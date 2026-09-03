@@ -77,6 +77,9 @@ create table if not exists nyiregyhaza_purchases (
   paid_at     timestamptz
 );
 
+-- Utólagos oszlop: a felvásárláshoz tartozó mozgás visszavonhatóságához.
+alter table keszlet_movements add column if not exists purchase_id bigint references nyiregyhaza_purchases(id);
+
 -- Nyíregyháza kassza mozgásai (felvásárlás -, csere +, egyéb kiadás -).
 create table if not exists kassza_movements (
   id          bigserial primary key,
@@ -95,6 +98,7 @@ create table if not exists keszlet_events (
   effect     text not null,
   created_at timestamptz not null default now()
 );
+alter table keszlet_events add column if not exists purchase_id bigint references nyiregyhaza_purchases(id);
 
 -- Leltár: típusonkénti számlálás, elfogadott/elutasított korrekcióval.
 create table if not exists inventory_counts (

@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { X } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -18,6 +19,7 @@ import { toast } from "sonner";
 import {
   addKasszaMovement,
   addPurchase,
+  deletePurchase,
   getHaviSnapshot,
   type PurchaseRow,
 } from "@/lib/keszlet/actions";
@@ -34,9 +36,19 @@ function todayLabel() {
   return { datePart, weekdayPart };
 }
 
+function dayGroupLabel(dayKey: string) {
+  return new Date(`${dayKey}T00:00:00`).toLocaleDateString("hu-HU", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "long",
+  });
+}
+
 export function NyiregyhazaHaviTab() {
   const [loading, setLoading] = useState(true);
   const [purchases, setPurchases] = useState<PurchaseRow[]>([]);
+  const [todayKey, setTodayKey] = useState("");
   const [kassza, setKassza] = useState(0);
   const [todayExpense, setTodayExpense] = useState(0);
   const [prices, setPrices] = useState<Record<string, number>>({});
@@ -49,6 +61,7 @@ export function NyiregyhazaHaviTab() {
   const load = useCallback(async () => {
     const snap = await getHaviSnapshot();
     setPurchases(snap.purchases);
+    setTodayKey(snap.todayKey);
     setKassza(snap.kassza);
     setTodayExpense(snap.todayExpense);
     const priceMap: Record<string, number> = {};
@@ -93,6 +106,16 @@ export function NyiregyhazaHaviTab() {
     }
   }
 
+  async function handleDelete(id: string) {
+    try {
+      await deletePurchase(id);
+      await load();
+      toast.success("Tétel törölve.");
+    } catch {
+      toast.error("Nem sikerült törölni.");
+    }
+  }
+
   async function recordKassza() {
     const amount = Number(kasszaAmount);
     if (!kasszaDesc.trim() || !amount) {
@@ -107,6 +130,18 @@ export function NyiregyhazaHaviTab() {
   }
 
   const pending = purchases.filter((p) => p.pending);
+  const todayPurchases = purchases.filter((p) => p.day_key === todayKey);
+  const pastPurchases = purchases.filter((p) => p.day_key !== todayKey);
+
+  const pastGroups: { dayKey: string; totals: Record<string, number> }[] = [];
+  for (const p of pastPurchases) {
+    let group = pastGroups.find((g) => g.dayKey === p.day_key);
+    if (!group) {
+      group = { dayKey: p.day_key, totals: {} };
+      pastGroups.push(group);
+    }
+    group.totals[p.type] = (group.totals[p.type] ?? 0) + p.qty;
+  }
 
   if (loading) {
     return <p className="text-sm text-muted-foreground">Betöltés…</p>;
@@ -160,10 +195,18 @@ export function NyiregyhazaHaviTab() {
                 <TableHead className="text-right">Egységár</TableHead>
                 <TableHead className="text-right">Összeg</TableHead>
                 <TableHead></TableHead>
+                <TableHead className="w-8"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {purchases.map((p) => (
+              {todayPurchases.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center text-muted-foreground">
+                    Ma még nincs rögzített vétel.
+                  </TableCell>
+                </TableRow>
+              )}
+              {todayPurchases.map((p) => (
                 <TableRow key={p.id}>
                   <TableCell className="text-muted-foreground">{p.date}</TableCell>
                   <TableCell>{p.type}</TableCell>
@@ -179,10 +222,40 @@ export function NyiregyhazaHaviTab() {
                       </Badge>
                     )}
                   </TableCell>
+                  <TableCell>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(p.id)}
+                      title="Törlés (hibás rögzítés)"
+                      className="text-destructive/70 hover:text-destructive"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
+
+          {pastGroups.length > 0 && (
+            <div className="space-y-3 pt-2">
+              <h3 className="text-sm font-medium">Korábbi napok</h3>
+              {pastGroups.map((g) => (
+                <div key={g.dayKey} className="rounded-md border px-3 py-2">
+                  <div className="text-xs font-medium text-muted-foreground">
+                    {dayGroupLabel(g.dayKey)}
+                  </div>
+                  <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                    {Object.entries(g.totals).map(([type, qty]) => (
+                      <span key={type}>
+                        {type}: <span className="font-medium tabular-nums">{qty} db</span>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
