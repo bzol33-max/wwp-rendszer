@@ -157,3 +157,11 @@ alter table nyiregyhaza_purchases add column if not exists created_by text;
 alter table kassza_movements add column if not exists created_by text;
 alter table keszlet_events add column if not exists created_by text;
 alter table inventory_counts add column if not exists created_by text;
+
+-- Kassza-tétel kategóriája: 'felvasarlas' = felvásárláshoz/cseréhez/kifizetésre
+-- váró tétel kiegyenlítéséhez kötődő kiadás (ezek a Kassza mozgások nézetben
+-- havonta egy összesítő sorba vonódnak), 'egyeb' = minden más (kézzel felvitt
+-- kiadás, pl. számla, bevétel, nyitó kassza) — ezek egyenként látszanak.
+alter table kassza_movements add column if not exists category text not null default 'egyeb';
+update kassza_movements set category = 'felvasarlas' where purchase_id is not null and category = 'egyeb';
+update kassza_movements set category = 'felvasarlas' where description like 'Kifizetés — %' and category = 'egyeb';

@@ -260,8 +260,8 @@ export async function addPurchase(input: {
     await addMovement({ site: "Nyíregyháza", type: "EUR szürke", direction: "ki", qty: input.qty, partner: "Csere", purchaseId, createdBy: createdBy ?? undefined });
     if (affectsKassza) {
       await query(
-        `insert into kassza_movements (description, amount, purchase_id, created_by)
-         values ($1, $2, $3, $4)`,
+        `insert into kassza_movements (description, amount, purchase_id, created_by, category)
+         values ($1, $2, $3, $4, 'felvasarlas')`,
         [`Csere (${input.qty} db × ${input.unitPrice} Ft)`, -total, purchaseId, createdBy]
       );
     }
@@ -291,8 +291,8 @@ export async function addPurchase(input: {
   });
   if (affectsKassza) {
     await query(
-      `insert into kassza_movements (description, amount, purchase_id, created_by)
-       values ($1, $2, $3, $4)`,
+      `insert into kassza_movements (description, amount, purchase_id, created_by, category)
+       values ($1, $2, $3, $4, 'felvasarlas')`,
       [`Felvásárlás — ${input.type} (${input.qty} db)`, -total, purchaseId, createdBy]
     );
   }
@@ -375,7 +375,7 @@ export async function payPendingSeller(seller: string, createdBy?: string) {
     [seller]
   );
   await query(
-    `insert into kassza_movements (description, amount, created_by) values ($1, $2, $3)`,
+    `insert into kassza_movements (description, amount, created_by, category) values ($1, $2, $3, 'felvasarlas')`,
     [`Kifizetés — ${seller} (${rows.length} tétel)`, -sum, createdBy ?? null]
   );
 }
@@ -397,11 +397,11 @@ export type KasszaMovementRow = {
 };
 
 export async function getKasszaMovements(): Promise<KasszaMovementRow[]> {
-  // A felvásárláshoz (és cseréhez) kötött kassza-tételek nagyon elszaporodnak —
+  // Minden felvásárláshoz kapcsolódó kiadás (felvásárlás, csere, kifizetésre
+  // váró tétel kiegyenlítése — category = 'felvasarlas') nagyon elszaporodik —
   // ezeket havonta egy összesítő sorba vonjuk össze, mindig a lista tetején,
-  // a folyó hónap kerül legfelülre. Az egyéb (nem felvásárláshoz kötött)
-  // tételek — kifizetés, egyéb kassza-mozgás, nyitó kassza — továbbra is
-  // egyenként látszanak.
+  // a folyó hónap kerül legfelülre. Az egyéb tételek — kézzel felvitt kiadás
+  // (pl. számla), bevétel, nyitó kassza — továbbra is egyenként látszanak.
   const purchaseMonths = await query<{
     month_key: string;
     month_label: string;
@@ -413,7 +413,7 @@ export async function getKasszaMovements(): Promise<KasszaMovementRow[]> {
             count(*)::int as cnt,
             sum(amount)::int as total
      from kassza_movements
-     where purchase_id is not null
+     where category = 'felvasarlas'
      group by 1, 2
      order by 1 desc`
   );
@@ -421,7 +421,7 @@ export async function getKasszaMovements(): Promise<KasszaMovementRow[]> {
   const otherRows = await query<KasszaMovementRow>(
     `select id::text, to_char(created_at, '${TIME_FMT}') as date, description, amount, created_by
      from kassza_movements
-     where purchase_id is null
+     where category <> 'felvasarlas'
      order by created_at desc
      limit 200`
   );
