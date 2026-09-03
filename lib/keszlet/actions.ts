@@ -392,12 +392,16 @@ export type EventRow = {
 };
 
 export async function getNyiregyhazaFoSnapshot() {
+  // A "Legutóbbi mozgások" itt csak a be/ki szállításokat és a telephelyek közti
+  // mozgatást mutatja (kind = 'mozgas') — a Csere/Szétválogatás tételenkénti
+  // története a saját fülén (Havi, ill. a Vegyes EUR sor) tekinthető meg.
   const [stock, events] = await Promise.all([
     getStock("Nyíregyháza"),
     query<EventRow>(
       `select id::text, to_char(created_at, 'mon. DD') as date, kind, details, effect
        from keszlet_events
        where site_id = (select id from sites where name = 'Nyíregyháza')
+         and kind = 'mozgas'
        order by created_at desc
        limit 20`
     ),
