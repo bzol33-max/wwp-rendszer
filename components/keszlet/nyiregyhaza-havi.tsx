@@ -38,9 +38,9 @@ export function NyiregyhazaHaviTab() {
   const [loading, setLoading] = useState(true);
   const [purchases, setPurchases] = useState<PurchaseRow[]>([]);
   const [kassza, setKassza] = useState(0);
+  const [todayExpense, setTodayExpense] = useState(0);
   const [prices, setPrices] = useState<Record<string, number>>({});
   const [todayQty, setTodayQty] = useState<Record<string, string>>({});
-  const [seller, setSeller] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [kasszaDesc, setKasszaDesc] = useState("");
   const [kasszaAmount, setKasszaAmount] = useState("");
@@ -50,6 +50,7 @@ export function NyiregyhazaHaviTab() {
     const snap = await getHaviSnapshot();
     setPurchases(snap.purchases);
     setKassza(snap.kassza);
+    setTodayExpense(snap.todayExpense);
     const priceMap: Record<string, number> = {};
     for (const p of snap.prices) if (p.default_price) priceMap[p.name] = p.default_price;
     setPrices(priceMap);
@@ -60,7 +61,7 @@ export function NyiregyhazaHaviTab() {
     load().finally(() => setLoading(false));
   }, [load]);
 
-  const todayTotal = useMemo(() => {
+  const currentEntryTotal = useMemo(() => {
     return Object.entries(todayQty).reduce((sum, [type, qtyStr]) => {
       const qty = Number(qtyStr) || 0;
       return sum + qty * (prices[type] ?? 0);
@@ -69,8 +70,8 @@ export function NyiregyhazaHaviTab() {
 
   async function recordDay() {
     const entries = Object.entries(todayQty).filter(([, v]) => Number(v) > 0);
-    if (entries.length === 0 || !seller.trim()) {
-      toast.error("Adj meg legalább egy típust darabszámmal, és az eladót.");
+    if (entries.length === 0) {
+      toast.error("Adj meg legalább egy típust darabszámmal.");
       return;
     }
     setSubmitting(true);
@@ -80,11 +81,9 @@ export function NyiregyhazaHaviTab() {
           type,
           qty: Number(qtyStr),
           unitPrice: prices[type] ?? 0,
-          seller,
         });
       }
       setTodayQty({});
-      setSeller("");
       await load();
       toast.success("Vétel rögzítve.");
     } catch {
@@ -141,14 +140,10 @@ export function NyiregyhazaHaviTab() {
               </div>
             ))}
           </div>
-          <div className="space-y-1.5">
-            <Label>Eladó</Label>
-            <Input placeholder="Név" value={seller} onChange={(e) => setSeller(e.target.value)} />
-          </div>
           <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm">
-            <span className="text-muted-foreground">Mai kiadás összesen</span>
+            <span className="text-muted-foreground">Aktuális kifizetés</span>
             <span className="font-semibold tabular-nums">
-              {todayTotal.toLocaleString("hu-HU")} Ft
+              {currentEntryTotal.toLocaleString("hu-HU")} Ft
             </span>
           </div>
           <Button onClick={recordDay} disabled={submitting} size="lg" className="w-full">
@@ -164,7 +159,7 @@ export function NyiregyhazaHaviTab() {
                 <TableHead className="text-right">Db</TableHead>
                 <TableHead className="text-right">Egységár</TableHead>
                 <TableHead className="text-right">Összeg</TableHead>
-                <TableHead>Eladó</TableHead>
+                <TableHead></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -178,9 +173,8 @@ export function NyiregyhazaHaviTab() {
                     {p.total.toLocaleString("hu-HU")} Ft
                   </TableCell>
                   <TableCell>
-                    {p.seller}
                     {p.pending && (
-                      <Badge className="ml-2 bg-warning/15 text-warning hover:bg-warning/15">
+                      <Badge className="bg-warning/15 text-warning hover:bg-warning/15">
                         Kifizetésre vár
                       </Badge>
                     )}
@@ -206,6 +200,19 @@ export function NyiregyhazaHaviTab() {
           </CardContent>
         </Card>
 
+        <Card className="border-primary/30 bg-primary/5">
+          <CardHeader>
+            <CardTitle className="text-xs font-medium text-primary">
+              Mai kiadás
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-primary">
+              {todayExpense.toLocaleString("hu-HU")} Ft
+            </div>
+          </CardContent>
+        </Card>
+
         {pending.length > 0 && (
           <Card>
             <CardHeader>
@@ -218,7 +225,7 @@ export function NyiregyhazaHaviTab() {
                   className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm"
                 >
                   <span>
-                    {p.type} · {p.qty} db · {p.seller}
+                    {p.type} · {p.qty} db
                   </span>
                   <span className="font-medium tabular-nums">
                     {p.total.toLocaleString("hu-HU")} Ft
