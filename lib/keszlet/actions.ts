@@ -159,6 +159,7 @@ export async function addPurchase(input: {
   seller?: string;
   pending?: boolean;
   method?: PaymentMethod;
+  date?: string;
 }) {
   const seller = input.seller ?? "";
   const total = input.qty * input.unitPrice;
@@ -167,10 +168,10 @@ export async function addPurchase(input: {
   // az összeg banki átutalással rendeződik, nem készpénzből.
   const affectsKassza = !input.pending && method === "keszpenz";
   const rows = await query<{ id: string }>(
-    `insert into nyiregyhaza_purchases (type_id, qty, unit_price, total, seller, pending, payment_method)
-     values ((select id from pallet_types where name = $1), $2, $3, $4, $5, $6, $7)
+    `insert into nyiregyhaza_purchases (type_id, qty, unit_price, total, seller, pending, payment_method, created_at)
+     values ((select id from pallet_types where name = $1), $2, $3, $4, $5, $6, $7, coalesce($8::timestamptz, now()))
      returning id`,
-    [input.type, input.qty, input.unitPrice, total, seller, input.pending ?? false, method]
+    [input.type, input.qty, input.unitPrice, total, seller, input.pending ?? false, method, input.date ?? null]
   );
   const purchaseId = rows[0].id;
 
@@ -223,6 +224,77 @@ export async function deletePurchase(id: string) {
   await query(`delete from kassza_movements where purchase_id = $1`, [id]);
   await query(`delete from keszlet_events where purchase_id = $1`, [id]);
   await query(`delete from nyiregyhaza_purchases where id = $1`, [id]);
+}
+
+// --- Kifizetésre váró tételek (nyitvatartáson túl/hétvégén leadott felvásárlás) ---
+
+export async function addPendingPurchase(input: {
+  seller: string;
+  type: string;
+  qty: number;
+  date: string;
+}) {
+  const priceRows = await query<{ default_price: number | null }>(
+    `select default_price from pallet_types where name = $1`,
+    [input.type]
+  );
+  const unitPrice = priceRows[0]?.default_price ?? 0;
+  await addPurchase({
+    type: input.type,
+    qty: input.qty,
+    unitPrice,
+    seller: input.seller,
+    pending: true,
+    date: input.date,
+  });
+}
+
+export async function updatePendingPurchase(
+  id: string,
+  input: { type: string; qty: number; date: string }
+) {
+  const priceRows = await query<{ default_price: number | null }>(
+    `select default_price from pallet_types where name = $1`,
+    [input.type]
+  );
+  const unitPrice = priceRows[0]?.default_price ?? 0;
+  const total = input.qty * unitPrice;
+  const rows = await query<{ seller: string }>(
+    `update nyiregyhaza_purchases
+     set type_id = (select id from pallet_types where name = $1),
+         qty = $2, unit_price = $3, total = $4, created_at = $5::timestamptz
+     where id = $6 and pending = true
+     returning seller`,
+    [input.type, input.qty, unitPrice, total, input.date, id]
+  );
+  if (rows.length === 0) return;
+  // A kapcsolódó készletmozgást is frissítjük az új típusra/darabszámra.
+  await query(`delete from keszlet_movements where purchase_id = $1`, [id]);
+  await addMovement({
+    site: "Nyíregyháza",
+    type: input.type,
+    direction: "be",
+    qty: input.qty,
+    partner: rows[0].seller || undefined,
+    purchaseId: id,
+  });
+}
+
+export async function payPendingSeller(seller: string) {
+  const rows = await query<{ id: string; total: number }>(
+    `select id::text, total from nyiregyhaza_purchases where seller = $1 and pending = true`,
+    [seller]
+  );
+  if (rows.length === 0) return;
+  const sum = rows.reduce((s, r) => s + Number(r.total), 0);
+  await query(
+    `update nyiregyhaza_purchases set pending = false, paid_at = now() where seller = $1 and pending = true`,
+    [seller]
+  );
+  await query(
+    `insert into kassza_movements (description, amount) values ($1, $2)`,
+    [`Kifizetés — ${seller} (${rows.length} tétel)`, -sum]
+  );
 }
 
 export async function addKasszaMovement(description: string, amount: number) {

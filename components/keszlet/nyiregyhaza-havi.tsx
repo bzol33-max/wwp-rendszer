@@ -6,6 +6,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { X } from "lucide-react";
 import {
   Dialog,
@@ -24,10 +31,13 @@ import {
 import { toast } from "sonner";
 import {
   addKasszaMovement,
+  addPendingPurchase,
   addPurchase,
   deletePurchase,
   getHaviSnapshot,
   getKasszaMovements,
+  payPendingSeller,
+  updatePendingPurchase,
   type KasszaMovementRow,
   type PurchaseRow,
 } from "@/lib/keszlet/actions";
@@ -42,6 +52,14 @@ function todayLabel() {
   // "2026. szeptember 3., csütörtök" -> "ma, csütörtök (2026. szeptember 3.)"
   const [datePart, weekdayPart] = raw.split(", ");
   return { datePart, weekdayPart };
+}
+
+function todayDateInputValue() {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function dayGroupLabel(dayKey: string) {
@@ -69,6 +87,16 @@ export function NyiregyhazaHaviTab() {
   const [kasszaMovements, setKasszaMovements] = useState<KasszaMovementRow[]>([]);
   const [customPriceOpen, setCustomPriceOpen] = useState(false);
   const [customPrices, setCustomPrices] = useState<Record<string, string>>({});
+  const [pendingAddOpen, setPendingAddOpen] = useState(false);
+  const [pendingSeller, setPendingSeller] = useState("");
+  const [pendingDate, setPendingDate] = useState(todayDateInputValue());
+  const [pendingType, setPendingType] = useState("");
+  const [pendingQty, setPendingQty] = useState("");
+  const [pendingSubmitting, setPendingSubmitting] = useState(false);
+  const [pendingEditRow, setPendingEditRow] = useState<PurchaseRow | null>(null);
+  const [pendingEditType, setPendingEditType] = useState("");
+  const [pendingEditQty, setPendingEditQty] = useState("");
+  const [pendingEditDate, setPendingEditDate] = useState("");
   const { datePart, weekdayPart } = todayLabel();
 
   const load = useCallback(async () => {
@@ -174,6 +202,79 @@ export function NyiregyhazaHaviTab() {
     }
   }
 
+  function openPendingAdd() {
+    setPendingSeller("");
+    setPendingDate(todayDateInputValue());
+    setPendingType("");
+    setPendingQty("");
+    setPendingAddOpen(true);
+  }
+
+  async function submitPendingAdd() {
+    const qty = Number(pendingQty);
+    if (!pendingSeller.trim() || !pendingType || !qty) {
+      toast.error("Adj meg nevet, típust és darabszámot.");
+      return;
+    }
+    setPendingSubmitting(true);
+    try {
+      await addPendingPurchase({
+        seller: pendingSeller.trim(),
+        type: pendingType,
+        qty,
+        date: pendingDate,
+      });
+      setPendingAddOpen(false);
+      await load();
+      toast.success("Kifizetésre váró tétel rögzítve.");
+    } catch {
+      toast.error("Nem sikerült menteni.");
+    } finally {
+      setPendingSubmitting(false);
+    }
+  }
+
+  function openPendingEdit(row: PurchaseRow) {
+    setPendingEditRow(row);
+    setPendingEditType(row.type);
+    setPendingEditQty(String(row.qty));
+    setPendingEditDate(row.day_key);
+  }
+
+  async function submitPendingEdit() {
+    if (!pendingEditRow) return;
+    const qty = Number(pendingEditQty);
+    if (!pendingEditType || !qty) {
+      toast.error("Adj meg típust és darabszámot.");
+      return;
+    }
+    setPendingSubmitting(true);
+    try {
+      await updatePendingPurchase(pendingEditRow.id, {
+        type: pendingEditType,
+        qty,
+        date: pendingEditDate,
+      });
+      setPendingEditRow(null);
+      await load();
+      toast.success("Tétel módosítva.");
+    } catch {
+      toast.error("Nem sikerült módosítani.");
+    } finally {
+      setPendingSubmitting(false);
+    }
+  }
+
+  async function handlePaySeller(seller: string) {
+    try {
+      await payPendingSeller(seller);
+      await load();
+      toast.success(`${seller} kifizetve.`);
+    } catch {
+      toast.error("Nem sikerült kifizetni.");
+    }
+  }
+
   async function openKasszaDetail() {
     setKasszaDetailOpen(true);
     setKasszaDetailLoading(true);
@@ -198,8 +299,9 @@ export function NyiregyhazaHaviTab() {
   }
 
   const pending = purchases.filter((p) => p.pending);
-  const todayPurchases = purchases.filter((p) => p.day_key === todayKey);
-  const pastPurchases = purchases.filter((p) => p.day_key !== todayKey);
+  const settled = purchases.filter((p) => !p.pending);
+  const todayPurchases = settled.filter((p) => p.day_key === todayKey);
+  const pastPurchases = settled.filter((p) => p.day_key !== todayKey);
 
   const pastGroups: { dayKey: string; totals: Record<string, number> }[] = [];
   for (const p of pastPurchases) {
@@ -209,6 +311,17 @@ export function NyiregyhazaHaviTab() {
       pastGroups.push(group);
     }
     group.totals[p.type] = (group.totals[p.type] ?? 0) + p.qty;
+  }
+
+  const pendingGroups: { seller: string; entries: PurchaseRow[]; total: number }[] = [];
+  for (const p of pending) {
+    let group = pendingGroups.find((g) => g.seller === p.seller);
+    if (!group) {
+      group = { seller: p.seller, entries: [], total: 0 };
+      pendingGroups.push(group);
+    }
+    group.entries.push(p);
+    group.total += p.total;
   }
 
   if (loading) {
@@ -383,32 +496,72 @@ export function NyiregyhazaHaviTab() {
           </CardContent>
         </Card>
 
-        {pending.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Kifizetésre vár</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {pending.map((p) => (
-                <div
-                  key={p.id}
-                  className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm"
-                >
-                  <span>
-                    {p.type} · {p.qty} db
-                  </span>
-                  <span className="font-medium tabular-nums">
-                    {p.total.toLocaleString("hu-HU")} Ft
-                  </span>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-sm">Kifizetésre váró tételek</CardTitle>
+            <Button size="sm" variant="outline" onClick={openPendingAdd}>
+              + Új tétel
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {pendingGroups.length === 0 && (
+              <p className="text-xs text-muted-foreground">Nincs kifizetésre váró tétel.</p>
+            )}
+            {pendingGroups.map((g) => (
+              <div key={g.seller} className="rounded-md border px-3 py-2 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">{g.seller}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-semibold tabular-nums">
+                      {g.total.toLocaleString("hu-HU")} Ft
+                    </span>
+                    <Button size="sm" onClick={() => handlePaySeller(g.seller)}>
+                      Kifizetés
+                    </Button>
+                  </div>
                 </div>
-              ))}
-              <p className="text-xs text-muted-foreground">
-                Nyitvatartáson túl/hétvégén leadott tétel — a darabszám már a készletben van,
-                a kassza csak a tényleges kifizetéskor csökken.
-              </p>
-            </CardContent>
-          </Card>
-        )}
+                <div className="space-y-1">
+                  {g.entries.map((e) => (
+                    <div
+                      key={e.id}
+                      className="flex items-center justify-between rounded-md bg-muted/30 px-2.5 py-1.5 text-xs"
+                    >
+                      <span className="text-muted-foreground">
+                        {dayGroupLabel(e.day_key)} · {e.type} ·{" "}
+                        <span className="font-medium text-foreground">{e.qty} db</span>
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium tabular-nums">
+                          {e.total.toLocaleString("hu-HU")} Ft
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => openPendingEdit(e)}
+                          title="Módosítás"
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          ✎
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(e.id)}
+                          title="Törlés"
+                          className="text-destructive/70 hover:text-destructive"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+            <p className="text-xs text-muted-foreground">
+              Nyitvatartáson túl/hétvégén leadott tétel — a darabszám azonnal a készletben van,
+              a kassza csak a "Kifizetés" gombra kattintva, a tényleges kifizetéskor csökken.
+            </p>
+          </CardContent>
+        </Card>
 
         <Card>
           <CardHeader>
@@ -521,6 +674,128 @@ export function NyiregyhazaHaviTab() {
               className="w-full bg-violet-600 text-white hover:bg-violet-700"
             >
               {submitting ? "Mentés…" : "Rögzítés egyedi áron"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={pendingAddOpen} onOpenChange={setPendingAddOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Kifizetésre váró tétel felvétele</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Név</Label>
+              <Input
+                value={pendingSeller}
+                onChange={(e) => setPendingSeller(e.target.value)}
+                placeholder="Ki hozta"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Dátum</Label>
+              <Input
+                type="date"
+                value={pendingDate}
+                onChange={(e) => setPendingDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Típus</Label>
+              <Select value={pendingType} onValueChange={(v) => v && setPendingType(v)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Válassz típust" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.keys(prices).map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Darabszám</Label>
+              <Input
+                type="number"
+                value={pendingQty}
+                onChange={(e) => setPendingQty(e.target.value)}
+                placeholder="db"
+              />
+            </div>
+            <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm">
+              <span className="text-muted-foreground">Összeg</span>
+              <span className="font-semibold tabular-nums">
+                {((Number(pendingQty) || 0) * (prices[pendingType] ?? 0)).toLocaleString(
+                  "hu-HU"
+                )}{" "}
+                Ft
+              </span>
+            </div>
+            <Button onClick={submitPendingAdd} disabled={pendingSubmitting} className="w-full">
+              {pendingSubmitting ? "Mentés…" : "Rögzítés"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={pendingEditRow !== null}
+        onOpenChange={(open) => !open && setPendingEditRow(null)}
+      >
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Tétel módosítása — {pendingEditRow?.seller}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Dátum</Label>
+              <Input
+                type="date"
+                value={pendingEditDate}
+                onChange={(e) => setPendingEditDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Típus</Label>
+              <Select
+                value={pendingEditType}
+                onValueChange={(v) => v && setPendingEditType(v)}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Válassz típust" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.keys(prices).map((t) => (
+                    <SelectItem key={t} value={t}>
+                      {t}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Darabszám</Label>
+              <Input
+                type="number"
+                value={pendingEditQty}
+                onChange={(e) => setPendingEditQty(e.target.value)}
+                placeholder="db"
+              />
+            </div>
+            <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm">
+              <span className="text-muted-foreground">Összeg</span>
+              <span className="font-semibold tabular-nums">
+                {(
+                  (Number(pendingEditQty) || 0) * (prices[pendingEditType] ?? 0)
+                ).toLocaleString("hu-HU")}{" "}
+                Ft
+              </span>
+            </div>
+            <Button onClick={submitPendingEdit} disabled={pendingSubmitting} className="w-full">
+              {pendingSubmitting ? "Mentés…" : "Módosítás mentése"}
             </Button>
           </div>
         </DialogContent>
