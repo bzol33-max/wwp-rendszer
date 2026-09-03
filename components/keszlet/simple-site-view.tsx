@@ -12,30 +12,18 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { InventoryDialog } from "@/components/keszlet/inventory-dialog";
-import { cn } from "@/lib/utils";
-import { toast } from "sonner";
+import { MovementForm } from "@/components/keszlet/movement-form";
 import {
-  addMovement,
   getSiteSnapshot,
-  type Direction,
   type MovementRow,
 } from "@/lib/keszlet/actions";
 
 type Site = "Szakoly" | "Balkány";
 
-const OTHER_SITE: Record<Site, string> = {
-  Szakoly: "Balkány",
-  Balkány: "Szakoly",
+const OTHER_SITES: Record<Site, string[]> = {
+  Szakoly: ["Balkány", "Nyíregyháza"],
+  Balkány: ["Szakoly", "Nyíregyháza"],
 };
 
 export function SimpleSiteView({ site }: { site: Site }) {
@@ -43,21 +31,13 @@ export function SimpleSiteView({ site }: { site: Site }) {
   const [types, setTypes] = useState<string[]>([]);
   const [stock, setStock] = useState<Record<string, number>>({});
   const [movements, setMovements] = useState<MovementRow[]>([]);
-
-  const [direction, setDirection] = useState<Direction>("be");
-  const [type, setType] = useState<string>("");
-  const [qty, setQty] = useState("");
-  const [partner, setPartner] = useState("");
-  const [targetSite, setTargetSite] = useState(OTHER_SITE[site]);
   const [inventoryOpen, setInventoryOpen] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
 
   const load = useCallback(async () => {
     const snap = await getSiteSnapshot(site);
     setTypes(snap.types);
     setStock(snap.stock);
     setMovements(snap.movements);
-    setType((prev) => prev || snap.types[0] || "");
   }, [site]);
 
   useEffect(() => {
@@ -65,128 +45,13 @@ export function SimpleSiteView({ site }: { site: Site }) {
     load().finally(() => setLoading(false));
   }, [load]);
 
-  async function submit() {
-    const n = Number(qty);
-    if (!n || n <= 0) {
-      toast.error("Adj meg érvényes darabszámot.");
-      return;
-    }
-    if (direction !== "mozgatas" && !partner.trim()) {
-      toast.error("A partner megadása kötelező.");
-      return;
-    }
-    setSubmitting(true);
-    try {
-      await addMovement({
-        site,
-        type,
-        direction,
-        qty: n,
-        partner: direction === "mozgatas" ? undefined : partner,
-        targetSite: direction === "mozgatas" ? targetSite : undefined,
-      });
-      setQty("");
-      setPartner("");
-      await load();
-      toast.success("Mozgás rögzítve.");
-    } catch {
-      toast.error("Nem sikerült menteni. Próbáld újra.");
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   if (loading) {
     return <p className="text-sm text-muted-foreground">Betöltés…</p>;
   }
 
   return (
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.4fr_1fr]">
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm">Mozgás rögzítése</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-3 gap-2">
-            {(
-              [
-                ["be", "Beérkezés"],
-                ["ki", "Kiszállítás"],
-                ["mozgatas", "Telephelyek közti mozgatás"],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setDirection(value)}
-                className={cn(
-                  "rounded-md border px-2 py-2 text-xs font-medium transition-colors",
-                  direction === value
-                    ? "border-primary bg-accent text-accent-foreground"
-                    : "border-border text-muted-foreground hover:bg-muted"
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Típus</Label>
-              <Select value={type} onValueChange={(v) => v && setType(v)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {types.map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {t}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Darabszám</Label>
-              <Input
-                type="number"
-                placeholder="pl. 33"
-                value={qty}
-                onChange={(e) => setQty(e.target.value)}
-              />
-            </div>
-          </div>
-
-          {direction !== "mozgatas" ? (
-            <div className="space-y-1.5">
-              <Label>Partner</Label>
-              <Input
-                placeholder="Partner neve"
-                value={partner}
-                onChange={(e) => setPartner(e.target.value)}
-              />
-            </div>
-          ) : (
-            <div className="space-y-1.5">
-              <Label>Hová</Label>
-              <Select value={targetSite} onValueChange={(v) => v && setTargetSite(v)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={OTHER_SITE[site]}>{OTHER_SITE[site]}</SelectItem>
-                  <SelectItem value="Nyíregyháza">Nyíregyháza</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          <Button onClick={submit} disabled={submitting} className="w-full sm:w-auto">
-            {submitting ? "Mentés…" : "Mentés"}
-          </Button>
-        </CardContent>
-      </Card>
+      <MovementForm site={site} types={types} otherSites={OTHER_SITES[site]} onRecorded={load} />
 
       <Card>
         <CardHeader>

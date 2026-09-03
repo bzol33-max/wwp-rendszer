@@ -14,6 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { InventoryDialog } from "@/components/keszlet/inventory-dialog";
+import { MovementForm } from "@/components/keszlet/movement-form";
 import { toast } from "sonner";
 import {
   getNyiregyhazaFoSnapshot,
@@ -90,23 +91,32 @@ export function NyiregyhazaFoTab() {
   }
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap gap-2">
-        <Button onClick={() => setInventoryOpen(true)} variant="outline">
-          📋 Leltár indítása
-        </Button>
-      </div>
+    <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.4fr_1fr]">
+      <MovementForm
+        site="Nyíregyháza"
+        types={Object.keys(stock)}
+        otherSites={["Szakoly", "Balkány"]}
+        onRecorded={load}
+      />
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        {Object.entries(stock).map(([type, qty]) => (
-          <Card key={type}>
-            <CardContent className="space-y-3 py-4">
-              <div>
-                <div className="text-xs text-muted-foreground">{type}</div>
-                <div className="mt-1 text-2xl font-bold tabular-nums">{qty}</div>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm">Jelenlegi készlet — Nyíregyháza</CardTitle>
+            <Button size="sm" variant="outline" onClick={() => setInventoryOpen(true)}>
+              Leltár indítása
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {Object.entries(stock).map(([type, qty]) => (
+            <div key={type} className="rounded-md border bg-muted/30 px-3 py-2">
+              <div className="flex items-center justify-between text-sm">
+                <span>{type}</span>
+                <span className="font-semibold tabular-nums">{qty}</span>
               </div>
               {type === "Vegyes EUR" && (
-                <div className="space-y-1.5 border-t pt-3">
+                <div className="mt-2 space-y-1.5 border-t pt-2">
                   <Input
                     type="number"
                     placeholder="db"
@@ -136,12 +146,12 @@ export function NyiregyhazaFoTab() {
                   </div>
                 </div>
               )}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
-      <Card>
+      <Card className="lg:col-span-2">
         <CardHeader>
           <CardTitle className="text-sm">Legutóbbi mozgások</CardTitle>
         </CardHeader>

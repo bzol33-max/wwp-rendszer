@@ -88,6 +88,38 @@ export async function addMovement(input: {
   );
 }
 
+// Mozgás rögzítése (Beérkezés / Kiszállítás / Telephelyek közti mozgatás) — a Mozgás
+// rögzítése kártya minden telephelyen ezt hívja. Nyíregyházán a mozgásokat a
+// keszlet_events (Legutóbbi mozgások) listában is megjeleníti, hogy egy helyen
+// lásd a Csere/Szétválogatás mellett a sima Be/Ki/Mozgatás tételeket is.
+export async function recordMovement(input: {
+  site: string;
+  type: string;
+  direction: Direction;
+  qty: number;
+  partner?: string;
+  targetSite?: string;
+}) {
+  await addMovement(input);
+  if (input.site === "Nyíregyháza") {
+    const details =
+      input.direction === "mozgatas"
+        ? `${input.qty} db ${input.type} átszállítva ide: ${input.targetSite}`
+        : `${input.qty} db ${input.type}${input.partner ? ` — ${input.partner}` : ""}`;
+    const effect =
+      input.direction === "be"
+        ? `${input.type} +${input.qty}`
+        : input.direction === "ki"
+          ? `${input.type} −${input.qty}`
+          : `${input.type} −${input.qty} → ${input.targetSite}`;
+    await query(
+      `insert into keszlet_events (site_id, kind, details, effect)
+       values ((select id from sites where name = 'Nyíregyháza'), 'mozgas', $1, $2)`,
+      [details, effect]
+    );
+  }
+}
+
 export async function getSiteSnapshot(site: string) {
   const [stock, movements, types] = await Promise.all([
     getStock(site),
