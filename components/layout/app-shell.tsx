@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Settings } from "lucide-react";
 import { NAV_ITEMS } from "@/lib/nav";
 import { cn } from "@/lib/utils";
 
@@ -43,8 +44,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             );
           })}
         </nav>
-        <div className="mt-auto px-5 py-4 text-xs text-sidebar-foreground/40">
-          Szakoly · Balkány · Nyíregyháza
+        <div className="mt-auto flex flex-col gap-2 border-t border-sidebar-border px-2 py-3">
+          <Link
+            href="/beallitasok/tipusok"
+            className={cn(
+              "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors",
+              pathname.startsWith("/beallitasok")
+                ? "bg-sidebar-accent text-white font-medium"
+                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-white"
+            )}
+          >
+            <Settings className="h-4 w-4" />
+            Típusok és árak
+          </Link>
+          <div className="px-3 pb-1 text-xs text-sidebar-foreground/40">
+            Szakoly · Balkány · Nyíregyháza
+          </div>
         </div>
       </aside>
       <main className="flex-1 overflow-x-hidden">

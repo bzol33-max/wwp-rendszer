@@ -22,7 +22,17 @@ import {
   type PurchaseRow,
 } from "@/lib/keszlet/actions";
 
-const QUICK_TYPES = ["EUR világos", "EUR szürke", "Vegyes EUR", "Csere"];
+function todayLabel() {
+  const raw = new Date().toLocaleDateString("hu-HU", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "long",
+  });
+  // "2026. szeptember 3., csütörtök" -> "ma, csütörtök (2026. szeptember 3.)"
+  const [datePart, weekdayPart] = raw.split(", ");
+  return { datePart, weekdayPart };
+}
 
 export function NyiregyhazaHaviTab() {
   const [loading, setLoading] = useState(true);
@@ -34,6 +44,7 @@ export function NyiregyhazaHaviTab() {
   const [submitting, setSubmitting] = useState(false);
   const [kasszaDesc, setKasszaDesc] = useState("");
   const [kasszaAmount, setKasszaAmount] = useState("");
+  const { datePart, weekdayPart } = todayLabel();
 
   const load = useCallback(async () => {
     const snap = await getHaviSnapshot();
@@ -106,11 +117,14 @@ export function NyiregyhazaHaviTab() {
     <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.5fr_1fr]">
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">Mai nap — gyors rögzítés</CardTitle>
+          <CardTitle className="text-sm">
+            Ma, {weekdayPart} — gyors rögzítés
+          </CardTitle>
+          <p className="text-xs text-muted-foreground">{datePart}</p>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {QUICK_TYPES.map((t) => (
+            {Object.keys(prices).map((t) => (
               <div key={t} className="space-y-1.5">
                 <Label className="text-xs">{t}</Label>
                 <Input

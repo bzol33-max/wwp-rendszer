@@ -119,8 +119,14 @@ export async function getHaviSnapshot() {
   const kasszaRows = await query<{ total: string }>(
     `select coalesce(sum(amount), 0) as total from kassza_movements`
   );
+  // Gyors rögzítéshez azok a típusok jelennek meg, amik Nyíregyházán aktívak ÉS van beárazva.
   const priceRows = await query<{ name: string; default_price: number | null }>(
-    `select name, default_price from pallet_types where name in ('EUR világos','EUR szürke','Vegyes EUR','Csere')`
+    `select t.name, t.default_price
+     from pallet_types t
+     join site_active_types sat on sat.type_id = t.id
+     join sites s on s.id = sat.site_id
+     where s.name = 'Nyíregyháza' and t.default_price is not null
+     order by t.id`
   );
   return {
     purchases,
@@ -253,5 +259,47 @@ export async function recordInventoryCount(input: {
         partner: "Leltári korrekció",
       });
     }
+  }
+}
+
+// --- Admin: típusok és árak ---
+
+export type TypeAdminRow = {
+  id: number;
+  name: string;
+  default_price: number | null;
+  sites: string[];
+};
+
+export async function getAllTypesAdmin(): Promise<TypeAdminRow[]> {
+  return query<TypeAdminRow>(
+    `select t.id, t.name, t.default_price,
+       coalesce(array_agg(s.name) filter (where s.name is not null), '{}') as sites
+     from pallet_types t
+     left join site_active_types sat on sat.type_id = t.id
+     left join sites s on s.id = sat.site_id
+     group by t.id, t.name, t.default_price
+     order by t.id`
+  );
+}
+
+export async function updateTypePrice(typeId: number, price: number | null) {
+  await query(`update pallet_types set default_price = $1 where id = $2`, [price, typeId]);
+}
+
+export async function setTypeSiteActive(typeId: number, site: string, active: boolean) {
+  if (active) {
+    await query(
+      `insert into site_active_types (site_id, type_id)
+       values ((select id from sites where name = $1), $2)
+       on conflict do nothing`,
+      [site, typeId]
+    );
+  } else {
+    await query(
+      `delete from site_active_types
+       where site_id = (select id from sites where name = $1) and type_id = $2`,
+      [site, typeId]
+    );
   }
 }
