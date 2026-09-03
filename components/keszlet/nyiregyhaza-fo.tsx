@@ -12,13 +12,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { CsereDialog } from "@/components/keszlet/csere-dialog";
 import { SzetvalogatasDialog } from "@/components/keszlet/szetvalogatas-dialog";
 import { InventoryDialog } from "@/components/keszlet/inventory-dialog";
 import { toast } from "sonner";
 import {
   getNyiregyhazaFoSnapshot,
-  recordCsere,
   recordSzetvalogatas,
   type EventRow,
 } from "@/lib/keszlet/actions";
@@ -43,7 +41,6 @@ export function NyiregyhazaFoTab() {
   const [loading, setLoading] = useState(true);
   const [stock, setStock] = useState<Record<string, number>>({});
   const [events, setEvents] = useState<EventRow[]>([]);
-  const [csereOpen, setCsereOpen] = useState(false);
   const [szetOpen, setSzetOpen] = useState(false);
   const [inventoryOpen, setInventoryOpen] = useState(false);
 
@@ -57,16 +54,6 @@ export function NyiregyhazaFoTab() {
     setLoading(true);
     load().finally(() => setLoading(false));
   }, [load]);
-
-  async function handleCsere(qty: number) {
-    try {
-      await recordCsere(qty);
-      await load();
-      toast.success("Csere rögzítve.");
-    } catch {
-      toast.error("Nem sikerült rögzíteni.");
-    }
-  }
 
   async function handleSzet(result: { vilagos: number; szurke: number; torott: number }) {
     try {
@@ -85,13 +72,6 @@ export function NyiregyhazaFoTab() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap gap-2">
-        <Button
-          onClick={() => setCsereOpen(true)}
-          variant="outline"
-          className="border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100"
-        >
-          🔁 Csere
-        </Button>
         <Button onClick={() => setSzetOpen(true)} variant="outline">
           ✂️ Szétválogatás (Vegyes EUR)
         </Button>
@@ -141,7 +121,6 @@ export function NyiregyhazaFoTab() {
         </CardContent>
       </Card>
 
-      <CsereDialog open={csereOpen} onOpenChange={setCsereOpen} onConfirm={handleCsere} />
       <SzetvalogatasDialog
         open={szetOpen}
         onOpenChange={setSzetOpen}
