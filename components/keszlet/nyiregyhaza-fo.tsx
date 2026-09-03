@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -35,14 +36,14 @@ const KIND_CLASS: Record<EventRow["kind"], string> = {
   mozgas: "bg-muted text-muted-foreground hover:bg-muted",
 };
 
-const ACTIVE_TYPES = ["EUR világos", "EUR szürke", "Vegyes EUR"];
-
 export function NyiregyhazaFoTab() {
   const [loading, setLoading] = useState(true);
   const [stock, setStock] = useState<Record<string, number>>({});
   const [events, setEvents] = useState<EventRow[]>([]);
   const [szetOpen, setSzetOpen] = useState(false);
   const [inventoryOpen, setInventoryOpen] = useState(false);
+  const [quickSplitQty, setQuickSplitQty] = useState("");
+  const [quickSplitSubmitting, setQuickSplitSubmitting] = useState(false);
 
   const load = useCallback(async () => {
     const snap = await getNyiregyhazaFoSnapshot();
@@ -65,6 +66,37 @@ export function NyiregyhazaFoTab() {
     }
   }
 
+  async function handleQuickSplit(target: "vilagos" | "szurke") {
+    const qty = Number(quickSplitQty);
+    if (!qty || qty <= 0) {
+      toast.error("Adj meg egy darabszámot.");
+      return;
+    }
+    if (qty > (stock["Vegyes EUR"] ?? 0)) {
+      toast.error("A megadott darabszám meghaladja az elérhető Vegyes EUR mennyiséget.");
+      return;
+    }
+    setQuickSplitSubmitting(true);
+    try {
+      await recordSzetvalogatas({
+        vilagos: target === "vilagos" ? qty : 0,
+        szurke: target === "szurke" ? qty : 0,
+        torott: 0,
+      });
+      setQuickSplitQty("");
+      await load();
+      toast.success(
+        target === "vilagos"
+          ? `${qty} db átkerült Fehérbe.`
+          : `${qty} db átkerült Szürkébe.`
+      );
+    } catch {
+      toast.error("Nem sikerült rögzíteni.");
+    } finally {
+      setQuickSplitSubmitting(false);
+    }
+  }
+
   if (loading) {
     return <p className="text-sm text-muted-foreground">Betöltés…</p>;
   }
@@ -83,9 +115,42 @@ export function NyiregyhazaFoTab() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {Object.entries(stock).map(([type, qty]) => (
           <Card key={type}>
-            <CardContent className="py-4">
-              <div className="text-xs text-muted-foreground">{type}</div>
-              <div className="mt-1 text-2xl font-bold tabular-nums">{qty}</div>
+            <CardContent className="space-y-3 py-4">
+              <div>
+                <div className="text-xs text-muted-foreground">{type}</div>
+                <div className="mt-1 text-2xl font-bold tabular-nums">{qty}</div>
+              </div>
+              {type === "Vegyes EUR" && (
+                <div className="space-y-1.5 border-t pt-3">
+                  <Input
+                    type="number"
+                    placeholder="db"
+                    value={quickSplitQty}
+                    onChange={(e) => setQuickSplitQty(e.target.value)}
+                    className="h-8"
+                  />
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={quickSplitSubmitting}
+                      onClick={() => handleQuickSplit("vilagos")}
+                      className="border-neutral-300 bg-neutral-50 text-neutral-700 hover:bg-neutral-100"
+                    >
+                      Fehér
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={quickSplitSubmitting}
+                      onClick={() => handleQuickSplit("szurke")}
+                      className="border-slate-400 bg-slate-100 text-slate-700 hover:bg-slate-200"
+                    >
+                      Szürke
+                    </Button>
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         ))}
@@ -129,7 +194,7 @@ export function NyiregyhazaFoTab() {
       />
       <InventoryDialog
         site="Nyíregyháza"
-        types={ACTIVE_TYPES}
+        types={Object.keys(stock)}
         currentStock={stock}
         open={inventoryOpen}
         onOpenChange={setInventoryOpen}
