@@ -24,7 +24,7 @@ export async function getActiveTypes(site: string) {
      join sites s on s.id = sat.site_id
      join pallet_types t on t.id = sat.type_id
      where s.name = $1
-     order by t.id`,
+     order by t.sort_order, t.id`,
     [site]
   );
   return rows.map((r) => r.name);
@@ -192,7 +192,7 @@ export async function getHaviSnapshot() {
      join site_active_types sat on sat.type_id = t.id
      join sites s on s.id = sat.site_id
      where s.name = 'Nyíregyháza' and t.default_price is not null
-     order by t.id`
+     order by t.sort_order, t.id`
   );
   // Típusonkénti darabszám-számláló: havi (aktuális naptári hónap) és mai összesítés.
   // Pending tétel is beleszámít, mert a darabszám a felvételkor azonnal a készletben van.
@@ -212,7 +212,7 @@ export async function getHaviSnapshot() {
      left join nyiregyhaza_purchases p on p.type_id = t.id
      where s.name = 'Nyíregyháza' and t.default_price is not null
      group by t.name, t.id
-     order by t.id`
+     order by t.sort_order, t.id`
   );
   return {
     purchases,
@@ -515,7 +515,7 @@ export async function getAllTypesAdmin(): Promise<TypeAdminRow[]> {
      left join site_active_types sat on sat.type_id = t.id
      left join sites s on s.id = sat.site_id
      group by t.id, t.name, t.default_price
-     order by t.id`
+     order by t.sort_order, t.id`
   );
 }
 
