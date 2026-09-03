@@ -397,12 +397,44 @@ export type KasszaMovementRow = {
 };
 
 export async function getKasszaMovements(): Promise<KasszaMovementRow[]> {
-  return query<KasszaMovementRow>(
+  // A felvásárláshoz (és cseréhez) kötött kassza-tételek nagyon elszaporodnak —
+  // ezeket havonta egy összesítő sorba vonjuk össze, mindig a lista tetején,
+  // a folyó hónap kerül legfelülre. Az egyéb (nem felvásárláshoz kötött)
+  // tételek — kifizetés, egyéb kassza-mozgás, nyitó kassza — továbbra is
+  // egyenként látszanak.
+  const purchaseMonths = await query<{
+    month_key: string;
+    month_label: string;
+    cnt: number;
+    total: number;
+  }>(
+    `select to_char(date_trunc('month', created_at), 'YYYY-MM') as month_key,
+            to_char(date_trunc('month', created_at), 'mon. YYYY') as month_label,
+            count(*)::int as cnt,
+            sum(amount)::int as total
+     from kassza_movements
+     where purchase_id is not null
+     group by 1, 2
+     order by 1 desc`
+  );
+
+  const otherRows = await query<KasszaMovementRow>(
     `select id::text, to_char(created_at, '${TIME_FMT}') as date, description, amount, created_by
      from kassza_movements
+     where purchase_id is null
      order by created_at desc
      limit 200`
   );
+
+  const aggregated: KasszaMovementRow[] = purchaseMonths.map((m) => ({
+    id: `purchase-${m.month_key}`,
+    date: m.month_label,
+    description: `Felvásárlás (${m.cnt} tétel)`,
+    amount: Number(m.total),
+    created_by: null,
+  }));
+
+  return [...aggregated, ...otherRows];
 }
 
 // --- Nyíregyháza — fő fül ---
