@@ -147,11 +147,36 @@ export async function getHaviSnapshot() {
      where s.name = 'Nyíregyháza' and t.default_price is not null
      order by t.id`
   );
+  // Típusonkénti darabszám-számláló: havi (aktuális naptári hónap) és mai összesítés.
+  // Pending tétel is beleszámít, mert a darabszám a felvételkor azonnal a készletben van.
+  const typeCounterRows = await query<{
+    type: string;
+    monthly_qty: string;
+    daily_qty: string;
+  }>(
+    `select t.name as type,
+       coalesce(sum(p.qty) filter (
+         where date_trunc('month', p.created_at) = date_trunc('month', current_date)
+       ), 0) as monthly_qty,
+       coalesce(sum(p.qty) filter (where p.created_at::date = current_date), 0) as daily_qty
+     from pallet_types t
+     join site_active_types sat on sat.type_id = t.id
+     join sites s on s.id = sat.site_id
+     left join nyiregyhaza_purchases p on p.type_id = t.id
+     where s.name = 'Nyíregyháza' and t.default_price is not null
+     group by t.name, t.id
+     order by t.id`
+  );
   return {
     purchases,
     kassza: Number(kasszaRows[0]?.total ?? 0),
     todayExpense: Number(todayExpenseRows[0]?.total ?? 0),
     todayKey: todayExpenseRows[0].today_key,
+    typeCounters: typeCounterRows.map((r) => ({
+      type: r.type,
+      monthlyQty: Number(r.monthly_qty),
+      dailyQty: Number(r.daily_qty),
+    })),
     prices: priceRows,
   };
 }

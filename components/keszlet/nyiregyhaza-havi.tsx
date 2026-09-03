@@ -75,6 +75,9 @@ function dayGroupLabel(dayKey: string) {
 export function NyiregyhazaHaviTab() {
   const [loading, setLoading] = useState(true);
   const [purchases, setPurchases] = useState<PurchaseRow[]>([]);
+  const [typeCounters, setTypeCounters] = useState<
+    { type: string; monthlyQty: number; dailyQty: number }[]
+  >([]);
   const [todayKey, setTodayKey] = useState("");
   const [kassza, setKassza] = useState(0);
   const [todayExpense, setTodayExpense] = useState(0);
@@ -107,6 +110,7 @@ export function NyiregyhazaHaviTab() {
     setTodayKey(snap.todayKey);
     setKassza(snap.kassza);
     setTodayExpense(snap.todayExpense);
+    setTypeCounters(snap.typeCounters);
     const priceMap: Record<string, number> = {};
     for (const p of snap.prices) if (p.default_price) priceMap[p.name] = p.default_price;
     setPrices(priceMap);
@@ -355,7 +359,31 @@ export function NyiregyhazaHaviTab() {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.5fr_1fr]">
+    <div className="space-y-5">
+      {typeCounters.length > 0 && (
+        <Card>
+          <CardContent className="space-y-2 py-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {typeCounters.map((c) => (
+                <div key={`havi-${c.type}`} className="text-center">
+                  <div className="text-[11px] text-muted-foreground">{c.type} — havi</div>
+                  <div className="text-lg font-semibold tabular-nums">{c.monthlyQty} db</div>
+                </div>
+              ))}
+            </div>
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 border-t pt-2">
+              {typeCounters.map((c) => (
+                <div key={`napi-${c.type}`} className="text-center">
+                  <div className="text-[11px] text-muted-foreground">{c.type} — mai</div>
+                  <div className="text-lg font-semibold tabular-nums">{c.dailyQty} db</div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.5fr_1fr]">
       <Card>
         <CardHeader>
           <CardTitle className="text-sm">
@@ -870,6 +898,7 @@ export function NyiregyhazaHaviTab() {
           </div>
         </DialogContent>
       </Dialog>
+      </div>
     </div>
   );
 }
