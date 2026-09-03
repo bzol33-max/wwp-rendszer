@@ -8,6 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { X } from "lucide-react";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -21,6 +27,8 @@ import {
   addPurchase,
   deletePurchase,
   getHaviSnapshot,
+  getKasszaMovements,
+  type KasszaMovementRow,
   type PurchaseRow,
 } from "@/lib/keszlet/actions";
 
@@ -56,6 +64,9 @@ export function NyiregyhazaHaviTab() {
   const [submitting, setSubmitting] = useState(false);
   const [kasszaDesc, setKasszaDesc] = useState("");
   const [kasszaAmount, setKasszaAmount] = useState("");
+  const [kasszaDetailOpen, setKasszaDetailOpen] = useState(false);
+  const [kasszaDetailLoading, setKasszaDetailLoading] = useState(false);
+  const [kasszaMovements, setKasszaMovements] = useState<KasszaMovementRow[]>([]);
   const { datePart, weekdayPart } = todayLabel();
 
   const load = useCallback(async () => {
@@ -113,6 +124,16 @@ export function NyiregyhazaHaviTab() {
       toast.success("Tétel törölve.");
     } catch {
       toast.error("Nem sikerült törölni.");
+    }
+  }
+
+  async function openKasszaDetail() {
+    setKasszaDetailOpen(true);
+    setKasszaDetailLoading(true);
+    try {
+      setKasszaMovements(await getKasszaMovements());
+    } finally {
+      setKasszaDetailLoading(false);
     }
   }
 
@@ -260,7 +281,10 @@ export function NyiregyhazaHaviTab() {
       </Card>
 
       <div className="flex flex-col gap-5">
-        <Card className="border-warning/30 bg-warning/5">
+        <Card
+          className="cursor-pointer border-warning/30 bg-warning/5 transition-colors hover:bg-warning/10"
+          onClick={openKasszaDetail}
+        >
           <CardHeader>
             <CardTitle className="text-xs font-medium text-warning">
               Kassza egyenleg
@@ -270,6 +294,9 @@ export function NyiregyhazaHaviTab() {
             <div className="text-3xl font-bold text-warning">
               {kassza.toLocaleString("hu-HU")} Ft
             </div>
+            <p className="mt-1 text-[11px] text-muted-foreground">
+              Kattints a tételes bevétel/kifizetés listáért
+            </p>
           </CardContent>
         </Card>
 
@@ -335,6 +362,66 @@ export function NyiregyhazaHaviTab() {
           </CardContent>
         </Card>
       </div>
+
+      <Dialog open={kasszaDetailOpen} onOpenChange={setKasszaDetailOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Kassza mozgások</DialogTitle>
+          </DialogHeader>
+          {kasszaDetailLoading ? (
+            <p className="text-sm text-muted-foreground">Betöltés…</p>
+          ) : (
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+              <div>
+                <h4 className="mb-2 text-xs font-medium text-success">Bevétel</h4>
+                <div className="max-h-80 space-y-1.5 overflow-y-auto pr-1">
+                  {kasszaMovements.filter((m) => m.amount > 0).length === 0 && (
+                    <p className="text-xs text-muted-foreground">Nincs tétel.</p>
+                  )}
+                  {kasszaMovements
+                    .filter((m) => m.amount > 0)
+                    .map((m) => (
+                      <div
+                        key={m.id}
+                        className="flex items-center justify-between rounded-md border bg-success/5 px-2.5 py-1.5 text-sm"
+                      >
+                        <span className="truncate pr-2 text-muted-foreground">
+                          {m.date} · {m.description}
+                        </span>
+                        <span className="shrink-0 font-medium tabular-nums text-success">
+                          +{m.amount.toLocaleString("hu-HU")} Ft
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+              <div>
+                <h4 className="mb-2 text-xs font-medium text-destructive">Kifizetés</h4>
+                <div className="max-h-80 space-y-1.5 overflow-y-auto pr-1">
+                  {kasszaMovements.filter((m) => m.amount < 0).length === 0 && (
+                    <p className="text-xs text-muted-foreground">Nincs tétel.</p>
+                  )}
+                  {kasszaMovements
+                    .filter((m) => m.amount < 0)
+                    .map((m) => (
+                      <div
+                        key={m.id}
+                        className="flex items-center justify-between rounded-md border bg-destructive/5 px-2.5 py-1.5 text-sm"
+                      >
+                        <span className="truncate pr-2 text-muted-foreground">
+                          {m.date} · {m.description}
+                        </span>
+                        <span className="shrink-0 font-medium tabular-nums text-destructive">
+                          {m.amount.toLocaleString("hu-HU")} Ft
+                        </span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -223,6 +223,22 @@ export async function addKasszaMovement(description: string, amount: number) {
   ]);
 }
 
+export type KasszaMovementRow = {
+  id: string;
+  date: string;
+  description: string;
+  amount: number;
+};
+
+export async function getKasszaMovements(): Promise<KasszaMovementRow[]> {
+  return query<KasszaMovementRow>(
+    `select id::text, to_char(created_at, 'mon. DD') as date, description, amount
+     from kassza_movements
+     order by created_at desc
+     limit 200`
+  );
+}
+
 // --- Nyíregyháza — fő fül ---
 
 export type EventRow = {
