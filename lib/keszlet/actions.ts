@@ -300,10 +300,33 @@ export async function addPurchase(input: {
 
 export async function deletePurchase(id: string) {
   // Visszavonja a felvásárlás összes hatását: mozgás(ok), kassza-tétel, esemény, majd maga a tétel.
+  const purchaseRows = await query<{
+    total: number;
+    payment_method: string;
+    pending: boolean;
+  }>(`select total, payment_method, pending from nyiregyhaza_purchases where id = $1`, [id]);
+
   await query(`delete from keszlet_movements where purchase_id = $1`, [id]);
-  await query(`delete from kassza_movements where purchase_id = $1`, [id]);
+  const deletedKassza = await query<{ id: string }>(
+    `delete from kassza_movements where purchase_id = $1 returning id`,
+    [id]
+  );
   await query(`delete from keszlet_events where purchase_id = $1`, [id]);
   await query(`delete from nyiregyhaza_purchases where id = $1`, [id]);
+
+  // Régebbi, eladónkénti gyűjtő kifizetésből származó (a konkrét tételhez nem
+  // közvetlenül kötött) kassza-terhelést nem tudtuk a fenti purchase_id
+  // alapján megtalálni és törölni — ilyenkor a törölt tétel összegét
+  // manuálisan visszaírjuk a kasszába, hogy a pénz ne vesszen el.
+  if (deletedKassza.length === 0 && purchaseRows.length > 0) {
+    const p = purchaseRows[0];
+    if (!p.pending && p.payment_method === "keszpenz") {
+      await query(
+        `insert into kassza_movements (description, amount, category) values ($1, $2, 'felvasarlas')`,
+        [`Törölt felvásárlási tétel visszaírása`, Number(p.total)]
+      );
+    }
+  }
 }
 
 // --- Kifizetésre váró tételek (nyitvatartáson túl/hétvégén leadott felvásárlás) ---
@@ -369,15 +392,20 @@ export async function payPendingSeller(seller: string, createdBy?: string) {
     [seller]
   );
   if (rows.length === 0) return;
-  const sum = rows.reduce((s, r) => s + Number(r.total), 0);
   await query(
     `update nyiregyhaza_purchases set pending = false, paid_at = now() where seller = $1 and pending = true`,
     [seller]
   );
-  await query(
-    `insert into kassza_movements (description, amount, created_by, category) values ($1, $2, $3, 'felvasarlas')`,
-    [`Kifizetés — ${seller} (${rows.length} tétel)`, -sum, createdBy ?? null]
-  );
+  // Tételenként külön kassza-sor (purchase_id-hoz kötve), hogy egy később
+  // törölt tétel pénze pontosan visszaíródjon a kasszába — nem egy közös,
+  // eladónkénti gyűjtő összeg, amit nem lehetne utólag tételre bontani.
+  for (const r of rows) {
+    await query(
+      `insert into kassza_movements (description, amount, purchase_id, created_by, category)
+       values ($1, $2, $3, $4, 'felvasarlas')`,
+      [`Kifizetés — ${seller}`, -Number(r.total), r.id, createdBy ?? null]
+    );
+  }
 }
 
 export async function addKasszaMovement(description: string, amount: number, createdBy?: string) {
