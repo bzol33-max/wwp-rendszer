@@ -120,12 +120,11 @@ export async function getHaviSnapshot() {
   const kasszaRows = await query<{ total: string }>(
     `select coalesce(sum(amount), 0) as total from kassza_movements`
   );
-  // Mai kiadás: a mai napon rögzített, ténylegesen kiadást jelentő (nem Csere) vételek összege.
+  // Mai kiadás: a mai napon rögzített összes vétel (Csere is kiadás — készpénzért veszünk raklapot).
   const todayExpenseRows = await query<{ total: string }>(
     `select coalesce(sum(p.total), 0) as total
      from nyiregyhaza_purchases p
-     join pallet_types t on t.id = p.type_id
-     where t.name <> 'Csere' and p.created_at::date = current_date`
+     where p.created_at::date = current_date`
   );
   // Gyors rögzítéshez azok a típusok jelennek meg, amik Nyíregyházán aktívak ÉS van beárazva.
   const priceRows = await query<{ name: string; default_price: number | null }>(
@@ -161,15 +160,15 @@ export async function addPurchase(input: {
   );
 
   if (input.type === "Csere") {
-    // A "Csere" nem önálló készlettétel: a vevő szürkét ad le, világosat visz,
-    // és megfizeti a különbözetet — tehát világos +db, szürke −db, kassza +összeg.
+    // A "Csere" nem önálló készlettétel: világos +db, szürke −db a Nyíregyháza készleten.
+    // Kasszaszempontból ugyanolyan kiadás, mint bármelyik más felvásárlás — készpénzért vesszük.
     await addMovement({ site: "Nyíregyháza", type: "EUR világos", direction: "be", qty: input.qty, partner: "Csere" });
     await addMovement({ site: "Nyíregyháza", type: "EUR szürke", direction: "ki", qty: input.qty, partner: "Csere" });
     if (!input.pending) {
       await query(
         `insert into kassza_movements (description, amount, purchase_id)
          values ($1, $2, $3)`,
-        [`Csere (${input.qty} db × ${input.unitPrice} Ft)`, total, rows[0].id]
+        [`Csere (${input.qty} db × ${input.unitPrice} Ft)`, -total, rows[0].id]
       );
     }
     await query(
@@ -177,7 +176,7 @@ export async function addPurchase(input: {
        values ((select id from sites where name = 'Nyíregyháza'), 'csere', $1, $2)`,
       [
         `${input.qty} db csere, ${input.unitPrice} Ft/db`,
-        `világos +${input.qty} · szürke −${input.qty} · kassza +${total.toLocaleString("hu-HU")} Ft`,
+        `világos +${input.qty} · szürke −${input.qty} · kassza −${total.toLocaleString("hu-HU")} Ft`,
       ]
     );
     return;
