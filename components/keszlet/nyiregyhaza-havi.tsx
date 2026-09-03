@@ -41,6 +41,7 @@ import {
   type KasszaMovementRow,
   type PurchaseRow,
 } from "@/lib/keszlet/actions";
+import { kbNav } from "@/lib/keszlet/kbnav";
 
 function todayLabel() {
   const raw = new Date().toLocaleDateString("hu-HU", {
@@ -362,7 +363,7 @@ export function NyiregyhazaHaviTab() {
           </CardTitle>
           <p className="text-xs text-muted-foreground">{datePart}</p>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4" data-kbnav-group>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {Object.keys(prices).map((t) => (
               <div key={t} className="space-y-1.5">
@@ -374,6 +375,8 @@ export function NyiregyhazaHaviTab() {
                   onChange={(e) =>
                     setTodayQty((prev) => ({ ...prev, [t]: e.target.value }))
                   }
+                  data-kbnav-item
+                  onKeyDown={kbNav}
                 />
                 <p className="text-[11px] text-muted-foreground">
                   {prices[t] ? `${prices[t]} Ft/db` : "—"}
@@ -387,7 +390,13 @@ export function NyiregyhazaHaviTab() {
               {currentEntryTotal.toLocaleString("hu-HU")} Ft
             </span>
           </div>
-          <Button onClick={() => recordDay("keszpenz")} disabled={submitting} size="lg" className="w-full">
+          <Button
+            onClick={() => recordDay("keszpenz")}
+            disabled={submitting}
+            size="lg"
+            className="w-full"
+            data-kbnav-submit
+          >
             {submitting ? "Mentés…" : "Vétel — készpénzből fizetve"}
           </Button>
           <div className="grid grid-cols-2 gap-2">
@@ -697,7 +706,7 @@ export function NyiregyhazaHaviTab() {
           <DialogHeader>
             <DialogTitle>Vétel — egyedi áron</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
+          <div className="space-y-3" data-kbnav-group>
             {getEntries().map(([type, qtyStr]) => (
               <div key={type} className="flex items-center justify-between gap-3">
                 <div className="text-sm">
@@ -711,6 +720,8 @@ export function NyiregyhazaHaviTab() {
                   onChange={(e) =>
                     setCustomPrices((prev) => ({ ...prev, [type]: e.target.value }))
                   }
+                  data-kbnav-item
+                  onKeyDown={kbNav}
                 />
               </div>
             ))}
@@ -718,6 +729,7 @@ export function NyiregyhazaHaviTab() {
               onClick={recordCustomPrice}
               disabled={submitting}
               className="w-full bg-violet-600 text-white hover:bg-violet-700"
+              data-kbnav-submit
             >
               {submitting ? "Mentés…" : "Rögzítés egyedi áron"}
             </Button>
@@ -730,7 +742,7 @@ export function NyiregyhazaHaviTab() {
           <DialogHeader>
             <DialogTitle>Kifizetésre váró tétel felvétele</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
+          <div className="space-y-3" data-kbnav-group>
             <div className="space-y-1.5">
               <Label className="text-xs">Név</Label>
               <Input
@@ -738,6 +750,8 @@ export function NyiregyhazaHaviTab() {
                 onChange={(e) => setPendingSeller(e.target.value)}
                 placeholder="Ki hozta"
                 disabled={pendingSellerLocked}
+                data-kbnav-item
+                onKeyDown={kbNav}
               />
             </div>
             <div className="space-y-1.5">
@@ -746,6 +760,8 @@ export function NyiregyhazaHaviTab() {
                 type="date"
                 value={pendingDate}
                 onChange={(e) => setPendingDate(e.target.value)}
+                data-kbnav-item
+                onKeyDown={kbNav}
               />
             </div>
             <div className="space-y-1.5">
@@ -761,6 +777,8 @@ export function NyiregyhazaHaviTab() {
                       onChange={(e) =>
                         setPendingQtyMap((prev) => ({ ...prev, [t]: e.target.value }))
                       }
+                      data-kbnav-item
+                      onKeyDown={kbNav}
                     />
                   </div>
                 ))}
@@ -772,7 +790,12 @@ export function NyiregyhazaHaviTab() {
                 {pendingAddTotal.toLocaleString("hu-HU")} Ft
               </span>
             </div>
-            <Button onClick={submitPendingAdd} disabled={pendingSubmitting} className="w-full">
+            <Button
+              onClick={submitPendingAdd}
+              disabled={pendingSubmitting}
+              className="w-full"
+              data-kbnav-submit
+            >
               {pendingSubmitting ? "Mentés…" : "Rögzítés"}
             </Button>
           </div>
@@ -787,13 +810,15 @@ export function NyiregyhazaHaviTab() {
           <DialogHeader>
             <DialogTitle>Tétel módosítása — {pendingEditRow?.seller}</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
+          <div className="space-y-3" data-kbnav-group>
             <div className="space-y-1.5">
               <Label className="text-xs">Dátum</Label>
               <Input
                 type="date"
                 value={pendingEditDate}
                 onChange={(e) => setPendingEditDate(e.target.value)}
+                data-kbnav-item
+                onKeyDown={kbNav}
               />
             </div>
             <div className="space-y-1.5">
@@ -802,7 +827,7 @@ export function NyiregyhazaHaviTab() {
                 value={pendingEditType}
                 onValueChange={(v) => v && setPendingEditType(v)}
               >
-                <SelectTrigger className="w-full">
+                <SelectTrigger className="w-full" data-kbnav-item onKeyDown={kbNav}>
                   <SelectValue placeholder="Válassz típust" />
                 </SelectTrigger>
                 <SelectContent>
@@ -821,6 +846,8 @@ export function NyiregyhazaHaviTab() {
                 value={pendingEditQty}
                 onChange={(e) => setPendingEditQty(e.target.value)}
                 placeholder="db"
+                data-kbnav-item
+                onKeyDown={kbNav}
               />
             </div>
             <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm">
@@ -832,7 +859,12 @@ export function NyiregyhazaHaviTab() {
                 Ft
               </span>
             </div>
-            <Button onClick={submitPendingEdit} disabled={pendingSubmitting} className="w-full">
+            <Button
+              onClick={submitPendingEdit}
+              disabled={pendingSubmitting}
+              className="w-full"
+              data-kbnav-submit
+            >
               {pendingSubmitting ? "Mentés…" : "Módosítás mentése"}
             </Button>
           </div>

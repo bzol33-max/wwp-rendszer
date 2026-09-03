@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { recordInventoryCount } from "@/lib/keszlet/actions";
+import { kbNav } from "@/lib/keszlet/kbnav";
 
 type Props = {
   site: string;
@@ -87,7 +88,7 @@ export function InventoryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" data-kbnav-group>
         {!done ? (
           <>
             <DialogHeader>
@@ -110,6 +111,8 @@ export function InventoryDialog({
                   autoFocus
                   value={counted}
                   onChange={(e) => setCounted(e.target.value)}
+                  data-kbnav-item
+                  onKeyDown={kbNav}
                 />
               </div>
 
@@ -128,6 +131,8 @@ export function InventoryDialog({
                       placeholder="pl. törés, minőségromlás"
                       value={comment}
                       onChange={(e) => setComment(e.target.value)}
+                      data-kbnav-item
+                      onKeyDown={kbNav}
                     />
                   </div>
                 </div>
@@ -144,12 +149,16 @@ export function InventoryDialog({
                     <Button variant="outline" disabled={saving} onClick={() => next(false)}>
                       Eltérés elutasítása
                     </Button>
-                    <Button disabled={saving} onClick={() => next(true)}>
+                    <Button disabled={saving} onClick={() => next(true)} data-kbnav-submit>
                       Korrekció elfogadása
                     </Button>
                   </>
                 ) : (
-                  <Button onClick={() => next(null)} disabled={countedNum === null}>
+                  <Button
+                    onClick={() => next(null)}
+                    disabled={countedNum === null}
+                    data-kbnav-submit
+                  >
                     Tovább
                   </Button>
                 )}
