@@ -28,7 +28,8 @@ export async function getActiveTypes(site: string) {
 }
 
 export async function getStock(site: string): Promise<Record<string, number>> {
-  const active = await getActiveTypes(site);
+  // A "Csere" tranzakciótípus, nem önálló készlet — sosem jelenik meg készletkártyaként.
+  const active = (await getActiveTypes(site)).filter((t) => t !== "Csere");
   const rows = await query<{ name: string; qty: string }>(
     `select t.name,
        coalesce(sum(case
@@ -149,6 +150,30 @@ export async function addPurchase(input: {
      returning id`,
     [input.type, input.qty, input.unitPrice, total, input.seller, input.pending ?? false]
   );
+
+  if (input.type === "Csere") {
+    // A "Csere" nem önálló készlettétel: a vevő szürkét ad le, világosat visz,
+    // és megfizeti a különbözetet — tehát világos +db, szürke −db, kassza +összeg.
+    await addMovement({ site: "Nyíregyháza", type: "EUR világos", direction: "be", qty: input.qty, partner: input.seller });
+    await addMovement({ site: "Nyíregyháza", type: "EUR szürke", direction: "ki", qty: input.qty, partner: input.seller });
+    if (!input.pending) {
+      await query(
+        `insert into kassza_movements (description, amount, purchase_id)
+         values ($1, $2, $3)`,
+        [`Csere (${input.qty} db × ${input.unitPrice} Ft)`, total, rows[0].id]
+      );
+    }
+    await query(
+      `insert into keszlet_events (site_id, kind, details, effect)
+       values ((select id from sites where name = 'Nyíregyháza'), 'csere', $1, $2)`,
+      [
+        `${input.qty} db csere, ${input.unitPrice} Ft/db — ${input.seller}`,
+        `világos +${input.qty} · szürke −${input.qty} · kassza +${total.toLocaleString("hu-HU")} Ft`,
+      ]
+    );
+    return;
+  }
+
   // Havi fülről automatikusan bekerül a Nyíregyháza fül (tényleges készlet) állományba is,
   // kivéve ha kifizetésre vár (akkor a darabszám már benne van, csak a kassza vár).
   await query(
@@ -195,21 +220,6 @@ export async function getNyiregyhazaFoSnapshot() {
     ),
   ]);
   return { stock, events };
-}
-
-export async function recordCsere(qty: number) {
-  const price = 800;
-  await addMovement({ site: "Nyíregyháza", type: "EUR világos", direction: "be", qty, partner: "Csere" });
-  await addMovement({ site: "Nyíregyháza", type: "EUR szürke", direction: "ki", qty, partner: "Csere" });
-  await addKasszaMovement(`Csere befizetés (${qty} db × ${price} Ft)`, qty * price);
-  await query(
-    `insert into keszlet_events (site_id, kind, details, effect)
-     values ((select id from sites where name = 'Nyíregyháza'), 'csere', $1, $2)`,
-    [
-      `${qty} db csere, ${price} Ft/db`,
-      `világos +${qty} · szürke −${qty} · kassza +${(qty * price).toLocaleString("hu-HU")} Ft`,
-    ]
-  );
 }
 
 export async function recordSzetvalogatas(result: { vilagos: number; szurke: number; torott: number }) {
