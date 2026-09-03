@@ -55,8 +55,8 @@ export const MODULES: ModuleInfo[] = [
     label: "Számlák",
     href: "/szamlak",
     icon: Receipt,
-    status: "tervezes-alatt",
-    description: "A modul funkciói még nincsenek kidolgozva.",
+      status: "fejlesztes-alatt",
+    description: "A modul funkciói kidolgozás alatt, saját beszélgetésben.",
   },
   {
     key: "dolgozok",
