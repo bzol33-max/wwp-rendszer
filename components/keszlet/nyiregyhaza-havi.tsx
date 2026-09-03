@@ -374,35 +374,41 @@ export function NyiregyhazaHaviTab() {
     <div className="space-y-5">
       {typeCounters.length > 0 && (
         <div className="space-y-2">
-          <div className="flex flex-nowrap gap-2 overflow-x-auto pb-1">
-            {typeCounters.map((c) => (
-              <div
-                key={`havi-${c.type}`}
-                className={`shrink-0 rounded-lg border px-3 py-2 ${MONTHLY_TILE_COLOR.border} ${MONTHLY_TILE_COLOR.bg}`}
-              >
-                <div className={`whitespace-nowrap text-[11px] font-medium ${MONTHLY_TILE_COLOR.text}`}>
-                  {c.type} — havi
+          <div>
+            <div className={`mb-1 text-xs font-semibold ${MONTHLY_TILE_COLOR.text}`}>Havi</div>
+            <div className="flex flex-nowrap gap-1.5">
+              {typeCounters.map((c) => (
+                <div
+                  key={`havi-${c.type}`}
+                  className={`min-w-0 flex-1 rounded-lg border px-1.5 py-2 text-center ${MONTHLY_TILE_COLOR.border} ${MONTHLY_TILE_COLOR.bg}`}
+                >
+                  <div className={`truncate text-[10px] font-medium ${MONTHLY_TILE_COLOR.text}`}>
+                    {c.type}
+                  </div>
+                  <div className={`text-lg font-bold tabular-nums ${MONTHLY_TILE_COLOR.text}`}>
+                    {c.monthlyQty}
+                  </div>
                 </div>
-                <div className={`text-xl font-bold tabular-nums ${MONTHLY_TILE_COLOR.text}`}>
-                  {c.monthlyQty} db
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-          <div className="flex flex-nowrap gap-2 overflow-x-auto pb-1">
-            {typeCounters.map((c) => (
-              <div
-                key={`napi-${c.type}`}
-                className={`shrink-0 rounded-lg border px-2.5 py-1.5 ${DAILY_TILE_COLOR.border} ${DAILY_TILE_COLOR.bg}`}
-              >
-                <div className={`whitespace-nowrap text-[10px] font-medium ${DAILY_TILE_COLOR.text}`}>
-                  {c.type} — mai
+          <div>
+            <div className={`mb-1 text-xs font-semibold ${DAILY_TILE_COLOR.text}`}>Mai</div>
+            <div className="flex flex-nowrap gap-1.5">
+              {typeCounters.map((c) => (
+                <div
+                  key={`napi-${c.type}`}
+                  className={`min-w-0 flex-1 rounded-lg border px-1.5 py-1.5 text-center ${DAILY_TILE_COLOR.border} ${DAILY_TILE_COLOR.bg}`}
+                >
+                  <div className={`truncate text-[10px] font-medium ${DAILY_TILE_COLOR.text}`}>
+                    {c.type}
+                  </div>
+                  <div className={`text-sm font-semibold tabular-nums ${DAILY_TILE_COLOR.text}`}>
+                    {c.dailyQty}
+                  </div>
                 </div>
-                <div className={`text-sm font-semibold tabular-nums ${DAILY_TILE_COLOR.text}`}>
-                  {c.dailyQty} db
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       )}
