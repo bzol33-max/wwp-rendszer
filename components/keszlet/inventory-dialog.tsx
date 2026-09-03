@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { recordInventoryCount } from "@/lib/keszlet/actions";
 import { kbNav } from "@/lib/keszlet/kbnav";
+import { getCurrentUser } from "@/lib/current-user";
 
 type Props = {
   site: string;
@@ -64,6 +65,7 @@ export function InventoryDialog({
           countedQty: countedNum,
           accepted: accept,
           comment: comment || undefined,
+          createdBy: getCurrentUser() || undefined,
         });
         if (accept) {
           toast.success(`${type}: készlet korrigálva ${countedNum} db-ra.`);

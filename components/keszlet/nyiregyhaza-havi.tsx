@@ -42,6 +42,7 @@ import {
   type PurchaseRow,
 } from "@/lib/keszlet/actions";
 import { kbNav } from "@/lib/keszlet/kbnav";
+import { getCurrentUser } from "@/lib/current-user";
 
 function todayLabel() {
   const raw = new Date().toLocaleDateString("hu-HU", {
@@ -158,6 +159,7 @@ export function NyiregyhazaHaviTab() {
           qty: Number(qtyStr),
           unitPrice: prices[type] ?? 0,
           method,
+          createdBy: getCurrentUser() || undefined,
         });
       }
       setTodayQty({});
@@ -197,6 +199,7 @@ export function NyiregyhazaHaviTab() {
           qty: Number(qtyStr),
           unitPrice,
           method: "keszpenz",
+          createdBy: getCurrentUser() || undefined,
         });
       }
       setTodayQty({});
@@ -261,6 +264,7 @@ export function NyiregyhazaHaviTab() {
           type,
           qty: Number(qtyStr),
           date: pendingDate,
+          createdBy: getCurrentUser() || undefined,
         });
       }
       setPendingAddOpen(false);
@@ -293,6 +297,7 @@ export function NyiregyhazaHaviTab() {
         type: pendingEditType,
         qty,
         date: pendingEditDate,
+        createdBy: getCurrentUser() || undefined,
       });
       setPendingEditRow(null);
       await load();
@@ -306,7 +311,7 @@ export function NyiregyhazaHaviTab() {
 
   async function handlePaySeller(seller: string) {
     try {
-      await payPendingSeller(seller);
+      await payPendingSeller(seller, getCurrentUser() || undefined);
       await load();
       toast.success(`${seller} kifizetve.`);
     } catch {
@@ -330,7 +335,7 @@ export function NyiregyhazaHaviTab() {
       toast.error("Adj meg leírást és összeget.");
       return;
     }
-    await addKasszaMovement(kasszaDesc, amount);
+    await addKasszaMovement(kasszaDesc, amount, getCurrentUser() || undefined);
     setKasszaDesc("");
     setKasszaAmount("");
     await load();
@@ -478,19 +483,20 @@ export function NyiregyhazaHaviTab() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Dátum</TableHead>
+                <TableHead>Dátum/idő</TableHead>
                 <TableHead>Típus</TableHead>
                 <TableHead className="text-right">Db</TableHead>
                 <TableHead className="text-right">Egységár</TableHead>
                 <TableHead className="text-right">Összeg</TableHead>
                 <TableHead></TableHead>
+                <TableHead>Ki</TableHead>
                 <TableHead className="w-8"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {todayPurchases.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center text-muted-foreground">
                     Ma még nincs rögzített vétel.
                   </TableCell>
                 </TableRow>
@@ -518,6 +524,7 @@ export function NyiregyhazaHaviTab() {
                       )}
                     </div>
                   </TableCell>
+                  <TableCell className="text-muted-foreground">{p.created_by ?? "—"}</TableCell>
                   <TableCell>
                     <button
                       type="button"
@@ -641,6 +648,7 @@ export function NyiregyhazaHaviTab() {
                       <span className="text-muted-foreground">
                         {dayGroupLabel(e.day_key)} · {e.type} ·{" "}
                         <span className="font-medium text-foreground">{e.qty} db</span>
+                        {e.created_by && <> · {e.created_by}</>}
                       </span>
                       <div className="flex items-center gap-2">
                         <span className="font-medium tabular-nums">
@@ -723,6 +731,7 @@ export function NyiregyhazaHaviTab() {
                       >
                         <span className="truncate pr-2 text-muted-foreground">
                           {m.date} · {m.description}
+                          {m.created_by && <> · {m.created_by}</>}
                         </span>
                         <span className="shrink-0 font-medium tabular-nums text-success">
                           +{m.amount.toLocaleString("hu-HU")} Ft
@@ -746,6 +755,7 @@ export function NyiregyhazaHaviTab() {
                       >
                         <span className="truncate pr-2 text-muted-foreground">
                           {m.date} · {m.description}
+                          {m.created_by && <> · {m.created_by}</>}
                         </span>
                         <span className="shrink-0 font-medium tabular-nums text-destructive">
                           {m.amount.toLocaleString("hu-HU")} Ft

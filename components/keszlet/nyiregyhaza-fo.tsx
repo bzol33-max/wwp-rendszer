@@ -21,6 +21,7 @@ import {
   recordSzetvalogatas,
   type EventRow,
 } from "@/lib/keszlet/actions";
+import { getCurrentUser } from "@/lib/current-user";
 
 const KIND_LABEL: Record<EventRow["kind"], string> = {
   csere: "Csere",
@@ -55,7 +56,12 @@ export function NyiregyhazaFoTab() {
 
   async function handleVegyesSplit(vilagos: number, szurke: number) {
     try {
-      await recordSzetvalogatas({ site: "Nyíregyháza", vilagos, szurke });
+      await recordSzetvalogatas({
+        site: "Nyíregyháza",
+        vilagos,
+        szurke,
+        createdBy: getCurrentUser() || undefined,
+      });
       await load();
       toast.success("Szétválogatás rögzítve.");
     } catch {
@@ -110,10 +116,11 @@ export function NyiregyhazaFoTab() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Dátum</TableHead>
+                <TableHead>Dátum/idő</TableHead>
                 <TableHead>Esemény</TableHead>
                 <TableHead>Részletek</TableHead>
                 <TableHead>Hatás</TableHead>
+                <TableHead>Ki</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -125,6 +132,7 @@ export function NyiregyhazaFoTab() {
                   </TableCell>
                   <TableCell>{e.details}</TableCell>
                   <TableCell className="text-muted-foreground">{e.effect}</TableCell>
+                  <TableCell className="text-muted-foreground">{e.created_by ?? "—"}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

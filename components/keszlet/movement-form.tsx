@@ -15,6 +15,7 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { recordMovement, type Direction } from "@/lib/keszlet/actions";
+import { getCurrentUser } from "@/lib/current-user";
 
 /**
  * Megosztott "Mozgás rögzítése" kártya (Beérkezés / Kiszállítás / Telephelyek
@@ -75,6 +76,7 @@ export function MovementForm({
         qty: n,
         partner: direction === "mozgatas" ? undefined : partner,
         targetSite: direction === "mozgatas" ? targetSite : undefined,
+        createdBy: getCurrentUser() || undefined,
       });
       setQty("");
       setPartner("");

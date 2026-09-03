@@ -2,6 +2,8 @@
 
 import { query } from "@/lib/db";
 
+const TIME_FMT = "mon. DD HH24:MI";
+
 export type Direction = "be" | "ki" | "mozgatas";
 
 export type MovementRow = {
@@ -12,6 +14,7 @@ export type MovementRow = {
   partner: string | null;
   qty: number;
   target_site: string | null;
+  created_by: string | null;
 };
 
 export async function getActiveTypes(site: string) {
@@ -53,8 +56,8 @@ export async function getStock(site: string): Promise<Record<string, number>> {
 
 export async function getMovements(site: string, limit = 20): Promise<MovementRow[]> {
   const rows = await query<MovementRow>(
-    `select m.id::text, to_char(m.created_at, 'mon. DD') as date, t.name as type,
-       m.direction, m.partner, m.qty, ts.name as target_site
+    `select m.id::text, to_char(m.created_at, '${TIME_FMT}') as date, t.name as type,
+       m.direction, m.partner, m.qty, ts.name as target_site, m.created_by
      from keszlet_movements m
      join pallet_types t on t.id = m.type_id
      left join sites ts on ts.id = m.target_site_id
@@ -74,17 +77,27 @@ export async function addMovement(input: {
   partner?: string;
   targetSite?: string;
   purchaseId?: string;
+  createdBy?: string;
 }) {
   await query(
-    `insert into keszlet_movements (site_id, type_id, direction, qty, partner, target_site_id, purchase_id)
+    `insert into keszlet_movements (site_id, type_id, direction, qty, partner, target_site_id, purchase_id, created_by)
      values (
        (select id from sites where name = $1),
        (select id from pallet_types where name = $2),
        $3, $4, $5,
        (select id from sites where name = $6),
-       $7
+       $7, $8
      )`,
-    [input.site, input.type, input.direction, input.qty, input.partner ?? null, input.targetSite ?? null, input.purchaseId ?? null]
+    [
+      input.site,
+      input.type,
+      input.direction,
+      input.qty,
+      input.partner ?? null,
+      input.targetSite ?? null,
+      input.purchaseId ?? null,
+      input.createdBy ?? null,
+    ]
   );
 }
 
@@ -99,6 +112,7 @@ export async function recordMovement(input: {
   qty: number;
   partner?: string;
   targetSite?: string;
+  createdBy?: string;
 }) {
   await addMovement(input);
   if (input.site === "Nyíregyháza") {
@@ -113,9 +127,9 @@ export async function recordMovement(input: {
           ? `${input.type} −${input.qty}`
           : `${input.type} −${input.qty} → ${input.targetSite}`;
     await query(
-      `insert into keszlet_events (site_id, kind, details, effect)
-       values ((select id from sites where name = 'Nyíregyháza'), 'mozgas', $1, $2)`,
-      [details, effect]
+      `insert into keszlet_events (site_id, kind, details, effect, created_by)
+       values ((select id from sites where name = 'Nyíregyháza'), 'mozgas', $1, $2, $3)`,
+      [details, effect, input.createdBy ?? null]
     );
   }
 }
@@ -144,13 +158,14 @@ export type PurchaseRow = {
   seller: string;
   pending: boolean;
   payment_method: PaymentMethod;
+  created_by: string | null;
 };
 
 export async function getHaviSnapshot() {
   const purchases = await query<PurchaseRow>(
-    `select p.id::text, to_char(p.created_at, 'mon. DD') as date,
+    `select p.id::text, to_char(p.created_at, '${TIME_FMT}') as date,
        to_char(p.created_at, 'YYYY-MM-DD') as day_key, t.name as type,
-       p.qty, p.unit_price, p.total, p.seller, p.pending, p.payment_method
+       p.qty, p.unit_price, p.total, p.seller, p.pending, p.payment_method, p.created_by
      from nyiregyhaza_purchases p
      join pallet_types t on t.id = p.type_id
      order by p.created_at desc
@@ -221,40 +236,43 @@ export async function addPurchase(input: {
   pending?: boolean;
   method?: PaymentMethod;
   date?: string;
+  createdBy?: string;
 }) {
   const seller = input.seller ?? "";
   const total = input.qty * input.unitPrice;
   const method: PaymentMethod = input.method ?? "keszpenz";
+  const createdBy = input.createdBy ?? null;
   // Átutalással fizetett vétel: a készletet növeli, de a kasszát nem érinti —
   // az összeg banki átutalással rendeződik, nem készpénzből.
   const affectsKassza = !input.pending && method === "keszpenz";
   const rows = await query<{ id: string }>(
-    `insert into nyiregyhaza_purchases (type_id, qty, unit_price, total, seller, pending, payment_method, created_at)
-     values ((select id from pallet_types where name = $1), $2, $3, $4, $5, $6, $7, coalesce($8::timestamptz, now()))
+    `insert into nyiregyhaza_purchases (type_id, qty, unit_price, total, seller, pending, payment_method, created_at, created_by)
+     values ((select id from pallet_types where name = $1), $2, $3, $4, $5, $6, $7, coalesce($8::timestamptz, now()), $9)
      returning id`,
-    [input.type, input.qty, input.unitPrice, total, seller, input.pending ?? false, method, input.date ?? null]
+    [input.type, input.qty, input.unitPrice, total, seller, input.pending ?? false, method, input.date ?? null, createdBy]
   );
   const purchaseId = rows[0].id;
 
   if (input.type === "Csere") {
     // A "Csere" nem önálló készlettétel: világos +db, szürke −db a Nyíregyháza készleten.
     // Kasszaszempontból ugyanolyan kiadás, mint bármelyik más felvásárlás — készpénzért vesszük.
-    await addMovement({ site: "Nyíregyháza", type: "EUR világos", direction: "be", qty: input.qty, partner: "Csere", purchaseId });
-    await addMovement({ site: "Nyíregyháza", type: "EUR szürke", direction: "ki", qty: input.qty, partner: "Csere", purchaseId });
+    await addMovement({ site: "Nyíregyháza", type: "EUR világos", direction: "be", qty: input.qty, partner: "Csere", purchaseId, createdBy: createdBy ?? undefined });
+    await addMovement({ site: "Nyíregyháza", type: "EUR szürke", direction: "ki", qty: input.qty, partner: "Csere", purchaseId, createdBy: createdBy ?? undefined });
     if (affectsKassza) {
       await query(
-        `insert into kassza_movements (description, amount, purchase_id)
-         values ($1, $2, $3)`,
-        [`Csere (${input.qty} db × ${input.unitPrice} Ft)`, -total, purchaseId]
+        `insert into kassza_movements (description, amount, purchase_id, created_by)
+         values ($1, $2, $3, $4)`,
+        [`Csere (${input.qty} db × ${input.unitPrice} Ft)`, -total, purchaseId, createdBy]
       );
     }
     await query(
-      `insert into keszlet_events (site_id, kind, details, effect, purchase_id)
-       values ((select id from sites where name = 'Nyíregyháza'), 'csere', $1, $2, $3)`,
+      `insert into keszlet_events (site_id, kind, details, effect, purchase_id, created_by)
+       values ((select id from sites where name = 'Nyíregyháza'), 'csere', $1, $2, $3, $4)`,
       [
         `${input.qty} db csere, ${input.unitPrice} Ft/db`,
         `világos +${input.qty} · szürke −${input.qty} · kassza −${total.toLocaleString("hu-HU")} Ft`,
         purchaseId,
+        createdBy,
       ]
     );
     return;
@@ -269,12 +287,13 @@ export async function addPurchase(input: {
     qty: input.qty,
     partner: seller || undefined,
     purchaseId,
+    createdBy: createdBy ?? undefined,
   });
   if (affectsKassza) {
     await query(
-      `insert into kassza_movements (description, amount, purchase_id)
-       values ($1, $2, $3)`,
-      [`Felvásárlás — ${input.type} (${input.qty} db)`, -total, purchaseId]
+      `insert into kassza_movements (description, amount, purchase_id, created_by)
+       values ($1, $2, $3, $4)`,
+      [`Felvásárlás — ${input.type} (${input.qty} db)`, -total, purchaseId, createdBy]
     );
   }
 }
@@ -294,6 +313,7 @@ export async function addPendingPurchase(input: {
   type: string;
   qty: number;
   date: string;
+  createdBy?: string;
 }) {
   const priceRows = await query<{ default_price: number | null }>(
     `select default_price from pallet_types where name = $1`,
@@ -307,12 +327,13 @@ export async function addPendingPurchase(input: {
     seller: input.seller,
     pending: true,
     date: input.date,
+    createdBy: input.createdBy,
   });
 }
 
 export async function updatePendingPurchase(
   id: string,
-  input: { type: string; qty: number; date: string }
+  input: { type: string; qty: number; date: string; createdBy?: string }
 ) {
   const priceRows = await query<{ default_price: number | null }>(
     `select default_price from pallet_types where name = $1`,
@@ -338,10 +359,11 @@ export async function updatePendingPurchase(
     qty: input.qty,
     partner: rows[0].seller || undefined,
     purchaseId: id,
+    createdBy: input.createdBy,
   });
 }
 
-export async function payPendingSeller(seller: string) {
+export async function payPendingSeller(seller: string, createdBy?: string) {
   const rows = await query<{ id: string; total: number }>(
     `select id::text, total from nyiregyhaza_purchases where seller = $1 and pending = true`,
     [seller]
@@ -353,15 +375,16 @@ export async function payPendingSeller(seller: string) {
     [seller]
   );
   await query(
-    `insert into kassza_movements (description, amount) values ($1, $2)`,
-    [`Kifizetés — ${seller} (${rows.length} tétel)`, -sum]
+    `insert into kassza_movements (description, amount, created_by) values ($1, $2, $3)`,
+    [`Kifizetés — ${seller} (${rows.length} tétel)`, -sum, createdBy ?? null]
   );
 }
 
-export async function addKasszaMovement(description: string, amount: number) {
-  await query(`insert into kassza_movements (description, amount) values ($1, $2)`, [
+export async function addKasszaMovement(description: string, amount: number, createdBy?: string) {
+  await query(`insert into kassza_movements (description, amount, created_by) values ($1, $2, $3)`, [
     description,
     amount,
+    createdBy ?? null,
   ]);
 }
 
@@ -370,11 +393,12 @@ export type KasszaMovementRow = {
   date: string;
   description: string;
   amount: number;
+  created_by: string | null;
 };
 
 export async function getKasszaMovements(): Promise<KasszaMovementRow[]> {
   return query<KasszaMovementRow>(
-    `select id::text, to_char(created_at, 'mon. DD') as date, description, amount
+    `select id::text, to_char(created_at, '${TIME_FMT}') as date, description, amount, created_by
      from kassza_movements
      order by created_at desc
      limit 200`
@@ -389,6 +413,7 @@ export type EventRow = {
   kind: "csere" | "szet" | "havi-zaras" | "mozgas";
   details: string;
   effect: string;
+  created_by: string | null;
 };
 
 export async function getNyiregyhazaFoSnapshot() {
@@ -398,7 +423,7 @@ export async function getNyiregyhazaFoSnapshot() {
   const [stock, events] = await Promise.all([
     getStock("Nyíregyháza"),
     query<EventRow>(
-      `select id::text, to_char(created_at, 'mon. DD') as date, kind, details, effect
+      `select id::text, to_char(created_at, '${TIME_FMT}') as date, kind, details, effect, created_by
        from keszlet_events
        where site_id = (select id from sites where name = 'Nyíregyháza')
          and kind = 'mozgas'
@@ -414,27 +439,29 @@ export async function recordSzetvalogatas(input: {
   vilagos: number;
   szurke: number;
   torott?: number;
+  createdBy?: string;
 }) {
   const torott = input.torott ?? 0;
   const total = input.vilagos + input.szurke + torott;
   if (total > 0) {
-    await addMovement({ site: input.site, type: "Vegyes EUR", direction: "ki", qty: total, partner: "Szétválogatás" });
+    await addMovement({ site: input.site, type: "Vegyes EUR", direction: "ki", qty: total, partner: "Szétválogatás", createdBy: input.createdBy });
   }
   if (input.vilagos > 0) {
-    await addMovement({ site: input.site, type: "EUR világos", direction: "be", qty: input.vilagos, partner: "Szétválogatás" });
+    await addMovement({ site: input.site, type: "EUR világos", direction: "be", qty: input.vilagos, partner: "Szétválogatás", createdBy: input.createdBy });
   }
   if (input.szurke > 0) {
-    await addMovement({ site: input.site, type: "EUR szürke", direction: "be", qty: input.szurke, partner: "Szétválogatás" });
+    await addMovement({ site: input.site, type: "EUR szürke", direction: "be", qty: input.szurke, partner: "Szétválogatás", createdBy: input.createdBy });
   }
   // A "Legutóbbi mozgások" görgetett esemény-feed egyelőre csak Nyíregyházán van —
   // a többi telepen a nyers mozgás-lista (getMovements) már mutatja ugyanezt.
   if (input.site === "Nyíregyháza") {
     await query(
-      `insert into keszlet_events (site_id, kind, details, effect)
-       values ((select id from sites where name = 'Nyíregyháza'), 'szet', $1, $2)`,
+      `insert into keszlet_events (site_id, kind, details, effect, created_by)
+       values ((select id from sites where name = 'Nyíregyháza'), 'szet', $1, $2, $3)`,
       [
         "Vegyes EUR → világos/szürke/törött",
         `vegyes −${total} · világos +${input.vilagos} · szürke +${input.szurke} · törött +${torott}`,
+        input.createdBy ?? null,
       ]
     );
   }
@@ -449,11 +476,12 @@ export async function recordInventoryCount(input: {
   countedQty: number;
   accepted: boolean;
   comment?: string;
+  createdBy?: string;
 }) {
   await query(
-    `insert into inventory_counts (site_id, type_id, expected_qty, counted_qty, accepted, comment)
-     values ((select id from sites where name = $1), (select id from pallet_types where name = $2), $3, $4, $5, $6)`,
-    [input.site, input.type, input.expectedQty, input.countedQty, input.accepted, input.comment ?? null]
+    `insert into inventory_counts (site_id, type_id, expected_qty, counted_qty, accepted, comment, created_by)
+     values ((select id from sites where name = $1), (select id from pallet_types where name = $2), $3, $4, $5, $6, $7)`,
+    [input.site, input.type, input.expectedQty, input.countedQty, input.accepted, input.comment ?? null, input.createdBy ?? null]
   );
   if (input.accepted) {
     const diff = input.countedQty - input.expectedQty;
@@ -464,6 +492,7 @@ export async function recordInventoryCount(input: {
         direction: diff > 0 ? "be" : "ki",
         qty: Math.abs(diff),
         partner: "Leltári korrekció",
+        createdBy: input.createdBy,
       });
     }
   }

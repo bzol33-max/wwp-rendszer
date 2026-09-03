@@ -21,6 +21,7 @@ import {
   recordSzetvalogatas,
   type MovementRow,
 } from "@/lib/keszlet/actions";
+import { getCurrentUser } from "@/lib/current-user";
 
 type Site = "Szakoly" | "Balkány";
 
@@ -50,7 +51,7 @@ export function SimpleSiteView({ site }: { site: Site }) {
 
   async function handleVegyesSplit(vilagos: number, szurke: number) {
     try {
-      await recordSzetvalogatas({ site, vilagos, szurke });
+      await recordSzetvalogatas({ site, vilagos, szurke, createdBy: getCurrentUser() || undefined });
       await load();
       toast.success("Szétválogatás rögzítve.");
     } catch {
@@ -105,11 +106,12 @@ export function SimpleSiteView({ site }: { site: Site }) {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Dátum</TableHead>
+                <TableHead>Dátum/idő</TableHead>
                 <TableHead>Típus</TableHead>
                 <TableHead>Irány</TableHead>
                 <TableHead>Partner / cél</TableHead>
                 <TableHead className="text-right">Db</TableHead>
+                <TableHead>Ki</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -137,6 +139,7 @@ export function SimpleSiteView({ site }: { site: Site }) {
                     {m.direction === "be" ? "+" : "−"}
                     {m.qty}
                   </TableCell>
+                  <TableCell className="text-muted-foreground">{m.created_by ?? "—"}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

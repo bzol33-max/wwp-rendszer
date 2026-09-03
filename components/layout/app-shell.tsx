@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { Settings } from "lucide-react";
 import { NAV_ITEMS } from "@/lib/nav";
 import { cn } from "@/lib/utils";
+import { UserBadge } from "@/components/layout/user-badge";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -45,6 +46,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
         <div className="mt-auto flex flex-col gap-2 border-t border-sidebar-border px-2 py-3">
+          <UserBadge />
           <Link
             href="/beallitasok/tipusok"
             className={cn(

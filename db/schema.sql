@@ -114,3 +114,11 @@ create table if not exists inventory_counts (
   comment       text,
   created_at    timestamptz not null default now()
 );
+
+-- Felhasználó-bélyegző: ki rögzítette a tételt. A böngészőben eltárolt névvel
+-- töltődik, nincs mögötte bejelentkezés/jogosultság — csak nyomon követhetőség.
+alter table keszlet_movements add column if not exists created_by text;
+alter table nyiregyhaza_purchases add column if not exists created_by text;
+alter table kassza_movements add column if not exists created_by text;
+alter table keszlet_events add column if not exists created_by text;
+alter table inventory_counts add column if not exists created_by text;
