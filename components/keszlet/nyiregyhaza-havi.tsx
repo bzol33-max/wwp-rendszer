@@ -63,42 +63,17 @@ function todayDateInputValue() {
   return `${y}-${m}-${day}`;
 }
 
-const TYPE_TILE_COLORS = [
-  {
-    border: "border-amber-300/60",
-    bg: "bg-amber-50 dark:bg-amber-950/30",
-    text: "text-amber-700 dark:text-amber-400",
-  },
-  {
-    border: "border-blue-300/60",
-    bg: "bg-blue-50 dark:bg-blue-950/30",
-    text: "text-blue-700 dark:text-blue-400",
-  },
-  {
-    border: "border-emerald-300/60",
-    bg: "bg-emerald-50 dark:bg-emerald-950/30",
-    text: "text-emerald-700 dark:text-emerald-400",
-  },
-  {
-    border: "border-violet-300/60",
-    bg: "bg-violet-50 dark:bg-violet-950/30",
-    text: "text-violet-700 dark:text-violet-400",
-  },
-  {
-    border: "border-rose-300/60",
-    bg: "bg-rose-50 dark:bg-rose-950/30",
-    text: "text-rose-700 dark:text-rose-400",
-  },
-  {
-    border: "border-cyan-300/60",
-    bg: "bg-cyan-50 dark:bg-cyan-950/30",
-    text: "text-cyan-700 dark:text-cyan-400",
-  },
-];
+const MONTHLY_TILE_COLOR = {
+  border: "border-emerald-300/60",
+  bg: "bg-emerald-50 dark:bg-emerald-950/30",
+  text: "text-emerald-700 dark:text-emerald-400",
+};
 
-function typeTileColor(index: number) {
-  return TYPE_TILE_COLORS[index % TYPE_TILE_COLORS.length];
-}
+const DAILY_TILE_COLOR = {
+  border: "border-orange-300/60",
+  bg: "bg-orange-50 dark:bg-orange-950/30",
+  text: "text-orange-700 dark:text-orange-400",
+};
 
 function dayGroupLabel(dayKey: string) {
   return new Date(`${dayKey}T00:00:00`).toLocaleDateString("hu-HU", {
@@ -399,41 +374,35 @@ export function NyiregyhazaHaviTab() {
     <div className="space-y-5">
       {typeCounters.length > 0 && (
         <div className="space-y-2">
-          <div className="flex flex-wrap gap-2.5">
-            {typeCounters.map((c, i) => {
-              const color = typeTileColor(i);
-              return (
-                <div
-                  key={`havi-${c.type}`}
-                  className={`rounded-lg border px-4 py-2.5 ${color.border} ${color.bg}`}
-                >
-                  <div className={`text-xs font-medium ${color.text}`}>
-                    {c.type} — havi
-                  </div>
-                  <div className={`text-2xl font-bold tabular-nums ${color.text}`}>
-                    {c.monthlyQty} db
-                  </div>
+          <div className="flex flex-nowrap gap-2 overflow-x-auto pb-1">
+            {typeCounters.map((c) => (
+              <div
+                key={`havi-${c.type}`}
+                className={`shrink-0 rounded-lg border px-3 py-2 ${MONTHLY_TILE_COLOR.border} ${MONTHLY_TILE_COLOR.bg}`}
+              >
+                <div className={`whitespace-nowrap text-[11px] font-medium ${MONTHLY_TILE_COLOR.text}`}>
+                  {c.type} — havi
                 </div>
-              );
-            })}
+                <div className={`text-xl font-bold tabular-nums ${MONTHLY_TILE_COLOR.text}`}>
+                  {c.monthlyQty} db
+                </div>
+              </div>
+            ))}
           </div>
-          <div className="flex flex-wrap gap-2">
-            {typeCounters.map((c, i) => {
-              const color = typeTileColor(i);
-              return (
-                <div
-                  key={`napi-${c.type}`}
-                  className={`rounded-lg border px-3 py-1.5 ${color.border} ${color.bg}`}
-                >
-                  <div className={`text-[11px] font-medium ${color.text}`}>
-                    {c.type} — mai
-                  </div>
-                  <div className={`text-base font-semibold tabular-nums ${color.text}`}>
-                    {c.dailyQty} db
-                  </div>
+          <div className="flex flex-nowrap gap-2 overflow-x-auto pb-1">
+            {typeCounters.map((c) => (
+              <div
+                key={`napi-${c.type}`}
+                className={`shrink-0 rounded-lg border px-2.5 py-1.5 ${DAILY_TILE_COLOR.border} ${DAILY_TILE_COLOR.bg}`}
+              >
+                <div className={`whitespace-nowrap text-[10px] font-medium ${DAILY_TILE_COLOR.text}`}>
+                  {c.type} — mai
                 </div>
-              );
-            })}
+                <div className={`text-sm font-semibold tabular-nums ${DAILY_TILE_COLOR.text}`}>
+                  {c.dailyQty} db
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
