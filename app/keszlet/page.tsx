@@ -7,10 +7,23 @@ import { SimpleSiteView } from "@/components/keszlet/simple-site-view";
 import { NyiregyhazaHaviTab } from "@/components/keszlet/nyiregyhaza-havi";
 import { NyiregyhazaFoTab } from "@/components/keszlet/nyiregyhaza-fo";
 
-const SITES = ["Szakoly", "Balkány", "Nyíregyháza"] as const;
+const TABS = ["havi", "Nyíregyháza", "Balkány", "Szakoly", "archivum"] as const;
+
+function currentMonthLabel() {
+  const raw = new Date().toLocaleDateString("hu-HU", { month: "long" });
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+}
 
 export default function KeszletPage() {
-  const [site, setSite] = useState<(typeof SITES)[number]>("Szakoly");
+  const [tab, setTab] = useState<(typeof TABS)[number]>("havi");
+
+  const tabLabel: Record<(typeof TABS)[number], string> = {
+    havi: currentMonthLabel(),
+    Nyíregyháza: "Nyíregyháza",
+    Balkány: "Balkány",
+    Szakoly: "Szakoly",
+    archivum: "Archívum",
+  };
 
   return (
     <div>
@@ -19,40 +32,31 @@ export default function KeszletPage() {
         subtitle="Raklap- és eszközkészlet telephelyenként"
       />
 
-      <Tabs value={site} onValueChange={(v) => setSite(v as (typeof SITES)[number])}>
+      <Tabs value={tab} onValueChange={(v) => setTab(v as (typeof TABS)[number])}>
         <TabsList>
-          {SITES.map((s) => (
-            <TabsTrigger key={s} value={s}>
-              {s}
+          {TABS.map((t) => (
+            <TabsTrigger key={t} value={t}>
+              {tabLabel[t]}
             </TabsTrigger>
           ))}
         </TabsList>
 
-        <TabsContent value="Szakoly" className="mt-5">
-          <SimpleSiteView site="Szakoly" />
+        <TabsContent value="havi" className="mt-5">
+          <NyiregyhazaHaviTab />
+        </TabsContent>
+        <TabsContent value="Nyíregyháza" className="mt-5">
+          <NyiregyhazaFoTab />
         </TabsContent>
         <TabsContent value="Balkány" className="mt-5">
           <SimpleSiteView site="Balkány" />
         </TabsContent>
-        <TabsContent value="Nyíregyháza" className="mt-5">
-          <Tabs defaultValue="havi">
-            <TabsList>
-              <TabsTrigger value="havi">Havi fül</TabsTrigger>
-              <TabsTrigger value="fo">Nyíregyháza fül</TabsTrigger>
-              <TabsTrigger value="archivum">Archívum</TabsTrigger>
-            </TabsList>
-            <TabsContent value="havi" className="mt-5">
-              <NyiregyhazaHaviTab />
-            </TabsContent>
-            <TabsContent value="fo" className="mt-5">
-              <NyiregyhazaFoTab />
-            </TabsContent>
-            <TabsContent value="archivum" className="mt-5">
-              <p className="text-sm text-muted-foreground">
-                Lezárt hónapok típusonkénti összesítése — csak megtekinthető. (Hamarosan.)
-              </p>
-            </TabsContent>
-          </Tabs>
+        <TabsContent value="Szakoly" className="mt-5">
+          <SimpleSiteView site="Szakoly" />
+        </TabsContent>
+        <TabsContent value="archivum" className="mt-5">
+          <p className="text-sm text-muted-foreground">
+            Lezárt hónapok típusonkénti összesítése — csak megtekinthető. (Hamarosan.)
+          </p>
         </TabsContent>
       </Tabs>
     </div>
