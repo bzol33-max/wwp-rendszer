@@ -99,6 +99,8 @@ export async function getSiteSnapshot(site: string) {
 
 // --- Nyíregyháza — Havi fül ---
 
+export type PaymentMethod = "keszpenz" | "atutalas";
+
 export type PurchaseRow = {
   id: string;
   date: string;
@@ -109,13 +111,14 @@ export type PurchaseRow = {
   total: number;
   seller: string;
   pending: boolean;
+  payment_method: PaymentMethod;
 };
 
 export async function getHaviSnapshot() {
   const purchases = await query<PurchaseRow>(
     `select p.id::text, to_char(p.created_at, 'mon. DD') as date,
        to_char(p.created_at, 'YYYY-MM-DD') as day_key, t.name as type,
-       p.qty, p.unit_price, p.total, p.seller, p.pending
+       p.qty, p.unit_price, p.total, p.seller, p.pending, p.payment_method
      from nyiregyhaza_purchases p
      join pallet_types t on t.id = p.type_id
      order by p.created_at desc
@@ -154,14 +157,19 @@ export async function addPurchase(input: {
   unitPrice: number;
   seller?: string;
   pending?: boolean;
+  method?: PaymentMethod;
 }) {
   const seller = input.seller ?? "";
   const total = input.qty * input.unitPrice;
+  const method: PaymentMethod = input.method ?? "keszpenz";
+  // Átutalással fizetett vétel: a készletet növeli, de a kasszát nem érinti —
+  // az összeg banki átutalással rendeződik, nem készpénzből.
+  const affectsKassza = !input.pending && method === "keszpenz";
   const rows = await query<{ id: string }>(
-    `insert into nyiregyhaza_purchases (type_id, qty, unit_price, total, seller, pending)
-     values ((select id from pallet_types where name = $1), $2, $3, $4, $5, $6)
+    `insert into nyiregyhaza_purchases (type_id, qty, unit_price, total, seller, pending, payment_method)
+     values ((select id from pallet_types where name = $1), $2, $3, $4, $5, $6, $7)
      returning id`,
-    [input.type, input.qty, input.unitPrice, total, seller, input.pending ?? false]
+    [input.type, input.qty, input.unitPrice, total, seller, input.pending ?? false, method]
   );
   const purchaseId = rows[0].id;
 
@@ -170,7 +178,7 @@ export async function addPurchase(input: {
     // Kasszaszempontból ugyanolyan kiadás, mint bármelyik más felvásárlás — készpénzért vesszük.
     await addMovement({ site: "Nyíregyháza", type: "EUR világos", direction: "be", qty: input.qty, partner: "Csere", purchaseId });
     await addMovement({ site: "Nyíregyháza", type: "EUR szürke", direction: "ki", qty: input.qty, partner: "Csere", purchaseId });
-    if (!input.pending) {
+    if (affectsKassza) {
       await query(
         `insert into kassza_movements (description, amount, purchase_id)
          values ($1, $2, $3)`,
@@ -199,7 +207,7 @@ export async function addPurchase(input: {
     partner: seller || undefined,
     purchaseId,
   });
-  if (!input.pending) {
+  if (affectsKassza) {
     await query(
       `insert into kassza_movements (description, amount, purchase_id)
        values ($1, $2, $3)`,

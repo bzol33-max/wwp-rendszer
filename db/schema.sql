@@ -80,6 +80,9 @@ create table if not exists nyiregyhaza_purchases (
 -- Utólagos oszlop: a felvásárláshoz tartozó mozgás visszavonhatóságához.
 alter table keszlet_movements add column if not exists purchase_id bigint references nyiregyhaza_purchases(id);
 
+-- Utólagos oszlop: fizetési mód — 'keszpenz' (kasszát csökkenti) vagy 'atutalas' (kasszát nem érinti).
+alter table nyiregyhaza_purchases add column if not exists payment_method text not null default 'keszpenz';
+
 -- Nyíregyháza kassza mozgásai (felvásárlás -, csere +, egyéb kiadás -).
 create table if not exists kassza_movements (
   id          bigserial primary key,

@@ -67,6 +67,8 @@ export function NyiregyhazaHaviTab() {
   const [kasszaDetailOpen, setKasszaDetailOpen] = useState(false);
   const [kasszaDetailLoading, setKasszaDetailLoading] = useState(false);
   const [kasszaMovements, setKasszaMovements] = useState<KasszaMovementRow[]>([]);
+  const [customPriceOpen, setCustomPriceOpen] = useState(false);
+  const [customPrices, setCustomPrices] = useState<Record<string, string>>({});
   const { datePart, weekdayPart } = todayLabel();
 
   const load = useCallback(async () => {
@@ -92,8 +94,12 @@ export function NyiregyhazaHaviTab() {
     }, 0);
   }, [todayQty, prices]);
 
-  async function recordDay() {
-    const entries = Object.entries(todayQty).filter(([, v]) => Number(v) > 0);
+  function getEntries() {
+    return Object.entries(todayQty).filter(([, v]) => Number(v) > 0);
+  }
+
+  async function recordDay(method: "keszpenz" | "atutalas" = "keszpenz") {
+    const entries = getEntries();
     if (entries.length === 0) {
       toast.error("Adj meg legalább egy típust darabszámmal.");
       return;
@@ -105,11 +111,52 @@ export function NyiregyhazaHaviTab() {
           type,
           qty: Number(qtyStr),
           unitPrice: prices[type] ?? 0,
+          method,
         });
       }
       setTodayQty({});
       await load();
-      toast.success("Vétel rögzítve.");
+      toast.success(
+        method === "atutalas" ? "Vétel rögzítve — átutalással." : "Vétel rögzítve."
+      );
+    } catch {
+      toast.error("Nem sikerült menteni.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function openCustomPrice() {
+    const entries = getEntries();
+    if (entries.length === 0) {
+      toast.error("Adj meg legalább egy típust darabszámmal.");
+      return;
+    }
+    const initial: Record<string, string> = {};
+    for (const [type] of entries) {
+      initial[type] = String(prices[type] ?? "");
+    }
+    setCustomPrices(initial);
+    setCustomPriceOpen(true);
+  }
+
+  async function recordCustomPrice() {
+    const entries = getEntries();
+    setSubmitting(true);
+    try {
+      for (const [type, qtyStr] of entries) {
+        const unitPrice = Number(customPrices[type]) || 0;
+        await addPurchase({
+          type,
+          qty: Number(qtyStr),
+          unitPrice,
+          method: "keszpenz",
+        });
+      }
+      setTodayQty({});
+      setCustomPriceOpen(false);
+      await load();
+      toast.success("Vétel rögzítve — egyedi áron.");
     } catch {
       toast.error("Nem sikerült menteni.");
     } finally {
@@ -202,9 +249,25 @@ export function NyiregyhazaHaviTab() {
               {currentEntryTotal.toLocaleString("hu-HU")} Ft
             </span>
           </div>
-          <Button onClick={recordDay} disabled={submitting} size="lg" className="w-full">
+          <Button onClick={() => recordDay("keszpenz")} disabled={submitting} size="lg" className="w-full">
             {submitting ? "Mentés…" : "Vétel — készpénzből fizetve"}
           </Button>
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              onClick={() => recordDay("atutalas")}
+              disabled={submitting}
+              className="w-full bg-blue-600 text-white hover:bg-blue-700"
+            >
+              Vétel — átutalással
+            </Button>
+            <Button
+              onClick={openCustomPrice}
+              disabled={submitting}
+              className="w-full bg-violet-600 text-white hover:bg-violet-700"
+            >
+              Vétel — egyedi áron
+            </Button>
+          </div>
 
           <h3 className="pt-2 text-sm font-medium">Havi felvásárlások</h3>
           <Table>
@@ -237,11 +300,18 @@ export function NyiregyhazaHaviTab() {
                     {p.total.toLocaleString("hu-HU")} Ft
                   </TableCell>
                   <TableCell>
-                    {p.pending && (
-                      <Badge className="bg-warning/15 text-warning hover:bg-warning/15">
-                        Kifizetésre vár
-                      </Badge>
-                    )}
+                    <div className="flex flex-wrap gap-1">
+                      {p.pending && (
+                        <Badge className="bg-warning/15 text-warning hover:bg-warning/15">
+                          Kifizetésre vár
+                        </Badge>
+                      )}
+                      {p.payment_method === "atutalas" && (
+                        <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">
+                          Átutalással
+                        </Badge>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <button
@@ -420,6 +490,39 @@ export function NyiregyhazaHaviTab() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={customPriceOpen} onOpenChange={setCustomPriceOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Vétel — egyedi áron</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            {getEntries().map(([type, qtyStr]) => (
+              <div key={type} className="flex items-center justify-between gap-3">
+                <div className="text-sm">
+                  <div className="font-medium">{type}</div>
+                  <div className="text-xs text-muted-foreground">{qtyStr} db</div>
+                </div>
+                <Input
+                  type="number"
+                  className="w-28 text-right"
+                  value={customPrices[type] ?? ""}
+                  onChange={(e) =>
+                    setCustomPrices((prev) => ({ ...prev, [type]: e.target.value }))
+                  }
+                />
+              </div>
+            ))}
+            <Button
+              onClick={recordCustomPrice}
+              disabled={submitting}
+              className="w-full bg-violet-600 text-white hover:bg-violet-700"
+            >
+              {submitting ? "Mentés…" : "Rögzítés egyedi áron"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
