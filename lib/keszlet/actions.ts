@@ -405,25 +405,35 @@ export async function getNyiregyhazaFoSnapshot() {
   return { stock, events };
 }
 
-export async function recordSzetvalogatas(result: { vilagos: number; szurke: number; torott: number }) {
-  const total = result.vilagos + result.szurke + result.torott;
+export async function recordSzetvalogatas(input: {
+  site: string;
+  vilagos: number;
+  szurke: number;
+  torott?: number;
+}) {
+  const torott = input.torott ?? 0;
+  const total = input.vilagos + input.szurke + torott;
   if (total > 0) {
-    await addMovement({ site: "Nyíregyháza", type: "Vegyes EUR", direction: "ki", qty: total, partner: "Szétválogatás" });
+    await addMovement({ site: input.site, type: "Vegyes EUR", direction: "ki", qty: total, partner: "Szétválogatás" });
   }
-  if (result.vilagos > 0) {
-    await addMovement({ site: "Nyíregyháza", type: "EUR világos", direction: "be", qty: result.vilagos, partner: "Szétválogatás" });
+  if (input.vilagos > 0) {
+    await addMovement({ site: input.site, type: "EUR világos", direction: "be", qty: input.vilagos, partner: "Szétválogatás" });
   }
-  if (result.szurke > 0) {
-    await addMovement({ site: "Nyíregyháza", type: "EUR szürke", direction: "be", qty: result.szurke, partner: "Szétválogatás" });
+  if (input.szurke > 0) {
+    await addMovement({ site: input.site, type: "EUR szürke", direction: "be", qty: input.szurke, partner: "Szétválogatás" });
   }
-  await query(
-    `insert into keszlet_events (site_id, kind, details, effect)
-     values ((select id from sites where name = 'Nyíregyháza'), 'szet', $1, $2)`,
-    [
-      "Vegyes EUR → világos/szürke/törött",
-      `vegyes −${total} · világos +${result.vilagos} · szürke +${result.szurke} · törött +${result.torott}`,
-    ]
-  );
+  // A "Legutóbbi mozgások" görgetett esemény-feed egyelőre csak Nyíregyházán van —
+  // a többi telepen a nyers mozgás-lista (getMovements) már mutatja ugyanezt.
+  if (input.site === "Nyíregyháza") {
+    await query(
+      `insert into keszlet_events (site_id, kind, details, effect)
+       values ((select id from sites where name = 'Nyíregyháza'), 'szet', $1, $2)`,
+      [
+        "Vegyes EUR → világos/szürke/törött",
+        `vegyes −${total} · világos +${input.vilagos} · szürke +${input.szurke} · törött +${torott}`,
+      ]
+    );
+  }
 }
 
 // --- Leltár ---

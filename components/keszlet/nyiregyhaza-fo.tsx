@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -15,6 +14,7 @@ import {
 } from "@/components/ui/table";
 import { InventoryDialog } from "@/components/keszlet/inventory-dialog";
 import { MovementForm } from "@/components/keszlet/movement-form";
+import { VegyesSplitRow } from "@/components/keszlet/vegyes-split-row";
 import { toast } from "sonner";
 import {
   getNyiregyhazaFoSnapshot,
@@ -41,8 +41,6 @@ export function NyiregyhazaFoTab() {
   const [stock, setStock] = useState<Record<string, number>>({});
   const [events, setEvents] = useState<EventRow[]>([]);
   const [inventoryOpen, setInventoryOpen] = useState(false);
-  const [quickSplitQty, setQuickSplitQty] = useState("");
-  const [quickSplitSubmitting, setQuickSplitSubmitting] = useState(false);
 
   const load = useCallback(async () => {
     const snap = await getNyiregyhazaFoSnapshot();
@@ -55,34 +53,13 @@ export function NyiregyhazaFoTab() {
     load().finally(() => setLoading(false));
   }, [load]);
 
-  async function handleQuickSplit(target: "vilagos" | "szurke") {
-    const qty = Number(quickSplitQty);
-    if (!qty || qty <= 0) {
-      toast.error("Adj meg egy darabszámot.");
-      return;
-    }
-    if (qty > (stock["Vegyes EUR"] ?? 0)) {
-      toast.error("A megadott darabszám meghaladja az elérhető Vegyes EUR mennyiséget.");
-      return;
-    }
-    setQuickSplitSubmitting(true);
+  async function handleVegyesSplit(vilagos: number, szurke: number) {
     try {
-      await recordSzetvalogatas({
-        vilagos: target === "vilagos" ? qty : 0,
-        szurke: target === "szurke" ? qty : 0,
-        torott: 0,
-      });
-      setQuickSplitQty("");
+      await recordSzetvalogatas({ site: "Nyíregyháza", vilagos, szurke });
       await load();
-      toast.success(
-        target === "vilagos"
-          ? `${qty} db átkerült Fehérbe.`
-          : `${qty} db átkerült Szürkébe.`
-      );
+      toast.success("Szétválogatás rögzítve.");
     } catch {
       toast.error("Nem sikerült rögzíteni.");
-    } finally {
-      setQuickSplitSubmitting(false);
     }
   }
 
@@ -109,45 +86,19 @@ export function NyiregyhazaFoTab() {
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
-          {Object.entries(stock).map(([type, qty]) => (
-            <div key={type} className="rounded-md border bg-muted/30 px-3 py-2">
-              <div className="flex items-center justify-between text-sm">
+          {Object.entries(stock).map(([type, qty]) =>
+            type === "Vegyes EUR" ? (
+              <VegyesSplitRow key={type} qty={qty} onSubmit={handleVegyesSplit} />
+            ) : (
+              <div
+                key={type}
+                className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm"
+              >
                 <span>{type}</span>
                 <span className="font-semibold tabular-nums">{qty}</span>
               </div>
-              {type === "Vegyes EUR" && (
-                <div className="mt-2 space-y-1.5 border-t pt-2">
-                  <Input
-                    type="number"
-                    placeholder="db"
-                    value={quickSplitQty}
-                    onChange={(e) => setQuickSplitQty(e.target.value)}
-                    className="h-8"
-                  />
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={quickSplitSubmitting}
-                      onClick={() => handleQuickSplit("vilagos")}
-                      className="border-neutral-300 bg-neutral-50 text-neutral-700 hover:bg-neutral-100"
-                    >
-                      Fehér
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={quickSplitSubmitting}
-                      onClick={() => handleQuickSplit("szurke")}
-                      className="border-slate-400 bg-slate-100 text-slate-700 hover:bg-slate-200"
-                    >
-                      Szürke
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
+            )
+          )}
         </CardContent>
       </Card>
 

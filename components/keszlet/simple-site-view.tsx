@@ -14,8 +14,11 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { InventoryDialog } from "@/components/keszlet/inventory-dialog";
 import { MovementForm } from "@/components/keszlet/movement-form";
+import { VegyesSplitRow } from "@/components/keszlet/vegyes-split-row";
+import { toast } from "sonner";
 import {
   getSiteSnapshot,
+  recordSzetvalogatas,
   type MovementRow,
 } from "@/lib/keszlet/actions";
 
@@ -45,6 +48,16 @@ export function SimpleSiteView({ site }: { site: Site }) {
     load().finally(() => setLoading(false));
   }, [load]);
 
+  async function handleVegyesSplit(vilagos: number, szurke: number) {
+    try {
+      await recordSzetvalogatas({ site, vilagos, szurke });
+      await load();
+      toast.success("Szétválogatás rögzítve.");
+    } catch {
+      toast.error("Nem sikerült rögzíteni.");
+    }
+  }
+
   if (loading) {
     return <p className="text-sm text-muted-foreground">Betöltés…</p>;
   }
@@ -64,15 +77,19 @@ export function SimpleSiteView({ site }: { site: Site }) {
         </CardHeader>
         <CardContent>
           <div className="flex flex-col gap-2">
-            {Object.entries(stock).map(([t, q]) => (
-              <div
-                key={t}
-                className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm"
-              >
-                <span>{t}</span>
-                <span className="font-semibold tabular-nums">{q}</span>
-              </div>
-            ))}
+            {Object.entries(stock).map(([t, q]) =>
+              t === "Vegyes EUR" ? (
+                <VegyesSplitRow key={t} qty={q} onSubmit={handleVegyesSplit} />
+              ) : (
+                <div
+                  key={t}
+                  className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm"
+                >
+                  <span>{t}</span>
+                  <span className="font-semibold tabular-nums">{q}</span>
+                </div>
+              )
+            )}
           </div>
           <p className="mt-4 text-xs text-muted-foreground">
             Csak az itt aktivált típusok jelennek meg — telephelyenként állítható.
