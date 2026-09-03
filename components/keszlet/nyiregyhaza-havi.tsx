@@ -13,7 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -92,6 +92,8 @@ export function NyiregyhazaHaviTab() {
   const [pendingDate, setPendingDate] = useState(todayDateInputValue());
   const [pendingQtyMap, setPendingQtyMap] = useState<Record<string, string>>({});
   const [pendingSubmitting, setPendingSubmitting] = useState(false);
+  const [pendingListOpen, setPendingListOpen] = useState(false);
+  const [pendingSellerLocked, setPendingSellerLocked] = useState(false);
   const [pendingEditRow, setPendingEditRow] = useState<PurchaseRow | null>(null);
   const [pendingEditType, setPendingEditType] = useState("");
   const [pendingEditQty, setPendingEditQty] = useState("");
@@ -214,6 +216,15 @@ export function NyiregyhazaHaviTab() {
 
   function openPendingAdd() {
     setPendingSeller("");
+    setPendingSellerLocked(false);
+    setPendingDate(todayDateInputValue());
+    setPendingQtyMap({});
+    setPendingAddOpen(true);
+  }
+
+  function openPendingAddForSeller(seller: string) {
+    setPendingSeller(seller);
+    setPendingSellerLocked(true);
     setPendingDate(todayDateInputValue());
     setPendingQtyMap({});
     setPendingAddOpen(true);
@@ -333,6 +344,9 @@ export function NyiregyhazaHaviTab() {
     }
     group.entries.push(p);
     group.total += p.total;
+  }
+  for (const g of pendingGroups) {
+    g.entries.sort((a, b) => a.day_key.localeCompare(b.day_key));
   }
 
   if (loading) {
@@ -510,29 +524,49 @@ export function NyiregyhazaHaviTab() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0">
             <CardTitle className="text-sm">Kifizetésre váró tételek</CardTitle>
-            <Button size="sm" variant="outline" onClick={openPendingAdd}>
-              + Új tétel
-            </Button>
+            <div className="flex items-center gap-2">
+              {pendingGroups.length > 0 && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setPendingListOpen((v) => !v)}
+                >
+                  Lista ({pendingGroups.length})
+                </Button>
+              )}
+              <Button size="sm" variant="outline" onClick={openPendingAdd}>
+                + Új tétel
+              </Button>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-3">
-            {pendingGroups.length === 0 && (
-              <p className="text-xs text-muted-foreground">Nincs kifizetésre váró tétel.</p>
-            )}
-            {pendingGroups.map((g) => (
-              <div key={g.seller} className="rounded-md border px-3 py-2 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm font-medium">{g.seller}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold tabular-nums">
-                      {g.total.toLocaleString("hu-HU")} Ft
-                    </span>
-                    <Button size="sm" onClick={() => handlePaySeller(g.seller)}>
-                      Kifizetés
-                    </Button>
+          {(pendingGroups.length === 0 || pendingListOpen) && (
+            <CardContent className="space-y-3">
+              {pendingGroups.length === 0 && (
+                <p className="text-xs text-muted-foreground">Nincs kifizetésre váró tétel.</p>
+              )}
+              {pendingGroups.map((g) => (
+                <div key={g.seller} className="rounded-md border px-3 py-2 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">{g.seller}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold tabular-nums">
+                        {g.total.toLocaleString("hu-HU")} Ft
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => openPendingAddForSeller(g.seller)}
+                        title="Új dátumra felvétel"
+                        className="rounded-md border p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                      </button>
+                      <Button size="sm" onClick={() => handlePaySeller(g.seller)}>
+                        Kifizetés
+                      </Button>
+                    </div>
                   </div>
-                </div>
-                <div className="space-y-1">
-                  {g.entries.map((e) => (
+                  <div className="space-y-1">
+                    {g.entries.map((e) => (
                     <div
                       key={e.id}
                       className="flex items-center justify-between rounded-md bg-muted/30 px-2.5 py-1.5 text-xs"
@@ -564,14 +598,15 @@ export function NyiregyhazaHaviTab() {
                       </div>
                     </div>
                   ))}
+                  </div>
                 </div>
-              </div>
-            ))}
-            <p className="text-xs text-muted-foreground">
-              Nyitvatartáson túl/hétvégén leadott tétel — a darabszám azonnal a készletben van,
-              a kassza csak a "Kifizetés" gombra kattintva, a tényleges kifizetéskor csökken.
-            </p>
-          </CardContent>
+              ))}
+              <p className="text-xs text-muted-foreground">
+                Nyitvatartáson túl/hétvégén leadott tétel — a darabszám azonnal a készletben van,
+                a kassza csak a "Kifizetés" gombra kattintva, a tényleges kifizetéskor csökken.
+              </p>
+            </CardContent>
+          )}
         </Card>
 
         <Card>
@@ -702,6 +737,7 @@ export function NyiregyhazaHaviTab() {
                 value={pendingSeller}
                 onChange={(e) => setPendingSeller(e.target.value)}
                 placeholder="Ki hozta"
+                disabled={pendingSellerLocked}
               />
             </div>
             <div className="space-y-1.5">
