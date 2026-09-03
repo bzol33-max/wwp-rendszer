@@ -63,6 +63,43 @@ function todayDateInputValue() {
   return `${y}-${m}-${day}`;
 }
 
+const TYPE_TILE_COLORS = [
+  {
+    border: "border-amber-300/60",
+    bg: "bg-amber-50 dark:bg-amber-950/30",
+    text: "text-amber-700 dark:text-amber-400",
+  },
+  {
+    border: "border-blue-300/60",
+    bg: "bg-blue-50 dark:bg-blue-950/30",
+    text: "text-blue-700 dark:text-blue-400",
+  },
+  {
+    border: "border-emerald-300/60",
+    bg: "bg-emerald-50 dark:bg-emerald-950/30",
+    text: "text-emerald-700 dark:text-emerald-400",
+  },
+  {
+    border: "border-violet-300/60",
+    bg: "bg-violet-50 dark:bg-violet-950/30",
+    text: "text-violet-700 dark:text-violet-400",
+  },
+  {
+    border: "border-rose-300/60",
+    bg: "bg-rose-50 dark:bg-rose-950/30",
+    text: "text-rose-700 dark:text-rose-400",
+  },
+  {
+    border: "border-cyan-300/60",
+    bg: "bg-cyan-50 dark:bg-cyan-950/30",
+    text: "text-cyan-700 dark:text-cyan-400",
+  },
+];
+
+function typeTileColor(index: number) {
+  return TYPE_TILE_COLORS[index % TYPE_TILE_COLORS.length];
+}
+
 function dayGroupLabel(dayKey: string) {
   return new Date(`${dayKey}T00:00:00`).toLocaleDateString("hu-HU", {
     year: "numeric",
@@ -361,26 +398,44 @@ export function NyiregyhazaHaviTab() {
   return (
     <div className="space-y-5">
       {typeCounters.length > 0 && (
-        <Card>
-          <CardContent className="space-y-2 py-4">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {typeCounters.map((c) => (
-                <div key={`havi-${c.type}`} className="text-center">
-                  <div className="text-[11px] text-muted-foreground">{c.type} — havi</div>
-                  <div className="text-lg font-semibold tabular-nums">{c.monthlyQty} db</div>
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-2.5">
+            {typeCounters.map((c, i) => {
+              const color = typeTileColor(i);
+              return (
+                <div
+                  key={`havi-${c.type}`}
+                  className={`rounded-lg border px-4 py-2.5 ${color.border} ${color.bg}`}
+                >
+                  <div className={`text-xs font-medium ${color.text}`}>
+                    {c.type} — havi
+                  </div>
+                  <div className={`text-2xl font-bold tabular-nums ${color.text}`}>
+                    {c.monthlyQty} db
+                  </div>
                 </div>
-              ))}
-            </div>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 border-t pt-2">
-              {typeCounters.map((c) => (
-                <div key={`napi-${c.type}`} className="text-center">
-                  <div className="text-[11px] text-muted-foreground">{c.type} — mai</div>
-                  <div className="text-lg font-semibold tabular-nums">{c.dailyQty} db</div>
+              );
+            })}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {typeCounters.map((c, i) => {
+              const color = typeTileColor(i);
+              return (
+                <div
+                  key={`napi-${c.type}`}
+                  className={`rounded-lg border px-3 py-1.5 ${color.border} ${color.bg}`}
+                >
+                  <div className={`text-[11px] font-medium ${color.text}`}>
+                    {c.type} — mai
+                  </div>
+                  <div className={`text-base font-semibold tabular-nums ${color.text}`}>
+                    {c.dailyQty} db
+                  </div>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.5fr_1fr]">
