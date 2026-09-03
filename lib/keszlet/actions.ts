@@ -127,12 +127,16 @@ export async function getHaviSnapshot() {
   const kasszaRows = await query<{ total: string }>(
     `select coalesce(sum(amount), 0) as total from kassza_movements`
   );
-  // Mai kiadás: a mai napon rögzített készpénzes vétel (Csere is kiadás — készpénzért veszünk raklapot).
-  // Átutalással fizetett vétel nem kassza-kiadás, ezért itt sem számít bele.
+  // Mai kiadás: a mai napon ténylegesen kifizetett készpénzes vétel (Csere is kiadás —
+  // készpénzért veszünk raklapot). Átutalással fizetett vétel nem kassza-kiadás, ezért
+  // itt sem számít bele. Kifizetésre váró (pending) tétel csak azon a napon számít bele,
+  // amikor ténylegesen kifizetésre kerül (paid_at), nem amikor felvették.
   const todayExpenseRows = await query<{ total: string; today_key: string }>(
     `select coalesce(sum(p.total), 0) as total, to_char(current_date, 'YYYY-MM-DD') as today_key
      from nyiregyhaza_purchases p
-     where p.created_at::date = current_date and p.payment_method = 'keszpenz'`
+     where p.payment_method = 'keszpenz'
+       and p.pending = false
+       and coalesce(p.paid_at::date, p.created_at::date) = current_date`
   );
   // Gyors rögzítéshez azok a típusok jelennek meg, amik Nyíregyházán aktívak ÉS van beárazva.
   const priceRows = await query<{ name: string; default_price: number | null }>(
