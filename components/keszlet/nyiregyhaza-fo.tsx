@@ -13,7 +13,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { SzetvalogatasDialog } from "@/components/keszlet/szetvalogatas-dialog";
 import { InventoryDialog } from "@/components/keszlet/inventory-dialog";
 import { toast } from "sonner";
 import {
@@ -40,7 +39,6 @@ export function NyiregyhazaFoTab() {
   const [loading, setLoading] = useState(true);
   const [stock, setStock] = useState<Record<string, number>>({});
   const [events, setEvents] = useState<EventRow[]>([]);
-  const [szetOpen, setSzetOpen] = useState(false);
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [quickSplitQty, setQuickSplitQty] = useState("");
   const [quickSplitSubmitting, setQuickSplitSubmitting] = useState(false);
@@ -55,16 +53,6 @@ export function NyiregyhazaFoTab() {
     setLoading(true);
     load().finally(() => setLoading(false));
   }, [load]);
-
-  async function handleSzet(result: { vilagos: number; szurke: number; torott: number }) {
-    try {
-      await recordSzetvalogatas(result);
-      await load();
-      toast.success("Szétválogatás rögzítve.");
-    } catch {
-      toast.error("Nem sikerült rögzíteni.");
-    }
-  }
 
   async function handleQuickSplit(target: "vilagos" | "szurke") {
     const qty = Number(quickSplitQty);
@@ -104,9 +92,6 @@ export function NyiregyhazaFoTab() {
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap gap-2">
-        <Button onClick={() => setSzetOpen(true)} variant="outline">
-          ✂️ Szétválogatás (Vegyes EUR)
-        </Button>
         <Button onClick={() => setInventoryOpen(true)} variant="outline">
           📋 Leltár indítása
         </Button>
@@ -186,12 +171,6 @@ export function NyiregyhazaFoTab() {
         </CardContent>
       </Card>
 
-      <SzetvalogatasDialog
-        open={szetOpen}
-        onOpenChange={setSzetOpen}
-        vegyesAvailable={stock["Vegyes EUR"] ?? 0}
-        onConfirm={handleSzet}
-      />
       <InventoryDialog
         site="Nyíregyháza"
         types={Object.keys(stock)}
