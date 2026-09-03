@@ -90,8 +90,7 @@ export function NyiregyhazaHaviTab() {
   const [pendingAddOpen, setPendingAddOpen] = useState(false);
   const [pendingSeller, setPendingSeller] = useState("");
   const [pendingDate, setPendingDate] = useState(todayDateInputValue());
-  const [pendingType, setPendingType] = useState("");
-  const [pendingQty, setPendingQty] = useState("");
+  const [pendingQtyMap, setPendingQtyMap] = useState<Record<string, string>>({});
   const [pendingSubmitting, setPendingSubmitting] = useState(false);
   const [pendingEditRow, setPendingEditRow] = useState<PurchaseRow | null>(null);
   const [pendingEditType, setPendingEditType] = useState("");
@@ -202,31 +201,43 @@ export function NyiregyhazaHaviTab() {
     }
   }
 
+  function getPendingEntries() {
+    return Object.entries(pendingQtyMap).filter(([, v]) => Number(v) > 0);
+  }
+
+  const pendingAddTotal = useMemo(() => {
+    return Object.entries(pendingQtyMap).reduce((sum, [type, qtyStr]) => {
+      const qty = Number(qtyStr) || 0;
+      return sum + qty * (prices[type] ?? 0);
+    }, 0);
+  }, [pendingQtyMap, prices]);
+
   function openPendingAdd() {
     setPendingSeller("");
     setPendingDate(todayDateInputValue());
-    setPendingType("");
-    setPendingQty("");
+    setPendingQtyMap({});
     setPendingAddOpen(true);
   }
 
   async function submitPendingAdd() {
-    const qty = Number(pendingQty);
-    if (!pendingSeller.trim() || !pendingType || !qty) {
-      toast.error("Adj meg nevet, típust és darabszámot.");
+    const entries = getPendingEntries();
+    if (!pendingSeller.trim() || entries.length === 0) {
+      toast.error("Adj meg nevet, és legalább egy típust darabszámmal.");
       return;
     }
     setPendingSubmitting(true);
     try {
-      await addPendingPurchase({
-        seller: pendingSeller.trim(),
-        type: pendingType,
-        qty,
-        date: pendingDate,
-      });
+      for (const [type, qtyStr] of entries) {
+        await addPendingPurchase({
+          seller: pendingSeller.trim(),
+          type,
+          qty: Number(qtyStr),
+          date: pendingDate,
+        });
+      }
       setPendingAddOpen(false);
       await load();
-      toast.success("Kifizetésre váró tétel rögzítve.");
+      toast.success("Kifizetésre váró tétel(ek) rögzítve.");
     } catch {
       toast.error("Nem sikerült menteni.");
     } finally {
@@ -702,36 +713,27 @@ export function NyiregyhazaHaviTab() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-xs">Típus</Label>
-              <Select value={pendingType} onValueChange={(v) => v && setPendingType(v)}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Válassz típust" />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.keys(prices).map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {t}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs">Darabszám</Label>
-              <Input
-                type="number"
-                value={pendingQty}
-                onChange={(e) => setPendingQty(e.target.value)}
-                placeholder="db"
-              />
+              <Label className="text-xs">Típusok és darabszámok</Label>
+              <div className="grid grid-cols-2 gap-3">
+                {Object.keys(prices).map((t) => (
+                  <div key={t} className="space-y-1">
+                    <Label className="text-[11px] text-muted-foreground">{t}</Label>
+                    <Input
+                      type="number"
+                      placeholder="db"
+                      value={pendingQtyMap[t] ?? ""}
+                      onChange={(e) =>
+                        setPendingQtyMap((prev) => ({ ...prev, [t]: e.target.value }))
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
             <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm">
               <span className="text-muted-foreground">Összeg</span>
               <span className="font-semibold tabular-nums">
-                {((Number(pendingQty) || 0) * (prices[pendingType] ?? 0)).toLocaleString(
-                  "hu-HU"
-                )}{" "}
-                Ft
+                {pendingAddTotal.toLocaleString("hu-HU")} Ft
               </span>
             </div>
             <Button onClick={submitPendingAdd} disabled={pendingSubmitting} className="w-full">
