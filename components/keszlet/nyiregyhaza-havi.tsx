@@ -223,6 +223,18 @@ export function NyiregyhazaHaviTab() {
     }
   }
 
+  async function handleDeleteGroup(ids: string[]) {
+    try {
+      for (const id of ids) {
+        await deletePurchase(id);
+      }
+      await load();
+      toast.success("Tétel törölve.");
+    } catch {
+      toast.error("Nem sikerült törölni.");
+    }
+  }
+
   function getPendingEntries() {
     return Object.entries(pendingQtyMap).filter(([, v]) => Number(v) > 0);
   }
@@ -347,14 +359,23 @@ export function NyiregyhazaHaviTab() {
   const todayPurchases = settled.filter((p) => p.day_key === todayKey);
   const pastPurchases = settled.filter((p) => p.day_key !== todayKey);
 
-  const pastGroups: { dayKey: string; totals: Record<string, number> }[] = [];
+  const pastGroups: {
+    dayKey: string;
+    lines: { type: string; qty: number; ids: string[] }[];
+  }[] = [];
   for (const p of pastPurchases) {
     let group = pastGroups.find((g) => g.dayKey === p.day_key);
     if (!group) {
-      group = { dayKey: p.day_key, totals: {} };
+      group = { dayKey: p.day_key, lines: [] };
       pastGroups.push(group);
     }
-    group.totals[p.type] = (group.totals[p.type] ?? 0) + p.qty;
+    let line = group.lines.find((l) => l.type === p.type);
+    if (!line) {
+      line = { type: p.type, qty: 0, ids: [] };
+      group.lines.push(line);
+    }
+    line.qty += p.qty;
+    line.ids.push(p.id);
   }
 
   const pendingGroups: { seller: string; entries: PurchaseRow[]; total: number }[] = [];
@@ -549,9 +570,17 @@ export function NyiregyhazaHaviTab() {
                     {dayGroupLabel(g.dayKey)}
                   </div>
                   <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                    {Object.entries(g.totals).map(([type, qty]) => (
-                      <span key={type}>
-                        {type}: <span className="font-medium tabular-nums">{qty} db</span>
+                    {g.lines.map((l) => (
+                      <span key={l.type} className="inline-flex items-center gap-1">
+                        {l.type}: <span className="font-medium tabular-nums">{l.qty} db</span>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteGroup(l.ids)}
+                          title="Törlés (hibás rögzítés)"
+                          className="text-destructive/70 hover:text-destructive"
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
                       </span>
                     ))}
                   </div>
