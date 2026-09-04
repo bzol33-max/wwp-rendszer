@@ -39,8 +39,8 @@ export const MODULES: ModuleInfo[] = [
     label: "Fuvarozás",
     href: "/fuvarozas",
     icon: Truck,
-    status: "tervezes-alatt",
-    description: "A modul funkciói még nincsenek kidolgozva.",
+    status: "fejlesztes-alatt",
+    description: "Ecofleet GPS-pozíció élesben. Fuvarkezelés, ütemezés kidolgozás alatt, saját beszélgetésben.",
   },
   {
     key: "jarmuvek",
