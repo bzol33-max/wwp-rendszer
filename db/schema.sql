@@ -188,3 +188,17 @@ create table if not exists fuvar_megbizasok (
   created_by   text
 );
 create index if not exists idx_fuvar_megbizasok_tipus on fuvar_megbizasok (tipus, datum desc);
+
+-- Kibővítés: PDF/e-mail alapú megbízás-felismeréshez (spec 8. pont) — a
+-- rendszer előkészít egy fuvart, de "ellenorzott = false" amíg valaki
+-- jóvá nem hagyja vagy nem módosítja. A dokumentum forrása (pl. Drive-link)
+-- és néhány további mező is idekerül.
+alter table fuvar_megbizasok add column if not exists idopont text;
+alter table fuvar_megbizasok add column if not exists mennyiseg text;
+alter table fuvar_megbizasok add column if not exists suly text;
+alter table fuvar_megbizasok add column if not exists sofor text;
+alter table fuvar_megbizasok add column if not exists dokumentum_url text;
+alter table fuvar_megbizasok add column if not exists drive_file_id text;
+alter table fuvar_megbizasok add column if not exists forras text not null default 'kezi'
+  check (forras in ('kezi', 'pdf_import'));
+alter table fuvar_megbizasok add column if not exists ellenorzott boolean not null default true;
