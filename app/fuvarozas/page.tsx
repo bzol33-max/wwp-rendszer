@@ -6,11 +6,13 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GpsStatus } from "@/components/fuvarozas/gps-status";
 import { TollCalculator } from "@/components/fuvarozas/toll-calculator";
+import { Megbizasok } from "@/components/fuvarozas/megbizasok";
 
-const TABS = ["kalkulator", "gps"] as const;
+const TABS = ["megbizasok", "kalkulator", "gps"] as const;
 type Tab = (typeof TABS)[number];
 
 const TAB_LABEL: Record<Tab, string> = {
+  megbizasok: "Megbízások",
   kalkulator: "Kalkulátor",
   gps: "GPS",
 };
@@ -25,7 +27,7 @@ function FuvarozasTabs() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlTab = searchParams.get("tab");
-  const [tab, setTab] = useState<Tab>(isTab(urlTab) ? urlTab : "kalkulator");
+  const [tab, setTab] = useState<Tab>(isTab(urlTab) ? urlTab : "megbizasok");
 
   function handleTabChange(v: string) {
     if (!isTab(v)) return;
@@ -43,6 +45,9 @@ function FuvarozasTabs() {
         ))}
       </TabsList>
 
+      <TabsContent value="megbizasok" className="mt-5">
+        <Megbizasok />
+      </TabsContent>
       <TabsContent value="kalkulator" className="mt-5">
         <TollCalculator />
       </TabsContent>
@@ -58,7 +63,7 @@ export default function Page() {
     <div className="flex flex-col gap-5">
       <PageHeader
         title="Fuvarozás"
-        subtitle="Útdíj- és km-kalkulátor, valamint a két DAF valós idejű pozíciója (Ecofleet). A fuvarkezelés a következő lépés."
+        subtitle="Megbízások (saját/bér fuvarok), útdíj- és km-kalkulátor, valamint a két DAF valós idejű pozíciója (Ecofleet)."
       />
       <Suspense fallback={<p className="text-sm text-muted-foreground">Betöltés…</p>}>
         <FuvarozasTabs />

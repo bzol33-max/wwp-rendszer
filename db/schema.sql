@@ -165,3 +165,26 @@ alter table inventory_counts add column if not exists created_by text;
 alter table kassza_movements add column if not exists category text not null default 'egyeb';
 update kassza_movements set category = 'felvasarlas' where purchase_id is not null and category = 'egyeb';
 update kassza_movements set category = 'felvasarlas' where description like 'Kifizetés — %' and category = 'egyeb';
+
+-- Fuvarozás — megbízások (saját fuvar vagy bérfuvar/alvállalkozó).
+create table if not exists fuvar_megbizasok (
+  id           bigserial primary key,
+  tipus        text not null check (tipus in ('sajat', 'ber')),
+  datum        date not null,
+  felrako      text not null,
+  lerako       text not null,
+  megrendelo   text,
+  aru          text,
+  -- Saját fuvarnál a jármű rendszáma, bérfuvarnál az alvállalkozó (fuvarozó partner) neve.
+  jarmu        text,
+  alvallalkozo text,
+  fuvardij     integer,
+  koltseg      integer,
+  statusz      text not null default 'uj' check (
+    statusz in ('uj', 'tervezett', 'uton', 'lezarva', 'szamlazva', 'problemas', 'torolt')
+  ),
+  megjegyzes   text,
+  created_at   timestamptz not null default now(),
+  created_by   text
+);
+create index if not exists idx_fuvar_megbizasok_tipus on fuvar_megbizasok (tipus, datum desc);
