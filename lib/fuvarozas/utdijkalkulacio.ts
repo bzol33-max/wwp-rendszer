@@ -22,8 +22,7 @@ export type GeocodedAddress = {
   lat: number;
 };
 
-/** Egy cím -> legjobb találat (koordináta + a kalkulátor által ismert cím-alak). */
-export async function geocodeAddress(query: string): Promise<GeocodedAddress> {
+async function fuzzySearch(query: string): Promise<GeocodedAddress[]> {
   const url = new URL(`${BASE}/location/fuzzy`);
   url.searchParams.set("query", query);
   url.searchParams.set("types", "hnum,road,cos,admin,poi");
@@ -33,15 +32,29 @@ export async function geocodeAddress(query: string): Promise<GeocodedAddress> {
     throw new TollCalcError(`Címkeresés sikertelen (HTTP ${res.status}).`);
   }
   const data = (await res.json()) as FuzzyResponse;
-  const first = data.result?.features?.[0];
+  return (data.result?.features ?? []).map((f) => ({
+    label: f.properties.address,
+    lon: f.geometry.coordinates[0],
+    lat: f.geometry.coordinates[1],
+  }));
+}
+
+/** Cím -> legjobb találat (koordináta + a kalkulátor által ismert cím-alak). */
+export async function geocodeAddress(query: string): Promise<GeocodedAddress> {
+  const first = (await fuzzySearch(query))[0];
   if (!first) {
     throw new TollCalcError(`Nem található cím erre: "${query}".`);
   }
-  return {
-    label: first.properties.address,
-    lon: first.geometry.coordinates[0],
-    lat: first.geometry.coordinates[1],
-  };
+  return first;
+}
+
+/** Gépelés közbeni javaslatlista (max `limit` találat). */
+export async function suggestAddresses(
+  query: string,
+  limit = 6
+): Promise<GeocodedAddress[]> {
+  if (query.trim().length < 2) return [];
+  return (await fuzzySearch(query)).slice(0, limit);
 }
 
 // A kalkulátor oldal saját enumjai (app.$store.state.app), a HT (nehéz
@@ -61,6 +74,14 @@ export const EURO_CATEGORIES = [
   "NO_EMISSION",
 ] as const;
 export type EuroCategory = (typeof EURO_CATEGORIES)[number];
+
+// A flotta HU-GO besorolása fix: J5 kategória, EURO6, kb. 40t össztömeg
+// (nyerges vontató + Schmitz Mega pótkocsi). Nem felhasználó által állítható.
+export const FIXED_VEHICLE = {
+  vehicleCategory: "J5" as const,
+  euroCategory: "EURO6" as const,
+  weight: 40,
+};
 
 export type TollCalcParams = {
   fromLon: number;
@@ -102,7 +123,8 @@ export type TollRoute = {
   } | null;
 };
 
-export async function calculateToll(params: TollCalcParams): Promise<TollRoute[]> {
+/** Csak a leggyorsabb útvonalat adja vissza (a többi opciót nem mutatjuk). */
+export async function calculateToll(params: TollCalcParams): Promise<TollRoute> {
   const res = await fetch(`${BASE}/route-planner`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -142,7 +164,9 @@ export async function calculateToll(params: TollCalcParams): Promise<TollRoute[]
     throw new TollCalcError("Nem található útvonal a megadott két cím között.");
   }
 
-  return routes.map((r) => ({
+  const r = routes.find((x) => x.method === "FAST") ?? routes[0];
+
+  return {
     method: r.method,
     distanceKm: Math.round((r.distanceMeter / 1000) * 10) / 10,
     durationMin: Math.round(r.durationSecond / 60),
@@ -153,5 +177,5 @@ export async function calculateToll(params: TollCalcParams): Promise<TollRoute[]
           grossTotal: Math.round(r.tariff.total),
         }
       : null,
-  }));
+  };
 }
