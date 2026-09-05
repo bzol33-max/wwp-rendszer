@@ -587,6 +587,8 @@ function FuvarTypeView({
   listTitle,
   showJarmu,
   partnerColumnLabel,
+  noForm,
+  noFormNote,
 }: {
   tipus: FuvarTipus;
   minimal?: boolean;
@@ -594,17 +596,26 @@ function FuvarTypeView({
   listTitle?: string;
   showJarmu?: boolean;
   partnerColumnLabel?: string;
+  /** Ha true, nincs kézi rögzítő űrlap — csak lista + egy magyarázó kártya. */
+  noForm?: boolean;
+  noFormNote?: string;
 }) {
   const [refreshKey, setRefreshKey] = useState(0);
 
   return (
     <div className="flex flex-col gap-4">
-      <FuvarForm
-        tipus={tipus}
-        onSaved={() => setRefreshKey((k) => k + 1)}
-        minimal={minimal}
-        titleOverride={formTitle}
-      />
+      {noForm ? (
+        <Card className="bg-muted/40">
+          <CardContent className="py-4 text-sm text-muted-foreground">{noFormNote}</CardContent>
+        </Card>
+      ) : (
+        <FuvarForm
+          tipus={tipus}
+          onSaved={() => setRefreshKey((k) => k + 1)}
+          minimal={minimal}
+          titleOverride={formTitle}
+        />
+      )}
       <FuvarList
         tipus={tipus}
         refreshKey={refreshKey}
@@ -764,7 +775,11 @@ export function Megbizasok() {
         </TabsTrigger>
       </TabsList>
       <TabsContent value="sajat" className="mt-4">
-        <FuvarTypeView tipus="sajat" />
+        <FuvarTypeView
+          tipus="sajat"
+          noForm
+          noFormNote="A bér fuvarok mindig megbízásból (a Drive „Fuvarmegbizások” mappájában érkező dokumentumból) indulnak — nincs kézi rögzítés. Az onnan felismert fuvarok az „Ellenőrzésre vár” fülön jelennek meg jóváhagyásra, és jóváhagyás után itt látszanak."
+        />
       </TabsContent>
       <TabsContent value="ber" className="mt-4">
         <FuvarTypeView
