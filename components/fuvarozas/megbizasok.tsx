@@ -759,26 +759,17 @@ function ElokeszitettView() {
 }
 
 export function Megbizasok() {
-  const [pendingCount, setPendingCount] = useState<number | null>(null);
-
-  useEffect(() => {
-    getElokeszitettFuvarok().then((rows) => setPendingCount(rows.length));
-  }, []);
-
   return (
     <Tabs defaultValue="sajat">
       <TabsList>
         <TabsTrigger value="sajat">Bér fuvarok</TabsTrigger>
         <TabsTrigger value="ber">Saját fuvarok</TabsTrigger>
-        <TabsTrigger value="elokeszitett">
-          Ellenőrzésre vár{pendingCount ? ` (${pendingCount})` : ""}
-        </TabsTrigger>
       </TabsList>
       <TabsContent value="sajat" className="mt-4">
         <FuvarTypeView
           tipus="sajat"
           noForm
-          noFormNote="A bér fuvarok mindig megbízásból (a Drive „Fuvarmegbizások” mappájában érkező dokumentumból) indulnak — nincs kézi rögzítés. Az onnan felismert fuvarok az „Ellenőrzésre vár” fülön jelennek meg jóváhagyásra, és jóváhagyás után itt látszanak."
+          noFormNote="A bér fuvarok mindig megbízásból (a Drive „Fuvarmegbizások” mappájában érkező dokumentumból) indulnak — nincs kézi rögzítés."
         />
       </TabsContent>
       <TabsContent value="ber" className="mt-4">
@@ -790,9 +781,6 @@ export function Megbizasok() {
           showJarmu
           partnerColumnLabel="Partner"
         />
-      </TabsContent>
-      <TabsContent value="elokeszitett" className="mt-4">
-        <ElokeszitettView />
       </TabsContent>
     </Tabs>
   );
