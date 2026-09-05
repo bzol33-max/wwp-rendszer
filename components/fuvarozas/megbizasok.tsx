@@ -601,8 +601,8 @@ export function Megbizasok() {
   return (
     <Tabs defaultValue="sajat">
       <TabsList>
-        <TabsTrigger value="sajat">Saját fuvarok</TabsTrigger>
-        <TabsTrigger value="ber">Bér fuvarok</TabsTrigger>
+        <TabsTrigger value="sajat">Bér fuvarok</TabsTrigger>
+        <TabsTrigger value="ber">Saját fuvarok</TabsTrigger>
         <TabsTrigger value="elokeszitett">
           Ellenőrzésre vár{pendingCount ? ` (${pendingCount})` : ""}
         </TabsTrigger>
