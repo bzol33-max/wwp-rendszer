@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -55,6 +56,8 @@ const STATUSZ_BADGE_CLASS: Record<FuvarStatusz, string> = {
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
+
+const SAJAT_TELEP_PARTNER = "Well-Worn Pallet Kft.";
 
 function eredmeny(row: FuvarRow): number | null {
   if (row.fuvardij == null || row.koltseg == null) return null;
@@ -267,12 +270,22 @@ function MinimalFuvarFields({
         />
       </div>
       <div className="flex flex-col gap-1.5">
-        <Label>Megrendelő</Label>
+        <Label>Partner</Label>
         <Input
           placeholder="partner neve"
           value={form.megrendelo}
+          disabled={form.megrendelo === SAJAT_TELEP_PARTNER}
           onChange={(e) => onChange({ megrendelo: e.target.value })}
         />
+        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Checkbox
+            checked={form.megrendelo === SAJAT_TELEP_PARTNER}
+            onCheckedChange={(checked) =>
+              onChange({ megrendelo: checked === true ? SAJAT_TELEP_PARTNER : "" })
+            }
+          />
+          Saját telepek közti szállítás
+        </label>
       </div>
       <div className="flex flex-col gap-1.5">
         <Label>Felrakó</Label>
