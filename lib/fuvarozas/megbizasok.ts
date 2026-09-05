@@ -8,7 +8,6 @@ import type {
   AddFuvarInput,
   ApproveFuvarInput,
 } from "@/lib/fuvarozas/fuvar-constants";
-import { BERFUVAR_BACKFILL } from "@/lib/fuvarozas/berfuvar-backfill-data";
 
 // FIGYELEM: ez egy "use server" fájl — Next.js-ben ez KIZÁRÓLAG async
 // függvényeket exportálhat. Típusokat, konstans objektumokat/tömböket NE
@@ -94,35 +93,6 @@ export async function addFuvar(input: AddFuvarInput) {
       input.fizetesiHataridoNap ?? null,
     ]
   );
-}
-
-/**
- * IDEIGLENES: a Drive "Fuvarmegbizások" mappájából korábban importált bér
- * fuvarok erkezett_datum / lerakas_datum / fizetesi_hatarido_nap mezőinek
- * egyszeri visszatöltése (lib/fuvarozas/berfuvar-backfill-data.ts alapján,
- * drive_file_id szerint egyeztetve). Csak a UI-ból, kézzel indítható —
- * miután lefutott, ez a függvény, a hívása és az adatfájl is törölhető.
- */
-export async function backfillBerFuvarAdatok(): Promise<{ updated: number; missing: string[] }> {
-  let updated = 0;
-  const missing: string[] = [];
-  for (const entry of BERFUVAR_BACKFILL) {
-    const res = await query<{ id: string }>(
-      `update fuvar_megbizasok
-         set erkezett_datum = $2,
-             lerakas_datum = $3,
-             fizetesi_hatarido_nap = $4
-       where drive_file_id = $1
-       returning id::text`,
-      [entry.driveFileId, entry.erkezettDatum, entry.lerakasDatum, entry.fizetesiHataridoNap]
-    );
-    if (res.length > 0) {
-      updated += 1;
-    } else {
-      missing.push(entry.driveFileId);
-    }
-  }
-  return { updated, missing };
 }
 
 export async function updateFuvarStatus(id: string, statusz: FuvarStatusz) {

@@ -28,7 +28,6 @@ import { X } from "lucide-react";
 import {
   addFuvar,
   approveFuvar,
-  backfillBerFuvarAdatok,
   deleteFuvar,
   getElokeszitettFuvarok,
   getFuvarok,
@@ -581,6 +580,61 @@ function FuvarList({
   );
 }
 
+/** Ismert telephely-kódok, amikhez a szövegben nincs irányítószám (pl. "Budapest (BILK)"). */
+const ISMERT_IRSZ_KULCSSZO: Record<string, string> = {
+  BILK: "1239",
+};
+
+/**
+ * Egy felrakó/lerakó cím szövegének rövidített formája: "irányítószám város
+ * partner" — az utca/házszám és a cégforma-toldalékok (Kft., Zrt., stb.),
+ * valamint az "Magyarország" szó nélkül. Pl. "Unilever Magyarország Kft.,
+ * 4300 Nyírbátor, Táncsics u. 2-4" -> "4300 Nyírbátor Unilever".
+ */
+function roviditettHelynev(value: string | null | undefined): string {
+  if (!value) return "";
+  const parts = value
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  let zip = "";
+  let city = "";
+  let cityIdx = -1;
+
+  parts.forEach((p, i) => {
+    if (cityIdx !== -1) return;
+    const m = p.match(/(\d{4})\s+([^(]+)/);
+    if (m) {
+      zip = m[1];
+      city = m[2].trim();
+      cityIdx = i;
+    }
+  });
+
+  if (!zip) {
+    parts.forEach((p, i) => {
+      if (cityIdx !== -1) return;
+      const kulcsszo = Object.keys(ISMERT_IRSZ_KULCSSZO).find((k) => p.includes(k));
+      if (kulcsszo) {
+        zip = ISMERT_IRSZ_KULCSSZO[kulcsszo];
+        city = p.replace(/\(.*\)/, "").trim();
+        cityIdx = i;
+      }
+    });
+  }
+
+  let nev = parts.find((_, i) => i !== cityIdx) ?? "";
+  nev = nev
+    .replace(/\bMagyarország\b/gi, "")
+    .replace(/\b(Kft\.?|Zrt\.?|Bt\.?|Nyrt\.?|Kkt\.?)\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const hely = [zip, city].filter(Boolean).join(" ");
+  return [hely, nev].filter(Boolean).join(" ").trim();
+}
+
 /**
  * A "Bér fuvarok" (tipus="sajat") lista — kizárólag a megbízás-specifikus 7
  * oszloppal: 1) Dátum = a megbízás beérkezési dátuma, 2) Megrendelő,
@@ -655,11 +709,12 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
                   <TableCell>
                     {row.felrako ? (
                       <>
-                        {row.felrako} ({row.date}) → {row.lerako} ({row.lerakas_datum ?? row.date})
+                        {roviditettHelynev(row.felrako)} {row.date} → {roviditettHelynev(row.lerako)}{" "}
+                        {row.lerakas_datum ?? row.date}
                       </>
                     ) : (
                       <>
-                        {row.lerako} ({row.lerakas_datum ?? row.date})
+                        {roviditettHelynev(row.lerako)} {row.lerakas_datum ?? row.date}
                       </>
                     )}
                   </TableCell>
@@ -891,35 +946,7 @@ function ElokeszitettView() {
   );
 }
 
-function BerFuvarBackfillButton({ onDone }: { onDone: () => void }) {
-  const [running, setRunning] = useState(false);
-
-  async function handleClick() {
-    setRunning(true);
-    try {
-      const result = await backfillBerFuvarAdatok();
-      toast.success(
-        `${result.updated} fuvar adatai frissítve.` +
-          (result.missing.length > 0 ? ` ${result.missing.length} dokumentumhoz nem volt találat.` : "")
-      );
-      onDone();
-    } catch {
-      toast.error("Nem sikerült frissíteni.");
-    } finally {
-      setRunning(false);
-    }
-  }
-
-  return (
-    <Button size="sm" variant="outline" disabled={running} onClick={handleClick}>
-      {running ? "Frissítés…" : "Meglévő adatok frissítése a Drive alapján"}
-    </Button>
-  );
-}
-
 export function Megbizasok() {
-  const [berRefreshKey, setBerRefreshKey] = useState(0);
-
   return (
     <Tabs defaultValue="sajat">
       <TabsList>
@@ -929,15 +956,12 @@ export function Megbizasok() {
       <TabsContent value="sajat" className="mt-4">
         <div className="flex flex-col gap-4">
           <Card className="bg-muted/40">
-            <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4 text-sm text-muted-foreground">
-              <span>
-                A bér fuvarok mindig megbízásból (a Drive „Fuvarmegbizások” mappájában érkező
-                dokumentumból) indulnak — nincs kézi rögzítés.
-              </span>
-              <BerFuvarBackfillButton onDone={() => setBerRefreshKey((k) => k + 1)} />
+            <CardContent className="py-4 text-sm text-muted-foreground">
+              A bér fuvarok mindig megbízásból (a Drive „Fuvarmegbizások” mappájában érkező
+              dokumentumból) indulnak — nincs kézi rögzítés.
             </CardContent>
           </Card>
-          <BerFuvarLista refreshKey={berRefreshKey} />
+          <BerFuvarLista refreshKey={0} />
         </div>
       </TabsContent>
       <TabsContent value="ber" className="mt-4">
