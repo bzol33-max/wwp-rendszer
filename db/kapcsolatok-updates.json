@@ -1,0 +1,106 @@
+{
+  "_megjegyzes": "Ez a fájl a Fuvarozás / Kapcsolatok tábla forrás-adata. Induláskor (scripts/migrate.mjs) MINDIG lefut és automatikusan alkalmazódik: a \"fixes\" tömb a meglévő sorokat pontosítja (cég+kapcsolattartó alapján azonosítva), a \"new\" tömb pedig új sorokat vesz fel, ha még nincs ugyanaz a cég+e-mail (vagy cég+kapcsolattartó) kombináció. Ez biztonságos és duplikáció-mentes, bármikor újrafuttatható. A JÖVŐBENI SZABÁLY: valahányszor új vagy pontosított partner-kapcsolat kerül elő (Gmail 'Fuvarmegbízás' címke, új megbízás, stb.), ide kell felvenni egy új 'new' vagy 'fixes' bejegyzést, majd deployolni — a tábla ettől a fájltól automatikusan, kézi lépés (gombnyomás) nélkül bővül minden induláskor.",
+  "fixes": [
+    {
+      "match": { "ceg": "Hajdúspedíció Kft.", "kapcsolattarto": "Hajdu János" },
+      "patch": {
+        "kapcsolattarto": "Hajdu Zoltán",
+        "email": "hajduspedicio@gmail.com",
+        "megjegyzes": "Javítva Gmail alapján (2026.09.): a korábbi \"Hajdu János\" név és a hajduspedicio@t-online.hu cím elavult volt. A helyes cím hajduspedicio@gmail.com, a küldő neve minden ellenőrzött levélben \"Zoltán Hajdu\" (aláírás: \"Zoli\")."
+      }
+    },
+    {
+      "match": { "ceg": "Pro Line Speed Kft.", "kapcsolattarto": "Prostyák Tamás" },
+      "patch": { "email": "prostyak1@gmail.com" }
+    },
+    {
+      "match": { "ceg": "ÁB Speed Szállítmányozási Kft.", "kapcsolattarto": "Németh Ákos" },
+      "patch": {
+        "megjegyzes": "Gmail-ellenőrzéskor ez a kapcsolat nem volt igazolható aláírással ellátott küldőként (csak cc-ben szerepelt). Lásd emellett: Szabó Károly (transport@abspeed.hu) — ő a ténylegesen aláírt levelek küldője."
+      }
+    },
+    {
+      "match": { "ceg": "Alpok-Trans Kft.", "kapcsolattarto": "Borhi Szilárd" },
+      "patch": { "email": "szilard@alpoktrans.hu" }
+    },
+    {
+      "match": { "ceg": "Trans-Sped Kft.", "kapcsolattarto": "Tálas Viktória" },
+      "patch": { "telefon": "+36 20 246 3969" }
+    },
+    {
+      "match": { "ceg": "VOXOV Logistics Kft." },
+      "patch": {
+        "kapcsolattarto": "Szabó-Csala Petra",
+        "telefon": "+36 30 095 9520",
+        "email": "petra.szabo.csala@voxov.hu",
+        "megjegyzes": "Speditőr. Az aláírás képként érkezett, onnan olvasva ki a telefonszámot."
+      }
+    },
+    {
+      "match": { "ceg": "SG Transport Kft." },
+      "patch": {
+        "megjegyzes": "Minden levél csak céges aláírással érkezik, személynév nélkül — ellenőrizve."
+      }
+    }
+  ],
+  "new": [
+    { "ceg": "Trans-Sped Kft.", "kapcsolattarto": "Pelle Kitti", "email": "pelle.kitti@trans-sped.hu", "forras": "48940_1788426129_order.pdf" },
+    { "ceg": "Trans-Sped Kft.", "kapcsolattarto": "Kovács Gyöngyi", "email": "kovacs.gyongyi@trans-sped.hu", "forras": "email cc: Alvállalkozói megbízás 37941" },
+    { "ceg": "Trans-Sped Kft.", "kapcsolattarto": "Tálas Viktória", "email": "talas.viktoria@trans-sped.hu", "forras": "MGB/26 fuvarfeladat 33313.pdf" },
+    { "ceg": "Trans-Sped Kft.", "kapcsolattarto": "Végh András", "email": "vegh.andras@trans-sped.hu", "forras": "42448_1786441568_order.pdf" },
+    { "ceg": "Trans-Sped Kft.", "kapcsolattarto": "Gerhard Edina", "email": "gerhard.edina@trans-sped.hu", "forras": "email cc: Alvállalkozói megbízás 30357" },
+    { "ceg": "Trans-Sped Kft.", "email": "v-szamlak@trans-sped.hu", "forras": "számlázási email (több fuvarmegbízás)" },
+
+    { "ceg": "RBT Europe Kft.", "kapcsolattarto": "Orsós Dorottya", "telefon": "+36 20 355 8797 / +36 70 313 9674", "email": "dori.orsos@rbteurope.com", "forras": "Megbízás (poz 2844/2683/2688).pdf" },
+    { "ceg": "RBT Europe Kft.", "kapcsolattarto": "Rabi Klári", "telefon": "+36 70 397 4377", "email": "rbtfinance@rbteurope.com", "megjegyzes": "Pénzügyi kapcsolattartó.", "forras": "Gmail — label:Fuvarmegbízás" },
+
+    { "ceg": "Hajdúspedíció Kft.", "kapcsolattarto": "Hajdu Zoltán", "telefon": "30/9786-781, 36/545-110", "email": "hajduspedicio@gmail.com", "forras": "Well-Worn Pallet 09.02/09.03 Nyírjákó-Ikrény / Pázmándfalu-Nagyhegyes; javítva Gmail alapján" },
+
+    { "ceg": "Flott-Trans Kft.", "kapcsolattarto": "Podlóczky Andrea", "telefon": "+36 70 933 1533 / +36 70 933 1698", "email": "flott@flott.hu", "forras": "2026-01084 / 2026-01024 / 2026-00931-WELLWORNPA.pdf" },
+    { "ceg": "Flott-Trans Kft.", "telefon": "+36 (36) 512-500", "email": "szallitolevel@flott.hu", "forras": "2026-01084-WELLWORNPA.pdf (dokumentum visszaküldési email)" },
+    { "ceg": "Flott-Trans Kft.", "kapcsolattarto": "Pallagi Péter", "telefon": "+36 70 933 1543", "email": "peter.pallagi@flott.hu", "megjegyzes": "Logisztikai ügyintéző.", "forras": "Gmail — label:Fuvarmegbízás" },
+
+    { "ceg": "HAPP Kft.", "kapcsolattarto": "Burkus Árpád", "telefon": "+36 30 946 2726", "email": "burkus.arpad@happ.eu", "forras": "Fuvarmegbízás_0000129953/129356/128971/128972/128828/128468/128216.pdf" },
+    { "ceg": "HAPP Kft.", "telefon": "+36 20 347 6882", "email": "faktor@happ.eu", "forras": "Fuvarmegbízás_0000129953.pdf (faktoring info)" },
+    { "ceg": "HAPP Kft.", "email": "finance@happ.eu", "forras": "Fuvarmegbízás_0000129953.pdf (számlázási email)" },
+
+    { "ceg": "ÁB Speed Szállítmányozási Kft.", "kapcsolattarto": "Németh Ákos", "telefon": "+36 20 594 2296", "email": "akos.nemeth@abspeed.hu / akos@abspeed.hu", "forras": "26-3456/3368/3367/3384/3198/3319/3318/3289/3102.pdf" },
+    { "ceg": "ÁB Speed Szállítmányozási Kft.", "kapcsolattarto": "Szabó Károly", "telefon": "+36 20 275 0191", "email": "transport@abspeed.hu", "megjegyzes": "Gmail alapján (2026.09.) ő a ténylegesen aláírással megerősített küldő. Fontos: más személy, mint a Lorry GM Kft.-nél szereplő azonos nevű Szabó Károly.", "forras": "Gmail — label:Fuvarmegbízás" },
+
+    { "ceg": "SG Transport Kft.", "telefon": "+36 30 865 3166", "email": "sgtransportkft@gmail.com", "forras": "SG_Transport_fuvarmegbizas_20260810_11-HB-S-756.pdf" },
+
+    { "ceg": "HRT Spedition Kft.", "kapcsolattarto": "Pretsner József Ádám", "telefon": "+36 30 1532 793", "email": "adam.pretsner@hrtsped.hu", "forras": "_20260825_102300.pdf" },
+    { "ceg": "HRT Spedition Kft.", "email": "iroda@hrtsped.hu / penzugy@hrtsped.hu / cmr@hrtsped.hu", "forras": "_20260825_102300.pdf" },
+
+    { "ceg": "Pro Line Speed Kft.", "kapcsolattarto": "Prostyák Tamás", "telefon": "+36 70 776 5349", "email": "prostyak1@gmail.com", "forras": "Well worn.pdf; e-mail Gmail alapján" },
+
+    { "ceg": "K+K Spedit Kft.", "kapcsolattarto": "Novák Nikoletta", "telefon": "+36 30 088 1442", "email": "fuvarszervezes@kkspedit.hu", "forras": "Megbiz.pdf" },
+    { "ceg": "K+K Spedit Kft.", "telefon": "06-42/310-084", "email": "iroda@kkspedit.hu", "forras": "Megbiz.pdf" },
+
+    { "ceg": "Alpok-Trans Kft.", "kapcsolattarto": "Borhi Szilárd", "telefon": "+36 70 611 2552", "email": "szilard@alpoktrans.hu", "forras": "MGB 26 1754 2026 08 18 Well-Worn Pallet.pdf; e-mail Gmail alapján" },
+
+    { "ceg": "Well Pack Hungaria Kft.", "kapcsolattarto": "Sági Fanni", "telefon": "+36 30 839 8114", "email": "sagi.fanni@wellpack.hu", "forras": "196 AUG Well worn pallet kft 110e 3402621138 WAB-BÜK.pdf" },
+    { "ceg": "Well Pack Hungaria Kft.", "email": "transport@wellpack.hu", "forras": "196 AUG Well worn pallet kft 110e 3402621138 WAB-BÜK.pdf" },
+    { "ceg": "Well Pack Hungaria Kft.", "kapcsolattarto": "Fonai Orsolya", "telefon": "+36 20 574 6094", "email": "orsolya.fonai@wellpack.hu", "megjegyzes": "Gmail alapján ő a legtöbb levélben aláírással megerősített küldő (Sági Fanni csak cc-ben szerepelt, saját aláírás nélkül).", "forras": "Gmail — label:Fuvarmegbízás" },
+
+    { "ceg": "Pannoniacoop Logisztikai Kft.", "email": "pannoniacoop@gmail.com", "forras": "A268 26 - well-worn pallet kft.pdf" },
+    { "ceg": "Pannoniacoop Logisztikai Kft.", "kapcsolattarto": "Dejan Kordic", "email": "dkordic@pannoniacoop.com", "megjegyzes": "Nem igazolt teljesen, hogy ugyanaz a kapcsolat, mint a pannoniacoop@gmail.com — más, nem \"Fuvarmegbízás\" címkéjű levélszálból került elő. Ellenőrizendő.", "forras": "Gmail — nem Fuvarmegbízás címke" },
+
+    { "ceg": "VOXOV Logistics Kft.", "forras": "P26380SoroksárlNyíregyházaWELL-WORN.pdf (csak postacím: 1601 Budapest Pf. 131)" },
+
+    { "ceg": "Lorry GM Kft.", "kapcsolattarto": "Szabó Károly", "telefon": "+36 70 455 5205", "email": "karoly.szabo@lorry.hu", "forras": "Gmail — label:Fuvarmegbízás" },
+    { "ceg": "Lorry GM Kft.", "kapcsolattarto": "Siklér-Czotter Kitti", "telefon": "+36 70 455 5516", "email": "raklapos@lorry.hu", "megjegyzes": "Raklapos ügyintéző (kifejezetten raklapos ügyekhez).", "forras": "Gmail — label:Fuvarmegbízás" },
+
+    { "ceg": "Bi-Ma Logisztika Kft.", "kapcsolattarto": "Bihari Gábor", "telefon": "+36 70 539 3197", "email": "b.gabor@bi-ma.hu", "forras": "Gmail — label:Fuvarmegbízás" },
+
+    { "ceg": "Mission Trans", "email": "kovacs.fanni@missiontrans.hu", "megjegyzes": "Csak automata (InnoManagement portál) értesítő levél volt fellelhető, aláírás/telefonszám nélkül. A feladó neve a levélben \"kovacs.fanni\", de ez nem igazolt személynév.", "forras": "Gmail — label:Fuvarmegbízás" },
+
+    { "ceg": "ÁJ-TRANS Kft.", "kapcsolattarto": "Dravucz Edina", "telefon": "+36 70 88 47 079", "email": "dravucz.edina@ajtrans.hu", "forras": "Gmail — label:Fuvarmegbízás" },
+
+    { "ceg": "CEMIX", "kapcsolattarto": "Üregi Szabolcs", "email": "szabolcs.uregi@cemix.hu", "megjegyzes": "Közvetlen megrendelő (nem fuvarszervező partner). Telefonszám nem volt igazolható.", "forras": "Gmail — label:Fuvarmegbízás" },
+
+    { "ceg": "XPEDIT Logistics Kft.", "kapcsolattarto": "Kristóf Szegedi", "telefon": "+36 30 372 2220", "email": "kristof.szegedi@xpeditlog.com", "forras": "Gmail — label:Fuvarmegbízás" },
+
+    { "ceg": "Solinwest Agro Kft.", "kapcsolattarto": "Őri Beatrix", "telefon": "+36 70 421 6811 / +36 27 739 703", "email": "ertekesites@solinwest.hu", "forras": "Gmail — label:Fuvarmegbízás" }
+  ]
+}

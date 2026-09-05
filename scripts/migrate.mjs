@@ -29,7 +29,76 @@ async function main() {
     console.log("[migrate] már van adat, seed kihagyva.");
   }
 
+  await applyKapcsolatokUpdates(pool, dbDir);
+
   await pool.end();
+}
+
+// Fuvarozás — Kapcsolatok: minden induláskor lefut, biztonságosan
+// újrafuttatható. A db/kapcsolatok-updates.json a folyamatosan bővülő
+// forrás-adat — valahányszor új vagy pontosított partner-kapcsolat kerül
+// elő (pl. Gmail "Fuvarmegbízás" címke alapján), oda kell felvenni egy
+// "fixes" (meglévő sor javítása, cég+kapcsolattartó alapján azonosítva) vagy
+// "new" (új sor, cég+e-mail / cég+kapcsolattartó alapján duplikáció-védett)
+// bejegyzést — a tábla ettől kézi lépés nélkül, automatikusan bővül minden
+// deploykor.
+async function applyKapcsolatokUpdates(pool, dbDir) {
+  let data;
+  try {
+    data = JSON.parse(readFileSync(path.join(dbDir, "kapcsolatok-updates.json"), "utf8"));
+  } catch {
+    console.log("[migrate] kapcsolatok-updates.json nincs, kihagyva.");
+    return;
+  }
+
+  let updated = 0;
+  for (const fix of data.fixes ?? []) {
+    const hasKapcsolattarto = Object.prototype.hasOwnProperty.call(fix.match, "kapcsolattarto");
+    const { rows: matches } = await pool.query(
+      hasKapcsolattarto
+        ? "select id from fuvar_kapcsolatok where ceg = $1 and kapcsolattarto = $2"
+        : "select id from fuvar_kapcsolatok where ceg = $1",
+      hasKapcsolattarto ? [fix.match.ceg, fix.match.kapcsolattarto] : [fix.match.ceg]
+    );
+    for (const row of matches) {
+      const entries = Object.entries(fix.patch ?? {});
+      if (entries.length === 0) continue;
+      const sets = entries.map(([key], i) => `${key} = $${i + 1}`);
+      const params = entries.map(([, value]) => value);
+      params.push(row.id);
+      await pool.query(
+        `update fuvar_kapcsolatok set ${sets.join(", ")} where id = $${params.length}`,
+        params
+      );
+      updated++;
+    }
+  }
+
+  let inserted = 0;
+  for (const entry of data.new ?? []) {
+    const { rows: existing } = await pool.query(
+      entry.email
+        ? "select 1 from fuvar_kapcsolatok where ceg = $1 and email = $2"
+        : "select 1 from fuvar_kapcsolatok where ceg = $1 and kapcsolattarto = $2",
+      entry.email ? [entry.ceg, entry.email] : [entry.ceg, entry.kapcsolattarto ?? null]
+    );
+    if (existing.length > 0) continue;
+    await pool.query(
+      `insert into fuvar_kapcsolatok (ceg, kapcsolattarto, telefon, email, megjegyzes, forras)
+       values ($1, $2, $3, $4, $5, $6)`,
+      [
+        entry.ceg,
+        entry.kapcsolattarto ?? null,
+        entry.telefon ?? null,
+        entry.email ?? null,
+        entry.megjegyzes ?? null,
+        entry.forras ?? null,
+      ]
+    );
+    inserted++;
+  }
+
+  console.log(`[migrate] kapcsolatok frissítve: ${updated} javítás, ${inserted} új sor.`);
 }
 
 main().catch((err) => {

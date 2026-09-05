@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { ChevronDown, Search, X } from "lucide-react";
-import { addKapcsolat, deleteKapcsolat, fixKapcsolatok, getKapcsolatok, seedKapcsolatok } from "@/lib/fuvarozas/kapcsolatok";
+import { addKapcsolat, deleteKapcsolat, getKapcsolatok } from "@/lib/fuvarozas/kapcsolatok";
 import type { KapcsolatRow } from "@/lib/fuvarozas/kapcsolatok-constants";
 
 type UjKapcsolatForm = {
@@ -163,8 +163,6 @@ function CegCsoport({
 export function Kapcsolatok() {
   const [rows, setRows] = useState<KapcsolatRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [seeding, setSeeding] = useState(false);
-  const [fixing, setFixing] = useState(false);
   const [ujSorNyitva, setUjSorNyitva] = useState(false);
   const [kereses, setKereses] = useState("");
   const [nyitottCegek, setNyitottCegek] = useState<Set<string>>(new Set());
@@ -178,38 +176,6 @@ export function Kapcsolatok() {
     setLoading(true);
     load().finally(() => setLoading(false));
   }, [load]);
-
-  async function handleSeed() {
-    setSeeding(true);
-    try {
-      const result = await seedKapcsolatok();
-      if (result.skipped) {
-        toast.error("Már vannak kapcsolatok — a feltöltés csak üres listánál fut le.");
-      } else {
-        toast.success(`${result.inserted} kapcsolat feltöltve.`);
-      }
-      await load();
-    } catch {
-      toast.error("Nem sikerült feltölteni.");
-    } finally {
-      setSeeding(false);
-    }
-  }
-
-  async function handleFix() {
-    setFixing(true);
-    try {
-      const result = await fixKapcsolatok();
-      toast.success(
-        `Pontosítva: ${result.updated} javítás, ${result.inserted} új kapcsolat (${result.skippedInserted} már megvolt).`
-      );
-      await load();
-    } catch {
-      toast.error("Nem sikerült a pontosítást elvégezni.");
-    } finally {
-      setFixing(false);
-    }
-  }
 
   async function handleDelete(id: string) {
     await deleteKapcsolat(id);
@@ -265,16 +231,6 @@ export function Kapcsolatok() {
             />
           </div>
           <div className="flex items-center gap-2">
-            {!loading && rows.length === 0 && (
-              <Button size="sm" variant="outline" disabled={seeding} onClick={handleSeed}>
-                {seeding ? "Feltöltés…" : "Feltöltés a megbízásokból"}
-              </Button>
-            )}
-            {!loading && rows.length > 0 && (
-              <Button size="sm" variant="outline" disabled={fixing} onClick={handleFix}>
-                {fixing ? "Pontosítás…" : "Pontosítás Gmail alapján"}
-              </Button>
-            )}
             {!ujSorNyitva && (
               <Button size="sm" onClick={() => setUjSorNyitva(true)}>
                 + Új kapcsolat felvétele
