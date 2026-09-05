@@ -40,6 +40,7 @@ import {
   type FuvarTipus,
 } from "@/lib/fuvarozas/fuvar-constants";
 import { getCurrentUser } from "@/lib/current-user";
+import { SAJAT_JARMUVEK, jarmuLabel } from "@/lib/fuvarozas/vehicles";
 
 const STATUSZ_BADGE_CLASS: Record<FuvarStatusz, string> = {
   uj: "bg-muted text-muted-foreground hover:bg-muted",
@@ -289,6 +290,21 @@ function MinimalFuvarFields({
           onChange={(e) => onChange({ lerako: e.target.value })}
         />
       </div>
+      <div className="flex flex-col gap-1.5">
+        <Label>Kocsi</Label>
+        <Select value={form.jarmu} onValueChange={(v) => v && onChange({ jarmu: v })}>
+          <SelectTrigger>
+            <SelectValue placeholder="Válassz kocsit" />
+          </SelectTrigger>
+          <SelectContent>
+            {SAJAT_JARMUVEK.map((j) => (
+              <SelectItem key={j.sofor} value={jarmuLabel(j)}>
+                {jarmuLabel(j)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
     </div>
   );
 }
@@ -329,7 +345,7 @@ function FuvarForm({
         aru: minimal ? undefined : form.aru || undefined,
         mennyiseg: minimal ? undefined : form.mennyiseg || undefined,
         suly: minimal ? undefined : form.suly || undefined,
-        jarmu: minimal ? undefined : form.jarmu || undefined,
+        jarmu: form.jarmu || undefined,
         sofor: minimal ? undefined : form.sofor || undefined,
         alvallalkozo: minimal ? undefined : form.alvallalkozo || undefined,
         fuvardij: minimal ? undefined : form.fuvardij ? Number(form.fuvardij) : undefined,
@@ -374,11 +390,15 @@ function FuvarList({
   tipus,
   refreshKey,
   titleOverride,
+  showJarmu,
 }: {
   tipus: FuvarTipus;
   refreshKey: number;
   titleOverride?: string;
+  /** Melyik oszlopot mutassa a jármű-oszlopban — alapból tipus alapján dől el. */
+  showJarmu?: boolean;
 }) {
+  const jarmuOszlop = showJarmu ?? tipus === "sajat";
   const [rows, setRows] = useState<FuvarRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -418,7 +438,7 @@ function FuvarList({
                 <TableHead>Dátum</TableHead>
                 <TableHead>Honnan → Hová</TableHead>
                 <TableHead>Megrendelő</TableHead>
-                <TableHead>{tipus === "sajat" ? "Jármű" : "Alvállalkozó"}</TableHead>
+                <TableHead>{jarmuOszlop ? "Kocsi" : "Alvállalkozó"}</TableHead>
                 <TableHead className="text-right">Fuvardíj</TableHead>
                 <TableHead className="text-right">Eredmény</TableHead>
                 <TableHead>Státusz</TableHead>
@@ -451,7 +471,7 @@ function FuvarList({
                     </TableCell>
                     <TableCell>{row.megrendelo ?? "—"}</TableCell>
                     <TableCell>
-                      {tipus === "sajat" ? row.jarmu ?? "—" : row.alvallalkozo ?? "—"}
+                      {jarmuOszlop ? row.jarmu ?? "—" : row.alvallalkozo ?? "—"}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {row.fuvardij != null ? `${row.fuvardij.toLocaleString("hu-HU")} Ft` : "—"}
@@ -515,11 +535,13 @@ function FuvarTypeView({
   minimal,
   formTitle,
   listTitle,
+  showJarmu,
 }: {
   tipus: FuvarTipus;
   minimal?: boolean;
   formTitle?: string;
   listTitle?: string;
+  showJarmu?: boolean;
 }) {
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -531,7 +553,12 @@ function FuvarTypeView({
         minimal={minimal}
         titleOverride={formTitle}
       />
-      <FuvarList tipus={tipus} refreshKey={refreshKey} titleOverride={listTitle} />
+      <FuvarList
+        tipus={tipus}
+        refreshKey={refreshKey}
+        titleOverride={listTitle}
+        showJarmu={showJarmu}
+      />
     </div>
   );
 }
@@ -692,6 +719,7 @@ export function Megbizasok() {
           minimal
           formTitle="Új saját fuvar"
           listTitle="Saját fuvarok"
+          showJarmu
         />
       </TabsContent>
       <TabsContent value="elokeszitett" className="mt-4">

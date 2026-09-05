@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { getFleetPositions } from "@/lib/fuvarozas/actions";
 import type { EcofleetPosition } from "@/lib/fuvarozas/ecofleet";
+import { findJarmuByPlate } from "@/lib/fuvarozas/vehicles";
 
 /** "2026-09-04 13:35:05+0200" -> Date (a +0200 már helyi eltolás, nincs újraszámolás) */
 function parseEcofleetTimestamp(ts: string): Date | null {
@@ -28,12 +29,14 @@ function formatAgo(d: Date | null): string {
 function VehicleCard({ pos }: { pos: EcofleetPosition }) {
   const when = parseEcofleetTimestamp(pos.timestamp);
   const mapsUrl = `https://www.google.com/maps?q=${pos.latitude},${pos.longitude}`;
+  const jarmu = findJarmuByPlate(pos.plate);
+  const cim = jarmu ? `${jarmu.sofor} — ${pos.plate || pos.name}` : pos.plate || pos.name;
 
   return (
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="text-sm">{pos.plate || pos.name}</CardTitle>
+          <CardTitle className="text-sm">{cim}</CardTitle>
           <Badge variant={pos.engineOn ? "default" : "secondary"}>
             {pos.engineOn ? "Fut a motor" : "Áll"}
           </Badge>
