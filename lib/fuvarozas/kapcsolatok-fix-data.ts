@@ -43,6 +43,13 @@ export const KAPCSOLATOK_FIXES: {
         "Gmail-ellenőrzéskor ez a kapcsolat nem volt igazolható aláírással ellátott küldőként (csak cc-ben szerepelt). Lásd emellett: Szabó Károly (transport@abspeed.hu) — ő a ténylegesen aláírt levelek küldője.",
     },
   },
+  {
+    // A Drive-dokumentumból (PDF) hiányzott az e-mail cím — a Gmailben
+    // megtalált eredeti levél (a pontosan ugyanahhoz a megbízáshoz tartozó
+    // "MGB 1754" szál) igazolta a feladó címét.
+    match: { ceg: "Alpok-Trans Kft.", kapcsolattarto: "Borhi Szilárd" },
+    patch: { email: "szilard@alpoktrans.hu" },
+  },
 ];
 
 // Új sorok — korábban nem szerepeltek a Kapcsolatok táblában.
