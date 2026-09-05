@@ -41,6 +41,7 @@ import {
   type FuvarTipus,
 } from "@/lib/fuvarozas/fuvar-constants";
 import { getCurrentUser } from "@/lib/current-user";
+import { Kapcsolatok } from "@/components/fuvarozas/kapcsolatok";
 import {
   SAJAT_JARMUVEK,
   JARMU_SZIN_DOT_CLASS,
@@ -966,11 +967,7 @@ export function Megbizasok() {
         />
       </TabsContent>
       <TabsContent value="kapcsolatok" className="mt-4">
-        <Card className="bg-muted/40">
-          <CardContent className="py-4 text-sm text-muted-foreground">
-            Kapcsolatok — hamarosan.
-          </CardContent>
-        </Card>
+        <Kapcsolatok />
       </TabsContent>
       <TabsContent value="szamla-posta" className="mt-4">
         <Card className="bg-muted/40">

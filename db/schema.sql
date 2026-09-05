@@ -213,3 +213,17 @@ alter table fuvar_megbizasok alter column felrako drop not null;
 alter table fuvar_megbizasok add column if not exists erkezett_datum date;
 alter table fuvar_megbizasok add column if not exists lerakas_datum date;
 alter table fuvar_megbizasok add column if not exists fizetesi_hatarido_nap integer;
+
+-- Fuvarozás — Kapcsolatok fül: a megbízásokból (és a hozzájuk tartozó
+-- e-mailekből) kinyert cégenkénti kapcsolattartók. Egy céghez több
+-- kapcsolattartó/telefon/e-mail sor is tartozhat.
+create table if not exists fuvar_kapcsolatok (
+  id             bigserial primary key,
+  ceg            text not null,
+  kapcsolattarto text,
+  telefon        text,
+  email          text,
+  forras         text, -- pl. a drive dokumentum neve vagy e-mail, ahonnan származik
+  created_at     timestamptz not null default now()
+);
+create index if not exists idx_fuvar_kapcsolatok_ceg on fuvar_kapcsolatok (ceg);
