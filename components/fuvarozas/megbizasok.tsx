@@ -31,12 +31,14 @@ import {
   getElokeszitettFuvarok,
   getFuvarok,
   updateFuvarStatus,
+} from "@/lib/fuvarozas/megbizasok";
+import {
   FUVAR_STATUSZ_LABEL,
   FUVAR_STATUSZOK,
   type FuvarRow,
   type FuvarStatusz,
   type FuvarTipus,
-} from "@/lib/fuvarozas/megbizasok";
+} from "@/lib/fuvarozas/fuvar-constants";
 import { getCurrentUser } from "@/lib/current-user";
 
 const STATUSZ_BADGE_CLASS: Record<FuvarStatusz, string> = {

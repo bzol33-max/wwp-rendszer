@@ -1,53 +1,19 @@
 "use server";
 
 import { query } from "@/lib/db";
+import type {
+  FuvarTipus,
+  FuvarStatusz,
+  FuvarRow,
+  AddFuvarInput,
+  ApproveFuvarInput,
+} from "@/lib/fuvarozas/fuvar-constants";
 
-export type FuvarTipus = "sajat" | "ber";
-
-export type FuvarStatusz =
-  | "uj"
-  | "tervezett"
-  | "uton"
-  | "lezarva"
-  | "szamlazva"
-  | "problemas"
-  | "torolt";
-
-export const FUVAR_STATUSZ_LABEL: Record<FuvarStatusz, string> = {
-  uj: "Új",
-  tervezett: "Tervezett",
-  uton: "Úton",
-  lezarva: "Lezárva",
-  szamlazva: "Számlázva",
-  problemas: "Problémás",
-  torolt: "Törölt",
-};
-
-export const FUVAR_STATUSZOK = Object.keys(FUVAR_STATUSZ_LABEL) as FuvarStatusz[];
-
-export type FuvarRow = {
-  id: string;
-  tipus: FuvarTipus;
-  date: string;
-  idopont: string | null;
-  felrako: string;
-  lerako: string;
-  megrendelo: string | null;
-  aru: string | null;
-  mennyiseg: string | null;
-  suly: string | null;
-  jarmu: string | null;
-  sofor: string | null;
-  alvallalkozo: string | null;
-  fuvardij: number | null;
-  koltseg: number | null;
-  statusz: FuvarStatusz;
-  megjegyzes: string | null;
-  dokumentum_url: string | null;
-  forras: "kezi" | "pdf_import";
-  ellenorzott: boolean;
-  created_by: string | null;
-};
+// FIGYELEM: ez egy "use server" fájl — Next.js-ben ez KIZÁRÓLAG async
+// függvényeket exportálhat. Típusokat, konstans objektumokat/tömböket NE
+// ide tegyünk (lásd lib/fuvarozas/fuvar-constants.ts), mert az futásidőben
+// "A "use server" file can only export async functions, found object."
+// hibát okoz, és eldönti az egész oldalt.
 
 const TIME_FMT = "mon. DD";
 
@@ -81,29 +47,6 @@ export async function getElokeszitettFuvarok(): Promise<FuvarRow[]> {
      limit 200`
   );
 }
-
-export type AddFuvarInput = {
-  tipus: FuvarTipus;
-  datum: string;
-  idopont?: string;
-  felrako: string;
-  lerako: string;
-  megrendelo?: string;
-  aru?: string;
-  mennyiseg?: string;
-  suly?: string;
-  jarmu?: string;
-  sofor?: string;
-  alvallalkozo?: string;
-  fuvardij?: number;
-  koltseg?: number;
-  megjegyzes?: string;
-  dokumentumUrl?: string;
-  driveFileId?: string;
-  forras?: "kezi" | "pdf_import";
-  ellenorzott?: boolean;
-  createdBy?: string;
-};
 
 export async function addFuvar(input: AddFuvarInput) {
   await query(
@@ -145,25 +88,6 @@ export async function deleteFuvar(id: string) {
   // Nem töröljük fizikailag — "Törölt" státuszba kerül, hogy a naplózás megmaradjon.
   await query(`update fuvar_megbizasok set statusz = 'torolt' where id = $1`, [id]);
 }
-
-export type ApproveFuvarInput = {
-  id: string;
-  tipus: FuvarTipus;
-  datum: string;
-  idopont?: string;
-  felrako: string;
-  lerako: string;
-  megrendelo?: string;
-  aru?: string;
-  mennyiseg?: string;
-  suly?: string;
-  jarmu?: string;
-  sofor?: string;
-  alvallalkozo?: string;
-  fuvardij?: number;
-  koltseg?: number;
-  megjegyzes?: string;
-};
 
 /** A "Jóváhagy" / "Módosít" gomb: a mezőket (esetleg módosítva) menti, és ellenorzott = true. */
 export async function approveFuvar(input: ApproveFuvarInput) {
