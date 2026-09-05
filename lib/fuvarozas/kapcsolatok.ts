@@ -3,6 +3,7 @@
 import { query } from "@/lib/db";
 import type { KapcsolatRow, AddKapcsolatInput } from "@/lib/fuvarozas/kapcsolatok-constants";
 import { KAPCSOLATOK_SEED } from "@/lib/fuvarozas/kapcsolatok-seed-data";
+import { KAPCSOLATOK_FIXES, KAPCSOLATOK_UJ } from "@/lib/fuvarozas/kapcsolatok-fix-data";
 
 export async function getKapcsolatok(): Promise<KapcsolatRow[]> {
   return query<KapcsolatRow>(
@@ -47,4 +48,60 @@ export async function seedKapcsolatok(): Promise<{ inserted: number; skipped: bo
     await addKapcsolat(entry);
   }
   return { inserted: KAPCSOLATOK_SEED.length, skipped: false };
+}
+
+/**
+ * IDEIGLENES: a Gmail "Fuvarmegbízás" címkével ellátott levelek (406 levél /
+ * 189 szál) alapján végzett pontosítási kör. Javítja a korábban hibásan
+ * rögzített adatokat (pl. Hajdúspedíció e-mail/név), és felveszi az újonnan
+ * azonosított partnereket/kapcsolattartókat
+ * (lib/fuvarozas/kapcsolatok-fix-data.ts). Kézzel, a UI-ból indítható, és
+ * duplikáció ellen véd: egy javítás csak akkor fut le, ha a régi érték még
+ * megvan, egy új sor pedig csak akkor kerül be, ha ugyanaz a cég+e-mail
+ * (vagy cég+kapcsolattartó) kombináció még nincs a táblában. Miután lefutott,
+ * ez a függvény, a hívása és a kapcsolatok-fix-data.ts is törölhető.
+ */
+export async function fixKapcsolatok(): Promise<{ updated: number; inserted: number; skippedInserted: number }> {
+  let updated = 0;
+  for (const fix of KAPCSOLATOK_FIXES) {
+    const rows = await query<{ id: string }>(
+      fix.match.kapcsolattarto !== undefined
+        ? `select id::text from fuvar_kapcsolatok where ceg = $1 and kapcsolattarto = $2`
+        : `select id::text from fuvar_kapcsolatok where ceg = $1`,
+      fix.match.kapcsolattarto !== undefined ? [fix.match.ceg, fix.match.kapcsolattarto] : [fix.match.ceg]
+    );
+    for (const row of rows) {
+      const sets: string[] = [];
+      const params: unknown[] = [];
+      let i = 1;
+      for (const [key, value] of Object.entries(fix.patch)) {
+        sets.push(`${key} = $${i}`);
+        params.push(value);
+        i++;
+      }
+      if (sets.length === 0) continue;
+      params.push(row.id);
+      await query(`update fuvar_kapcsolatok set ${sets.join(", ")} where id = $${i}`, params);
+      updated++;
+    }
+  }
+
+  let inserted = 0;
+  let skippedInserted = 0;
+  for (const entry of KAPCSOLATOK_UJ) {
+    const existing = await query<{ n: number }>(
+      entry.email
+        ? `select count(*)::int as n from fuvar_kapcsolatok where ceg = $1 and email = $2`
+        : `select count(*)::int as n from fuvar_kapcsolatok where ceg = $1 and kapcsolattarto = $2`,
+      entry.email ? [entry.ceg, entry.email] : [entry.ceg, entry.kapcsolattarto ?? null]
+    );
+    if (existing[0].n > 0) {
+      skippedInserted++;
+      continue;
+    }
+    await addKapcsolat(entry);
+    inserted++;
+  }
+
+  return { updated, inserted, skippedInserted };
 }

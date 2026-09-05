@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { ChevronDown, X } from "lucide-react";
-import { addKapcsolat, deleteKapcsolat, getKapcsolatok, seedKapcsolatok } from "@/lib/fuvarozas/kapcsolatok";
+import { addKapcsolat, deleteKapcsolat, fixKapcsolatok, getKapcsolatok, seedKapcsolatok } from "@/lib/fuvarozas/kapcsolatok";
 import type { KapcsolatRow } from "@/lib/fuvarozas/kapcsolatok-constants";
 
 type UjKapcsolatForm = {
@@ -162,6 +162,7 @@ export function Kapcsolatok() {
   const [rows, setRows] = useState<KapcsolatRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [seeding, setSeeding] = useState(false);
+  const [fixing, setFixing] = useState(false);
   const [ujSorNyitva, setUjSorNyitva] = useState(false);
 
   const load = useCallback(async () => {
@@ -191,6 +192,21 @@ export function Kapcsolatok() {
     }
   }
 
+  async function handleFix() {
+    setFixing(true);
+    try {
+      const result = await fixKapcsolatok();
+      toast.success(
+        `Pontosítva: ${result.updated} javítás, ${result.inserted} új kapcsolat (${result.skippedInserted} már megvolt).`
+      );
+      await load();
+    } catch {
+      toast.error("Nem sikerült a pontosítást elvégezni.");
+    } finally {
+      setFixing(false);
+    }
+  }
+
   async function handleDelete(id: string) {
     await deleteKapcsolat(id);
     await load();
@@ -216,6 +232,11 @@ export function Kapcsolatok() {
             {!loading && rows.length === 0 && (
               <Button size="sm" variant="outline" disabled={seeding} onClick={handleSeed}>
                 {seeding ? "Feltöltés…" : "Feltöltés a megbízásokból"}
+              </Button>
+            )}
+            {!loading && rows.length > 0 && (
+              <Button size="sm" variant="outline" disabled={fixing} onClick={handleFix}>
+                {fixing ? "Pontosítás…" : "Pontosítás Gmail alapján"}
               </Button>
             )}
             {!ujSorNyitva && (
