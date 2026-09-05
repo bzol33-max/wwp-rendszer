@@ -41,7 +41,12 @@ import {
   type FuvarTipus,
 } from "@/lib/fuvarozas/fuvar-constants";
 import { getCurrentUser } from "@/lib/current-user";
-import { SAJAT_JARMUVEK, jarmuLabel } from "@/lib/fuvarozas/vehicles";
+import {
+  SAJAT_JARMUVEK,
+  JARMU_SZIN_DOT_CLASS,
+  jarmuLabel,
+  findJarmuByLabel,
+} from "@/lib/fuvarozas/vehicles";
 
 const STATUSZ_BADGE_CLASS: Record<FuvarStatusz, string> = {
   uj: "bg-muted text-muted-foreground hover:bg-muted",
@@ -62,6 +67,17 @@ const SAJAT_TELEP_PARTNER = "Telephelyek közti szállítás";
 function eredmeny(row: FuvarRow): number | null {
   if (row.fuvardij == null || row.koltseg == null) return null;
   return row.fuvardij - row.koltseg;
+}
+
+/** Egy jármű-címke (pl. "Gergő — AOPU-427/AOTY-474") a hozzá tartozó színes ponttal. */
+function JarmuJelolo({ value }: { value: string }) {
+  const j = findJarmuByLabel(value);
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      {j && <span className={`h-2 w-2 shrink-0 rounded-full ${JARMU_SZIN_DOT_CLASS[j.szin]}`} />}
+      {value}
+    </span>
+  );
 }
 
 type FormState = {
@@ -201,12 +217,21 @@ function FuvarFields({
         {form.tipus === "sajat" ? (
           <>
             <div className="flex flex-col gap-1.5">
-              <Label>Jármű (rendszám)</Label>
-              <Input
-                placeholder="pl. ABC-123"
-                value={form.jarmu}
-                onChange={(e) => onChange({ jarmu: e.target.value })}
-              />
+              <Label>Kocsi</Label>
+              <Select value={form.jarmu} onValueChange={(v) => v && onChange({ jarmu: v })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Válassz kocsit">
+                    {form.jarmu && <JarmuJelolo value={form.jarmu} />}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  {SAJAT_JARMUVEK.map((j) => (
+                    <SelectItem key={j.sofor} value={jarmuLabel(j)}>
+                      <JarmuJelolo value={jarmuLabel(j)} />
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>Sofőr</Label>
@@ -307,12 +332,14 @@ function MinimalFuvarFields({
         <Label>Kocsi</Label>
         <Select value={form.jarmu} onValueChange={(v) => v && onChange({ jarmu: v })}>
           <SelectTrigger>
-            <SelectValue placeholder="Válassz kocsit" />
+            <SelectValue placeholder="Válassz kocsit">
+              {form.jarmu && <JarmuJelolo value={form.jarmu} />}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {SAJAT_JARMUVEK.map((j) => (
               <SelectItem key={j.sofor} value={jarmuLabel(j)}>
-                {jarmuLabel(j)}
+                <JarmuJelolo value={jarmuLabel(j)} />
               </SelectItem>
             ))}
           </SelectContent>
@@ -486,7 +513,15 @@ function FuvarList({
                     </TableCell>
                     <TableCell>{row.megrendelo ?? "—"}</TableCell>
                     <TableCell>
-                      {jarmuOszlop ? row.jarmu ?? "—" : row.alvallalkozo ?? "—"}
+                      {jarmuOszlop ? (
+                        row.jarmu ? (
+                          <JarmuJelolo value={row.jarmu} />
+                        ) : (
+                          "—"
+                        )
+                      ) : (
+                        row.alvallalkozo ?? "—"
+                      )}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {row.fuvardij != null ? `${row.fuvardij.toLocaleString("hu-HU")} Ft` : "—"}

@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { getFleetPositions } from "@/lib/fuvarozas/actions";
 import type { EcofleetPosition } from "@/lib/fuvarozas/ecofleet";
-import { findJarmuByPlate } from "@/lib/fuvarozas/vehicles";
+import { findJarmuByPlate, JARMU_SZIN_DOT_CLASS } from "@/lib/fuvarozas/vehicles";
 
 /** "2026-09-04 13:35:05+0200" -> Date (a +0200 már helyi eltolás, nincs újraszámolás) */
 function parseEcofleetTimestamp(ts: string): Date | null {
@@ -36,7 +36,12 @@ function VehicleCard({ pos }: { pos: EcofleetPosition }) {
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle className="text-sm">{cim}</CardTitle>
+          <CardTitle className="flex items-center gap-1.5 text-sm">
+            {jarmu && (
+              <span className={`h-2 w-2 shrink-0 rounded-full ${JARMU_SZIN_DOT_CLASS[jarmu.szin]}`} />
+            )}
+            {cim}
+          </CardTitle>
           <Badge variant={pos.engineOn ? "default" : "secondary"}>
             {pos.engineOn ? "Fut a motor" : "Áll"}
           </Badge>
