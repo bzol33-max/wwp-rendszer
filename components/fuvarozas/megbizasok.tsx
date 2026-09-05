@@ -256,7 +256,7 @@ function MinimalFuvarFields({
   onChange: (patch: Partial<FormState>) => void;
 }) {
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
       <div className="flex flex-col gap-1.5">
         <Label>Dátum</Label>
         <Input
@@ -271,6 +271,14 @@ function MinimalFuvarFields({
           placeholder="partner neve"
           value={form.megrendelo}
           onChange={(e) => onChange({ megrendelo: e.target.value })}
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label>Felrakó</Label>
+        <Input
+          placeholder="pl. Szakoly"
+          value={form.felrako}
+          onChange={(e) => onChange({ felrako: e.target.value })}
         />
       </div>
       <div className="flex flex-col gap-1.5">
@@ -305,12 +313,7 @@ function FuvarForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (minimal) {
-      if (!form.lerako.trim()) {
-        toast.error("Add meg a lerakó helyet.");
-        return;
-      }
-    } else if (!form.felrako.trim() || !form.lerako.trim()) {
+    if (!form.felrako.trim() || !form.lerako.trim()) {
       toast.error("Add meg a felrakó és lerakó helyet.");
       return;
     }
@@ -320,7 +323,7 @@ function FuvarForm({
         tipus,
         datum: form.datum,
         idopont: minimal ? undefined : form.idopont || undefined,
-        felrako: minimal ? undefined : form.felrako,
+        felrako: form.felrako,
         lerako: form.lerako,
         megrendelo: form.megrendelo || undefined,
         aru: minimal ? undefined : form.aru || undefined,
