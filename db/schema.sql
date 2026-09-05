@@ -202,3 +202,7 @@ alter table fuvar_megbizasok add column if not exists drive_file_id text;
 alter table fuvar_megbizasok add column if not exists forras text not null default 'kezi'
   check (forras in ('kezi', 'pdf_import'));
 alter table fuvar_megbizasok add column if not exists ellenorzott boolean not null default true;
+
+-- Egyszerűsített "Új saját fuvar" gyorsrögzítéshez (csak dátum, megrendelő,
+-- lerakó) a felrakó mostantól nem kötelező.
+alter table fuvar_megbizasok alter column felrako drop not null;

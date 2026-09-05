@@ -59,7 +59,7 @@ export async function addFuvar(input: AddFuvarInput) {
       input.tipus,
       input.datum,
       input.idopont || null,
-      input.felrako,
+      input.felrako || null,
       input.lerako,
       input.megrendelo || null,
       input.aru || null,

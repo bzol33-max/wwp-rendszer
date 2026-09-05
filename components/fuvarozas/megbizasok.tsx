@@ -103,7 +103,7 @@ function formFromRow(row: FuvarRow): FormState {
     tipus: row.tipus,
     datum: todayISO(), // a szerver "mon. DD" formátumot ad vissza, dátum-inputhoz nem használható újra
     idopont: row.idopont ?? "",
-    felrako: row.felrako,
+    felrako: row.felrako ?? "",
     lerako: row.lerako,
     megrendelo: row.megrendelo ?? "",
     aru: row.aru ?? "",
@@ -248,12 +248,53 @@ function FuvarFields({
   );
 }
 
+function MinimalFuvarFields({
+  form,
+  onChange,
+}: {
+  form: FormState;
+  onChange: (patch: Partial<FormState>) => void;
+}) {
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="flex flex-col gap-1.5">
+        <Label>Dátum</Label>
+        <Input
+          type="date"
+          value={form.datum}
+          onChange={(e) => onChange({ datum: e.target.value })}
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label>Megrendelő</Label>
+        <Input
+          placeholder="partner neve"
+          value={form.megrendelo}
+          onChange={(e) => onChange({ megrendelo: e.target.value })}
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label>Lerakó</Label>
+        <Input
+          placeholder="pl. Budapest"
+          value={form.lerako}
+          onChange={(e) => onChange({ lerako: e.target.value })}
+        />
+      </div>
+    </div>
+  );
+}
+
 function FuvarForm({
   tipus,
   onSaved,
+  minimal,
+  titleOverride,
 }: {
   tipus: FuvarTipus;
   onSaved: () => void | Promise<void>;
+  minimal?: boolean;
+  titleOverride?: string;
 }) {
   const [form, setForm] = useState<FormState>(emptyForm(tipus));
   const [saving, setSaving] = useState(false);
@@ -264,7 +305,12 @@ function FuvarForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.felrako.trim() || !form.lerako.trim()) {
+    if (minimal) {
+      if (!form.lerako.trim()) {
+        toast.error("Add meg a lerakó helyet.");
+        return;
+      }
+    } else if (!form.felrako.trim() || !form.lerako.trim()) {
       toast.error("Add meg a felrakó és lerakó helyet.");
       return;
     }
@@ -273,19 +319,19 @@ function FuvarForm({
       await addFuvar({
         tipus,
         datum: form.datum,
-        idopont: form.idopont || undefined,
-        felrako: form.felrako,
+        idopont: minimal ? undefined : form.idopont || undefined,
+        felrako: minimal ? undefined : form.felrako,
         lerako: form.lerako,
         megrendelo: form.megrendelo || undefined,
-        aru: form.aru || undefined,
-        mennyiseg: form.mennyiseg || undefined,
-        suly: form.suly || undefined,
-        jarmu: form.jarmu || undefined,
-        sofor: form.sofor || undefined,
-        alvallalkozo: form.alvallalkozo || undefined,
-        fuvardij: form.fuvardij ? Number(form.fuvardij) : undefined,
-        koltseg: form.koltseg ? Number(form.koltseg) : undefined,
-        megjegyzes: form.megjegyzes || undefined,
+        aru: minimal ? undefined : form.aru || undefined,
+        mennyiseg: minimal ? undefined : form.mennyiseg || undefined,
+        suly: minimal ? undefined : form.suly || undefined,
+        jarmu: minimal ? undefined : form.jarmu || undefined,
+        sofor: minimal ? undefined : form.sofor || undefined,
+        alvallalkozo: minimal ? undefined : form.alvallalkozo || undefined,
+        fuvardij: minimal ? undefined : form.fuvardij ? Number(form.fuvardij) : undefined,
+        koltseg: minimal ? undefined : form.koltseg ? Number(form.koltseg) : undefined,
+        megjegyzes: minimal ? undefined : form.megjegyzes || undefined,
         createdBy: getCurrentUser() || undefined,
       });
       setForm(emptyForm(tipus));
@@ -302,12 +348,16 @@ function FuvarForm({
     <Card>
       <CardHeader>
         <CardTitle className="text-sm">
-          Új {tipus === "sajat" ? "saját" : "bér"} fuvar
+          {titleOverride ?? `Új ${tipus === "sajat" ? "saját" : "bér"} fuvar`}
         </CardTitle>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-          <FuvarFields form={form} onChange={patch} />
+          {minimal ? (
+            <MinimalFuvarFields form={form} onChange={patch} />
+          ) : (
+            <FuvarFields form={form} onChange={patch} />
+          )}
           <Button type="submit" disabled={saving} className="self-start">
             {saving ? "Mentés…" : "Fuvar rögzítése"}
           </Button>
@@ -317,7 +367,15 @@ function FuvarForm({
   );
 }
 
-function FuvarList({ tipus, refreshKey }: { tipus: FuvarTipus; refreshKey: number }) {
+function FuvarList({
+  tipus,
+  refreshKey,
+  titleOverride,
+}: {
+  tipus: FuvarTipus;
+  refreshKey: number;
+  titleOverride?: string;
+}) {
   const [rows, setRows] = useState<FuvarRow[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -346,7 +404,7 @@ function FuvarList({ tipus, refreshKey }: { tipus: FuvarTipus; refreshKey: numbe
     <Card>
       <CardHeader>
         <CardTitle className="text-sm">
-          {tipus === "sajat" ? "Saját fuvarok" : "Bér fuvarok"}
+          {titleOverride ?? (tipus === "sajat" ? "Saját fuvarok" : "Bér fuvarok")}
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -386,7 +444,7 @@ function FuvarList({ tipus, refreshKey }: { tipus: FuvarTipus; refreshKey: numbe
                       )}
                     </TableCell>
                     <TableCell>
-                      {row.felrako} → {row.lerako}
+                      {row.felrako ? `${row.felrako} → ${row.lerako}` : row.lerako}
                     </TableCell>
                     <TableCell>{row.megrendelo ?? "—"}</TableCell>
                     <TableCell>
@@ -449,13 +507,28 @@ function FuvarList({ tipus, refreshKey }: { tipus: FuvarTipus; refreshKey: numbe
   );
 }
 
-function FuvarTypeView({ tipus }: { tipus: FuvarTipus }) {
+function FuvarTypeView({
+  tipus,
+  minimal,
+  formTitle,
+  listTitle,
+}: {
+  tipus: FuvarTipus;
+  minimal?: boolean;
+  formTitle?: string;
+  listTitle?: string;
+}) {
   const [refreshKey, setRefreshKey] = useState(0);
 
   return (
     <div className="flex flex-col gap-4">
-      <FuvarForm tipus={tipus} onSaved={() => setRefreshKey((k) => k + 1)} />
-      <FuvarList tipus={tipus} refreshKey={refreshKey} />
+      <FuvarForm
+        tipus={tipus}
+        onSaved={() => setRefreshKey((k) => k + 1)}
+        minimal={minimal}
+        titleOverride={formTitle}
+      />
+      <FuvarList tipus={tipus} refreshKey={refreshKey} titleOverride={listTitle} />
     </div>
   );
 }
@@ -611,7 +684,12 @@ export function Megbizasok() {
         <FuvarTypeView tipus="sajat" />
       </TabsContent>
       <TabsContent value="ber" className="mt-4">
-        <FuvarTypeView tipus="ber" />
+        <FuvarTypeView
+          tipus="ber"
+          minimal
+          formTitle="Új saját fuvar"
+          listTitle="Saját fuvarok"
+        />
       </TabsContent>
       <TabsContent value="elokeszitett" className="mt-4">
         <ElokeszitettView />

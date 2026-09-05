@@ -34,7 +34,7 @@ export type FuvarRow = {
   tipus: FuvarTipus;
   date: string;
   idopont: string | null;
-  felrako: string;
+  felrako: string | null;
   lerako: string;
   megrendelo: string | null;
   aru: string | null;
@@ -57,7 +57,7 @@ export type AddFuvarInput = {
   tipus: FuvarTipus;
   datum: string;
   idopont?: string;
-  felrako: string;
+  felrako?: string;
   lerako: string;
   megrendelo?: string;
   aru?: string;
