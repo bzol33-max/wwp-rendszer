@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { getFleetPositions } from "@/lib/fuvarozas/actions";
 import type { EcofleetPosition } from "@/lib/fuvarozas/ecofleet";
-import { findJarmuByPlate, JARMU_SZIN_DOT_CLASS } from "@/lib/fuvarozas/vehicles";
+import { SAJAT_JARMUVEK, findJarmuByPlate, JARMU_SZIN_DOT_CLASS, type SajatJarmu } from "@/lib/fuvarozas/vehicles";
 
 /** "2026-09-04 13:35:05+0200" -> Date (a +0200 már helyi eltolás, nincs újraszámolás) */
 function parseEcofleetTimestamp(ts: string): Date | null {
@@ -26,26 +26,45 @@ function formatAgo(d: Date | null): string {
   return d.toLocaleString("hu-HU", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
-function VehicleCard({ pos }: { pos: EcofleetPosition }) {
+function VehicleCardHeader({
+  jarmu,
+  cim,
+  badge,
+}: {
+  jarmu: SajatJarmu | null;
+  cim: string;
+  badge?: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <CardTitle className="flex items-center gap-1.5 text-sm">
+        {jarmu && (
+          <span className={`h-2 w-2 shrink-0 rounded-full ${JARMU_SZIN_DOT_CLASS[jarmu.szin]}`} />
+        )}
+        {cim}
+      </CardTitle>
+      {badge}
+    </div>
+  );
+}
+
+function VehicleCard({ pos, jarmu }: { pos: EcofleetPosition; jarmu: SajatJarmu | null }) {
   const when = parseEcofleetTimestamp(pos.timestamp);
   const mapsUrl = `https://www.google.com/maps?q=${pos.latitude},${pos.longitude}`;
-  const jarmu = findJarmuByPlate(pos.plate);
   const cim = jarmu ? `${jarmu.sofor} — ${pos.plate || pos.name}` : pos.plate || pos.name;
 
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-1.5 text-sm">
-            {jarmu && (
-              <span className={`h-2 w-2 shrink-0 rounded-full ${JARMU_SZIN_DOT_CLASS[jarmu.szin]}`} />
-            )}
-            {cim}
-          </CardTitle>
-          <Badge variant={pos.engineOn ? "default" : "secondary"}>
-            {pos.engineOn ? "Fut a motor" : "Áll"}
-          </Badge>
-        </div>
+        <VehicleCardHeader
+          jarmu={jarmu}
+          cim={cim}
+          badge={
+            <Badge variant={pos.engineOn ? "default" : "secondary"}>
+              {pos.engineOn ? "Fut a motor" : "Áll"}
+            </Badge>
+          }
+        />
       </CardHeader>
       <CardContent>
         <div className="flex flex-col gap-1.5 text-sm">
@@ -80,6 +99,30 @@ function VehicleCard({ pos }: { pos: EcofleetPosition }) {
   );
 }
 
+/** Saját jármű, aminek még nincs élő GPS-adata (nincs rendszáma, vagy az Ecofleet nem ad rá pozíciót). */
+function PlaceholderVehicleCard({ jarmu, ismeretlen }: { jarmu: SajatJarmu; ismeretlen: boolean }) {
+  return (
+    <Card className="border-dashed">
+      <CardHeader>
+        <VehicleCardHeader
+          jarmu={jarmu}
+          cim={`${jarmu.sofor} — ${jarmu.label}`}
+          badge={<Badge variant="secondary">Nincs GPS-adat</Badge>}
+        />
+      </CardHeader>
+      <CardContent>
+        <p className="text-sm text-muted-foreground">
+          {jarmu.rendszamok.length === 0
+            ? "A jármű még gyártás alatt van, egyelőre nincs rendszáma és Ecofleet-kapcsolata."
+            : ismeretlen
+              ? "Rendszáma megvan, de az Ecofleet jelenleg nem ad vissza rá pozíciót."
+              : "Egyelőre nincs elérhető pozícióadat."}
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 export function GpsStatus() {
   const [loading, setLoading] = useState(true);
   const [positions, setPositions] = useState<EcofleetPosition[]>([]);
@@ -107,6 +150,20 @@ export function GpsStatus() {
     setLoading(false);
   }
 
+  // Minden saját jármű mindig megjelenik egy kártyával — akinek van élő
+  // Ecofleet-pozíciója, azt mutatjuk; akinek nincs (mert még gyártás alatt
+  // van, vagy az Ecofleet épp nem ad rá adatot), az egy "Nincs GPS-adat"
+  // helykitöltő kártyát kap ugyanazzal a végleges dizájnnal — így amint egy
+  // jármű rendszámot kap és bekötésre kerül az Ecofleet-be, csak a
+  // vehicles.ts-t kell frissíteni, a felület már kész.
+  const matchedPositions = new Set<string>();
+  const jarmuCards = SAJAT_JARMUVEK.map((jarmu) => {
+    const pos = positions.find((p) => findJarmuByPlate(p.plate)?.sofor === jarmu.sofor);
+    if (pos) matchedPositions.add(pos.objectId);
+    return { jarmu, pos };
+  });
+  const ismeretlenPozicok = positions.filter((p) => !matchedPositions.has(p.objectId));
+
   return (
     <Card>
       <CardHeader>
@@ -124,10 +181,21 @@ export function GpsStatus() {
         {!loading && error && positions.length === 0 && (
           <p className="text-sm text-destructive">{error}</p>
         )}
-        {positions.length > 0 && (
+        {!(loading && positions.length === 0) && (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            {positions.map((pos) => (
-              <VehicleCard key={pos.objectId} pos={pos} />
+            {jarmuCards.map(({ jarmu, pos }) =>
+              pos ? (
+                <VehicleCard key={jarmu.sofor} pos={pos} jarmu={jarmu} />
+              ) : (
+                <PlaceholderVehicleCard
+                  key={jarmu.sofor}
+                  jarmu={jarmu}
+                  ismeretlen={jarmu.rendszamok.length > 0 && !error}
+                />
+              )
+            )}
+            {ismeretlenPozicok.map((pos) => (
+              <VehicleCard key={pos.objectId} pos={pos} jarmu={findJarmuByPlate(pos.plate)} />
             ))}
           </div>
         )}
