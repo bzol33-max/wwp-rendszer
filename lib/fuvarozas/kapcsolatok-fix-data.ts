@@ -50,6 +50,12 @@ export const KAPCSOLATOK_FIXES: {
     match: { ceg: "Alpok-Trans Kft.", kapcsolattarto: "Borhi Szilárd" },
     patch: { email: "szilard@alpoktrans.hu" },
   },
+  {
+    // A Drive-dokumentumból hiányzott a telefonszám — a Gmail-aláírás
+    // igazolta.
+    match: { ceg: "Trans-Sped Kft.", kapcsolattarto: "Tálas Viktória" },
+    patch: { telefon: "+36 20 246 3969" },
+  },
 ];
 
 // Új sorok — korábban nem szerepeltek a Kapcsolatok táblában.
