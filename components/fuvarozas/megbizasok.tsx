@@ -500,14 +500,7 @@ function FuvarList({
                 const res = eredmeny(row);
                 return (
                   <TableRow key={row.id}>
-                    <TableCell className="text-muted-foreground">
-                      {row.date}
-                      {!row.ellenorzott && (
-                        <Badge className="ml-1.5 bg-warning/20 text-warning hover:bg-warning/20">
-                          Ellenőrzés szükséges
-                        </Badge>
-                      )}
-                    </TableCell>
+                    <TableCell className="text-muted-foreground">{row.date}</TableCell>
                     <TableCell>
                       {row.felrako ? `${row.felrako} → ${row.lerako}` : row.lerako}
                     </TableCell>
@@ -699,11 +692,6 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
                 <TableRow key={row.id}>
                   <TableCell className="text-muted-foreground">
                     {row.erkezett_datum ?? row.date}
-                    {!row.ellenorzott && (
-                      <Badge className="ml-1.5 bg-warning/20 text-warning hover:bg-warning/20">
-                        Ellenőrzés szükséges
-                      </Badge>
-                    )}
                   </TableCell>
                   <TableCell>{row.megrendelo ?? "—"}</TableCell>
                   <TableCell>
