@@ -690,32 +690,32 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
               )}
               {rows.map((row) => (
                 <TableRow key={row.id}>
-                  <TableCell className="text-muted-foreground">
+                  <TableCell className="align-top text-muted-foreground">
                     {row.erkezett_datum ?? row.date}
                   </TableCell>
-                  <TableCell>{row.megrendelo ?? "—"}</TableCell>
-                  <TableCell>
-                    {row.felrako ? (
-                      <>
-                        {roviditettHelynev(row.felrako)} {row.date} → {roviditettHelynev(row.lerako)}{" "}
-                        {row.lerakas_datum ?? row.date}
-                      </>
-                    ) : (
-                      <>
-                        {roviditettHelynev(row.lerako)} {row.lerakas_datum ?? row.date}
-                      </>
-                    )}
+                  <TableCell className="max-w-[120px] whitespace-normal break-words align-top leading-tight">
+                    {row.megrendelo ?? "—"}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">
+                  <TableCell className="max-w-[180px] whitespace-normal break-words align-top leading-tight">
+                    <div className="flex flex-col gap-0.5">
+                      <span>
+                        {row.felrako ? roviditettHelynev(row.felrako) : "—"} {row.date}
+                      </span>
+                      <span>
+                        → {roviditettHelynev(row.lerako)} {row.lerakas_datum ?? row.date}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="align-top text-right tabular-nums">
                     {row.fuvardij != null ? `${row.fuvardij.toLocaleString("hu-HU")} Ft` : "—"}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="align-top">
                     {row.fizetesi_hatarido_nap != null ? `${row.fizetesi_hatarido_nap} nap` : "—"}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="align-top">
                     {row.jarmu ? <JarmuJelolo value={row.jarmu} /> : "—"}
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="align-top">
                     <Select
                       value={row.statusz}
                       onValueChange={(v) => v && handleStatusChange(row.id, v as FuvarStatusz)}
@@ -736,7 +736,7 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
                       </SelectContent>
                     </Select>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="align-top">
                     <button
                       type="button"
                       onClick={() => handleDelete(row.id)}
