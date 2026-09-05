@@ -940,6 +940,9 @@ export function Megbizasok() {
       <TabsList>
         <TabsTrigger value="sajat">Bér fuvarok</TabsTrigger>
         <TabsTrigger value="ber">Saját fuvarok</TabsTrigger>
+        <TabsTrigger value="kapcsolatok">Kapcsolatok</TabsTrigger>
+        <TabsTrigger value="szamla-posta">Számla/Posta</TabsTrigger>
+        <TabsTrigger value="archiv">Archív</TabsTrigger>
       </TabsList>
       <TabsContent value="sajat" className="mt-4">
         <div className="flex flex-col gap-4">
@@ -961,6 +964,27 @@ export function Megbizasok() {
           showJarmu
           partnerColumnLabel="Partner"
         />
+      </TabsContent>
+      <TabsContent value="kapcsolatok" className="mt-4">
+        <Card className="bg-muted/40">
+          <CardContent className="py-4 text-sm text-muted-foreground">
+            Kapcsolatok — hamarosan.
+          </CardContent>
+        </Card>
+      </TabsContent>
+      <TabsContent value="szamla-posta" className="mt-4">
+        <Card className="bg-muted/40">
+          <CardContent className="py-4 text-sm text-muted-foreground">
+            Számla/Posta — hamarosan.
+          </CardContent>
+        </Card>
+      </TabsContent>
+      <TabsContent value="archiv" className="mt-4">
+        <Card className="bg-muted/40">
+          <CardContent className="py-4 text-sm text-muted-foreground">
+            Archív — hamarosan.
+          </CardContent>
+        </Card>
       </TabsContent>
     </Tabs>
   );
