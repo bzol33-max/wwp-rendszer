@@ -56,6 +56,34 @@ export function findJarmuByLabel(value: string): SajatJarmu | null {
   return SAJAT_JARMUVEK.find((j) => jarmuLabel(j) === value) ?? null;
 }
 
+/**
+ * Egy jármű-mezőben elmentett bármilyen szöveghez (a mai "Sofőr — címke"
+ * formátumtól a régebbi, csak sofőrnevet vagy csak rendszámot tartalmazó
+ * bejegyzésekig) megkeresi a hozzá tartozó saját járművet, hogy a színes
+ * jelölés mindenhol megjelenjen, függetlenül attól, mikor/hogyan lett a
+ * mező kitöltve. Sorrend: pontos "Sofőr — címke" egyezés, majd rendszám,
+ * majd sofőrnév (a szöveg eleje vagy egésze).
+ */
+export function resolveJarmu(value: string): SajatJarmu | null {
+  const exact = findJarmuByLabel(value);
+  if (exact) return exact;
+
+  const byPlate = findJarmuByPlate(value);
+  if (byPlate) return byPlate;
+
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) return null;
+  return (
+    SAJAT_JARMUVEK.find(
+      (j) =>
+        j.sofor.toLowerCase() === trimmed ||
+        trimmed.startsWith(j.sofor.toLowerCase() + " ") ||
+        trimmed.startsWith(j.sofor.toLowerCase() + "—") ||
+        trimmed.startsWith(j.sofor.toLowerCase() + "-")
+    ) ?? null
+  );
+}
+
 /** Egy rendszámhoz (vagy már elmentett "Sofőr — rendszám/rendszám" szöveghez) a megjelenítendő címke. */
 export function labelForPlateOrText(value: string): string {
   const match = findJarmuByPlate(value);

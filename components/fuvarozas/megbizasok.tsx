@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { X } from "lucide-react";
@@ -47,7 +53,7 @@ import {
   SAJAT_JARMUVEK,
   JARMU_SZIN_DOT_CLASS,
   jarmuLabel,
-  findJarmuByLabel,
+  resolveJarmu,
 } from "@/lib/fuvarozas/vehicles";
 
 const STATUSZ_BADGE_CLASS: Record<FuvarStatusz, string> = {
@@ -71,9 +77,14 @@ function eredmeny(row: FuvarRow): number | null {
   return row.fuvardij - row.koltseg;
 }
 
-/** Egy jármű-címke (pl. "Gergő — AOPU-427/AOTY-474") a hozzá tartozó színes ponttal. */
+/**
+ * Egy jármű-mező (a mai "Sofőr — címke" formátumtól a régebbi, csak
+ * sofőrnevet vagy rendszámot tartalmazó bejegyzésekig) a hozzá tartozó
+ * színes ponttal — mindenhol, ahol jármű szerepel a Fuvarozás fülön,
+ * függetlenül a mező pontos szövegétől.
+ */
 function JarmuJelolo({ value }: { value: string }) {
-  const j = findJarmuByLabel(value);
+  const j = resolveJarmu(value);
   return (
     <span className="inline-flex items-center gap-1.5">
       {j && <span className={`h-2 w-2 shrink-0 rounded-full ${JARMU_SZIN_DOT_CLASS[j.szin]}`} />}
@@ -194,6 +205,92 @@ function PoziciszamCell({
     >
       ⚠️ ellenőrizd, hiányzik a hiv. szám
     </button>
+  );
+}
+
+/** Egy sor a fuvar-részletek nézetben — csak akkor jelenik meg, ha van értéke. */
+function ReszletSor({ label, children }: { label: string; children: ReactNode }) {
+  if (children == null || children === "") return null;
+  return (
+    <div className="flex items-baseline justify-between gap-4 border-b py-1.5 text-sm last:border-b-0">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="text-right font-medium">{children}</span>
+    </div>
+  );
+}
+
+/**
+ * A dátumra kattintva megnyíló részletes megbízás-nézet — minden a fuvarhoz
+ * rögzített adatot egy helyen mutat, plusz a forrás dokumentum linkjét, ha
+ * PDF-importból származik.
+ */
+function FuvarDetailModal({
+  row,
+  onClose,
+}: {
+  row: FuvarRow | null;
+  onClose: () => void;
+}) {
+  const res = row ? eredmeny(row) : null;
+  return (
+    <Dialog open={row != null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        {row && (
+          <>
+            <DialogHeader>
+              <DialogTitle>
+                {row.felrako ? `${row.felrako} → ${row.lerako}` : row.lerako}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col">
+              <ReszletSor label="Dátum">{row.date}</ReszletSor>
+              <ReszletSor label="Beérkezés dátuma">{row.erkezett_datum}</ReszletSor>
+              <ReszletSor label="Lerakás dátuma">{row.lerakas_datum}</ReszletSor>
+              <ReszletSor label="Időpont">{row.idopont}</ReszletSor>
+              <ReszletSor label="Megrendelő">{row.megrendelo}</ReszletSor>
+              <ReszletSor label="Hiv. szám">
+                {row.pozicioszam ?? (row.pozicioszam_nincs ? "— (nincs ilyen)" : null)}
+              </ReszletSor>
+              <ReszletSor label="Áru">{row.aru}</ReszletSor>
+              <ReszletSor label="Mennyiség">{row.mennyiseg}</ReszletSor>
+              <ReszletSor label="Súly">{row.suly}</ReszletSor>
+              <ReszletSor label="Kocsi">{row.jarmu && <JarmuJelolo value={row.jarmu} />}</ReszletSor>
+              <ReszletSor label="Sofőr">{row.sofor}</ReszletSor>
+              <ReszletSor label="Alvállalkozó">{row.alvallalkozo}</ReszletSor>
+              <ReszletSor label="Fuvardíj">
+                {row.fuvardij != null ? `${row.fuvardij.toLocaleString("hu-HU")} Ft` : null}
+              </ReszletSor>
+              <ReszletSor label="Költség">
+                {row.koltseg != null ? `${row.koltseg.toLocaleString("hu-HU")} Ft` : null}
+              </ReszletSor>
+              <ReszletSor label="Eredmény">
+                {res != null && (
+                  <span className={res < 0 ? "text-destructive" : "text-success"}>
+                    {res.toLocaleString("hu-HU")} Ft
+                  </span>
+                )}
+              </ReszletSor>
+              <ReszletSor label="Fizetési határidő">
+                {row.fizetesi_hatarido_nap != null ? `${row.fizetesi_hatarido_nap} nap` : null}
+              </ReszletSor>
+              <ReszletSor label="Státusz">{FUVAR_STATUSZ_LABEL[row.statusz]}</ReszletSor>
+              <ReszletSor label="Megjegyzés">{row.megjegyzes}</ReszletSor>
+              <ReszletSor label="Rögzítette">{row.created_by}</ReszletSor>
+            </div>
+            {row.dokumentum_url && (
+              <a
+                href={row.dokumentum_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-primary hover:underline"
+              >
+                Eredeti dokumentum megnyitása
+              </a>
+            )}
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -621,6 +718,7 @@ function FuvarList({
   const jarmuOszlop = showJarmu ?? tipus === "sajat";
   const [rows, setRows] = useState<FuvarRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [reszletek, setReszletek] = useState<FuvarRow | null>(null);
 
   const load = useCallback(async () => {
     const data = await getFuvarok(tipus);
@@ -679,7 +777,16 @@ function FuvarList({
                 const res = eredmeny(row);
                 return (
                   <TableRow key={row.id}>
-                    <TableCell className="text-muted-foreground">{row.date}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      <button
+                        type="button"
+                        title="Megbízás megnyitása"
+                        className="hover:underline"
+                        onClick={() => setReszletek(row)}
+                      >
+                        {row.date}
+                      </button>
+                    </TableCell>
                     <TableCell>
                       {row.felrako ? `${row.felrako} → ${row.lerako}` : row.lerako}
                     </TableCell>
@@ -751,6 +858,7 @@ function FuvarList({
           </Table>
         </div>
       </CardContent>
+      <FuvarDetailModal row={reszletek} onClose={() => setReszletek(null)} />
     </Card>
   );
 }
@@ -820,6 +928,7 @@ function roviditettHelynev(value: string | null | undefined): string {
 function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
   const [rows, setRows] = useState<FuvarRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [reszletek, setReszletek] = useState<FuvarRow | null>(null);
 
   const load = useCallback(async () => {
     const data = await getFuvarok("sajat");
@@ -874,7 +983,14 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
               {rows.map((row) => (
                 <TableRow key={row.id}>
                   <TableCell className="align-top text-muted-foreground">
-                    {row.erkezett_datum ?? row.date}
+                    <button
+                      type="button"
+                      title="Megbízás megnyitása"
+                      className="hover:underline"
+                      onClick={() => setReszletek(row)}
+                    >
+                      {row.erkezett_datum ?? row.date}
+                    </button>
                   </TableCell>
                   <TableCell className="max-w-[120px] whitespace-normal break-words align-top leading-tight">
                     {row.megrendelo ?? "—"}
@@ -938,6 +1054,7 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
           </Table>
         </div>
       </CardContent>
+      <FuvarDetailModal row={reszletek} onClose={() => setReszletek(null)} />
     </Card>
   );
 }
