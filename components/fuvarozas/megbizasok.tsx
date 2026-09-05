@@ -581,11 +581,6 @@ function MinimalFuvarFields({
           Saját telepek közti szállítás
         </label>
       </div>
-      <PoziciszamMezo
-        pozicioszam={form.pozicioszam}
-        nincs={form.pozicioszamNincs}
-        onChange={onChange}
-      />
       <div className="flex flex-col gap-1.5">
         <Label>Felrakó</Label>
         <Input
@@ -757,7 +752,6 @@ function FuvarList({
                 <TableHead>Dátum</TableHead>
                 <TableHead>Honnan → Hová</TableHead>
                 <TableHead>{partnerColumnLabel ?? "Megrendelő"}</TableHead>
-                <TableHead>Hiv. szám</TableHead>
                 <TableHead>{jarmuOszlop ? "Kocsi" : "Alvállalkozó"}</TableHead>
                 <TableHead className="text-right">Fuvardíj</TableHead>
                 <TableHead className="text-right">Eredmény</TableHead>
@@ -769,7 +763,7 @@ function FuvarList({
             <TableBody>
               {!loading && rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center text-muted-foreground">
                     Még nincs rögzített fuvar.
                   </TableCell>
                 </TableRow>
@@ -792,9 +786,6 @@ function FuvarList({
                       {row.felrako ? `${row.felrako} → ${row.lerako}` : row.lerako}
                     </TableCell>
                     <TableCell>{row.megrendelo ?? "—"}</TableCell>
-                    <TableCell>
-                      <PoziciszamCell row={row} onSaved={load} />
-                    </TableCell>
                     <TableCell>
                       {jarmuOszlop ? (
                         row.jarmu ? (
