@@ -57,7 +57,7 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
-const SAJAT_TELEP_PARTNER = "Well-Worn Pallet Kft.";
+const SAJAT_TELEP_PARTNER = "Telephelyek közti szállítás";
 
 function eredmeny(row: FuvarRow): number | null {
   if (row.fuvardij == null || row.koltseg == null) return null;
@@ -404,12 +404,14 @@ function FuvarList({
   refreshKey,
   titleOverride,
   showJarmu,
+  partnerColumnLabel,
 }: {
   tipus: FuvarTipus;
   refreshKey: number;
   titleOverride?: string;
   /** Melyik oszlopot mutassa a jármű-oszlopban — alapból tipus alapján dől el. */
   showJarmu?: boolean;
+  partnerColumnLabel?: string;
 }) {
   const jarmuOszlop = showJarmu ?? tipus === "sajat";
   const [rows, setRows] = useState<FuvarRow[]>([]);
@@ -450,7 +452,7 @@ function FuvarList({
               <TableRow>
                 <TableHead>Dátum</TableHead>
                 <TableHead>Honnan → Hová</TableHead>
-                <TableHead>Megrendelő</TableHead>
+                <TableHead>{partnerColumnLabel ?? "Megrendelő"}</TableHead>
                 <TableHead>{jarmuOszlop ? "Kocsi" : "Alvállalkozó"}</TableHead>
                 <TableHead className="text-right">Fuvardíj</TableHead>
                 <TableHead className="text-right">Eredmény</TableHead>
@@ -549,12 +551,14 @@ function FuvarTypeView({
   formTitle,
   listTitle,
   showJarmu,
+  partnerColumnLabel,
 }: {
   tipus: FuvarTipus;
   minimal?: boolean;
   formTitle?: string;
   listTitle?: string;
   showJarmu?: boolean;
+  partnerColumnLabel?: string;
 }) {
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -569,6 +573,7 @@ function FuvarTypeView({
       <FuvarList
         tipus={tipus}
         refreshKey={refreshKey}
+        partnerColumnLabel={partnerColumnLabel}
         titleOverride={listTitle}
         showJarmu={showJarmu}
       />
@@ -733,6 +738,7 @@ export function Megbizasok() {
           formTitle="Új saját fuvar"
           listTitle="Saját fuvarok"
           showJarmu
+          partnerColumnLabel="Partner"
         />
       </TabsContent>
       <TabsContent value="elokeszitett" className="mt-4">
