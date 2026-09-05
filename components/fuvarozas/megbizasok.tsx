@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -1239,9 +1240,32 @@ function ElokeszitettView() {
   );
 }
 
+const MEGBIZASOK_TABS = ["sajat", "ber", "kapcsolatok", "szamla-posta", "archiv"] as const;
+type MegbizasokTab = (typeof MEGBIZASOK_TABS)[number];
+
+function isMegbizasokTab(v: string | null): v is MegbizasokTab {
+  return !!v && (MEGBIZASOK_TABS as readonly string[]).includes(v);
+}
+
+// A kiválasztott alfület is a URL-ben (?mtab=...) tartjuk (a "tab" paramot a
+// szülő /fuvarozas oldal Megbízások/Kalkulátor/GPS füle már használja), hogy
+// böngésző-frissítéskor (F5) ez a fül se ugorjon vissza az alapértelmezettre.
 export function Megbizasok() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const urlTab = searchParams.get("mtab");
+  const [tab, setTab] = useState<MegbizasokTab>(isMegbizasokTab(urlTab) ? urlTab : "sajat");
+
+  function handleTabChange(v: string) {
+    if (!isMegbizasokTab(v)) return;
+    setTab(v);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("mtab", v);
+    router.replace(`/fuvarozas?${params.toString()}`, { scroll: false });
+  }
+
   return (
-    <Tabs defaultValue="sajat">
+    <Tabs value={tab} onValueChange={handleTabChange}>
       <TabsList>
         <TabsTrigger value="sajat">Bér fuvarok</TabsTrigger>
         <TabsTrigger value="ber">Saját fuvarok</TabsTrigger>
