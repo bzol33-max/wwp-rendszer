@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { ChevronDown, X } from "lucide-react";
+import { ChevronDown, Search, X } from "lucide-react";
 import { addKapcsolat, deleteKapcsolat, fixKapcsolatok, getKapcsolatok, seedKapcsolatok } from "@/lib/fuvarozas/kapcsolatok";
 import type { KapcsolatRow } from "@/lib/fuvarozas/kapcsolatok-constants";
 
@@ -106,18 +106,20 @@ function CegCsoport({
   ceg,
   kapcsolatok,
   onDelete,
+  open,
+  onToggle,
 }: {
   ceg: string;
   kapcsolatok: KapcsolatRow[];
   onDelete: (id: string) => void;
+  open: boolean;
+  onToggle: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-
   return (
     <div className="rounded-md border">
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={onToggle}
         className="flex w-full items-center justify-between px-3 py-2 text-left text-sm font-medium hover:bg-muted/50"
       >
         <span>
@@ -164,6 +166,8 @@ export function Kapcsolatok() {
   const [seeding, setSeeding] = useState(false);
   const [fixing, setFixing] = useState(false);
   const [ujSorNyitva, setUjSorNyitva] = useState(false);
+  const [kereses, setKereses] = useState("");
+  const [nyitottCegek, setNyitottCegek] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     const data = await getKapcsolatok();
@@ -213,21 +217,53 @@ export function Kapcsolatok() {
     toast.success("Kapcsolat törölve.");
   }
 
+  const kereses_norm = kereses.trim().toLowerCase();
+
+  const szurtRows = useMemo(() => {
+    if (!kereses_norm) return rows;
+    return rows.filter((row) =>
+      [row.ceg, row.kapcsolattarto, row.telefon, row.email, row.megjegyzes, row.forras]
+        .filter(Boolean)
+        .some((mezo) => (mezo as string).toLowerCase().includes(kereses_norm))
+    );
+  }, [rows, kereses_norm]);
+
   const csoportok = useMemo(() => {
     const map = new Map<string, KapcsolatRow[]>();
-    for (const row of rows) {
+    for (const row of szurtRows) {
       const lista = map.get(row.ceg) ?? [];
       lista.push(row);
       map.set(row.ceg, lista);
     }
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0], "hu"));
-  }, [rows]);
+  }, [szurtRows]);
+
+  function toggleCeg(ceg: string) {
+    setNyitottCegek((prev) => {
+      const next = new Set(prev);
+      if (next.has(ceg)) {
+        next.delete(ceg);
+      } else {
+        next.add(ceg);
+      }
+      return next;
+    });
+  }
 
   return (
     <Card>
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle className="text-sm">Kapcsolatok</CardTitle>
+          <div className="relative w-full sm:w-72">
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={kereses}
+              onChange={(e) => setKereses(e.target.value)}
+              placeholder="Keresés — cég, név, telefon, e-mail…"
+              className="pl-8"
+            />
+          </div>
           <div className="flex items-center gap-2">
             {!loading && rows.length === 0 && (
               <Button size="sm" variant="outline" disabled={seeding} onClick={handleSeed}>
@@ -260,13 +296,20 @@ export function Kapcsolatok() {
 
         {!loading && csoportok.length === 0 && (
           <p className="py-4 text-center text-sm text-muted-foreground">
-            Még nincs rögzített kapcsolat.
+            {kereses_norm ? "Nincs találat." : "Még nincs rögzített kapcsolat."}
           </p>
         )}
 
         <div className="flex flex-col gap-2">
           {csoportok.map(([ceg, kapcsolatok]) => (
-            <CegCsoport key={ceg} ceg={ceg} kapcsolatok={kapcsolatok} onDelete={handleDelete} />
+            <CegCsoport
+              key={ceg}
+              ceg={ceg}
+              kapcsolatok={kapcsolatok}
+              onDelete={handleDelete}
+              open={kereses_norm.length > 0 || nyitottCegek.has(ceg)}
+              onToggle={() => toggleCeg(ceg)}
+            />
           ))}
         </div>
       </CardContent>

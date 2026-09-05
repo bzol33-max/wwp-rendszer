@@ -56,6 +56,29 @@ export const KAPCSOLATOK_FIXES: {
     match: { ceg: "Trans-Sped Kft.", kapcsolattarto: "Tálas Viktória" },
     patch: { telefon: "+36 20 246 3969" },
   },
+  {
+    // A postai cím mellett eddig sem kapcsolattartó név, sem telefonszám,
+    // sem e-mail nem volt rögzítve. A küldő címe (petra.szabo.csala@voxov.hu)
+    // alapján kapcsolattartóként korábban rögzítettük volna a nevet, de a
+    // teljes bizonyossághoz a beágyazott aláírás-képet is beolvastuk.
+    match: { ceg: "VOXOV Logistics Kft." },
+    patch: {
+      kapcsolattarto: "Szabó-Csala Petra",
+      telefon: "+36 30 095 9520",
+      email: "petra.szabo.csala@voxov.hu",
+      megjegyzes: "Speditőr. Az aláírás képként érkezett, onnan olvasva ki a telefonszámot.",
+    },
+  },
+  {
+    // Alapos Gmail-átvizsgálás: sem az SG Transport, sem a CEMIX kapcsolatnál
+    // nem volt fellelhető további adat (személynév ill. telefonszám) a
+    // sima szöveges levéltestben — ez jelzi, hogy nem hiányosság, hanem
+    // ennyi áll rendelkezésre.
+    match: { ceg: "SG Transport Kft." },
+    patch: {
+      megjegyzes: "Minden levél csak céges aláírással érkezik, személynév nélkül — ellenőrizve.",
+    },
+  },
 ];
 
 // Új sorok — korábban nem szerepeltek a Kapcsolatok táblában.
@@ -143,5 +166,21 @@ export const KAPCSOLATOK_UJ: AddKapcsolatInput[] = [
     telefon: "+36 70 421 6811 / +36 27 739 703",
     email: "ertekesites@solinwest.hu",
     forras: "Gmail — label:Fuvarmegbízás",
+  },
+  {
+    ceg: "Flott-Trans Kft.",
+    kapcsolattarto: "Pallagi Péter",
+    telefon: "+36 70 933 1543",
+    email: "peter.pallagi@flott.hu",
+    megjegyzes: "Logisztikai ügyintéző.",
+    forras: "Gmail — label:Fuvarmegbízás",
+  },
+  {
+    ceg: "Pannoniacoop Logisztikai Kft.",
+    kapcsolattarto: "Dejan Kordic",
+    email: "dkordic@pannoniacoop.com",
+    megjegyzes:
+      "Nem igazolt teljesen, hogy ugyanaz a kapcsolat, mint a pannoniacoop@gmail.com — más, nem \"Fuvarmegbízás\" címkéjű levélszálból került elő. Ellenőrzendő.",
+    forras: "Gmail — nem Fuvarmegbízás címke",
   },
 ];
