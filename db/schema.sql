@@ -227,3 +227,6 @@ create table if not exists fuvar_kapcsolatok (
   created_at     timestamptz not null default now()
 );
 create index if not exists idx_fuvar_kapcsolatok_ceg on fuvar_kapcsolatok (ceg);
+
+-- Kapcsolatok fül: szabad szöveges megjegyzés a kapcsolattartóhoz.
+alter table fuvar_kapcsolatok add column if not exists megjegyzes text;

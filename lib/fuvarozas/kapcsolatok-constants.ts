@@ -8,6 +8,7 @@ export type KapcsolatRow = {
   kapcsolattarto: string | null;
   telefon: string | null;
   email: string | null;
+  megjegyzes: string | null;
   forras: string | null;
 };
 
@@ -16,5 +17,6 @@ export type AddKapcsolatInput = {
   kapcsolattarto?: string;
   telefon?: string;
   email?: string;
+  megjegyzes?: string;
   forras?: string;
 };

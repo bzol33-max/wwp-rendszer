@@ -6,7 +6,7 @@ import { KAPCSOLATOK_SEED } from "@/lib/fuvarozas/kapcsolatok-seed-data";
 
 export async function getKapcsolatok(): Promise<KapcsolatRow[]> {
   return query<KapcsolatRow>(
-    `select id::text, ceg, kapcsolattarto, telefon, email, forras
+    `select id::text, ceg, kapcsolattarto, telefon, email, megjegyzes, forras
      from fuvar_kapcsolatok
      order by ceg asc, kapcsolattarto asc nulls last, id asc`
   );
@@ -14,9 +14,16 @@ export async function getKapcsolatok(): Promise<KapcsolatRow[]> {
 
 export async function addKapcsolat(input: AddKapcsolatInput) {
   await query(
-    `insert into fuvar_kapcsolatok (ceg, kapcsolattarto, telefon, email, forras)
-     values ($1, $2, $3, $4, $5)`,
-    [input.ceg, input.kapcsolattarto || null, input.telefon || null, input.email || null, input.forras || null]
+    `insert into fuvar_kapcsolatok (ceg, kapcsolattarto, telefon, email, megjegyzes, forras)
+     values ($1, $2, $3, $4, $5, $6)`,
+    [
+      input.ceg,
+      input.kapcsolattarto || null,
+      input.telefon || null,
+      input.email || null,
+      input.megjegyzes || null,
+      input.forras || null,
+    ]
   );
 }
 
