@@ -206,3 +206,10 @@ alter table fuvar_megbizasok add column if not exists ellenorzott boolean not nu
 -- Egyszerűsített "Új saját fuvar" gyorsrögzítéshez (csak dátum, megrendelő,
 -- lerakó) a felrakó mostantól nem kötelező.
 alter table fuvar_megbizasok alter column felrako drop not null;
+
+-- Bér fuvarok listaoszlopaihoz: a megbízás beérkezésének dátuma (elkülönítve
+-- a felrakás dátumától, ami a "datum" oszlop), a lerakás dátuma (ha eltér a
+-- felrakás dátumától), és a megbízásban szereplő fizetési határidő (napban).
+alter table fuvar_megbizasok add column if not exists erkezett_datum date;
+alter table fuvar_megbizasok add column if not exists lerakas_datum date;
+alter table fuvar_megbizasok add column if not exists fizetesi_hatarido_nap integer;

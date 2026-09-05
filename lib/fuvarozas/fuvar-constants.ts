@@ -51,6 +51,12 @@ export type FuvarRow = {
   forras: "kezi" | "pdf_import";
   ellenorzott: boolean;
   created_by: string | null;
+  /** A megbízás beérkezésének dátuma (bér fuvaroknál) — formázva, mint a "date" mező. */
+  erkezett_datum: string | null;
+  /** A lerakás dátuma, ha eltér a felrakás dátumától ("date" mezőtől) — formázva. */
+  lerakas_datum: string | null;
+  /** A megbízásban szereplő fizetési határidő, napokban (pl. 30/45/60). */
+  fizetesi_hatarido_nap: number | null;
 };
 
 export type AddFuvarInput = {
@@ -74,6 +80,9 @@ export type AddFuvarInput = {
   forras?: "kezi" | "pdf_import";
   ellenorzott?: boolean;
   createdBy?: string;
+  erkezettDatum?: string;
+  lerakasDatum?: string;
+  fizetesiHataridoNap?: number;
 };
 
 export type ApproveFuvarInput = {

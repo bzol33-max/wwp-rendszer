@@ -580,6 +580,138 @@ function FuvarList({
   );
 }
 
+/**
+ * A "Bér fuvarok" (tipus="sajat") lista — kizárólag a megbízás-specifikus 7
+ * oszloppal: 1) Dátum = a megbízás beérkezési dátuma, 2) Megrendelő,
+ * 3) Honnan → Hová a fel- és lerakás dátumával, 4) Fuvardíj,
+ * 5) Fizetési határidő, 6) Kocsi, 7) Státusz. Ez szándékosan külön komponens
+ * a generikus FuvarList-től, mert az oszlopkészlet itt jelentősen eltér.
+ */
+function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
+  const [rows, setRows] = useState<FuvarRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    const data = await getFuvarok("sajat");
+    setRows(data);
+  }, []);
+
+  useEffect(() => {
+    setLoading(true);
+    load().finally(() => setLoading(false));
+  }, [load, refreshKey]);
+
+  async function handleStatusChange(id: string, statusz: FuvarStatusz) {
+    await updateFuvarStatus(id, statusz);
+    await load();
+  }
+
+  async function handleDelete(id: string) {
+    await deleteFuvar(id);
+    await load();
+    toast.success("Fuvar törölve.");
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-sm">Bér fuvarok</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Dátum</TableHead>
+                <TableHead>Megrendelő</TableHead>
+                <TableHead>Honnan → Hová</TableHead>
+                <TableHead className="text-right">Fuvardíj</TableHead>
+                <TableHead>Fizetési határidő</TableHead>
+                <TableHead>Kocsi</TableHead>
+                <TableHead>Státusz</TableHead>
+                <TableHead className="w-8"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {!loading && rows.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center text-muted-foreground">
+                    Még nincs rögzített bér fuvar.
+                  </TableCell>
+                </TableRow>
+              )}
+              {rows.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell className="text-muted-foreground">
+                    {row.erkezett_datum ?? row.date}
+                    {!row.ellenorzott && (
+                      <Badge className="ml-1.5 bg-warning/20 text-warning hover:bg-warning/20">
+                        Ellenőrzés szükséges
+                      </Badge>
+                    )}
+                  </TableCell>
+                  <TableCell>{row.megrendelo ?? "—"}</TableCell>
+                  <TableCell>
+                    {row.felrako ? (
+                      <>
+                        {row.felrako} ({row.date}) → {row.lerako} ({row.lerakas_datum ?? row.date})
+                      </>
+                    ) : (
+                      <>
+                        {row.lerako} ({row.lerakas_datum ?? row.date})
+                      </>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {row.fuvardij != null ? `${row.fuvardij.toLocaleString("hu-HU")} Ft` : "—"}
+                  </TableCell>
+                  <TableCell>
+                    {row.fizetesi_hatarido_nap != null ? `${row.fizetesi_hatarido_nap} nap` : "—"}
+                  </TableCell>
+                  <TableCell>
+                    {row.jarmu ? <JarmuJelolo value={row.jarmu} /> : "—"}
+                  </TableCell>
+                  <TableCell>
+                    <Select
+                      value={row.statusz}
+                      onValueChange={(v) => v && handleStatusChange(row.id, v as FuvarStatusz)}
+                    >
+                      <SelectTrigger className="h-7 w-[130px] text-xs">
+                        <SelectValue>
+                          <Badge className={`${STATUSZ_BADGE_CLASS[row.statusz]} text-xs`}>
+                            {FUVAR_STATUSZ_LABEL[row.statusz]}
+                          </Badge>
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {FUVAR_STATUSZOK.filter((s) => s !== "torolt").map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {FUVAR_STATUSZ_LABEL[s]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(row.id)}
+                      title="Törlés"
+                      className="text-destructive/70 hover:text-destructive"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function FuvarTypeView({
   tipus,
   minimal,
@@ -766,11 +898,15 @@ export function Megbizasok() {
         <TabsTrigger value="ber">Saját fuvarok</TabsTrigger>
       </TabsList>
       <TabsContent value="sajat" className="mt-4">
-        <FuvarTypeView
-          tipus="sajat"
-          noForm
-          noFormNote="A bér fuvarok mindig megbízásból (a Drive „Fuvarmegbizások” mappájában érkező dokumentumból) indulnak — nincs kézi rögzítés."
-        />
+        <div className="flex flex-col gap-4">
+          <Card className="bg-muted/40">
+            <CardContent className="py-4 text-sm text-muted-foreground">
+              A bér fuvarok mindig megbízásból (a Drive „Fuvarmegbizások” mappájában érkező
+              dokumentumból) indulnak — nincs kézi rögzítés.
+            </CardContent>
+          </Card>
+          <BerFuvarLista refreshKey={0} />
+        </div>
       </TabsContent>
       <TabsContent value="ber" className="mt-4">
         <FuvarTypeView

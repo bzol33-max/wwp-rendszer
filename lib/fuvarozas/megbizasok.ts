@@ -23,15 +23,26 @@ const FUVAR_ROW_COLUMNS = `
   idopont, felrako, lerako, megrendelo, aru, mennyiseg, suly,
   jarmu, sofor, alvallalkozo,
   fuvardij, koltseg, statusz, megjegyzes,
-  dokumentum_url, forras, ellenorzott, created_by
+  dokumentum_url, forras, ellenorzott, created_by,
+  to_char(erkezett_datum, '${TIME_FMT}') as erkezett_datum,
+  to_char(lerakas_datum, '${TIME_FMT}') as lerakas_datum,
+  fizetesi_hatarido_nap
 `;
 
 export async function getFuvarok(tipus: FuvarTipus): Promise<FuvarRow[]> {
+  // A "sajat" tipus mögött (megjelenítve: "Bér fuvarok") a megbízás beérkezési
+  // dátuma a fő rendezési szempont — a "fuvar_megbizasok." előtag azért kell,
+  // mert az erkezett_datum alias a select-listában már formázott szöveg, a
+  // dátum szerinti (nem szöveges) rendezéshez az eredeti oszlopra van szükség.
+  const orderBy =
+    tipus === "sajat"
+      ? `ellenorzott asc, fuvar_megbizasok.erkezett_datum desc nulls last, datum desc, id desc`
+      : `ellenorzott asc, datum desc, id desc`;
   return query<FuvarRow>(
     `select ${FUVAR_ROW_COLUMNS}
      from fuvar_megbizasok
      where tipus = $1 and statusz <> 'torolt'
-     order by ellenorzott asc, datum desc, id desc
+     order by ${orderBy}
      limit 200`,
     [tipus]
   );
@@ -53,8 +64,9 @@ export async function addFuvar(input: AddFuvarInput) {
     `insert into fuvar_megbizasok
        (tipus, datum, idopont, felrako, lerako, megrendelo, aru, mennyiseg, suly,
         jarmu, sofor, alvallalkozo, fuvardij, koltseg, megjegyzes,
-        dokumentum_url, drive_file_id, forras, ellenorzott, created_by)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)`,
+        dokumentum_url, drive_file_id, forras, ellenorzott, created_by,
+        erkezett_datum, lerakas_datum, fizetesi_hatarido_nap)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)`,
     [
       input.tipus,
       input.datum,
@@ -76,6 +88,9 @@ export async function addFuvar(input: AddFuvarInput) {
       input.forras ?? "kezi",
       input.ellenorzott ?? true,
       input.createdBy ?? null,
+      input.erkezettDatum || null,
+      input.lerakasDatum || null,
+      input.fizetesiHataridoNap ?? null,
     ]
   );
 }
