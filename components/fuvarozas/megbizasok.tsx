@@ -31,6 +31,7 @@ import {
   deleteFuvar,
   getElokeszitettFuvarok,
   getFuvarok,
+  setFuvarPoziciszam,
   updateFuvarStatus,
 } from "@/lib/fuvarozas/megbizasok";
 import {
@@ -81,6 +82,121 @@ function JarmuJelolo({ value }: { value: string }) {
   );
 }
 
+/**
+ * A lista soraiban a hivatkozási szám (fuvarszám / pozíciószám / megbízási
+ * szám) inline szerkeszthető cellája. Ha üres és nincs "nincs ilyen" jelölve,
+ * piros figyelmeztetést mutat — kattintásra bárhonnan azonnal kitölthető
+ * vagy "nincs"-re jelölhető, szerkesztő űrlap megnyitása nélkül.
+ */
+function PoziciszamCell({
+  row,
+  onSaved,
+}: {
+  row: FuvarRow;
+  onSaved: () => void | Promise<void>;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(row.pozicioszam ?? "");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setValue(row.pozicioszam ?? "");
+  }, [row.pozicioszam]);
+
+  async function persist(pozicioszam: string | null, nincs: boolean) {
+    setSaving(true);
+    try {
+      await setFuvarPoziciszam(row.id, { pozicioszam, nincs });
+      await onSaved();
+      setEditing(false);
+    } catch {
+      toast.error("Nem sikerült menteni.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <div className="flex flex-col gap-1">
+        <Input
+          autoFocus
+          className="h-7 w-[140px] text-xs"
+          placeholder="hiv. szám"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") persist(value || null, false);
+            if (e.key === "Escape") setEditing(false);
+          }}
+        />
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
+          <button
+            type="button"
+            className="text-primary hover:underline disabled:opacity-50"
+            disabled={saving}
+            onClick={() => persist(value || null, false)}
+          >
+            Mentés
+          </button>
+          <button
+            type="button"
+            className="text-muted-foreground hover:underline disabled:opacity-50"
+            disabled={saving}
+            onClick={() => persist(null, true)}
+          >
+            Nincs ilyen
+          </button>
+          <button
+            type="button"
+            className="text-muted-foreground hover:underline"
+            onClick={() => setEditing(false)}
+          >
+            Mégse
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (row.pozicioszam) {
+    return (
+      <button
+        type="button"
+        title="Szerkesztés"
+        className="text-left hover:underline"
+        onClick={() => setEditing(true)}
+      >
+        {row.pozicioszam}
+      </button>
+    );
+  }
+
+  if (row.pozicioszam_nincs) {
+    return (
+      <button
+        type="button"
+        title="Szerkesztés"
+        className="text-left text-muted-foreground hover:underline"
+        onClick={() => setEditing(true)}
+      >
+        — (nincs ilyen)
+      </button>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      title="Kattints a kitöltéshez"
+      className="text-left text-xs font-medium text-destructive hover:underline"
+      onClick={() => setEditing(true)}
+    >
+      ⚠️ ellenőrizd, hiányzik a hiv. szám
+    </button>
+  );
+}
+
 type FormState = {
   tipus: FuvarTipus;
   datum: string;
@@ -97,6 +213,8 @@ type FormState = {
   fuvardij: string;
   koltseg: string;
   megjegyzes: string;
+  pozicioszam: string;
+  pozicioszamNincs: boolean;
 };
 
 function emptyForm(tipus: FuvarTipus): FormState {
@@ -116,6 +234,8 @@ function emptyForm(tipus: FuvarTipus): FormState {
     fuvardij: "",
     koltseg: "",
     megjegyzes: "",
+    pozicioszam: "",
+    pozicioszamNincs: false,
   };
 }
 
@@ -136,7 +256,52 @@ function formFromRow(row: FuvarRow): FormState {
     fuvardij: row.fuvardij != null ? String(row.fuvardij) : "",
     koltseg: row.koltseg != null ? String(row.koltseg) : "",
     megjegyzes: row.megjegyzes ?? "",
+    pozicioszam: row.pozicioszam ?? "",
+    pozicioszamNincs: row.pozicioszam_nincs,
   };
+}
+
+/**
+ * A megbízó által adott hivatkozási szám (fuvarszám / pozíciószám /
+ * megbízási szám — mind ugyanaz). Figyelmeztet, ha üres és nincs "nincs
+ * ilyen szám" jelölve — ez a szám sok megbízónál kötelező a számlán, és a
+ * beérkező számlák automatikus párosításához is ez az elsődleges kulcs.
+ */
+function PoziciszamMezo({
+  pozicioszam,
+  nincs,
+  onChange,
+}: {
+  pozicioszam: string;
+  nincs: boolean;
+  onChange: (patch: { pozicioszam?: string; pozicioszamNincs?: boolean }) => void;
+}) {
+  const hianyzik = !pozicioszam.trim() && !nincs;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label>Hiv. szám (fuvarszám / pozíciószám)</Label>
+      <Input
+        placeholder="a megbízó által adott szám"
+        value={pozicioszam}
+        disabled={nincs}
+        onChange={(e) => onChange({ pozicioszam: e.target.value, pozicioszamNincs: false })}
+      />
+      <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Checkbox
+          checked={nincs}
+          onCheckedChange={(checked) =>
+            onChange({ pozicioszamNincs: checked === true, pozicioszam: checked === true ? "" : pozicioszam })
+          }
+        />
+        Ennél a megbízónál nincs ilyen szám
+      </label>
+      {hianyzik && (
+        <span className="text-xs font-medium text-destructive">
+          ⚠️ ellenőrizd, hiányzik a hiv. szám
+        </span>
+      )}
+    </div>
+  );
 }
 
 function FuvarFields({
@@ -192,6 +357,11 @@ function FuvarFields({
             onChange={(e) => onChange({ megrendelo: e.target.value })}
           />
         </div>
+        <PoziciszamMezo
+          pozicioszam={form.pozicioszam}
+          nincs={form.pozicioszamNincs}
+          onChange={onChange}
+        />
         <div className="flex flex-col gap-1.5">
           <Label>Áru</Label>
           <Input value={form.aru} onChange={(e) => onChange({ aru: e.target.value })} />
@@ -313,6 +483,11 @@ function MinimalFuvarFields({
           Saját telepek közti szállítás
         </label>
       </div>
+      <PoziciszamMezo
+        pozicioszam={form.pozicioszam}
+        nincs={form.pozicioszamNincs}
+        onChange={onChange}
+      />
       <div className="flex flex-col gap-1.5">
         <Label>Felrakó</Label>
         <Input
@@ -392,6 +567,8 @@ function FuvarForm({
         fuvardij: minimal ? undefined : form.fuvardij ? Number(form.fuvardij) : undefined,
         koltseg: minimal ? undefined : form.koltseg ? Number(form.koltseg) : undefined,
         megjegyzes: minimal ? undefined : form.megjegyzes || undefined,
+        pozicioszam: form.pozicioszam || undefined,
+        pozicioszamNincs: form.pozicioszamNincs,
         createdBy: getCurrentUser() || undefined,
       });
       setForm(emptyForm(tipus));
@@ -481,6 +658,7 @@ function FuvarList({
                 <TableHead>Dátum</TableHead>
                 <TableHead>Honnan → Hová</TableHead>
                 <TableHead>{partnerColumnLabel ?? "Megrendelő"}</TableHead>
+                <TableHead>Hiv. szám</TableHead>
                 <TableHead>{jarmuOszlop ? "Kocsi" : "Alvállalkozó"}</TableHead>
                 <TableHead className="text-right">Fuvardíj</TableHead>
                 <TableHead className="text-right">Eredmény</TableHead>
@@ -492,7 +670,7 @@ function FuvarList({
             <TableBody>
               {!loading && rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center text-muted-foreground">
+                  <TableCell colSpan={10} className="text-center text-muted-foreground">
                     Még nincs rögzített fuvar.
                   </TableCell>
                 </TableRow>
@@ -506,6 +684,9 @@ function FuvarList({
                       {row.felrako ? `${row.felrako} → ${row.lerako}` : row.lerako}
                     </TableCell>
                     <TableCell>{row.megrendelo ?? "—"}</TableCell>
+                    <TableCell>
+                      <PoziciszamCell row={row} onSaved={load} />
+                    </TableCell>
                     <TableCell>
                       {jarmuOszlop ? (
                         row.jarmu ? (
@@ -673,6 +854,7 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
               <TableRow>
                 <TableHead>Dátum</TableHead>
                 <TableHead>Megrendelő</TableHead>
+                <TableHead>Hiv. szám</TableHead>
                 <TableHead>Honnan → Hová</TableHead>
                 <TableHead className="text-right">Fuvardíj</TableHead>
                 <TableHead>Fizetési határidő</TableHead>
@@ -684,7 +866,7 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
             <TableBody>
               {!loading && rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground">
+                  <TableCell colSpan={9} className="text-center text-muted-foreground">
                     Még nincs rögzített bér fuvar.
                   </TableCell>
                 </TableRow>
@@ -696,6 +878,9 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
                   </TableCell>
                   <TableCell className="max-w-[120px] whitespace-normal break-words align-top leading-tight">
                     {row.megrendelo ?? "—"}
+                  </TableCell>
+                  <TableCell className="max-w-[140px] whitespace-normal break-words align-top leading-tight">
+                    <PoziciszamCell row={row} onSaved={load} />
                   </TableCell>
                   <TableCell className="max-w-[180px] whitespace-normal break-words align-top leading-tight">
                     <div className="flex flex-col gap-0.5">
@@ -838,6 +1023,8 @@ function ElokeszitettCard({
         fuvardij: form.fuvardij ? Number(form.fuvardij) : undefined,
         koltseg: form.koltseg ? Number(form.koltseg) : undefined,
         megjegyzes: form.megjegyzes || undefined,
+        pozicioszam: form.pozicioszam || undefined,
+        pozicioszamNincs: form.pozicioszamNincs,
       });
       await onDone();
       toast.success("Fuvar jóváhagyva.");

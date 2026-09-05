@@ -57,6 +57,14 @@ export type FuvarRow = {
   lerakas_datum: string | null;
   /** A megbízásban szereplő fizetési határidő, napokban (pl. 30/45/60). */
   fizetesi_hatarido_nap: number | null;
+  /**
+   * A megbízó által adott hivatkozási szám (fuvarszám / pozíciószám /
+   * megbízási szám — mind ugyanaz). A megbízó hivatkozik erre a saját
+   * rendszerében, és sok esetben megköveteli, hogy a számlán is szerepeljen.
+   */
+  pozicioszam: string | null;
+  /** Igaz, ha megerősítve rögzítve lett, hogy ennél a megbízónál nincs ilyen szám. */
+  pozicioszam_nincs: boolean;
 };
 
 export type AddFuvarInput = {
@@ -83,6 +91,8 @@ export type AddFuvarInput = {
   erkezettDatum?: string;
   lerakasDatum?: string;
   fizetesiHataridoNap?: number;
+  pozicioszam?: string;
+  pozicioszamNincs?: boolean;
 };
 
 export type ApproveFuvarInput = {
@@ -102,4 +112,6 @@ export type ApproveFuvarInput = {
   fuvardij?: number;
   koltseg?: number;
   megjegyzes?: string;
+  pozicioszam?: string;
+  pozicioszamNincs?: boolean;
 };

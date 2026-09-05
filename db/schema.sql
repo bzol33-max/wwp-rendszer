@@ -214,6 +214,17 @@ alter table fuvar_megbizasok add column if not exists erkezett_datum date;
 alter table fuvar_megbizasok add column if not exists lerakas_datum date;
 alter table fuvar_megbizasok add column if not exists fizetesi_hatarido_nap integer;
 
+-- A megbízó által adott hivatkozási szám a fuvarhoz — a sablonban
+-- "pozíciószám", de a megbízók hívják fuvarszámnak, hivatkozási számnak vagy
+-- megbízási számnak is; ugyanaz a mező. FONTOS a beérkező számlák
+-- automatikus párosításához (lásd Kapcsolatok/Számla modul), ezért a rendszer
+-- figyelmeztet, ha hiányzik. A "pozicioszam_nincs" jelöli, ha az adott
+-- megbízónál valóban nincs ilyen szám (ekkor a figyelmeztetés nem jelenik meg
+-- hamis szám kitalálása nélkül). NEM keverendő a kiállított számla saját
+-- számával (az egy külön, később bekötendő mező lesz).
+alter table fuvar_megbizasok add column if not exists pozicioszam text;
+alter table fuvar_megbizasok add column if not exists pozicioszam_nincs boolean not null default false;
+
 -- Fuvarozás — Kapcsolatok fül: a megbízásokból (és a hozzájuk tartozó
 -- e-mailekből) kinyert cégenkénti kapcsolattartók. Egy céghez több
 -- kapcsolattartó/telefon/e-mail sor is tartozhat.
