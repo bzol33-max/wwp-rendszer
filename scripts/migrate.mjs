@@ -30,6 +30,7 @@ async function main() {
   }
 
   await applyKapcsolatokUpdates(pool, dbDir);
+  await applyPoziciszamUpdates(pool, dbDir);
 
   await pool.end();
 }
@@ -99,6 +100,37 @@ async function applyKapcsolatokUpdates(pool, dbDir) {
   }
 
   console.log(`[migrate] kapcsolatok frissítve: ${updated} javítás, ${inserted} új sor.`);
+}
+
+// Bér fuvarok — hivatkozási szám (fuvarszám/pozíciószám/megbízási szám):
+// a Drive-dokumentumokból kinyert értékek visszatöltése drive_file_id
+// alapján egyeztetve. Minden induláskor lefut, biztonságosan újrafuttatható
+// (csak akkor ír, ha a mező még üres ÉS nincs "nincs" jelölve — így egy
+// felhasználó által kézzel beírt/megjelölt érték nem íródik felül).
+async function applyPoziciszamUpdates(pool, dbDir) {
+  let data;
+  try {
+    data = JSON.parse(readFileSync(path.join(dbDir, "fuvar-poziciszam-updates.json"), "utf8"));
+  } catch {
+    console.log("[migrate] fuvar-poziciszam-updates.json nincs, kihagyva.");
+    return;
+  }
+
+  let updated = 0;
+  for (const entry of data.updates ?? []) {
+    const { rowCount } = await pool.query(
+      `update fuvar_megbizasok
+         set pozicioszam = $2,
+             pozicioszam_nincs = $3
+       where drive_file_id = $1
+         and pozicioszam is null
+         and pozicioszam_nincs = false`,
+      [entry.driveFileId, entry.pozicioszam ?? null, entry.pozicioszam == null]
+    );
+    updated += rowCount ?? 0;
+  }
+
+  console.log(`[migrate] pozíciószámok visszatöltve: ${updated} sor.`);
 }
 
 main().catch((err) => {
