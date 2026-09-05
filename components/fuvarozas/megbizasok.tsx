@@ -28,6 +28,7 @@ import { X } from "lucide-react";
 import {
   addFuvar,
   approveFuvar,
+  backfillBerFuvarAdatok,
   deleteFuvar,
   getElokeszitettFuvarok,
   getFuvarok,
@@ -890,7 +891,35 @@ function ElokeszitettView() {
   );
 }
 
+function BerFuvarBackfillButton({ onDone }: { onDone: () => void }) {
+  const [running, setRunning] = useState(false);
+
+  async function handleClick() {
+    setRunning(true);
+    try {
+      const result = await backfillBerFuvarAdatok();
+      toast.success(
+        `${result.updated} fuvar adatai frissítve.` +
+          (result.missing.length > 0 ? ` ${result.missing.length} dokumentumhoz nem volt találat.` : "")
+      );
+      onDone();
+    } catch {
+      toast.error("Nem sikerült frissíteni.");
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  return (
+    <Button size="sm" variant="outline" disabled={running} onClick={handleClick}>
+      {running ? "Frissítés…" : "Meglévő adatok frissítése a Drive alapján"}
+    </Button>
+  );
+}
+
 export function Megbizasok() {
+  const [berRefreshKey, setBerRefreshKey] = useState(0);
+
   return (
     <Tabs defaultValue="sajat">
       <TabsList>
@@ -900,12 +929,15 @@ export function Megbizasok() {
       <TabsContent value="sajat" className="mt-4">
         <div className="flex flex-col gap-4">
           <Card className="bg-muted/40">
-            <CardContent className="py-4 text-sm text-muted-foreground">
-              A bér fuvarok mindig megbízásból (a Drive „Fuvarmegbizások” mappájában érkező
-              dokumentumból) indulnak — nincs kézi rögzítés.
+            <CardContent className="flex flex-wrap items-center justify-between gap-3 py-4 text-sm text-muted-foreground">
+              <span>
+                A bér fuvarok mindig megbízásból (a Drive „Fuvarmegbizások” mappájában érkező
+                dokumentumból) indulnak — nincs kézi rögzítés.
+              </span>
+              <BerFuvarBackfillButton onDone={() => setBerRefreshKey((k) => k + 1)} />
             </CardContent>
           </Card>
-          <BerFuvarLista refreshKey={0} />
+          <BerFuvarLista refreshKey={berRefreshKey} />
         </div>
       </TabsContent>
       <TabsContent value="ber" className="mt-4">
