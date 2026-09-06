@@ -55,8 +55,9 @@ export const MODULES: ModuleInfo[] = [
     label: "Számlák",
     href: "/szamlak",
     icon: Receipt,
-      status: "fejlesztes-alatt",
-    description: "A modul funkciói kidolgozás alatt, saját beszélgetésben.",
+    status: "fejlesztes-alatt",
+    description:
+      "Kintlévőség-követő: a Számlázz.hu-ban kiállított számlákat húzza be automatikusan (óránkénti helyett 15 percenkénti szinkron 6–22 óra között), Fuvar/Raklap kategorizálással.",
   },
   {
     key: "dolgozok",

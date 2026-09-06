@@ -258,3 +258,70 @@ create index if not exists idx_fuvar_kapcsolatok_ceg on fuvar_kapcsolatok (ceg);
 
 -- Kapcsolatok fül: szabad szöveges megjegyzés a kapcsolattartóhoz.
 alter table fuvar_kapcsolatok add column if not exists megjegyzes text;
+
+-- Számlák modul — kintlévőség-követő. FONTOS: ez a modul NEM állít ki
+-- számlát, hanem a Számlázz.hu-ban (ahol a cég ténylegesen számláz)
+-- kiállított kimenő számlákat tükrözi vissza egyetlen, központi
+-- lekérdezéssel (lásd lib/szamlak/poll.ts) — más modulok (pl. Fuvarozás)
+-- ebből a táblából olvasnak, NEM kérdezik le maguk a Számlázz.hu API-t,
+-- hogy elkerüljük a háromszoros API-terhelést és az egymásnak ellentmondó
+-- állapotokat.
+create table if not exists szamla (
+  id                bigserial primary key,
+  -- A Számlázz.hu-beli sorszám, pl. "WLLWR-2026-283" — ebből bontjuk ki az
+  -- előtagot/évet/sorszámot a lekérdezés-sorrendhez (lib/szamlak/poll.ts).
+  szamlaszam        text not null unique,
+  vevo_nev          text not null,
+  rendelesszam      text,
+  fizmod            text,
+  penznem           text not null default 'HUF',
+  teljesites_datum  date,
+  kiallitas_datum   date not null,
+  fizetesi_hatarido date,
+  netto              numeric,
+  afa                numeric,
+  brutto             numeric not null,
+  -- A tételek (megnevezés-lista) alapján automatikus kategorizálás
+  -- (lib/szamlak/categorize.ts): 'fuvar' vagy 'raklap'; a 'raklap' a vevő
+  -- neve alapján tovább bomlik alkategóriára.
+  kategoria          text not null check (kategoria in ('fuvar', 'raklap')),
+  alkategoria        text check (alkategoria in ('fabrika', 'keter', 'egyeb')),
+  tetelek_szoveg     text, -- a tételek megnevezése, összefűzve (kategorizáláshoz és megjelenítéshez)
+  -- A Számlázz.hu nem küld vissza fizetettségi státuszt ehhez a
+  -- workflow-hoz — a "Fizetve" jelölés kézi, a dolgozó pipálja ki.
+  fizetve            boolean not null default false,
+  fizetve_datum      timestamptz,
+  raw_xml            text, -- a lekérdezett teljes <szamla> XML válasz, hibakereséshez
+  lekerdezve_at      timestamptz not null default now(),
+  created_at         timestamptz not null default now()
+);
+create index if not exists idx_szamla_kategoria on szamla (kategoria, alkategoria);
+create index if not exists idx_szamla_fizetve on szamla (fizetve, fizetesi_hatarido);
+
+-- Egy meg nem talált számlaszám nem jelenti azt, hogy soha nem is lesz — a
+-- Számlázz.hu-ban egy sorszám lefoglalása megelőzheti a tényleges kiállítást.
+-- Ezért minden "nem található" választ (hibakód 7) ide teszünk, és minden
+-- további lekérdezési körben újra megvizsgáljuk, a fő kereső állásától
+-- függetlenül, amíg "feladva" nem lesz (lásd lib/szamlak/poll.ts — kb. 400
+-- napos határidő).
+create table if not exists szamlak_poll_pending (
+  szamlaszam     text primary key,
+  eloszor_probalt_at timestamptz not null default now(),
+  utoljara_probalt_at timestamptz not null default now(),
+  probalkozasok  integer not null default 1,
+  feladva        boolean not null default false
+);
+
+-- Egyetlen soros állapot-tábla: melyik évhez meddig jutott el a fő kereső
+-- (a legutóbb sikeresen ELÉRT sorszám, a lyukakat a fenti pending tábla
+-- kezeli), és mikor futott le legutóbb egy teljes kör.
+create table if not exists szamlak_poll_allapot (
+  id                bigint primary key default 1,
+  ev                integer not null,
+  utolso_sorszam    integer not null default 0,
+  utolso_futas_at   timestamptz,
+  check (id = 1)
+);
+insert into szamlak_poll_allapot (id, ev, utolso_sorszam)
+  values (1, extract(year from now())::int, 0)
+  on conflict (id) do nothing;
