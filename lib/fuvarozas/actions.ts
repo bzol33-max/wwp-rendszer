@@ -10,6 +10,32 @@ import {
   type GeocodedAddress,
   type TollRoute,
 } from "./utdijkalkulacio";
+import { fetchGazolajAr, GazolajArError } from "./uzemanyagar";
+
+// Ha a NAV oldala nem érhető el (átmeneti hiba, oldalszerkezet-változás),
+// ez a tartalék érték jelenik meg — utoljára kézzel ellenőrizve 2026.
+// szeptemberében. Csak akkor használódik, ha az automatikus lekérés hibázik.
+const GAZOLAJ_AR_TARTALEK = { ar: 667, cimke: "2026. szeptember (tartalék érték)" };
+
+export type GazolajArResult = {
+  ar: number;
+  cimke: string;
+  /** false, ha a NAV oldaláról nem sikerült frissen lekérni, és a tartalék érték jelenik meg. */
+  friss: boolean;
+};
+
+/** A NAV hivatalos, aktuális havi gázolajárának automatikus lekérése (napi cache-eléssel). */
+export async function getGazolajAr(): Promise<GazolajArResult> {
+  try {
+    const { ar, cimke } = await fetchGazolajAr();
+    return { ar, cimke, friss: true };
+  } catch (err) {
+    if (!(err instanceof GazolajArError)) {
+      console.error("[uzemanyagar] váratlan hiba:", err);
+    }
+    return { ...GAZOLAJ_AR_TARTALEK, friss: false };
+  }
+}
 
 export type FleetPositionResult =
   | { ok: true; positions: EcofleetPosition[] }

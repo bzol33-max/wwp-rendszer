@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,9 @@ import { X } from "lucide-react";
 import {
   calculateTollForAddresses,
   calculateTollForPoints,
+  getGazolajAr,
   searchAddressSuggestions,
+  type GazolajArResult,
 } from "@/lib/fuvarozas/actions";
 import type { GeocodedAddress, TollRoute } from "@/lib/fuvarozas/utdijkalkulacio";
 
@@ -27,12 +29,6 @@ function formatHuf(n: number): string {
 // egyetlen fix átlaggal számolunk (a spec 17. pontja: km alapján üzemanyag-
 // költség is a fuvarköltség számításához).
 const ATLAG_FOGYASZTAS_L_PER_100KM = 30;
-
-// A NAV hivatalos, havonta közzétett gázolagár (nincs "heti" hivatalos ár
-// Magyarországon, ez a legfrissebb elérhető referenciaár) — 2026. szeptemberi
-// közlemény szerint. Havonta kézzel frissítendő, ha új NAV-közlemény jelenik
-// meg: https://nav.gov.hu/ugyfeliranytu/uzemanyag/2026-ban-alkalmazhato-uzemanyagarak
-const GAZOLAJ_AR_FT_PER_LITER = 667;
 
 function formatLiter(l: number): string {
   return `${l.toLocaleString("hu-HU", { maximumFractionDigits: 1 })} l`;
@@ -118,10 +114,13 @@ function AddressField({
 function RouteResult({
   route,
   stopLabels,
+  gazolajAr,
 }: {
   route: TollRoute;
   stopLabels: string[];
+  gazolajAr: GazolajArResult | null;
 }) {
+  const literek = (route.distanceKm * ATLAG_FOGYASZTAS_L_PER_100KM) / 100;
   return (
     <div className="flex flex-col gap-1 rounded-lg border border-border p-2 text-xs">
       {stopLabels.length > 2 && (
@@ -132,20 +131,15 @@ function RouteResult({
           {route.distanceKm.toLocaleString("hu-HU")} km · {formatDuration(route.durationMin)}
         </span>
         <span>
-          Üzemanyag:{" "}
-          <span className="font-medium">
-            {formatLiter((route.distanceKm * ATLAG_FOGYASZTAS_L_PER_100KM) / 100)}
-          </span>
-          <span className="text-muted-foreground">
-            {" "}
-            (
-            {formatHuf(
-              Math.round(
-                ((route.distanceKm * ATLAG_FOGYASZTAS_L_PER_100KM) / 100) * GAZOLAJ_AR_FT_PER_LITER
-              )
-            )}
-            , {ATLAG_FOGYASZTAS_L_PER_100KM} l/100km átlaggal, {GAZOLAJ_AR_FT_PER_LITER} Ft/l NAV gázolajárral)
-          </span>
+          Üzemanyag: <span className="font-medium">{formatLiter(literek)}</span>
+          {gazolajAr && (
+            <span className="text-muted-foreground">
+              {" "}
+              ({formatHuf(Math.round(literek * gazolajAr.ar))}, {ATLAG_FOGYASZTAS_L_PER_100KM} l/100km
+              átlaggal, {gazolajAr.ar} Ft/l NAV gázolajárral – {gazolajAr.cimke}
+              {!gazolajAr.friss && ", nem sikerült frissíteni"})
+            </span>
+          )}
         </span>
         {route.tollHuf ? (
           <span>
@@ -194,6 +188,13 @@ export function TollCalculator() {
   const [stops, setStops] = useState<Stop[]>([newStop(), newStop()]);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ stopLabels: string[]; route: TollRoute } | null>(null);
+  // A NAV aktuális hivatalos gázolajárát automatikusan, a szerverről kérjük
+  // le (lásd lib/fuvarozas/uzemanyagar.ts) — soha nem kell kézzel frissíteni.
+  const [gazolajAr, setGazolajAr] = useState<GazolajArResult | null>(null);
+
+  useEffect(() => {
+    getGazolajAr().then(setGazolajAr);
+  }, []);
 
   function updateStop(id: number, patch: Partial<Stop>) {
     setStops((prev) => {
@@ -262,7 +263,7 @@ export function TollCalculator() {
 
         {result && (
           <div className="mt-2">
-            <RouteResult route={result.route} stopLabels={result.stopLabels} />
+            <RouteResult route={result.route} stopLabels={result.stopLabels} gazolajAr={gazolajAr} />
           </div>
         )}
       </CardContent>
