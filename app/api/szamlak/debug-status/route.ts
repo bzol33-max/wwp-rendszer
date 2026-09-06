@@ -44,37 +44,37 @@ export async function GET() {
   const dayStartUnix = Math.floor(new Date(`${todayStr}T00:00:00+02:00`).getTime() / 1000);
   const dayEndUnix = Math.floor(new Date(`${todayStr}T23:59:59+02:00`).getTime() / 1000);
 
-  const attemptSpaceFormat = await rawGet("Vehicles/getTrips", {
+  // A begTimestamp/endTimestamp formátum ("YYYY-MM-DD HH:MM:SS") jó (status 0),
+  // de a mai napra üres a válasz -> szélesebb (14 napos) tartományt próbálunk,
+  // és objectId nélkül is (hátha minden járműre kell).
+  const d14 = new Date(today);
+  d14.setDate(d14.getDate() - 14);
+  const from14 = `${d14.getFullYear()}-${String(d14.getMonth() + 1).padStart(2, "0")}-${String(d14.getDate()).padStart(2, "0")}`;
+
+  const attemptWideRange = await rawGet("Vehicles/getTrips", {
     objectId,
-    begTimestamp: `${todayStr} 00:00:00`,
+    begTimestamp: `${from14} 00:00:00`,
     endTimestamp: `${todayStr} 23:59:59`,
   });
 
-  const attemptIsoFormat = await rawGet("Vehicles/getTrips", {
-    objectId,
-    begTimestamp: `${todayStr}T00:00:00`,
-    endTimestamp: `${todayStr}T23:59:59`,
+  const attemptNoObjectId = await rawGet("Vehicles/getTrips", {
+    begTimestamp: `${from14} 00:00:00`,
+    endTimestamp: `${todayStr} 23:59:59`,
   });
 
-  const attemptUnixFormat = await rawGet("Vehicles/getTrips", {
-    objectId,
-    begTimestamp: String(dayStartUnix),
-    endTimestamp: String(dayEndUnix),
-  });
-
-  const attemptDateOnlyFormat = await rawGet("Vehicles/getTrips", {
-    objectId,
-    begTimestamp: todayStr,
-    endTimestamp: todayStr,
+  const attemptOtherVehicleWide = await rawGet("Vehicles/getTrips", {
+    objectId: "369485",
+    begTimestamp: `${from14} 00:00:00`,
+    endTimestamp: `${todayStr} 23:59:59`,
   });
 
   return NextResponse.json({
     vehicles,
-    attemptSpaceFormat,
-    attemptIsoFormat,
-    attemptUnixFormat,
-    attemptDateOnlyFormat,
+    attemptWideRange,
+    attemptNoObjectId,
+    attemptOtherVehicleWide,
     todayStr,
+    from14,
     dayStartUnix,
     dayEndUnix,
   });
