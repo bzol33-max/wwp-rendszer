@@ -23,6 +23,15 @@ function formatHuf(n: number): string {
   return `${n.toLocaleString("hu-HU")} Ft`;
 }
 
+// A flotta átlagfogyasztása — nincs kocsinkénti/terhelésenkénti adat, ezért
+// egyetlen fix átlaggal számolunk (a spec 17. pontja: km alapján üzemanyag-
+// költség is a fuvarköltség számításához).
+const ATLAG_FOGYASZTAS_L_PER_100KM = 30;
+
+function formatLiter(l: number): string {
+  return `${l.toLocaleString("hu-HU", { maximumFractionDigits: 1 })} l`;
+}
+
 function AddressField({
   placeholder,
   value,
@@ -115,6 +124,13 @@ function RouteResult({
       <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
         <span className="font-medium">
           {route.distanceKm.toLocaleString("hu-HU")} km · {formatDuration(route.durationMin)}
+        </span>
+        <span>
+          Üzemanyag:{" "}
+          <span className="font-medium">
+            {formatLiter((route.distanceKm * ATLAG_FOGYASZTAS_L_PER_100KM) / 100)}
+          </span>
+          <span className="text-muted-foreground"> ({ATLAG_FOGYASZTAS_L_PER_100KM} l/100km átlaggal)</span>
         </span>
         {route.tollHuf ? (
           <span>
