@@ -5,7 +5,7 @@
 
 import { query } from "@/lib/db";
 import { futtatSzamlaSzinkron, type PollEredmeny } from "./poll";
-import type { SzamlaKategoria, SzamlaOsszesitoSor, SzamlaRow } from "./szamla-constants";
+import type { SzamlaAlkategoria, SzamlaKategoria, SzamlaOsszesitoSor, SzamlaRow } from "./szamla-constants";
 
 const TIME_FMT = "YYYY-MM-DD";
 
@@ -18,23 +18,45 @@ const SZAMLA_COLUMNS = `
   fizetve, fizetve_datum::text, lekerdezve_at::text
 `;
 
+export type SzamlaListaSzuro = {
+  kategoria: SzamlaKategoria;
+  /** undefined = nem szűr alkategóriára; null = kifejezetten az alkategória nélküli (pl. Fuvar) sorokra. */
+  alkategoria?: SzamlaAlkategoria | null;
+  vevoNev?: string;
+  penznem?: string;
+};
+
 /**
- * Egy kategórián (és Raklapnál alkategórián) belüli számlalista, esedékesség
- * szerint rendezve. A rontott/sztornózott számla-párok (lib/szamlak/sztorno.ts)
- * ki vannak zárva — sem az eredeti (hibás) számla, sem a hozzá tartozó
- * negatív törlő/helyesbítő tétel nem jelenik meg itt, hogy ne látszódjon
- * tévesen "Fizetve"-ként a hibás összeg.
+ * Egy csempére kattintva megnyíló, szűrt számlalista (kategória, alkategória,
+ * vevő és/vagy pénznem szerint), esedékesség szerint rendezve. A rontott/
+ * sztornózott számla-párok (lib/szamlak/sztorno.ts) ki vannak zárva.
  */
-export async function getSzamlak(kategoria: SzamlaKategoria): Promise<SzamlaRow[]> {
+export async function getSzamlaLista(szuro: SzamlaListaSzuro): Promise<SzamlaRow[]> {
+  const feltetelek: string[] = ["kategoria = $1", "not sztorno", "not sztornozva"];
+  const parameterek: unknown[] = [szuro.kategoria];
+
+  if (szuro.alkategoria === null) {
+    feltetelek.push("alkategoria is null");
+  } else if (szuro.alkategoria !== undefined) {
+    parameterek.push(szuro.alkategoria);
+    feltetelek.push(`alkategoria = $${parameterek.length}`);
+  }
+  if (szuro.vevoNev) {
+    parameterek.push(szuro.vevoNev);
+    feltetelek.push(`vevo_nev = $${parameterek.length}`);
+  }
+  if (szuro.penznem) {
+    parameterek.push(szuro.penznem);
+    feltetelek.push(`penznem = $${parameterek.length}`);
+  }
+
   return query<SzamlaRow>(
     `select ${SZAMLA_COLUMNS}
      from szamla
-     where kategoria = $1
-       and not sztorno
-       and not sztornozva
+     where ${feltetelek.join(" and ")}
      order by fizetve asc, fizetesi_hatarido asc nulls last, kiallitas_datum desc
      limit 500`,
-    [kategoria]
+    parameterek
   );
 }
 

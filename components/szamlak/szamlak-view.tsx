@@ -2,7 +2,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -16,12 +23,15 @@ import {
   frissitesMost,
   getSzamlaEgyebCegenkent,
   getSzamlaLejaratLista,
+  getSzamlaLista,
   getSzamlaOsszesito,
   getSzamlaSzinkronAllapot,
   jeloltFizetve,
+  visszavonFizetve,
   type SzamlaAllapot,
   type SzamlaEgyebCegSor,
   type SzamlaLejaratLista,
+  type SzamlaListaSzuro,
 } from "@/lib/szamlak/actions";
 import {
   ALKATEGORIA_LABEL,
@@ -35,7 +45,150 @@ function formatOsszeg(n: number, penznem: string) {
   return `${n.toLocaleString("hu-HU")} ${penznem}`;
 }
 
-function OsszesitoCsempek({ sorok }: { sorok: SzamlaOsszesitoSor[] }) {
+/** Az 5 perces visszavonási ablakon belül van-e még a "Fizetve" jelölés. */
+function visszavonhato(fizetveDatum: string | null): boolean {
+  if (!fizetveDatum) return false;
+  return Date.now() - new Date(fizetveDatum).getTime() < 5 * 60 * 1000;
+}
+
+/** Egy csempére kattintva megnyíló, teljes (szűrt) számlalista. */
+function SzamlaListaDialog({
+  cim,
+  szuro,
+  onOpenChange,
+  onChanged,
+}: {
+  cim: string | null;
+  szuro: SzamlaListaSzuro | null;
+  onOpenChange: (nyitva: boolean) => void;
+  onChanged: () => void;
+}) {
+  const [rows, setRows] = useState<SzamlaRow[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!szuro) return;
+    setLoading(true);
+    try {
+      const data = await getSzamlaLista(szuro);
+      setRows(data);
+    } finally {
+      setLoading(false);
+    }
+  }, [szuro]);
+
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [szuro]);
+
+  async function handleFizetve(id: string) {
+    await jeloltFizetve(id);
+    await load();
+    onChanged();
+    toast.success("Számla fizetve-nek jelölve.");
+  }
+
+  async function handleVisszavon(id: string) {
+    await visszavonFizetve(id);
+    await load();
+    onChanged();
+  }
+
+  const ma = new Date().toISOString().slice(0, 10);
+
+  return (
+    <Dialog open={szuro !== null} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-4xl">
+        <DialogHeader>
+          <DialogTitle>{cim}</DialogTitle>
+        </DialogHeader>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Sorszám</TableHead>
+                <TableHead>Vevő</TableHead>
+                <TableHead>Hiv. szám</TableHead>
+                <TableHead>Kiállítás</TableHead>
+                <TableHead>Fizetési határidő</TableHead>
+                <TableHead className="text-right">Összeg</TableHead>
+                <TableHead>Állapot</TableHead>
+                <TableHead className="w-24"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {!loading && rows.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center text-muted-foreground">
+                    Nincs ilyen számla.
+                  </TableCell>
+                </TableRow>
+              )}
+              {rows.map((row) => {
+                const lejart = !row.fizetve && !!row.fizetesi_hatarido && row.fizetesi_hatarido < ma;
+                return (
+                  <TableRow key={row.id}>
+                    <TableCell className="text-muted-foreground">{row.szamlaszam}</TableCell>
+                    <TableCell>{row.vevo_nev}</TableCell>
+                    <TableCell>{row.rendelesszam ?? "—"}</TableCell>
+                    <TableCell>{row.kiallitas_datum}</TableCell>
+                    <TableCell className={lejart ? "font-medium text-destructive" : ""}>
+                      {row.fizetesi_hatarido ?? "—"}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatOsszeg(row.brutto, row.penznem)}
+                    </TableCell>
+                    <TableCell>
+                      {row.fizetve ? (
+                        <Badge className="bg-success/15 text-success hover:bg-success/15 text-xs">Fizetve</Badge>
+                      ) : lejart ? (
+                        <Badge className="bg-destructive/15 text-destructive hover:bg-destructive/15 text-xs">
+                          Lejárt
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-muted text-muted-foreground hover:bg-muted text-xs">Nyitott</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {row.fizetve ? (
+                        visszavonhato(row.fizetve_datum) && (
+                          <button
+                            type="button"
+                            className="text-xs text-muted-foreground hover:underline"
+                            onClick={() => handleVisszavon(row.id)}
+                          >
+                            Visszavon
+                          </button>
+                        )
+                      ) : (
+                        <button
+                          type="button"
+                          className="text-xs text-primary hover:underline"
+                          onClick={() => handleFizetve(row.id)}
+                        >
+                          Fizetve
+                        </button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function OsszesitoCsempek({
+  sorok,
+  onValaszt,
+}: {
+  sorok: SzamlaOsszesitoSor[];
+  onValaszt: (s: SzamlaOsszesitoSor) => void;
+}) {
   // A "Raklap — Egyéb" alkategóriát külön, cégenkénti bontásban mutatjuk
   // (lásd EgyebCegCsempe) — itt kihagyjuk, hogy ne szerepeljen duplán.
   const megjelenitett = sorok.filter((s) => s.alkategoria !== "egyeb");
@@ -43,7 +196,12 @@ function OsszesitoCsempek({ sorok }: { sorok: SzamlaOsszesitoSor[] }) {
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
       {megjelenitett.map((s, i) => (
-        <Card key={i} size="sm">
+        <Card
+          key={i}
+          size="sm"
+          className="cursor-pointer transition-colors hover:bg-muted/50"
+          onClick={() => onValaszt(s)}
+        >
           <CardContent className="flex flex-col gap-1 py-1">
             <div className="text-xs text-muted-foreground">
               {KATEGORIA_LABEL[s.kategoria]}
@@ -67,8 +225,14 @@ function OsszesitoCsempek({ sorok }: { sorok: SzamlaOsszesitoSor[] }) {
   );
 }
 
-/** A "Raklap — Egyéb" alkategória cégenkénti bontása — egy csempén belül, soronként egy vevő. */
-function EgyebCegCsempe({ sorok }: { sorok: SzamlaEgyebCegSor[] }) {
+/** A "Raklap — Egyéb" alkategória cégenkénti bontása — egy csempén belül, soronként egy vevő, kattinthatóan. */
+function EgyebCegCsempe({
+  sorok,
+  onValaszt,
+}: {
+  sorok: SzamlaEgyebCegSor[];
+  onValaszt: (s: SzamlaEgyebCegSor) => void;
+}) {
   if (sorok.length === 0) return null;
   return (
     <Card size="sm">
@@ -77,7 +241,12 @@ function EgyebCegCsempe({ sorok }: { sorok: SzamlaEgyebCegSor[] }) {
       </CardHeader>
       <CardContent className="flex flex-col gap-1.5 pt-0">
         {sorok.map((s, i) => (
-          <div key={i} className="flex items-baseline justify-between gap-3 border-b border-border/50 py-1 text-sm last:border-0">
+          <button
+            type="button"
+            key={i}
+            onClick={() => onValaszt(s)}
+            className="flex items-baseline justify-between gap-3 border-b border-border/50 py-1 text-left text-sm last:border-0 hover:bg-muted/50"
+          >
             <span className="truncate">{s.vevo_nev}</span>
             <span className="shrink-0 text-right tabular-nums">
               <span className="font-medium">{formatOsszeg(s.nyitott_osszeg, s.penznem)}</span>
@@ -88,7 +257,7 @@ function EgyebCegCsempe({ sorok }: { sorok: SzamlaEgyebCegSor[] }) {
                 </span>
               )}
             </span>
-          </div>
+          </button>
         ))}
       </CardContent>
     </Card>
@@ -215,6 +384,8 @@ export function SzamlakView() {
   const [allapot, setAllapot] = useState<SzamlaAllapot | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [frissitve, setFrissitve] = useState(false);
+  const [listaCim, setListaCim] = useState<string | null>(null);
+  const [listaSzuro, setListaSzuro] = useState<SzamlaListaSzuro | null>(null);
 
   const loadOsszesito = useCallback(async () => {
     const [o, ceg, a] = await Promise.all([
@@ -277,11 +448,34 @@ export function SzamlakView() {
         </CardContent>
       </Card>
 
-      <OsszesitoCsempek sorok={osszesito} />
+      <OsszesitoCsempek
+        sorok={osszesito}
+        onValaszt={(s) => {
+          setListaCim(
+            `${KATEGORIA_LABEL[s.kategoria]}${s.alkategoria ? ` — ${ALKATEGORIA_LABEL[s.alkategoria]}` : ""} (${s.penznem})`
+          );
+          setListaSzuro({ kategoria: s.kategoria, alkategoria: s.alkategoria, penznem: s.penznem });
+        }}
+      />
 
-      <EgyebCegCsempe sorok={egyebCegek} />
+      <EgyebCegCsempe
+        sorok={egyebCegek}
+        onValaszt={(s) => {
+          setListaCim(`Raklap — Egyéb — ${s.vevo_nev} (${s.penznem})`);
+          setListaSzuro({ kategoria: "raklap", alkategoria: "egyeb", vevoNev: s.vevo_nev, penznem: s.penznem });
+        }}
+      />
 
       <LejaratCsempek refreshKey={refreshKey} onChanged={loadOsszesito} />
+
+      <SzamlaListaDialog
+        cim={listaCim}
+        szuro={listaSzuro}
+        onOpenChange={(nyitva) => {
+          if (!nyitva) setListaSzuro(null);
+        }}
+        onChanged={loadOsszesito}
+      />
     </div>
   );
 }
