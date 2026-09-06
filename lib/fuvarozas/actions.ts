@@ -39,22 +39,16 @@ export async function searchAddressSuggestions(query: string): Promise<GeocodedA
 }
 
 export type TollCalcResult =
-  | { ok: true; fromLabel: string; toLabel: string; route: TollRoute }
+  | { ok: true; stopLabels: string[]; route: TollRoute }
   | { ok: false; error: string };
 
-async function runTollCalc(
-  from: GeocodedAddress,
-  to: GeocodedAddress
-): Promise<TollCalcResult> {
+async function runTollCalc(stops: GeocodedAddress[]): Promise<TollCalcResult> {
   try {
     const route = await calculateToll({
-      fromLon: from.lon,
-      fromLat: from.lat,
-      toLon: to.lon,
-      toLat: to.lat,
+      points: stops.map((s) => ({ lon: s.lon, lat: s.lat })),
       ...FIXED_VEHICLE,
     });
-    return { ok: true, fromLabel: from.label, toLabel: to.label, route };
+    return { ok: true, stopLabels: stops.map((s) => s.label), route };
   } catch (err) {
     const message =
       err instanceof TollCalcError
@@ -64,25 +58,20 @@ async function runTollCalc(
   }
 }
 
-/** Amikor a felhasználó egy javasolt címre kattintott — koordináta már ismert. */
+/** Amikor a felhasználó minden állomásnál egy javasolt címre kattintott — koordináták már ismertek. */
 export async function calculateTollForPoints(
-  from: GeocodedAddress,
-  to: GeocodedAddress
+  stops: GeocodedAddress[]
 ): Promise<TollCalcResult> {
-  return runTollCalc(from, to);
+  return runTollCalc(stops);
 }
 
-/** Amikor a felhasználó szabadon beírt szöveggel indította a számítást. */
+/** Amikor a felhasználó (legalább egy állomásnál) szabadon beírt szöveggel indította a számítást. */
 export async function calculateTollForAddresses(
-  fromQuery: string,
-  toQuery: string
+  queries: string[]
 ): Promise<TollCalcResult> {
   try {
-    const [from, to] = await Promise.all([
-      geocodeAddress(fromQuery),
-      geocodeAddress(toQuery),
-    ]);
-    return runTollCalc(from, to);
+    const stops = await Promise.all(queries.map((q) => geocodeAddress(q)));
+    return runTollCalc(stops);
   } catch (err) {
     const message =
       err instanceof TollCalcError

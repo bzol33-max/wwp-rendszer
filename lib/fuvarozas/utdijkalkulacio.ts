@@ -83,11 +83,11 @@ export const FIXED_VEHICLE = {
   weight: 40,
 };
 
+export type RoutePoint = { lon: number; lat: number };
+
 export type TollCalcParams = {
-  fromLon: number;
-  fromLat: number;
-  toLon: number;
-  toLat: number;
+  /** Legalább 2 pont: az útvonal állomásai sorrendben (honnan → [köztes megállók] → hová). */
+  points: RoutePoint[];
   vehicleCategory: VehicleCategory;
   euroCategory: EuroCategory;
   /** tonna, HT esetén 3.5-44 közt */
@@ -123,8 +123,16 @@ export type TollRoute = {
   } | null;
 };
 
-/** Csak a leggyorsabb útvonalat adja vissza (a többi opciót nem mutatjuk). */
+/**
+ * Csak a leggyorsabb útvonalat adja vissza (a többi opciót nem mutatjuk).
+ * A points tömb 2 vagy több állomást tartalmazhat — a kalkulátor a teljes,
+ * több-megállós útvonalra (honnan → köztes megállók → hová) számol.
+ */
 export async function calculateToll(params: TollCalcParams): Promise<TollRoute> {
+  if (params.points.length < 2) {
+    throw new TollCalcError("Legalább két cím szükséges az útvonalhoz.");
+  }
+
   const res = await fetch(`${BASE}/route-planner`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -142,10 +150,7 @@ export async function calculateToll(params: TollCalcParams): Promise<TollRoute> 
       guidance: false,
       ferry: true,
       motorway: true,
-      waypoints: [
-        [params.fromLon, params.fromLat],
-        [params.toLon, params.toLat],
-      ],
+      waypoints: params.points.map((p) => [p.lon, p.lat]),
     }),
   });
 
@@ -161,7 +166,7 @@ export async function calculateToll(params: TollCalcParams): Promise<TollRoute> 
   }
 
   if (!Array.isArray(routes) || routes.length === 0) {
-    throw new TollCalcError("Nem található útvonal a megadott két cím között.");
+    throw new TollCalcError("Nem található útvonal a megadott címek között.");
   }
 
   const r = routes.find((x) => x.method === "FAST") ?? routes[0];
