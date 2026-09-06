@@ -43,6 +43,7 @@ import {
   setFuvarPostazasiCim,
   updateFuvarStatus,
 } from "@/lib/fuvarozas/megbizasok";
+import { calculateTollForAddresses, getGazolajAr } from "@/lib/fuvarozas/actions";
 import {
   FUVAR_STATUSZ_LABEL,
   FUVAR_STATUSZOK,
@@ -806,6 +807,91 @@ function FuvarForm({
   );
 }
 
+// Ugyanaz az átlagfogyasztás, mint a Kalkulátor fülön (toll-calculator.tsx) —
+// itt is 30 l/100km-rel számolunk.
+const KOLTSEG_ATLAG_FOGYASZTAS_L_PER_100KM = 30;
+
+/**
+ * A felrakó/lerakó cím alapján kiszámított útdíj+üzemanyag költség — a
+ * Kalkulátor fülön már bevált géppel (calculateTollForAddresses +
+ * getGazolajAr). Memóriabeli gyorsítótár (cím-pár -> költség) és
+ * in-flight-dedup véd az ismételt/egyidejű táblázatsorok miatti felesleges
+ * külső API-hívásoktól — csak a kliens élettartamáig érvényes, adatbázisba
+ * sosem ír.
+ */
+const koltsegCache = new Map<string, number | null>();
+const koltsegInFlight = new Map<string, Promise<number | null>>();
+
+async function szamitottUtKoltseg(
+  felrako: string | null | undefined,
+  lerako: string | null | undefined
+): Promise<number | null> {
+  const from = felrako?.trim();
+  const to = lerako?.trim();
+  if (!from || !to) return null;
+  const key = `${from} ${to}`;
+
+  if (koltsegCache.has(key)) return koltsegCache.get(key) ?? null;
+  const inFlight = koltsegInFlight.get(key);
+  if (inFlight) return inFlight;
+
+  const promise = (async () => {
+    try {
+      const [result, gazolajAr] = await Promise.all([
+        calculateTollForAddresses([from, to]),
+        getGazolajAr(),
+      ]);
+      if (!result.ok) {
+        koltsegCache.set(key, null);
+        return null;
+      }
+      const literek = (result.route.distanceKm * KOLTSEG_ATLAG_FOGYASZTAS_L_PER_100KM) / 100;
+      const uzemanyagKoltseg = literek * gazolajAr.ar;
+      const utdijKoltseg = result.route.tollHuf?.grossTotal ?? 0;
+      const osszeg = Math.round(uzemanyagKoltseg + utdijKoltseg);
+      koltsegCache.set(key, osszeg);
+      return osszeg;
+    } catch {
+      koltsegCache.set(key, null);
+      return null;
+    } finally {
+      koltsegInFlight.delete(key);
+    }
+  })();
+  koltsegInFlight.set(key, promise);
+  return promise;
+}
+
+/** A felrakó/lerakó városok alapján automatikusan számított útköltséget mutató cella. */
+function KoltsegCell({
+  felrako,
+  lerako,
+}: {
+  felrako?: string | null;
+  lerako?: string | null;
+}) {
+  const [koltseg, setKoltseg] = useState<number | null | undefined>(undefined);
+
+  useEffect(() => {
+    let elveszett = false;
+    setKoltseg(undefined);
+    szamitottUtKoltseg(felrako, lerako).then((v) => {
+      if (!elveszett) setKoltseg(v);
+    });
+    return () => {
+      elveszett = true;
+    };
+  }, [felrako, lerako]);
+
+  if (koltseg === undefined) {
+    return <span className="text-muted-foreground">…</span>;
+  }
+  if (koltseg === null) {
+    return <span className="text-muted-foreground">—</span>;
+  }
+  return <span className="tabular-nums">{koltseg.toLocaleString("hu-HU")} Ft</span>;
+}
+
 function FuvarList({
   tipus,
   refreshKey,
@@ -862,7 +948,9 @@ function FuvarList({
                 <TableHead>Honnan → Hová</TableHead>
                 <TableHead>{partnerColumnLabel ?? "Megrendelő"}</TableHead>
                 <TableHead>{jarmuOszlop ? "Kocsi" : "Alvállalkozó"}</TableHead>
-                <TableHead className="text-right">Fuvardíj</TableHead>
+                <TableHead className="text-right" title="A fel- és lerakó városok alapján automatikusan számított útdíj+üzemanyag költség.">
+                  Fuvardíj (számított)
+                </TableHead>
                 <TableHead className="text-right">Eredmény</TableHead>
                 <TableHead>Státusz</TableHead>
                 <TableHead>Ki</TableHead>
@@ -907,7 +995,7 @@ function FuvarList({
                       )}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {row.fuvardij != null ? `${row.fuvardij.toLocaleString("hu-HU")} Ft` : "—"}
+                      <KoltsegCell felrako={row.felrako} lerako={row.lerako} />
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {res != null ? (
@@ -1072,11 +1160,6 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
     load().finally(() => setLoading(false));
   }, [load, refreshKey]);
 
-  async function handleStatusChange(id: string, statusz: FuvarStatusz) {
-    await updateFuvarStatus(id, statusz);
-    await load();
-  }
-
   async function handleDelete(id: string) {
     await deleteFuvar(id);
     await load();
@@ -1100,7 +1183,12 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
                 <TableHead className="text-right">Fuvardíj</TableHead>
                 <TableHead title="Fizetési határidő">FH</TableHead>
                 <TableHead>Kocsi</TableHead>
-                <TableHead>Státusz</TableHead>
+                <TableHead
+                  className="text-right"
+                  title="A fel- és lerakó városok alapján automatikusan számított útdíj+üzemanyag költség."
+                >
+                  Költség
+                </TableHead>
                 <TableHead className="w-8"></TableHead>
               </TableRow>
             </TableHeader>
@@ -1149,26 +1237,8 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
                   <TableCell className="align-top">
                     {row.jarmu ? <JarmuJelolo value={row.jarmu} /> : "—"}
                   </TableCell>
-                  <TableCell className="align-top">
-                    <Select
-                      value={row.statusz}
-                      onValueChange={(v) => v && handleStatusChange(row.id, v as FuvarStatusz)}
-                    >
-                      <SelectTrigger className="h-7 w-[130px] text-xs">
-                        <SelectValue>
-                          <Badge className={`${STATUSZ_BADGE_CLASS[row.statusz]} text-xs`}>
-                            {FUVAR_STATUSZ_LABEL[row.statusz]}
-                          </Badge>
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {FUVAR_STATUSZOK.filter((s) => s !== "torolt").map((s) => (
-                          <SelectItem key={s} value={s}>
-                            {FUVAR_STATUSZ_LABEL[s]}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                  <TableCell className="align-top text-right tabular-nums">
+                    <KoltsegCell felrako={row.felrako} lerako={row.lerako} />
                   </TableCell>
                   <TableCell className="align-top">
                     <button
