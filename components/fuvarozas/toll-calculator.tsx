@@ -252,9 +252,11 @@ export function TollCalculator() {
     setLoading(false);
 
     if (res.ok) {
+      // A végére kerül, nem az elejére — a csempék sorban követik egymást
+      // ahogy születnek, a legutóbbi nem ugrik előre.
       setTiles((prev) => [
-        { id: nextTileId(), stopLabels: res.stopLabels, route: res.route, gazolajAr },
         ...prev,
+        { id: nextTileId(), stopLabels: res.stopLabels, route: res.route, gazolajAr },
       ]);
     } else {
       toast.error(res.error);
@@ -280,7 +282,7 @@ export function TollCalculator() {
                 value={stop.value}
                 onChange={(v) => updateStop(stop.id, { value: v, point: null })}
                 onSelect={(a) => updateStop(stop.id, { value: a.label, point: a })}
-                onRemove={i > 0 && i < stops.length - 1 ? () => removeStop(stop.id) : undefined}
+                onRemove={i < stops.length - 1 ? () => removeStop(stop.id) : undefined}
               />
             ))}
             <Button type="submit" size="sm" disabled={loading}>
