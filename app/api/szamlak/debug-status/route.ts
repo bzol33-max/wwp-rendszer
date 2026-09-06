@@ -48,10 +48,15 @@ export async function GET() {
     [erintettSzamok]
   );
 
+  const jupiker = await query<{ szamlaszam: string; brutto: number; kiallitas_datum: string; fizetve: boolean }>(
+    `select szamlaszam, brutto, kiallitas_datum::text, fizetve from szamla where vevo_nev ilike '%jupiker%' order by kiallitas_datum`
+  );
+
   return NextResponse.json({
     sztornoSzovegTalalat: sztornoSzoveg,
     negativVagyNullaOsszeg: negativOsszeg,
     duplikaltRendelesszamok: duplikaltRendelesszam,
     reszletek,
+    jupiker,
   });
 }
