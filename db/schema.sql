@@ -242,6 +242,12 @@ alter table fuvar_megbizasok add column if not exists postazva boolean not null 
 -- keverendő a "pozicioszam" mezővel, ami a megbízó hivatkozási száma).
 alter table fuvar_megbizasok add column if not exists szamla_szam text;
 
+-- Számla/Posta fül: mikor lett a "Postázva" jelölő bepipálva — ebből
+-- számítjuk az 5 perces visszavonási ablakot, és ennek leteltével a sor
+-- automatikusan (időalapon, külön oszlop/job nélkül) átkerül az Archív
+-- fülre. A jelölő visszavonásakor (kipipálás törlése) nullázódik.
+alter table fuvar_megbizasok add column if not exists postazva_at timestamptz;
+
 -- Fuvarozás — Kapcsolatok fül: a megbízásokból (és a hozzájuk tartozó
 -- e-mailekből) kinyert cégenkénti kapcsolattartók. Egy céghez több
 -- kapcsolattartó/telefon/e-mail sor is tartozhat.

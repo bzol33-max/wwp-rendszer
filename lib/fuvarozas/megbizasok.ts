@@ -27,7 +27,8 @@ const FUVAR_ROW_COLUMNS = `
   to_char(erkezett_datum, '${TIME_FMT}') as erkezett_datum,
   to_char(lerakas_datum, '${TIME_FMT}') as lerakas_datum,
   fizetesi_hatarido_nap,
-  pozicioszam, pozicioszam_nincs, postazasi_cim, postazva, szamla_szam
+  pozicioszam, pozicioszam_nincs, postazasi_cim, postazva, szamla_szam,
+  postazva_at::text
 `;
 
 export async function getFuvarok(tipus: FuvarTipus): Promise<FuvarRow[]> {
@@ -130,9 +131,94 @@ export async function setFuvarPostazasiCim(id: string, postazasiCim: string | nu
   ]);
 }
 
-/** A Számla/Posta nézet jelölője: postára lett-e adva a fuvar dokumentációja (számla + megbízás). */
+/**
+ * A Számla/Posta nézet jelölője: postára lett-e adva a fuvar dokumentációja
+ * (számla + megbízás). A "postazva_at" időbélyeg indítja/törli az 5 perces
+ * visszavonási ablakot — ennek leteltével a sor automatikusan (időalapon)
+ * archiváltnak számít, lásd getSzamlaPostaFuvarok / getArchivFuvarok.
+ */
 export async function setFuvarPostazva(id: string, postazva: boolean) {
-  await query(`update fuvar_megbizasok set postazva = $2 where id = $1`, [id, postazva]);
+  await query(
+    `update fuvar_megbizasok set postazva = $2, postazva_at = case when $2 then now() else null end where id = $1`,
+    [id, postazva]
+  );
+}
+
+/** Az 5 perces visszavonási ablak, amíg egy "Postázva" jelölésű fuvar még nem archiválódik automatikusan. */
+const ARCHIVALAS_ABLAK_SQL = `interval '5 minutes'`;
+
+/**
+ * A Számla/Posta lista: a Bér fuvarok, kihagyva azokat, amik már "effektíve"
+ * archiváltnak számítanak (postázva, és az 5 perces visszavonási ablak
+ * lejárt) — ezek helyette az Archív fülön (getArchivFuvarok) jelennek meg.
+ */
+export async function getSzamlaPostaFuvarok(): Promise<FuvarRow[]> {
+  return query<FuvarRow>(
+    `select ${FUVAR_ROW_COLUMNS}
+     from fuvar_megbizasok
+     where tipus = 'sajat' and statusz <> 'torolt'
+       and not (postazva and postazva_at <= now() - ${ARCHIVALAS_ABLAK_SQL})
+     order by ellenorzott asc, fuvar_megbizasok.erkezett_datum desc nulls last, datum desc, id desc
+     limit 200`
+  );
+}
+
+/** Archív fül: a postázott és az 5 perces visszavonási ablakon már túljutott fuvarok, legutóbb postázott elöl. */
+export async function getArchivFuvarok(): Promise<FuvarRow[]> {
+  return query<FuvarRow>(
+    `select ${FUVAR_ROW_COLUMNS}
+     from fuvar_megbizasok
+     where tipus = 'sajat' and statusz <> 'torolt'
+       and postazva and postazva_at <= now() - ${ARCHIVALAS_ABLAK_SQL}
+     order by postazva_at desc
+     limit 200`
+  );
+}
+
+/**
+ * A Számlák modulban rögzített fuvarszámlák (kategoria = 'fuvar') sorszámát
+ * automatikusan beírja a megfelelő bér fuvar "Számla szám" mezőjébe, a
+ * megbízó hivatkozási száma (pozicioszam) és a számla rendelésszáma alapján
+ * párosítva (whitespace-érzéketlenül). Csak azokat a fuvarokat érinti,
+ * amiknek még nincs kitöltve a számlaszáma. Meghívva: a Számlázz.hu
+ * szinkron minden körének végén (lib/szamlak/poll.ts) és a Számla/Posta
+ * lista betöltésekor is, hogy ne kelljen a legfeljebb 15 perces automata
+ * körre várni.
+ */
+export async function szinkronizalSzamlaSzamokat(): Promise<number> {
+  const hianyzoSorok = await query<{ id: string; pozicioszam: string }>(
+    `select id::text, pozicioszam
+     from fuvar_megbizasok
+     where tipus = 'sajat' and statusz <> 'torolt'
+       and szamla_szam is null
+       and pozicioszam is not null and pozicioszam <> ''`
+  );
+  if (hianyzoSorok.length === 0) return 0;
+
+  const szamlak = await query<{ szamlaszam: string; rendelesszam: string }>(
+    `select szamlaszam, rendelesszam
+     from szamla
+     where kategoria = 'fuvar'
+       and rendelesszam is not null and rendelesszam <> ''
+       and not sztorno and not sztornozva`
+  );
+  if (szamlak.length === 0) return 0;
+
+  const normalizal = (s: string) => s.replace(/\s+/g, "").toLowerCase();
+  const szamlaTerkep = new Map<string, string>();
+  for (const sz of szamlak) {
+    szamlaTerkep.set(normalizal(sz.rendelesszam), sz.szamlaszam);
+  }
+
+  let talalatDarab = 0;
+  for (const sor of hianyzoSorok) {
+    const talalat = szamlaTerkep.get(normalizal(sor.pozicioszam));
+    if (talalat) {
+      await query(`update fuvar_megbizasok set szamla_szam = $2 where id = $1`, [sor.id, talalat]);
+      talalatDarab++;
+    }
+  }
+  return talalatDarab;
 }
 
 /** A Számla/Posta nézet soron belüli, azonnali javítása: a kiállított számla sorszámának kitöltése. */

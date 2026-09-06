@@ -71,6 +71,8 @@ export type FuvarRow = {
   postazva: boolean;
   /** A Számla/Posta nézethez: a fuvarhoz kiállított saját számla sorszáma. */
   szamla_szam: string | null;
+  /** Mikor lett a "Postázva" jelölő bepipálva — ebből számít az 5 perces visszavonási ablak. */
+  postazva_at: string | null;
 };
 
 export type AddFuvarInput = {

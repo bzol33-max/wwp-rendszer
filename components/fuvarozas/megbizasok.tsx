@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,13 +36,16 @@ import {
   addFuvar,
   approveFuvar,
   deleteFuvar,
+  getArchivFuvarok,
   getElokeszitettFuvarok,
   getFuvarok,
   getPostazasiCimJavaslat,
+  getSzamlaPostaFuvarok,
   setFuvarPoziciszam,
   setFuvarPostazasiCim,
   setFuvarPostazva,
   setFuvarSzamlaSzam,
+  szinkronizalSzamlaSzamokat,
   updateFuvarStatus,
 } from "@/lib/fuvarozas/megbizasok";
 import { calculateTollForAddresses, getGazolajAr } from "@/lib/fuvarozas/actions";
@@ -290,11 +293,11 @@ function SzovegCell({
 function PostazvaCella({
   id,
   postazva,
-  onSaved,
+  onToggle,
 }: {
   id: string;
   postazva: boolean;
-  onSaved: () => void | Promise<void>;
+  onToggle: (id: string, value: boolean) => void | Promise<void>;
 }) {
   const [checked, setChecked] = useState(postazva);
   const [saving, setSaving] = useState(false);
@@ -307,8 +310,7 @@ function PostazvaCella({
     setChecked(value);
     setSaving(true);
     try {
-      await setFuvarPostazva(id, value);
-      await onSaved();
+      await onToggle(id, value);
     } catch {
       setChecked(!value);
       toast.error("Nem sikerült menteni.");
@@ -1374,9 +1376,23 @@ function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
   const [rows, setRows] = useState<FuvarRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [reszletek, setReszletek] = useState<FuvarRow | null>(null);
+  // "Postázva"-ra kattintva a sor 5 percig még itt marad (sötétzölden,
+  // visszavonható), utána automatikusan (időalapon) eltűnik innen és
+  // átkerül az Archív fülre — ehhez ütemezünk egy késleltetett újratöltést.
+  const archivalasIdozitokRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const load = useCallback(async () => {
-    const data = await getFuvarok("sajat");
+    // A Számlázz.hu-ból behúzott fuvarszámlák alapján automatikusan
+    // kitöltjük a "Számla szám" mezőt, mielőtt betöltjük a listát — így ha
+    // időközben új számla érkezett, azonnal látszik, nem kell a legfeljebb
+    // 15 perces automata körre várni.
+    try {
+      await szinkronizalSzamlaSzamokat();
+    } catch {
+      // Csendben hagyjuk — a listát ettől még be kell tölteni, a
+      // párosítás legközelebb (pl. a következő automata körben) újra megpróbálódik.
+    }
+    const data = await getSzamlaPostaFuvarok();
     setRows(data);
   }, []);
 
@@ -1385,10 +1401,37 @@ function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
     load().finally(() => setLoading(false));
   }, [load, refreshKey]);
 
+  useEffect(() => {
+    const idozitok = archivalasIdozitokRef.current;
+    return () => {
+      idozitok.forEach((t) => clearTimeout(t));
+    };
+  }, []);
+
   async function handleDelete(id: string) {
     await deleteFuvar(id);
     await load();
     toast.success("Fuvar törölve.");
+  }
+
+  async function handlePostazva(id: string, ertek: boolean) {
+    await setFuvarPostazva(id, ertek);
+    await load();
+
+    const korabbi = archivalasIdozitokRef.current.get(id);
+    if (korabbi) {
+      clearTimeout(korabbi);
+      archivalasIdozitokRef.current.delete(id);
+    }
+    if (ertek) {
+      archivalasIdozitokRef.current.set(
+        id,
+        setTimeout(() => {
+          archivalasIdozitokRef.current.delete(id);
+          load();
+        }, 5 * 60 * 1000 + 2000)
+      );
+    }
   }
 
   return (
@@ -1428,7 +1471,16 @@ function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
                 </TableRow>
               )}
               {rows.map((row) => (
-                <TableRow key={row.id}>
+                <TableRow
+                  key={row.id}
+                  className={
+                    row.postazva
+                      ? "bg-success/25 hover:bg-success/30"
+                      : row.szamla_szam
+                        ? "bg-success/10 hover:bg-success/15"
+                        : ""
+                  }
+                >
                   <TableCell className="align-top text-muted-foreground">
                     <button
                       type="button"
@@ -1478,7 +1530,7 @@ function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
                     />
                   </TableCell>
                   <TableCell className="align-top text-center">
-                    <PostazvaCella id={row.id} postazva={row.postazva} onSaved={load} />
+                    <PostazvaCella id={row.id} postazva={row.postazva} onToggle={handlePostazva} />
                   </TableCell>
                   <TableCell className="align-top">
                     <button
@@ -1672,6 +1724,96 @@ function ElokeszitettCard({
   );
 }
 
+/**
+ * Archív fül: a postázott és az 5 perces visszavonási ablakon már túljutott
+ * bér fuvarok, csak megtekintésre — egy "Visszaállítás" gombbal, ha mégis
+ * vissza kellene kerülnie a Számla/Posta listába (pl. tévedésből lett
+ * bepipálva "Postázva").
+ */
+function ArchivLista() {
+  const [rows, setRows] = useState<FuvarRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    const data = await getArchivFuvarok();
+    setRows(data);
+  }, []);
+
+  useEffect(() => {
+    setLoading(true);
+    load().finally(() => setLoading(false));
+  }, [load]);
+
+  async function handleVisszaallitas(id: string) {
+    await setFuvarPostazva(id, false);
+    await load();
+    toast.success("Visszaállítva a Számla/Posta listába.");
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-sm">Archív — postázott bér fuvarok</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Dátum</TableHead>
+                <TableHead>Megrendelő</TableHead>
+                <TableHead>Hiv. szám</TableHead>
+                <TableHead>Honnan → Hová</TableHead>
+                <TableHead className="text-right">Fuvardíj</TableHead>
+                <TableHead>Számla szám</TableHead>
+                <TableHead>Postázva</TableHead>
+                <TableHead className="w-28"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {!loading && rows.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center text-muted-foreground">
+                    Még nincs archivált fuvar.
+                  </TableCell>
+                </TableRow>
+              )}
+              {rows.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell className="text-muted-foreground">{row.erkezett_datum ?? row.date}</TableCell>
+                  <TableCell className="max-w-[140px] whitespace-normal break-words leading-tight">
+                    {row.megrendelo ?? "—"}
+                  </TableCell>
+                  <TableCell>{row.pozicioszam ?? "—"}</TableCell>
+                  <TableCell>
+                    {row.felrako ? `${varosNev(row.felrako)} → ${varosNev(row.lerako)}` : varosNev(row.lerako)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {row.fuvardij != null ? `${row.fuvardij.toLocaleString("hu-HU")} Ft` : "—"}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">{row.szamla_szam ?? "—"}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {row.postazva_at ? new Date(row.postazva_at).toLocaleDateString("hu-HU") : "—"}
+                  </TableCell>
+                  <TableCell>
+                    <button
+                      type="button"
+                      className="text-xs text-muted-foreground hover:underline"
+                      onClick={() => handleVisszaallitas(row.id)}
+                    >
+                      Visszaállítás
+                    </button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function ElokeszitettView() {
   const [rows, setRows] = useState<FuvarRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1766,11 +1908,7 @@ export function Megbizasok() {
         <SzamlaPostaLista refreshKey={0} />
       </TabsContent>
       <TabsContent value="archiv" className="mt-4">
-        <Card className="bg-muted/40">
-          <CardContent className="py-4 text-sm text-muted-foreground">
-            Archív — hamarosan.
-          </CardContent>
-        </Card>
+        <ArchivLista />
       </TabsContent>
     </Tabs>
   );

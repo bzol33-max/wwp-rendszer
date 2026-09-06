@@ -23,6 +23,7 @@ import { query } from "@/lib/db";
 import { lekerdezSzamla, SzamlazzHuError, type SzamlazzHuSzamla } from "./szamlazzhu-client";
 import { kategorizalSzamla, alkategorizalRaklap } from "./categorize";
 import { frissitSztornoJelolest } from "./sztorno";
+import { szinkronizalSzamlaSzamokat } from "@/lib/fuvarozas/megbizasok";
 
 /** A cég ismert Számlázz.hu számlatömb-előtagjai — mindegyik saját, független sorszám-keresőt kap. */
 const ELOTAGOK = ["WLLWR", "WNYH"];
@@ -107,6 +108,7 @@ export type PollEredmeny = {
   pendingMegoldva: number;
   hibak: string[];
   sztornoDarab?: number;
+  szamlaSzamParositva?: number;
 };
 
 /** Egy teljes lekérdezési kör: 1) a pending sorszámok újrapróbálása, 2) a fő kereső előrehaladása. */
@@ -197,6 +199,17 @@ export async function futtatSzamlaSzinkron(): Promise<PollEredmeny> {
   // import) adat is azonnal helyesen legyen jelölve.
   const sztornoEredmeny = await frissitSztornoJelolest();
   eredmeny.sztornoDarab = sztornoEredmeny.sztornoDarab;
+
+  // 4) A Fuvarozás — Számla/Posta fülön a bér fuvarok "Számla szám" mezőjének
+  // automatikus kitöltése a most már meglévő fuvarszámlák alapján (a
+  // megbízó hivatkozási száma ↔ a számla rendelésszáma párosítással).
+  try {
+    eredmeny.szamlaSzamParositva = await szinkronizalSzamlaSzamokat();
+  } catch (err) {
+    eredmeny.hibak.push(
+      `Fuvar számlaszám-párosítás: ${err instanceof Error ? err.message : "ismeretlen hiba"}`
+    );
+  }
 
   return eredmeny;
 }
