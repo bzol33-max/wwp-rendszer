@@ -850,6 +850,27 @@ function koltsegSorbaAllit<T>(feladat: () => Promise<T>): Promise<T> {
   });
 }
 
+/**
+ * Ha a teljes, szabad szöveges cím (pl. "HU-DC WABERERS, Budapest (BILK),
+ * Európa u. 6. 'H' Épület" — cégnévvel/raktárkóddal kezdve, irányítószám
+ * nélkül) nem geokódolható, próbáljuk meg csak az "irányítószám + város"
+ * részét (pl. "1239 Budapest") — ugyanazzal a heurisztikával, amivel a
+ * táblázat is kinyeri a városnevet (talalVaros, lásd lentebb). Ez csak
+ * városközépponti pontosságot ad, de a teljes cím hiányában ez a legjobb
+ * elérhető közelítés.
+ */
+function zipVarosFallback(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const parts = value
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const talalt = talalVaros(parts);
+  if (!talalt?.city) return null;
+  const fallback = [talalt.zip, talalt.city].filter(Boolean).join(" ");
+  return fallback || null;
+}
+
 async function szamitottUtKoltseg(
   felrako: string | null | undefined,
   lerako: string | null | undefined
@@ -857,7 +878,7 @@ async function szamitottUtKoltseg(
   const from = felrako?.trim();
   const to = lerako?.trim();
   if (!from || !to) return null;
-  const key = `${from} ${to}`;
+  const key = `${from} ${to}`;
 
   if (koltsegCache.has(key)) return koltsegCache.get(key) ?? null;
   const inFlight = koltsegInFlight.get(key);
@@ -865,11 +886,18 @@ async function szamitottUtKoltseg(
 
   const promise = koltsegSorbaAllit(async () => {
     try {
-      const [result, gazolajAr] = await Promise.all([
-        calculateTollForAddresses([from, to]),
-        getGazolajAr(),
-      ]);
+      let result = await calculateTollForAddresses([from, to]);
+      if (!result.ok) {
+        // A teljes cím (gyakran cégnévvel/raktárkóddal, irányítószám nélkül)
+        // nem geokódolható — próbáljuk meg csak a városával.
+        const fromFallback = zipVarosFallback(from);
+        const toFallback = zipVarosFallback(to);
+        if ((fromFallback && fromFallback !== from) || (toFallback && toFallback !== to)) {
+          result = await calculateTollForAddresses([fromFallback ?? from, toFallback ?? to]);
+        }
+      }
       if (!result.ok) return null;
+      const gazolajAr = await getGazolajAr();
       const literek = (result.route.distanceKm * KOLTSEG_ATLAG_FOGYASZTAS_L_PER_100KM) / 100;
       const uzemanyagKoltseg = literek * gazolajAr.ar;
       const utdijKoltseg = result.route.tollHuf?.grossTotal ?? 0;
