@@ -130,6 +130,26 @@ export async function setFuvarPostazasiCim(id: string, postazasiCim: string | nu
   ]);
 }
 
+/**
+ * Javaslat a postázási címhez: az adott megrendelőnél korábban már rögzített,
+ * legutóbbi postázási cím (ha van) — hogy jóváhagyáskor ne kelljen újra
+ * beírni egy már ismert partner címét (lásd 20. pont: "ha egy adat már
+ * rendelkezésre áll, ne kérje be újra").
+ */
+export async function getPostazasiCimJavaslat(megrendelo: string): Promise<string | null> {
+  if (!megrendelo.trim()) return null;
+  const rows = await query<{ postazasi_cim: string }>(
+    `select postazasi_cim
+       from fuvar_megbizasok
+      where megrendelo ilike $1
+        and postazasi_cim is not null
+      order by created_at desc
+      limit 1`,
+    [megrendelo.trim()]
+  );
+  return rows[0]?.postazasi_cim ?? null;
+}
+
 /** A "Jóváhagy" / "Módosít" gomb: a mezőket (esetleg módosítva) menti, és ellenorzott = true. */
 export async function approveFuvar(input: ApproveFuvarInput) {
   await query(
@@ -139,6 +159,7 @@ export async function approveFuvar(input: ApproveFuvarInput) {
        jarmu = $11, sofor = $12, alvallalkozo = $13,
        fuvardij = $14, koltseg = $15, megjegyzes = $16,
        pozicioszam = $17, pozicioszam_nincs = $18,
+       postazasi_cim = $19,
        ellenorzott = true
      where id = $1`,
     [
@@ -160,6 +181,7 @@ export async function approveFuvar(input: ApproveFuvarInput) {
       input.megjegyzes || null,
       input.pozicioszam || null,
       input.pozicioszamNincs ?? false,
+      input.postazasiCim || null,
     ]
   );
 }

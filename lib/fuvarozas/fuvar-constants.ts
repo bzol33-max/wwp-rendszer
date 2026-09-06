@@ -116,4 +116,5 @@ export type ApproveFuvarInput = {
   megjegyzes?: string;
   pozicioszam?: string;
   pozicioszamNincs?: boolean;
+  postazasiCim?: string;
 };

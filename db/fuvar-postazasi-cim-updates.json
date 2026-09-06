@@ -1,5 +1,5 @@
 {
-  "_megjegyzes": "A Drive 'Fuvarmegbizások' mappájából importált 37 bér fuvar dokumentum újra átnézve: hol ad meg a megrendelő a saját székhelyétől eltérő, kifejezett postázási/számlázási címet a számla/eredeti dokumentumok kiküldéséhez (elsődleges eset), és ahol ilyen nincs, ott a dokumentumban szereplő cégcím (székhely) mint alapértelmezett postázási cím (lásd az egyes bejegyzések megjegyzését). 6 dokumentumnál sem az egyik, sem a másik nem volt fellelhető — lásd _hianyzik. Induláskor (scripts/migrate.mjs) automatikusan alkalmazódik, biztonságosan újrafuttatható: csak akkor ír, ha a postazasi_cim mező még üres, így egy kézzel beírt/módosított érték nem íródik felül.",
+  "_megjegyzes": "A Drive 'Fuvarmegbizások' mappájából importált mind a 37 bér fuvar dokumentum átnézve: hol ad meg a megrendelő a saját székhelyétől eltérő, kifejezett postázási/számlázási címet a számla/eredeti dokumentumok kiküldéséhez (elsődleges eset), és ahol ilyen nincs, ott a dokumentumban szereplő cégcím (székhely, fejléc/lábléc alapján) mint alapértelmezett postázási cím (lásd az egyes bejegyzések megjegyzését). Induláskor (scripts/migrate.mjs) automatikusan alkalmazódik, biztonságosan újrafuttatható: csak akkor ír, ha a postazasi_cim mező még üres, így egy kézzel beírt/módosított érték nem íródik felül.",
   "updates": [
     { "driveFileId": "1GeRKm3fiZtHE-O800v1kp8ASh4Ieoebr", "postazasiCim": "4001 Debrecen, Pf. 219.", "megjegyzes": "Trans-Sped Kft.: \"Változás történt a számlaküldési címünkben\" — a dokumentum ezt kéri, nem a székhelyet (4030 Debrecen, Vámraktár utca 3.)." },
     { "driveFileId": "1op2vF2o1nmSR1HEQ8Fxcg0Hb3UEJK8cK", "postazasiCim": "4001 Debrecen, Pf. 219.", "megjegyzes": "Trans-Sped Kft. — azonos postázási cím záradék." },
@@ -35,7 +35,13 @@
     { "driveFileId": "1topjI29QPnlMRFQALY3kiBSM3LpOwx6b", "postazasiCim": "8441 Márkó, Iparos utca 10.", "megjegyzes": "HAPP Kft. — lásd fenti megjegyzés." },
 
     { "driveFileId": "1EtsUKqo2gDWCyXrDkObykWskoRJAz9CD", "postazasiCim": "4030 Debrecen, Árnyas u. 10.", "megjegyzes": "Pro Line Speed Kft.: nincs külön postázási cím a dokumentumban, ezért a cég székhelye." },
-    { "driveFileId": "1f2yjOX6okRD-dDC_qWZXHpZhTXZxCk6w", "postazasiCim": "6754 Újszentiván, Fő utca 7.", "megjegyzes": "Pannoniacoop Logisztikai Kft.: a dokumentum a saját (székhely szerinti) címére kéri a dokumentumok visszaküldését, külön eltérő postázási cím nincs." }
-  ],
-  "_hianyzik": "6 dokumentumnál (RBT Europe Kft. — 3 fájl: 1Z4qdrKXreeRiYf_XKwVJPmf4TfitLFbe, 1fCJQll6IHmrQ5EY4N4gwHsKZV-hL8eUu, 1wDwl5mlPrA1krOVTSEEWwS6q1RBYLnL8; K+K Spedit Kft. — 1HaekaBCNSGyPzR2hrRwTMyN_zEvbRUU2; HRT Spedition Kft. — 1PtifbwYvRrDznqPBp2Kd2aRaDCDa4XNj; Alpok-Trans Kft. — 1euVGnNLS3UrPUfRr8JRFfbw8oQehJscl) sem külön postázási cím, sem pontos székhely-cím nem szerepelt a dokumentumban — ezeknél a postazasi_cim mező üresen marad, amíg elő nem kerül a pontos cím."
+    { "driveFileId": "1f2yjOX6okRD-dDC_qWZXHpZhTXZxCk6w", "postazasiCim": "6754 Újszentiván, Fő utca 7.", "megjegyzes": "Pannoniacoop Logisztikai Kft.: a dokumentum a saját (székhely szerinti) címére kéri a dokumentumok visszaküldését, külön eltérő postázási cím nincs." },
+
+    { "driveFileId": "1Z4qdrKXreeRiYf_XKwVJPmf4TfitLFbe", "postazasiCim": "1118 Budapest, Rétköz utca 5.", "megjegyzes": "RBT Europe Kft.: a cím a levélfej logó-blokkjában szerepelt (csak képként, ezért maradt ki elsőre a szöveges kinyerésből)." },
+    { "driveFileId": "1fCJQll6IHmrQ5EY4N4gwHsKZV-hL8eUu", "postazasiCim": "1118 Budapest, Rétköz utca 5.", "megjegyzes": "RBT Europe Kft. — lásd fenti megjegyzés." },
+    { "driveFileId": "1wDwl5mlPrA1krOVTSEEWwS6q1RBYLnL8", "postazasiCim": "1118 Budapest, Rétköz utca 5.", "megjegyzes": "RBT Europe Kft. — lásd fenti megjegyzés." },
+    { "driveFileId": "1HaekaBCNSGyPzR2hrRwTMyN_zEvbRUU2", "postazasiCim": "4400 Nyíregyháza, Búza tér 10.", "megjegyzes": "K+K Spedit Kft.: cím a dokumentum fejlécében, a cégnév alatt." },
+    { "driveFileId": "1PtifbwYvRrDznqPBp2Kd2aRaDCDa4XNj", "postazasiCim": "1037 Budapest, Bécsi út 224.", "megjegyzes": "HRT Spedition Kft.: cím minden oldal fejlécében és lábjegyzetében." },
+    { "driveFileId": "1euVGnNLS3UrPUfRr8JRFfbw8oQehJscl", "postazasiCim": "9730 Kőszeg, Kelcz-Adelffy utca 13. 1/3.", "megjegyzes": "Alpok-Trans Kft.: cím a dokumentum fejlécében, a cégnév mellett." }
+  ]
 }

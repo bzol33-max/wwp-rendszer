@@ -38,6 +38,7 @@ import {
   deleteFuvar,
   getElokeszitettFuvarok,
   getFuvarok,
+  getPostazasiCimJavaslat,
   setFuvarPoziciszam,
   setFuvarPostazasiCim,
   updateFuvarStatus,
@@ -383,6 +384,7 @@ type FormState = {
   megjegyzes: string;
   pozicioszam: string;
   pozicioszamNincs: boolean;
+  postazasiCim: string;
 };
 
 function emptyForm(tipus: FuvarTipus): FormState {
@@ -404,6 +406,7 @@ function emptyForm(tipus: FuvarTipus): FormState {
     megjegyzes: "",
     pozicioszam: "",
     pozicioszamNincs: false,
+    postazasiCim: "",
   };
 }
 
@@ -426,6 +429,7 @@ function formFromRow(row: FuvarRow): FormState {
     megjegyzes: row.megjegyzes ?? "",
     pozicioszam: row.pozicioszam ?? "",
     pozicioszamNincs: row.pozicioszam_nincs,
+    postazasiCim: row.postazasi_cim ?? "",
   };
 }
 
@@ -466,6 +470,38 @@ function PoziciszamMezo({
       {hianyzik && (
         <span className="text-xs font-medium text-destructive">
           ⚠️ ellenőrizd, hiányzik a hiv. szám
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A megrendelő számára kiállított számla/eredeti dokumentumok postázási
+ * címe (Számla/Posta fül). Csak Bér fuvaroknál értelmezett — új megbízás
+ * jóváhagyásakor a rendszer automatikusan felajánlja az adott megrendelőnél
+ * korábban már rögzített postázási címet (lásd getPostazasiCimJavaslat),
+ * hogy ne kelljen ismert partnernél újra beírni; ha nincs ilyen javaslat és
+ * a mező üres, figyelmeztet.
+ */
+function PostazasiCimMezo({
+  postazasiCim,
+  onChange,
+}: {
+  postazasiCim: string;
+  onChange: (patch: { postazasiCim: string }) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label>Postázási cím</Label>
+      <Input
+        placeholder="hová postázzuk a számlát"
+        value={postazasiCim}
+        onChange={(e) => onChange({ postazasiCim: e.target.value })}
+      />
+      {!postazasiCim.trim() && (
+        <span className="text-xs font-medium text-destructive">
+          ⚠️ ellenőrizd, hiányzik a postázási cím
         </span>
       )}
     </div>
@@ -605,12 +641,15 @@ function FuvarFields({
         </div>
       </div>
 
-      <div className="flex flex-col gap-1.5">
-        <Label>Megjegyzés</Label>
-        <Input
-          value={form.megjegyzes}
-          onChange={(e) => onChange({ megjegyzes: e.target.value })}
-        />
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+        <div className="flex flex-col gap-1.5 sm:col-span-3">
+          <Label>Megjegyzés</Label>
+          <Input
+            value={form.megjegyzes}
+            onChange={(e) => onChange({ megjegyzes: e.target.value })}
+          />
+        </div>
+        <PostazasiCimMezo postazasiCim={form.postazasiCim} onChange={onChange} />
       </div>
     </div>
   );
@@ -1331,6 +1370,29 @@ function ElokeszitettCard({
     setForm((f) => ({ ...f, ...p }));
   }
 
+  // Ha a megrendelőnél már ismert postázási cím (korábbi jóváhagyott
+  // megbízásból), automatikusan felajánljuk — de csak ha a mező még üres,
+  // hogy egy a dokumentumból már kiolvasott/kézzel beírt értéket ne írjon
+  // felül.
+  useEffect(() => {
+    const megrendelo = form.megrendelo;
+    if (!megrendelo.trim()) return;
+    let elveszett = false;
+    getPostazasiCimJavaslat(megrendelo).then((javaslat) => {
+      if (!elveszett && javaslat) {
+        setForm((f) =>
+          f.megrendelo === megrendelo && !f.postazasiCim.trim()
+            ? { ...f, postazasiCim: javaslat }
+            : f
+        );
+      }
+    });
+    return () => {
+      elveszett = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.megrendelo]);
+
   async function handleApprove() {
     setSaving(true);
     try {
@@ -1353,6 +1415,7 @@ function ElokeszitettCard({
         megjegyzes: form.megjegyzes || undefined,
         pozicioszam: form.pozicioszam || undefined,
         pozicioszamNincs: form.pozicioszamNincs,
+        postazasiCim: form.postazasiCim || undefined,
       });
       await onDone();
       toast.success("Fuvar jóváhagyva.");
