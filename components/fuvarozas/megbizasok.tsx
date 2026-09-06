@@ -38,6 +38,7 @@ import {
   deleteFuvar,
   getArchivFuvarok,
   getElokeszitettFuvarok,
+  getFolyamatbanSajatFuvarok,
   getFuvarok,
   getPostazasiCimJavaslat,
   getSzamlaPostaFuvarok,
@@ -1253,7 +1254,7 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
   const [reszletek, setReszletek] = useState<FuvarRow | null>(null);
 
   const load = useCallback(async () => {
-    const data = await getFuvarok("sajat");
+    const data = await getFolyamatbanSajatFuvarok();
     setRows(data);
   }, []);
 
@@ -1271,7 +1272,7 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-sm">Bér fuvarok</CardTitle>
+        <CardTitle className="text-sm">Bér fuvarok — folyamatban</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">
@@ -1298,7 +1299,8 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
               {!loading && rows.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={9} className="text-center text-muted-foreground">
-                    Még nincs rögzített bér fuvar.
+                    Nincs jelenleg folyamatban lévő bér fuvar. (A lerakás dátuma után a fuvar a
+                    Számla/Posta fülön folytatódik.)
                   </TableCell>
                 </TableRow>
               )}
@@ -1989,7 +1991,9 @@ export function Megbizasok() {
           <Card className="bg-muted/40">
             <CardContent className="py-4 text-sm text-muted-foreground">
               A bér fuvarok mindig megbízásból (a Drive „Fuvarmegbizások” mappájában érkező
-              dokumentumból) indulnak — nincs kézi rögzítés.
+              dokumentumból) indulnak — nincs kézi rögzítés. Itt csak a még folyamatban lévők
+              (a lerakás dátuma még nem múlt el) látszanak; a lerakás után a fuvar a
+              Számla/Posta fülön folytatódik, onnan pedig postázás után 5 perccel az Archívba kerül.
             </CardContent>
           </Card>
           <BerFuvarLista refreshKey={0} />

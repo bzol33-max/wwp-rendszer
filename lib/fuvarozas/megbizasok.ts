@@ -50,6 +50,27 @@ export async function getFuvarok(tipus: FuvarTipus): Promise<FuvarRow[]> {
   );
 }
 
+/**
+ * A "Bér fuvarok" fül logikája: a Drive-ból (fuvarmegbízás-figyelő
+ * automatika) érkező, "sajat" típusú fuvarok itt jelennek meg, amíg a munka
+ * (a lerakás) folyamatban van. Amint a lerakás dátuma elmúlt, a fuvar innen
+ * eltűnik, és onnantól csak a Számla/Posta fülön látszik (lásd
+ * getSzamlaPostaFuvarok) — ott intézhető a számlázás/postázás, majd
+ * (postázás + 5 perc) után automatikusan archiválódik (getArchivFuvarok).
+ * "Folyamatban" = a lerakás dátuma (vagy ha nincs külön megadva, a felrakás
+ * dátuma) még nem múlt el.
+ */
+export async function getFolyamatbanSajatFuvarok(): Promise<FuvarRow[]> {
+  return query<FuvarRow>(
+    `select ${FUVAR_ROW_COLUMNS}
+     from fuvar_megbizasok
+     where tipus = 'sajat' and statusz <> 'torolt'
+       and coalesce(lerakas_datum, datum) >= current_date
+     order by ellenorzott asc, coalesce(lerakas_datum, datum) asc, id asc
+     limit 200`
+  );
+}
+
 /** A PDF-ből előkészített, még jóvá nem hagyott fuvarok — típustól függetlenül. */
 export async function getElokeszitettFuvarok(): Promise<FuvarRow[]> {
   return query<FuvarRow>(
@@ -148,8 +169,10 @@ export async function setFuvarPostazva(id: string, postazva: boolean) {
 const ARCHIVALAS_ABLAK_SQL = `interval '5 minutes'`;
 
 /**
- * A Számla/Posta lista: a Bér fuvarok, kihagyva azokat, amik már "effektíve"
- * archiváltnak számítanak (postázva, és az 5 perces visszavonási ablak
+ * A Számla/Posta lista: a Bér fuvarok, DE csak azok, amiknek a munkája már
+ * befejeződött (a lerakás dátuma elmúlt — amíg folyamatban van, a "Bér
+ * fuvarok" fülön látszik, lásd getFolyamatbanSajatFuvarok), és amik még nem
+ * "effektíve" archiváltak (postázva, és az 5 perces visszavonási ablak már
  * lejárt) — ezek helyette az Archív fülön (getArchivFuvarok) jelennek meg.
  */
 export async function getSzamlaPostaFuvarok(): Promise<FuvarRow[]> {
@@ -157,6 +180,7 @@ export async function getSzamlaPostaFuvarok(): Promise<FuvarRow[]> {
     `select ${FUVAR_ROW_COLUMNS}
      from fuvar_megbizasok
      where tipus = 'sajat' and statusz <> 'torolt'
+       and coalesce(lerakas_datum, datum) < current_date
        and not (postazva and postazva_at <= now() - ${ARCHIVALAS_ABLAK_SQL})
      order by ellenorzott asc, fuvar_megbizasok.erkezett_datum desc nulls last, datum desc, id desc
      limit 200`
