@@ -32,6 +32,7 @@ async function main() {
   await applyKapcsolatokUpdates(pool, dbDir);
   await applyPoziciszamUpdates(pool, dbDir);
   await applyFuvarCorrections(pool, dbDir);
+  await applyPostazasiCimUpdates(pool, dbDir);
 
   await pool.end();
 }
@@ -163,6 +164,36 @@ async function applyFuvarCorrections(pool, dbDir) {
   }
 
   console.log(`[migrate] fuvar-javítások alkalmazva: ${updated} sor.`);
+}
+
+// Bér fuvarok — Számla/Posta fül: postázási cím visszatöltése a Drive-
+// dokumentumokból, drive_file_id alapján, ott ahol a megrendelő kifejezetten
+// a székhelyétől eltérő címet ad meg a számla/eredeti dokumentumok
+// postázásához. Minden induláskor lefut, biztonságosan újrafuttatható (csak
+// akkor ír, ha a postazasi_cim mező még üres — egy kézzel beírt/módosított
+// érték nem íródik felül).
+async function applyPostazasiCimUpdates(pool, dbDir) {
+  let data;
+  try {
+    data = JSON.parse(readFileSync(path.join(dbDir, "fuvar-postazasi-cim-updates.json"), "utf8"));
+  } catch {
+    console.log("[migrate] fuvar-postazasi-cim-updates.json nincs, kihagyva.");
+    return;
+  }
+
+  let updated = 0;
+  for (const entry of data.updates ?? []) {
+    const { rowCount } = await pool.query(
+      `update fuvar_megbizasok
+         set postazasi_cim = $2
+       where drive_file_id = $1
+         and postazasi_cim is null`,
+      [entry.driveFileId, entry.postazasiCim]
+    );
+    updated += rowCount ?? 0;
+  }
+
+  console.log(`[migrate] postázási címek visszatöltve: ${updated} sor.`);
 }
 
 main().catch((err) => {

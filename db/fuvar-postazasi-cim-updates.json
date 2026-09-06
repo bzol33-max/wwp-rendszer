@@ -1,0 +1,41 @@
+{
+  "_megjegyzes": "A Drive 'Fuvarmegbizások' mappájából importált 37 bér fuvar dokumentum újra átnézve: hol ad meg a megrendelő a saját székhelyétől eltérő, kifejezett postázási/számlázási címet a számla/eredeti dokumentumok kiküldéséhez (elsődleges eset), és ahol ilyen nincs, ott a dokumentumban szereplő cégcím (székhely) mint alapértelmezett postázási cím (lásd az egyes bejegyzések megjegyzését). 6 dokumentumnál sem az egyik, sem a másik nem volt fellelhető — lásd _hianyzik. Induláskor (scripts/migrate.mjs) automatikusan alkalmazódik, biztonságosan újrafuttatható: csak akkor ír, ha a postazasi_cim mező még üres, így egy kézzel beírt/módosított érték nem íródik felül.",
+  "updates": [
+    { "driveFileId": "1GeRKm3fiZtHE-O800v1kp8ASh4Ieoebr", "postazasiCim": "4001 Debrecen, Pf. 219.", "megjegyzes": "Trans-Sped Kft.: \"Változás történt a számlaküldési címünkben\" — a dokumentum ezt kéri, nem a székhelyet (4030 Debrecen, Vámraktár utca 3.)." },
+    { "driveFileId": "1op2vF2o1nmSR1HEQ8Fxcg0Hb3UEJK8cK", "postazasiCim": "4001 Debrecen, Pf. 219.", "megjegyzes": "Trans-Sped Kft. — azonos postázási cím záradék." },
+    { "driveFileId": "1c1lDqZh1b7lmRml3bpwW4XQteyXkXnFH", "postazasiCim": "4001 Debrecen, Pf. 219.", "megjegyzes": "Trans-Sped Kft. — azonos postázási cím záradék." },
+    { "driveFileId": "10QPXkXeabuRF8f4omKDFLpYfCTuXTTDK", "postazasiCim": "9662 Tompaládony, Ifjúság u. 20.", "megjegyzes": "ÁB Speed Szállítmányozási Kft.: \"Új postázási címünk\" — eltér a székhelytől (9625 Gór, Széchenyi utca 58.)." },
+    { "driveFileId": "13QxrGhaG1Eh62KyshoEeBLCLBq3pWERp", "postazasiCim": "9662 Tompaládony, Ifjúság u. 20.", "megjegyzes": "ÁB Speed Szállítmányozási Kft. — azonos postázási cím záradék." },
+    { "driveFileId": "1uPJHbIK5V-b6lh3bCtWoFVhaZCa4MvTj", "postazasiCim": "9662 Tompaládony, Ifjúság u. 20.", "megjegyzes": "ÁB Speed Szállítmányozási Kft. — azonos postázási cím záradék." },
+    { "driveFileId": "1mYb8aagDk_bzB2VR5qCU-a5B85Ao4u9x", "postazasiCim": "9662 Tompaládony, Ifjúság u. 20.", "megjegyzes": "ÁB Speed Szállítmányozási Kft. — azonos postázási cím záradék." },
+    { "driveFileId": "1VVu5Md_NIxhsxKiggTEah5Y_wNPSS8E4", "postazasiCim": "9662 Tompaládony, Ifjúság u. 20.", "megjegyzes": "ÁB Speed Szállítmányozási Kft. — azonos postázási cím záradék." },
+    { "driveFileId": "1ka-Wwib23Ig33wVxUmWPYwADuMMOapwv", "postazasiCim": "9662 Tompaládony, Ifjúság u. 20.", "megjegyzes": "ÁB Speed Szállítmányozási Kft. — azonos postázási cím záradék." },
+    { "driveFileId": "1jF28ppsdGw1jYuE6b53mg3mrT3S0d0u2", "postazasiCim": "9662 Tompaládony, Ifjúság u. 20.", "megjegyzes": "ÁB Speed Szállítmányozási Kft. — azonos postázási cím záradék." },
+    { "driveFileId": "1SV6scbl3byNGlJNFRVFtT8yhTIm_HtKQ", "postazasiCim": "9662 Tompaládony, Ifjúság u. 20.", "megjegyzes": "ÁB Speed Szállítmányozási Kft. — azonos postázási cím záradék." },
+    { "driveFileId": "1qtkSv2m2hThyFYdD7Ks5uMnMqSbyuQeX", "postazasiCim": "9662 Tompaládony, Ifjúság u. 20.", "megjegyzes": "ÁB Speed Szállítmányozási Kft. — azonos postázási cím záradék." },
+    { "driveFileId": "1yZBst4ZVnl7aOuAm73RZ-kNkCVYOZUKY", "postazasiCim": "9662 Tompaládony, Ifjúság u. 20.", "megjegyzes": "ÁB Speed Szállítmányozási Kft. — azonos postázási cím záradék." },
+    { "driveFileId": "1_RPRq-9ZzpPNyGzYs7OO2a9rTBHPaWgT", "postazasiCim": "4220 Hajdúböszörmény, Kálmán Ferenc utca 18/B.", "megjegyzes": "SG Transport Kft.: dokumentumban külön \"Postázási cím:\" mező, eltér a debreceni székhelytől." },
+    { "driveFileId": "1b6TveMHxXATFIswrDY_10Qg8Zi3s1L8O", "postazasiCim": "2051 Biatorbágy, Rozália Park 11.", "megjegyzes": "Well Pack Hungaria Kft.: dokumentumban külön \"Postázási cím:\" mező." },
+    { "driveFileId": "1tpaXkdetVlZ1AVpJnIst5WdBnaX7YPx1", "postazasiCim": "1601 Budapest, Pf. 131.", "megjegyzes": "VOXOV Logistics Kft.: \"a számlát az alábbi címre kérjük eljuttatni\"." },
+
+    { "driveFileId": "1HuH-3TAbOJYVIQJN9k00Xl3YXUZLQj-y", "postazasiCim": "3360 Heves, Táncsics M. út 4.", "megjegyzes": "Hajdúspedíció Kft.: a dokumentumban nincs külön postázási cím megadva, ezért a cég székhelye (ez a számlázási cím is)." },
+    { "driveFileId": "1yIayap8m_RS-EFrcQ1rvUiUQmcvS5282", "postazasiCim": "3360 Heves, Táncsics M. út 4.", "megjegyzes": "Hajdúspedíció Kft. — lásd fenti megjegyzés." },
+    { "driveFileId": "1WCnoDUHlrTi_xX2J8z6uuuAqlRpOSi75", "postazasiCim": "3360 Heves, Táncsics M. út 4.", "megjegyzes": "Hajdúspedíció Kft. — lásd fenti megjegyzés." },
+
+    { "driveFileId": "1IRLGp_soovtvHIV6ZaEGdmAaFTD2tT15", "postazasiCim": "3300 Eger, Kistályai út 12.", "megjegyzes": "Flott-Trans Kft.: nincs külön postázási cím a dokumentumban, ezért a cég székhelye." },
+    { "driveFileId": "1Gi9RxdIc1Qw_YSv-0kpDnFAg8K-dKnJe", "postazasiCim": "3300 Eger, Kistályai út 12.", "megjegyzes": "Flott-Trans Kft. — lásd fenti megjegyzés." },
+    { "driveFileId": "1fTh0iT_I2Lncj7q5k5v5HqF4rMe_xDrm", "postazasiCim": "3300 Eger, Kistályai út 12.", "megjegyzes": "Flott-Trans Kft. — lásd fenti megjegyzés." },
+
+    { "driveFileId": "1emUCSd87Rv0938VMhdFoEEoopLGK830C", "postazasiCim": "8441 Márkó, Iparos utca 10.", "megjegyzes": "HAPP Kft.: nincs külön postázási cím a dokumentumban (csak e-mail: finance@happ.eu), ezért a cég székhelye." },
+    { "driveFileId": "1toXNqLJdyoXLTw6fkttD4wiwTlZov9Ar", "postazasiCim": "8441 Márkó, Iparos utca 10.", "megjegyzes": "HAPP Kft. — lásd fenti megjegyzés." },
+    { "driveFileId": "1BtlkPGpVgxnw6MmtX9avIb0Vlnlo3JwR", "postazasiCim": "8441 Márkó, Iparos utca 10.", "megjegyzes": "HAPP Kft. — lásd fenti megjegyzés." },
+    { "driveFileId": "1L8fSQTrwT5OGeGH0aTT38AyS-MMbT9TI", "postazasiCim": "8441 Márkó, Iparos utca 10.", "megjegyzes": "HAPP Kft. — lásd fenti megjegyzés." },
+    { "driveFileId": "1xY21pwXhifIG7lCbj4pOkq9RuE6XlnOj", "postazasiCim": "8441 Márkó, Iparos utca 10.", "megjegyzes": "HAPP Kft. — lásd fenti megjegyzés." },
+    { "driveFileId": "1JquKIoWP34M8a146TZ3o9q14Eg9rNvoO", "postazasiCim": "8441 Márkó, Iparos utca 10.", "megjegyzes": "HAPP Kft. — lásd fenti megjegyzés." },
+    { "driveFileId": "1topjI29QPnlMRFQALY3kiBSM3LpOwx6b", "postazasiCim": "8441 Márkó, Iparos utca 10.", "megjegyzes": "HAPP Kft. — lásd fenti megjegyzés." },
+
+    { "driveFileId": "1EtsUKqo2gDWCyXrDkObykWskoRJAz9CD", "postazasiCim": "4030 Debrecen, Árnyas u. 10.", "megjegyzes": "Pro Line Speed Kft.: nincs külön postázási cím a dokumentumban, ezért a cég székhelye." },
+    { "driveFileId": "1f2yjOX6okRD-dDC_qWZXHpZhTXZxCk6w", "postazasiCim": "6754 Újszentiván, Fő utca 7.", "megjegyzes": "Pannoniacoop Logisztikai Kft.: a dokumentum a saját (székhely szerinti) címére kéri a dokumentumok visszaküldését, külön eltérő postázási cím nincs." }
+  ],
+  "_hianyzik": "6 dokumentumnál (RBT Europe Kft. — 3 fájl: 1Z4qdrKXreeRiYf_XKwVJPmf4TfitLFbe, 1fCJQll6IHmrQ5EY4N4gwHsKZV-hL8eUu, 1wDwl5mlPrA1krOVTSEEWwS6q1RBYLnL8; K+K Spedit Kft. — 1HaekaBCNSGyPzR2hrRwTMyN_zEvbRUU2; HRT Spedition Kft. — 1PtifbwYvRrDznqPBp2Kd2aRaDCDa4XNj; Alpok-Trans Kft. — 1euVGnNLS3UrPUfRr8JRFfbw8oQehJscl) sem külön postázási cím, sem pontos székhely-cím nem szerepelt a dokumentumban — ezeknél a postazasi_cim mező üresen marad, amíg elő nem kerül a pontos cím."
+}
