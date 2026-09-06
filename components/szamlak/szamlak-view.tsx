@@ -229,6 +229,13 @@ export function SzamlakView() {
             {!!allapot?.pending_darab && (
               <> {allapot.pending_darab} sorszám még függőben (később kiadott/kihagyott).</>
             )}
+            {!!allapot?.sztorno_darab && (
+              <>
+                {" "}
+                {allapot.sztorno_darab} db rontott/sztornózott számla (és a törlő párja) automatikusan
+                kiszűrve a listákból.
+              </>
+            )}
           </span>
           <Button variant="outline" size="sm" disabled={frissitve} onClick={handleFrissites}>
             {frissitve ? "Frissítés…" : "Frissítés most"}

@@ -22,6 +22,7 @@
 import { query } from "@/lib/db";
 import { lekerdezSzamla, SzamlazzHuError, type SzamlazzHuSzamla } from "./szamlazzhu-client";
 import { kategorizalSzamla, alkategorizalRaklap } from "./categorize";
+import { frissitSztornoJelolest } from "./sztorno";
 
 /** A cég ismert Számlázz.hu számlatömb-előtagjai — mindegyik saját, független sorszám-keresőt kap. */
 const ELOTAGOK = ["WLLWR", "WNYH"];
@@ -105,6 +106,7 @@ export type PollEredmeny = {
   ujMegtalalt: number;
   pendingMegoldva: number;
   hibak: string[];
+  sztornoDarab?: number;
 };
 
 /** Egy teljes lekérdezési kör: 1) a pending sorszámok újrapróbálása, 2) a fő kereső előrehaladása. */
@@ -189,6 +191,12 @@ export async function futtatSzamlaSzinkron(): Promise<PollEredmeny> {
       [elotag, ev, utolsoSorszam]
     );
   }
+
+  // 3) Rontott/sztornózott számla-párok újrafelismerése — minden kör végén,
+  // hogy egy frissen behúzott vagy kézzel importált (pl. tömeges fizetve-
+  // import) adat is azonnal helyesen legyen jelölve.
+  const sztornoEredmeny = await frissitSztornoJelolest();
+  eredmeny.sztornoDarab = sztornoEredmeny.sztornoDarab;
 
   return eredmeny;
 }

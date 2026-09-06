@@ -293,10 +293,25 @@ create table if not exists szamla (
   fizetve_datum      timestamptz,
   raw_xml            text, -- a lekérdezett teljes <szamla> XML válasz, hibakereséshez
   lekerdezve_at      timestamptz not null default now(),
-  created_at         timestamptz not null default now()
+  created_at         timestamptz not null default now(),
+  -- Rontott/sztornózott számlák automatikus felismerése (lib/szamlak/sztorno.ts):
+  -- "sztorno" = ez a sor maga egy negatív összegű törlő/helyesbítő számla;
+  -- "sztornozva" = EZT a (pozitív) számlát törölte/helyesbítette egy másik,
+  -- negatív összegű számla; "sztornozo_szamla_id" a párja. Mindkét fél ki
+  -- van zárva a Fizetve/Nyitott listákból és az összesítőből, hogy egy
+  -- rontott számla ne szerepeljen tévesen "Fizetve"-ként.
+  sztorno              boolean not null default false,
+  sztornozva           boolean not null default false,
+  sztornozo_szamla_id  bigint references szamla(id)
 );
 create index if not exists idx_szamla_kategoria on szamla (kategoria, alkategoria);
 create index if not exists idx_szamla_fizetve on szamla (fizetve, fizetesi_hatarido);
+
+-- Egyszeri migráció (2026-09-06): ha a szamla tábla korábban jött létre
+-- ezen oszlopok nélkül, pótoljuk őket.
+alter table szamla add column if not exists sztorno boolean not null default false;
+alter table szamla add column if not exists sztornozva boolean not null default false;
+alter table szamla add column if not exists sztornozo_szamla_id bigint references szamla(id);
 
 -- Egy meg nem talált számlaszám nem jelenti azt, hogy soha nem is lesz — a
 -- Számlázz.hu-ban egy sorszám lefoglalása megelőzheti a tényleges kiállítást.

@@ -18,19 +18,27 @@ const SZAMLA_COLUMNS = `
   fizetve, fizetve_datum::text, lekerdezve_at::text
 `;
 
-/** Egy kategórián (és Raklapnál alkategórián) belüli számlalista, esedékesség szerint rendezve. */
+/**
+ * Egy kategórián (és Raklapnál alkategórián) belüli számlalista, esedékesség
+ * szerint rendezve. A rontott/sztornózott számla-párok (lib/szamlak/sztorno.ts)
+ * ki vannak zárva — sem az eredeti (hibás) számla, sem a hozzá tartozó
+ * negatív törlő/helyesbítő tétel nem jelenik meg itt, hogy ne látszódjon
+ * tévesen "Fizetve"-ként a hibás összeg.
+ */
 export async function getSzamlak(kategoria: SzamlaKategoria): Promise<SzamlaRow[]> {
   return query<SzamlaRow>(
     `select ${SZAMLA_COLUMNS}
      from szamla
      where kategoria = $1
+       and not sztorno
+       and not sztornozva
      order by fizetve asc, fizetesi_hatarido asc nulls last, kiallitas_datum desc
      limit 500`,
     [kategoria]
   );
 }
 
-/** Kategóriánkénti (Raklapnál alkategóriánkénti) kintlévőség-összesítő, pénznemenként külön. */
+/** Kategóriánkénti (Raklapnál alkategóriánkénti) kintlévőség-összesítő, pénznemenként külön — a sztornó-párok nélkül. */
 export async function getSzamlaOsszesito(): Promise<SzamlaOsszesitoSor[]> {
   return query<SzamlaOsszesitoSor>(
     `select
@@ -40,6 +48,7 @@ export async function getSzamlaOsszesito(): Promise<SzamlaOsszesitoSor[]> {
        count(*) filter (where not fizetve) as nyitott_darab,
        count(*) filter (where not fizetve and fizetesi_hatarido < current_date) as lejart_darab
      from szamla
+     where not sztorno and not sztornozva
      group by kategoria, alkategoria, penznem
      order by kategoria, alkategoria nulls first, penznem`
   );
@@ -71,6 +80,8 @@ export type SzamlaAllapot = {
   /** A legkésőbbi futás időpontja az összes előtag közül (a fejléc egyetlen összefoglaló üzenetéhez). */
   utolso_futas_at: string | null;
   pending_darab: number;
+  /** Rontott/sztornózott számlaként felismert és a listákból kizárt tételek száma (mindkét fél együtt). */
+  sztorno_darab: number;
   /** Előtagonkénti részletes állapot (hol tart melyik számlatömb sorszám-keresője). */
   elotagok: SzamlaElotagAllapot[];
 };
@@ -83,10 +94,18 @@ export async function getSzamlaSzinkronAllapot(): Promise<SzamlaAllapot> {
   const pending = (
     await query<{ n: number }>(`select count(*)::int as n from szamlak_poll_pending where feladva = false`)
   )[0];
+  const sztorno = (
+    await query<{ n: number }>(`select count(*)::int as n from szamla where sztorno or sztornozva`)
+  )[0];
   const utolsoFutasAt = elotagok
     .map((e) => e.utolso_futas_at)
     .filter((d): d is string => !!d)
     .sort()
     .at(-1) ?? null;
-  return { utolso_futas_at: utolsoFutasAt, pending_darab: pending?.n ?? 0, elotagok };
+  return {
+    utolso_futas_at: utolsoFutasAt,
+    pending_darab: pending?.n ?? 0,
+    sztorno_darab: sztorno?.n ?? 0,
+    elotagok,
+  };
 }
