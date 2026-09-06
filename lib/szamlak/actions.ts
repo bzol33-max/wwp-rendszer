@@ -24,11 +24,14 @@ export type SzamlaListaSzuro = {
   alkategoria?: SzamlaAlkategoria | null;
   vevoNev?: string;
   penznem?: string;
+  /** true = kiállítás dátuma szerint, időrendben (a legrégebbi elöl) — pl. a több céget összefogó "Egyéb" csempénél hasznos. */
+  idorendben?: boolean;
 };
 
 /**
  * Egy csempére kattintva megnyíló, szűrt számlalista (kategória, alkategória,
- * vevő és/vagy pénznem szerint), esedékesség szerint rendezve. A rontott/
+ * vevő és/vagy pénznem szerint), alapesetben esedékesség szerint rendezve
+ * (vagy időrendben, ha a szuro.idorendben be van kapcsolva). A rontott/
  * sztornózott számla-párok (lib/szamlak/sztorno.ts) ki vannak zárva.
  */
 export async function getSzamlaLista(szuro: SzamlaListaSzuro): Promise<SzamlaRow[]> {
@@ -50,11 +53,15 @@ export async function getSzamlaLista(szuro: SzamlaListaSzuro): Promise<SzamlaRow
     feltetelek.push(`penznem = $${parameterek.length}`);
   }
 
+  const rendezes = szuro.idorendben
+    ? "kiallitas_datum asc, szamlaszam asc"
+    : "fizetve asc, fizetesi_hatarido asc nulls last, kiallitas_datum desc";
+
   return query<SzamlaRow>(
     `select ${SZAMLA_COLUMNS}
      from szamla
      where ${feltetelek.join(" and ")}
-     order by fizetve asc, fizetesi_hatarido asc nulls last, kiallitas_datum desc
+     order by ${rendezes}
      limit 500`,
     parameterek
   );
