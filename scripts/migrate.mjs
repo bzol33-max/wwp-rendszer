@@ -34,6 +34,7 @@ async function main() {
   await applyFuvarCorrections(pool, dbDir);
   await applyPostazasiCimUpdates(pool, dbDir);
   await resetSzamlaRosszTotalosszMezok(pool);
+  await applySzamlaFizetveImport(pool, dbDir);
 
   await pool.end();
 }
@@ -218,6 +219,42 @@ async function applyPostazasiCimUpdates(pool, dbDir) {
   }
 
   console.log(`[migrate] postázási címek visszatöltve: ${updated} sor.`);
+}
+
+// Számlák — kifizetettség tömeges importja: a Számlázz.hu API nem ad vissza
+// fizetettségi státuszt, ezért ez kézi ("Fizetve" gomb) workflow lenne
+// egyenként — a felhasználó viszont adott egy teljes, könyvelésből/
+// Számlázz.hu-ból származó listát a ténylegesen kifizetett számlákról
+// (dátummal, ahol ismert). A db/szamla-fizetve-import.json a forrás —
+// minden induláskor lefut, biztonságosan újrafuttatható (csak azokat a
+// sorokat érinti, amik a `szamla` táblában MÉG "nincs fizetve" állapotúak,
+// tehát egy már kézzel "Fizetve"-ként megjelölt/visszavont sort nem ír
+// felül). Ha a listában nem szerepelt pontos kifizetés-dátum, a számla
+// kiállítás-dátumát használjuk helyette (csak becslés, de a "Visszavon"
+// 5 perces ablakot nem nyitja fel feleslegesen, mert ez már régi dátum).
+async function applySzamlaFizetveImport(pool, dbDir) {
+  let data;
+  try {
+    data = JSON.parse(readFileSync(path.join(dbDir, "szamla-fizetve-import.json"), "utf8"));
+  } catch {
+    console.log("[migrate] szamla-fizetve-import.json nincs, kihagyva.");
+    return;
+  }
+
+  let updated = 0;
+  for (const entry of data.updates ?? []) {
+    const { rowCount } = await pool.query(
+      `update szamla
+         set fizetve = true,
+             fizetve_datum = coalesce($2::timestamptz, kiallitas_datum::timestamptz)
+       where szamlaszam = $1
+         and fizetve = false`,
+      [entry.szamlaszam, entry.kifizetve]
+    );
+    updated += rowCount ?? 0;
+  }
+
+  console.log(`[migrate] számla fizetve-import: ${updated} sor jelölve kifizetettnek.`);
 }
 
 main().catch((err) => {

@@ -1,0 +1,1016 @@
+{
+  "updates": [
+    {
+      "szamlaszam": "WLLWR-2026-244",
+      "kifizetve": "2026-09-03"
+    },
+    {
+      "szamlaszam": "WLLWR-2026-240",
+      "kifizetve": "2026-09-02"
+    },
+    {
+      "szamlaszam": "WLLWR-2026-237",
+      "kifizetve": "2026-09-02"
+    },
+    {
+      "szamlaszam": "WLLWR-2026-238",
+      "kifizetve": "2026-09-04"
+    },
+    {
+      "szamlaszam": "WLLWR-2026-179",
+      "kifizetve": "2026-09-04"
+    },
+    {
+      "szamlaszam": "WLLWR-2026-178",
+      "kifizetve": "2026-08-31"
+    },
+    {
+      "szamlaszam": "WLLWR-2026-232",
+      "kifizetve": "2026-09-04"
+    },
+    {
+      "szamlaszam": "WLLWR-2026-242",
+      "kifizetve": "2026-09-01"
+    },
+    {
+      "szamlaszam": "WLLWR-2026-243",
+      "kifizetve": "2026-09-01"
+    },
+    {
+      "szamlaszam": "WLLWR-2026-269",
+      "kifizetve": "2026-08-25"
+    },
+    {
+      "szamlaszam": "WLLWR-2026-271",
+      "kifizetve": "2026-08-27"
+    },
+    {
+      "szamlaszam": "WLLWR-2026-175",
+      "kifizetve": "2026-09-04"
+    },
+    {
+      "szamlaszam": "WLLWR-2026-230",
+      "kifizetve": "2026-09-04"
+    },
+    {
+      "szamlaszam": "WLLWR-2026-228",
+      "kifizetve": "2026-08-31"
+    },
+    {
+      "szamlaszam": "WLLWR-2026-173",
+      "kifizetve": "2026-09-04"
+    },
+    {
+      "szamlaszam": "WLLWR-2026-174",
+      "kifizetve": "2026-09-04"
+    },
+    {
+      "szamlaszam": "WLLWR-2026-224",
+      "kifizetve": "2026-08-28"
+    },
+    {
+      "szamlaszam": "WLLWR-2026-221",
+      "kifizetve": "2026-08-26"
+    },
+    {
+      "szamlaszam": "WLLWR-2026-225",
+      "kifizetve": "2026-08-28"
+    },
+    {
+      "szamlaszam": "WLLWR-2026-220",
+      "kifizetve": "2026-08-25"
+    },
+    {
+      "szamlaszam": "WNYH-2026-49",
+      "kifizetve": "2026-08-27"
+    },
+    {
+      "szamlaszam": "WLLWR-2026-170",
+      "kifizetve": "2026-08-25"
+    },
+    {
+      "szamlaszam": "WLLWR-2026-218",
+      "kifizetve": "2026-08-27"
+    },
+    {
+      "szamlaszam": "WLLWR-2026-204",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-206",
+      "kifizetve": "2026-08-28"
+    },
+    {
+      "szamlaszam": "WLLWR-2026-208",
+      "kifizetve": "2026-08-25"
+    },
+    {
+      "szamlaszam": "WLLWR-2026-209",
+      "kifizetve": "2026-08-25"
+    },
+    {
+      "szamlaszam": "WLLWR-2026-211",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-213",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-214",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-215",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-216",
+      "kifizetve": "2026-08-28"
+    },
+    {
+      "szamlaszam": "WLLWR-2026-219",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-246",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-162",
+      "kifizetve": "2026-08-24"
+    },
+    {
+      "szamlaszam": "WLLWR-2026-195",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-196",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-191",
+      "kifizetve": "2026-08-28"
+    },
+    {
+      "szamlaszam": "WLLWR-2026-192",
+      "kifizetve": "2026-08-28"
+    },
+    {
+      "szamlaszam": "WNYH-2026-45",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-157",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-185",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-41",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-42",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-43",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-156",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-184",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-40",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-205",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-155",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-39",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-177",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-180",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-149",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-150",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-176",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-212",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-227",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-147",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-146",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-142",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-143",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-169",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-168",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-167",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-141",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-140",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-139",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-165",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-197",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-129",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-130",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-131",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-159",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-158",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-38",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-126",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-124",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-125",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-172",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-37",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-154",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-152",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-117",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-119",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-145",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-36",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-114",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-115",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-144",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-164",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-163",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-161",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-116",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-133",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-110",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-132",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-136",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-106",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-107",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-108",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-103",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-128",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-35",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-127",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-34",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-100",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-153",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-99",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-151",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-33",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-123",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-32",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-93",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-31",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-148",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-90",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-29",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-30",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-134",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-135",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-118",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-83",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-84",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-85",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-86",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-88",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-28",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-87",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-137",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-79",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-113",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-112",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-27",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-25",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-26",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-73",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-75",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-104",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-24",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-23",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-101",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-22",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-62",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-63",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-64",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-66",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-21",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-94",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-98",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-120",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-122",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-97",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-59",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-60",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-56",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-20",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-61",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-89",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-91",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-102",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-109",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-105",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-82",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-51",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-81",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-19",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-18",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-38",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-17",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-70",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-96",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-69",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-34",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-92",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-33",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-65",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-95",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-28",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-29",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-54",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-55",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-16",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-78",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-80",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-22",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-77",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-20",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-49",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-50",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-15",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-71",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-76",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-52",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-13",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-14",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-48",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-45",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-46",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-47",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-15",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-42",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-43",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-44",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-67",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-68",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-72",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-37",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-7",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-8",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-35",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-36",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-12",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-5",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-11",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-32",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-10",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-31",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-53",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-58",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-26",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-27",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-25",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-24",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-23",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-21",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-39",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-40",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-18",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-19",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-14",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-12",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-13",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-9",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-30",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-9",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-10",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-11",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-8",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-6",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-4",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-7",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-2",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-6",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-5",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-17",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-16",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-4",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-3",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-2",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WNYH-2026-1",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-3",
+      "kifizetve": null
+    },
+    {
+      "szamlaszam": "WLLWR-2026-1",
+      "kifizetve": null
+    }
+  ]
+}
