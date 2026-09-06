@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CheckIcon } from "lucide-react";
+import { CheckIcon, InfoIcon } from "lucide-react";
+import { PageHeader } from "@/components/layout/page-header";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -51,6 +52,32 @@ function formatOsszeg(n: number, penznem: string) {
 function visszavonhato(fizetveDatum: string | null): boolean {
   if (!fizetveDatum) return false;
   return Date.now() - new Date(fizetveDatum).getTime() < 5 * 60 * 1000;
+}
+
+/** Kis "i" infó gomb — egérrel ráhúzva (vagy érintésre) mutatja a szinkron-állapot szövegét. */
+function SzinkronInfoGomb({ szoveg }: { szoveg: string }) {
+  const [nyitva, setNyitva] = useState(false);
+  return (
+    <span
+      className="relative inline-flex"
+      onMouseEnter={() => setNyitva(true)}
+      onMouseLeave={() => setNyitva(false)}
+    >
+      <button
+        type="button"
+        aria-label="Szinkron infó"
+        onClick={() => setNyitva((v) => !v)}
+        className="flex h-6 w-6 items-center justify-center rounded-full border border-border text-muted-foreground hover:bg-muted"
+      >
+        <InfoIcon className="h-3.5 w-3.5" />
+      </button>
+      {nyitva && (
+        <span className="absolute right-0 top-7 z-50 w-72 rounded-lg border bg-popover p-3 text-xs leading-relaxed text-popover-foreground shadow-md">
+          {szoveg}
+        </span>
+      )}
+    </span>
+  );
 }
 
 /** Egy csempére kattintva megnyíló, teljes (szűrt) számlalista. */
@@ -263,6 +290,57 @@ function OsszesitoCsempek({ csempek }: { csempek: Csempe[] }) {
         </Card>
       ))}
     </div>
+  );
+}
+
+/** Összegzés pénznemenként egy adott szűrőre (pl. csak "fuvar", vagy minden sor). */
+function osszegzesPenznemenkent(osszesito: SzamlaOsszesitoSor[], szuro?: (s: SzamlaOsszesitoSor) => boolean) {
+  const map = new Map<string, number>();
+  for (const s of osszesito) {
+    if (szuro && !szuro(s)) continue;
+    map.set(s.penznem, (map.get(s.penznem) ?? 0) + Number(s.nyitott_osszeg));
+  }
+  return [...map.entries()].filter(([, osszeg]) => osszeg !== 0);
+}
+
+/** A leíró szöveges kártya helyén: a teljes kintlévőség összesen, plusz Fuvar/Raklap bontás pénznemenként. */
+function OsszesitesCsempe({ osszesito }: { osszesito: SzamlaOsszesitoSor[] }) {
+  if (osszesito.length === 0) return null;
+  const osszesen = osszegzesPenznemenkent(osszesito);
+  const fuvar = osszegzesPenznemenkent(osszesito, (s) => s.kategoria === "fuvar");
+  const raklap = osszegzesPenznemenkent(osszesito, (s) => s.kategoria === "raklap");
+
+  return (
+    <Card>
+      <CardContent className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-3">
+        <div className="flex flex-col gap-1">
+          <div className="text-xs text-muted-foreground">Összes kintlévőség</div>
+          {osszesen.map(([penznem, osszeg]) => (
+            <div key={penznem} className="text-xl font-semibold tabular-nums">
+              {formatOsszeg(osszeg, penznem)}
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-col gap-1">
+          <div className="text-xs text-muted-foreground">Fuvar</div>
+          {fuvar.length === 0 && <div className="text-sm text-muted-foreground">—</div>}
+          {fuvar.map(([penznem, osszeg]) => (
+            <div key={penznem} className="text-base font-medium tabular-nums">
+              {formatOsszeg(osszeg, penznem)}
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-col gap-1">
+          <div className="text-xs text-muted-foreground">Raklap</div>
+          {raklap.length === 0 && <div className="text-sm text-muted-foreground">—</div>}
+          {raklap.map(([penznem, osszeg]) => (
+            <div key={penznem} className="text-base font-medium tabular-nums">
+              {formatOsszeg(osszeg, penznem)}
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -504,32 +582,35 @@ export function SzamlakView() {
     }
   }
 
+  const infoSzoveg = [
+    "A számlákat a cég a Számlázz.hu-ban állítja ki — ez a nézet onnan automatikusan behúzott kintlévőség-követő, nem számlázó felület.",
+    allapot?.utolso_futas_at
+      ? `Legutóbbi szinkron: ${new Date(allapot.utolso_futas_at).toLocaleString("hu-HU")}.`
+      : null,
+    allapot?.pending_darab ? `${allapot.pending_darab} sorszám még függőben (később kiadott/kihagyott).` : null,
+    allapot?.sztorno_darab
+      ? `${allapot.sztorno_darab} db rontott/sztornózott számla (és a törlő párja) automatikusan kiszűrve a listákból.`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <div className="flex flex-col gap-4">
-      <Card className="bg-muted/40">
-        <CardContent className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm text-muted-foreground">
-          <span>
-            A számlákat a cég a Számlázz.hu-ban állítja ki — ez a nézet onnan automatikusan behúzott
-            kintlévőség-követő, nem számlázó felület.
-            {allapot?.utolso_futas_at && (
-              <> Legutóbbi szinkron: {new Date(allapot.utolso_futas_at).toLocaleString("hu-HU")}.</>
-            )}
-            {!!allapot?.pending_darab && (
-              <> {allapot.pending_darab} sorszám még függőben (később kiadott/kihagyott).</>
-            )}
-            {!!allapot?.sztorno_darab && (
-              <>
-                {" "}
-                {allapot.sztorno_darab} db rontott/sztornózott számla (és a törlő párja) automatikusan
-                kiszűrve a listákból.
-              </>
-            )}
-          </span>
-          <Button variant="outline" size="sm" disabled={frissitve} onClick={handleFrissites}>
-            {frissitve ? "Frissítés…" : "Frissítés most"}
-          </Button>
-        </CardContent>
-      </Card>
+      <PageHeader
+        title="Számlák"
+        subtitle="Kintlévőség-követő — a Számlázz.hu-ban kiállított számlákat tükrözi vissza."
+        actions={
+          <>
+            <SzinkronInfoGomb szoveg={infoSzoveg} />
+            <Button variant="outline" size="sm" disabled={frissitve} onClick={handleFrissites}>
+              {frissitve ? "Frissítés…" : "Frissítés most"}
+            </Button>
+          </>
+        }
+      />
+
+      <OsszesitesCsempe osszesito={osszesito} />
 
       <OsszesitoCsempek
         csempek={osszesito.map((s) => {
