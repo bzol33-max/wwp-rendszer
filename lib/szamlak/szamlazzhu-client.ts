@@ -57,6 +57,23 @@ export type SzamlazzHuSzamla = {
   rawXml: string;
 };
 
+/**
+ * A fast-xml-parser alapból nem old fel minden numerikus HTML-entitást (a
+ * Számlázz.hu válasza pl. "&#225;"-t küld "á" helyett) — egy valós
+ * válaszban ellenőrizve ez okozott hibás ("VASB&#193;R-KER Kft.") neveket.
+ * Ez a függvény utólag, biztonságosan feloldja ezeket.
+ */
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, code) => String.fromCharCode(parseInt(code, 16)))
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
+}
+
 function toNumber(v: unknown): number | null {
   if (v == null) return null;
   const n = Number(String(v).replace(/\s/g, "").replace(",", "."));
@@ -139,28 +156,36 @@ export async function lekerdezSzamla(
   const alap = (szamla["alap"] ?? {}) as Record<string, unknown>;
   const vevo = (szamla["vevo"] ?? {}) as Record<string, unknown>;
   const osszegek = (szamla["osszegek"] ?? {}) as Record<string, unknown>;
+  // A tényleges (élő) válasz szerint az összesítők az <osszegek><totalossz>
+  // alatt vannak, nem közvetlenül az <osszegek> alatt.
+  const totalossz = (osszegek["totalossz"] ?? {}) as Record<string, unknown>;
   const tetelekNode = (szamla["tetelek"] ?? {}) as Record<string, unknown>;
   const tetelSorok = asArray(tetelekNode["tetel"] as Record<string, unknown> | Record<string, unknown>[] | undefined);
-  const tetelekSzoveg = tetelSorok
-    .map((t) => String(t["megnevezes"] ?? "").trim())
-    .filter(Boolean)
-    .join("; ");
+  // A tétel megnevezése <nev> (nem <megnevezes>) — élő válaszban ellenőrizve.
+  const tetelekSzoveg = decodeEntities(
+    tetelSorok
+      .map((t) => String(t["nev"] ?? "").trim())
+      .filter(Boolean)
+      .join("; ")
+  );
 
   const szamlaszamValasz = String(alap["szamlaszam"] ?? szamlaszam);
-  const brutto = toNumber(osszegek["bruttoegyenleg"] ?? osszegek["brutto"] ?? osszegek["vegosszeg"]);
+  // A pénznem mezője <devizanem> (pl. "Ft"), nem <penznem>.
+  const penznem = alap["devizanem"] ? decodeEntities(String(alap["devizanem"]).trim()) : "Ft";
 
   return {
     szamlaszam: szamlaszamValasz,
-    vevoNev: String(vevo["nev"] ?? "").trim(),
+    vevoNev: decodeEntities(String(vevo["nev"] ?? "").trim()),
     rendelesszam: alap["rendelesszam"] ? String(alap["rendelesszam"]).trim() || null : null,
-    fizmod: alap["fizmod"] ? String(alap["fizmod"]).trim() || null : null,
-    penznem: alap["penznem"] ? String(alap["penznem"]).trim() : "HUF",
-    teljesitesDatum: toIsoDate(alap["teljesitesDatum"]),
-    kiallitasDatum: toIsoDate(alap["keltDatum"] ?? alap["kelt"]) ?? new Date().toISOString().slice(0, 10),
-    fizetesiHatarido: toIsoDate(alap["fizetesihatarido"] ?? alap["fizetesiHataridoDatum"]),
-    netto: toNumber(osszegek["nettoegyenleg"] ?? osszegek["netto"]),
-    afa: toNumber(osszegek["afaegyenleg"] ?? osszegek["afa"]),
-    brutto: brutto ?? 0,
+    fizmod: alap["fizmod"] ? decodeEntities(String(alap["fizmod"]).trim()) || null : null,
+    penznem,
+    // <telj> = teljesítés dátuma, <fizh> = fizetési határidő, <kelt> = kiállítás dátuma.
+    teljesitesDatum: toIsoDate(alap["telj"]),
+    kiallitasDatum: toIsoDate(alap["kelt"]) ?? new Date().toISOString().slice(0, 10),
+    fizetesiHatarido: toIsoDate(alap["fizh"]),
+    netto: toNumber(totalossz["netto"]),
+    afa: toNumber(totalossz["afa"]),
+    brutto: toNumber(totalossz["brutto"]) ?? 0,
     tetelekSzoveg,
     rawXml: bodyText,
   };

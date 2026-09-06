@@ -33,8 +33,32 @@ async function main() {
   await applyPoziciszamUpdates(pool, dbDir);
   await applyFuvarCorrections(pool, dbDir);
   await applyPostazasiCimUpdates(pool, dbDir);
+  await resetSzamlaRosszTotalosszMezok(pool);
 
   await pool.end();
+}
+
+// Egyszeri javítás (2026-09-06): a Számlázz.hu-lekérdező kliens első
+// verziója rossz mezőnevekről olvasta az összegeket (<osszegek><brutto>
+// helyett a valós válaszban <osszegek><totalossz><brutto> van) — emiatt
+// minden addig lekérdezett számla brutto/netto/afa mezője 0 volt. Mivel a
+// `szamla` tábla csak a Számlázz.hu-t tükröző, újra-lekérdezhető cache (nem
+// forrásadat), a legegyszerűbb és legbiztonságosabb javítás: egyszer,
+// névvel azonosítva teljesen kiürítjük és a lekérdező kört (poll.ts)
+// nulláról újrafuttatjuk a helyes mezőkkel.
+async function resetSzamlaRosszTotalosszMezok(pool) {
+  const JAVITAS_KOD = "szamla-totalossz-mezok-2026-09-06";
+  const { rows } = await pool.query(
+    `select 1 from alkalmazott_javitasok where kod = $1`,
+    [JAVITAS_KOD]
+  );
+  if (rows.length > 0) return;
+
+  await pool.query(`delete from szamla`);
+  await pool.query(`delete from szamlak_poll_pending`);
+  await pool.query(`update szamlak_poll_allapot set utolso_sorszam = 0 where id = 1`);
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1)`, [JAVITAS_KOD]);
+  console.log("[migrate] szamla javítás alkalmazva: cache törölve, újra fog épülni a helyes mezőkkel.");
 }
 
 // Fuvarozás — Kapcsolatok: minden induláskor lefut, biztonságosan

@@ -325,3 +325,10 @@ create table if not exists szamlak_poll_allapot (
 insert into szamlak_poll_allapot (id, ev, utolso_sorszam)
   values (1, extract(year from now())::int, 0)
   on conflict (id) do nothing;
+
+-- Egyszeri, névvel azonosított javítások nyilvántartása (scripts/migrate.mjs),
+-- hogy egy-egy javítás csak EGYSZER fusson le, ne minden deploy-nál újra.
+create table if not exists alkalmazott_javitasok (
+  kod text primary key,
+  alkalmazva_at timestamptz not null default now()
+);
