@@ -402,7 +402,6 @@ export function SzamlakView() {
 
       <OsszesitoCsempek
         csempek={osszesito.map((s) => {
-          const idorendben = s.alkategoria === "egyeb";
           const cim = `${KATEGORIA_LABEL[s.kategoria]}${s.alkategoria ? ` — ${ALKATEGORIA_LABEL[s.alkategoria]}` : ""} (${s.penznem})`;
           return {
             kulcs: `${s.kategoria}-${s.alkategoria ?? "nincs"}-${s.penznem}`,
@@ -414,7 +413,7 @@ export function SzamlakView() {
             lejartDarab: s.lejart_darab,
             onClick: () => {
               setListaCim(cim);
-              setListaSzuro({ kategoria: s.kategoria, alkategoria: s.alkategoria, penznem: s.penznem, idorendben });
+              setListaSzuro({ kategoria: s.kategoria, alkategoria: s.alkategoria, penznem: s.penznem });
             },
           };
         })}
