@@ -4,23 +4,27 @@
 //
 // A Számlázz.hu Számla Agent API-jának nincs listázó végpontja, csak
 // egyedi számla kérdezhető le sorszám alapján — ezért sorszámról sorszámra
-// haladva próbálgatjuk őket. A cég Számlázz.hu-s számlatömbjének előtagja
-// (egy valós, 2026-ban kiállított számláról leolvasva: "WLLWR-2026-283")
-// "WLLWR", formátum: "{ELOTAG}-{ÉV}-{SORSZÁM}".
+// haladva próbálgatjuk őket. A cég TÖBB számlatömböt (előtagot) is használ
+// Számlázz.hu-ban — ezeket valós, kiállított számlákról olvastuk le:
+// "WLLWR" (pl. "WLLWR-2026-283") és "WNYH" (pl. "WNYH-2026-1") — formátum:
+// "{ELOTAG}-{ÉV}-{SORSZÁM}". Minden előtag saját, egymástól FÜGGETLEN
+// sorszám-keresőt kap (lásd ELOTAGOK lent), mert a sorszámozásuk is
+// egymástól független.
 //
 // FONTOS tervezési döntés: egy adott pillanatban "nem található" sorszám
 // nem jelenti, hogy soha nem is lesz — a Számlázz.hu-ban egy sorszám
 // lefoglalása megelőzheti a tényleges kiállítást. Ezért a fő kereső
-// (szamlak_poll_allapot.utolso_sorszam) és a "még hiányzó" sorszámok
-// listája (szamlak_poll_pending) EGYMÁSTÓL FÜGGETLENÜL haladnak: a hiányzó
-// sorszámokat minden körben újra megvizsgáljuk, függetlenül attól, hogy a
-// fő kereső időközben már jóval előrébb jár.
+// (szamlak_poll_allapot.utolso_sorszam, előtagonként) és a "még hiányzó"
+// sorszámok listája (szamlak_poll_pending) EGYMÁSTÓL FÜGGETLENÜL haladnak:
+// a hiányzó sorszámokat minden körben újra megvizsgáljuk, függetlenül
+// attól, hogy a fő kereső időközben már jóval előrébb jár.
 
 import { query } from "@/lib/db";
 import { lekerdezSzamla, SzamlazzHuError, type SzamlazzHuSzamla } from "./szamlazzhu-client";
 import { kategorizalSzamla, alkategorizalRaklap } from "./categorize";
 
-const SZAMLA_ELOTAG = "WLLWR";
+/** A cég ismert Számlázz.hu számlatömb-előtagjai — mindegyik saját, független sorszám-keresőt kap. */
+const ELOTAGOK = ["WLLWR", "WNYH"];
 /** Egy lekérdezési körben legfeljebb ennyi ÚJ sorszámot próbálunk (a kezdeti,
  *  sok száz számlát behozó felzárkózás fokozatosan, több kör alatt fusson le). */
 const MAX_UJ_PROBALKOZAS_KORONKENT = 60;
@@ -139,47 +143,52 @@ export async function futtatSzamlaSzinkron(): Promise<PollEredmeny> {
     }
   }
 
-  // 2) A fő kereső előrehaladása — új, még sosem próbált sorszámok.
+  // 2) A fő kereső előrehaladása — új, még sosem próbált sorszámok,
+  // ELŐTAGONKÉNT KÜLÖN-KÜLÖN (egymástól független sorszámozás).
   const ev = budapestEv();
-  const allapotSor = (
-    await query<{ ev: number; utolso_sorszam: number }>(
-      `select ev, utolso_sorszam from szamlak_poll_allapot where id = 1`
-    )
-  )[0];
 
-  let utolsoSorszam = allapotSor?.ev === ev ? allapotSor.utolso_sorszam : 0;
-  let egymasutaniHiany = 0;
+  for (const elotag of ELOTAGOK) {
+    const allapotSor = (
+      await query<{ ev: number; utolso_sorszam: number }>(
+        `select ev, utolso_sorszam from szamlak_poll_allapot where elotag = $1`,
+        [elotag]
+      )
+    )[0];
 
-  for (let i = 0; i < MAX_UJ_PROBALKOZAS_KORONKENT; i++) {
-    const kovetkezo = utolsoSorszam + 1;
-    const szamlaszam = `${SZAMLA_ELOTAG}-${ev}-${kovetkezo}`;
-    try {
-      const talalat = await lekerdezSzamla(szamlaszam, agentKulcs);
-      if (talalat) {
-        await mentSzamla(talalat);
-        utolsoSorszam = kovetkezo;
-        eredmeny.ujMegtalalt++;
-        egymasutaniHiany = 0;
-      } else {
-        await felveszPendingbe(szamlaszam);
-        utolsoSorszam = kovetkezo;
-        egymasutaniHiany++;
-        if (egymasutaniHiany >= MAX_EGYMASUTANI_HIANY) break;
+    let utolsoSorszam = allapotSor?.ev === ev ? allapotSor.utolso_sorszam : 0;
+    let egymasutaniHiany = 0;
+
+    for (let i = 0; i < MAX_UJ_PROBALKOZAS_KORONKENT; i++) {
+      const kovetkezo = utolsoSorszam + 1;
+      const szamlaszam = `${elotag}-${ev}-${kovetkezo}`;
+      try {
+        const talalat = await lekerdezSzamla(szamlaszam, agentKulcs);
+        if (talalat) {
+          await mentSzamla(talalat);
+          utolsoSorszam = kovetkezo;
+          eredmeny.ujMegtalalt++;
+          egymasutaniHiany = 0;
+        } else {
+          await felveszPendingbe(szamlaszam);
+          utolsoSorszam = kovetkezo;
+          egymasutaniHiany++;
+          if (egymasutaniHiany >= MAX_EGYMASUTANI_HIANY) break;
+        }
+      } catch (err) {
+        eredmeny.hibak.push(
+          `${szamlaszam}: ${err instanceof SzamlazzHuError ? err.message : "ismeretlen hiba"}`
+        );
+        break; // hálózati/kulcs-hiba esetén ne pörgessük tovább feleslegesen
       }
-    } catch (err) {
-      eredmeny.hibak.push(
-        `${szamlaszam}: ${err instanceof SzamlazzHuError ? err.message : "ismeretlen hiba"}`
-      );
-      break; // hálózati/kulcs-hiba esetén ne pörgessük tovább feleslegesen
     }
-  }
 
-  await query(
-    `insert into szamlak_poll_allapot (id, ev, utolso_sorszam, utolso_futas_at)
-     values (1, $1, $2, now())
-     on conflict (id) do update set ev = $1, utolso_sorszam = $2, utolso_futas_at = now()`,
-    [ev, utolsoSorszam]
-  );
+    await query(
+      `insert into szamlak_poll_allapot (elotag, ev, utolso_sorszam, utolso_futas_at)
+       values ($1, $2, $3, now())
+       on conflict (elotag) do update set ev = $2, utolso_sorszam = $3, utolso_futas_at = now()`,
+      [elotag, ev, utolsoSorszam]
+    );
+  }
 
   return eredmeny;
 }

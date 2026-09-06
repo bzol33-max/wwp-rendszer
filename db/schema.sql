@@ -312,19 +312,47 @@ create table if not exists szamlak_poll_pending (
   feladva        boolean not null default false
 );
 
--- Egyetlen soros állapot-tábla: melyik évhez meddig jutott el a fő kereső
--- (a legutóbb sikeresen ELÉRT sorszám, a lyukakat a fenti pending tábla
--- kezeli), és mikor futott le legutóbb egy teljes kör.
+-- Állapot-tábla ELŐTAGONKÉNT egy sor: melyik évhez meddig jutott el az adott
+-- számlatömb-előtag fő keresője (a legutóbb sikeresen ELÉRT sorszám, a
+-- lyukakat a fenti pending tábla kezeli), és mikor futott le legutóbb egy
+-- teljes kör. A cég több számlatömböt is használ Számlázz.hu-ban (pl.
+-- "WLLWR", "WNYH"), ezért ELŐTAGONKÉNT FÜGGETLEN sorszám-kereső fut.
 create table if not exists szamlak_poll_allapot (
-  id                bigint primary key default 1,
+  elotag            text primary key,
   ev                integer not null,
   utolso_sorszam    integer not null default 0,
-  utolso_futas_at   timestamptz,
-  check (id = 1)
+  utolso_futas_at   timestamptz
 );
-insert into szamlak_poll_allapot (id, ev, utolso_sorszam)
-  values (1, extract(year from now())::int, 0)
-  on conflict (id) do nothing;
+
+-- Egyszeri migráció (2026-09-06): a tábla korábban egyetlen, "id=1"-hez
+-- kötött sorból állt (egyetlen előtaggal, "WLLWR"). Ha még a régi alakban
+-- van (nincs "elotag" oszlop), áttesszük "elotag" elsődleges kulcsra, a
+-- meglévő haladást megőrizve.
+do $$
+begin
+  if exists (
+    select 1 from information_schema.columns
+    where table_name = 'szamlak_poll_allapot' and column_name = 'id'
+  ) and not exists (
+    select 1 from information_schema.columns
+    where table_name = 'szamlak_poll_allapot' and column_name = 'elotag'
+  ) then
+    alter table szamlak_poll_allapot add column elotag text;
+    update szamlak_poll_allapot set elotag = 'WLLWR' where elotag is null;
+    alter table szamlak_poll_allapot alter column elotag set not null;
+    alter table szamlak_poll_allapot drop constraint if exists szamlak_poll_allapot_check;
+    alter table szamlak_poll_allapot drop constraint if exists szamlak_poll_allapot_pkey;
+    alter table szamlak_poll_allapot add constraint szamlak_poll_allapot_pkey primary key (elotag);
+    alter table szamlak_poll_allapot drop column if exists id;
+  end if;
+end $$;
+
+insert into szamlak_poll_allapot (elotag, ev, utolso_sorszam)
+  values ('WLLWR', extract(year from now())::int, 0)
+  on conflict (elotag) do nothing;
+insert into szamlak_poll_allapot (elotag, ev, utolso_sorszam)
+  values ('WNYH', extract(year from now())::int, 0)
+  on conflict (elotag) do nothing;
 
 -- Egyszeri, névvel azonosított javítások nyilvántartása (scripts/migrate.mjs),
 -- hogy egy-egy javítás csak EGYSZER fusson le, ne minden deploy-nál újra.

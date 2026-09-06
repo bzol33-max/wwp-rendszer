@@ -60,22 +60,33 @@ export async function frissitesMost(): Promise<PollEredmeny> {
   return futtatSzamlaSzinkron();
 }
 
-export type SzamlaAllapot = {
+export type SzamlaElotagAllapot = {
+  elotag: string;
   utolso_futas_at: string | null;
   ev: number;
   utolso_sorszam: number;
-  pending_darab: number;
 };
 
-/** A Kezdőlap/Számlák fejlécéhez: mikor futott le legutóbb a szinkron, hol tart. */
+export type SzamlaAllapot = {
+  /** A legkésőbbi futás időpontja az összes előtag közül (a fejléc egyetlen összefoglaló üzenetéhez). */
+  utolso_futas_at: string | null;
+  pending_darab: number;
+  /** Előtagonkénti részletes állapot (hol tart melyik számlatömb sorszám-keresője). */
+  elotagok: SzamlaElotagAllapot[];
+};
+
+/** A Kezdőlap/Számlák fejlécéhez: mikor futott le legutóbb a szinkron, hol tart — minden ismert előtagra. */
 export async function getSzamlaSzinkronAllapot(): Promise<SzamlaAllapot> {
-  const allapot = (
-    await query<{ utolso_futas_at: string | null; ev: number; utolso_sorszam: number }>(
-      `select utolso_futas_at::text, ev, utolso_sorszam from szamlak_poll_allapot where id = 1`
-    )
-  )[0] ?? { utolso_futas_at: null, ev: new Date().getFullYear(), utolso_sorszam: 0 };
+  const elotagok = await query<SzamlaElotagAllapot>(
+    `select elotag, utolso_futas_at::text, ev, utolso_sorszam from szamlak_poll_allapot order by elotag`
+  );
   const pending = (
     await query<{ n: number }>(`select count(*)::int as n from szamlak_poll_pending where feladva = false`)
   )[0];
-  return { ...allapot, pending_darab: pending?.n ?? 0 };
+  const utolsoFutasAt = elotagok
+    .map((e) => e.utolso_futas_at)
+    .filter((d): d is string => !!d)
+    .sort()
+    .at(-1) ?? null;
+  return { utolso_futas_at: utolsoFutasAt, pending_darab: pending?.n ?? 0, elotagok };
 }
