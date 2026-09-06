@@ -162,7 +162,8 @@ function ResultTileCard({ tile, onClose }: { tile: ResultTile; onClose: () => vo
             Üzemanyag: <span className="font-medium text-foreground">{formatLiter(literek)}</span>
             {gazolajAr && uzemanyagKoltseg != null && (
               <>
-                {" "}({formatHuf(uzemanyagKoltseg)}, {gazolajAr.ar} Ft/l – {gazolajAr.cimke}
+                {" "}({formatHuf(uzemanyagKoltseg)}, {gazolajAr.ar} Ft/l – {gazolajAr.cimke}, NAV {gazolajAr.navAr}{" "}
+                Ft/l - {gazolajAr.kedvezmeny} Ft/l tankolási kedvezmény
                 {!gazolajAr.friss && ", nem sikerült frissíteni"})
               </>
             )}
