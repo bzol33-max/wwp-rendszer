@@ -1730,9 +1730,112 @@ function ElokeszitettCard({
  * vissza kellene kerülnie a Számla/Posta listába (pl. tévedésből lett
  * bepipálva "Postázva").
  */
+/** Egy archív fuvar minden mezőjét egyetlen, kis-és-ékezet-érzéketlen szövegbe
+ *  fűzi össze, hogy a kereső bármelyik kulcsszóra (cég, útvonal, rendszám,
+ *  pozíciószám, számlaszám, stb.) rá tudjon találni. */
+function archivKeresoSzoveg(row: FuvarRow): string {
+  return [
+    row.megrendelo,
+    row.pozicioszam,
+    row.felrako,
+    row.lerako,
+    row.szamla_szam,
+    row.jarmu,
+    row.sofor,
+    row.aru,
+    row.megjegyzes,
+    row.date,
+    row.erkezett_datum,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+}
+
+function ArchivFuvarSor({
+  row,
+  onVisszaallitas,
+  mutatMegrendelot,
+}: {
+  row: FuvarRow;
+  onVisszaallitas: (id: string) => void;
+  mutatMegrendelot: boolean;
+}) {
+  return (
+    <TableRow>
+      <TableCell className="text-muted-foreground">{row.erkezett_datum ?? row.date}</TableCell>
+      {mutatMegrendelot && (
+        <TableCell className="max-w-[140px] whitespace-normal break-words leading-tight">
+          {row.megrendelo ?? "—"}
+        </TableCell>
+      )}
+      <TableCell>{row.pozicioszam ?? "—"}</TableCell>
+      <TableCell>
+        {row.felrako ? `${varosNev(row.felrako)} → ${varosNev(row.lerako)}` : varosNev(row.lerako)}
+      </TableCell>
+      <TableCell className="text-right tabular-nums">
+        {row.fuvardij != null ? `${row.fuvardij.toLocaleString("hu-HU")} Ft` : "—"}
+      </TableCell>
+      <TableCell className="text-muted-foreground">{row.szamla_szam ?? "—"}</TableCell>
+      <TableCell className="text-muted-foreground">
+        {row.postazva_at ? new Date(row.postazva_at).toLocaleDateString("hu-HU") : "—"}
+      </TableCell>
+      <TableCell>
+        <button
+          type="button"
+          className="text-xs text-muted-foreground hover:underline"
+          onClick={() => onVisszaallitas(row.id)}
+        >
+          Visszaállítás
+        </button>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+function ArchivCsoportTablazat({
+  rows,
+  onVisszaallitas,
+  mutatMegrendelot = false,
+}: {
+  rows: FuvarRow[];
+  onVisszaallitas: (id: string) => void;
+  mutatMegrendelot?: boolean;
+}) {
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Dátum</TableHead>
+            {mutatMegrendelot && <TableHead>Megrendelő</TableHead>}
+            <TableHead>Hiv. szám</TableHead>
+            <TableHead>Honnan → Hová</TableHead>
+            <TableHead className="text-right">Fuvardíj</TableHead>
+            <TableHead>Számla szám</TableHead>
+            <TableHead>Postázva</TableHead>
+            <TableHead className="w-28"></TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((row) => (
+            <ArchivFuvarSor
+              key={row.id}
+              row={row}
+              onVisszaallitas={onVisszaallitas}
+              mutatMegrendelot={mutatMegrendelot}
+            />
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
 function ArchivLista() {
   const [rows, setRows] = useState<FuvarRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [kereso, setKereso] = useState("");
 
   const load = useCallback(async () => {
     const data = await getArchivFuvarok();
@@ -1750,65 +1853,66 @@ function ArchivLista() {
     toast.success("Visszaállítva a Számla/Posta listába.");
   }
 
+  const keresoNorm = kereso.trim().toLowerCase();
+  const szurtRows = keresoNorm
+    ? rows.filter((row) => archivKeresoSzoveg(row).includes(keresoNorm))
+    : rows;
+
+  // Cégenkénti csoportosítás — csak azok a megrendelők kapnak külön, névvel
+  // jelölt csoportot, akiktől legalább 2 (a keresés utáni listában is) fuvar
+  // van; az egy-fuvaros megrendelők az "Egyéb" csoportba kerülnek, hogy ne
+  // legyen tucatnyi egysoros "csoport" a listában.
+  const csoportok = new Map<string, FuvarRow[]>();
+  for (const row of szurtRows) {
+    const kulcs = row.megrendelo?.trim() || "(nincs megrendelő)";
+    const lista = csoportok.get(kulcs) ?? [];
+    lista.push(row);
+    csoportok.set(kulcs, lista);
+  }
+  const nagyCsoportok = [...csoportok.entries()]
+    .filter(([, lista]) => lista.length >= 2)
+    .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0], "hu"));
+  const egyebSorok = [...csoportok.entries()]
+    .filter(([, lista]) => lista.length < 2)
+    .flatMap(([, lista]) => lista);
+
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="gap-3">
         <CardTitle className="text-sm">Archív — postázott bér fuvarok</CardTitle>
+        <Input
+          placeholder="Keresés: cég, útvonal, rendszám, pozíciószám, számlaszám…"
+          value={kereso}
+          onChange={(e) => setKereso(e.target.value)}
+          className="max-w-md"
+        />
       </CardHeader>
-      <CardContent>
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Dátum</TableHead>
-                <TableHead>Megrendelő</TableHead>
-                <TableHead>Hiv. szám</TableHead>
-                <TableHead>Honnan → Hová</TableHead>
-                <TableHead className="text-right">Fuvardíj</TableHead>
-                <TableHead>Számla szám</TableHead>
-                <TableHead>Postázva</TableHead>
-                <TableHead className="w-28"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {!loading && rows.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground">
-                    Még nincs archivált fuvar.
-                  </TableCell>
-                </TableRow>
-              )}
-              {rows.map((row) => (
-                <TableRow key={row.id}>
-                  <TableCell className="text-muted-foreground">{row.erkezett_datum ?? row.date}</TableCell>
-                  <TableCell className="max-w-[140px] whitespace-normal break-words leading-tight">
-                    {row.megrendelo ?? "—"}
-                  </TableCell>
-                  <TableCell>{row.pozicioszam ?? "—"}</TableCell>
-                  <TableCell>
-                    {row.felrako ? `${varosNev(row.felrako)} → ${varosNev(row.lerako)}` : varosNev(row.lerako)}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {row.fuvardij != null ? `${row.fuvardij.toLocaleString("hu-HU")} Ft` : "—"}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{row.szamla_szam ?? "—"}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {row.postazva_at ? new Date(row.postazva_at).toLocaleDateString("hu-HU") : "—"}
-                  </TableCell>
-                  <TableCell>
-                    <button
-                      type="button"
-                      className="text-xs text-muted-foreground hover:underline"
-                      onClick={() => handleVisszaallitas(row.id)}
-                    >
-                      Visszaállítás
-                    </button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+      <CardContent className="flex flex-col gap-6">
+        {!loading && szurtRows.length === 0 && (
+          <p className="text-center text-sm text-muted-foreground">
+            {kereso ? "Nincs a keresésnek megfelelő archivált fuvar." : "Még nincs archivált fuvar."}
+          </p>
+        )}
+        {nagyCsoportok.map(([megrendelo, lista]) => (
+          <div key={megrendelo} className="flex flex-col gap-2">
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-medium">{megrendelo}</h3>
+              <Badge variant="secondary">{lista.length} megbízás</Badge>
+            </div>
+            <ArchivCsoportTablazat rows={lista} onVisszaallitas={handleVisszaallitas} />
+          </div>
+        ))}
+        {egyebSorok.length > 0 && (
+          <div className="flex flex-col gap-2">
+            {nagyCsoportok.length > 0 && (
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-medium text-muted-foreground">Egyéb (1 megbízásos partnerek)</h3>
+                <Badge variant="secondary">{egyebSorok.length} megbízás</Badge>
+              </div>
+            )}
+            <ArchivCsoportTablazat rows={egyebSorok} onVisszaallitas={handleVisszaallitas} mutatMegrendelot />
+          </div>
+        )}
       </CardContent>
     </Card>
   );
