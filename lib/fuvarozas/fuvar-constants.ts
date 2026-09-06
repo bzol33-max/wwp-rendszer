@@ -67,6 +67,8 @@ export type FuvarRow = {
   pozicioszam_nincs: boolean;
   /** A Számla/Posta nézethez: hová kell postázni a kiállított számlát ennél a megbízásnál. */
   postazasi_cim: string | null;
+  /** A Számla/Posta nézethez: igaz, ha a fuvar dokumentációja (számla + megbízás) ténylegesen postára lett adva. */
+  postazva: boolean;
 };
 
 export type AddFuvarInput = {

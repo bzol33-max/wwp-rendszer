@@ -41,6 +41,7 @@ import {
   getPostazasiCimJavaslat,
   setFuvarPoziciszam,
   setFuvarPostazasiCim,
+  setFuvarPostazva,
   updateFuvarStatus,
 } from "@/lib/fuvarozas/megbizasok";
 import { calculateTollForAddresses, getGazolajAr } from "@/lib/fuvarozas/actions";
@@ -280,6 +281,50 @@ function SzovegCell({
   );
 }
 
+/**
+ * A Számla/Posta nézet "Postázva" jelölője: azonnal (optimista frissítéssel)
+ * pipálható, hogy a fuvar dokumentációja (számla + megbízás) ténylegesen
+ * postára lett-e adva a megrendelőnek.
+ */
+function PostazvaCella({
+  id,
+  postazva,
+  onSaved,
+}: {
+  id: string;
+  postazva: boolean;
+  onSaved: () => void | Promise<void>;
+}) {
+  const [checked, setChecked] = useState(postazva);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setChecked(postazva);
+  }, [postazva]);
+
+  async function handleChange(value: boolean) {
+    setChecked(value);
+    setSaving(true);
+    try {
+      await setFuvarPostazva(id, value);
+      await onSaved();
+    } catch {
+      setChecked(!value);
+      toast.error("Nem sikerült menteni.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Checkbox
+      checked={checked}
+      disabled={saving}
+      onCheckedChange={(v) => handleChange(v === true)}
+    />
+  );
+}
+
 /** Egy sor a fuvar-részletek nézetben — csak akkor jelenik meg, ha van értéke. */
 function ReszletSor({ label, children }: { label: string; children: ReactNode }) {
   if (children == null || children === "") return null;
@@ -347,6 +392,7 @@ function FuvarDetailModal({
               </ReszletSor>
               <ReszletSor label="Státusz">{FUVAR_STATUSZ_LABEL[row.statusz]}</ReszletSor>
               <ReszletSor label="Postázási cím">{row.postazasi_cim}</ReszletSor>
+              <ReszletSor label="Postázva">{row.postazva ? "Igen" : null}</ReszletSor>
               <ReszletSor label="Megjegyzés">{row.megjegyzes}</ReszletSor>
               <ReszletSor label="Rögzítette">{row.created_by}</ReszletSor>
             </div>
@@ -1317,8 +1363,10 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
  * Számla/Posta fül: a Bér fuvarok listája számlázási/postázási fókusszal —
  * ugyanaz az adat, mint a "Bér fuvarok" fülön (az ott is megmarad), de itt a
  * Honnan → Hová csak a városnevet mutatja (a teljes cím helyett), nincs
- * Státusz oszlop, és van egy új, inline szerkeszthető "Postázási cím" mező
- * (hová kell postázni a kiállított számlát ennél a megbízásnál).
+ * Státusz oszlop, és van egy inline szerkeszthető "Postázási cím" mező
+ * (hová kell postázni a kiállított számlát ennél a megbízásnál), valamint
+ * egy "Postázva" jelölő (pipálható, ha a fuvar dokumentációja ténylegesen
+ * postára lett adva).
  */
 function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
   const [rows, setRows] = useState<FuvarRow[]>([]);
@@ -1359,13 +1407,19 @@ function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
                 <TableHead title="Fizetési határidő">FH</TableHead>
                 <TableHead>Kocsi</TableHead>
                 <TableHead>Postázási cím</TableHead>
+                <TableHead
+                  className="text-center"
+                  title="A fuvar dokumentációja (számla + megbízás) postára lett adva a megrendelőnek."
+                >
+                  Postázva
+                </TableHead>
                 <TableHead className="w-8"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {!loading && rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center text-muted-foreground">
+                  <TableCell colSpan={10} className="text-center text-muted-foreground">
                     Még nincs rögzített bér fuvar.
                   </TableCell>
                 </TableRow>
@@ -1409,6 +1463,9 @@ function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
                         await load();
                       }}
                     />
+                  </TableCell>
+                  <TableCell className="align-top text-center">
+                    <PostazvaCella id={row.id} postazva={row.postazva} onSaved={load} />
                   </TableCell>
                   <TableCell className="align-top">
                     <button

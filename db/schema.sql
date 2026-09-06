@@ -234,6 +234,10 @@ alter table fuvar_megbizasok add column if not exists postazasi_cim text;
 -- felrakó/lerakó címtől és megbízásonként is változhat ugyanannál a partnernél.
 alter table fuvar_megbizasok add column if not exists postazasi_cim text;
 
+-- Számla/Posta fül: jelölő, hogy a fuvar dokumentációja (számla + megbízás)
+-- ténylegesen postára lett-e adva a megrendelőnek.
+alter table fuvar_megbizasok add column if not exists postazva boolean not null default false;
+
 -- Fuvarozás — Kapcsolatok fül: a megbízásokból (és a hozzájuk tartozó
 -- e-mailekből) kinyert cégenkénti kapcsolattartók. Egy céghez több
 -- kapcsolattartó/telefon/e-mail sor is tartozhat.
