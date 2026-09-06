@@ -69,6 +69,8 @@ export type FuvarRow = {
   postazasi_cim: string | null;
   /** A Számla/Posta nézethez: igaz, ha a fuvar dokumentációja (számla + megbízás) ténylegesen postára lett adva. */
   postazva: boolean;
+  /** A Számla/Posta nézethez: a fuvarhoz kiállított saját számla sorszáma. */
+  szamla_szam: string | null;
 };
 
 export type AddFuvarInput = {

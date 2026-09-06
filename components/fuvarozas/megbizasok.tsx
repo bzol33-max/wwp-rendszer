@@ -42,6 +42,7 @@ import {
   setFuvarPoziciszam,
   setFuvarPostazasiCim,
   setFuvarPostazva,
+  setFuvarSzamlaSzam,
   updateFuvarStatus,
 } from "@/lib/fuvarozas/megbizasok";
 import { calculateTollForAddresses, getGazolajAr } from "@/lib/fuvarozas/actions";
@@ -391,6 +392,7 @@ function FuvarDetailModal({
                 {row.fizetesi_hatarido_nap != null ? `${row.fizetesi_hatarido_nap} nap` : null}
               </ReszletSor>
               <ReszletSor label="Státusz">{FUVAR_STATUSZ_LABEL[row.statusz]}</ReszletSor>
+              <ReszletSor label="Számla sorszáma">{row.szamla_szam}</ReszletSor>
               <ReszletSor label="Postázási cím">{row.postazasi_cim}</ReszletSor>
               <ReszletSor label="Postázva">{row.postazva ? "Igen" : null}</ReszletSor>
               <ReszletSor label="Megjegyzés">{row.megjegyzes}</ReszletSor>
@@ -1406,6 +1408,7 @@ function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
                 <TableHead className="text-right">Fuvardíj</TableHead>
                 <TableHead title="Fizetési határidő">FH</TableHead>
                 <TableHead>Kocsi</TableHead>
+                <TableHead>Számla szám</TableHead>
                 <TableHead>Postázási cím</TableHead>
                 <TableHead
                   className="text-center"
@@ -1419,7 +1422,7 @@ function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
             <TableBody>
               {!loading && rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center text-muted-foreground">
+                  <TableCell colSpan={11} className="text-center text-muted-foreground">
                     Még nincs rögzített bér fuvar.
                   </TableCell>
                 </TableRow>
@@ -1453,6 +1456,16 @@ function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
                   </TableCell>
                   <TableCell className="align-top">
                     {row.jarmu ? <JarmuJelolo value={row.jarmu} /> : "—"}
+                  </TableCell>
+                  <TableCell className="align-top">
+                    <SzovegCell
+                      value={row.szamla_szam}
+                      placeholder="számlaszám megadása"
+                      onSave={async (v) => {
+                        await setFuvarSzamlaSzam(row.id, v);
+                        await load();
+                      }}
+                    />
                   </TableCell>
                   <TableCell className="align-top">
                     <SzovegCell

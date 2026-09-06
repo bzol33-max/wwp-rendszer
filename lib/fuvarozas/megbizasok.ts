@@ -27,7 +27,7 @@ const FUVAR_ROW_COLUMNS = `
   to_char(erkezett_datum, '${TIME_FMT}') as erkezett_datum,
   to_char(lerakas_datum, '${TIME_FMT}') as lerakas_datum,
   fizetesi_hatarido_nap,
-  pozicioszam, pozicioszam_nincs, postazasi_cim, postazva
+  pozicioszam, pozicioszam_nincs, postazasi_cim, postazva, szamla_szam
 `;
 
 export async function getFuvarok(tipus: FuvarTipus): Promise<FuvarRow[]> {
@@ -133,6 +133,14 @@ export async function setFuvarPostazasiCim(id: string, postazasiCim: string | nu
 /** A Számla/Posta nézet jelölője: postára lett-e adva a fuvar dokumentációja (számla + megbízás). */
 export async function setFuvarPostazva(id: string, postazva: boolean) {
   await query(`update fuvar_megbizasok set postazva = $2 where id = $1`, [id, postazva]);
+}
+
+/** A Számla/Posta nézet soron belüli, azonnali javítása: a kiállított számla sorszámának kitöltése. */
+export async function setFuvarSzamlaSzam(id: string, szamlaSzam: string | null) {
+  await query(`update fuvar_megbizasok set szamla_szam = $2 where id = $1`, [
+    id,
+    szamlaSzam || null,
+  ]);
 }
 
 /**

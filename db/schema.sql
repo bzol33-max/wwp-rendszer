@@ -238,6 +238,10 @@ alter table fuvar_megbizasok add column if not exists postazasi_cim text;
 -- ténylegesen postára lett-e adva a megrendelőnek.
 alter table fuvar_megbizasok add column if not exists postazva boolean not null default false;
 
+-- Számla/Posta fül: a fuvarhoz kiállított SAJÁT számla sorszáma (nem
+-- keverendő a "pozicioszam" mezővel, ami a megbízó hivatkozási száma).
+alter table fuvar_megbizasok add column if not exists szamla_szam text;
+
 -- Fuvarozás — Kapcsolatok fül: a megbízásokból (és a hozzájuk tartozó
 -- e-mailekből) kinyert cégenkénti kapcsolattartók. Egy céghez több
 -- kapcsolattartó/telefon/e-mail sor is tartozhat.
