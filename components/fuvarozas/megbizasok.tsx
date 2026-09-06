@@ -819,8 +819,36 @@ const KOLTSEG_ATLAG_FOGYASZTAS_L_PER_100KM = 30;
  * külső API-hívásoktól — csak a kliens élettartamáig érvényes, adatbázisba
  * sosem ír.
  */
-const koltsegCache = new Map<string, number | null>();
+const koltsegCache = new Map<string, number>();
 const koltsegInFlight = new Map<string, Promise<number | null>>();
+
+// A táblázat sok sora egyszerre mountol, és mindegyik saját geokódolás +
+// útvonaltervezés hívást indítana — ez könnyen túlterhelheti/limitelheti a
+// külső (ingyenes, hivatalos) útdíjkalkulátor API-t. Ezért legfeljebb ennyi
+// számítás fut egyszerre; a többi sorban áll, amíg egy hely felszabadul.
+const KOLTSEG_MAX_PARHUZAMOS = 4;
+let koltsegFutoSzam = 0;
+const koltsegVarosor: Array<() => void> = [];
+
+function koltsegSorbaAllit<T>(feladat: () => Promise<T>): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const futtat = () => {
+      koltsegFutoSzam++;
+      feladat()
+        .then(resolve, reject)
+        .finally(() => {
+          koltsegFutoSzam--;
+          const kovetkezo = koltsegVarosor.shift();
+          if (kovetkezo) kovetkezo();
+        });
+    };
+    if (koltsegFutoSzam < KOLTSEG_MAX_PARHUZAMOS) {
+      futtat();
+    } else {
+      koltsegVarosor.push(futtat);
+    }
+  });
+}
 
 async function szamitottUtKoltseg(
   felrako: string | null | undefined,
@@ -835,16 +863,13 @@ async function szamitottUtKoltseg(
   const inFlight = koltsegInFlight.get(key);
   if (inFlight) return inFlight;
 
-  const promise = (async () => {
+  const promise = koltsegSorbaAllit(async () => {
     try {
       const [result, gazolajAr] = await Promise.all([
         calculateTollForAddresses([from, to]),
         getGazolajAr(),
       ]);
-      if (!result.ok) {
-        koltsegCache.set(key, null);
-        return null;
-      }
+      if (!result.ok) return null;
       const literek = (result.route.distanceKm * KOLTSEG_ATLAG_FOGYASZTAS_L_PER_100KM) / 100;
       const uzemanyagKoltseg = literek * gazolajAr.ar;
       const utdijKoltseg = result.route.tollHuf?.grossTotal ?? 0;
@@ -852,12 +877,11 @@ async function szamitottUtKoltseg(
       koltsegCache.set(key, osszeg);
       return osszeg;
     } catch {
-      koltsegCache.set(key, null);
       return null;
     } finally {
       koltsegInFlight.delete(key);
     }
-  })();
+  });
   koltsegInFlight.set(key, promise);
   return promise;
 }
