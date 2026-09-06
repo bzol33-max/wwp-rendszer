@@ -111,6 +111,8 @@ function AddressField({
   );
 }
 
+const TILES_STORAGE_KEY = "wwp-kalkulator-eredmenyek";
+
 let tileIdCounter = 0;
 function nextTileId() {
   tileIdCounter += 1;
@@ -208,6 +210,12 @@ export function TollCalculator() {
   // (legújabb elöl), amíg valaki be nem zárja — így egyszerre több eredmény
   // is összehasonlítható.
   const [tiles, setTiles] = useState<ResultTile[]>([]);
+  // Az eredménycsempéket a böngésző localStorage-ában is megőrizzük, hogy
+  // lapváltáskor vagy oldalfrissítéskor is megmaradjanak — csak az "x"
+  // gombbal tűnnek el. `betoltve` jelzi, hogy a mentett állapot betöltése
+  // megtörtént, hogy az induláskori üres tiles ne írja felül a tárolt
+  // adatot, mielőtt beolvasnánk.
+  const [betoltve, setBetoltve] = useState(false);
   // A NAV aktuális hivatalos gázolajárát automatikusan, a szerverről kérjük
   // le (lásd lib/fuvarozas/uzemanyagar.ts) — soha nem kell kézzel frissíteni.
   const [gazolajAr, setGazolajAr] = useState<GazolajArResult | null>(null);
@@ -215,6 +223,32 @@ export function TollCalculator() {
   useEffect(() => {
     getGazolajAr().then(setGazolajAr);
   }, []);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(TILES_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as ResultTile[];
+        if (Array.isArray(parsed)) {
+          setTiles(parsed);
+          const maxId = parsed.reduce((m, t) => Math.max(m, t.id), 0);
+          if (maxId >= tileIdCounter) tileIdCounter = maxId + 1;
+        }
+      }
+    } catch {
+      // sérült/hiányzó tárolt adat — üresen indulunk
+    }
+    setBetoltve(true);
+  }, []);
+
+  useEffect(() => {
+    if (!betoltve) return;
+    try {
+      localStorage.setItem(TILES_STORAGE_KEY, JSON.stringify(tiles));
+    } catch {
+      // pl. privát böngészés — nem kritikus, csak a megőrzés marad el
+    }
+  }, [tiles, betoltve]);
 
   function updateStop(id: number, patch: Partial<Stop>) {
     setStops((prev) => {
