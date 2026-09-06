@@ -17,11 +17,13 @@ import { toast } from "sonner";
 import {
   frissitesMost,
   getSzamlak,
+  getSzamlaLejaratLista,
   getSzamlaOsszesito,
   getSzamlaSzinkronAllapot,
   jeloltFizetve,
   visszavonFizetve,
   type SzamlaAllapot,
+  type SzamlaLejaratLista,
 } from "@/lib/szamlak/actions";
 import {
   ALKATEGORIA_LABEL,
@@ -63,6 +65,120 @@ function OsszesitoCsempek({ sorok }: { sorok: SzamlaOsszesitoSor[] }) {
                 </span>
               )}
             </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+/** Kompakt, csempébe illő mini-táblázat egy lejárat-szakaszhoz (Következő / Lejárt). */
+function LejaratMiniTabla({
+  cim,
+  sorok,
+  lejartStilus,
+  ures,
+  onFizetve,
+}: {
+  cim: string;
+  sorok: SzamlaRow[];
+  lejartStilus: boolean;
+  ures: string;
+  onFizetve: (id: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <div className={`text-sm font-semibold ${lejartStilus ? "text-destructive" : ""}`}>{cim}</div>
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Sorszám</TableHead>
+              <TableHead>Vevő</TableHead>
+              <TableHead>Fizetési határidő</TableHead>
+              <TableHead className="text-right">Összeg</TableHead>
+              <TableHead className="w-24">Fizetve</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sorok.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center text-muted-foreground">
+                  {ures}
+                </TableCell>
+              </TableRow>
+            )}
+            {sorok.map((row) => (
+              <TableRow key={row.id} className={lejartStilus ? "bg-destructive/10 hover:bg-destructive/15" : ""}>
+                <TableCell className="text-muted-foreground">{row.szamlaszam}</TableCell>
+                <TableCell>{row.vevo_nev}</TableCell>
+                <TableCell className={lejartStilus ? "font-medium text-destructive" : ""}>
+                  {row.fizetesi_hatarido ?? "—"}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">{formatOsszeg(row.brutto, row.penznem)}</TableCell>
+                <TableCell>
+                  <Button variant="secondary" size="sm" className="h-7 px-2 text-xs" onClick={() => onFizetve(row.id)}>
+                    Fizetve?
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}
+
+/** Két csempe (Fuvar / Raklap) a legközelebbi és a lejárt esedékességű, nyitott számlákról — gyors áttekintéshez. */
+function LejaratCsempek({ refreshKey, onChanged }: { refreshKey: number; onChanged: () => void }) {
+  const [fuvar, setFuvar] = useState<SzamlaLejaratLista | null>(null);
+  const [raklap, setRaklap] = useState<SzamlaLejaratLista | null>(null);
+
+  const load = useCallback(async () => {
+    const [f, r] = await Promise.all([getSzamlaLejaratLista("fuvar"), getSzamlaLejaratLista("raklap")]);
+    setFuvar(f);
+    setRaklap(r);
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load, refreshKey]);
+
+  async function handleFizetve(id: string) {
+    await jeloltFizetve(id);
+    await load();
+    onChanged();
+    toast.success("Számla fizetve-nek jelölve.");
+  }
+
+  const csempek: { kategoria: SzamlaKategoria; adat: SzamlaLejaratLista | null }[] = [
+    { kategoria: "fuvar", adat: fuvar },
+    { kategoria: "raklap", adat: raklap },
+  ];
+
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      {csempek.map(({ kategoria, adat }) => (
+        <Card key={kategoria}>
+          <CardHeader>
+            <CardTitle className="text-sm">{KATEGORIA_LABEL[kategoria]} — esedékesség szerint</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-5">
+            <LejaratMiniTabla
+              cim="Következő 10 lejárat"
+              sorok={adat?.kovetkezo ?? []}
+              lejartStilus={false}
+              ures="Nincs közelgő esedékesség."
+              onFizetve={handleFizetve}
+            />
+            <LejaratMiniTabla
+              cim={`Lejárt (${adat?.lejartOsszesen ?? 0})`}
+              sorok={adat?.lejart ?? []}
+              lejartStilus
+              ures="Nincs lejárt számla."
+              onFizetve={handleFizetve}
+            />
           </CardContent>
         </Card>
       ))}
@@ -244,6 +360,8 @@ export function SzamlakView() {
       </Card>
 
       <OsszesitoCsempek sorok={osszesito} />
+
+      <LejaratCsempek refreshKey={refreshKey} onChanged={loadOsszesito} />
 
       <Tabs defaultValue="fuvar">
         <TabsList>

@@ -38,6 +38,56 @@ export async function getSzamlak(kategoria: SzamlaKategoria): Promise<SzamlaRow[
   );
 }
 
+export type SzamlaLejaratLista = {
+  /** A legközelebbi (még nem lejárt) esedékességű, nyitott számlák, max. 10 db. */
+  kovetkezo: SzamlaRow[];
+  /** Az összes lejárt esedékességű, nyitott számla, a legrégebben lejárt elöl. */
+  lejart: SzamlaRow[];
+  lejartOsszesen: number;
+};
+
+/**
+ * Kategóriánkénti (Fuvar/Raklap) gyors lejárat-áttekintés a Kezdőlap-szerű
+ * csempékhez: a legközelebbi 10 esedékesség, plusz az összes lejárt tétel —
+ * a sztornó-párok itt is ki vannak zárva.
+ */
+export async function getSzamlaLejaratLista(kategoria: SzamlaKategoria): Promise<SzamlaLejaratLista> {
+  const kovetkezo = await query<SzamlaRow>(
+    `select ${SZAMLA_COLUMNS}
+     from szamla
+     where kategoria = $1
+       and not fizetve
+       and not sztorno
+       and not sztornozva
+       and (fizetesi_hatarido is null or fizetesi_hatarido >= current_date)
+     order by fizetesi_hatarido asc nulls last, kiallitas_datum desc
+     limit 10`,
+    [kategoria]
+  );
+  const lejart = await query<SzamlaRow>(
+    `select ${SZAMLA_COLUMNS}
+     from szamla
+     where kategoria = $1
+       and not fizetve
+       and not sztorno
+       and not sztornozva
+       and fizetesi_hatarido < current_date
+     order by fizetesi_hatarido asc
+     limit 50`,
+    [kategoria]
+  );
+  const lejartOsszesen = (
+    await query<{ n: number }>(
+      `select count(*)::int as n
+       from szamla
+       where kategoria = $1 and not fizetve and not sztorno and not sztornozva and fizetesi_hatarido < current_date`,
+      [kategoria]
+    )
+  )[0]?.n ?? 0;
+
+  return { kovetkezo, lejart, lejartOsszesen };
+}
+
 /** Kategóriánkénti (Raklapnál alkategóriánkénti) kintlévőség-összesítő, pénznemenként külön — a sztornó-párok nélkül. */
 export async function getSzamlaOsszesito(): Promise<SzamlaOsszesitoSor[]> {
   return query<SzamlaOsszesitoSor>(
