@@ -29,6 +29,26 @@ export const FUVAR_STATUSZ_LABEL: Record<FuvarStatusz, string> = {
 
 export const FUVAR_STATUSZOK = Object.keys(FUVAR_STATUSZ_LABEL) as FuvarStatusz[];
 
+/**
+ * Egy nap saját fuvarjai az idővonal-becsléshez — nyers (nem szövegre
+ * formázott) dátumokkal, hogy Date objektumot lehessen belőlük építeni.
+ */
+export type MaiFuvarSor = {
+  id: string;
+  megrendelo: string | null;
+  felrako: string | null;
+  lerako: string;
+  /** Szabad szöveg (pl. "06:00") — nincs garantált formátum. */
+  idopont: string | null;
+  /** ISO dátum (YYYY-MM-DD) — a felrakás napja. */
+  datum: string;
+  /** ISO dátum (YYYY-MM-DD), ha a lerakás más napra esik. */
+  lerakas_datum: string | null;
+  jarmu: string | null;
+  sofor: string | null;
+  pozicioszam: string | null;
+};
+
 export type FuvarRow = {
   id: string;
   tipus: FuvarTipus;

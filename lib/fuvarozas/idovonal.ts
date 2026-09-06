@@ -164,3 +164,37 @@ export function napiTavKm(szakaszok: IdovonalSzakasz[]): number {
     .filter((sz): sz is Extract<IdovonalSzakasz, { tipus: "vezetes" }> => sz.tipus === "vezetes")
     .reduce((sum, sz) => sum + sz.tavKm, 0);
 }
+
+/**
+ * Egy saját fuvar (megbízás) becsült elhelyezése az idővonalon — a valós
+ * GPS-adattól függetlenül, a megbízás adataiból (időpont, felrakó/lerakó
+ * cím, becsült menetidő + rakodási/lerakodási puffer) számolva. A
+ * `lib/fuvarozas/actions.ts`-ben épül fel, mert a menetidő-becsléshez
+ * hálózati hívás (geokódolás + útvonaltervezés) kell.
+ */
+export type TervezettFuvarSzakasz = {
+  id: string;
+  megrendelo: string | null;
+  pozicioszam: string | null;
+  honnan: string | null;
+  hova: string;
+  /** Becsült felrakás-kezdés időpontja. */
+  kezdet: Date;
+  /** Becsült lerakás-befejezés időpontja. */
+  veg: Date;
+  /** Igaz, ha a megbízáson nem volt megadva időpont, ezért a kezdés csak durva alapértelmezés (reggel 7). */
+  idoBizonytalan: boolean;
+  /** Igaz, ha a menetidőt nem sikerült kiszámolni (cím hiányzik/nem geokódolható), ezért egy átalány (2 óra) szerepel. */
+  utvonalBizonytalan: boolean;
+};
+
+/** Szabad szöveges időpont-mezőből ("06:00", "de. 6", stb.) kiolvasott óra:perc, ha felismerhető. */
+export function parseIdopontSzoveg(text: string | null): { ora: number; perc: number } | null {
+  if (!text) return null;
+  const m = text.match(/(\d{1,2})[:.](\d{2})/);
+  if (!m) return null;
+  const ora = Number(m[1]);
+  const perc = Number(m[2]);
+  if (ora > 23 || perc > 59) return null;
+  return { ora, perc };
+}

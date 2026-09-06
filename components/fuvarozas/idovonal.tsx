@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { getIdovonalak, type JarmuIdovonalEredmeny } from "@/lib/fuvarozas/actions";
 import { SAJAT_JARMUVEK, JARMU_SZIN_DOT_CLASS, type JarmuSzin } from "@/lib/fuvarozas/vehicles";
-import type { IdovonalSzakasz } from "@/lib/fuvarozas/idovonal";
+import type { IdovonalSzakasz, TervezettFuvarSzakasz } from "@/lib/fuvarozas/idovonal";
 
 // 3 vízszintes idővonal-csík (egy-egy saját jármű, a kártyáin is használt
 // színében) a GPS-pozíció kártyák alatt. Minden csík a mai naptári napot
@@ -23,6 +23,12 @@ const SZIN_DOT_RING: Record<JarmuSzin, string> = {
   blue: "ring-blue-300",
   yellow: "ring-yellow-300",
   green: "ring-green-300",
+};
+
+const SZIN_TERVEZETT_BORDER: Record<JarmuSzin, string> = {
+  blue: "border-blue-500",
+  yellow: "border-yellow-600",
+  green: "border-green-600",
 };
 
 const NAP_KEZDETE_PERC = 0;
@@ -59,10 +65,37 @@ function AllasStilus(kategoria: Extract<IdovonalSzakasz, { tipus: "allas" }>["ka
   }
 }
 
+function TervezettFuvarSav({ jarmu, tervezettFuvarok }: { jarmu: (typeof SAJAT_JARMUVEK)[number]; tervezettFuvarok: TervezettFuvarSzakasz[] }) {
+  if (tervezettFuvarok.length === 0) return null;
+  return (
+    <div className="relative h-4 w-full">
+      {tervezettFuvarok.map((f) => {
+        const left = pctFromMinutes(percTolNapkezdettol(f.kezdet));
+        const right = pctFromMinutes(percTolNapkezdettol(f.veg));
+        const width = Math.max(0.5, right - left);
+        const bizonytalan = f.idoBizonytalan || f.utvonalBizonytalan;
+        return (
+          <span
+            key={f.id}
+            title={`${f.megrendelo ?? "Megbízás"}${f.pozicioszam ? ` (${f.pozicioszam})` : ""}\n${f.honnan ?? "?"} → ${f.hova}\nBecsült: ${formatIdo(
+              f.kezdet
+            )}–${formatIdo(f.veg)}${bizonytalan ? "\n(becslés — " + (f.idoBizonytalan ? "nincs megadott időpont" : "") + (f.idoBizonytalan && f.utvonalBizonytalan ? ", " : "") + (f.utvonalBizonytalan ? "átalány menetidő" : "") + ")" : ""}`}
+            className={`absolute top-0 h-full rounded-sm border-dashed bg-white/70 dark:bg-black/30 ${SZIN_TERVEZETT_BORDER[jarmu.szin]} ${
+              bizonytalan ? "border-dashed" : "border-solid"
+            }`}
+            style={{ left: `${left}%`, width: `${width}%`, borderWidth: 1.5 }}
+          />
+        );
+      })}
+    </div>
+  );
+}
+
 function IdovonalCsik({ jarmu, eredmeny }: { jarmu: (typeof SAJAT_JARMUVEK)[number]; eredmeny: JarmuIdovonalEredmeny | undefined }) {
   const szakaszok = eredmeny?.szakaszok;
   const hiba = eredmeny?.hiba;
   const figyelmezetesek = eredmeny?.figyelmezetesek ?? [];
+  const tervezettFuvarok = eredmeny?.tervezettFuvarok ?? [];
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -88,7 +121,7 @@ function IdovonalCsik({ jarmu, eredmeny }: { jarmu: (typeof SAJAT_JARMUVEK)[numb
       </div>
 
       {jarmu.ecofleetObjectId === null ? (
-        <div className="h-6 w-full rounded bg-muted" />
+        <div className="flex h-6 w-full items-center rounded bg-muted px-2 text-[11px] text-muted-foreground">Nincs GPS-adat.</div>
       ) : hiba ? (
         <div className="flex h-6 w-full items-center rounded bg-muted px-2 text-[11px] text-destructive">{hiba}</div>
       ) : !szakaszok || szakaszok.length === 0 ? (
@@ -133,6 +166,8 @@ function IdovonalCsik({ jarmu, eredmeny }: { jarmu: (typeof SAJAT_JARMUVEK)[numb
           })}
         </div>
       )}
+
+      <TervezettFuvarSav jarmu={jarmu} tervezettFuvarok={tervezettFuvarok} />
 
       {figyelmezetesek.length > 0 && (
         <ul className="flex flex-col gap-0.5 pl-1 text-[11px] text-muted-foreground">
@@ -184,8 +219,10 @@ export function JarmuIdovonalak() {
             ))}
             <p className="text-[11px] text-muted-foreground">
               A narancssárga szakaszok valószínű rakodást/ügyintézést, a szürke szakaszok pihenőt vagy rövid megállást jelölnek — időtartam alapú
-              becslés, a tényleges okot érdemes ellenőrizni. Az AETR-figyelmeztetések a napi vezetési/pihenő szabályok egyszerűsített ellenőrzéséből
-              származnak, jogi teljeskörűséget nem helyettesítenek.
+              becslés, a tényleges okot érdemes ellenőrizni. A vastag sáv alatti szaggatott/keretes téglalapok a mai saját megbízások becsült
+              időpontjai (időpont + felrakó/lerakó cím + útvonal-menetidő + rakodási/lerakodási puffer alapján) — szaggatott keret jelzi, ha nincs
+              megadva pontos időpont vagy nem sikerült az útvonalat kiszámolni, ilyenkor csak durva becslés. Az AETR-figyelmeztetések a napi
+              vezetési/pihenő szabályok egyszerűsített ellenőrzéséből származnak, jogi teljeskörűséget nem helyettesítenek.
             </p>
           </div>
         )}

@@ -5,6 +5,7 @@ import type {
   FuvarTipus,
   FuvarStatusz,
   FuvarRow,
+  MaiFuvarSor,
   AddFuvarInput,
   ApproveFuvarInput,
 } from "@/lib/fuvarozas/fuvar-constants";
@@ -68,6 +69,29 @@ export async function getFolyamatbanSajatFuvarok(): Promise<FuvarRow[]> {
        and coalesce(lerakas_datum, datum) >= current_date
      order by ellenorzott asc, coalesce(lerakas_datum, datum) asc, id asc
      limit 200`
+  );
+}
+
+/**
+ * Egy adott nap (alapértelmezetten a mai) saját fuvarjai — akár aznap
+ * kell felrakni, akár aznap kell lerakni —, nyers dátumokkal, a napi
+ * jármű-idővonalra (GPS-idővonal + tervezett fuvarok) történő
+ * időpont-becsléshez.
+ */
+export async function getMaiSajatFuvarok(nap?: string): Promise<MaiFuvarSor[]> {
+  return query<MaiFuvarSor>(
+    `select
+       id::text, megrendelo, felrako, lerako, idopont,
+       to_char(datum, 'YYYY-MM-DD') as datum,
+       to_char(lerakas_datum, 'YYYY-MM-DD') as lerakas_datum,
+       jarmu, sofor, pozicioszam
+     from fuvar_megbizasok
+     where tipus = 'sajat' and statusz <> 'torolt'
+       and (datum = coalesce($1::date, current_date)
+            or coalesce(lerakas_datum, datum) = coalesce($1::date, current_date))
+     order by idopont nulls last, id asc
+     limit 100`,
+    [nap ?? null]
   );
 }
 

@@ -12,9 +12,11 @@ import {
   type TollRoute,
 } from "./utdijkalkulacio";
 import { fetchGazolajAr, GazolajArError } from "./uzemanyagar";
-import { epitsIdovonal, type IdovonalSzakasz } from "./idovonal";
+import { epitsIdovonal, parseIdopontSzoveg, type IdovonalSzakasz, type TervezettFuvarSzakasz } from "./idovonal";
 import { ellenorizAetr, type AetrFigyelmezetes } from "./aetr";
-import { SAJAT_JARMUVEK } from "./vehicles";
+import { SAJAT_JARMUVEK, resolveJarmu, type SajatJarmu } from "./vehicles";
+import { getMaiSajatFuvarok } from "./megbizasok";
+import type { MaiFuvarSor } from "./fuvar-constants";
 
 // Ha a NAV oldala nem érhető el (átmeneti hiba, oldalszerkezet-változás),
 // ez a tartalék érték jelenik meg — utoljára kézzel ellenőrizve 2026.
@@ -102,38 +104,103 @@ export type JarmuIdovonalEredmeny = {
   szakaszok: IdovonalSzakasz[] | null;
   figyelmezetesek: AetrFigyelmezetes[];
   hiba: string | null;
+  /** Az adott napra ehhez a sofőrhöz rendelt saját fuvarok, becsült időponttal az idővonalra helyezve. */
+  tervezettFuvarok: TervezettFuvarSzakasz[];
 };
 
 /** "Europe/Budapest" szerinti mai naptári nap 00:00–jelenlegi időpont (vagy 23:59:59, ha egy korábbi napot kérnek). */
-function budapestNapHatarok(nap?: string): { kezdet: Date; veg: Date } {
+function budapestNapHatarok(nap?: string): { kezdet: Date; veg: Date; napISO: string } {
   const fmt = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Budapest", year: "numeric", month: "2-digit", day: "2-digit" });
   const maiNap = fmt.format(new Date()); // "YYYY-MM-DD"
   const celNap = nap ?? maiNap;
   const kezdet = new Date(`${celNap}T00:00:00`);
   const veg = celNap === maiNap ? new Date() : new Date(`${celNap}T23:59:59`);
-  return { kezdet, veg };
+  return { kezdet, veg, napISO: celNap };
+}
+
+const RAKODAS_PUFFER_PERC = 30;
+const LERAKODAS_PUFFER_PERC = 45;
+/** Ha egy megbízáson nincs megadva időpont, ezt tekintjük becsült felrakás-kezdésnek. */
+const ALAPERTELMEZETT_FELRAKAS_ORA = 7;
+/** Ha a cím nem geokódolható / az útvonal nem számolható, ennyi menetidőt feltételezünk. */
+const ALAPERTELMEZETT_UTVONAL_PERC = 120;
+
+function driverMatchesRow(jarmu: SajatJarmu, row: MaiFuvarSor): boolean {
+  if (row.jarmu && resolveJarmu(row.jarmu) === jarmu) return true;
+  if (row.sofor && row.sofor.trim().toLowerCase() === jarmu.sofor.toLowerCase()) return true;
+  return false;
+}
+
+async function becsulFuvarSzakasz(row: MaiFuvarSor): Promise<TervezettFuvarSzakasz> {
+  const parsedIdo = parseIdopontSzoveg(row.idopont);
+  const idoBizonytalan = !parsedIdo;
+  const [ev, ho, napSzam] = row.datum.split("-").map(Number);
+  const kezdet = new Date(ev, ho - 1, napSzam, parsedIdo?.ora ?? ALAPERTELMEZETT_FELRAKAS_ORA, parsedIdo?.perc ?? 0, 0);
+
+  let utvonalPercek = ALAPERTELMEZETT_UTVONAL_PERC;
+  let utvonalBizonytalan = true;
+  if (row.felrako && row.lerako) {
+    try {
+      const [honnan, hova] = await Promise.all([geocodeAddress(row.felrako), geocodeAddress(row.lerako)]);
+      const route = await calculateToll({
+        points: [
+          { lon: honnan.lon, lat: honnan.lat },
+          { lon: hova.lon, lat: hova.lat },
+        ],
+        ...FIXED_VEHICLE,
+      });
+      utvonalPercek = route.durationMin;
+      utvonalBizonytalan = false;
+    } catch {
+      // marad az alapértelmezett átalány-menetidő
+    }
+  }
+
+  const felrakasVeg = new Date(kezdet.getTime() + RAKODAS_PUFFER_PERC * 60000);
+  const erkezes = new Date(felrakasVeg.getTime() + utvonalPercek * 60000);
+  const veg = new Date(erkezes.getTime() + LERAKODAS_PUFFER_PERC * 60000);
+
+  return {
+    id: row.id,
+    megrendelo: row.megrendelo,
+    pozicioszam: row.pozicioszam,
+    honnan: row.felrako,
+    hova: row.lerako,
+    kezdet,
+    veg,
+    idoBizonytalan,
+    utvonalBizonytalan,
+  };
 }
 
 /**
  * Minden saját jármű mai (vagy megadott napi) idővonala valós Ecofleet
- * trip-előzményből, AETR-figyelmeztetésekkel együtt.
+ * trip-előzményből, AETR-figyelmeztetésekkel, PLUSZ az adott napra
+ * ütemezett saját megbízások becsült időpontokkal az idővonalra helyezve
+ * (felrakó/lerakó cím + útvonal-menetidő + rakodási/lerakodási puffer
+ * alapján — ha nincs megadva pontos időpont vagy nem sikerül a
+ * geokódolás/útvonalszámítás, a szakasz "bizonytalan" jelölést kap).
  */
 export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny[]> {
-  const { kezdet, veg } = budapestNapHatarok(nap);
+  const { kezdet, veg, napISO } = budapestNapHatarok(nap);
+  const maiFuvarok = await getMaiSajatFuvarok(napISO).catch(() => [] as MaiFuvarSor[]);
 
   return Promise.all(
     SAJAT_JARMUVEK.map(async (jarmu): Promise<JarmuIdovonalEredmeny> => {
+      const sajatSorok = maiFuvarok.filter((row) => driverMatchesRow(jarmu, row));
+      const tervezettFuvarok = await Promise.all(sajatSorok.map(becsulFuvarSzakasz));
+
       if (!jarmu.ecofleetObjectId) {
-        return { sofor: jarmu.sofor, szin: jarmu.szin, szakaszok: null, figyelmezetesek: [], hiba: null };
+        return { sofor: jarmu.sofor, szin: jarmu.szin, szakaszok: null, figyelmezetesek: [], hiba: null, tervezettFuvarok };
       }
       try {
         const trips = await getVehicleTrips(jarmu.ecofleetObjectId, kezdet, veg);
         const szakaszok = epitsIdovonal(trips);
         const figyelmezetesek = ellenorizAetr(szakaszok);
-        return { sofor: jarmu.sofor, szin: jarmu.szin, szakaszok, figyelmezetesek, hiba: null };
+        return { sofor: jarmu.sofor, szin: jarmu.szin, szakaszok, figyelmezetesek, hiba: null, tervezettFuvarok };
       } catch (err) {
         const message = err instanceof EcofleetError ? err.message : "Nem sikerült lekérni az idővonalat.";
-        return { sofor: jarmu.sofor, szin: jarmu.szin, szakaszok: null, figyelmezetesek: [], hiba: message };
+        return { sofor: jarmu.sofor, szin: jarmu.szin, szakaszok: null, figyelmezetesek: [], hiba: message, tervezettFuvarok };
       }
     })
   );
