@@ -65,6 +65,8 @@ export type FuvarRow = {
   pozicioszam: string | null;
   /** Igaz, ha megerősítve rögzítve lett, hogy ennél a megbízónál nincs ilyen szám. */
   pozicioszam_nincs: boolean;
+  /** A Számla/Posta nézethez: hová kell postázni a kiállított számlát ennél a megbízásnál. */
+  postazasi_cim: string | null;
 };
 
 export type AddFuvarInput = {

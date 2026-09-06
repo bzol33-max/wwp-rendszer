@@ -39,6 +39,7 @@ import {
   getElokeszitettFuvarok,
   getFuvarok,
   setFuvarPoziciszam,
+  setFuvarPostazasiCim,
   updateFuvarStatus,
 } from "@/lib/fuvarozas/megbizasok";
 import {
@@ -209,6 +210,74 @@ function PoziciszamCell({
   );
 }
 
+/** Egy sor a lista táblázatban inline szerkeszthető, szabad szöveges mező (pl. postázási cím). */
+function SzovegCell({
+  value,
+  onSave,
+  placeholder,
+}: {
+  value: string | null;
+  onSave: (value: string | null) => Promise<void>;
+  placeholder: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(value ?? "");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setText(value ?? "");
+  }, [value]);
+
+  async function persist() {
+    setSaving(true);
+    try {
+      await onSave(text || null);
+      setEditing(false);
+    } catch {
+      toast.error("Nem sikerült menteni.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <Input
+          autoFocus
+          className="h-7 w-[220px] text-xs"
+          placeholder={placeholder}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") persist();
+            if (e.key === "Escape") setEditing(false);
+          }}
+        />
+        <button
+          type="button"
+          className="text-xs text-primary hover:underline disabled:opacity-50"
+          disabled={saving}
+          onClick={persist}
+        >
+          Mentés
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      title="Szerkesztés"
+      className={`text-left hover:underline ${value ? "" : "text-muted-foreground"}`}
+      onClick={() => setEditing(true)}
+    >
+      {value ?? placeholder}
+    </button>
+  );
+}
+
 /** Egy sor a fuvar-részletek nézetben — csak akkor jelenik meg, ha van értéke. */
 function ReszletSor({ label, children }: { label: string; children: ReactNode }) {
   if (children == null || children === "") return null;
@@ -275,6 +344,7 @@ function FuvarDetailModal({
                 {row.fizetesi_hatarido_nap != null ? `${row.fizetesi_hatarido_nap} nap` : null}
               </ReszletSor>
               <ReszletSor label="Státusz">{FUVAR_STATUSZ_LABEL[row.statusz]}</ReszletSor>
+              <ReszletSor label="Postázási cím">{row.postazasi_cim}</ReszletSor>
               <ReszletSor label="Megjegyzés">{row.megjegyzes}</ReszletSor>
               <ReszletSor label="Rögzítette">{row.created_by}</ReszletSor>
             </div>
@@ -910,6 +980,32 @@ function roviditettHelynev(value: string | null | undefined): string {
   return [hely, nev].filter(Boolean).join(" ").trim();
 }
 
+/** Egy felrakó/lerakó cím szövegéből csak a városnév (irányítószám és partner nélkül) — a Számla/Posta nézethez. */
+function varosNev(value: string | null | undefined): string {
+  if (!value) return "";
+  const parts = value
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  let city = "";
+  parts.forEach((p) => {
+    if (city) return;
+    const m = p.match(/(\d{4})\s+([^(]+)/);
+    if (m) city = m[2].trim();
+  });
+
+  if (!city) {
+    parts.forEach((p) => {
+      if (city) return;
+      const kulcsszo = Object.keys(ISMERT_IRSZ_KULCSSZO).find((k) => p.includes(k));
+      if (kulcsszo) city = p.replace(/\(.*\)/, "").trim();
+    });
+  }
+
+  return city || value;
+}
+
 /**
  * A "Bér fuvarok" (tipus="sajat") lista — kizárólag a megbízás-specifikus 7
  * oszloppal: 1) Dátum = a megbízás beérkezési dátuma, 2) Megrendelő,
@@ -1029,6 +1125,124 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
                         ))}
                       </SelectContent>
                     </Select>
+                  </TableCell>
+                  <TableCell className="align-top">
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(row.id)}
+                      title="Törlés"
+                      className="text-destructive/70 hover:text-destructive"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+      <FuvarDetailModal row={reszletek} onClose={() => setReszletek(null)} />
+    </Card>
+  );
+}
+
+/**
+ * Számla/Posta fül: a Bér fuvarok listája számlázási/postázási fókusszal —
+ * ugyanaz az adat, mint a "Bér fuvarok" fülön (az ott is megmarad), de itt a
+ * Honnan → Hová csak a városnevet mutatja (a teljes cím helyett), nincs
+ * Státusz oszlop, és van egy új, inline szerkeszthető "Postázási cím" mező
+ * (hová kell postázni a kiállított számlát ennél a megbízásnál).
+ */
+function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
+  const [rows, setRows] = useState<FuvarRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [reszletek, setReszletek] = useState<FuvarRow | null>(null);
+
+  const load = useCallback(async () => {
+    const data = await getFuvarok("sajat");
+    setRows(data);
+  }, []);
+
+  useEffect(() => {
+    setLoading(true);
+    load().finally(() => setLoading(false));
+  }, [load, refreshKey]);
+
+  async function handleDelete(id: string) {
+    await deleteFuvar(id);
+    await load();
+    toast.success("Fuvar törölve.");
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-sm">Bér fuvarok — Számla/Posta</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Dátum</TableHead>
+                <TableHead>Megrendelő</TableHead>
+                <TableHead>Hiv. szám</TableHead>
+                <TableHead>Honnan → Hová</TableHead>
+                <TableHead className="text-right">Fuvardíj</TableHead>
+                <TableHead>Fizetési határidő</TableHead>
+                <TableHead>Kocsi</TableHead>
+                <TableHead>Postázási cím</TableHead>
+                <TableHead className="w-8"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {!loading && rows.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center text-muted-foreground">
+                    Még nincs rögzített bér fuvar.
+                  </TableCell>
+                </TableRow>
+              )}
+              {rows.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell className="align-top text-muted-foreground">
+                    <button
+                      type="button"
+                      title="Megbízás megnyitása"
+                      className="hover:underline"
+                      onClick={() => setReszletek(row)}
+                    >
+                      {row.erkezett_datum ?? row.date}
+                    </button>
+                  </TableCell>
+                  <TableCell className="max-w-[120px] whitespace-normal break-words align-top leading-tight">
+                    {row.megrendelo ?? "—"}
+                  </TableCell>
+                  <TableCell className="max-w-[140px] whitespace-normal break-words align-top leading-tight">
+                    <PoziciszamCell row={row} onSaved={load} />
+                  </TableCell>
+                  <TableCell className="align-top">
+                    {row.felrako ? `${varosNev(row.felrako)} → ${varosNev(row.lerako)}` : varosNev(row.lerako)}
+                  </TableCell>
+                  <TableCell className="align-top text-right tabular-nums">
+                    {row.fuvardij != null ? `${row.fuvardij.toLocaleString("hu-HU")} Ft` : "—"}
+                  </TableCell>
+                  <TableCell className="align-top">
+                    {row.fizetesi_hatarido_nap != null ? `${row.fizetesi_hatarido_nap} nap` : "—"}
+                  </TableCell>
+                  <TableCell className="align-top">
+                    {row.jarmu ? <JarmuJelolo value={row.jarmu} /> : "—"}
+                  </TableCell>
+                  <TableCell className="align-top">
+                    <SzovegCell
+                      value={row.postazasi_cim}
+                      placeholder="postázási cím megadása"
+                      onSave={async (v) => {
+                        await setFuvarPostazasiCim(row.id, v);
+                        await load();
+                      }}
+                    />
                   </TableCell>
                   <TableCell className="align-top">
                     <button
@@ -1289,11 +1503,7 @@ export function Megbizasok() {
         <Kapcsolatok />
       </TabsContent>
       <TabsContent value="szamla-posta" className="mt-4">
-        <Card className="bg-muted/40">
-          <CardContent className="py-4 text-sm text-muted-foreground">
-            Számla/Posta — hamarosan.
-          </CardContent>
-        </Card>
+        <SzamlaPostaLista refreshKey={0} />
       </TabsContent>
       <TabsContent value="archiv" className="mt-4">
         <Card className="bg-muted/40">

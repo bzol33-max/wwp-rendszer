@@ -27,7 +27,7 @@ const FUVAR_ROW_COLUMNS = `
   to_char(erkezett_datum, '${TIME_FMT}') as erkezett_datum,
   to_char(lerakas_datum, '${TIME_FMT}') as lerakas_datum,
   fizetesi_hatarido_nap,
-  pozicioszam, pozicioszam_nincs
+  pozicioszam, pozicioszam_nincs, postazasi_cim
 `;
 
 export async function getFuvarok(tipus: FuvarTipus): Promise<FuvarRow[]> {
@@ -120,6 +120,14 @@ export async function setFuvarPoziciszam(
      where id = $1`,
     [id, input.pozicioszam || null, input.nincs ?? false]
   );
+}
+
+/** A Számla/Posta nézet soron belüli, azonnali javítása: postázási cím kitöltése. */
+export async function setFuvarPostazasiCim(id: string, postazasiCim: string | null) {
+  await query(`update fuvar_megbizasok set postazasi_cim = $2 where id = $1`, [
+    id,
+    postazasiCim || null,
+  ]);
 }
 
 /** A "Jóváhagy" / "Módosít" gomb: a mezőket (esetleg módosítva) menti, és ellenorzott = true. */

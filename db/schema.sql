@@ -225,6 +225,15 @@ alter table fuvar_megbizasok add column if not exists fizetesi_hatarido_nap inte
 alter table fuvar_megbizasok add column if not exists pozicioszam text;
 alter table fuvar_megbizasok add column if not exists pozicioszam_nincs boolean not null default false;
 
+-- Számla/Posta fül: hová kell postázni a kiállított számlát ehhez a
+-- fuvarhoz (ha a megbízó papíralapú számlát kér, és nem a székhelyére).
+alter table fuvar_megbizasok add column if not exists postazasi_cim text;
+
+-- A Számla/Posta nézethez: a megbízáshoz tartozó postázási cím (ahová a
+-- kiállított számlát postán ki kell küldeni) — külön mező, mert eltérhet a
+-- felrakó/lerakó címtől és megbízásonként is változhat ugyanannál a partnernél.
+alter table fuvar_megbizasok add column if not exists postazasi_cim text;
+
 -- Fuvarozás — Kapcsolatok fül: a megbízásokból (és a hozzájuk tartozó
 -- e-mailekből) kinyert cégenkénti kapcsolattartók. Egy céghez több
 -- kapcsolattartó/telefon/e-mail sor is tartozhat.
