@@ -1098,7 +1098,7 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
                 <TableHead>Hiv. szám</TableHead>
                 <TableHead>Honnan → Hová</TableHead>
                 <TableHead className="text-right">Fuvardíj</TableHead>
-                <TableHead>Fizetési határidő</TableHead>
+                <TableHead title="Fizetési határidő">FH</TableHead>
                 <TableHead>Kocsi</TableHead>
                 <TableHead>Státusz</TableHead>
                 <TableHead className="w-8"></TableHead>
@@ -1234,7 +1234,7 @@ function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
                 <TableHead>Hiv. szám</TableHead>
                 <TableHead>Honnan → Hová</TableHead>
                 <TableHead className="text-right">Fuvardíj</TableHead>
-                <TableHead>Fizetési határidő</TableHead>
+                <TableHead title="Fizetési határidő">FH</TableHead>
                 <TableHead>Kocsi</TableHead>
                 <TableHead>Postázási cím</TableHead>
                 <TableHead className="w-8"></TableHead>
