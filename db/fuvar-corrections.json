@@ -1,0 +1,11 @@
+{
+  "updates": [
+    {
+      "driveFileId": "1GeRKm3fiZtHE-O800v1kp8ASh4Ieoebr",
+      "note": "Trans-Sped Kft. — 37941: a megbízás 3 állomásos (Gyermely → Polgár → Debrecen); a lerako mező javítva, a köztes állomás csak a mezőben szerepel.",
+      "patch": {
+        "lerako": "Polgár – Debrecen"
+      }
+    }
+  ]
+}

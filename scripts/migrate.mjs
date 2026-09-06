@@ -31,6 +31,7 @@ async function main() {
 
   await applyKapcsolatokUpdates(pool, dbDir);
   await applyPoziciszamUpdates(pool, dbDir);
+  await applyFuvarCorrections(pool, dbDir);
 
   await pool.end();
 }
@@ -131,6 +132,37 @@ async function applyPoziciszamUpdates(pool, dbDir) {
   }
 
   console.log(`[migrate] pozíciószámok visszatöltve: ${updated} sor.`);
+}
+
+// Bér fuvarok — egyedi, egyszeri mezőjavítások drive_file_id alapján (pl.
+// hibásan importált/összemosott adat egy adott megbízásnál). A db/fuvar-
+// corrections.json a folyamatosan bővülő forrás — minden induláskor lefut,
+// biztonságosan újrafuttatható (a patch mezőket egyszerűen ismét beállítja
+// ugyanarra az értékre, ami ártalmatlan). A "note" mező csak dokumentáció,
+// nem kerül be az adatbázisba.
+async function applyFuvarCorrections(pool, dbDir) {
+  let data;
+  try {
+    data = JSON.parse(readFileSync(path.join(dbDir, "fuvar-corrections.json"), "utf8"));
+  } catch {
+    console.log("[migrate] fuvar-corrections.json nincs, kihagyva.");
+    return;
+  }
+
+  let updated = 0;
+  for (const entry of data.updates ?? []) {
+    const entries = Object.entries(entry.patch ?? {});
+    if (entries.length === 0) continue;
+    const sets = entries.map(([key], i) => `${key} = $${i + 2}`);
+    const params = [entry.driveFileId, ...entries.map(([, value]) => value)];
+    const { rowCount } = await pool.query(
+      `update fuvar_megbizasok set ${sets.join(", ")} where drive_file_id = $1`,
+      params
+    );
+    updated += rowCount ?? 0;
+  }
+
+  console.log(`[migrate] fuvar-javítások alkalmazva: ${updated} sor.`);
 }
 
 main().catch((err) => {
