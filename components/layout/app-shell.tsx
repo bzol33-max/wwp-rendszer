@@ -63,7 +63,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
       <main className="flex-1 overflow-x-hidden">
-        <div className="mx-auto max-w-6xl px-8 py-7">{children}</div>
+        {/* A tartalom szélessége a kijelzőhöz igazodik (nagy felbontáson akár
+            teljes szélességben), hogy a sok oszlopos táblázatok (pl.
+            Fuvarozás — Számla/Posta) ne igényeljenek belső görgetést —
+            csak egy nagyon nagy max-szélesség van, hogy ultraszéles
+            monitoron ne fusson szélről szélre a tartalom. */}
+        <div className="mx-auto max-w-[1800px] px-8 py-7">{children}</div>
       </main>
     </div>
   );
