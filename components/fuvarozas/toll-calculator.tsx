@@ -111,49 +111,66 @@ function AddressField({
   );
 }
 
-function RouteResult({
-  route,
-  stopLabels,
-  gazolajAr,
-}: {
-  route: TollRoute;
+let tileIdCounter = 0;
+function nextTileId() {
+  tileIdCounter += 1;
+  return tileIdCounter;
+}
+
+type ResultTile = {
+  id: number;
   stopLabels: string[];
+  route: TollRoute;
+  /** A számításkor érvényes gázolajár — rögzítve, hogy egy régi csempe eredménye ne változzon utólag. */
   gazolajAr: GazolajArResult | null;
-}) {
+};
+
+function ResultTileCard({ tile, onClose }: { tile: ResultTile; onClose: () => void }) {
+  const { route, stopLabels, gazolajAr } = tile;
   const literek = (route.distanceKm * ATLAG_FOGYASZTAS_L_PER_100KM) / 100;
+  const uzemanyagKoltseg = gazolajAr ? Math.round(literek * gazolajAr.ar) : null;
+  const utdijKoltseg = route.tollHuf?.grossTotal ?? 0;
+  const osszKoltseg = (uzemanyagKoltseg ?? 0) + utdijKoltseg;
+
   return (
-    <div className="flex flex-col gap-1 rounded-lg border border-border p-2 text-xs">
-      {stopLabels.length > 2 && (
-        <div className="text-muted-foreground">{stopLabels.join(" → ")}</div>
-      )}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5">
-        <span className="font-medium">
-          {route.distanceKm.toLocaleString("hu-HU")} km · {formatDuration(route.durationMin)}
-        </span>
-        <span>
-          Üzemanyag: <span className="font-medium">{formatLiter(literek)}</span>
-          {gazolajAr && (
-            <span className="text-muted-foreground">
-              {" "}
-              ({formatHuf(Math.round(literek * gazolajAr.ar))}, {ATLAG_FOGYASZTAS_L_PER_100KM} l/100km
-              átlaggal, {gazolajAr.ar} Ft/l NAV gázolajárral – {gazolajAr.cimke}
-              {!gazolajAr.friss && ", nem sikerült frissíteni"})
-            </span>
+    <Card size="sm" className="relative w-full min-w-[220px] sm:w-[calc(50%-0.5rem)] lg:w-[calc(33.333%-0.667rem)]">
+      <button
+        type="button"
+        aria-label="Eredmény eltávolítása"
+        className="absolute top-2 right-2 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+        onClick={onClose}
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
+      <CardContent className="flex flex-col gap-1.5 pr-6 text-xs">
+        <div className="pr-2 font-medium">{stopLabels.join(" → ")}</div>
+        <div className="flex flex-col gap-0.5 text-muted-foreground">
+          <div>
+            Táv: <span className="font-medium text-foreground">{route.distanceKm.toLocaleString("hu-HU")} km</span>
+            {" "}({formatDuration(route.durationMin)})
+          </div>
+          {route.tollHuf ? (
+            <div>
+              Útdíj: <span className="font-medium text-foreground">{formatHuf(route.tollHuf.grossTotal)}</span>
+            </div>
+          ) : (
+            <div>Útdíj: nincs útdíjköteles szakasz.</div>
           )}
-        </span>
-        {route.tollHuf ? (
-          <span>
-            Útdíj: <span className="font-medium">{formatHuf(route.tollHuf.grossTotal)}</span>
-            <span className="text-muted-foreground">
-              {" "}
-              ({formatHuf(route.tollHuf.infrastructure)} infra + {formatHuf(route.tollHuf.external)} külső)
-            </span>
-          </span>
-        ) : (
-          <span className="text-muted-foreground">Nincs útdíjköteles szakasz.</span>
-        )}
-      </div>
-    </div>
+          <div>
+            Üzemanyag: <span className="font-medium text-foreground">{formatLiter(literek)}</span>
+            {gazolajAr && uzemanyagKoltseg != null && (
+              <>
+                {" "}({formatHuf(uzemanyagKoltseg)}, {gazolajAr.ar} Ft/l – {gazolajAr.cimke}
+                {!gazolajAr.friss && ", nem sikerült frissíteni"})
+              </>
+            )}
+          </div>
+          <div className="pt-0.5 text-sm font-semibold text-foreground">
+            Össz. költség: {formatHuf(osszKoltseg)}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -187,7 +204,10 @@ export function TollCalculator() {
   // számú megálló felvehető anélkül, hogy külön "+" gombot kellene keresni.
   const [stops, setStops] = useState<Stop[]>([newStop(), newStop()]);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ stopLabels: string[]; route: TollRoute } | null>(null);
+  // Minden sikeres számítás egy külön csempeként megmarad a kalkulátor alatt
+  // (legújabb elöl), amíg valaki be nem zárja — így egyszerre több eredmény
+  // is összehasonlítható.
+  const [tiles, setTiles] = useState<ResultTile[]>([]);
   // A NAV aktuális hivatalos gázolajárát automatikusan, a szerverről kérjük
   // le (lásd lib/fuvarozas/uzemanyagar.ts) — soha nem kell kézzel frissíteni.
   const [gazolajAr, setGazolajAr] = useState<GazolajArResult | null>(null);
@@ -226,47 +246,57 @@ export function TollCalculator() {
     }
 
     setLoading(true);
-    setResult(null);
     const res = kitoltottek.every((s) => s.point)
       ? await calculateTollForPoints(kitoltottek.map((s) => s.point as GeocodedAddress))
       : await calculateTollForAddresses(kitoltottek.map((s) => s.value));
     setLoading(false);
 
     if (res.ok) {
-      setResult({ stopLabels: res.stopLabels, route: res.route });
+      setTiles((prev) => [
+        { id: nextTileId(), stopLabels: res.stopLabels, route: res.route, gazolajAr },
+        ...prev,
+      ]);
     } else {
       toast.error(res.error);
     }
   }
 
-  return (
-    <Card size="sm">
-      <CardHeader>
-        <CardTitle className="text-sm">Útdíj- és km-kalkulátor</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="flex flex-wrap items-start gap-2">
-          {stops.map((stop, i) => (
-            <AddressField
-              key={stop.id}
-              placeholder={stopLabel(i, stops.length)}
-              value={stop.value}
-              onChange={(v) => updateStop(stop.id, { value: v, point: null })}
-              onSelect={(a) => updateStop(stop.id, { value: a.label, point: a })}
-              onRemove={i > 0 && i < stops.length - 1 ? () => removeStop(stop.id) : undefined}
-            />
-          ))}
-          <Button type="submit" size="sm" disabled={loading}>
-            {loading ? "Számítás…" : "Számítás"}
-          </Button>
-        </form>
+  function removeTile(id: number) {
+    setTiles((prev) => prev.filter((t) => t.id !== id));
+  }
 
-        {result && (
-          <div className="mt-2">
-            <RouteResult route={result.route} stopLabels={result.stopLabels} gazolajAr={gazolajAr} />
-          </div>
-        )}
-      </CardContent>
-    </Card>
+  return (
+    <div className="flex flex-col gap-3">
+      <Card size="sm">
+        <CardHeader>
+          <CardTitle className="text-sm">Útdíj- és km-kalkulátor</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="flex flex-wrap items-start gap-2">
+            {stops.map((stop, i) => (
+              <AddressField
+                key={stop.id}
+                placeholder={stopLabel(i, stops.length)}
+                value={stop.value}
+                onChange={(v) => updateStop(stop.id, { value: v, point: null })}
+                onSelect={(a) => updateStop(stop.id, { value: a.label, point: a })}
+                onRemove={i > 0 && i < stops.length - 1 ? () => removeStop(stop.id) : undefined}
+              />
+            ))}
+            <Button type="submit" size="sm" disabled={loading}>
+              {loading ? "Számítás…" : "Számítás"}
+            </Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      {tiles.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {tiles.map((tile) => (
+            <ResultTileCard key={tile.id} tile={tile} onClose={() => removeTile(tile.id)} />
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
