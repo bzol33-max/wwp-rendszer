@@ -25,9 +25,33 @@ export async function GET() {
      order by rendelesszam`
   );
 
+  const erintettSzamok = [
+    "WLLWR-2026-27", "WLLWR-2026-53", "WLLWR-2026-72", "WLLWR-2026-120", "WLLWR-2026-137",
+    "WLLWR-2026-111", "WLLWR-2026-57", "WLLWR-2026-74", "WLLWR-2026-121", "WLLWR-2026-138",
+    "WLLWR-2026-41", "WLLWR-2026-73", "WLLWR-2026-139", "WLLWR-2026-13", "WLLWR-2026-68",
+    "WLLWR-2026-46", "WLLWR-2026-60", "WLLWR-2026-49", "WLLWR-2026-50",
+    "WLLWR-2026-107", "WLLWR-2026-86", "WLLWR-2026-143", "WLLWR-2026-149",
+  ];
+  const reszletek = await query<{
+    szamlaszam: string;
+    vevo_nev: string;
+    rendelesszam: string | null;
+    tetelek_szoveg: string;
+    brutto: number;
+    fizetve: boolean;
+    kiallitas_datum: string;
+  }>(
+    `select szamlaszam, vevo_nev, rendelesszam, tetelek_szoveg, brutto, fizetve, kiallitas_datum::text
+     from szamla
+     where szamlaszam = any($1)
+     order by rendelesszam, kiallitas_datum, szamlaszam`,
+    [erintettSzamok]
+  );
+
   return NextResponse.json({
     sztornoSzovegTalalat: sztornoSzoveg,
     negativVagyNullaOsszeg: negativOsszeg,
     duplikaltRendelesszamok: duplikaltRendelesszam,
+    reszletek,
   });
 }
