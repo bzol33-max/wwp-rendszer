@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { CheckIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -66,6 +67,11 @@ function SzamlaListaDialog({
 }) {
   const [rows, setRows] = useState<SzamlaRow[]>([]);
   const [loading, setLoading] = useState(false);
+  // A "Fizetve" jelölés az 5 perces visszavonási ablak végéig ne rendezze át
+  // azonnal a listát — csak a sor jelölése változzon (pipa, zöld), a sorrend
+  // maradjon, aztán a késleltetett load() hozza majd a valós (átrendezett)
+  // állapotot.
+  const idozitokRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const load = useCallback(async () => {
     if (!szuro) return;
@@ -83,16 +89,41 @@ function SzamlaListaDialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [szuro]);
 
+  useEffect(() => {
+    const idozitok = idozitokRef.current;
+    return () => {
+      idozitok.forEach((t) => clearTimeout(t));
+    };
+  }, []);
+
+  function torolIdozito(id: string) {
+    const korabbi = idozitokRef.current.get(id);
+    if (korabbi) {
+      clearTimeout(korabbi);
+      idozitokRef.current.delete(id);
+    }
+  }
+
   async function handleFizetve(id: string) {
     await jeloltFizetve(id);
-    await load();
+    setRows((rs) => rs.map((r) => (r.id === id ? { ...r, fizetve: true, fizetve_datum: new Date().toISOString() } : r)));
     onChanged();
     toast.success("Számla fizetve-nek jelölve.");
+
+    torolIdozito(id);
+    idozitokRef.current.set(
+      id,
+      setTimeout(() => {
+        idozitokRef.current.delete(id);
+        load();
+      }, 5 * 60 * 1000)
+    );
   }
 
   async function handleVisszavon(id: string) {
     await visszavonFizetve(id);
-    await load();
+    torolIdozito(id);
+    setRows((rs) => rs.map((r) => (r.id === id ? { ...r, fizetve: false, fizetve_datum: null } : r)));
     onChanged();
   }
 
@@ -151,7 +182,9 @@ function SzamlaListaDialog({
                     </TableCell>
                     <TableCell>
                       {row.fizetve ? (
-                        <Badge className="bg-success/15 text-success hover:bg-success/15 text-xs">Fizetve</Badge>
+                        <Badge className="gap-1 bg-success/15 text-success hover:bg-success/15 text-xs">
+                          <CheckIcon className="h-3 w-3" /> Fizetve
+                        </Badge>
                       ) : lejart ? (
                         <Badge className="bg-destructive/15 text-destructive hover:bg-destructive/15 text-xs">
                           Lejárt
@@ -240,12 +273,14 @@ function LejaratMiniTabla({
   lejartStilus,
   ures,
   onFizetve,
+  onVisszavon,
 }: {
   cim: string;
   sorok: SzamlaRow[];
   lejartStilus: boolean;
   ures: string;
   onFizetve: (id: string) => void;
+  onVisszavon: (id: string) => void;
 }) {
   return (
     <div className="flex flex-col gap-2">
@@ -258,7 +293,7 @@ function LejaratMiniTabla({
               <TableHead>Vevő</TableHead>
               <TableHead>Fizetési határidő</TableHead>
               <TableHead className="text-right">Összeg</TableHead>
-              <TableHead className="w-24">Fizetve</TableHead>
+              <TableHead className="w-28">Fizetve</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -269,21 +304,55 @@ function LejaratMiniTabla({
                 </TableCell>
               </TableRow>
             )}
-            {sorok.map((row) => (
-              <TableRow key={row.id} className={lejartStilus ? "bg-destructive/10 hover:bg-destructive/15" : ""}>
-                <TableCell className="text-muted-foreground">{row.szamlaszam}</TableCell>
-                <TableCell>{row.vevo_nev}</TableCell>
-                <TableCell className={lejartStilus ? "font-medium text-destructive" : ""}>
-                  {row.fizetesi_hatarido ?? "—"}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">{formatOsszeg(row.brutto, row.penznem)}</TableCell>
-                <TableCell>
-                  <Button variant="secondary" size="sm" className="h-7 px-2 text-xs" onClick={() => onFizetve(row.id)}>
-                    Fizetve?
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
+            {sorok.map((row) => {
+              // A frissen fizetve-nek jelölt sor a helyén marad, zöld/pipa jelöléssel,
+              // és 5 percig még visszavonható — nem tűnik el/rendeződik át azonnal.
+              const frissFizetve = row.fizetve && visszavonhato(row.fizetve_datum);
+              return (
+                <TableRow
+                  key={row.id}
+                  className={
+                    row.fizetve
+                      ? "bg-success/10 hover:bg-success/15"
+                      : lejartStilus
+                        ? "bg-destructive/10 hover:bg-destructive/15"
+                        : ""
+                  }
+                >
+                  <TableCell className="text-muted-foreground">{row.szamlaszam}</TableCell>
+                  <TableCell>{row.vevo_nev}</TableCell>
+                  <TableCell className={!row.fizetve && lejartStilus ? "font-medium text-destructive" : ""}>
+                    {row.fizetesi_hatarido ?? "—"}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{formatOsszeg(row.brutto, row.penznem)}</TableCell>
+                  <TableCell>
+                    {row.fizetve ? (
+                      <div className="flex items-center gap-1 text-xs text-success">
+                        <CheckIcon className="h-3.5 w-3.5" /> Fizetve
+                        {frissFizetve && (
+                          <button
+                            type="button"
+                            className="text-muted-foreground hover:underline"
+                            onClick={() => onVisszavon(row.id)}
+                          >
+                            (Visszavon)
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="h-7 px-2 text-xs"
+                        onClick={() => onFizetve(row.id)}
+                      >
+                        Fizetve?
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </div>
@@ -291,10 +360,25 @@ function LejaratMiniTabla({
   );
 }
 
+/** Egy lejárat-lista adott sorának helyben (átrendezés nélkül) frissítése. */
+function frissitSorLejaratListaban(
+  lista: SzamlaLejaratLista | null,
+  id: string,
+  frissit: (row: SzamlaRow) => SzamlaRow
+): SzamlaLejaratLista | null {
+  if (!lista) return lista;
+  const alkalmaz = (sorok: SzamlaRow[]) => sorok.map((r) => (r.id === id ? frissit(r) : r));
+  return { ...lista, kovetkezo: alkalmaz(lista.kovetkezo), lejart: alkalmaz(lista.lejart) };
+}
+
 /** Két csempe (Fuvar / Raklap) a legközelebbi és a lejárt esedékességű, nyitott számlákról — gyors áttekintéshez. */
 function LejaratCsempek({ refreshKey, onChanged }: { refreshKey: number; onChanged: () => void }) {
   const [fuvar, setFuvar] = useState<SzamlaLejaratLista | null>(null);
   const [raklap, setRaklap] = useState<SzamlaLejaratLista | null>(null);
+  // "Fizetve"-re kattintva a sor a helyén marad (pipa, zöld), és csak az 5 perces
+  // visszavonási ablak leteltével tűnik el ténylegesen — addig időzítővel várunk
+  // a valós (a sort már kizáró) újratöltéssel.
+  const idozitokRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
 
   const load = useCallback(async () => {
     const [f, r] = await Promise.all([getSzamlaLejaratLista("fuvar"), getSzamlaLejaratLista("raklap")]);
@@ -306,11 +390,45 @@ function LejaratCsempek({ refreshKey, onChanged }: { refreshKey: number; onChang
     load();
   }, [load, refreshKey]);
 
+  useEffect(() => {
+    const idozitok = idozitokRef.current;
+    return () => {
+      idozitok.forEach((t) => clearTimeout(t));
+    };
+  }, []);
+
+  function torolIdozito(id: string) {
+    const korabbi = idozitokRef.current.get(id);
+    if (korabbi) {
+      clearTimeout(korabbi);
+      idozitokRef.current.delete(id);
+    }
+  }
+
   async function handleFizetve(id: string) {
     await jeloltFizetve(id);
-    await load();
+    const most = new Date().toISOString();
+    setFuvar((f) => frissitSorLejaratListaban(f, id, (r) => ({ ...r, fizetve: true, fizetve_datum: most })));
+    setRaklap((r0) => frissitSorLejaratListaban(r0, id, (r) => ({ ...r, fizetve: true, fizetve_datum: most })));
     onChanged();
     toast.success("Számla fizetve-nek jelölve.");
+
+    torolIdozito(id);
+    idozitokRef.current.set(
+      id,
+      setTimeout(() => {
+        idozitokRef.current.delete(id);
+        load();
+      }, 5 * 60 * 1000)
+    );
+  }
+
+  async function handleVisszavon(id: string) {
+    await visszavonFizetve(id);
+    torolIdozito(id);
+    setFuvar((f) => frissitSorLejaratListaban(f, id, (r) => ({ ...r, fizetve: false, fizetve_datum: null })));
+    setRaklap((r0) => frissitSorLejaratListaban(r0, id, (r) => ({ ...r, fizetve: false, fizetve_datum: null })));
+    onChanged();
   }
 
   const csempek: { kategoria: SzamlaKategoria; adat: SzamlaLejaratLista | null }[] = [
@@ -332,6 +450,7 @@ function LejaratCsempek({ refreshKey, onChanged }: { refreshKey: number; onChang
               lejartStilus={false}
               ures="Nincs közelgő esedékesség."
               onFizetve={handleFizetve}
+              onVisszavon={handleVisszavon}
             />
             <LejaratMiniTabla
               cim={`Lejárt (${adat?.lejartOsszesen ?? 0})`}
@@ -339,6 +458,7 @@ function LejaratCsempek({ refreshKey, onChanged }: { refreshKey: number; onChang
               lejartStilus
               ures="Nincs lejárt számla."
               onFizetve={handleFizetve}
+              onVisszavon={handleVisszavon}
             />
           </CardContent>
         </Card>
