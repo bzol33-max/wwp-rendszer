@@ -28,6 +28,12 @@ function formatHuf(n: number): string {
 // költség is a fuvarköltség számításához).
 const ATLAG_FOGYASZTAS_L_PER_100KM = 30;
 
+// A NAV hivatalos, havonta közzétett gázolagár (nincs "heti" hivatalos ár
+// Magyarországon, ez a legfrissebb elérhető referenciaár) — 2026. szeptemberi
+// közlemény szerint. Havonta kézzel frissítendő, ha új NAV-közlemény jelenik
+// meg: https://nav.gov.hu/ugyfeliranytu/uzemanyag/2026-ban-alkalmazhato-uzemanyagarak
+const GAZOLAJ_AR_FT_PER_LITER = 667;
+
 function formatLiter(l: number): string {
   return `${l.toLocaleString("hu-HU", { maximumFractionDigits: 1 })} l`;
 }
@@ -130,7 +136,16 @@ function RouteResult({
           <span className="font-medium">
             {formatLiter((route.distanceKm * ATLAG_FOGYASZTAS_L_PER_100KM) / 100)}
           </span>
-          <span className="text-muted-foreground"> ({ATLAG_FOGYASZTAS_L_PER_100KM} l/100km átlaggal)</span>
+          <span className="text-muted-foreground">
+            {" "}
+            (
+            {formatHuf(
+              Math.round(
+                ((route.distanceKm * ATLAG_FOGYASZTAS_L_PER_100KM) / 100) * GAZOLAJ_AR_FT_PER_LITER
+              )
+            )}
+            , {ATLAG_FOGYASZTAS_L_PER_100KM} l/100km átlaggal, {GAZOLAJ_AR_FT_PER_LITER} Ft/l NAV gázolajárral)
+          </span>
         </span>
         {route.tollHuf ? (
           <span>
