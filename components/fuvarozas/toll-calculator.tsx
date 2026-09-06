@@ -269,7 +269,9 @@ export function TollCalculator() {
 
   return (
     <div className="flex flex-col gap-3">
-      <Card size="sm">
+      {/* overflow-visible: a Card alapból overflow-hidden, ami levágta a
+          címmezők alá nyíló javaslat-legördülőt — emiatt nem látszott. */}
+      <Card size="sm" className="overflow-visible">
         <CardHeader>
           <CardTitle className="text-sm">Útdíj- és km-kalkulátor</CardTitle>
         </CardHeader>
