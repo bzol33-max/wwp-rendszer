@@ -11,5 +11,13 @@ export async function GET() {
      order by fizetve_datum desc
      limit 10`
   );
-  return NextResponse.json({ recent });
+
+  const visszaallitva = await query(
+    `update szamla
+       set fizetve = false, fizetve_datum = null
+     where szamlaszam = 'WLLWR-2026-160'
+     returning id::text, szamlaszam`
+  );
+
+  return NextResponse.json({ recent, visszaallitva });
 }
