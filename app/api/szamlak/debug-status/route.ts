@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { getSzamlaLista } from "@/lib/szamlak/actions";
 
 export async function GET() {
+  const egyebLista = await getSzamlaLista({ kategoria: "raklap", alkategoria: "egyeb", penznem: "Ft" });
   const osszesito = await query(
     `select kategoria, alkategoria, penznem,
             coalesce(sum(brutto) filter (where not fizetve), 0) as nyitott_osszeg,
@@ -24,5 +26,5 @@ export async function GET() {
   const alkategoriaEloszlas = await query(
     `select alkategoria, count(*)::int as n from szamla where kategoria='raklap' group by alkategoria`
   );
-  return NextResponse.json({ osszesito, egyebMinta, alkategoriaEloszlas });
+  return NextResponse.json({ osszesito, egyebMinta, alkategoriaEloszlas, egyebLista });
 }
