@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { getFleetPositions, type EcofleetPositionWithCim } from "@/lib/fuvarozas/actions";
 import { SAJAT_JARMUVEK, findJarmuByPlate, JARMU_SZIN_DOT_CLASS, type SajatJarmu } from "@/lib/fuvarozas/vehicles";
+import { JarmuIdovonalak } from "@/components/fuvarozas/idovonal";
 
 /** "2026-09-04 13:35:05+0200" -> Date (a +0200 már helyi eltolás, nincs újraszámolás) */
 function parseEcofleetTimestamp(ts: string): Date | null {
@@ -164,41 +165,44 @@ export function GpsStatus() {
   const ismeretlenPozicok = positions.filter((p) => !matchedPositions.has(p.objectId));
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm">Járművek GPS-pozíciója</CardTitle>
-          <Button size="sm" variant="outline" onClick={handleRefresh} disabled={loading}>
-            {loading ? "Frissítés…" : "Frissítés"}
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {loading && positions.length === 0 && (
-          <p className="text-sm text-muted-foreground">Betöltés…</p>
-        )}
-        {!loading && error && positions.length === 0 && (
-          <p className="text-sm text-destructive">{error}</p>
-        )}
-        {!(loading && positions.length === 0) && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {jarmuCards.map(({ jarmu, pos }) =>
-              pos ? (
-                <VehicleCard key={jarmu.sofor} pos={pos} jarmu={jarmu} />
-              ) : (
-                <PlaceholderVehicleCard
-                  key={jarmu.sofor}
-                  jarmu={jarmu}
-                  ismeretlen={jarmu.rendszamok.length > 0 && !error}
-                />
-              )
-            )}
-            {ismeretlenPozicok.map((pos) => (
-              <VehicleCard key={pos.objectId} pos={pos} jarmu={findJarmuByPlate(pos.plate)} />
-            ))}
+    <div className="flex flex-col gap-5">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm">Járművek GPS-pozíciója</CardTitle>
+            <Button size="sm" variant="outline" onClick={handleRefresh} disabled={loading}>
+              {loading ? "Frissítés…" : "Frissítés"}
+            </Button>
           </div>
-        )}
-      </CardContent>
-    </Card>
+        </CardHeader>
+        <CardContent>
+          {loading && positions.length === 0 && (
+            <p className="text-sm text-muted-foreground">Betöltés…</p>
+          )}
+          {!loading && error && positions.length === 0 && (
+            <p className="text-sm text-destructive">{error}</p>
+          )}
+          {!(loading && positions.length === 0) && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {jarmuCards.map(({ jarmu, pos }) =>
+                pos ? (
+                  <VehicleCard key={jarmu.sofor} pos={pos} jarmu={jarmu} />
+                ) : (
+                  <PlaceholderVehicleCard
+                    key={jarmu.sofor}
+                    jarmu={jarmu}
+                    ismeretlen={jarmu.rendszamok.length > 0 && !error}
+                  />
+                )
+              )}
+              {ismeretlenPozicok.map((pos) => (
+                <VehicleCard key={pos.objectId} pos={pos} jarmu={findJarmuByPlate(pos.plate)} />
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      <JarmuIdovonalak />
+    </div>
   );
 }

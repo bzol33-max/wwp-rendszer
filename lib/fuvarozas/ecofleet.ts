@@ -144,3 +144,93 @@ export async function getFleetLastPositions(): Promise<EcofleetPosition[]> {
       odometerKm: toNumberOrNull(n.currentOdometer),
     }));
 }
+
+type RawTrip = {
+  id?: number | string;
+  startTimestamp?: string;
+  endTimestamp?: string;
+  distance?: number | string;
+  duration?: number | string;
+  /** Az adott fuvarszakasz UTÁN a jármű hány másodpercig állt (a következő trip indulásáig). */
+  stoppedAfter?: number | string;
+  driverId?: number | string;
+  driverName?: string;
+  startLocation?: string;
+  startLatitude?: number | string;
+  startLongitude?: number | string;
+  endLocation?: string;
+  endLatitude?: number | string;
+  endLongitude?: number | string;
+  avgSpeed?: number | string;
+  maxSpeed?: number | string;
+};
+
+export type EcofleetTrip = {
+  id: string;
+  /** Ecofleet timestamp string, helyi eltolással, pl. "2026-09-04 13:35:05+0200" */
+  startTimestamp: string;
+  endTimestamp: string;
+  /** km */
+  distance: number;
+  /** másodperc */
+  duration: number;
+  /** másodperc — mennyi ideig állt a jármű ezután a szakasz után, a következő indulásig */
+  stoppedAfter: number;
+  driverName: string | null;
+  startLocation: string | null;
+  startLatitude: number;
+  startLongitude: number;
+  endLocation: string | null;
+  endLatitude: number;
+  endLongitude: number;
+  avgSpeed: number;
+  maxSpeed: number;
+};
+
+/** "2026-09-04 13:35:05+0200" -> Date */
+export function parseEcofleetTimestamp(ts: string): Date | null {
+  const normalized = ts.replace(" ", "T").replace(/([+-]\d{2})(\d{2})$/, "$1:$2");
+  const d = new Date(normalized);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function ecofleetDateParam(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+
+/**
+ * Egy jármű útvonal-előzménye (trip-jei) egy időszakra. A `begin`/`end`
+ * helyi idő szerint értendő (Europe/Budapest) — a hívó felelőssége a
+ * megfelelő Date objektumokat átadni.
+ *
+ * Az Ecofleet ezt már trip-ekre bontva, geokódolt címekkel adja vissza —
+ * a `stoppedAfter` mező pedig pontosan azt jelzi, mennyi ideig állt a
+ * jármű az adott trip vége után a következő indulásig, ami a rakodási/
+ * lerakodási (vagy egyéb megállási) idő számításának alapja.
+ */
+export async function getVehicleTrips(objectId: string, begin: Date, end: Date): Promise<EcofleetTrip[]> {
+  const response = await ecofleetGet<{ node?: RawTrip[] }>("Vehicles/getTrips", {
+    objectId,
+    begTimestamp: ecofleetDateParam(begin),
+    endTimestamp: ecofleetDateParam(end),
+  });
+  const nodes = response.node ?? [];
+  return nodes.map((n) => ({
+    id: String(n.id ?? ""),
+    startTimestamp: String(n.startTimestamp ?? ""),
+    endTimestamp: String(n.endTimestamp ?? ""),
+    distance: toNumberOrNull(n.distance) ?? 0,
+    duration: toNumberOrNull(n.duration) ?? 0,
+    stoppedAfter: toNumberOrNull(n.stoppedAfter) ?? 0,
+    driverName: n.driverName ? String(n.driverName) : null,
+    startLocation: n.startLocation ? String(n.startLocation) : null,
+    startLatitude: toNumberOrNull(n.startLatitude) ?? 0,
+    startLongitude: toNumberOrNull(n.startLongitude) ?? 0,
+    endLocation: n.endLocation ? String(n.endLocation) : null,
+    endLatitude: toNumberOrNull(n.endLatitude) ?? 0,
+    endLongitude: toNumberOrNull(n.endLongitude) ?? 0,
+    avgSpeed: toNumberOrNull(n.avgSpeed) ?? 0,
+    maxSpeed: toNumberOrNull(n.maxSpeed) ?? 0,
+  }));
+}

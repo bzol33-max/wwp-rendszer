@@ -1,6 +1,6 @@
 "use server";
 
-import { getFleetLastPositions, EcofleetError, type EcofleetPosition } from "./ecofleet";
+import { getFleetLastPositions, getVehicleTrips, EcofleetError, type EcofleetPosition } from "./ecofleet";
 import {
   calculateToll,
   FIXED_VEHICLE,
@@ -12,6 +12,9 @@ import {
   type TollRoute,
 } from "./utdijkalkulacio";
 import { fetchGazolajAr, GazolajArError } from "./uzemanyagar";
+import { epitsIdovonal, type IdovonalSzakasz } from "./idovonal";
+import { ellenorizAetr, type AetrFigyelmezetes } from "./aetr";
+import { SAJAT_JARMUVEK } from "./vehicles";
 
 // Ha a NAV oldala nem érhető el (átmeneti hiba, oldalszerkezet-változás),
 // ez a tartalék érték jelenik meg — utoljára kézzel ellenőrizve 2026.
@@ -90,6 +93,50 @@ export async function getFleetPositions(): Promise<FleetPositionResult> {
         : "Nem sikerült lekérni a jármű-pozíciókat.";
     return { ok: false, error: message };
   }
+}
+
+export type JarmuIdovonalEredmeny = {
+  sofor: string;
+  szin: "blue" | "yellow" | "green";
+  /** null, ha a jármű nincs (még) Ecofleet-be kötve. */
+  szakaszok: IdovonalSzakasz[] | null;
+  figyelmezetesek: AetrFigyelmezetes[];
+  hiba: string | null;
+};
+
+/** "Europe/Budapest" szerinti mai naptári nap 00:00–jelenlegi időpont (vagy 23:59:59, ha egy korábbi napot kérnek). */
+function budapestNapHatarok(nap?: string): { kezdet: Date; veg: Date } {
+  const fmt = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Budapest", year: "numeric", month: "2-digit", day: "2-digit" });
+  const maiNap = fmt.format(new Date()); // "YYYY-MM-DD"
+  const celNap = nap ?? maiNap;
+  const kezdet = new Date(`${celNap}T00:00:00`);
+  const veg = celNap === maiNap ? new Date() : new Date(`${celNap}T23:59:59`);
+  return { kezdet, veg };
+}
+
+/**
+ * Minden saját jármű mai (vagy megadott napi) idővonala valós Ecofleet
+ * trip-előzményből, AETR-figyelmeztetésekkel együtt.
+ */
+export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny[]> {
+  const { kezdet, veg } = budapestNapHatarok(nap);
+
+  return Promise.all(
+    SAJAT_JARMUVEK.map(async (jarmu): Promise<JarmuIdovonalEredmeny> => {
+      if (!jarmu.ecofleetObjectId) {
+        return { sofor: jarmu.sofor, szin: jarmu.szin, szakaszok: null, figyelmezetesek: [], hiba: null };
+      }
+      try {
+        const trips = await getVehicleTrips(jarmu.ecofleetObjectId, kezdet, veg);
+        const szakaszok = epitsIdovonal(trips);
+        const figyelmezetesek = ellenorizAetr(szakaszok);
+        return { sofor: jarmu.sofor, szin: jarmu.szin, szakaszok, figyelmezetesek, hiba: null };
+      } catch (err) {
+        const message = err instanceof EcofleetError ? err.message : "Nem sikerült lekérni az idővonalat.";
+        return { sofor: jarmu.sofor, szin: jarmu.szin, szakaszok: null, figyelmezetesek: [], hiba: message };
+      }
+    })
+  );
 }
 
 export async function searchAddressSuggestions(query: string): Promise<GeocodedAddress[]> {

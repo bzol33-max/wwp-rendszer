@@ -14,12 +14,14 @@ export type SajatJarmu = {
   /** GPS/rendszám-egyeztetéshez használt rendszámok — üres tömb, ha még nincs rendszáma a járműnek. */
   rendszamok: string[];
   szin: JarmuSzin;
+  /** Ecofleet Vehicles/get szerinti objectId (getTrips/idővonal hívásokhoz) — null, ha a jármű nincs Ecofleet-be kötve. */
+  ecofleetObjectId: string | null;
 };
 
 export const SAJAT_JARMUVEK: SajatJarmu[] = [
-  { sofor: "Gergő", label: "AOPU-427/AOTY-474", rendszamok: ["AOPU-427", "AOTY-474"], szin: "blue" },
-  { sofor: "Micó", label: "NMZ-492/XZV-926", rendszamok: ["NMZ-492", "XZV-926"], szin: "yellow" },
-  { sofor: "Jani", label: "DAF XG (Gyártás alatt)", rendszamok: [], szin: "green" },
+  { sofor: "Gergő", label: "AOPU-427/AOTY-474", rendszamok: ["AOPU-427", "AOTY-474"], szin: "blue", ecofleetObjectId: "1144376" },
+  { sofor: "Micó", label: "NMZ-492/XZV-926", rendszamok: ["NMZ-492", "XZV-926"], szin: "yellow", ecofleetObjectId: "369485" },
+  { sofor: "Jani", label: "DAF XG (Gyártás alatt)", rendszamok: [], szin: "green", ecofleetObjectId: null },
 ];
 
 /** Szín -> Tailwind badge osztályok (a projektben már használt "bg-x-100 text-x-700" mintát követve). */
