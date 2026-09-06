@@ -8,13 +8,13 @@ import { GpsStatus } from "@/components/fuvarozas/gps-status";
 import { TollCalculator } from "@/components/fuvarozas/toll-calculator";
 import { Megbizasok } from "@/components/fuvarozas/megbizasok";
 
-const TABS = ["megbizasok", "kalkulator", "gps"] as const;
+const TABS = ["gps", "megbizasok", "kalkulator"] as const;
 type Tab = (typeof TABS)[number];
 
 const TAB_LABEL: Record<Tab, string> = {
+  gps: "GPS",
   megbizasok: "Megbízások",
   kalkulator: "Kalkulátor",
-  gps: "GPS",
 };
 
 function isTab(v: string | null): v is Tab {
@@ -27,7 +27,7 @@ function FuvarozasTabs() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlTab = searchParams.get("tab");
-  const [tab, setTab] = useState<Tab>(isTab(urlTab) ? urlTab : "megbizasok");
+  const [tab, setTab] = useState<Tab>(isTab(urlTab) ? urlTab : "gps");
 
   function handleTabChange(v: string) {
     if (!isTab(v)) return;

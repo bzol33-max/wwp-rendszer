@@ -5,8 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { getFleetPositions } from "@/lib/fuvarozas/actions";
-import type { EcofleetPosition } from "@/lib/fuvarozas/ecofleet";
+import { getFleetPositions, type EcofleetPositionWithCim } from "@/lib/fuvarozas/actions";
 import { SAJAT_JARMUVEK, findJarmuByPlate, JARMU_SZIN_DOT_CLASS, type SajatJarmu } from "@/lib/fuvarozas/vehicles";
 
 /** "2026-09-04 13:35:05+0200" -> Date (a +0200 már helyi eltolás, nincs újraszámolás) */
@@ -48,17 +47,17 @@ function VehicleCardHeader({
   );
 }
 
-function VehicleCard({ pos, jarmu }: { pos: EcofleetPosition; jarmu: SajatJarmu | null }) {
+function VehicleCard({ pos, jarmu }: { pos: EcofleetPositionWithCim; jarmu: SajatJarmu | null }) {
   const when = parseEcofleetTimestamp(pos.timestamp);
   const mapsUrl = `https://www.google.com/maps?q=${pos.latitude},${pos.longitude}`;
-  const cim = jarmu ? `${jarmu.sofor} — ${pos.plate || pos.name}` : pos.plate || pos.name;
+  const nev = jarmu ? `${jarmu.sofor} — ${pos.plate || pos.name}` : pos.plate || pos.name;
 
   return (
     <Card>
       <CardHeader>
         <VehicleCardHeader
           jarmu={jarmu}
-          cim={cim}
+          cim={nev}
           badge={
             <Badge variant={pos.engineOn ? "default" : "secondary"}>
               {pos.engineOn ? "Fut a motor" : "Áll"}
@@ -68,13 +67,24 @@ function VehicleCard({ pos, jarmu }: { pos: EcofleetPosition; jarmu: SajatJarmu 
       </CardHeader>
       <CardContent>
         <div className="flex flex-col gap-1.5 text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Utolsó adat</span>
-            <span>{formatAgo(when)}</span>
+          <div className="flex justify-between gap-3">
+            <span className="text-muted-foreground shrink-0">Cím</span>
+            <a
+              href={mapsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-right text-primary hover:underline"
+            >
+              {pos.cim ?? "térképen"}
+            </a>
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Sebesség</span>
             <span>{pos.speed} km/h</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Utolsó adat</span>
+            <span>{formatAgo(when)}</span>
           </div>
           {pos.odometerKm !== null && (
             <div className="flex justify-between">
@@ -82,17 +92,6 @@ function VehicleCard({ pos, jarmu }: { pos: EcofleetPosition; jarmu: SajatJarmu 
               <span>{pos.odometerKm.toLocaleString("hu-HU")} km</span>
             </div>
           )}
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Pozíció</span>
-            <a
-              href={mapsUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary hover:underline"
-            >
-              térképen
-            </a>
-          </div>
         </div>
       </CardContent>
     </Card>
@@ -125,7 +124,7 @@ function PlaceholderVehicleCard({ jarmu, ismeretlen }: { jarmu: SajatJarmu; isme
 
 export function GpsStatus() {
   const [loading, setLoading] = useState(true);
-  const [positions, setPositions] = useState<EcofleetPosition[]>([]);
+  const [positions, setPositions] = useState<EcofleetPositionWithCim[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
@@ -182,7 +181,7 @@ export function GpsStatus() {
           <p className="text-sm text-destructive">{error}</p>
         )}
         {!(loading && positions.length === 0) && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {jarmuCards.map(({ jarmu, pos }) =>
               pos ? (
                 <VehicleCard key={jarmu.sofor} pos={pos} jarmu={jarmu} />

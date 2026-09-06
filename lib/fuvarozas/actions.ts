@@ -5,6 +5,7 @@ import {
   calculateToll,
   FIXED_VEHICLE,
   geocodeAddress,
+  reverseGeocodeCoords,
   suggestAddresses,
   TollCalcError,
   type GeocodedAddress,
@@ -56,8 +57,15 @@ export async function getGazolajAr(): Promise<GazolajArResult> {
   }
 }
 
+export type EcofleetPositionWithCim = EcofleetPosition & {
+  /** A pozíció koordinátájából visszafejtett, olvasható cím — a GPS-kártyán
+   *  ez jelenik meg a kocsi neve mellett, a sebesség/egyéb adatok előtt.
+   *  `null`, ha a fordított geokódolás nem sikerült. */
+  cim: string | null;
+};
+
 export type FleetPositionResult =
-  | { ok: true; positions: EcofleetPosition[] }
+  | { ok: true; positions: EcofleetPositionWithCim[] }
   | { ok: false; error: string };
 
 export async function getFleetPositions(): Promise<FleetPositionResult> {
@@ -65,7 +73,16 @@ export async function getFleetPositions(): Promise<FleetPositionResult> {
     const positions = await getFleetLastPositions();
     // Rendszám szerint, hogy a felület mindig ugyanabban a sorrendben mutassa.
     positions.sort((a, b) => a.plate.localeCompare(b.plate));
-    return { ok: true, positions };
+    // Csak néhány (2-3) saját jármű van, ezért a fordított geokódolás
+    // párhuzamosan, korlátozás nélkül elfér — nem kell a toll-kalkulátor
+    // címkeresésénél alkalmazott párhuzamosság-korlátozás.
+    const withCim = await Promise.all(
+      positions.map(async (p) => ({
+        ...p,
+        cim: await reverseGeocodeCoords(p.latitude, p.longitude),
+      }))
+    );
+    return { ok: true, positions: withCim };
   } catch (err) {
     const message =
       err instanceof EcofleetError

@@ -57,6 +57,61 @@ export async function suggestAddresses(
   return (await fuzzySearch(query)).slice(0, limit);
 }
 
+type NominatimAddress = {
+  road?: string;
+  house_number?: string;
+  city?: string;
+  town?: string;
+  village?: string;
+  postcode?: string;
+};
+
+type NominatimReverseResponse = {
+  display_name?: string;
+  address?: NominatimAddress;
+};
+
+/**
+ * Koordináta -> rövid, olvasható cím (pl. "4400 Nyíregyháza, Rákóczi utca 26.").
+ * A GPS-pozíció kártyákhoz kell (kocsi mellett a cím, nem csak a koordináta) —
+ * a HU-GO kalkulátornak nincs fordított (koordináta -> cím) végpontja, ezért
+ * ehhez a nyílt, kulcs nélküli OpenStreetMap Nominatim reverse API-t
+ * használjuk. `null`-t ad vissza hiba esetén (nem dobunk — ez csak
+ * kényelmi kiegészítő adat, egy lassú/hibázó geokódolás miatt nem szabad az
+ * egész GPS-kártyát elhasalnia).
+ */
+export async function reverseGeocodeCoords(lat: number, lon: number): Promise<string | null> {
+  try {
+    const url = new URL("https://nominatim.openstreetmap.org/reverse");
+    url.searchParams.set("format", "json");
+    url.searchParams.set("lat", String(lat));
+    url.searchParams.set("lon", String(lon));
+    url.searchParams.set("zoom", "18");
+    url.searchParams.set("addressdetails", "1");
+
+    const res = await fetch(url.toString(), {
+      cache: "no-store",
+      headers: {
+        // A Nominatim használati feltételei megkövetelik az azonosító
+        // User-Agentet (nem böngésző-alapértelmezettet).
+        "User-Agent": "wwp-system/1.0 (Well-Worn Pallet Kft. belso vallalatiranyitasi rendszer)",
+      },
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as NominatimReverseResponse;
+    const a = data.address;
+    if (a) {
+      const varos = a.city || a.town || a.village || "";
+      const utca = [a.road, a.house_number].filter(Boolean).join(" ");
+      const cim = [varos, utca].filter(Boolean).join(", ");
+      if (cim) return a.postcode ? `${a.postcode} ${cim}` : cim;
+    }
+    return data.display_name ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // A kalkulátor oldal saját enumjai (app.$store.state.app), a HT (nehéz
 // tehergépjármű) típushoz tartozó tartományokkal.
 export const VEHICLE_CATEGORIES = ["J2", "J3", "J4", "J5"] as const;
