@@ -158,8 +158,8 @@ function stopLabel(index: number, count: number): string {
 export function TollCalculator() {
   // Több-megállós útvonal: a lista mindig "Honnan" + "Hová" két mezővel indul.
   // Amint minden mező ki van töltve (nincs üres), automatikusan megjelenik egy
-  // új, üres mező a vég előtt — így tetszőleges számú köztes megálló felvehető
-  // anélkül, hogy külön "+" gombot kellene keresni.
+  // új, üres mező a lista végén, az eddigi utolsó cím után — így tetszőleges
+  // számú megálló felvehető anélkül, hogy külön "+" gombot kellene keresni.
   const [stops, setStops] = useState<Stop[]>([newStop(), newStop()]);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<{ stopLabels: string[]; route: TollRoute } | null>(null);
@@ -168,9 +168,11 @@ export function TollCalculator() {
     setStops((prev) => {
       const next = prev.map((s) => (s.id === id ? { ...s, ...patch } : s));
       const mindKitoltve = next.every((s) => s.value.trim().length > 0);
-      // Ha minden mező ki van töltve, egy új üres megálló kerül a "Hová" elé.
+      // Ha minden mező ki van töltve, egy új üres mező kerül a lista végére
+      // (a jelenlegi utolsó cím után) — az addig utolsó mezőből "Hová"
+      // helyett köztes megálló lesz, az új mező veszi át a "Hová" helyet.
       if (mindKitoltve) {
-        next.splice(next.length - 1, 0, newStop());
+        next.push(newStop());
       }
       return next;
     });
