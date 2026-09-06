@@ -7,14 +7,14 @@ export async function GET() {
   );
 
   const sorok = await query(
-    `select id::text, tipus, date, megrendelo, forras, ellenorzott, dokumentum_url, created_at::text
+    `select id::text, tipus, datum::text, megrendelo, forras, ellenorzott, dokumentum_url, created_at::text
      from fuvar_megbizasok
      order by created_at desc
      limit 100`
   );
 
   const hajduKriki = await query(
-    `select id::text, tipus, date, megrendelo, forras, ellenorzott, dokumentum_url
+    `select id::text, tipus, datum::text, megrendelo, forras, ellenorzott, dokumentum_url
      from fuvar_megbizasok
      where megrendelo ilike '%hajdu%' or megrendelo ilike '%hajdú%' or megrendelo ilike '%kriki%'`
   );
