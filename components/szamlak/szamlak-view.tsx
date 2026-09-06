@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -12,17 +11,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import {
   frissitesMost,
-  getSzamlak,
+  getSzamlaEgyebCegenkent,
   getSzamlaLejaratLista,
   getSzamlaOsszesito,
   getSzamlaSzinkronAllapot,
   jeloltFizetve,
-  visszavonFizetve,
   type SzamlaAllapot,
+  type SzamlaEgyebCegSor,
   type SzamlaLejaratLista,
 } from "@/lib/szamlak/actions";
 import {
@@ -37,17 +35,14 @@ function formatOsszeg(n: number, penznem: string) {
   return `${n.toLocaleString("hu-HU")} ${penznem}`;
 }
 
-/** Az 5 perces visszavonási ablakon belül van-e még a "Fizetve" jelölés. */
-function visszavonhato(fizetveDatum: string | null): boolean {
-  if (!fizetveDatum) return false;
-  return Date.now() - new Date(fizetveDatum).getTime() < 5 * 60 * 1000;
-}
-
 function OsszesitoCsempek({ sorok }: { sorok: SzamlaOsszesitoSor[] }) {
-  if (sorok.length === 0) return null;
+  // A "Raklap — Egyéb" alkategóriát külön, cégenkénti bontásban mutatjuk
+  // (lásd EgyebCegCsempe) — itt kihagyjuk, hogy ne szerepeljen duplán.
+  const megjelenitett = sorok.filter((s) => s.alkategoria !== "egyeb");
+  if (megjelenitett.length === 0) return null;
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      {sorok.map((s, i) => (
+      {megjelenitett.map((s, i) => (
         <Card key={i} size="sm">
           <CardContent className="flex flex-col gap-1 py-1">
             <div className="text-xs text-muted-foreground">
@@ -69,6 +64,34 @@ function OsszesitoCsempek({ sorok }: { sorok: SzamlaOsszesitoSor[] }) {
         </Card>
       ))}
     </div>
+  );
+}
+
+/** A "Raklap — Egyéb" alkategória cégenkénti bontása — egy csempén belül, soronként egy vevő. */
+function EgyebCegCsempe({ sorok }: { sorok: SzamlaEgyebCegSor[] }) {
+  if (sorok.length === 0) return null;
+  return (
+    <Card size="sm">
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm">Raklap — Egyéb (cégenként)</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-1.5 pt-0">
+        {sorok.map((s, i) => (
+          <div key={i} className="flex items-baseline justify-between gap-3 border-b border-border/50 py-1 text-sm last:border-0">
+            <span className="truncate">{s.vevo_nev}</span>
+            <span className="shrink-0 text-right tabular-nums">
+              <span className="font-medium">{formatOsszeg(s.nyitott_osszeg, s.penznem)}</span>
+              <span className="ml-1.5 text-xs text-muted-foreground">{s.nyitott_darab} db</span>
+              {s.lejart_darab > 0 && (
+                <span className="ml-1.5 text-xs font-medium text-destructive">
+                  · {s.lejart_darab} lejárt ({formatOsszeg(s.lejart_osszeg, s.penznem)})
+                </span>
+              )}
+            </span>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -186,126 +209,21 @@ function LejaratCsempek({ refreshKey, onChanged }: { refreshKey: number; onChang
   );
 }
 
-function SzamlaLista({ kategoria, refreshKey, onChanged }: {
-  kategoria: SzamlaKategoria;
-  refreshKey: number;
-  onChanged: () => void;
-}) {
-  const [rows, setRows] = useState<SzamlaRow[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  const load = useCallback(async () => {
-    const data = await getSzamlak(kategoria);
-    setRows(data);
-  }, [kategoria]);
-
-  useEffect(() => {
-    setLoading(true);
-    load().finally(() => setLoading(false));
-  }, [load, refreshKey]);
-
-  async function handleFizetve(id: string) {
-    await jeloltFizetve(id);
-    await load();
-    onChanged();
-    toast.success("Számla fizetve-nek jelölve.");
-  }
-
-  async function handleVisszavon(id: string) {
-    await visszavonFizetve(id);
-    await load();
-    onChanged();
-  }
-
-  const ma = new Date().toISOString().slice(0, 10);
-
-  return (
-    <div className="overflow-x-auto">
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Sorszám</TableHead>
-            <TableHead>Vevő</TableHead>
-            <TableHead>Hiv. szám</TableHead>
-            <TableHead>Kiállítás</TableHead>
-            <TableHead>Fizetési határidő</TableHead>
-            <TableHead className="text-right">Összeg</TableHead>
-            <TableHead>Állapot</TableHead>
-            <TableHead className="w-24"></TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {!loading && rows.length === 0 && (
-            <TableRow>
-              <TableCell colSpan={8} className="text-center text-muted-foreground">
-                Nincs ilyen kategóriájú számla.
-              </TableCell>
-            </TableRow>
-          )}
-          {rows.map((row) => {
-            const lejart = !row.fizetve && !!row.fizetesi_hatarido && row.fizetesi_hatarido < ma;
-            return (
-              <TableRow key={row.id}>
-                <TableCell className="text-muted-foreground">{row.szamlaszam}</TableCell>
-                <TableCell>{row.vevo_nev}</TableCell>
-                <TableCell>{row.rendelesszam ?? "—"}</TableCell>
-                <TableCell>{row.kiallitas_datum}</TableCell>
-                <TableCell className={lejart ? "font-medium text-destructive" : ""}>
-                  {row.fizetesi_hatarido ?? "—"}
-                </TableCell>
-                <TableCell className="text-right tabular-nums">
-                  {formatOsszeg(row.brutto, row.penznem)}
-                </TableCell>
-                <TableCell>
-                  {row.fizetve ? (
-                    <Badge className="bg-success/15 text-success hover:bg-success/15 text-xs">Fizetve</Badge>
-                  ) : lejart ? (
-                    <Badge className="bg-destructive/15 text-destructive hover:bg-destructive/15 text-xs">
-                      Lejárt
-                    </Badge>
-                  ) : (
-                    <Badge className="bg-muted text-muted-foreground hover:bg-muted text-xs">Nyitott</Badge>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {row.fizetve ? (
-                    visszavonhato(row.fizetve_datum) && (
-                      <button
-                        type="button"
-                        className="text-xs text-muted-foreground hover:underline"
-                        onClick={() => handleVisszavon(row.id)}
-                      >
-                        Visszavon
-                      </button>
-                    )
-                  ) : (
-                    <button
-                      type="button"
-                      className="text-xs text-primary hover:underline"
-                      onClick={() => handleFizetve(row.id)}
-                    >
-                      Fizetve
-                    </button>
-                  )}
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
-    </div>
-  );
-}
-
 export function SzamlakView() {
   const [osszesito, setOsszesito] = useState<SzamlaOsszesitoSor[]>([]);
+  const [egyebCegek, setEgyebCegek] = useState<SzamlaEgyebCegSor[]>([]);
   const [allapot, setAllapot] = useState<SzamlaAllapot | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [frissitve, setFrissitve] = useState(false);
 
   const loadOsszesito = useCallback(async () => {
-    const [o, a] = await Promise.all([getSzamlaOsszesito(), getSzamlaSzinkronAllapot()]);
+    const [o, ceg, a] = await Promise.all([
+      getSzamlaOsszesito(),
+      getSzamlaEgyebCegenkent(),
+      getSzamlaSzinkronAllapot(),
+    ]);
     setOsszesito(o);
+    setEgyebCegek(ceg);
     setAllapot(a);
   }, []);
 
@@ -361,34 +279,9 @@ export function SzamlakView() {
 
       <OsszesitoCsempek sorok={osszesito} />
 
-      <LejaratCsempek refreshKey={refreshKey} onChanged={loadOsszesito} />
+      <EgyebCegCsempe sorok={egyebCegek} />
 
-      <Tabs defaultValue="fuvar">
-        <TabsList>
-          <TabsTrigger value="fuvar">Fuvar</TabsTrigger>
-          <TabsTrigger value="raklap">Raklap</TabsTrigger>
-        </TabsList>
-        <TabsContent value="fuvar" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Fuvar számlák</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <SzamlaLista kategoria="fuvar" refreshKey={refreshKey} onChanged={loadOsszesito} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-        <TabsContent value="raklap" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Raklap számlák</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <SzamlaLista kategoria="raklap" refreshKey={refreshKey} onChanged={loadOsszesito} />
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+      <LejaratCsempek refreshKey={refreshKey} onChanged={loadOsszesito} />
     </div>
   );
 }

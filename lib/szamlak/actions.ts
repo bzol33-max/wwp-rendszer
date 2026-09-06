@@ -38,6 +38,39 @@ export async function getSzamlak(kategoria: SzamlaKategoria): Promise<SzamlaRow[
   );
 }
 
+export type SzamlaEgyebCegSor = {
+  vevo_nev: string;
+  penznem: string;
+  nyitott_osszeg: number;
+  lejart_osszeg: number;
+  nyitott_darab: number;
+  lejart_darab: number;
+};
+
+/**
+ * A "Raklap — Egyéb" alkategória (minden olyan vevő, aki nem Fabrika/Keter)
+ * cégenkénti bontása — enélkül egyetlen, sokféle vevőt összemosó számban
+ * veszne el az információ, hogy melyik partnernél van kintlévőség.
+ */
+export async function getSzamlaEgyebCegenkent(): Promise<SzamlaEgyebCegSor[]> {
+  return query<SzamlaEgyebCegSor>(
+    `select
+       vevo_nev, penznem,
+       coalesce(sum(brutto) filter (where not fizetve), 0) as nyitott_osszeg,
+       coalesce(sum(brutto) filter (where not fizetve and fizetesi_hatarido < current_date), 0) as lejart_osszeg,
+       count(*) filter (where not fizetve) as nyitott_darab,
+       count(*) filter (where not fizetve and fizetesi_hatarido < current_date) as lejart_darab
+     from szamla
+     where kategoria = 'raklap'
+       and alkategoria = 'egyeb'
+       and not sztorno
+       and not sztornozva
+     group by vevo_nev, penznem
+     having count(*) filter (where not fizetve) > 0
+     order by nyitott_osszeg desc`
+  );
+}
+
 export type SzamlaLejaratLista = {
   /** A legközelebbi (még nem lejárt) esedékességű, nyitott számlák, max. 10 db. */
   kovetkezo: SzamlaRow[];
