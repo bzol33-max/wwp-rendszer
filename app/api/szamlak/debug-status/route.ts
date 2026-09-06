@@ -36,16 +36,46 @@ export async function GET() {
   const dd = String(today.getDate()).padStart(2, "0");
   const todayStr = `${yyyy}-${mm}-${dd}`;
 
-  // Több lehetséges paraméter-elnevezést próbálunk a getTrips-hez, mert a
-  // doksi nem közli őket.
-  const tripsAttempt1 = await rawGet("Vehicles/getTrips", {
-    dateFrom: `${todayStr} 00:00:00`,
-    dateTo: `${todayStr} 23:59:59`,
+  // Az első próbálkozásból kiderült: a helyes paraméternevek
+  // begTimestamp/endTimestamp (nem dateFrom/dateTo), de a formátum nem jó.
+  // Több formátumot és az objectId paramot is kipróbáljuk.
+  const objectId = "1144376"; // AO PU-427
+
+  const dayStartUnix = Math.floor(new Date(`${todayStr}T00:00:00+02:00`).getTime() / 1000);
+  const dayEndUnix = Math.floor(new Date(`${todayStr}T23:59:59+02:00`).getTime() / 1000);
+
+  const attemptSpaceFormat = await rawGet("Vehicles/getTrips", {
+    objectId,
+    begTimestamp: `${todayStr} 00:00:00`,
+    endTimestamp: `${todayStr} 23:59:59`,
+  });
+
+  const attemptIsoFormat = await rawGet("Vehicles/getTrips", {
+    objectId,
+    begTimestamp: `${todayStr}T00:00:00`,
+    endTimestamp: `${todayStr}T23:59:59`,
+  });
+
+  const attemptUnixFormat = await rawGet("Vehicles/getTrips", {
+    objectId,
+    begTimestamp: String(dayStartUnix),
+    endTimestamp: String(dayEndUnix),
+  });
+
+  const attemptDateOnlyFormat = await rawGet("Vehicles/getTrips", {
+    objectId,
+    begTimestamp: todayStr,
+    endTimestamp: todayStr,
   });
 
   return NextResponse.json({
     vehicles,
-    tripsAttempt1,
+    attemptSpaceFormat,
+    attemptIsoFormat,
+    attemptUnixFormat,
+    attemptDateOnlyFormat,
     todayStr,
+    dayStartUnix,
+    dayEndUnix,
   });
 }
