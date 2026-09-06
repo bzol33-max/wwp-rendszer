@@ -930,6 +930,47 @@ const ISMERT_IRSZ_KULCSSZO: Record<string, string> = {
   BILK: "1239",
 };
 
+/** Utcatípus-szavak — ezek jelenléte kizárja, hogy egy cím-darab városnév legyen. */
+const UTCA_SZAVAK = /\b(utca|út|tér|krt\.?|körút|sor|dűlő|park|ipartelep|telep|fasor|köz|rakpart)\b/i;
+const CEGFORMA_SZAVAK = /\b(kft\.?|zrt\.?|bt\.?|nyrt\.?|kkt\.?)\b/i;
+// Csak eltávolításhoz (roviditettHelynev): a fenti záró \b a ponttal együtt
+// nem illeszkedik szó vége után ("Kft." esetén csak a "Kft" részt törölné,
+// és egy magányos pont maradna) — ez a változat a pontot is levágja.
+const CEGFORMA_SZAVAK_STRIP = /\b(kft|zrt|bt|nyrt|kkt)\.?/gi;
+
+/**
+ * Egy felrakó/lerakó cím vesszővel tagolt részei közül megkeresi a
+ * városnevet (és ha van, az irányítószámot) — akkor is, ha nincs
+ * irányítószám a szövegben (pl. "Cégnév, Város, utca házszám" formátum,
+ * ahol a "Város" rész önmagában áll, számok és utcatípus-szavak nélkül).
+ * Sorrend: 1) irányítószám + városnév egy darabban, 2) ismert telephely-kód
+ * (pl. "Budapest (BILK)"), 3) heurisztika — az első olyan darab, ami nem
+ * szám, nem utcatípus-szó és nem cégforma-toldalék (3+ darabnál az elsőt,
+ * jellemzően a cégnevet, kihagyva).
+ */
+function talalVaros(parts: string[]): { zip: string; city: string; idx: number } | null {
+  for (let i = 0; i < parts.length; i++) {
+    const m = parts[i].match(/(\d{4})\s+([^(]+)/);
+    if (m) return { zip: m[1], city: m[2].trim(), idx: i };
+  }
+
+  for (let i = 0; i < parts.length; i++) {
+    const kulcsszo = Object.keys(ISMERT_IRSZ_KULCSSZO).find((k) => parts[i].includes(k));
+    if (kulcsszo) {
+      return { zip: ISMERT_IRSZ_KULCSSZO[kulcsszo], city: parts[i].replace(/\(.*\)/, "").trim(), idx: i };
+    }
+  }
+
+  const jeloltek = parts.length >= 3 ? parts.slice(1) : parts;
+  for (const p of jeloltek) {
+    if (!/\d/.test(p) && !UTCA_SZAVAK.test(p) && !CEGFORMA_SZAVAK.test(p)) {
+      return { zip: "", city: p, idx: parts.indexOf(p) };
+    }
+  }
+
+  return null;
+}
+
 /**
  * Egy felrakó/lerakó cím szövegének rövidített formája: "irányítószám város
  * partner" — az utca/házszám és a cégforma-toldalékok (Kft., Zrt., stb.),
@@ -943,36 +984,15 @@ function roviditettHelynev(value: string | null | undefined): string {
     .map((p) => p.trim())
     .filter(Boolean);
 
-  let zip = "";
-  let city = "";
-  let cityIdx = -1;
-
-  parts.forEach((p, i) => {
-    if (cityIdx !== -1) return;
-    const m = p.match(/(\d{4})\s+([^(]+)/);
-    if (m) {
-      zip = m[1];
-      city = m[2].trim();
-      cityIdx = i;
-    }
-  });
-
-  if (!zip) {
-    parts.forEach((p, i) => {
-      if (cityIdx !== -1) return;
-      const kulcsszo = Object.keys(ISMERT_IRSZ_KULCSSZO).find((k) => p.includes(k));
-      if (kulcsszo) {
-        zip = ISMERT_IRSZ_KULCSSZO[kulcsszo];
-        city = p.replace(/\(.*\)/, "").trim();
-        cityIdx = i;
-      }
-    });
-  }
+  const talalt = talalVaros(parts);
+  const zip = talalt?.zip ?? "";
+  const city = talalt?.city ?? "";
+  const cityIdx = talalt?.idx ?? -1;
 
   let nev = parts.find((_, i) => i !== cityIdx) ?? "";
   nev = nev
     .replace(/\bMagyarország\b/gi, "")
-    .replace(/\b(Kft\.?|Zrt\.?|Bt\.?|Nyrt\.?|Kkt\.?)\b/gi, "")
+    .replace(CEGFORMA_SZAVAK_STRIP, "")
     .replace(/\s+/g, " ")
     .trim();
 
@@ -988,22 +1008,7 @@ function varosNev(value: string | null | undefined): string {
     .map((p) => p.trim())
     .filter(Boolean);
 
-  let city = "";
-  parts.forEach((p) => {
-    if (city) return;
-    const m = p.match(/(\d{4})\s+([^(]+)/);
-    if (m) city = m[2].trim();
-  });
-
-  if (!city) {
-    parts.forEach((p) => {
-      if (city) return;
-      const kulcsszo = Object.keys(ISMERT_IRSZ_KULCSSZO).find((k) => p.includes(k));
-      if (kulcsszo) city = p.replace(/\(.*\)/, "").trim();
-    });
-  }
-
-  return city || value;
+  return talalVaros(parts)?.city || value;
 }
 
 /**
