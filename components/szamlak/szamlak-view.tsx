@@ -41,8 +41,9 @@ import {
   type SzamlaRow,
 } from "@/lib/szamlak/szamla-constants";
 
+// Ezres tagolás ponttal (pl. "1.314.234"), tizedesponttal a törtrésznél (EUR-nál előfordulhat).
 function formatOsszeg(n: number, penznem: string) {
-  return `${n.toLocaleString("hu-HU")} ${penznem}`;
+  return `${n.toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${penznem}`;
 }
 
 /** Az 5 perces visszavonási ablakon belül van-e még a "Fizetve" jelölés. */
@@ -182,39 +183,37 @@ function SzamlaListaDialog({
   );
 }
 
-function OsszesitoCsempek({
-  sorok,
-  onValaszt,
-}: {
-  sorok: SzamlaOsszesitoSor[];
-  onValaszt: (s: SzamlaOsszesitoSor) => void;
-}) {
-  // A "Raklap — Egyéb" alkategóriát külön, cégenkénti bontásban mutatjuk
-  // (lásd EgyebCegCsempe) — itt kihagyjuk, hogy ne szerepeljen duplán.
-  const megjelenitett = sorok.filter((s) => s.alkategoria !== "egyeb");
-  if (megjelenitett.length === 0) return null;
+type Csempe = {
+  kulcs: string;
+  cim: string;
+  nyitottOsszeg: number;
+  lejartOsszeg: number;
+  penznem: string;
+  nyitottDarab: number;
+  lejartDarab: number;
+  onClick: () => void;
+};
+
+/** Egységes stílusú összesítő csempesor — kategória/alkategória tételek ÉS az Egyéb cégenkénti bontása egy közös rácsban. */
+function OsszesitoCsempek({ csempek }: { csempek: Csempe[] }) {
+  if (csempek.length === 0) return null;
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      {megjelenitett.map((s, i) => (
+      {csempek.map((c) => (
         <Card
-          key={i}
+          key={c.kulcs}
           size="sm"
           className="cursor-pointer transition-colors hover:bg-muted/50"
-          onClick={() => onValaszt(s)}
+          onClick={c.onClick}
         >
           <CardContent className="flex flex-col gap-1 py-1">
+            <div className="truncate text-xs text-muted-foreground">{c.cim}</div>
+            <div className="text-lg font-semibold tabular-nums">{formatOsszeg(c.nyitottOsszeg, c.penznem)}</div>
             <div className="text-xs text-muted-foreground">
-              {KATEGORIA_LABEL[s.kategoria]}
-              {s.alkategoria ? ` — ${ALKATEGORIA_LABEL[s.alkategoria]}` : ""}
-            </div>
-            <div className="text-lg font-semibold tabular-nums">
-              {formatOsszeg(s.nyitott_osszeg, s.penznem)}
-            </div>
-            <div className="text-xs text-muted-foreground">
-              {s.nyitott_darab} nyitott számla
-              {s.lejart_darab > 0 && (
+              {c.nyitottDarab} nyitott számla
+              {c.lejartDarab > 0 && (
                 <span className="ml-1.5 font-medium text-destructive">
-                  · {s.lejart_darab} lejárt ({formatOsszeg(s.lejart_osszeg, s.penznem)})
+                  · {c.lejartDarab} lejárt ({formatOsszeg(c.lejartOsszeg, c.penznem)})
                 </span>
               )}
             </div>
@@ -222,45 +221,6 @@ function OsszesitoCsempek({
         </Card>
       ))}
     </div>
-  );
-}
-
-/** A "Raklap — Egyéb" alkategória cégenkénti bontása — egy csempén belül, soronként egy vevő, kattinthatóan. */
-function EgyebCegCsempe({
-  sorok,
-  onValaszt,
-}: {
-  sorok: SzamlaEgyebCegSor[];
-  onValaszt: (s: SzamlaEgyebCegSor) => void;
-}) {
-  if (sorok.length === 0) return null;
-  return (
-    <Card size="sm">
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm">Raklap — Egyéb (cégenként)</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-1.5 pt-0">
-        {sorok.map((s, i) => (
-          <button
-            type="button"
-            key={i}
-            onClick={() => onValaszt(s)}
-            className="flex items-baseline justify-between gap-3 border-b border-border/50 py-1 text-left text-sm last:border-0 hover:bg-muted/50"
-          >
-            <span className="truncate">{s.vevo_nev}</span>
-            <span className="shrink-0 text-right tabular-nums">
-              <span className="font-medium">{formatOsszeg(s.nyitott_osszeg, s.penznem)}</span>
-              <span className="ml-1.5 text-xs text-muted-foreground">{s.nyitott_darab} db</span>
-              {s.lejart_darab > 0 && (
-                <span className="ml-1.5 text-xs font-medium text-destructive">
-                  · {s.lejart_darab} lejárt ({formatOsszeg(s.lejart_osszeg, s.penznem)})
-                </span>
-              )}
-            </span>
-          </button>
-        ))}
-      </CardContent>
-    </Card>
   );
 }
 
@@ -449,21 +409,38 @@ export function SzamlakView() {
       </Card>
 
       <OsszesitoCsempek
-        sorok={osszesito}
-        onValaszt={(s) => {
-          setListaCim(
-            `${KATEGORIA_LABEL[s.kategoria]}${s.alkategoria ? ` — ${ALKATEGORIA_LABEL[s.alkategoria]}` : ""} (${s.penznem})`
-          );
-          setListaSzuro({ kategoria: s.kategoria, alkategoria: s.alkategoria, penznem: s.penznem });
-        }}
-      />
-
-      <EgyebCegCsempe
-        sorok={egyebCegek}
-        onValaszt={(s) => {
-          setListaCim(`Raklap — Egyéb — ${s.vevo_nev} (${s.penznem})`);
-          setListaSzuro({ kategoria: "raklap", alkategoria: "egyeb", vevoNev: s.vevo_nev, penznem: s.penznem });
-        }}
+        csempek={[
+          ...osszesito
+            .filter((s) => s.alkategoria !== "egyeb")
+            .map((s) => ({
+              kulcs: `${s.kategoria}-${s.alkategoria ?? "nincs"}-${s.penznem}`,
+              cim: `${KATEGORIA_LABEL[s.kategoria]}${s.alkategoria ? ` — ${ALKATEGORIA_LABEL[s.alkategoria]}` : ""} (${s.penznem})`,
+              nyitottOsszeg: s.nyitott_osszeg,
+              lejartOsszeg: s.lejart_osszeg,
+              penznem: s.penznem,
+              nyitottDarab: s.nyitott_darab,
+              lejartDarab: s.lejart_darab,
+              onClick: () => {
+                setListaCim(
+                  `${KATEGORIA_LABEL[s.kategoria]}${s.alkategoria ? ` — ${ALKATEGORIA_LABEL[s.alkategoria]}` : ""} (${s.penznem})`
+                );
+                setListaSzuro({ kategoria: s.kategoria, alkategoria: s.alkategoria, penznem: s.penznem });
+              },
+            })),
+          ...egyebCegek.map((s) => ({
+            kulcs: `egyeb-${s.vevo_nev}-${s.penznem}`,
+            cim: `Raklap — Egyéb — ${s.vevo_nev} (${s.penznem})`,
+            nyitottOsszeg: s.nyitott_osszeg,
+            lejartOsszeg: s.lejart_osszeg,
+            penznem: s.penznem,
+            nyitottDarab: s.nyitott_darab,
+            lejartDarab: s.lejart_darab,
+            onClick: () => {
+              setListaCim(`Raklap — Egyéb — ${s.vevo_nev} (${s.penznem})`);
+              setListaSzuro({ kategoria: "raklap", alkategoria: "egyeb", vevoNev: s.vevo_nev, penznem: s.penznem });
+            },
+          })),
+        ]}
       />
 
       <LejaratCsempek refreshKey={refreshKey} onChanged={loadOsszesito} />
