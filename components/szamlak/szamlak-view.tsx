@@ -40,8 +40,10 @@ import {
 } from "@/lib/szamlak/szamla-constants";
 
 // Ezres tagolás ponttal (pl. "1.314.234"), tizedesponttal a törtrésznél (EUR-nál előfordulhat).
+// A adatbázis-rétegből (pg) a numerikus oszlopok stringként érkeznek — Number()
+// nélkül a toLocaleString a stringen simán nem csinál semmit (nincs tagolás).
 function formatOsszeg(n: number, penznem: string) {
-  return `${n.toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${penznem}`;
+  return `${Number(n).toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${penznem}`;
 }
 
 /** Az 5 perces visszavonási ablakon belül van-e még a "Fizetve" jelölés. */
@@ -95,6 +97,11 @@ function SzamlaListaDialog({
   }
 
   const ma = new Date().toISOString().slice(0, 10);
+  // A "Hiv. szám" (rendelésszám) gyakorlatilag sosem töltött — ha egy sorban sincs
+  // adat, ne foglaljon helyet a fontosabb oszlopoktól (dátum, összeg), amik
+  // hosszú cégnevek (pl. "Egyéb" kategória) mellett amúgy is könnyen kiszorulnak
+  // a látható területről kis képernyőn.
+  const vanRendelesszam = rows.some((row) => row.rendelesszam);
 
   return (
     <Dialog open={szuro !== null} onOpenChange={onOpenChange}>
@@ -108,7 +115,7 @@ function SzamlaListaDialog({
               <TableRow>
                 <TableHead>Sorszám</TableHead>
                 <TableHead>Vevő</TableHead>
-                <TableHead>Hiv. szám</TableHead>
+                {vanRendelesszam && <TableHead>Hiv. szám</TableHead>}
                 <TableHead>Kiállítás</TableHead>
                 <TableHead>Fizetési határidő</TableHead>
                 <TableHead className="text-right">Összeg</TableHead>
@@ -119,7 +126,7 @@ function SzamlaListaDialog({
             <TableBody>
               {!loading && rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-muted-foreground">
+                  <TableCell colSpan={vanRendelesszam ? 8 : 7} className="text-center text-muted-foreground">
                     Nincs ilyen számla.
                   </TableCell>
                 </TableRow>
@@ -128,14 +135,18 @@ function SzamlaListaDialog({
                 const lejart = !row.fizetve && !!row.fizetesi_hatarido && row.fizetesi_hatarido < ma;
                 return (
                   <TableRow key={row.id}>
-                    <TableCell className="text-muted-foreground">{row.szamlaszam}</TableCell>
-                    <TableCell>{row.vevo_nev}</TableCell>
-                    <TableCell>{row.rendelesszam ?? "—"}</TableCell>
-                    <TableCell>{row.kiallitas_datum}</TableCell>
-                    <TableCell className={lejart ? "font-medium text-destructive" : ""}>
+                    <TableCell className="whitespace-nowrap text-muted-foreground">{row.szamlaszam}</TableCell>
+                    <TableCell className="max-w-[9rem] truncate" title={row.vevo_nev}>
+                      {row.vevo_nev}
+                    </TableCell>
+                    {vanRendelesszam && <TableCell>{row.rendelesszam ?? "—"}</TableCell>}
+                    <TableCell className="whitespace-nowrap">{row.kiallitas_datum}</TableCell>
+                    <TableCell
+                      className={`whitespace-nowrap ${lejart ? "font-medium text-destructive" : ""}`}
+                    >
                       {row.fizetesi_hatarido ?? "—"}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">
+                    <TableCell className="whitespace-nowrap text-right tabular-nums">
                       {formatOsszeg(row.brutto, row.penznem)}
                     </TableCell>
                     <TableCell>
