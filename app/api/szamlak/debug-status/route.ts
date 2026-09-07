@@ -11,3 +11,15 @@ export async function GET() {
   );
   return NextResponse.json({ count: rows.length, rows });
 }
+
+// A migrate.mjs javítása után: újra kiürítjük a keszlet_movements-et (amit
+// a hibás gate visszaseedelt), és jelöljük a demó seed-et "alkalmazottnak",
+// hogy induláskor SOHA többé ne fusson le újra.
+export async function POST() {
+  await query(`delete from keszlet_movements`);
+  await query(`delete from keszlet_events`);
+  await query(
+    `insert into alkalmazott_javitasok (kod) values ('demo-seed-v1') on conflict do nothing`
+  );
+  return NextResponse.json({ ok: true });
+}

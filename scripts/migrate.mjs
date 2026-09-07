@@ -1,6 +1,14 @@
 // Induláskor lefutó, biztonságosan újrafuttatható migráció:
 // - a séma mindig alkalmazódik (IF NOT EXISTS / ON CONFLICT DO NOTHING)
-// - a demó seed csak első indításkor fut le (ha még nincs egy mozgás sem)
+// - a demó seed csak EGYETLEN egyszer, a rendszer legelső indításakor fut
+//   le — ezt egy alkalmazott_javitasok-bejegyzés jelöli (2026-09-07-től),
+//   NEM a "van-e már sor a keszlet_movements-ben" ellenőrzés. Korábban ez
+//   utóbbi volt a feltétel, ami hibásnak bizonyult: amikor a Készlet modult
+//   élesítéskor teljesen kiürítettük (hogy 0-ról induljon), a következő
+//   induláskor a tábla megint üresnek látszott, és a migráció ÚJRA
+//   betöltötte a demó "Nyitókészlet" sorokat. Az alkalmazott_javitasok-os
+//   jelölés ettől független — egyszer fut le, aztán soha többé, akkor sem,
+//   ha valaki (jogosan) kiüríti a táblát.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -20,14 +28,7 @@ async function main() {
   await pool.query(schema);
   console.log("[migrate] séma alkalmazva.");
 
-  const { rows } = await pool.query("select count(*)::int as n from keszlet_movements");
-  if (rows[0].n === 0) {
-    const seed = readFileSync(path.join(dbDir, "seed.sql"), "utf8");
-    await pool.query(seed);
-    console.log("[migrate] demó adatok betöltve.");
-  } else {
-    console.log("[migrate] már van adat, seed kihagyva.");
-  }
+  await runDemoSeedOnce(pool, dbDir);
 
   await applyKapcsolatokUpdates(pool, dbDir);
   await applyPoziciszamUpdates(pool, dbDir);
@@ -37,6 +38,26 @@ async function main() {
   await applySzamlaFizetveImport(pool, dbDir);
 
   await pool.end();
+}
+
+// Demó seed — kizárólag a legelső induláskor fut le, utána soha többé
+// (lásd a fájl tetején lévő megjegyzést). A Készlet modul 2026-09-07-i
+// élesítésekor a felhasználó kérésére a tényleges (teszt) adatokat
+// kiürítettük — ez a bejegyzés azt jelöli, hogy a demó seed-et "már
+// alkalmazottnak" tekintjük, tehát ne fusson le újra és ne töltse vissza a
+// demó "Nyitókészlet" sorokat.
+async function runDemoSeedOnce(pool, dbDir) {
+  const JAVITAS_KOD = "demo-seed-v1";
+  const { rows } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (rows.length > 0) {
+    console.log("[migrate] demó seed már alkalmazva (vagy élesítéskor törölve), kihagyva.");
+    return;
+  }
+
+  const seed = readFileSync(path.join(dbDir, "seed.sql"), "utf8");
+  await pool.query(seed);
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1)`, [JAVITAS_KOD]);
+  console.log("[migrate] demó adatok betöltve.");
 }
 
 // Egyszeri javítás (2026-09-06): a Számlázz.hu-lekérdező kliens első
