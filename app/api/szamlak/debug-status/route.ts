@@ -3,17 +3,16 @@ import { addPurchase } from "@/lib/keszlet/actions";
 import { query } from "@/lib/db";
 
 export async function GET() {
-  const kassza = await query<{ sum: string | null }>(`select sum(amount)::text as sum from kassza_movements`);
-  const stock = await query(
-    `select t.name, sum(km.qty) as qty
+  const purchasesCount = await query<{ n: string }>(`select count(*)::text as n from nyiregyhaza_purchases`);
+  const movements = await query(
+    `select km.id, t.name as type, km.direction, km.qty, km.partner, km.created_at, km.purchase_id
      from keszlet_movements km
      join sites s on s.id = km.site_id
      join pallet_types t on t.id = km.type_id
      where s.name = 'Nyíregyháza'
-     group by t.name
-     order by t.name`
+     order by km.created_at`
   );
-  return NextResponse.json({ kasszaOsszeg: kassza[0]?.sum, nyiregyhazaKeszlet: stock });
+  return NextResponse.json({ purchasesCount: purchasesCount[0]?.n, movements });
 }
 
 // IDEIGLENES: az eddigi havi (Nyíregyháza) felvásárlás egyszeri, visszamenőleges
