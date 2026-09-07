@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Building2, MapPin, ArrowRight } from "lucide-react";
+import { Building2, MapPin, ArrowRight, Smartphone } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { ModuleStatusBadge } from "@/components/layout/module-status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -68,6 +68,14 @@ export default async function Home() {
           })}
         </div>
       </div>
+
+      <Link
+        href="/mobil"
+        className="flex items-center gap-2 self-start rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
+      >
+        <Smartphone className="h-3.5 w-3.5" />
+        Mobil összefoglaló nézet (mai felvásárlás, kassza, kocsinkénti megbízások)
+      </Link>
     </div>
   );
 }

@@ -21,8 +21,9 @@ export function AppShell({
   const pathname = usePathname();
   const userName = useCurrentUserName();
 
-  // A bejelentkezési oldalnak nincs oldalsáv/navigáció — önálló képernyő.
-  if (pathname === "/login") {
+  // A bejelentkezési oldalnak és a mobil összefoglalónak nincs (asztali
+  // méretre tervezett) oldalsávja — utóbbi saját, könnyű fejlécet rajzol.
+  if (pathname === "/login" || pathname === "/mobil") {
     return <>{children}</>;
   }
 

@@ -95,6 +95,31 @@ export async function getMaiSajatFuvarok(nap?: string): Promise<MaiFuvarSor[]> {
   );
 }
 
+/**
+ * Egy adott nap (alapértelmezetten a mai) "Saját fuvarok" fülön (tipus='ber')
+ * rögzített, kézzel felvett fuvarjai — a mobil összefoglaló nézethez
+ * (kocsinkénti csoportosítás a `jarmu` mező alapján). Lásd getMaiSajatFuvarok
+ * fenti megjegyzését a "sajat"/"ber" elnevezés (történelmi okokból fordított
+ * UI-címkézés: tipus='sajat' → "Bér fuvarok" fül, tipus='ber' → "Saját
+ * fuvarok" fül) tisztázásához.
+ */
+export async function getMaiValodiSajatFuvarok(nap?: string): Promise<MaiFuvarSor[]> {
+  return query<MaiFuvarSor>(
+    `select
+       id::text, megrendelo, felrako, lerako, idopont,
+       to_char(datum, 'YYYY-MM-DD') as datum,
+       to_char(lerakas_datum, 'YYYY-MM-DD') as lerakas_datum,
+       jarmu, sofor, pozicioszam
+     from fuvar_megbizasok
+     where tipus = 'ber' and statusz <> 'torolt'
+       and (datum = coalesce($1::date, current_date)
+            or coalesce(lerakas_datum, datum) = coalesce($1::date, current_date))
+     order by idopont nulls last, id asc
+     limit 100`,
+    [nap ?? null]
+  );
+}
+
 /** A PDF-ből előkészített, még jóvá nem hagyott fuvarok — típustól függetlenül. */
 export async function getElokeszitettFuvarok(): Promise<FuvarRow[]> {
   return query<FuvarRow>(
