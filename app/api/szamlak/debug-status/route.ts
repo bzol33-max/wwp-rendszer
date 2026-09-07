@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getIdovonalak } from "@/lib/fuvarozas/actions";
 import { getMaiSajatFuvarok } from "@/lib/fuvarozas/megbizasok";
-import { getVehicleTrips } from "@/lib/fuvarozas/ecofleet";
+import { getVehicleTrips, getFleetLastPositions } from "@/lib/fuvarozas/ecofleet";
 
 // IDEIGLENES diagnosztikai végpont — az idővonal/megbízás hibakereséséhez.
 // Törlésre kerül, amint a hiba beazonosítva.
@@ -12,7 +12,10 @@ export async function GET() {
   const napISO = fmt.format(now);
 
   const napKezdet = new Date(`${napISO}T00:00:00`);
+  const tegnap = new Date(napKezdet.getTime() - 24 * 3600 * 1000);
   const nmzTripsRaw = await getVehicleTrips("369485", napKezdet, now).catch((e) => ({ error: String(e) }));
+  const nmzTripsTegnaptol = await getVehicleTrips("369485", tegnap, now).catch((e) => ({ error: String(e) }));
+  const eloPoziciok = await getFleetLastPositions().catch((e) => ({ error: String(e) }));
 
   const maiFuvarok = await getMaiSajatFuvarok(napISO).catch((e) => ({ error: String(e) }));
   const idovonalak = await getIdovonalak().catch((e) => ({ error: String(e) }));
@@ -21,6 +24,8 @@ export async function GET() {
     serverNowUtc: now.toISOString(),
     napISO,
     nmzTripsRaw,
+    nmzTripsTegnaptol,
+    eloPoziciok,
     maiFuvarok,
     idovonalak,
   });
