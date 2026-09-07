@@ -12,6 +12,7 @@ const MODULES_FOR_NAV: ModuleKey[] = [
   "keszlet",
   "szamlak",
   "dolgozok",
+  "jelenlet",
   "jarmuvek",
 ];
 
