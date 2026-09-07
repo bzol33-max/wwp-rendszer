@@ -405,3 +405,81 @@ create table if not exists users (
 -- lib/auth/permissions.ts. Az "admin" szerepkör mindig mindenhez hozzáfér,
 -- ettől a mezőtől függetlenül.
 alter table users add column if not exists permissions jsonb not null default '{}'::jsonb;
+
+-- Dolgozók (Alkalmazottak) modul (2026-09-07). Egy dolgozónak a három
+-- bérmező (weekly_wage/daily_wage/monthly_wage) közül pontosan EGY legyen
+-- kitöltve — ez dönti el, melyik kártyatípust (heti/napi/fix havi) kapja a
+-- felületen; a validáció az alkalmazás oldalán történik
+-- (lib/dolgozok/actions.ts), nem adatbázis-constraint-tel.
+create table if not exists alkalmazottak (
+  id               bigserial primary key,
+  name             text not null,
+  position         integer not null default 0,
+  weekly_wage      integer not null default 0,
+  daily_wage       integer not null default 0,
+  monthly_wage     integer not null default 0,
+  fixed_deduction  integer not null default 0,
+  -- Csak fix havi béreseknél számít: van-e a kártyán "Letiltás"/"Üzemanyag"
+  -- beviteli mező (nem minden havi béres dolgozónál értelmezhető).
+  show_letiltas    boolean not null default false,
+  show_uzemanyag   boolean not null default false,
+  active           boolean not null default true,
+  created_at       timestamptz not null default now()
+);
+
+-- Heti béresek: hónaponta 4 sor (1-4. hét), egyenként kipipálható.
+create table if not exists alkalmazott_heti_ber (
+  id           bigserial primary key,
+  employee_id  bigint not null references alkalmazottak(id) on delete cascade,
+  year         integer not null,
+  month        integer not null check (month between 1 and 12),
+  week_index   smallint not null check (week_index between 1 and 4),
+  amount       integer not null default 0,
+  paid         boolean not null default false,
+  paid_at      timestamptz,
+  paid_by      text,
+  unique (employee_id, year, month, week_index)
+);
+
+-- Napi ÉS fix havi béresek: hónaponta 1 sor (közös tábla — a napi/fix havi
+-- formula a rá vonatkozó oszlopokat használja, lásd lib/dolgozok/actions.ts).
+create table if not exists alkalmazott_napi_havi_ber (
+  id           bigserial primary key,
+  employee_id  bigint not null references alkalmazottak(id) on delete cascade,
+  year         integer not null,
+  month        integer not null check (month between 1 and 12),
+  days_count   integer not null default 0,
+  utalas       integer not null default 0,
+  eloleg       integer not null default 0,
+  letiltas     integer not null default 0,
+  uzemanyag    integer not null default 0,
+  paid         boolean not null default false,
+  paid_at      timestamptz,
+  paid_by      text,
+  unique (employee_id, year, month)
+);
+
+-- Előlegek — önálló, dolgozónkénti lista. A napi/fix havi kártya "Előleg"
+-- mezője automatikusan létrehoz/frissít ide egy sort (auto_key azonosítja,
+-- hónaponta egyet) — ez a sor csak a kártyán módosítható, ezért a kézi
+-- törlés (lib/dolgozok/actions.ts:deleteAdvance) elutasítja. Minden más sor
+-- kézzel felvitt, önálló előleg (lehet negatív is — az levonást jelent).
+create table if not exists alkalmazott_elolegek (
+  id           bigserial primary key,
+  employee_id  bigint not null references alkalmazottak(id) on delete cascade,
+  advance_date date not null default current_date,
+  amount       integer not null,
+  note         text,
+  auto_key     text unique,
+  created_by   text,
+  created_at   timestamptz not null default now()
+);
+create index if not exists idx_alkalmazott_elolegek_employee on alkalmazott_elolegek (employee_id, advance_date desc);
+
+-- A modul aktuális ("nyitott") hónapja — NEM a naptári hónap, lásd
+-- lib/dolgozok/actions.ts:getPointer(). Egyetlen sor (id=1).
+create table if not exists alkalmazottak_allapot (
+  id     smallint primary key default 1 check (id = 1),
+  year   integer not null,
+  month  integer not null check (month between 1 and 12)
+);
