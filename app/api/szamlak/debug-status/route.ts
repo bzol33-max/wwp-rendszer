@@ -1,0 +1,35 @@
+import { NextResponse } from "next/server";
+import { query } from "@/lib/db";
+
+// IDEIGLENES diagnosztikai végpont — a Készlet "havi" fül élesítése előtt
+// megnézzük, mi van ténylegesen az éles adatbázisban (nem csak a seed
+// scriptben). Törlésre kerül, amint a döntés megszületett.
+
+export async function GET() {
+  const kassza = await query<{ count: string; sum: string | null }>(
+    `select count(*)::text as count, sum(amount)::text as sum from kassza_movements`
+  );
+  const purchases = await query<{ count: string }>(`select count(*)::text as count from nyiregyhaza_purchases`);
+  const keszletMovements = await query<{
+    site_id: string;
+    type_id: string;
+    direction: string;
+    count: string;
+    sum_qty: string;
+  }>(
+    `select site_id, type_id, direction, count(*)::text as count, sum(qty)::text as sum_qty
+     from keszlet_movements
+     group by site_id, type_id, direction
+     order by site_id, type_id, direction`
+  );
+  const inventoryCounts = await query<{ count: string }>(`select count(*)::text as count from inventory_counts`);
+  const keszletEvents = await query<{ count: string }>(`select count(*)::text as count from keszlet_events`);
+
+  return NextResponse.json({
+    kassza: kassza[0],
+    purchasesCount: purchases[0]?.count,
+    keszletMovements,
+    inventoryCountsCount: inventoryCounts[0]?.count,
+    keszletEventsCount: keszletEvents[0]?.count,
+  });
+}
