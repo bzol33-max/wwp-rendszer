@@ -42,3 +42,18 @@ export async function GET() {
     purchaseReszletek,
   });
 }
+
+// POST: a Készlet modul teljes élesítés előtti nullázása — a felhasználó
+// (Zoltán) kifejezetten jóváhagyta (2026-09-07), miután megmutattam neki a
+// pontos éles adatokat (teszt-kassza, teszt-felvásárlások, demó
+// "Nyitókészlet" sorok). Minden érintett tábla ürítése, hogy a Készlet
+// oldal minden telephelyen, minden terméken 0-ról induljon — a valós
+// leltárt/kasszát/havi felvásárlást ő adja majd meg ezután.
+export async function POST() {
+  await query(`delete from kassza_movements`);
+  await query(`delete from nyiregyhaza_purchases`);
+  await query(`delete from keszlet_movements`);
+  await query(`delete from keszlet_events`);
+  await query(`delete from inventory_counts`);
+  return NextResponse.json({ ok: true, message: "Készlet modul nullázva." });
+}
