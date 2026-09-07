@@ -56,6 +56,8 @@ export type IdovonalSzakasz =
       atlagSebesseg: number;
       honnan: string | null;
       hova: string | null;
+      hovaLat: number;
+      hovaLon: number;
       /** Igaz, ha ez egy még folyamatban lévő, az Ecofleet által még le nem zárt (ezért csak élő GPS-pozícióból becsült) szakasz. */
       elo?: boolean;
     }
@@ -109,6 +111,8 @@ export function epitsIdovonal(trips: EcofleetTrip[]): IdovonalSzakasz[] {
       atlagSebesseg: trip.avgSpeed,
       honnan: trip.startLocation,
       hova: trip.endLocation,
+      hovaLat: trip.endLatitude,
+      hovaLon: trip.endLongitude,
     });
 
     // Állás e trip után — és amíg a következő trip(ek) csak apró, helyben
@@ -223,10 +227,10 @@ export function kiegesziteloAllapottal(szakaszok: IdovonalSzakasz[], elo: EloPoz
 
   const utolsoHely =
     utolso.tipus === "vezetes"
-      ? { lat: NaN, lon: NaN, cim: utolso.hova }
+      ? { lat: utolso.hovaLat, lon: utolso.hovaLon, cim: utolso.hova }
       : { lat: utolso.lat, lon: utolso.lon, cim: utolso.cim };
 
-  const tavolsagKm = Number.isFinite(utolsoHely.lat) ? haversineKm(utolsoHely.lat, utolsoHely.lon, elo.lat, elo.lon) : Infinity;
+  const tavolsagKm = haversineKm(utolsoHely.lat, utolsoHely.lon, elo.lat, elo.lon);
   const folyamatbanVezet = elo.mozog || tavolsagKm >= OSSZEVONAS_KM;
 
   if (folyamatbanVezet) {
@@ -234,11 +238,13 @@ export function kiegesziteloAllapottal(szakaszok: IdovonalSzakasz[], elo: EloPoz
       tipus: "vezetes",
       kezdet: utolsoVeg,
       veg: most,
-      tavKm: Number.isFinite(tavolsagKm) ? tavolsagKm : 0,
+      tavKm: tavolsagKm,
       idotartamSec: Math.max(0, (most.getTime() - utolsoVeg.getTime()) / 1000),
       atlagSebesseg: 0,
       honnan: utolsoHely.cim,
       hova: elo.cim,
+      hovaLat: elo.lat,
+      hovaLon: elo.lon,
       elo: true,
     };
     return [...szakaszok, uj];
@@ -255,7 +261,22 @@ export function kiegesziteloAllapottal(szakaszok: IdovonalSzakasz[], elo: EloPoz
     return kiegeszitett;
   }
 
-  return szakaszok;
+  // Az utolsó lezárt szakasz vezetés volt, a jármű azóta (még le nem zárt
+  // trip formájában) megállt a végpontján — ezt egy új, élő állás-szakasszal jelezzük.
+  const idotartamSec = Math.max(0, (most.getTime() - utolsoVeg.getTime()) / 1000);
+  const ujAllas: IdovonalSzakasz = {
+    tipus: "allas",
+    kezdet: utolsoVeg,
+    veg: most,
+    idotartamSec,
+    cim: utolsoHely.cim,
+    lat: utolsoHely.lat,
+    lon: utolsoHely.lon,
+    kategoria: allasKategoria(idotartamSec),
+    osszevontLepesek: 0,
+    elo: true,
+  };
+  return [...szakaszok, ujAllas];
 }
 
 /** Szabad szöveges időpont-mezőből ("06:00", "de. 6", stb.) kiolvasott óra:perc, ha felismerhető. */
