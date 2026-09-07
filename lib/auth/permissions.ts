@@ -29,6 +29,15 @@ export type Permissions = Partial<Record<ModuleKey, ModulePermission>>;
 
 // Hiányzó modulbejegyzés = alapértelmezetten teljes hozzáférés. Az admin
 // felhasználó ettől függetlenül mindig mindent lát/szerkeszthet.
+//
+// A "mobil" modul kivétel: ez egy utólag bevezetett, szándékosan opt-in
+// jog (ld. app/mobil/page.tsx), nem egy a többi modullal egyenrangú,
+// eredettől fogva létező jogosultság. Ha a default-true szabályt rá is
+// alkalmaznánk, minden, a modul bevezetése ELŐTT létrehozott felhasználó
+// (akinek a permissions JSON-ja még nem tartalmaz "mobil" kulcsot)
+// visszamenőleg megkapná ezt a jogot — a mobil nézeten keresztül pedig ez
+// felülírná a Készlet/Fuvarozás modulra szándékosan beállított tiltásukat
+// is. Ezért itt hiányzó bejegyzésnél false az alapértelmezés.
 export function resolvePermission(
   role: string,
   permissions: Permissions | null | undefined,
@@ -36,6 +45,7 @@ export function resolvePermission(
 ): ModulePermission {
   if (role === "admin") return { view: true, edit: true };
   const p = permissions?.[module];
+  if (module === "mobil") return { view: p?.view ?? false, edit: p?.edit ?? false };
   return { view: p?.view ?? true, edit: p?.edit ?? true };
 }
 
