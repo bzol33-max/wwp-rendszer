@@ -64,7 +64,8 @@ export const MODULES: ModuleInfo[] = [
     label: "Dolgozók",
     href: "/dolgozok",
     icon: Users,
-    status: "tervezes-alatt",
-    description: "A modul funkciói még nincsenek kidolgozva.",
+    status: "fejlesztes-alatt",
+    description:
+      "Alkalmazottak bérszámolása (heti/napi/fix havi bérmód), kifizetés-jelölés, előlegek, archívum.",
   },
 ];
