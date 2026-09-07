@@ -73,7 +73,8 @@ export const MODULES: ModuleInfo[] = [
     label: "Jelenléti/üzenőfal",
     href: "/jelenlet",
     icon: MessageSquare,
-    status: "tervezes-alatt",
-    description: "A modul funkciói még nincsenek kidolgozva.",
+    status: "fejlesztes-alatt",
+    description:
+      "Két dolgozó napi érkezés/távozás idejének rögzítése (napi 9 órához viszonyított eltéréssel), plusz telephelyenkénti, sürgősség szerint jelölt feladat-üzenőfal.",
   },
 ];

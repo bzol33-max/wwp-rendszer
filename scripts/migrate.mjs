@@ -70,6 +70,7 @@ async function main() {
   await resetSzamlaRosszTotalosszMezok(pool);
   await applySzamlaFizetveImport(pool, dbDir);
   await seedAlkalmazottakOnce(pool);
+  await seedJelenletAktivOnce(pool);
 
   await pool.end();
 }
@@ -119,6 +120,20 @@ async function seedAlkalmazottakOnce(pool) {
   }
   await pool.query(`insert into alkalmazott_javitasok (kod) values ($1)`, [JAVITAS_KOD]);
   console.log(`[migrate] Alkalmazottak törzsadat feltöltve: ${employees.length} dolgozó.`);
+}
+
+// Jelenléti/üzenőfal modul (2026-09-07) — egyszeri kijelölés: melyik két
+// dolgozó jelenjen meg az érkezés-ablakban (alkalmazottak.jelenlet_aktiv).
+async function seedJelenletAktivOnce(pool) {
+  const JAVITAS_KOD = "jelenlet-aktiv-dolgozok-2026-09-07";
+  const { rows } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (rows.length > 0) return;
+
+  await pool.query(
+    `update alkalmazottak set jelenlet_aktiv = true where name in ('Vadon Gabi', 'Bodogán Gabi')`
+  );
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1)`, [JAVITAS_KOD]);
+  console.log("[migrate] Jelenlét modul: aktív dolgozók kijelölve.");
 }
 
 // Demó seed — kizárólag a legelső induláskor fut le, utána soha többé
