@@ -1,5 +1,20 @@
 import { NextResponse } from "next/server";
 import { addPurchase } from "@/lib/keszlet/actions";
+import { query } from "@/lib/db";
+
+export async function GET() {
+  const kassza = await query<{ sum: string | null }>(`select sum(amount)::text as sum from kassza_movements`);
+  const stock = await query(
+    `select t.name, sum(km.qty) as qty
+     from keszlet_movements km
+     join sites s on s.id = km.site_id
+     join pallet_types t on t.id = km.type_id
+     where s.name = 'Nyíregyháza'
+     group by t.name
+     order by t.name`
+  );
+  return NextResponse.json({ kasszaOsszeg: kassza[0]?.sum, nyiregyhazaKeszlet: stock });
+}
 
 // IDEIGLENES: az eddigi havi (Nyíregyháza) felvásárlás egyszeri, visszamenőleges
 // rögzítése — a felhasználó (Zoltán) adta meg a mennyiségeket és jóváhagyta az árakat.
