@@ -10,7 +10,8 @@ export type ModuleKey =
   | "szamlak"
   | "dolgozok"
   | "jarmuvek"
-  | "beallitasok";
+  | "beallitasok"
+  | "mobil";
 
 export const MODULES: { key: ModuleKey; label: string }[] = [
   { key: "info", label: "Info (kezdőlap)" },
@@ -20,6 +21,7 @@ export const MODULES: { key: ModuleKey; label: string }[] = [
   { key: "dolgozok", label: "Dolgozók" },
   { key: "jarmuvek", label: "Járművek" },
   { key: "beallitasok", label: "Beállítások (típusok és árak)" },
+  { key: "mobil", label: "Mobil összefoglaló (önálló, korlátozott nézet)" },
 ];
 
 export type ModulePermission = { view: boolean; edit: boolean };

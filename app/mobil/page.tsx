@@ -16,8 +16,14 @@ function formatIdo(iso: string) {
 
 export default async function MobilPage() {
   const session = await requireSession();
-  const showKeszlet = session.can("keszlet").view;
-  const showFuvarozas = session.can("fuvarozas").view;
+  // A "mobil" jog önmagában is feljogosít mindkét kártya megtekintésére —
+  // ez egy szándékosan önálló, korlátozott nézet, független attól, hogy a
+  // felhasználó a teljes Készlet/Fuvarozás modulhoz hozzáfér-e. Aki viszont
+  // amúgy is rendelkezik a teljes modul megtekintési jogával, annak külön
+  // "mobil" jog nélkül is megjelenik a hozzá tartozó kártya.
+  const mobilJog = session.can("mobil").view;
+  const showKeszlet = session.can("keszlet").view || mobilJog;
+  const showFuvarozas = session.can("fuvarozas").view || mobilJog;
 
   const data = await getMobilOsszefoglalo({ showKeszlet, showFuvarozas });
 

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { Building2, MapPin, ArrowRight, Smartphone } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { ModuleStatusBadge } from "@/components/layout/module-status-badge";
@@ -13,6 +14,13 @@ export default async function Home() {
   const visibleModules = MODULES.filter(
     (mod) => session.can(mod.key as ModuleKey).view
   );
+
+  // Aki egyelőre csak a mobil összefoglalóhoz kap jogot (egyik teljes
+  // modulhoz sincs hozzáférése), azt bejelentkezés után rögtön oda irányítjuk
+  // — neki ez a kezdőlap üres modul-rácsot mutatna.
+  if (visibleModules.length === 0 && session.can("mobil").view) {
+    redirect("/mobil");
+  }
 
   return (
     <div className="flex flex-col gap-6">

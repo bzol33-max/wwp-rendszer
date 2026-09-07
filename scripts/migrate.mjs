@@ -38,6 +38,28 @@ async function main() {
     name: "Admin",
     role: "admin",
   });
+  // Csak a mobil összefoglaló nézetet látja — minden más modul (Info,
+  // Fuvarozás, Készlet, Számlák, Dolgozók, Járművek, Beállítások) le van
+  // tiltva neki (view+edit is false), a "mobil" modul pedig önmagában
+  // feljogosít a /mobil oldal mindkét kártyájának megtekintésére, a teljes
+  // Készlet/Fuvarozás modul jogosultsága nélkül is. Lásd app/mobil/page.tsx.
+  await seedUserOnce(pool, {
+    code: "user-budahazizoltan-2026-09-07",
+    username: "BudahaziZoltan",
+    password: "Raklap6569",
+    name: "Budaházi Zoltán",
+    role: "felhasznalo",
+    permissions: {
+      info: { view: false, edit: false },
+      fuvarozas: { view: false, edit: false },
+      keszlet: { view: false, edit: false },
+      szamlak: { view: false, edit: false },
+      dolgozok: { view: false, edit: false },
+      jarmuvek: { view: false, edit: false },
+      beallitasok: { view: false, edit: false },
+      mobil: { view: true, edit: false },
+    },
+  });
 
   await applyKapcsolatokUpdates(pool, dbDir);
   await applyPoziciszamUpdates(pool, dbDir);
@@ -103,16 +125,16 @@ async function seedFirstUserOnce(pool) {
 // lépés csak egyszer fut le, utána soha többé (akkor sem, ha a felhasználót
 // valaki törli). Új felhasználó hozzáadásához elég egy újabb hívás egyedi
 // "code" értékkel a main()-ben.
-async function seedUserOnce(pool, { code, username, password, name, role }) {
+async function seedUserOnce(pool, { code, username, password, name, role, permissions }) {
   const { rows } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [code]);
   if (rows.length > 0) return;
 
   const passwordHash = await bcrypt.hash(password, 12);
   await pool.query(
-    `insert into users (username, password_hash, name, role)
-     values ($1, $2, $3, $4)
+    `insert into users (username, password_hash, name, role, permissions)
+     values ($1, $2, $3, $4, $5::jsonb)
      on conflict (username) do nothing`,
-    [username, passwordHash, name, role]
+    [username, passwordHash, name, role, JSON.stringify(permissions ?? {})]
   );
   await pool.query(`insert into alkalmazott_javitasok (kod) values ($1)`, [code]);
   console.log(`[migrate] felhasználó létrehozva: ${username}.`);
