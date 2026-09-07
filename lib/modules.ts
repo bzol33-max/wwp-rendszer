@@ -30,7 +30,7 @@ export const MODULES: ModuleInfo[] = [
     label: "Készlet",
     href: "/keszlet",
     icon: Package,
-    status: "fejlesztes-alatt",
+    status: "elkeszult",
     description:
       "Telephelyenkénti raklap- és eszközkészlet, mozgások, felvásárlás, kassza, leltár.",
   },
@@ -39,7 +39,7 @@ export const MODULES: ModuleInfo[] = [
     label: "Fuvarozás",
     href: "/fuvarozas",
     icon: Truck,
-    status: "fejlesztes-alatt",
+    status: "elkeszult",
     description: "Megbízások (saját/bér fuvarok), útdíjkalkulátor, Ecofleet GPS-pozíció élesben. Ütemezés kidolgozás alatt.",
   },
   {
@@ -55,7 +55,7 @@ export const MODULES: ModuleInfo[] = [
     label: "Számlák",
     href: "/szamlak",
     icon: Receipt,
-    status: "fejlesztes-alatt",
+    status: "elkeszult",
     description:
       "Kintlévőség-követő: a Számlázz.hu-ban kiállított számlákat húzza be automatikusan (óránkénti helyett 15 percenkénti szinkron 6–22 óra között), Fuvar/Raklap kategorizálással.",
   },
