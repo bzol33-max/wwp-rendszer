@@ -13,6 +13,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import pg from "pg";
+import bcrypt from "bcryptjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dbDir = path.join(__dirname, "..", "db");
@@ -29,6 +30,7 @@ async function main() {
   console.log("[migrate] séma alkalmazva.");
 
   await runDemoSeedOnce(pool, dbDir);
+  await seedFirstUserOnce(pool);
 
   await applyKapcsolatokUpdates(pool, dbDir);
   await applyPoziciszamUpdates(pool, dbDir);
@@ -58,6 +60,36 @@ async function runDemoSeedOnce(pool, dbDir) {
   await pool.query(seed);
   await pool.query(`insert into alkalmazott_javitasok (kod) values ($1)`, [JAVITAS_KOD]);
   console.log("[migrate] demó adatok betöltve.");
+}
+
+// Első felhasználó (2026-09-07): a rendszerben eddig nem volt bejelentkezés,
+// minden rögzített tétel a hardcode-olt "admin" névvel bélyegződött. Ez az
+// egyszeri lépés létrehozza az első valódi felhasználót bcrypt-hash-elt
+// jelszóval — csak akkor, ha az "users" tábla még teljesen üres, hogy egy
+// később, a felületen (vagy közvetlenül adatbázisban) létrehozott azonos
+// nevű felhasználót ne írjon felül.
+async function seedFirstUserOnce(pool) {
+  const JAVITAS_KOD = "first-user-2026-09-07";
+  const { rows } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (rows.length > 0) return;
+
+  const { rows: existingUsers } = await pool.query(`select 1 from users limit 1`);
+  if (existingUsers.length > 0) {
+    // Már van felhasználó (pl. időközben kézzel létrehozták) — csak jelöljük
+    // a javítást alkalmazottnak, ne hozzunk létre duplikátumot.
+    await pool.query(`insert into alkalmazott_javitasok (kod) values ($1)`, [JAVITAS_KOD]);
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash("Tunde20/A", 12);
+  await pool.query(
+    `insert into users (username, password_hash, name, role)
+     values ($1, $2, $3, 'admin')
+     on conflict (username) do nothing`,
+    ["OszlanszkiTamás", passwordHash, "Oszlánszki Tamás"]
+  );
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1)`, [JAVITAS_KOD]);
+  console.log("[migrate] első felhasználó létrehozva.");
 }
 
 // Egyszeri javítás (2026-09-06): a Számlázz.hu-lekérdező kliens első

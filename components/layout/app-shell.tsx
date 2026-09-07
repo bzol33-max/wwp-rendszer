@@ -2,12 +2,20 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Settings } from "lucide-react";
+import { LogOut, Settings } from "lucide-react";
 import { NAV_ITEMS } from "@/lib/nav";
 import { cn } from "@/lib/utils";
+import { useCurrentUserName } from "@/lib/current-user";
+import { logout } from "@/lib/auth/actions";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const userName = useCurrentUserName();
+
+  // A bejelentkezési oldalnak nincs oldalsáv/navigáció — önálló képernyő.
+  if (pathname === "/login") {
+    return <>{children}</>;
+  }
 
   return (
     <div className="flex min-h-screen bg-muted/40">
@@ -60,6 +68,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="px-3 pb-1 text-xs text-sidebar-foreground/40">
             Szakoly · Balkány · Nyíregyháza
           </div>
+          {userName && (
+            <div className="flex items-center justify-between gap-2 border-t border-sidebar-border px-3 pt-2">
+              <span className="truncate text-xs text-sidebar-foreground/70">
+                {userName}
+              </span>
+              <form action={logout}>
+                <button
+                  type="submit"
+                  title="Kijelentkezés"
+                  className="flex items-center justify-center rounded p-1 text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent/60 hover:text-white"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                </button>
+              </form>
+            </div>
+          )}
         </div>
       </aside>
       <main className="flex-1 overflow-x-hidden">

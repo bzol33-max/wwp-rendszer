@@ -381,3 +381,19 @@ create table if not exists alkalmazott_javitasok (
   kod text primary key,
   alkalmazva_at timestamptz not null default now()
 );
+
+-- Bejelentkezés / felhasználók (2026-09-07).
+-- Egyszerű felhasználónév alapú belépés, bcrypt-hash-elt jelszóval.
+-- A szerepkör-alapú jogosultságkezelés (Admin/Ügyvezető/Fuvarszervező/stb.)
+-- későbbi fázis — egyelőre a "role" mező csak tájékoztató jellegű.
+create extension if not exists pgcrypto;
+
+create table if not exists users (
+  id            uuid primary key default gen_random_uuid(),
+  username      text not null unique,
+  password_hash text not null,
+  name          text not null,
+  role          text not null default 'admin',
+  active        boolean not null default true,
+  created_at    timestamptz not null default now()
+);
