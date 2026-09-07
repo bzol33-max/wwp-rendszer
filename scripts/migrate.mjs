@@ -39,10 +39,11 @@ async function main() {
     role: "admin",
   });
   // Csak a mobil összefoglaló nézetet látja — minden más modul (Info,
-  // Fuvarozás, Készlet, Számlák, Dolgozók, Járművek, Beállítások) le van
-  // tiltva neki (view+edit is false), a "mobil" modul pedig önmagában
-  // feljogosít a /mobil oldal mindkét kártyájának megtekintésére, a teljes
-  // Készlet/Fuvarozás modul jogosultsága nélkül is. Lásd app/mobil/page.tsx.
+  // Fuvarozás, Készlet, Számlák, Dolgozók, Jelenléti/üzenőfal, Járművek,
+  // Beállítások) le van tiltva neki (view+edit is false), a "mobil" modul
+  // pedig önmagában feljogosít a /mobil oldal mindkét kártyájának
+  // megtekintésére, a teljes Készlet/Fuvarozás modul jogosultsága nélkül
+  // is. Lásd app/mobil/page.tsx.
   await seedUserOnce(pool, {
     code: "user-budahazizoltan-2026-09-07",
     username: "BudahaziZoltan",
@@ -55,6 +56,7 @@ async function main() {
       keszlet: { view: false, edit: false },
       szamlak: { view: false, edit: false },
       dolgozok: { view: false, edit: false },
+      jelenlet: { view: false, edit: false },
       jarmuvek: { view: false, edit: false },
       beallitasok: { view: false, edit: false },
       mobil: { view: true, edit: false },

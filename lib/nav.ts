@@ -6,6 +6,7 @@ import {
   Users,
   Car,
   LayoutDashboard,
+  MessageSquare,
 } from "lucide-react";
 import type { ModuleKey } from "@/lib/auth/permissions";
 
@@ -22,6 +23,12 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/keszlet", label: "Készlet", icon: Package, key: "keszlet" },
   { href: "/szamlak", label: "Számlák", icon: Receipt, key: "szamlak" },
   { href: "/dolgozok", label: "Dolgozók", icon: Users, key: "dolgozok" },
+  {
+    href: "/jelenlet",
+    label: "Jelenléti/üzenőfal",
+    icon: MessageSquare,
+    key: "jelenlet",
+  },
   { href: "/jarmuvek", label: "Járművek", icon: Car, key: "jarmuvek" },
 ];
 
