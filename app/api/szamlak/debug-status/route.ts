@@ -50,10 +50,12 @@ export async function GET() {
 // oldal minden telephelyen, minden terméken 0-ról induljon — a valós
 // leltárt/kasszát/havi felvásárlást ő adja majd meg ezután.
 export async function POST() {
-  await query(`delete from kassza_movements`);
-  await query(`delete from nyiregyhaza_purchases`);
+  // Sorrend a foreign key-ek miatt fontos: keszlet_movements/kassza_movements
+  // hivatkozik a nyiregyhaza_purchases-ra, azt előbb kell üríteni.
   await query(`delete from keszlet_movements`);
   await query(`delete from keszlet_events`);
+  await query(`delete from kassza_movements`);
+  await query(`delete from nyiregyhaza_purchases`);
   await query(`delete from inventory_counts`);
   return NextResponse.json({ ok: true, message: "Készlet modul nullázva." });
 }
