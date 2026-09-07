@@ -67,8 +67,56 @@ async function main() {
   await applyPostazasiCimUpdates(pool, dbDir);
   await resetSzamlaRosszTotalosszMezok(pool);
   await applySzamlaFizetveImport(pool, dbDir);
+  await seedAlkalmazottakOnce(pool);
 
   await pool.end();
+}
+
+// Dolgozók modul — egyszeri törzsadat-feltöltés (2026-09-07): a tényleges
+// dolgozói kör és bérmódjuk. Csak a törzsadatot (Employee) tölti fel — a
+// folyó havi tételeket (napok/utalás/előleg) NEM, azokat a felhasználó
+// viszi fel az oldalon a valós adatokkal, hogy ne legyen kitalált
+// pénzügyi adat a rendszerben.
+async function seedAlkalmazottakOnce(pool) {
+  const JAVITAS_KOD = "alkalmazottak-torzsadat-2026-09-07";
+  const { rows } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (rows.length > 0) return;
+
+  const employees = [
+    { name: "Vadon Gabi", position: 1, weeklyWage: 110000 },
+    { name: "Bodogán Gabi", position: 2, dailyWage: 22000 },
+    {
+      name: "Vadon Gergő",
+      position: 3,
+      monthlyWage: 700000,
+      fixedDeduction: 50000,
+      showLetiltas: true,
+      showUzemanyag: true,
+    },
+    { name: "Takács Micó", position: 4, monthlyWage: 600000 },
+    { name: "Oszlánszki Tamás", position: 5, monthlyWage: 300000 },
+    { name: "Budaházi Zoltán", position: 6, monthlyWage: 750000 },
+  ];
+
+  for (const e of employees) {
+    await pool.query(
+      `insert into alkalmazottak
+         (name, position, weekly_wage, daily_wage, monthly_wage, fixed_deduction, show_letiltas, show_uzemanyag)
+       values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [
+        e.name,
+        e.position,
+        e.weeklyWage ?? 0,
+        e.dailyWage ?? 0,
+        e.monthlyWage ?? 0,
+        e.fixedDeduction ?? 0,
+        e.showLetiltas ?? false,
+        e.showUzemanyag ?? false,
+      ]
+    );
+  }
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1)`, [JAVITAS_KOD]);
+  console.log(`[migrate] Alkalmazottak törzsadat feltöltve: ${employees.length} dolgozó.`);
 }
 
 // Demó seed — kizárólag a legelső induláskor fut le, utána soha többé
