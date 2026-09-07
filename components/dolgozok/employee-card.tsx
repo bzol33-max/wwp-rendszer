@@ -25,6 +25,11 @@ import {
 } from "@/lib/dolgozok/actions";
 import { getCurrentUser } from "@/lib/current-user";
 
+// Minden dolgozó kártyája egyforma méretű csempe legyen a rácsban,
+// függetlenül attól, hogy heti/napi/fix havi bérmódú-e (utóbbinak több
+// mezője van) — lásd a "6 egyforma kocka" kérést.
+const CARD_HEIGHT = "h-80";
+
 function NumberField({
   label,
   value,
@@ -72,21 +77,13 @@ function KifizetveButton({
   );
 }
 
-function CardShell({
-  name,
-  featured,
-  children,
-}: {
-  name: string;
-  featured?: boolean;
-  children: React.ReactNode;
-}) {
+function CardShell({ name, children }: { name: string; children: React.ReactNode }) {
   return (
-    <Card className={cn(featured && "border-primary/40")}>
+    <Card className={cn(CARD_HEIGHT, "flex flex-col")}>
       <CardHeader>
         <CardTitle className="text-center text-xl">{name}</CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">{children}</CardContent>
+      <CardContent className="flex flex-1 flex-col justify-between space-y-3">{children}</CardContent>
     </Card>
   );
 }
@@ -96,14 +93,12 @@ function HetiCard({
   rows,
   readonly,
   canEdit,
-  featured,
   onReload,
 }: {
   employee: Employee;
   rows: HetiRow[];
   readonly?: boolean;
   canEdit: boolean;
-  featured?: boolean;
   onReload: () => void | Promise<void>;
 }) {
   const [pending, startTransition] = useTransition();
@@ -121,7 +116,7 @@ function HetiCard({
   }
 
   return (
-    <CardShell name={employee.name} featured={featured}>
+    <CardShell name={employee.name}>
       <div className="grid grid-cols-2 gap-2">
         {[1, 2, 3, 4].map((week) => {
           const row = rows.find((r) => r.week_index === week);
@@ -154,14 +149,12 @@ function NapiCard({
   row,
   readonly,
   canEdit,
-  featured,
   onReload,
 }: {
   employee: Employee;
   row: NapiHaviRow;
   readonly?: boolean;
   canEdit: boolean;
-  featured?: boolean;
   onReload: () => void | Promise<void>;
 }) {
   const [daysCount, setDaysCount] = useState(String(row.days_count));
@@ -205,32 +198,36 @@ function NapiCard({
   );
 
   return (
-    <CardShell name={employee.name} featured={featured}>
-      <div className="grid grid-cols-3 items-end gap-2">
-        <NumberField label="Napok száma" value={daysCount} onChange={setDaysCount} disabled={locked} />
-        <NumberField label="Utalás (Ft)" value={utalas} onChange={setUtalas} disabled={locked} />
-        <NumberField label="Előleg (Ft)" value={eloleg} onChange={setEloleg} disabled={locked} />
-      </div>
-      {!locked && (
-        <Button size="sm" onClick={save} disabled={saving}>
-          {saving ? "Mentés…" : "✓ mentés"}
-        </Button>
-      )}
-      <div className="space-y-1 border-t pt-2 text-sm">
-        <div className="flex justify-between text-muted-foreground">
-          <span>
-            {Number(daysCount) || 0} nap × {ft(employee.daily_wage)}
-          </span>
-          <span>{ft(gross)}</span>
+    <CardShell name={employee.name}>
+      <div className="space-y-3">
+        <div className="grid grid-cols-3 items-end gap-2">
+          <NumberField label="Napok száma" value={daysCount} onChange={setDaysCount} disabled={locked} />
+          <NumberField label="Utalás (Ft)" value={utalas} onChange={setUtalas} disabled={locked} />
+          <NumberField label="Előleg (Ft)" value={eloleg} onChange={setEloleg} disabled={locked} />
         </div>
-        <div className="flex justify-between border-t pt-1 text-base font-semibold">
-          <span>Nettó</span>
-          <span>{ft(netto)}</span>
-        </div>
+        {!locked && (
+          <Button size="sm" onClick={save} disabled={saving}>
+            {saving ? "Mentés…" : "✓ mentés"}
+          </Button>
+        )}
       </div>
-      {!readonly && (
-        <KifizetveButton paid={row.paid} disabled={!canEdit || toggling} onToggle={toggle} />
-      )}
+      <div className="space-y-3">
+        <div className="space-y-1 border-t pt-2 text-sm">
+          <div className="flex justify-between text-muted-foreground">
+            <span>
+              {Number(daysCount) || 0} nap × {ft(employee.daily_wage)}
+            </span>
+            <span>{ft(gross)}</span>
+          </div>
+          <div className="flex justify-between border-t pt-1 text-base font-semibold">
+            <span>Nettó</span>
+            <span>{ft(netto)}</span>
+          </div>
+        </div>
+        {!readonly && (
+          <KifizetveButton paid={row.paid} disabled={!canEdit || toggling} onToggle={toggle} />
+        )}
+      </div>
     </CardShell>
   );
 }
@@ -240,14 +237,12 @@ function HaviCard({
   row,
   readonly,
   canEdit,
-  featured,
   onReload,
 }: {
   employee: Employee;
   row: NapiHaviRow;
   readonly?: boolean;
   canEdit: boolean;
-  featured?: boolean;
   onReload: () => void | Promise<void>;
 }) {
   const [letiltas, setLetiltas] = useState(String(row.letiltas));
@@ -297,41 +292,45 @@ function HaviCard({
   );
 
   return (
-    <CardShell name={employee.name} featured={featured}>
-      <div className="grid grid-cols-2 items-end gap-2">
-        {employee.show_letiltas && (
-          <NumberField label="Letiltás (Ft)" value={letiltas} onChange={setLetiltas} disabled={locked} />
-        )}
-        {employee.show_uzemanyag && (
-          <NumberField label="Üzemanyag (Ft)" value={uzemanyag} onChange={setUzemanyag} disabled={locked} />
-        )}
-        <NumberField label="Utalás (Ft)" value={utalas} onChange={setUtalas} disabled={locked} />
-        <NumberField label="Előleg (Ft)" value={eloleg} onChange={setEloleg} disabled={locked} />
-      </div>
-      {!locked && (
-        <Button size="sm" onClick={save} disabled={saving}>
-          {saving ? "Mentés…" : "✓ mentés"}
-        </Button>
-      )}
-      <div className="space-y-1 border-t pt-2 text-sm">
-        <div className="flex justify-between text-muted-foreground">
-          <span>Fix bér</span>
-          <span>{ft(employee.monthly_wage)}</span>
+    <CardShell name={employee.name}>
+      <div className="space-y-3">
+        <div className="grid grid-cols-2 items-end gap-2">
+          {employee.show_letiltas && (
+            <NumberField label="Letiltás (Ft)" value={letiltas} onChange={setLetiltas} disabled={locked} />
+          )}
+          {employee.show_uzemanyag && (
+            <NumberField label="Üzemanyag (Ft)" value={uzemanyag} onChange={setUzemanyag} disabled={locked} />
+          )}
+          <NumberField label="Utalás (Ft)" value={utalas} onChange={setUtalas} disabled={locked} />
+          <NumberField label="Előleg (Ft)" value={eloleg} onChange={setEloleg} disabled={locked} />
         </div>
-        {employee.fixed_deduction > 0 && (
+        {!locked && (
+          <Button size="sm" onClick={save} disabled={saving}>
+            {saving ? "Mentés…" : "✓ mentés"}
+          </Button>
+        )}
+      </div>
+      <div className="space-y-3">
+        <div className="space-y-1 border-t pt-2 text-sm">
           <div className="flex justify-between text-muted-foreground">
-            <span>Fix levonás</span>
-            <span>-{ft(employee.fixed_deduction)}</span>
+            <span>Fix bér</span>
+            <span>{ft(employee.monthly_wage)}</span>
           </div>
-        )}
-        <div className="flex justify-between border-t pt-1 text-base font-semibold">
-          <span>Nettó</span>
-          <span>{ft(netto)}</span>
+          {employee.fixed_deduction > 0 && (
+            <div className="flex justify-between text-muted-foreground">
+              <span>Fix levonás</span>
+              <span>-{ft(employee.fixed_deduction)}</span>
+            </div>
+          )}
+          <div className="flex justify-between border-t pt-1 text-base font-semibold">
+            <span>Nettó</span>
+            <span>{ft(netto)}</span>
+          </div>
         </div>
+        {!readonly && (
+          <KifizetveButton paid={row.paid} disabled={!canEdit || toggling} onToggle={toggle} />
+        )}
       </div>
-      {!readonly && (
-        <KifizetveButton paid={row.paid} disabled={!canEdit || toggling} onToggle={toggle} />
-      )}
     </CardShell>
   );
 }
@@ -342,7 +341,6 @@ export function EmployeeCard({
   napiHavi,
   readonly,
   canEdit,
-  featured,
   onReload,
 }: {
   employee: Employee;
@@ -350,45 +348,17 @@ export function EmployeeCard({
   napiHavi: NapiHaviRow | undefined;
   readonly?: boolean;
   canEdit: boolean;
-  featured?: boolean;
   onReload: () => void | Promise<void>;
 }) {
   const mode = wageMode(employee);
   if (mode === "heti") {
-    return (
-      <HetiCard
-        employee={employee}
-        rows={heti}
-        readonly={readonly}
-        canEdit={canEdit}
-        featured={featured}
-        onReload={onReload}
-      />
-    );
+    return <HetiCard employee={employee} rows={heti} readonly={readonly} canEdit={canEdit} onReload={onReload} />;
   }
   if (mode === "napi" && napiHavi) {
-    return (
-      <NapiCard
-        employee={employee}
-        row={napiHavi}
-        readonly={readonly}
-        canEdit={canEdit}
-        featured={featured}
-        onReload={onReload}
-      />
-    );
+    return <NapiCard employee={employee} row={napiHavi} readonly={readonly} canEdit={canEdit} onReload={onReload} />;
   }
   if (mode === "havi" && napiHavi) {
-    return (
-      <HaviCard
-        employee={employee}
-        row={napiHavi}
-        readonly={readonly}
-        canEdit={canEdit}
-        featured={featured}
-        onReload={onReload}
-      />
-    );
+    return <HaviCard employee={employee} row={napiHavi} readonly={readonly} canEdit={canEdit} onReload={onReload} />;
   }
   return null;
 }

@@ -11,10 +11,6 @@ import { useCanEdit } from "@/components/auth/edit-permission-context";
 import { HU_MONTHS, wageMode, type Snapshot } from "@/lib/dolgozok/shared";
 import { getAlkalmazottakSnapshot } from "@/lib/dolgozok/actions";
 
-// Ez a két név mindig kiemelt, teljes szélességű csempét kap a rács alatt —
-// ugyanaz a kártyatartalom, csak vizuálisan elkülönítve.
-const FEATURED_NAMES = ["Oszlánszki Tamás", "Budaházi Zoltán"];
-
 export function AlkalmazottakView() {
   const canEdit = useCanEdit();
   const [loading, setLoading] = useState(true);
@@ -37,8 +33,6 @@ export function AlkalmazottakView() {
 
   const { pointer, employees, weekly, napiHavi, advances } = snapshot;
   const withMode = employees.filter((e) => wageMode(e) !== "none");
-  const featured = withMode.filter((e) => FEATURED_NAMES.includes(e.name));
-  const grid = withMode.filter((e) => !FEATURED_NAMES.includes(e.name));
 
   return (
     <div className="flex flex-col gap-5">
@@ -64,27 +58,14 @@ export function AlkalmazottakView() {
       )}
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_18rem]">
-        <div className="flex flex-col gap-4">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-            {grid.map((e) => (
-              <EmployeeCard
-                key={e.id}
-                employee={e}
-                heti={weekly.filter((r) => r.employee_id === e.id)}
-                napiHavi={napiHavi.find((r) => r.employee_id === e.id)}
-                canEdit={canEdit}
-                onReload={load}
-              />
-            ))}
-          </div>
-          {featured.map((e) => (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {withMode.map((e) => (
             <EmployeeCard
               key={e.id}
               employee={e}
               heti={weekly.filter((r) => r.employee_id === e.id)}
               napiHavi={napiHavi.find((r) => r.employee_id === e.id)}
               canEdit={canEdit}
-              featured
               onReload={load}
             />
           ))}
