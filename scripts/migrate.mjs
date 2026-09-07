@@ -31,6 +31,13 @@ async function main() {
 
   await runDemoSeedOnce(pool, dbDir);
   await seedFirstUserOnce(pool);
+  await seedUserOnce(pool, {
+    code: "user-admin-2026-09-07",
+    username: "admin",
+    password: "Raklap6569",
+    name: "Admin",
+    role: "admin",
+  });
 
   await applyKapcsolatokUpdates(pool, dbDir);
   await applyPoziciszamUpdates(pool, dbDir);
@@ -90,6 +97,25 @@ async function seedFirstUserOnce(pool) {
   );
   await pool.query(`insert into alkalmazott_javitasok (kod) values ($1)`, [JAVITAS_KOD]);
   console.log("[migrate] első felhasználó létrehozva.");
+}
+
+// Általános, egyszeri felhasználó-létrehozó — a JAVITAS_KOD-dal azonosított
+// lépés csak egyszer fut le, utána soha többé (akkor sem, ha a felhasználót
+// valaki törli). Új felhasználó hozzáadásához elég egy újabb hívás egyedi
+// "code" értékkel a main()-ben.
+async function seedUserOnce(pool, { code, username, password, name, role }) {
+  const { rows } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [code]);
+  if (rows.length > 0) return;
+
+  const passwordHash = await bcrypt.hash(password, 12);
+  await pool.query(
+    `insert into users (username, password_hash, name, role)
+     values ($1, $2, $3, $4)
+     on conflict (username) do nothing`,
+    [username, passwordHash, name, role]
+  );
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1)`, [code]);
+  console.log(`[migrate] felhasználó létrehozva: ${username}.`);
 }
 
 // Egyszeri javítás (2026-09-06): a Számlázz.hu-lekérdező kliens első
