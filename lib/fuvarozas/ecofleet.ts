@@ -1,4 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
+import { formatBudapestFaliora } from "./idozona";
 
 // Ecofleet (FleetComplete / "seeme") GPS API kliens.
 //
@@ -194,10 +195,11 @@ export function parseEcofleetTimestamp(ts: string): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-function ecofleetDateParam(d: Date): string {
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
-}
+// FONTOS: NEM d.getHours()/getFullYear() stb. — az a SZERVER (Railway
+// konténer, jellemzően UTC) időzónája szerint adna órát/percet, nem
+// budapesti idő szerint, ami rossz (akár 1-2 órás eltolt) trip-lekérdezési
+// ablakot eredményezne. Lásd lib/fuvarozas/idozona.ts.
+const ecofleetDateParam = formatBudapestFaliora;
 
 /**
  * Egy jármű útvonal-előzménye (trip-jei) egy időszakra. A `begin`/`end`

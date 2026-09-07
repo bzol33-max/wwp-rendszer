@@ -56,6 +56,8 @@ export type IdovonalSzakasz =
       atlagSebesseg: number;
       honnan: string | null;
       hova: string | null;
+      /** Igaz, ha ez egy még folyamatban lévő, az Ecofleet által még le nem zárt (ezért csak élő GPS-pozícióból becsült) szakasz. */
+      elo?: boolean;
     }
   | {
       tipus: "allas";
@@ -68,6 +70,8 @@ export type IdovonalSzakasz =
       kategoria: AllasKategoria;
       /** Hány trip-nyi apró mozgás lett összevonva ebbe az egy állás-blokkba. */
       osszevontLepesek: number;
+      /** Igaz, ha ez a szakasz az élő GPS-pozíció alapján lett a jelen pillanatig meghosszabbítva (az Ecofleet trip-adata még nem tart eddig). */
+      elo?: boolean;
     };
 
 /**
@@ -187,6 +191,72 @@ export type TervezettFuvarSzakasz = {
   /** Igaz, ha a menetidőt nem sikerült kiszámolni (cím hiányzik/nem geokódolható), ezért egy átalány (2 óra) szerepel. */
   utvonalBizonytalan: boolean;
 };
+
+export type EloPozicio = {
+  lat: number;
+  lon: number;
+  cim: string | null;
+  /** Igaz, ha a jármű az utolsó ismert adat szerint jár a motorja vagy mozog. */
+  mozog: boolean;
+  idobelyeg: Date;
+};
+
+/**
+ * Az Ecofleet Vehicles/getTrips csak a MÁR LEZÁRULT trip-eket adja vissza —
+ * egy éppen folyamatban lévő fuvar (vagy egy még véget nem ért állás) tehát
+ * nem jelenik meg benne, amíg be nem fejeződik. Emiatt egy ténylegesen most
+ * úton lévő kamion idővonalán üres/hiányzó rész látszódna a nap végéig. Ez a
+ * függvény az élő GPS-pozíció (Vehicles/getLastData) alapján egészíti ki a
+ * lezárt szakaszokat a jelen pillanatig: ha a jármű mozog (vagy már messze
+ * jár az utolsó ismert megállási helytől), egy "élő" vezetés-szakaszt told
+ * hozzá; ha áll és közel van, az utolsó állás-szakaszt hosszabbítja meg a
+ * jelenig.
+ */
+export function kiegesziteloAllapottal(szakaszok: IdovonalSzakasz[], elo: EloPozicio | null, most: Date): IdovonalSzakasz[] {
+  if (!elo || szakaszok.length === 0) return szakaszok;
+
+  const utolso = szakaszok[szakaszok.length - 1];
+  const utolsoVeg = utolso.tipus === "indulas" ? utolso.idopont : utolso.veg;
+
+  // Ha az élő pozíció adata régebbi, mint az utolsó lezárt szakasz vége, nincs mit kiegészíteni.
+  if (elo.idobelyeg.getTime() <= utolsoVeg.getTime()) return szakaszok;
+
+  const utolsoHely =
+    utolso.tipus === "vezetes"
+      ? { lat: NaN, lon: NaN, cim: utolso.hova }
+      : { lat: utolso.lat, lon: utolso.lon, cim: utolso.cim };
+
+  const tavolsagKm = Number.isFinite(utolsoHely.lat) ? haversineKm(utolsoHely.lat, utolsoHely.lon, elo.lat, elo.lon) : Infinity;
+  const folyamatbanVezet = elo.mozog || tavolsagKm >= OSSZEVONAS_KM;
+
+  if (folyamatbanVezet) {
+    const uj: IdovonalSzakasz = {
+      tipus: "vezetes",
+      kezdet: utolsoVeg,
+      veg: most,
+      tavKm: Number.isFinite(tavolsagKm) ? tavolsagKm : 0,
+      idotartamSec: Math.max(0, (most.getTime() - utolsoVeg.getTime()) / 1000),
+      atlagSebesseg: 0,
+      honnan: utolsoHely.cim,
+      hova: elo.cim,
+      elo: true,
+    };
+    return [...szakaszok, uj];
+  }
+
+  if (utolso.tipus === "allas") {
+    const kiegeszitett = [...szakaszok];
+    kiegeszitett[kiegeszitett.length - 1] = {
+      ...utolso,
+      veg: most,
+      idotartamSec: Math.max(0, (most.getTime() - utolso.kezdet.getTime()) / 1000),
+      elo: true,
+    };
+    return kiegeszitett;
+  }
+
+  return szakaszok;
+}
 
 /** Szabad szöveges időpont-mezőből ("06:00", "de. 6", stb.) kiolvasott óra:perc, ha felismerhető. */
 export function parseIdopontSzoveg(text: string | null): { ora: number; perc: number } | null {

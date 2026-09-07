@@ -1,6 +1,6 @@
 "use server";
 
-import { getFleetLastPositions, getVehicleTrips, EcofleetError, type EcofleetPosition } from "./ecofleet";
+import { getFleetLastPositions, getVehicleTrips, parseEcofleetTimestamp, EcofleetError, type EcofleetPosition } from "./ecofleet";
 import {
   calculateToll,
   FIXED_VEHICLE,
@@ -12,11 +12,12 @@ import {
   type TollRoute,
 } from "./utdijkalkulacio";
 import { fetchGazolajAr, GazolajArError } from "./uzemanyagar";
-import { epitsIdovonal, parseIdopontSzoveg, type IdovonalSzakasz, type TervezettFuvarSzakasz } from "./idovonal";
+import { epitsIdovonal, kiegesziteloAllapottal, parseIdopontSzoveg, type EloPozicio, type IdovonalSzakasz, type TervezettFuvarSzakasz } from "./idovonal";
 import { ellenorizAetr, type AetrFigyelmezetes } from "./aetr";
 import { SAJAT_JARMUVEK, resolveJarmu, type SajatJarmu } from "./vehicles";
 import { getMaiSajatFuvarok } from "./megbizasok";
 import type { MaiFuvarSor } from "./fuvar-constants";
+import { budapestFalioraToInstant, budapestNapISO } from "./idozona";
 
 // Ha a NAV oldala nem érhető el (átmeneti hiba, oldalszerkezet-változás),
 // ez a tartalék érték jelenik meg — utoljára kézzel ellenőrizve 2026.
@@ -108,14 +109,21 @@ export type JarmuIdovonalEredmeny = {
   tervezettFuvarok: TervezettFuvarSzakasz[];
 };
 
-/** "Europe/Budapest" szerinti mai naptári nap 00:00–jelenlegi időpont (vagy 23:59:59, ha egy korábbi napot kérnek). */
-function budapestNapHatarok(nap?: string): { kezdet: Date; veg: Date; napISO: string } {
-  const fmt = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Budapest", year: "numeric", month: "2-digit", day: "2-digit" });
-  const maiNap = fmt.format(new Date()); // "YYYY-MM-DD"
-  const celNap = nap ?? maiNap;
-  const kezdet = new Date(`${celNap}T00:00:00`);
-  const veg = celNap === maiNap ? new Date() : new Date(`${celNap}T23:59:59`);
-  return { kezdet, veg, napISO: celNap };
+/**
+ * "Europe/Budapest" szerinti naptári nap határai — a szerver tényleges
+ * (jellemzően UTC) időzónájától FÜGGETLENÜL számolva (lásb idozona.ts),
+ * mert egy sima `new Date("YYYY-MM-DDT00:00:00")` a szerver helyi
+ * időzónáját venné alapul, ami akár 1-2 órás eltolódást okozna a valós
+ * budapesti naphatárhoz képest.
+ */
+function budapestNapHatarok(nap?: string): { kezdet: Date; veg: Date; napISO: string; maiNap: boolean } {
+  const maiNapISO = budapestNapISO();
+  const celNap = nap ?? maiNapISO;
+  const [ev, ho, napSzam] = celNap.split("-").map(Number);
+  const kezdet = budapestFalioraToInstant(ev, ho, napSzam, 0, 0, 0);
+  const maiNap = celNap === maiNapISO;
+  const veg = maiNap ? new Date() : budapestFalioraToInstant(ev, ho, napSzam, 23, 59, 59);
+  return { kezdet, veg, napISO: celNap, maiNap };
 }
 
 const RAKODAS_PUFFER_PERC = 30;
@@ -182,8 +190,12 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor): Promise<TervezettFuvarSzaka
  * geokódolás/útvonalszámítás, a szakasz "bizonytalan" jelölést kap).
  */
 export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny[]> {
-  const { kezdet, veg, napISO } = budapestNapHatarok(nap);
+  const { kezdet, veg, napISO, maiNap } = budapestNapHatarok(nap);
   const maiFuvarok = await getMaiSajatFuvarok(napISO).catch(() => [] as MaiFuvarSor[]);
+  // Az élő GPS-pozíciót csak a mai napra vonatkozó idővonalhoz kell (egy
+  // korábbi nap lezárt idővonalát nem kell/nem szabad "élő" adattal
+  // kiegészíteni) — feleslegesen sem hívjuk, ha nem kell.
+  const eloPoziciok = maiNap ? await getFleetLastPositions().catch(() => []) : [];
 
   return Promise.all(
     SAJAT_JARMUVEK.map(async (jarmu): Promise<JarmuIdovonalEredmeny> => {
@@ -195,7 +207,25 @@ export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny
       }
       try {
         const trips = await getVehicleTrips(jarmu.ecofleetObjectId, kezdet, veg);
-        const szakaszok = epitsIdovonal(trips);
+        let szakaszok = epitsIdovonal(trips);
+
+        if (maiNap) {
+          const livePos = eloPoziciok.find((p) => p.objectId === jarmu.ecofleetObjectId);
+          if (livePos) {
+            const parsedTs = parseEcofleetTimestamp(livePos.timestamp);
+            if (parsedTs) {
+              const elo: EloPozicio = {
+                lat: livePos.latitude,
+                lon: livePos.longitude,
+                cim: null,
+                mozog: livePos.engineOn || livePos.speed > 0,
+                idobelyeg: parsedTs,
+              };
+              szakaszok = kiegesziteloAllapottal(szakaszok, elo, veg);
+            }
+          }
+        }
+
         const figyelmezetesek = ellenorizAetr(szakaszok);
         return { sofor: jarmu.sofor, szin: jarmu.szin, szakaszok, figyelmezetesek, hiba: null, tervezettFuvarok };
       } catch (err) {

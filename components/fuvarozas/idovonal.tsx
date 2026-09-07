@@ -80,10 +80,13 @@ function TervezettFuvarSav({ jarmu, tervezettFuvarok }: { jarmu: (typeof SAJAT_J
             title={`${f.megrendelo ?? "Megbízás"}${f.pozicioszam ? ` (${f.pozicioszam})` : ""}\n${f.honnan ?? "?"} → ${f.hova}\nBecsült: ${formatIdo(
               f.kezdet
             )}–${formatIdo(f.veg)}${bizonytalan ? "\n(becslés — " + (f.idoBizonytalan ? "nincs megadott időpont" : "") + (f.idoBizonytalan && f.utvonalBizonytalan ? ", " : "") + (f.utvonalBizonytalan ? "átalány menetidő" : "") + ")" : ""}`}
-            className={`absolute top-0 h-full rounded-sm border-dashed bg-white/70 dark:bg-black/30 ${SZIN_TERVEZETT_BORDER[jarmu.szin]} ${
-              bizonytalan ? "border-dashed" : "border-solid"
-            }`}
-            style={{ left: `${left}%`, width: `${width}%`, borderWidth: 1.5 }}
+            className={`absolute top-0 h-full rounded-sm bg-white/70 dark:bg-black/30 ${SZIN_TERVEZETT_BORDER[jarmu.szin]}`}
+            style={{
+              left: `${left}%`,
+              width: `${width}%`,
+              borderWidth: 1.5,
+              borderStyle: bizonytalan ? "dashed" : "solid",
+            }}
           />
         );
       })}
@@ -147,8 +150,10 @@ function IdovonalCsik({ jarmu, eredmeny }: { jarmu: (typeof SAJAT_JARMUVEK)[numb
               return (
                 <span
                   key={i}
-                  title={`Vezetés ${formatIdo(sz.kezdet)}–${formatIdo(sz.veg)} (${sz.tavKm.toFixed(0)} km, ${formatIdotartam(sz.idotartamSec)})\n${sz.honnan ?? "?"} → ${sz.hova ?? "?"}`}
-                  className={`absolute top-0 h-full ${SZIN_BAR[jarmu.szin]}`}
+                  title={`Vezetés ${formatIdo(sz.kezdet)}–${formatIdo(sz.veg)} (${sz.tavKm.toFixed(0)} km, ${formatIdotartam(sz.idotartamSec)})\n${sz.honnan ?? "?"} → ${sz.hova ?? "?"}${
+                    sz.elo ? "\n(élő GPS-pozícióból becsülve — a fuvar még nem zárult le)" : ""
+                  }`}
+                  className={`absolute top-0 h-full ${SZIN_BAR[jarmu.szin]} ${sz.elo ? "animate-pulse opacity-80" : ""}`}
                   style={{ left: `${left}%`, width: `${width}%` }}
                 />
               );
@@ -158,8 +163,8 @@ function IdovonalCsik({ jarmu, eredmeny }: { jarmu: (typeof SAJAT_JARMUVEK)[numb
                 key={i}
                 title={`Állás ${formatIdo(sz.kezdet)}–${formatIdo(sz.veg)} (${formatIdotartam(sz.idotartamSec)})\n${sz.cim ?? "ismeretlen hely"}${
                   sz.kategoria === "rakodas" ? "\n(valószínűleg rakodás/ügyintézés)" : sz.kategoria === "piheno" ? "\n(pihenő)" : ""
-                }`}
-                className={`absolute top-0 h-full ${AllasStilus(sz.kategoria)}`}
+                }${sz.elo ? "\n(még tart — élő pozícióból meghosszabbítva)" : ""}`}
+                className={`absolute top-0 h-full ${AllasStilus(sz.kategoria)} ${sz.elo ? "animate-pulse" : ""}`}
                 style={{ left: `${left}%`, width: `${width}%` }}
               />
             );
