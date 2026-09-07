@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { Truck, Package, Receipt, Users, Car } from "lucide-react";
+import { Truck, Package, Receipt, Users, Car, MessageSquare } from "lucide-react";
 
 // Központi modul-nyilvántartás a főoldal (Info) számára.
 //
@@ -67,5 +67,13 @@ export const MODULES: ModuleInfo[] = [
     status: "fejlesztes-alatt",
     description:
       "Alkalmazottak bérszámolása (heti/napi/fix havi bérmód), kifizetés-jelölés, előlegek, archívum.",
+  },
+  {
+    key: "jelenlet",
+    label: "Jelenléti/üzenőfal",
+    href: "/jelenlet",
+    icon: MessageSquare,
+    status: "tervezes-alatt",
+    description: "A modul funkciói még nincsenek kidolgozva.",
   },
 ];

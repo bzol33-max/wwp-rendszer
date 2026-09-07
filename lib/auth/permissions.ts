@@ -9,6 +9,7 @@ export type ModuleKey =
   | "keszlet"
   | "szamlak"
   | "dolgozok"
+  | "jelenlet"
   | "jarmuvek"
   | "beallitasok"
   | "mobil";
@@ -19,6 +20,7 @@ export const MODULES: { key: ModuleKey; label: string }[] = [
   { key: "keszlet", label: "Készlet" },
   { key: "szamlak", label: "Számlák" },
   { key: "dolgozok", label: "Dolgozók" },
+  { key: "jelenlet", label: "Jelenléti/üzenőfal" },
   { key: "jarmuvek", label: "Járművek" },
   { key: "beallitasok", label: "Beállítások (típusok és árak)" },
   { key: "mobil", label: "Mobil összefoglaló (önálló, korlátozott nézet)" },
