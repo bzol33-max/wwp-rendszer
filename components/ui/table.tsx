@@ -5,10 +5,50 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 
 function Table({ className, ...props }: React.ComponentProps<"table">) {
+  // Sok táblázat szélesebb a mobil viewportnál és csak vízszintes
+  // görgetéssel olvasható végig — görgetési jelzés nélkül ez nem
+  // nyilvánvaló. Ez a belső árnyék a szélen jelzi, ha van még tartalom
+  // abba az irányba (háttérszíntől független, mert nem gradiens-fedés,
+  // hanem valódi box-shadow).
+  const scrollRef = React.useRef<HTMLDivElement>(null)
+  const [scrollShadow, setScrollShadow] = React.useState<{
+    left: boolean
+    right: boolean
+  }>({ left: false, right: false })
+
+  const updateScrollShadow = React.useCallback(() => {
+    const el = scrollRef.current
+    if (!el) return
+    setScrollShadow({
+      left: el.scrollLeft > 1,
+      right: el.scrollLeft < el.scrollWidth - el.clientWidth - 1,
+    })
+  }, [])
+
+  React.useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    updateScrollShadow()
+    const ro = new ResizeObserver(updateScrollShadow)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [updateScrollShadow])
+
+  const boxShadow =
+    [
+      scrollShadow.left ? "inset 10px 0 8px -8px rgba(0,0,0,0.18)" : "",
+      scrollShadow.right ? "inset -10px 0 8px -8px rgba(0,0,0,0.18)" : "",
+    ]
+      .filter(Boolean)
+      .join(", ") || undefined
+
   return (
     <div
+      ref={scrollRef}
+      onScroll={updateScrollShadow}
       data-slot="table-container"
-      className="relative w-full overflow-x-auto"
+      className="relative w-full overflow-x-auto transition-shadow"
+      style={{ boxShadow }}
     >
       <table
         data-slot="table"
