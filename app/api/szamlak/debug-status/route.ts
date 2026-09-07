@@ -25,11 +25,20 @@ export async function GET() {
   const inventoryCounts = await query<{ count: string }>(`select count(*)::text as count from inventory_counts`);
   const keszletEvents = await query<{ count: string }>(`select count(*)::text as count from keszlet_events`);
 
+  const kasszaReszletek = await query(
+    `select id, description, amount, purchase_id, category, created_at, created_by from kassza_movements order by created_at`
+  );
+  const purchaseReszletek = await query(
+    `select id, type_id, qty, unit_price, total, seller, pending, created_at, payment_method from nyiregyhaza_purchases order by created_at`
+  );
+
   return NextResponse.json({
     kassza: kassza[0],
     purchasesCount: purchases[0]?.count,
     keszletMovements,
     inventoryCountsCount: inventoryCounts[0]?.count,
     keszletEventsCount: keszletEvents[0]?.count,
+    kasszaReszletek,
+    purchaseReszletek,
   });
 }
