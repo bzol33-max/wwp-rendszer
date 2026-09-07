@@ -275,9 +275,11 @@ function OsszesitoCsempek({ csempek }: { csempek: Csempe[] }) {
           className="cursor-pointer transition-colors hover:bg-muted/50"
           onClick={c.onClick}
         >
-          <CardContent className="flex flex-col gap-1 py-1">
+          <CardContent className="flex min-w-0 flex-col gap-1 py-1">
             <div className="truncate text-xs text-muted-foreground">{c.cim}</div>
-            <div className="text-lg font-semibold tabular-nums">{formatOsszeg(c.nyitottOsszeg, c.penznem)}</div>
+            <div className="text-base font-semibold tabular-nums sm:text-lg">
+              {formatOsszeg(c.nyitottOsszeg, c.penznem)}
+            </div>
             <div className="text-xs text-muted-foreground">
               {c.nyitottDarab} nyitott számla
               {c.lejartDarab > 0 && (
@@ -313,15 +315,18 @@ function OsszesitesCsempe({ osszesito }: { osszesito: SzamlaOsszesitoSor[] }) {
   return (
     <Card>
       <CardContent className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-3">
-        <div className="flex flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1">
           <div className="text-xs text-muted-foreground">Összes kintlévőség</div>
           {osszesen.map(([penznem, osszeg]) => (
-            <div key={penznem} className="text-xl font-semibold tabular-nums">
+            <div
+              key={penznem}
+              className="text-lg font-semibold tabular-nums sm:text-xl"
+            >
               {formatOsszeg(osszeg, penznem)}
             </div>
           ))}
         </div>
-        <div className="flex flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1">
           <div className="text-xs text-muted-foreground">Fuvar</div>
           {fuvar.length === 0 && <div className="text-sm text-muted-foreground">—</div>}
           {fuvar.map(([penznem, osszeg]) => (
@@ -330,7 +335,7 @@ function OsszesitesCsempe({ osszesito }: { osszesito: SzamlaOsszesitoSor[] }) {
             </div>
           ))}
         </div>
-        <div className="flex flex-col gap-1">
+        <div className="flex min-w-0 flex-col gap-1">
           <div className="text-xs text-muted-foreground">Raklap</div>
           {raklap.length === 0 && <div className="text-sm text-muted-foreground">—</div>}
           {raklap.map(([penznem, osszeg]) => (

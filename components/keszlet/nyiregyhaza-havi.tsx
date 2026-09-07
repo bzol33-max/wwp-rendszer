@@ -410,11 +410,15 @@ export function NyiregyhazaHaviTab() {
         <div className="space-y-2">
           <div>
             <div className={`mb-1 text-xs font-semibold ${MONTHLY_TILE_COLOR.text}`}>Havi</div>
-            <div className="flex flex-nowrap gap-1.5">
+            {/* auto-fill + minmax: annyi típuscsempe fér egy sorba, amennyi a
+                minimum szélesség mellett elfér — keskeny (mobil) képernyőn
+                több sorba törik, ahelyett hogy flex-nowrap miatt egyre
+                keskenyebbre zsugorodna minden csempe. */}
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(4.25rem,1fr))] gap-1.5">
               {typeCounters.map((c) => (
                 <div
                   key={`havi-${c.type}`}
-                  className={`min-w-0 flex-1 rounded-lg border px-1.5 py-2 text-center ${MONTHLY_TILE_COLOR.border} ${MONTHLY_TILE_COLOR.bg}`}
+                  className={`min-w-0 rounded-lg border px-1.5 py-2 text-center ${MONTHLY_TILE_COLOR.border} ${MONTHLY_TILE_COLOR.bg}`}
                 >
                   <div className={`truncate text-[10px] font-medium ${MONTHLY_TILE_COLOR.text}`}>
                     {c.type}
@@ -428,11 +432,11 @@ export function NyiregyhazaHaviTab() {
           </div>
           <div>
             <div className={`mb-1 text-xs font-semibold ${DAILY_TILE_COLOR.text}`}>Mai</div>
-            <div className="flex flex-nowrap gap-1.5">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(4.25rem,1fr))] gap-1.5">
               {typeCounters.map((c) => (
                 <div
                   key={`napi-${c.type}`}
-                  className={`min-w-0 flex-1 rounded-lg border px-1.5 py-1.5 text-center ${DAILY_TILE_COLOR.border} ${DAILY_TILE_COLOR.bg}`}
+                  className={`min-w-0 rounded-lg border px-1.5 py-1.5 text-center ${DAILY_TILE_COLOR.border} ${DAILY_TILE_COLOR.bg}`}
                 >
                   <div className={`truncate text-[10px] font-medium ${DAILY_TILE_COLOR.text}`}>
                     {c.type}
