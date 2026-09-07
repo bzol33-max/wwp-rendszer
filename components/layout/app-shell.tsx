@@ -2,13 +2,22 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, Settings } from "lucide-react";
+import { LogOut, Settings, UsersRound } from "lucide-react";
 import { NAV_ITEMS } from "@/lib/nav";
+import type { ModuleKey } from "@/lib/auth/permissions";
 import { cn } from "@/lib/utils";
 import { useCurrentUserName } from "@/lib/current-user";
 import { logout } from "@/lib/auth/actions";
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  isAdmin,
+  visibleModuleKeys,
+}: {
+  children: React.ReactNode;
+  isAdmin: boolean;
+  visibleModuleKeys: ModuleKey[];
+}) {
   const pathname = usePathname();
   const userName = useCurrentUserName();
 
@@ -16,6 +25,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (pathname === "/login") {
     return <>{children}</>;
   }
+
+  const navItems = NAV_ITEMS.filter((item) => visibleModuleKeys.includes(item.key));
 
   return (
     <div className="flex min-h-screen bg-muted/40">
@@ -29,7 +40,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
         <nav className="flex flex-col gap-0.5 px-2 py-3">
-          {NAV_ITEMS.map((item) => {
+          {navItems.map((item) => {
             const active =
               item.href === "/"
                 ? pathname === "/"
@@ -53,11 +64,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
         <div className="mt-auto flex flex-col gap-2 border-t border-sidebar-border px-2 py-3">
+          {isAdmin && (
+            <Link
+              href="/beallitasok/felhasznalok"
+              className={cn(
+                "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors",
+                pathname.startsWith("/beallitasok/felhasznalok")
+                  ? "bg-sidebar-accent text-white font-medium"
+                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-white"
+              )}
+            >
+              <UsersRound className="h-4 w-4" />
+              Felhasználók
+            </Link>
+          )}
           <Link
             href="/beallitasok/tipusok"
             className={cn(
               "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors",
-              pathname.startsWith("/beallitasok")
+              pathname.startsWith("/beallitasok/tipusok")
                 ? "bg-sidebar-accent text-white font-medium"
                 : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-white"
             )}

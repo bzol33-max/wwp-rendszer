@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { recordMovement, type Direction } from "@/lib/keszlet/actions";
 import { getCurrentUser } from "@/lib/current-user";
+import { useCanEdit } from "@/components/auth/edit-permission-context";
 
 /**
  * Megosztott "Mozgás rögzítése" kártya (Beérkezés / Kiszállítás / Telephelyek
@@ -34,6 +35,7 @@ export function MovementForm({
   otherSites: string[];
   onRecorded: () => void | Promise<void>;
 }) {
+  const canEdit = useCanEdit();
   const [direction, setDirection] = useState<Direction>("be");
   const [type, setType] = useState("");
   const [qty, setQty] = useState("");
@@ -173,7 +175,16 @@ export function MovementForm({
           </div>
         )}
 
-        <Button onClick={submit} disabled={submitting} className="w-full sm:w-auto">
+        {!canEdit && (
+          <p className="text-xs text-muted-foreground">
+            Csak megtekintési jogosultságod van ehhez a modulhoz.
+          </p>
+        )}
+        <Button
+          onClick={submit}
+          disabled={submitting || !canEdit}
+          className="w-full sm:w-auto"
+        >
           {submitting ? "Mentés…" : "Mentés"}
         </Button>
       </CardContent>

@@ -397,3 +397,11 @@ create table if not exists users (
   active        boolean not null default true,
   created_at    timestamptz not null default now()
 );
+
+-- Modulonkénti (fuvarozás, készlet, számlák, dolgozók, járművek, beállítások)
+-- megtekintési/szerkesztési jogosultság JSON-ban tárolva, pl.
+-- {"keszlet": {"view": true, "edit": false}}. Hiányzó modulkulcs esetén az
+-- alkalmazás mindkettőt (view+edit) engedélyezettnek tekinti — lásd
+-- lib/auth/permissions.ts. Az "admin" szerepkör mindig mindenhez hozzáfér,
+-- ettől a mezőtől függetlenül.
+alter table users add column if not exists permissions jsonb not null default '{}'::jsonb;

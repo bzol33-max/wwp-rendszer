@@ -5,8 +5,15 @@ import { ModuleStatusBadge } from "@/components/layout/module-status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SITES } from "@/lib/nav";
 import { MODULES } from "@/lib/modules";
+import { requireSession } from "@/lib/auth/dal";
+import type { ModuleKey } from "@/lib/auth/permissions";
 
-export default function Home() {
+export default async function Home() {
+  const session = await requireSession();
+  const visibleModules = MODULES.filter(
+    (mod) => session.can(mod.key as ModuleKey).view
+  );
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -35,7 +42,7 @@ export default function Home() {
           Modulok
         </h2>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {MODULES.map((mod) => {
+          {visibleModules.map((mod) => {
             const Icon = mod.icon;
             return (
               <Link key={mod.key} href={mod.href} className="group block">

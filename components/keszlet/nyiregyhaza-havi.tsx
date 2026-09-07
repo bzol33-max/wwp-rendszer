@@ -43,6 +43,7 @@ import {
 } from "@/lib/keszlet/actions";
 import { kbNav } from "@/lib/keszlet/kbnav";
 import { getCurrentUser } from "@/lib/current-user";
+import { useCanEdit } from "@/components/auth/edit-permission-context";
 
 function todayLabel() {
   const raw = new Date().toLocaleDateString("hu-HU", {
@@ -86,6 +87,7 @@ function dayGroupLabel(dayKey: string) {
 }
 
 export function NyiregyhazaHaviTab() {
+  const canEdit = useCanEdit();
   const [loading, setLoading] = useState(true);
   const [purchases, setPurchases] = useState<PurchaseRow[]>([]);
   const [typeCounters, setTypeCounters] = useState<
@@ -397,7 +399,13 @@ export function NyiregyhazaHaviTab() {
   }
 
   return (
+    <fieldset disabled={!canEdit} className="contents">
     <div className="space-y-5">
+      {!canEdit && (
+        <p className="text-xs text-muted-foreground">
+          Csak megtekintési jogosultságod van ehhez a modulhoz.
+        </p>
+      )}
       {typeCounters.length > 0 && (
         <div className="space-y-2">
           <div>
@@ -969,5 +977,6 @@ export function NyiregyhazaHaviTab() {
       </Dialog>
       </div>
     </div>
+    </fieldset>
   );
 }

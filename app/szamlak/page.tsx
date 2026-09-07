@@ -1,9 +1,12 @@
 import { SzamlakView } from "@/components/szamlak/szamlak-view";
+import { ModuleGate } from "@/components/auth/module-gate";
 
 export default function Page() {
   return (
-    <div>
-      <SzamlakView />
-    </div>
+    <ModuleGate module="szamlak">
+      <div>
+        <SzamlakView />
+      </div>
+    </ModuleGate>
   );
 }

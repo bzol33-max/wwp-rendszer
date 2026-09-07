@@ -22,6 +22,7 @@ import {
   type MovementRow,
 } from "@/lib/keszlet/actions";
 import { getCurrentUser } from "@/lib/current-user";
+import { useCanEdit } from "@/components/auth/edit-permission-context";
 
 type Site = "Szakoly" | "Balkány";
 
@@ -31,6 +32,7 @@ const OTHER_SITES: Record<Site, string[]> = {
 };
 
 export function SimpleSiteView({ site }: { site: Site }) {
+  const canEdit = useCanEdit();
   const [loading, setLoading] = useState(true);
   const [types, setTypes] = useState<string[]>([]);
   const [stock, setStock] = useState<Record<string, number>>({});
@@ -71,16 +73,28 @@ export function SimpleSiteView({ site }: { site: Site }) {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm">Jelenlegi készlet — {site}</CardTitle>
-            <Button size="sm" variant="outline" onClick={() => setInventoryOpen(true)}>
-              Leltár indítása
-            </Button>
+            {canEdit && (
+              <Button size="sm" variant="outline" onClick={() => setInventoryOpen(true)}>
+                Leltár indítása
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col gap-2">
             {Object.entries(stock).map(([t, q]) =>
               t === "Vegyes EUR" ? (
-                <VegyesSplitRow key={t} qty={q} onSubmit={handleVegyesSplit} />
+                canEdit ? (
+                  <VegyesSplitRow key={t} qty={q} onSubmit={handleVegyesSplit} />
+                ) : (
+                  <div
+                    key={t}
+                    className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm"
+                  >
+                    <span>{t}</span>
+                    <span className="font-semibold tabular-nums">{q}</span>
+                  </div>
+                )
               ) : (
                 <div
                   key={t}

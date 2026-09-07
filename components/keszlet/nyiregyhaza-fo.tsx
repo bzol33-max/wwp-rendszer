@@ -22,6 +22,7 @@ import {
   type EventRow,
 } from "@/lib/keszlet/actions";
 import { getCurrentUser } from "@/lib/current-user";
+import { useCanEdit } from "@/components/auth/edit-permission-context";
 
 const KIND_LABEL: Record<EventRow["kind"], string> = {
   csere: "Csere",
@@ -38,6 +39,7 @@ const KIND_CLASS: Record<EventRow["kind"], string> = {
 };
 
 export function NyiregyhazaFoTab() {
+  const canEdit = useCanEdit();
   const [loading, setLoading] = useState(true);
   const [stock, setStock] = useState<Record<string, number>>({});
   const [events, setEvents] = useState<EventRow[]>([]);
@@ -86,15 +88,27 @@ export function NyiregyhazaFoTab() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-sm">Jelenlegi készlet — Nyíregyháza</CardTitle>
-            <Button size="sm" variant="outline" onClick={() => setInventoryOpen(true)}>
-              Leltár indítása
-            </Button>
+            {canEdit && (
+              <Button size="sm" variant="outline" onClick={() => setInventoryOpen(true)}>
+                Leltár indítása
+              </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
           {Object.entries(stock).map(([type, qty]) =>
             type === "Vegyes EUR" ? (
-              <VegyesSplitRow key={type} qty={qty} onSubmit={handleVegyesSplit} />
+              canEdit ? (
+                <VegyesSplitRow key={type} qty={qty} onSubmit={handleVegyesSplit} />
+              ) : (
+                <div
+                  key={type}
+                  className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm"
+                >
+                  <span>{type}</span>
+                  <span className="font-semibold tabular-nums">{qty}</span>
+                </div>
+              )
             ) : (
               <div
                 key={type}

@@ -46,12 +46,7 @@ export async function login(
     return { error: "Hibás felhasználónév vagy jelszó." };
   }
 
-  await createSession({
-    userId: user.id,
-    username: user.username,
-    name: user.name,
-    role: user.role,
-  });
+  await createSession(user.id, user.name);
 
   redirect("/");
 }

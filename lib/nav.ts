@@ -7,20 +7,22 @@ import {
   Car,
   LayoutDashboard,
 } from "lucide-react";
+import type { ModuleKey } from "@/lib/auth/permissions";
 
 export type NavItem = {
   href: string;
   label: string;
   icon: LucideIcon;
+  key: ModuleKey;
 };
 
 export const NAV_ITEMS: NavItem[] = [
-  { href: "/", label: "Info", icon: LayoutDashboard },
-  { href: "/fuvarozas", label: "Fuvarozás", icon: Truck },
-  { href: "/keszlet", label: "Készlet", icon: Package },
-  { href: "/szamlak", label: "Számlák", icon: Receipt },
-  { href: "/dolgozok", label: "Dolgozók", icon: Users },
-  { href: "/jarmuvek", label: "Járművek", icon: Car },
+  { href: "/", label: "Info", icon: LayoutDashboard, key: "info" },
+  { href: "/fuvarozas", label: "Fuvarozás", icon: Truck, key: "fuvarozas" },
+  { href: "/keszlet", label: "Készlet", icon: Package, key: "keszlet" },
+  { href: "/szamlak", label: "Számlák", icon: Receipt, key: "szamlak" },
+  { href: "/dolgozok", label: "Dolgozók", icon: Users, key: "dolgozok" },
+  { href: "/jarmuvek", label: "Járművek", icon: Car, key: "jarmuvek" },
 ];
 
 export const SITES = ["Szakoly", "Balkány", "Nyíregyháza"] as const;
