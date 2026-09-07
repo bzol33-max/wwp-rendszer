@@ -34,7 +34,7 @@ async function main() {
   await seedUserOnce(pool, {
     code: "user-admin-2026-09-07",
     username: "admin",
-    password: "Raklap6569",
+    password: process.env.SEED_ADMIN_PASSWORD,
     name: "Admin",
     role: "admin",
   });
@@ -46,7 +46,7 @@ async function main() {
   await seedUserOnce(pool, {
     code: "user-budahazizoltan-2026-09-07",
     username: "BudahaziZoltan",
-    password: "Raklap6569",
+    password: process.env.SEED_BUDAHAZIZOLTAN_PASSWORD,
     name: "Budaházi Zoltán",
     role: "felhasznalo",
     permissions: {
@@ -110,7 +110,15 @@ async function seedFirstUserOnce(pool) {
     return;
   }
 
-  const passwordHash = await bcrypt.hash("Tunde20/A", 12);
+  const password = process.env.SEED_FIRST_USER_PASSWORD;
+  if (!password) {
+    console.warn(
+      "[migrate] SEED_FIRST_USER_PASSWORD nincs beállítva, az első felhasználó létrehozása kihagyva."
+    );
+    return;
+  }
+
+  const passwordHash = await bcrypt.hash(password, 12);
   await pool.query(
     `insert into users (username, password_hash, name, role)
      values ($1, $2, $3, 'admin')
@@ -125,9 +133,20 @@ async function seedFirstUserOnce(pool) {
 // lépés csak egyszer fut le, utána soha többé (akkor sem, ha a felhasználót
 // valaki törli). Új felhasználó hozzáadásához elég egy újabb hívás egyedi
 // "code" értékkel a main()-ben.
+//
+// A jelszót MINDIG környezeti változóból kapja (soha nem szabad plaintext
+// jelszót a forráskódba írni — a repó publikus, a raw.githubusercontent.com
+// bárki számára olvasható). Ha a megfelelő env változó nincs beállítva, a
+// seed-lépés kihagyódik (figyelmeztetéssel), nem hibázik el az egész
+// migrációt.
 async function seedUserOnce(pool, { code, username, password, name, role, permissions }) {
   const { rows } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [code]);
   if (rows.length > 0) return;
+
+  if (!password) {
+    console.warn(`[migrate] nincs jelszó megadva (env változó hiányzik) — kihagyva: ${username}.`);
+    return;
+  }
 
   const passwordHash = await bcrypt.hash(password, 12);
   await pool.query(
