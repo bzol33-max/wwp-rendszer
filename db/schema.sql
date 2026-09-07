@@ -483,3 +483,34 @@ create table if not exists alkalmazottak_allapot (
   year   integer not null,
   month  integer not null check (month between 1 and 12)
 );
+
+-- Jelenléti/üzenőfal modul (2026-09-07). Két kijelölt dolgozó napi
+-- érkezés/távozás idejét rögzíti egyelőre kézzel (dolgozói bejelentkezés
+-- még nincs kiépítve — lásd lib/jelenlet/actions.ts), plusz egy
+-- telephelyenkénti feladat-üzenőfal.
+alter table alkalmazottak add column if not exists jelenlet_aktiv boolean not null default false;
+
+create table if not exists jelenletek (
+  id             bigserial primary key,
+  employee_id    bigint not null references alkalmazottak(id) on delete cascade,
+  work_date      date not null,
+  arrival_time   time,
+  departure_time time,
+  created_at     timestamptz not null default now(),
+  unique (employee_id, work_date)
+);
+create index if not exists idx_jelenletek_employee_date on jelenletek (employee_id, work_date desc);
+
+-- Sürgősség: 1 = piros/azonnali … 5 = zöld/ráér.
+create table if not exists feladatok (
+  id          bigserial primary key,
+  task_date   date not null default current_date,
+  site_id     smallint not null references sites(id),
+  description text not null,
+  urgency     smallint not null check (urgency between 1 and 5),
+  repeat_freq text not null default 'egyszeri' check (repeat_freq in ('egyszeri', 'heti', 'ketheti', 'havi')),
+  done        boolean not null default false,
+  created_by  text,
+  created_at  timestamptz not null default now()
+);
+create index if not exists idx_feladatok_date on feladatok (done, task_date desc, id desc);
