@@ -150,6 +150,24 @@ export async function getSzamlaLejaratLista(kategoria: SzamlaKategoria): Promise
   return { kovetkezo, lejart, lejartOsszesen };
 }
 
+/**
+ * Az összes lejárt esedékességű, nyitott számla, kategóriától függetlenül,
+ * a legrégebben lejárt elöl — az Áttekintés (lib/attekintes/actions.ts)
+ * "Számlák" csempéjéhez és a hozzá tartozó részletes listához.
+ */
+export async function getOsszesLejartSzamla(): Promise<SzamlaRow[]> {
+  return query<SzamlaRow>(
+    `select ${SZAMLA_COLUMNS}
+     from szamla
+     where not fizetve
+       and not sztorno
+       and not sztornozva
+       and fizetesi_hatarido < current_date
+     order by fizetesi_hatarido asc
+     limit 300`
+  );
+}
+
 /** Kategóriánkénti (Raklapnál alkategóriánkénti) kintlévőség-összesítő, pénznemenként külön — a sztornó-párok nélkül. */
 export async function getSzamlaOsszesito(): Promise<SzamlaOsszesitoSor[]> {
   return query<SzamlaOsszesitoSor>(
