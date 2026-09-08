@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { query } from "@/lib/db";
 
 const TIME_FMT = "mon. DD HH24:MI";
@@ -78,15 +79,16 @@ export async function addMovement(input: {
   targetSite?: string;
   purchaseId?: string;
   createdBy?: string;
+  movementGroup?: string;
 }) {
   await query(
-    `insert into keszlet_movements (site_id, type_id, direction, qty, partner, target_site_id, purchase_id, created_by)
+    `insert into keszlet_movements (site_id, type_id, direction, qty, partner, target_site_id, purchase_id, created_by, movement_group)
      values (
        (select id from sites where name = $1),
        (select id from pallet_types where name = $2),
        $3, $4, $5,
        (select id from sites where name = $6),
-       $7, $8
+       $7, $8, $9
      )`,
     [
       input.site,
@@ -97,6 +99,7 @@ export async function addMovement(input: {
       input.targetSite ?? null,
       input.purchaseId ?? null,
       input.createdBy ?? null,
+      input.movementGroup ?? null,
     ]
   );
 }
@@ -114,7 +117,8 @@ export async function recordMovement(input: {
   targetSite?: string;
   createdBy?: string;
 }) {
-  await addMovement(input);
+  const movementGroup = randomUUID();
+  await addMovement({ ...input, movementGroup });
   if (input.site === "Nyíregyháza") {
     const details =
       input.direction === "mozgatas"
@@ -127,9 +131,9 @@ export async function recordMovement(input: {
           ? `${input.type} −${input.qty}`
           : `${input.type} −${input.qty} → ${input.targetSite}`;
     await query(
-      `insert into keszlet_events (site_id, kind, details, effect, created_by)
-       values ((select id from sites where name = 'Nyíregyháza'), 'mozgas', $1, $2, $3)`,
-      [details, effect, input.createdBy ?? null]
+      `insert into keszlet_events (site_id, kind, details, effect, created_by, movement_group)
+       values ((select id from sites where name = 'Nyíregyháza'), 'mozgas', $1, $2, $3, $4)`,
+      [details, effect, input.createdBy ?? null, movementGroup]
     );
   }
 }
@@ -150,6 +154,7 @@ export async function recordMovements(input: {
 }) {
   if (input.items.length === 0) return;
 
+  const movementGroup = randomUUID();
   for (const item of input.items) {
     await addMovement({
       site: input.site,
@@ -159,6 +164,7 @@ export async function recordMovements(input: {
       partner: input.partner,
       targetSite: input.targetSite,
       createdBy: input.createdBy,
+      movementGroup,
     });
   }
 
@@ -178,11 +184,56 @@ export async function recordMovements(input: {
       )
       .join(" · ");
     await query(
-      `insert into keszlet_events (site_id, kind, details, effect, created_by)
-       values ((select id from sites where name = 'Nyíregyháza'), 'mozgas', $1, $2, $3)`,
-      [details, effect, input.createdBy ?? null]
+      `insert into keszlet_events (site_id, kind, details, effect, created_by, movement_group)
+       values ((select id from sites where name = 'Nyíregyháza'), 'mozgas', $1, $2, $3, $4)`,
+      [details, effect, input.createdBy ?? null, movementGroup]
     );
   }
+}
+
+// Egyetlen mozgás-sor törlése a "Legutóbbi mozgások" listából (Szakoly,
+// Balkány — ahol a lista közvetlenül a nyers keszlet_movements-sorokat
+// mutatja). Felvásárláshoz kötött sort (purchase_id) szándékosan NEM enged
+// itt törölni — azt a Havi fülön, a felvásárlás törlésével (deletePurchase)
+// kell visszavonni, hogy a kassza/esemény-hatás is konzisztens maradjon.
+export async function deleteMovement(id: string) {
+  const rows = await query<{ purchase_id: string | null }>(
+    `select purchase_id::text from keszlet_movements where id = $1`,
+    [id]
+  );
+  if (rows.length === 0) return;
+  if (rows[0].purchase_id) {
+    throw new Error(
+      "Ez a tétel egy felvásárláshoz tartozik — a Havi fülön, a felvásárlás törlésével vonható vissza."
+    );
+  }
+  await query(`delete from keszlet_movements where id = $1`, [id]);
+}
+
+// Egy "Legutóbbi mozgások" esemény (Nyíregyháza — keszlet_events, kind =
+// 'mozgas') törlése a hozzá tartozó ÖSSZES keszlet_movements-sorral együtt
+// (recordMovements egy mentésben több típust is felvehet — ezeket a közös
+// movement_group köti össze, lásd db/schema.sql).
+export async function deleteMovementEvent(id: string) {
+  const rows = await query<{ movement_group: string | null }>(
+    `select movement_group::text from keszlet_events where id = $1 and kind = 'mozgas'`,
+    [id]
+  );
+  if (rows.length === 0) return;
+  const group = rows[0].movement_group;
+  if (group) {
+    const linkedToPurchase = await query<{ id: string }>(
+      `select id from keszlet_movements where movement_group = $1 and purchase_id is not null`,
+      [group]
+    );
+    if (linkedToPurchase.length > 0) {
+      throw new Error(
+        "Ez a tétel egy felvásárláshoz tartozik — a Havi fülön, a felvásárlás törlésével vonható vissza."
+      );
+    }
+    await query(`delete from keszlet_movements where movement_group = $1`, [group]);
+  }
+  await query(`delete from keszlet_events where id = $1`, [id]);
 }
 
 export async function getSiteSnapshot(site: string) {

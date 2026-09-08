@@ -158,6 +158,16 @@ alter table kassza_movements add column if not exists created_by text;
 alter table keszlet_events add column if not exists created_by text;
 alter table inventory_counts add column if not exists created_by text;
 
+-- Több típus egy mentésben (recordMovements) esetén az egy tranzakcióban
+-- felvett keszlet_movements-sorokat és a hozzájuk tartozó (Nyíregyházán
+-- keletkező, összevont) keszlet_events-sort egy közös, véletlen azonosító
+-- köti össze — ez teszi lehetővé, hogy a "Legutóbbi mozgások" listából egy
+-- tétel törlésekor az ÖSSZES hozzá tartozó mozgás-sor (nem csak az
+-- esemény-napló bejegyzés) is eltűnjön, típusok számától függetlenül.
+alter table keszlet_movements add column if not exists movement_group uuid;
+alter table keszlet_events add column if not exists movement_group uuid;
+create index if not exists idx_keszlet_movements_group on keszlet_movements (movement_group);
+
 -- Kassza-tétel kategóriája: 'felvasarlas' = felvásárláshoz/cseréhez/kifizetésre
 -- váró tétel kiegyenlítéséhez kötődő kiadás (ezek a Kassza mozgások nézetben
 -- havonta egy összesítő sorba vonódnak), 'egyeb' = minden más (kézzel felvitt
