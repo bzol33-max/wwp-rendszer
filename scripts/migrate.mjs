@@ -62,6 +62,29 @@ async function main() {
       mobil: { view: true, edit: false },
     },
   });
+  // Csak a Posta nézetet látja (a Bér fuvarok Számla/Posta listáját,
+  // csempénként, mobilra optimalizálva) — minden más modul le van tiltva
+  // neki, a "posta" modul pedig önmagában feljogosít a /posta oldal
+  // megtekintésére és a "Postázva" jelölésre, a teljes Fuvarozás modul
+  // jogosultsága nélkül is. Lásd app/posta/page.tsx.
+  await seedUserOnce(pool, {
+    code: "user-budahaziszabina-2026-09-07",
+    username: "BudahaziSzabina",
+    password: process.env.SEED_BUDAHAZISZABINA_PASSWORD,
+    name: "Budaházi Szabina",
+    role: "felhasznalo",
+    permissions: {
+      info: { view: false, edit: false },
+      fuvarozas: { view: false, edit: false },
+      keszlet: { view: false, edit: false },
+      szamlak: { view: false, edit: false },
+      dolgozok: { view: false, edit: false },
+      jelenlet: { view: false, edit: false },
+      jarmuvek: { view: false, edit: false },
+      beallitasok: { view: false, edit: false },
+      posta: { view: true, edit: true },
+    },
+  });
 
   await applyKapcsolatokUpdates(pool, dbDir);
   await applyPoziciszamUpdates(pool, dbDir);
