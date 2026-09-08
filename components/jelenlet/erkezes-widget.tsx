@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Check, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -246,12 +246,58 @@ function HistoryDialog({
   );
 }
 
-export function ErkezesWidget() {
+// A dolgozónkénti, szerkeszthető szakasz-listák — ez a "Mai érkezés"
+// admin tile dialógusának tartalma.
+function ErkezesEmployeesPanel({
+  employees,
+  today,
+  loading,
+  canEdit,
+  onReload,
+}: {
+  employees: JelenletEmployee[];
+  today: JelenletSession[];
+  loading: boolean;
+  canEdit: boolean;
+  onReload: () => void | Promise<void>;
+}) {
+  const [historyFor, setHistoryFor] = useState<JelenletEmployee | null>(null);
+
+  return (
+    <div className="space-y-2">
+      {loading ? (
+        <p className="text-sm text-muted-foreground">Betöltés…</p>
+      ) : employees.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nincs kijelölt dolgozó.</p>
+      ) : (
+        employees.map((e) => (
+          <EmployeeBlock
+            key={e.id}
+            employee={e}
+            sessions={today.filter((s) => s.employee_id === e.id)}
+            canEdit={canEdit}
+            onReload={onReload}
+            onOpenHistory={() => setHistoryFor(e)}
+          />
+        ))
+      )}
+      <HistoryDialog
+        employee={historyFor}
+        open={historyFor !== null}
+        onOpenChange={(open) => !open && setHistoryFor(null)}
+      />
+    </div>
+  );
+}
+
+// Kompakt csempe a Jelenlét admin nézet felső sorában: dolgozónként a mai
+// állapot (bent/kint), koppintásra megnyílik a teljes, szerkeszthető nézet.
+export function MaiErkezesTile() {
   const canEdit = useCanEdit();
   const [employees, setEmployees] = useState<JelenletEmployee[]>([]);
   const [today, setToday] = useState<JelenletSession[]>([]);
   const [loading, setLoading] = useState(true);
-  const [historyFor, setHistoryFor] = useState<JelenletEmployee | null>(null);
+  const [open, setOpen] = useState(false);
 
   const load = useCallback(async () => {
     const [emp, rows] = await Promise.all([getJelenletEmployees(), getTodayJelenletek()]);
@@ -265,33 +311,53 @@ export function ErkezesWidget() {
   }, [load]);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-sm">Mai érkezés</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-2">
-        {loading ? (
-          <p className="text-sm text-muted-foreground">Betöltés…</p>
-        ) : employees.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nincs kijelölt dolgozó.</p>
-        ) : (
-          employees.map((e) => (
-            <EmployeeBlock
-              key={e.id}
-              employee={e}
-              sessions={today.filter((s) => s.employee_id === e.id)}
-              canEdit={canEdit}
-              onReload={load}
-              onOpenHistory={() => setHistoryFor(e)}
-            />
-          ))
-        )}
-      </CardContent>
-      <HistoryDialog
-        employee={historyFor}
-        open={historyFor !== null}
-        onOpenChange={(open) => !open && setHistoryFor(null)}
-      />
-    </Card>
+    <>
+      <Card>
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="flex h-full w-full flex-col items-center justify-center gap-1.5 px-2.5 text-center"
+        >
+          <span className="text-xs font-semibold">Mai érkezés</span>
+          {loading ? (
+            <span className="text-[11px] text-muted-foreground">Betöltés…</span>
+          ) : (
+            <div className="w-full space-y-0.5">
+              {employees.map((e) => {
+                const sessions = today.filter((s) => s.employee_id === e.id);
+                const openSession = sessions.find((s) => s.arrival_time && !s.departure_time);
+                return (
+                  <div key={e.id} className="flex items-center justify-between gap-1 text-[11px]">
+                    <span className="truncate text-muted-foreground">{e.name}</span>
+                    <span
+                      className={cn(
+                        "font-medium",
+                        openSession ? "text-success" : "text-muted-foreground"
+                      )}
+                    >
+                      {sessions.length === 0 ? "—" : openSession ? "Bent" : "Kint"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </button>
+      </Card>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Mai érkezés</DialogTitle>
+          </DialogHeader>
+          <ErkezesEmployeesPanel
+            employees={employees}
+            today={today}
+            loading={loading}
+            canEdit={canEdit}
+            onReload={load}
+          />
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

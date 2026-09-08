@@ -25,9 +25,8 @@ import {
 } from "@/lib/jelenlet/shared";
 import { createFeladat } from "@/lib/jelenlet/actions";
 
-// Új feladat felvétele — a Jelenlét admin nézet (feladatok-csempe.tsx) és
-// a dolgozói saját (mobil /erkezes) nézet "Feladat rögzítése" csempéje is
-// ezt használja.
+// Új feladat felvétele — a Jelenlét admin nézet "Feladat rögzítése"
+// csempéje (feladat-rogzites-tile.tsx) használja.
 export function UjFeladatForm({
   sites,
   canEdit,

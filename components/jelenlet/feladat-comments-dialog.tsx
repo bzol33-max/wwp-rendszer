@@ -14,7 +14,12 @@ import {
   type Feladat,
   type FeladatComment,
 } from "@/lib/jelenlet/shared";
-import { addFeladatComment, getFeladatComments, toggleFeladatDone } from "@/lib/jelenlet/actions";
+import {
+  addFeladatComment,
+  deleteFeladat,
+  getFeladatComments,
+  toggleFeladatDone,
+} from "@/lib/jelenlet/actions";
 
 // Megjegyzés-szál egy feladathoz — az admin (Jelenlét oldal) és a
 // dolgozói saját (mobil /erkezes) nézet is ezt használja, hogy mindkét
@@ -25,12 +30,15 @@ export function FeladatCommentsDialog({
   onOpenChange,
   onChanged,
   showDoneToggle = false,
+  canEdit = false,
 }: {
   feladat: Feladat | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onChanged: () => void | Promise<void>;
   showDoneToggle?: boolean;
+  /** Admin nézetben: megjelenít egy Törlés gombot is. */
+  canEdit?: boolean;
 }) {
   const [comments, setComments] = useState<FeladatComment[]>([]);
   const [loading, setLoading] = useState(false);
@@ -70,6 +78,15 @@ export function FeladatCommentsDialog({
     if (!feladat) return;
     startTransition(async () => {
       await toggleFeladatDone(feladat.id, !feladat.done);
+      await onChanged();
+      onOpenChange(false);
+    });
+  }
+
+  function remove() {
+    if (!feladat) return;
+    startTransition(async () => {
+      await deleteFeladat(feladat.id);
       await onChanged();
       onOpenChange(false);
     });
@@ -135,6 +152,16 @@ export function FeladatCommentsDialog({
             disabled={pending}
           >
             {feladat.done ? "Visszavonás (nincs kész)" : "✓ Elvégezve"}
+          </Button>
+        )}
+        {canEdit && (
+          <Button
+            className="w-full"
+            variant="destructive"
+            onClick={remove}
+            disabled={pending}
+          >
+            Törlés
           </Button>
         )}
       </DialogContent>
