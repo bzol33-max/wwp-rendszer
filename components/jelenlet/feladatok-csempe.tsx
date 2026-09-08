@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { X } from "lucide-react";
+import { MessageSquare, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { FeladatCommentsDialog } from "@/components/jelenlet/feladat-comments-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -154,10 +155,12 @@ function FeladatRow({
   feladat,
   canEdit,
   onReload,
+  onOpenComments,
 }: {
   feladat: Feladat;
   canEdit: boolean;
   onReload: () => void | Promise<void>;
+  onOpenComments: () => void;
 }) {
   const [pending, startTransition] = useTransition();
 
@@ -200,18 +203,23 @@ function FeladatRow({
           )}
         </div>
       </div>
-      {canEdit && (
-        <div className="flex shrink-0 items-center gap-1">
-          <Checkbox
-            checked={feladat.done}
-            disabled={pending}
-            onCheckedChange={(v) => toggle(v === true)}
-          />
-          <Button size="icon-xs" variant="ghost" disabled={pending} onClick={remove}>
-            <X />
-          </Button>
-        </div>
-      )}
+      <div className="flex shrink-0 items-center gap-1">
+        <Button size="icon-xs" variant="ghost" onClick={onOpenComments}>
+          <MessageSquare />
+        </Button>
+        {canEdit && (
+          <>
+            <Checkbox
+              checked={feladat.done}
+              disabled={pending}
+              onCheckedChange={(v) => toggle(v === true)}
+            />
+            <Button size="icon-xs" variant="ghost" disabled={pending} onClick={remove}>
+              <X />
+            </Button>
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -221,6 +229,7 @@ export function FeladatokCsempe() {
   const [sites, setSites] = useState<Site[]>([]);
   const [feladatok, setFeladatok] = useState<Feladat[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selected, setSelected] = useState<Feladat | null>(null);
 
   const load = useCallback(async () => {
     const [siteRows, taskRows] = await Promise.all([getSites(), listFeladatok()]);
@@ -249,13 +258,25 @@ export function FeladatokCsempe() {
             ) : (
               <div className="space-y-1.5">
                 {feladatok.map((f) => (
-                  <FeladatRow key={f.id} feladat={f} canEdit={canEdit} onReload={load} />
+                  <FeladatRow
+                    key={f.id}
+                    feladat={f}
+                    canEdit={canEdit}
+                    onReload={load}
+                    onOpenComments={() => setSelected(f)}
+                  />
                 ))}
               </div>
             )}
           </>
         )}
       </CardContent>
+      <FeladatCommentsDialog
+        feladat={selected}
+        open={selected !== null}
+        onOpenChange={(o) => !o && setSelected(null)}
+        onChanged={load}
+      />
     </Card>
   );
 }

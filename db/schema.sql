@@ -524,3 +524,18 @@ create table if not exists feladatok (
   created_at  timestamptz not null default now()
 );
 create index if not exists idx_feladatok_date on feladatok (done, task_date desc, id desc);
+
+-- Dolgozói bejelentkezés (2026-09-08): egy user account egy alkalmazottak
+-- sorhoz köthető — ez teszi lehetővé, hogy a saját (mobil) /erkezes nézet
+-- admin kiválasztás nélkül tudja, melyik dolgozó jelenlét-sorát írja.
+alter table users add column if not exists employee_id bigint references alkalmazottak(id);
+
+-- Feladatokhoz fűzött megjegyzések (pl. a dolgozó beírja, mit végzett el).
+create table if not exists feladat_megjegyzesek (
+  id         bigserial primary key,
+  feladat_id bigint not null references feladatok(id) on delete cascade,
+  author     text,
+  comment    text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_feladat_megjegyzesek_feladat on feladat_megjegyzesek (feladat_id, created_at);
