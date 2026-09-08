@@ -11,7 +11,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useCanEdit } from "@/components/auth/edit-permission-context";
 import { cn } from "@/lib/utils";
 import {
+  DAY_TYPE_LABELS,
   dayDiffFromWorkday,
+  dayType,
   formatDiff,
   summarizeByDay,
   todayIso,
@@ -122,7 +124,9 @@ function EmployeeBlock({
   onOpenHistory: () => void;
 }) {
   const [pending, startTransition] = useTransition();
-  const diff = dayDiffFromWorkday(sessions);
+  const workSessions = sessions.filter((s) => s.day_type === "munka");
+  const absences = sessions.filter((s) => s.day_type !== "munka");
+  const diff = dayDiffFromWorkday(workSessions);
 
   function addSession() {
     startTransition(async () => {
@@ -146,22 +150,28 @@ function EmployeeBlock({
         >
           {employee.name}
         </button>
-        {diff !== null && (
-          <span
-            className={cn(
-              "text-xs font-semibold",
-              diff < 0 ? "text-destructive" : "text-success"
-            )}
-          >
-            {formatDiff(diff)}
+        {absences.length > 0 ? (
+          <span className="text-xs font-semibold text-muted-foreground">
+            {DAY_TYPE_LABELS[absences[0].day_type]}
           </span>
+        ) : (
+          diff !== null && (
+            <span
+              className={cn(
+                "text-xs font-semibold",
+                diff < 0 ? "text-destructive" : "text-success"
+              )}
+            >
+              {formatDiff(diff)}
+            </span>
+          )
         )}
       </div>
       <div className="space-y-1.5">
-        {sessions.length === 0 ? (
+        {workSessions.length === 0 ? (
           <p className="text-xs text-muted-foreground">Ma még nincs bejegyzés.</p>
         ) : (
-          sessions.map((s) => (
+          workSessions.map((s) => (
             <SessionRow key={s.id} session={s} canEdit={canEdit} onReload={onReload} />
           ))
         )}
@@ -220,23 +230,29 @@ function HistoryDialog({
               <div key={d.date} className="rounded-md border p-2 text-xs">
                 <div className="mb-1 flex items-center justify-between font-medium">
                   <span>{d.date}</span>
-                  <span
-                    className={cn(
-                      d.diffMinutes !== null && d.diffMinutes < 0
-                        ? "text-destructive"
-                        : "text-success"
-                    )}
-                  >
-                    {formatDiff(d.diffMinutes)}
-                  </span>
+                  {d.dayType === "munka" ? (
+                    <span
+                      className={cn(
+                        d.diffMinutes !== null && d.diffMinutes < 0
+                          ? "text-destructive"
+                          : "text-success"
+                      )}
+                    >
+                      {formatDiff(d.diffMinutes)}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">{DAY_TYPE_LABELS[d.dayType]}</span>
+                  )}
                 </div>
-                <div className="space-y-0.5 text-muted-foreground">
-                  {d.sessions.map((s) => (
-                    <div key={s.id}>
-                      {s.arrival_time ?? "—"} – {s.departure_time ?? "—"}
-                    </div>
-                  ))}
-                </div>
+                {d.dayType === "munka" && (
+                  <div className="space-y-0.5 text-muted-foreground">
+                    {d.sessions.map((s) => (
+                      <div key={s.id}>
+                        {s.arrival_time ?? "—"} – {s.departure_time ?? "—"}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -325,6 +341,7 @@ export function MaiErkezesTile() {
             <div className="w-full space-y-0.5">
               {employees.map((e) => {
                 const sessions = today.filter((s) => s.employee_id === e.id);
+                const type = dayType(sessions);
                 const openSession = sessions.find((s) => s.arrival_time && !s.departure_time);
                 return (
                   <div key={e.id} className="flex items-center justify-between gap-1 text-[11px]">
@@ -332,10 +349,16 @@ export function MaiErkezesTile() {
                     <span
                       className={cn(
                         "font-medium",
-                        openSession ? "text-success" : "text-muted-foreground"
+                        type === "munka" && openSession ? "text-success" : "text-muted-foreground"
                       )}
                     >
-                      {sessions.length === 0 ? "—" : openSession ? "Bent" : "Kint"}
+                      {type !== "munka"
+                        ? DAY_TYPE_LABELS[type]
+                        : sessions.length === 0
+                          ? "—"
+                          : openSession
+                            ? "Bent"
+                            : "Kint"}
                     </span>
                   </div>
                 );

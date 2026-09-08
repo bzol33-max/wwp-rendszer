@@ -563,3 +563,13 @@ create index if not exists idx_feladat_megjegyzesek_feladat on feladat_megjegyze
 -- archivum) ez alapján, heti bontásban listázza a kész feladatokat.
 alter table feladatok add column if not exists elvegzes_datum date;
 update feladatok set elvegzes_datum = task_date where done = true and elvegzes_datum is null;
+
+-- Szabadság / Betegszabadság (2026-09-08): egy jelenletek-sor eddig
+-- mindig egy munkaidő-szakaszt (érkezés/távozás) jelentett — a day_type
+-- mostantól azt is lehetővé teszi, hogy egy sor egy egész napos távollétet
+-- jelöljön (arrival/departure nélkül). A note szabad szöveges megjegyzés,
+-- bármelyik gombhoz (érkezés/távozás/szabadság/betegszabadság) írható a
+-- saját (mobil) /erkezes nézeten — lásd lib/jelenlet/actions.ts.
+alter table jelenletek add column if not exists day_type text not null default 'munka'
+  check (day_type in ('munka', 'szabadsag', 'beteg'));
+alter table jelenletek add column if not exists note text;

@@ -3,15 +3,27 @@ export type JelenletEmployee = {
   name: string;
 };
 
+export type DayType = "munka" | "szabadsag" | "beteg";
+
+export const DAY_TYPE_LABELS: Record<DayType, string> = {
+  munka: "Munka",
+  szabadsag: "Szabadság",
+  beteg: "Betegszabadság",
+};
+
 // Egy munkaidő-szakasz (session) — egy nap TÖBB is lehet ugyanannál a
 // dolgozónál (pl. hazamegy, majd visszajön kamiont pakolni), ezért ez NEM
-// egy teljes napot azonosít, csak egy érkezés-távozás párt.
+// egy teljes napot azonosít, csak egy érkezés-távozás párt. A day_type
+// 'szabadsag'/'beteg' esetén a sor nem munkaidő-szakasz, hanem az egész
+// napot jelöli távollétnek — ilyenkor arrival/departure üres.
 export type JelenletSession = {
   id: string;
   employee_id: string;
   work_date: string; // YYYY-MM-DD
   arrival_time: string | null; // HH:MM
   departure_time: string | null; // HH:MM
+  day_type: DayType;
+  note: string | null;
 };
 
 export type RepeatFreq = "egyszeri" | "heti" | "ketheti" | "havi";
@@ -93,6 +105,13 @@ export function dayDiffFromWorkday(sessions: JelenletSession[]): number | null {
   return sumWorkedMinutes(sessions) - WORKDAY_MINUTES;
 }
 
+// Egy nap típusa: ha van rajta szabadság/betegszabadság sor, az egész nap
+// annak számít (nem munkanapnak) — az eltérés-számítás ilyenkor kimarad,
+// hogy egy szabadnap ne jelenjen meg hamis "-9:00"-ként.
+export function dayType(sessions: JelenletSession[]): DayType {
+  return sessions.find((s) => s.day_type !== "munka")?.day_type ?? "munka";
+}
+
 export function formatDiff(minutes: number | null): string {
   if (minutes === null) return "—";
   const sign = minutes > 0 ? "+" : minutes < 0 ? "−" : "";
@@ -115,6 +134,7 @@ export function groupSessionsByDate(sessions: JelenletSession[]): Map<string, Je
 export type DaySummary = {
   date: string;
   sessions: JelenletSession[];
+  dayType: DayType;
   workedMinutes: number;
   diffMinutes: number | null;
 };
@@ -127,11 +147,13 @@ export function summarizeByDay(sessions: JelenletSession[]): DaySummary[] {
       const sorted = [...daySessions].sort((a, b) =>
         (a.arrival_time ?? "").localeCompare(b.arrival_time ?? "")
       );
+      const type = dayType(sorted);
       return {
         date,
         sessions: sorted,
+        dayType: type,
         workedMinutes: sumWorkedMinutes(sorted),
-        diffMinutes: dayDiffFromWorkday(sorted),
+        diffMinutes: type === "munka" ? dayDiffFromWorkday(sorted) : null,
       };
     })
     .sort((a, b) => b.date.localeCompare(a.date));

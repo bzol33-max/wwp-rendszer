@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { HU_MONTHS } from "@/lib/dolgozok/shared";
 import {
   currentYearMonth,
+  DAY_TYPE_LABELS,
   formatDiff,
   monthlyTotalDiff,
   summarizeByDay,
@@ -96,23 +97,29 @@ export function HaviOsszesitoAdminTile() {
                         <div key={d.date} className="rounded-md border p-2 text-xs">
                           <div className="mb-1 flex items-center justify-between font-medium">
                             <span>{d.date}</span>
-                            <span
-                              className={cn(
-                                d.diffMinutes !== null && d.diffMinutes < 0
-                                  ? "text-destructive"
-                                  : "text-success"
-                              )}
-                            >
-                              {formatDiff(d.diffMinutes)}
-                            </span>
+                            {d.dayType === "munka" ? (
+                              <span
+                                className={cn(
+                                  d.diffMinutes !== null && d.diffMinutes < 0
+                                    ? "text-destructive"
+                                    : "text-success"
+                                )}
+                              >
+                                {formatDiff(d.diffMinutes)}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">{DAY_TYPE_LABELS[d.dayType]}</span>
+                            )}
                           </div>
-                          <div className="space-y-0.5 text-muted-foreground">
-                            {d.sessions.map((s) => (
-                              <div key={s.id}>
-                                {s.arrival_time ?? "—"} – {s.departure_time ?? "—"}
-                              </div>
-                            ))}
-                          </div>
+                          {d.dayType === "munka" && (
+                            <div className="space-y-0.5 text-muted-foreground">
+                              {d.sessions.map((s) => (
+                                <div key={s.id}>
+                                  {s.arrival_time ?? "—"} – {s.departure_time ?? "—"}
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>

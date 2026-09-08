@@ -38,7 +38,8 @@ export async function getTodayJelenletek(): Promise<JelenletSession[]> {
   return query<JelenletSession>(
     `select id::text, employee_id::text, to_char(work_date, 'YYYY-MM-DD') as work_date,
        to_char(arrival_time, 'HH24:MI') as arrival_time,
-       to_char(departure_time, 'HH24:MI') as departure_time
+       to_char(departure_time, 'HH24:MI') as departure_time,
+       day_type, note
      from jelenletek
      where work_date = ${BUDAPEST_NOW_DATE}
      order by arrival_time nulls last, id`
@@ -52,7 +53,8 @@ export async function getJelenletHistory(
   return query<JelenletSession>(
     `select id::text, employee_id::text, to_char(work_date, 'YYYY-MM-DD') as work_date,
        to_char(arrival_time, 'HH24:MI') as arrival_time,
-       to_char(departure_time, 'HH24:MI') as departure_time
+       to_char(departure_time, 'HH24:MI') as departure_time,
+       day_type, note
      from jelenletek
      where employee_id = $1 and work_date >= ${BUDAPEST_NOW_DATE} - $2::int
      order by work_date desc, id`,
@@ -68,7 +70,8 @@ export async function getMonthJelenletek(
   return query<JelenletSession>(
     `select id::text, employee_id::text, to_char(work_date, 'YYYY-MM-DD') as work_date,
        to_char(arrival_time, 'HH24:MI') as arrival_time,
-       to_char(departure_time, 'HH24:MI') as departure_time
+       to_char(departure_time, 'HH24:MI') as departure_time,
+       day_type, note
      from jelenletek
      where employee_id = $1
        and work_date >= make_date($2, $3, 1)
@@ -120,36 +123,67 @@ export async function deleteJelenletSession(id: string) {
 // mai szakaszt zárja le. Így le lehet fedni azt is, ha valaki hazamegy,
 // majd később visszajön (pl. kamiont pakolni).
 
-export async function recordArrivalNow(employeeId: string) {
+export async function recordArrivalNow(employeeId: string, note?: string) {
   await query(
-    `insert into jelenletek (employee_id, work_date, arrival_time)
-     values ($1, ${BUDAPEST_NOW_DATE}, ${BUDAPEST_NOW_TIME})`,
-    [employeeId]
+    `insert into jelenletek (employee_id, work_date, arrival_time, note)
+     values ($1, ${BUDAPEST_NOW_DATE}, ${BUDAPEST_NOW_TIME}, $2)`,
+    [employeeId, note?.trim() || null]
   );
   revalidatePath("/jelenlet");
   revalidatePath("/erkezes");
 }
 
-export async function recordDepartureNow(employeeId: string) {
+export async function recordDepartureNow(employeeId: string, note?: string) {
   const updated = await query<{ id: string }>(
     `update jelenletek
-     set departure_time = ${BUDAPEST_NOW_TIME}
+     set departure_time = ${BUDAPEST_NOW_TIME}, note = coalesce($2, note)
      where id = (
        select id from jelenletek
-       where employee_id = $1 and work_date = ${BUDAPEST_NOW_DATE} and departure_time is null
+       where employee_id = $1 and work_date = ${BUDAPEST_NOW_DATE}
+         and day_type = 'munka' and departure_time is null
        order by arrival_time desc nulls last, id desc
        limit 1
      )
      returning id`,
-    [employeeId]
+    [employeeId, note?.trim() || null]
   );
   if (updated.length === 0) {
     // Nincs nyitva hagyott mai szakasz (pl. valaki elfelejtett érkezést
     // rögzíteni) — ne vesszen el a koppintás, önálló távozás-sorként mentjük.
     await query(
-      `insert into jelenletek (employee_id, work_date, departure_time)
-       values ($1, ${BUDAPEST_NOW_DATE}, ${BUDAPEST_NOW_TIME})`,
-      [employeeId]
+      `insert into jelenletek (employee_id, work_date, departure_time, note)
+       values ($1, ${BUDAPEST_NOW_DATE}, ${BUDAPEST_NOW_TIME}, $2)`,
+      [employeeId, note?.trim() || null]
+    );
+  }
+  revalidatePath("/jelenlet");
+  revalidatePath("/erkezes");
+}
+
+// Szabadság / Betegszabadság: az egész napot távollétnek jelöli (nincs
+// érkezés/távozás-idő). Ha aznap már van ilyen bejegyzés, csak a
+// megjegyzést frissíti, nem szaporítja a sorokat.
+export async function recordAbszenciaNow(
+  employeeId: string,
+  dayType: "szabadsag" | "beteg",
+  note?: string
+) {
+  const updated = await query<{ id: string }>(
+    `update jelenletek
+     set note = coalesce($3, note)
+     where id = (
+       select id from jelenletek
+       where employee_id = $1 and work_date = ${BUDAPEST_NOW_DATE} and day_type = $2
+       limit 1
+     )
+     returning id`,
+    [employeeId, dayType, note?.trim() || null]
+  );
+  if (updated.length === 0) {
+    await query(
+      `insert into jelenletek (employee_id, work_date, day_type, note)
+       values ($1, ${BUDAPEST_NOW_DATE}, $2, $3)`,
+      [employeeId, dayType, note?.trim() || null]
     );
   }
   revalidatePath("/jelenlet");
