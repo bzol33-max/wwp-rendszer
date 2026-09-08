@@ -32,9 +32,14 @@ export function AppShell({
   const [moreOpen, setMoreOpen] = useState(false);
 
   // A bejelentkezési oldalnak és az önálló, korlátozott mobil nézeteknek
-  // (mobil összefoglaló, posta) nincs (asztali méretre tervezett)
-  // oldalsávja — utóbbiak saját, könnyű fejlécet rajzolnak.
-  if (pathname === "/login" || pathname === "/mobil" || pathname === "/posta") {
+  // (mobil összefoglaló, posta, saját érkezés) nincs (asztali méretre
+  // tervezett) oldalsávja — utóbbiak saját, könnyű fejlécet rajzolnak.
+  if (
+    pathname === "/login" ||
+    pathname === "/mobil" ||
+    pathname === "/posta" ||
+    pathname === "/erkezes"
+  ) {
     return <>{children}</>;
   }
 

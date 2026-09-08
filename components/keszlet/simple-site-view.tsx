@@ -15,10 +15,12 @@ import { Badge } from "@/components/ui/badge";
 import { InventoryDialog } from "@/components/keszlet/inventory-dialog";
 import { MovementForm } from "@/components/keszlet/movement-form";
 import { VegyesSplitRow } from "@/components/keszlet/vegyes-split-row";
+import { X } from "lucide-react";
 import { toast } from "sonner";
 import {
   getSiteSnapshot,
   recordSzetvalogatas,
+  deleteMovement,
   type MovementRow,
 } from "@/lib/keszlet/actions";
 import { getCurrentUser } from "@/lib/current-user";
@@ -58,6 +60,16 @@ export function SimpleSiteView({ site }: { site: Site }) {
       toast.success("Szétválogatás rögzítve.");
     } catch {
       toast.error("Nem sikerült rögzíteni.");
+    }
+  }
+
+  async function handleDeleteMovement(id: string) {
+    try {
+      await deleteMovement(id);
+      await load();
+      toast.success("Mozgás törölve.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Nem sikerült törölni.");
     }
   }
 
@@ -126,6 +138,7 @@ export function SimpleSiteView({ site }: { site: Site }) {
                 <TableHead>Partner / cél</TableHead>
                 <TableHead className="text-right">Db</TableHead>
                 <TableHead>Ki</TableHead>
+                {canEdit && <TableHead className="w-8" />}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -159,6 +172,18 @@ export function SimpleSiteView({ site }: { site: Site }) {
                     {m.qty}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{m.created_by ?? "—"}</TableCell>
+                  {canEdit && (
+                    <TableCell>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteMovement(m.id)}
+                        title="Törlés (hibás rögzítés)"
+                        className="text-destructive/70 hover:text-destructive"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>

@@ -169,6 +169,16 @@ alter table kassza_movements add column if not exists created_by text;
 alter table keszlet_events add column if not exists created_by text;
 alter table inventory_counts add column if not exists created_by text;
 
+-- Több típus egy mentésben (recordMovements) esetén az egy tranzakcióban
+-- felvett keszlet_movements-sorokat és a hozzájuk tartozó (Nyíregyházán
+-- keletkező, összevont) keszlet_events-sort egy közös, véletlen azonosító
+-- köti össze — ez teszi lehetővé, hogy a "Legutóbbi mozgások" listából egy
+-- tétel törlésekor az ÖSSZES hozzá tartozó mozgás-sor (nem csak az
+-- esemény-napló bejegyzés) is eltűnjön, típusok számától függetlenül.
+alter table keszlet_movements add column if not exists movement_group uuid;
+alter table keszlet_events add column if not exists movement_group uuid;
+create index if not exists idx_keszlet_movements_group on keszlet_movements (movement_group);
+
 -- Kassza-tétel kategóriája: 'felvasarlas' = felvásárláshoz/cseréhez/kifizetésre
 -- váró tétel kiegyenlítéséhez kötődő kiadás (ezek a Kassza mozgások nézetben
 -- havonta egy összesítő sorba vonódnak), 'egyeb' = minden más (kézzel felvitt
@@ -507,10 +517,15 @@ create table if not exists jelenletek (
   work_date      date not null,
   arrival_time   time,
   departure_time time,
-  created_at     timestamptz not null default now(),
-  unique (employee_id, work_date)
+  created_at     timestamptz not null default now()
 );
 create index if not exists idx_jelenletek_employee_date on jelenletek (employee_id, work_date desc);
+
+-- (2026-09-08): egy napon belül TÖBBSZÖR is lehet érkezés/távozás (pl.
+-- hazamegy, majd visszajön kamiont pakolni) — egy sor egy munkaidő-
+-- szakaszt (session) jelent, nem a teljes napot, ezért a korábbi
+-- (employee_id, work_date) UNIQUE megkötés megszűnik.
+alter table jelenletek drop constraint if exists jelenletek_employee_id_work_date_key;
 
 -- Sürgősség: 1 = piros/azonnali … 5 = zöld/ráér.
 create table if not exists feladatok (
@@ -525,3 +540,18 @@ create table if not exists feladatok (
   created_at  timestamptz not null default now()
 );
 create index if not exists idx_feladatok_date on feladatok (done, task_date desc, id desc);
+
+-- Dolgozói bejelentkezés (2026-09-08): egy user account egy alkalmazottak
+-- sorhoz köthető — ez teszi lehetővé, hogy a saját (mobil) /erkezes nézet
+-- admin kiválasztás nélkül tudja, melyik dolgozó jelenlét-sorát írja.
+alter table users add column if not exists employee_id bigint references alkalmazottak(id);
+
+-- Feladatokhoz fűzött megjegyzések (pl. a dolgozó beírja, mit végzett el).
+create table if not exists feladat_megjegyzesek (
+  id         bigserial primary key,
+  feladat_id bigint not null references feladatok(id) on delete cascade,
+  author     text,
+  comment    text not null,
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_feladat_megjegyzesek_feladat on feladat_megjegyzesek (feladat_id, created_at);

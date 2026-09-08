@@ -15,13 +15,14 @@ export default async function Home() {
     (mod) => session.can(mod.key as ModuleKey).view
   );
 
-  // Aki egyelőre csak egy önálló, korlátozott nézethez (mobil összefoglaló
-  // vagy posta) kap jogot (egyik teljes modulhoz sincs hozzáférése), azt
-  // bejelentkezés után rögtön oda irányítjuk — neki ez a kezdőlap üres
-  // modul-rácsot mutatna.
+  // Aki egyelőre csak egy önálló, korlátozott nézethez (mobil összefoglaló,
+  // posta vagy saját érkezés) kap jogot (egyik teljes modulhoz sincs
+  // hozzáférése), azt bejelentkezés után rögtön oda irányítjuk — neki ez a
+  // kezdőlap üres modul-rácsot mutatna.
   if (visibleModules.length === 0) {
     if (session.can("mobil").view) redirect("/mobil");
     if (session.can("posta").view) redirect("/posta");
+    if (session.can("erkezes").view) redirect("/erkezes");
   }
 
   return (

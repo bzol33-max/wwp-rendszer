@@ -96,6 +96,43 @@ async function main() {
   await seedAlkalmazottakOnce(pool);
   await seedJelenletAktivOnce(pool);
 
+  // Dolgozói bejelentkezés (2026-09-08): a két, érkezés-widgeten megjelenő
+  // dolgozó saját belépéssel éri el a mobilra optimalizált /erkezes
+  // nézetet. Az "employeeName" a hozzájuk tartozó alkalmazottak.id-t köti
+  // a user sorhoz (lásd seedUserOnce), hogy tudják, melyik dolgozóként
+  // rögzítenek — ezért ez a hívás a seedAlkalmazottakOnce UTÁN fut. Csak az
+  // "erkezes" modulhoz kapnak jogot, minden máshoz nem.
+  const dolgozoiPermissions = {
+    info: { view: false, edit: false },
+    fuvarozas: { view: false, edit: false },
+    keszlet: { view: false, edit: false },
+    szamlak: { view: false, edit: false },
+    dolgozok: { view: false, edit: false },
+    jelenlet: { view: false, edit: false },
+    jarmuvek: { view: false, edit: false },
+    beallitasok: { view: false, edit: false },
+    mobil: { view: false, edit: false },
+    erkezes: { view: true, edit: true },
+  };
+  await seedUserOnce(pool, {
+    code: "user-bodogangabor-2026-09-08",
+    username: "BodoganGabor",
+    password: process.env.SEED_BODOGANGABOR_PASSWORD,
+    name: "Bodogán Gábor",
+    role: "dolgozo",
+    permissions: dolgozoiPermissions,
+    employeeName: "Bodogán Gabi",
+  });
+  await seedUserOnce(pool, {
+    code: "user-vadongabor-2026-09-08",
+    username: "VadonGabor",
+    password: process.env.SEED_VADONGABOR_PASSWORD,
+    name: "Vadon Gábor",
+    role: "dolgozo",
+    permissions: dolgozoiPermissions,
+    employeeName: "Vadon Gabi",
+  });
+
   await pool.end();
 }
 
@@ -228,7 +265,7 @@ async function seedFirstUserOnce(pool) {
 // bárki számára olvasható). Ha a megfelelő env változó nincs beállítva, a
 // seed-lépés kihagyódik (figyelmeztetéssel), nem hibázik el az egész
 // migrációt.
-async function seedUserOnce(pool, { code, username, password, name, role, permissions }) {
+async function seedUserOnce(pool, { code, username, password, name, role, permissions, employeeName }) {
   const { rows } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [code]);
   if (rows.length > 0) return;
 
@@ -239,10 +276,10 @@ async function seedUserOnce(pool, { code, username, password, name, role, permis
 
   const passwordHash = await bcrypt.hash(password, 12);
   await pool.query(
-    `insert into users (username, password_hash, name, role, permissions)
-     values ($1, $2, $3, $4, $5::jsonb)
+    `insert into users (username, password_hash, name, role, permissions, employee_id)
+     values ($1, $2, $3, $4, $5::jsonb, (select id from alkalmazottak where name = $6))
      on conflict (username) do nothing`,
-    [username, passwordHash, name, role, JSON.stringify(permissions ?? {})]
+    [username, passwordHash, name, role, JSON.stringify(permissions ?? {}), employeeName ?? null]
   );
   await pool.query(`insert into alkalmazott_javitasok (kod) values ($1)`, [code]);
   console.log(`[migrate] felhasználó létrehozva: ${username}.`);

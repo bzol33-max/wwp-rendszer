@@ -4,13 +4,25 @@ import { revalidatePath } from "next/cache";
 import { query } from "@/lib/db";
 import type {
   Feladat,
+  FeladatComment,
   JelenletEmployee,
-  JelenletRow,
+  JelenletSession,
   RepeatFreq,
   Site,
 } from "@/lib/jelenlet/shared";
 
 // --- Jelenlét (érkezés/távozás) ---
+
+// A Railway-konténer (és a hozzá tartozó Postgres session) alapértelmezett
+// időzónája UTC, nem Europe/Budapest — lásd lib/fuvarozas/idozona.ts
+// hasonló megjegyzését. A sima `current_date`/`localtime`/`now()` ezért a
+// szerver (UTC) faliórát adná vissza, ami nyáron 2, télen 1 órával eltér a
+// valós budapesti időtől, és éjfél körül akár a naptári napot is elcsúsztatja.
+// Minden itt rögzített/összehasonlított dátum-idő ezért explicit
+// `at time zone 'Europe/Budapest'` konverzióval számol, a szerver
+// időzóna-beállításától függetlenül.
+const BUDAPEST_NOW_DATE = `(now() at time zone 'Europe/Budapest')::date`;
+const BUDAPEST_NOW_TIME = `(now() at time zone 'Europe/Budapest')::time`;
 
 export async function getJelenletEmployees(): Promise<JelenletEmployee[]> {
   return query<JelenletEmployee>(
@@ -20,32 +32,55 @@ export async function getJelenletEmployees(): Promise<JelenletEmployee[]> {
   );
 }
 
-export async function getTodayJelenletek(): Promise<JelenletRow[]> {
-  return query<JelenletRow>(
+// A mai nap ÖSSZES szakasza, minden dolgozónál (egy dolgozónak több sora is
+// lehet, ha többször érkezett/távozott aznap).
+export async function getTodayJelenletek(): Promise<JelenletSession[]> {
+  return query<JelenletSession>(
     `select id::text, employee_id::text, to_char(work_date, 'YYYY-MM-DD') as work_date,
        to_char(arrival_time, 'HH24:MI') as arrival_time,
        to_char(departure_time, 'HH24:MI') as departure_time
      from jelenletek
-     where work_date = current_date`
+     where work_date = ${BUDAPEST_NOW_DATE}
+     order by arrival_time nulls last, id`
   );
 }
 
 export async function getJelenletHistory(
   employeeId: string,
   days = 14
-): Promise<JelenletRow[]> {
-  return query<JelenletRow>(
+): Promise<JelenletSession[]> {
+  return query<JelenletSession>(
     `select id::text, employee_id::text, to_char(work_date, 'YYYY-MM-DD') as work_date,
        to_char(arrival_time, 'HH24:MI') as arrival_time,
        to_char(departure_time, 'HH24:MI') as departure_time
      from jelenletek
-     where employee_id = $1 and work_date >= current_date - $2::int
-     order by work_date desc`,
+     where employee_id = $1 and work_date >= ${BUDAPEST_NOW_DATE} - $2::int
+     order by work_date desc, id`,
     [employeeId, days]
   );
 }
 
-export async function saveJelenlet(input: {
+export async function getMonthJelenletek(
+  employeeId: string,
+  year: number,
+  month: number
+): Promise<JelenletSession[]> {
+  return query<JelenletSession>(
+    `select id::text, employee_id::text, to_char(work_date, 'YYYY-MM-DD') as work_date,
+       to_char(arrival_time, 'HH24:MI') as arrival_time,
+       to_char(departure_time, 'HH24:MI') as departure_time
+     from jelenletek
+     where employee_id = $1
+       and work_date >= make_date($2, $3, 1)
+       and work_date < (make_date($2, $3, 1) + interval '1 month')
+     order by work_date, id`,
+    [employeeId, year, month]
+  );
+}
+
+// --- Admin (Jelenlét oldal): kézi szakasz-kezelés ---
+
+export async function createJelenletSession(input: {
   employeeId: string;
   workDate: string;
   arrivalTime: string | null;
@@ -53,12 +88,72 @@ export async function saveJelenlet(input: {
 }) {
   await query(
     `insert into jelenletek (employee_id, work_date, arrival_time, departure_time)
-     values ($1, $2, $3, $4)
-     on conflict (employee_id, work_date)
-     do update set arrival_time = excluded.arrival_time, departure_time = excluded.departure_time`,
+     values ($1, $2, $3, $4)`,
     [input.employeeId, input.workDate, input.arrivalTime, input.departureTime]
   );
   revalidatePath("/jelenlet");
+  revalidatePath("/erkezes");
+}
+
+export async function updateJelenletSession(
+  id: string,
+  input: { arrivalTime: string | null; departureTime: string | null }
+) {
+  await query(`update jelenletek set arrival_time = $2, departure_time = $3 where id = $1`, [
+    id,
+    input.arrivalTime,
+    input.departureTime,
+  ]);
+  revalidatePath("/jelenlet");
+  revalidatePath("/erkezes");
+}
+
+export async function deleteJelenletSession(id: string) {
+  await query(`delete from jelenletek where id = $1`, [id]);
+  revalidatePath("/jelenlet");
+  revalidatePath("/erkezes");
+}
+
+// --- Saját (mobil) nézet: egy koppintással rögzíti a jelenlegi időt ---
+// Egy nap többször is használható — minden "Érkezés" koppintás ÚJ szakaszt
+// nyit, a "Távozás" pedig a legutóbb nyitva hagyott (távozás nélküli)
+// mai szakaszt zárja le. Így le lehet fedni azt is, ha valaki hazamegy,
+// majd később visszajön (pl. kamiont pakolni).
+
+export async function recordArrivalNow(employeeId: string) {
+  await query(
+    `insert into jelenletek (employee_id, work_date, arrival_time)
+     values ($1, ${BUDAPEST_NOW_DATE}, ${BUDAPEST_NOW_TIME})`,
+    [employeeId]
+  );
+  revalidatePath("/jelenlet");
+  revalidatePath("/erkezes");
+}
+
+export async function recordDepartureNow(employeeId: string) {
+  const updated = await query<{ id: string }>(
+    `update jelenletek
+     set departure_time = ${BUDAPEST_NOW_TIME}
+     where id = (
+       select id from jelenletek
+       where employee_id = $1 and work_date = ${BUDAPEST_NOW_DATE} and departure_time is null
+       order by arrival_time desc nulls last, id desc
+       limit 1
+     )
+     returning id`,
+    [employeeId]
+  );
+  if (updated.length === 0) {
+    // Nincs nyitva hagyott mai szakasz (pl. valaki elfelejtett érkezést
+    // rögzíteni) — ne vesszen el a koppintás, önálló távozás-sorként mentjük.
+    await query(
+      `insert into jelenletek (employee_id, work_date, departure_time)
+       values ($1, ${BUDAPEST_NOW_DATE}, ${BUDAPEST_NOW_TIME})`,
+      [employeeId]
+    );
+  }
+  revalidatePath("/jelenlet");
+  revalidatePath("/erkezes");
 }
 
 // --- Feladatok (üzenőfal) ---
@@ -104,14 +199,43 @@ export async function createFeladat(input: {
     ]
   );
   revalidatePath("/jelenlet");
+  revalidatePath("/erkezes");
 }
 
 export async function toggleFeladatDone(id: string, done: boolean) {
   await query(`update feladatok set done = $2 where id = $1`, [id, done]);
   revalidatePath("/jelenlet");
+  revalidatePath("/erkezes");
 }
 
 export async function deleteFeladat(id: string) {
   await query(`delete from feladatok where id = $1`, [id]);
   revalidatePath("/jelenlet");
+  revalidatePath("/erkezes");
+}
+
+export async function getFeladatComments(feladatId: string): Promise<FeladatComment[]> {
+  return query<FeladatComment>(
+    `select id::text, feladat_id::text, author, comment,
+       to_char(created_at at time zone 'Europe/Budapest', 'YYYY-MM-DD HH24:MI') as created_at
+     from feladat_megjegyzesek
+     where feladat_id = $1
+     order by created_at asc, id asc`,
+    [feladatId]
+  );
+}
+
+export async function addFeladatComment(input: {
+  feladatId: string;
+  author?: string;
+  comment: string;
+}) {
+  const comment = input.comment.trim();
+  if (!comment) throw new Error("A megjegyzés nem lehet üres.");
+  await query(
+    `insert into feladat_megjegyzesek (feladat_id, author, comment) values ($1, $2, $3)`,
+    [input.feladatId, input.author ?? null, comment]
+  );
+  revalidatePath("/jelenlet");
+  revalidatePath("/erkezes");
 }
