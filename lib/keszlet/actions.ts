@@ -134,6 +134,57 @@ export async function recordMovement(input: {
   }
 }
 
+// Ugyanaz, mint recordMovement, de egyszerre több típust/darabszámot rögzít
+// egy tranzakcióban (ugyanahhoz a partnerhez / cél telephelyhez) — a "Mozgás
+// rögzítése" kártya mindhárom telephelyen (Nyíregyháza, Szakoly, Balkány)
+// ezt hívja, hogy Be-/Kiszállításnál (és mozgatásnál is) ne kelljen
+// típusonként külön-külön elmenteni. Nyíregyházán egyetlen összevont
+// keszlet_events-sorban jelenik meg az összes tétel.
+export async function recordMovements(input: {
+  site: string;
+  direction: Direction;
+  items: { type: string; qty: number }[];
+  partner?: string;
+  targetSite?: string;
+  createdBy?: string;
+}) {
+  if (input.items.length === 0) return;
+
+  for (const item of input.items) {
+    await addMovement({
+      site: input.site,
+      type: item.type,
+      direction: input.direction,
+      qty: item.qty,
+      partner: input.partner,
+      targetSite: input.targetSite,
+      createdBy: input.createdBy,
+    });
+  }
+
+  if (input.site === "Nyíregyháza") {
+    const itemsText = input.items.map((i) => `${i.qty} db ${i.type}`).join(", ");
+    const details =
+      input.direction === "mozgatas"
+        ? `${itemsText} átszállítva ide: ${input.targetSite}`
+        : `${itemsText}${input.partner ? ` — ${input.partner}` : ""}`;
+    const effect = input.items
+      .map((i) =>
+        input.direction === "be"
+          ? `${i.type} +${i.qty}`
+          : input.direction === "ki"
+            ? `${i.type} −${i.qty}`
+            : `${i.type} −${i.qty} → ${input.targetSite}`
+      )
+      .join(" · ");
+    await query(
+      `insert into keszlet_events (site_id, kind, details, effect, created_by)
+       values ((select id from sites where name = 'Nyíregyháza'), 'mozgas', $1, $2, $3)`,
+      [details, effect, input.createdBy ?? null]
+    );
+  }
+}
+
 export async function getSiteSnapshot(site: string) {
   const [stock, movements, types] = await Promise.all([
     getStock(site),

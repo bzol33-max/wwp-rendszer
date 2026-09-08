@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,15 +15,23 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { recordMovement, type Direction } from "@/lib/keszlet/actions";
+import { recordMovements, type Direction } from "@/lib/keszlet/actions";
 import { getCurrentUser } from "@/lib/current-user";
 import { useCanEdit } from "@/components/auth/edit-permission-context";
+
+type Sor = { key: number; type: string; qty: string };
+
+let nextKey = 1;
+function ujSor(type: string): Sor {
+  return { key: nextKey++, type, qty: "" };
+}
 
 /**
  * Megosztott "Mozgás rögzítése" kártya (Beérkezés / Kiszállítás / Telephelyek
  * közti mozgatás) — Nyíregyháza, Szakoly és Balkány fülön egységesen ugyanez
  * a komponens rögzíti a mozgásokat, hogy mindhárom telepről lehessen a másik
- * kettő felé átszállítani.
+ * kettő felé átszállítani. Egy mentésen belül több típus (soronként külön
+ * darabszámmal) is rögzíthető, ugyanahhoz a partnerhez/cél telephelyhez.
  */
 export function MovementForm({
   site,
@@ -37,28 +46,57 @@ export function MovementForm({
 }) {
   const canEdit = useCanEdit();
   const [direction, setDirection] = useState<Direction>("be");
-  const [type, setType] = useState("");
-  const [qty, setQty] = useState("");
+  const [sorok, setSorok] = useState<Sor[]>([ujSor(types[0] ?? "")]);
   const [partner, setPartner] = useState("");
   const [targetSite, setTargetSite] = useState(otherSites[0] ?? "");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    setType((prev) => (prev && types.includes(prev) ? prev : types[0] ?? ""));
+    setSorok((prev) =>
+      prev.map((s) => (s.type && types.includes(s.type) ? s : { ...s, type: types[0] ?? "" }))
+    );
   }, [types]);
 
   useEffect(() => {
     setTargetSite((prev) => (prev && otherSites.includes(prev) ? prev : otherSites[0] ?? ""));
   }, [otherSites]);
 
+  function updateSor(key: number, patch: Partial<Sor>) {
+    setSorok((prev) => prev.map((s) => (s.key === key ? { ...s, ...patch } : s)));
+  }
+
+  function addSor() {
+    // Alapértelmezésben egy még nem használt típust ajánl fel, ha van ilyen.
+    const hasznaltak = new Set(sorok.map((s) => s.type));
+    const kovetkezo = types.find((t) => !hasznaltak.has(t)) ?? types[0] ?? "";
+    setSorok((prev) => [...prev, ujSor(kovetkezo)]);
+  }
+
+  function removeSor(key: number) {
+    setSorok((prev) => (prev.length > 1 ? prev.filter((s) => s.key !== key) : prev));
+  }
+
   async function submit() {
-    const n = Number(qty);
-    if (!n || n <= 0) {
-      toast.error("Adj meg érvényes darabszámot.");
-      return;
+    const items: { type: string; qty: number }[] = [];
+    for (const s of sorok) {
+      const n = Number(s.qty);
+      if (!s.qty && sorok.length === 1) {
+        toast.error("Adj meg érvényes darabszámot.");
+        return;
+      }
+      if (!s.qty) continue; // üresen hagyott sor kihagyva, ha van másik kitöltött
+      if (!n || n <= 0) {
+        toast.error(`Érvénytelen darabszám ehhez: ${s.type || "típus"}.`);
+        return;
+      }
+      if (!s.type) {
+        toast.error("Válassz típust minden sorhoz.");
+        return;
+      }
+      items.push({ type: s.type, qty: n });
     }
-    if (!type) {
-      toast.error("Válassz típust.");
+    if (items.length === 0) {
+      toast.error("Adj meg legalább egy típust és darabszámot.");
       return;
     }
     if (direction !== "mozgatas" && !partner.trim()) {
@@ -71,19 +109,20 @@ export function MovementForm({
     }
     setSubmitting(true);
     try {
-      await recordMovement({
+      await recordMovements({
         site,
-        type,
         direction,
-        qty: n,
+        items,
         partner: direction === "mozgatas" ? undefined : partner,
         targetSite: direction === "mozgatas" ? targetSite : undefined,
         createdBy: getCurrentUser() || undefined,
       });
-      setQty("");
+      setSorok([ujSor(types[0] ?? "")]);
       setPartner("");
       await onRecorded();
-      toast.success("Mozgás rögzítve.");
+      toast.success(
+        items.length > 1 ? `${items.length} típus rögzítve.` : "Mozgás rögzítve."
+      );
     } catch {
       toast.error("Nem sikerült menteni. Próbáld újra.");
     } finally {
@@ -121,31 +160,56 @@ export function MovementForm({
           ))}
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-1.5">
-            <Label>Típus</Label>
-            <Select value={type} onValueChange={(v) => v && setType(v)}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {types.map((t) => (
-                  <SelectItem key={t} value={t}>
-                    {t}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Darabszám</Label>
-            <Input
-              type="number"
-              placeholder="pl. 33"
-              value={qty}
-              onChange={(e) => setQty(e.target.value)}
-            />
-          </div>
+        <div className="space-y-2">
+          {sorok.map((sor, i) => (
+            <div key={sor.key} className="grid grid-cols-[1fr_auto_auto] items-end gap-2">
+              <div className="space-y-1.5">
+                {i === 0 && <Label>Típus</Label>}
+                <Select value={sor.type} onValueChange={(v) => v && updateSor(sor.key, { type: v })}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {types.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="w-24 space-y-1.5">
+                {i === 0 && <Label>Darabszám</Label>}
+                <Input
+                  type="number"
+                  placeholder="pl. 33"
+                  value={sor.qty}
+                  onChange={(e) => updateSor(sor.key, { qty: e.target.value })}
+                />
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                disabled={sorok.length === 1}
+                onClick={() => removeSor(sor.key)}
+                title="Sor törlése"
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={addSor}
+            disabled={sorok.length >= types.length}
+            className="w-full sm:w-auto"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Típus hozzáadása
+          </Button>
         </div>
 
         {direction !== "mozgatas" ? (
