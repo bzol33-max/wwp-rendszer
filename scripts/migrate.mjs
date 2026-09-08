@@ -120,7 +120,10 @@ async function main() {
     password: process.env.SEED_BODOGANGABOR_PASSWORD,
     name: "Bodogán Gábor",
     role: "dolgozo",
-    permissions: dolgozoiPermissions,
+    // Ő az egyetlen, aki az /erkezes főoldalán a Készlet csempét is megkapja
+    // (Szakoly/Balkány, leltár + Be/Ki mozgás) — lásd grantKeszletSajatOnce
+    // a már létező felhasználóknál (ha ez a hívás korábban már lefutott).
+    permissions: { ...dolgozoiPermissions, keszlet_sajat: { view: true, edit: true } },
     employeeName: "Bodogán Gabi",
   });
   await seedUserOnce(pool, {
@@ -132,8 +135,29 @@ async function main() {
     permissions: dolgozoiPermissions,
     employeeName: "Vadon Gabi",
   });
+  await grantKeszletSajatOnce(pool);
 
   await pool.end();
+}
+
+// Egyszeri javítás (2026-09-08): a BodoganGabor felhasználó a fenti
+// seedUserOnce hívás ELSŐ (élesítéskori) lefutásakor még nem kapta meg a
+// "keszlet_sajat" jogot (a modul csak utólag került be) — a seedUserOnce
+// pedig csak létrehozáskor ír jogosultságot, meglévő felhasználónál nem
+// nyúl hozzá. Ez a lépés utólag, egyszer ráírja a jogot a permissions
+// JSON-ra, a többi kulcsot érintetlenül hagyva.
+async function grantKeszletSajatOnce(pool) {
+  const JAVITAS_KOD = "bodogangabor-keszlet-sajat-2026-09-08";
+  const { rows } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (rows.length > 0) return;
+
+  await pool.query(
+    `update users
+     set permissions = permissions || '{"keszlet_sajat": {"view": true, "edit": true}}'::jsonb
+     where username = 'BodoganGabor'`
+  );
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1)`, [JAVITAS_KOD]);
+  console.log("[migrate] BodoganGabor megkapta a saját készlet (Szakoly/Balkány) jogot.");
 }
 
 // Dolgozók modul — egyszeri törzsadat-feltöltés (2026-09-07): a tényleges

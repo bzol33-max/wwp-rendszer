@@ -2,10 +2,13 @@
 
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, CalendarClock, ClipboardList, LogOut } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { ArrowLeft, CalendarClock, ClipboardList, LogOut, Package } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import { logout } from "@/lib/auth/actions";
+import { EditPermissionProvider } from "@/components/auth/edit-permission-context";
 import {
   getTodayJelenletek,
   recordAbszenciaNow,
@@ -14,8 +17,15 @@ import {
 } from "@/lib/jelenlet/actions";
 import type { JelenletSession } from "@/lib/jelenlet/shared";
 import { FeladatokMobilCsempe } from "@/components/erkezes/feladatok-mobil-csempe";
+import { getSiteSnapshot } from "@/lib/keszlet/actions";
+import { MovementForm } from "@/components/keszlet/movement-form";
+import { InventoryDialog } from "@/components/keszlet/inventory-dialog";
 
-type Screen = "home" | "jelenlet" | "feladatok";
+type Screen = "home" | "jelenlet" | "feladatok" | "keszlet";
+type ModulePermission = { view: boolean; edit: boolean };
+
+const KESZLET_SITES = ["Szakoly", "Balkány"] as const;
+type KeszletSite = (typeof KESZLET_SITES)[number];
 
 function Header({
   employeeName,
@@ -56,9 +66,11 @@ function Header({
 
 function HomeScreen({
   employeeName,
+  showKeszlet,
   onSelect,
 }: {
   employeeName: string;
+  showKeszlet: boolean;
   onSelect: (screen: Screen) => void;
 }) {
   return (
@@ -81,6 +93,16 @@ function HomeScreen({
           <ClipboardList className="h-7 w-7" />
           <span className="text-base font-semibold">Feladatok</span>
         </button>
+        {showKeszlet && (
+          <button
+            type="button"
+            onClick={() => onSelect("keszlet")}
+            className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-border bg-card py-10 transition-colors active:bg-muted"
+          >
+            <Package className="h-7 w-7" />
+            <span className="text-base font-semibold">Készlet</span>
+          </button>
+        )}
       </div>
     </div>
   );
@@ -199,12 +221,110 @@ function FeladatokScreen({
   );
 }
 
+// Leltár + Be/Ki mozgás rögzítés Szakolyra és Balkányra — a meglévő
+// MovementForm/InventoryDialog komponensek adják a logikát (allowTransfer
+// kikapcsolva, mert ezen a korlátozott mobil nézeten csak Be/Ki kell, nem
+// telephelyek közti mozgatás), a szerkesztési jogot a "keszlet_sajat" modul
+// dönti el (NEM a teljes "keszlet" modulét, hogy ez a dolgozó ne kapjon
+// hozzáférést a desktop Készlet oldalhoz/Nyíregyházához is).
+function KeszletScreen({
+  employeeName,
+  canEdit,
+  onBack,
+}: {
+  employeeName: string;
+  canEdit: boolean;
+  onBack: () => void;
+}) {
+  const [site, setSite] = useState<KeszletSite>("Szakoly");
+  const [loading, setLoading] = useState(true);
+  const [types, setTypes] = useState<string[]>([]);
+  const [stock, setStock] = useState<Record<string, number>>({});
+  const [inventoryOpen, setInventoryOpen] = useState(false);
+
+  const load = useCallback(async () => {
+    const snap = await getSiteSnapshot(site);
+    setTypes(snap.types);
+    setStock(snap.stock);
+  }, [site]);
+
+  useEffect(() => {
+    setLoading(true);
+    load().finally(() => setLoading(false));
+  }, [load]);
+
+  return (
+    <div className="mx-auto flex min-h-screen max-w-md flex-col gap-4 bg-muted/40 px-4 py-4">
+      <Header employeeName={employeeName} onBack={onBack} />
+
+      <div className="grid grid-cols-2 gap-2">
+        {KESZLET_SITES.map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => setSite(s)}
+            className={cn(
+              "rounded-xl border-2 py-3 text-sm font-semibold transition-colors",
+              site === s
+                ? "border-primary bg-accent text-accent-foreground"
+                : "border-border text-muted-foreground hover:bg-muted"
+            )}
+          >
+            {s}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <p className="text-sm text-muted-foreground">Betöltés…</p>
+      ) : (
+        <EditPermissionProvider canEdit={canEdit}>
+          <MovementForm site={site} types={types} otherSites={[]} onRecorded={load} allowTransfer={false} />
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-sm">Jelenlegi készlet — {site}</CardTitle>
+              {canEdit && (
+                <Button size="sm" variant="outline" onClick={() => setInventoryOpen(true)}>
+                  Leltár indítása
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent className="flex flex-col gap-2">
+              {Object.entries(stock).map(([t, q]) => (
+                <div
+                  key={t}
+                  className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm"
+                >
+                  <span>{t}</span>
+                  <span className="font-semibold tabular-nums">{q}</span>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+
+          <InventoryDialog
+            site={site}
+            types={types}
+            currentStock={stock}
+            open={inventoryOpen}
+            onOpenChange={setInventoryOpen}
+            onRecorded={load}
+          />
+        </EditPermissionProvider>
+      )}
+    </div>
+  );
+}
+
 export function ErkezesSajatView({
   employeeId,
   employeeName,
+  keszletPermission,
 }: {
   employeeId: string;
   employeeName: string;
+  keszletPermission: ModulePermission;
 }) {
   const [screen, setScreen] = useState<Screen>("home");
 
@@ -220,5 +340,20 @@ export function ErkezesSajatView({
   if (screen === "feladatok") {
     return <FeladatokScreen employeeName={employeeName} onBack={() => setScreen("home")} />;
   }
-  return <HomeScreen employeeName={employeeName} onSelect={setScreen} />;
+  if (screen === "keszlet" && keszletPermission.view) {
+    return (
+      <KeszletScreen
+        employeeName={employeeName}
+        canEdit={keszletPermission.edit}
+        onBack={() => setScreen("home")}
+      />
+    );
+  }
+  return (
+    <HomeScreen
+      employeeName={employeeName}
+      showKeszlet={keszletPermission.view}
+      onSelect={setScreen}
+    />
+  );
 }

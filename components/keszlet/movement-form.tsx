@@ -21,6 +21,12 @@ import { useCanEdit } from "@/components/auth/edit-permission-context";
 
 type Sor = { key: number; type: string; qty: string };
 
+const DIRECTION_OPTIONS: readonly [Direction, string][] = [
+  ["be", "Beérkezés"],
+  ["ki", "Kiszállítás"],
+  ["mozgatas", "Telephelyek közti mozgatás"],
+];
+
 let nextKey = 1;
 function ujSor(type: string): Sor {
   return { key: nextKey++, type, qty: "" };
@@ -38,11 +44,14 @@ export function MovementForm({
   types,
   otherSites,
   onRecorded,
+  allowTransfer = true,
 }: {
   site: string;
   types: string[];
   otherSites: string[];
   onRecorded: () => void | Promise<void>;
+  /** Korlátozott (mobil) nézeteken kikapcsolható, ha csak Be/Ki rögzítés kell. */
+  allowTransfer?: boolean;
 }) {
   const canEdit = useCanEdit();
   const [direction, setDirection] = useState<Direction>("be");
@@ -136,28 +145,24 @@ export function MovementForm({
         <CardTitle className="text-sm">Mozgás rögzítése</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid grid-cols-3 gap-2">
-          {(
-            [
-              ["be", "Beérkezés"],
-              ["ki", "Kiszállítás"],
-              ["mozgatas", "Telephelyek közti mozgatás"],
-            ] as const
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setDirection(value)}
-              className={cn(
-                "rounded-md border px-2 py-2 text-xs font-medium transition-colors",
-                direction === value
-                  ? "border-primary bg-accent text-accent-foreground"
-                  : "border-border text-muted-foreground hover:bg-muted"
-              )}
-            >
-              {label}
-            </button>
-          ))}
+        <div className={cn("grid gap-2", allowTransfer ? "grid-cols-3" : "grid-cols-2")}>
+          {DIRECTION_OPTIONS.filter(([value]) => allowTransfer || value !== "mozgatas").map(
+            ([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setDirection(value)}
+                className={cn(
+                  "rounded-md border px-2 py-2 text-xs font-medium transition-colors",
+                  direction === value
+                    ? "border-primary bg-accent text-accent-foreground"
+                    : "border-border text-muted-foreground hover:bg-muted"
+                )}
+              >
+                {label}
+              </button>
+            )
+          )}
         </div>
 
         <div className="space-y-2">
