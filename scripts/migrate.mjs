@@ -92,6 +92,7 @@ async function main() {
   await applyPostazasiCimUpdates(pool, dbDir);
   await resetSzamlaRosszTotalosszMezok(pool);
   await applySzamlaFizetveImport(pool, dbDir);
+  await backfillMozgatasBe(pool);
   await seedAlkalmazottakOnce(pool);
   await seedJelenletAktivOnce(pool);
 
@@ -268,6 +269,33 @@ async function resetSzamlaRosszTotalosszMezok(pool) {
   await pool.query(`update szamlak_poll_allapot set utolso_sorszam = 0 where id = 1`);
   await pool.query(`insert into alkalmazott_javitasok (kod) values ($1)`, [JAVITAS_KOD]);
   console.log("[migrate] szamla javítás alkalmazva: cache törölve, újra fog épülni a helyes mezőkkel.");
+}
+
+// Egyszeri javítás (2026-09-08): a Készlet modul "Telephelyek közti mozgatás"
+// funkciója eddig csak a FORRÁS telepen vont le mennyiséget — a cél telepen
+// soha nem íródott jóvá semmi, tehát minden eddigi mozgatás a rendszerből
+// "eltűnt" a cél oldalon (pl. ma Nyíregyházáról Szakolyra átvitt H1 raklap és
+// más típusok). A lib/keszlet/actions.ts recordMovement mostantól mindkét
+// oldalra rögzít (lásd "mozgatas_be" irány), ez a lépés pedig egyszer,
+// visszamenőleg pótolja a hiányzó jóváírásokat minden korábban rögzített
+// "mozgatas" sorhoz, az eredeti időbélyeggel — így a jelenlegi készletek is
+// helyesbülnek, nem csak az ezután rögzített mozgatások.
+async function backfillMozgatasBe(pool) {
+  const JAVITAS_KOD = "keszlet-mozgatas-be-backfill-2026-09-08";
+  const { rows } = await pool.query(
+    `select 1 from alkalmazott_javitasok where kod = $1`,
+    [JAVITAS_KOD]
+  );
+  if (rows.length > 0) return;
+
+  const { rowCount } = await pool.query(
+    `insert into keszlet_movements (site_id, type_id, direction, qty, target_site_id, created_at, created_by)
+     select m.target_site_id, m.type_id, 'mozgatas_be', m.qty, m.site_id, m.created_at, m.created_by
+     from keszlet_movements m
+     where m.direction = 'mozgatas' and m.target_site_id is not null`
+  );
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1)`, [JAVITAS_KOD]);
+  console.log(`[migrate] mozgatás-jóváírás pótolva: ${rowCount} korábbi telephelyek közti mozgatáshoz.`);
 }
 
 // Fuvarozás — Kapcsolatok: minden induláskor lefut, biztonságosan

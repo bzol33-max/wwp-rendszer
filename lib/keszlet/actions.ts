@@ -4,7 +4,10 @@ import { query } from "@/lib/db";
 
 const TIME_FMT = "mon. DD HH24:MI";
 
-export type Direction = "be" | "ki" | "mozgatas";
+// "mozgatas_be" sosem felhasználó által választott irány (a Mozgás
+// rögzítése kártyán nem is jelenik meg) — ez a telephelyek közti
+// mozgatás cél oldali, rendszer által generált párja, ld. recordMovement.
+export type Direction = "be" | "ki" | "mozgatas" | "mozgatas_be";
 
 export type MovementRow = {
   id: string;
@@ -36,7 +39,7 @@ export async function getStock(site: string): Promise<Record<string, number>> {
   const rows = await query<{ name: string; qty: string }>(
     `select t.name,
        coalesce(sum(case
-         when m.direction = 'be' then m.qty
+         when m.direction in ('be','mozgatas_be') then m.qty
          when m.direction in ('ki','mozgatas') then -m.qty
          else 0
        end), 0) as qty
@@ -105,6 +108,13 @@ export async function addMovement(input: {
 // rögzítése kártya minden telephelyen ezt hívja. Nyíregyházán a mozgásokat a
 // keszlet_events (Legutóbbi mozgások) listában is megjeleníti, hogy egy helyen
 // lásd a Csere/Szétválogatás mellett a sima Be/Ki/Mozgatás tételeket is.
+//
+// FONTOS (2026-09-08-i javítás): "mozgatas"-nál a régi kód csak a FORRÁS
+// telepen rögzített egy sort — a mennyiség levonódott onnan, de sehol nem
+// íródott jóvá a cél telepen, tehát ténylegesen eltűnt a rendszerből. Most
+// egy mozgatás mindig KÉT mozgás-sort ír: a forrásnál "mozgatas" (levonás),
+// a célnál "mozgatas_be" (jóváírás) — lásd getStock, ahol mindkét irány
+// a megfelelő előjellel számít bele a készletbe.
 export async function recordMovement(input: {
   site: string;
   type: string;
@@ -115,6 +125,17 @@ export async function recordMovement(input: {
   createdBy?: string;
 }) {
   await addMovement(input);
+  if (input.direction === "mozgatas" && input.targetSite) {
+    await addMovement({
+      site: input.targetSite,
+      type: input.type,
+      direction: "mozgatas_be",
+      qty: input.qty,
+      targetSite: input.site,
+      createdBy: input.createdBy,
+    });
+  }
+
   if (input.site === "Nyíregyháza") {
     const details =
       input.direction === "mozgatas"
@@ -130,6 +151,17 @@ export async function recordMovement(input: {
       `insert into keszlet_events (site_id, kind, details, effect, created_by)
        values ((select id from sites where name = 'Nyíregyháza'), 'mozgas', $1, $2, $3)`,
       [details, effect, input.createdBy ?? null]
+    );
+  }
+  if (input.direction === "mozgatas" && input.targetSite === "Nyíregyháza") {
+    await query(
+      `insert into keszlet_events (site_id, kind, details, effect, created_by)
+       values ((select id from sites where name = 'Nyíregyháza'), 'mozgas', $1, $2, $3)`,
+      [
+        `${input.qty} db ${input.type} érkezett innen: ${input.site}`,
+        `${input.type} +${input.qty}`,
+        input.createdBy ?? null,
+      ]
     );
   }
 }
