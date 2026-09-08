@@ -15,10 +15,12 @@ import {
 import { InventoryDialog } from "@/components/keszlet/inventory-dialog";
 import { MovementForm } from "@/components/keszlet/movement-form";
 import { VegyesSplitRow } from "@/components/keszlet/vegyes-split-row";
+import { X } from "lucide-react";
 import { toast } from "sonner";
 import {
   getNyiregyhazaFoSnapshot,
   recordSzetvalogatas,
+  deleteMovementEvent,
   type EventRow,
 } from "@/lib/keszlet/actions";
 import { getCurrentUser } from "@/lib/current-user";
@@ -68,6 +70,16 @@ export function NyiregyhazaFoTab() {
       toast.success("Szétválogatás rögzítve.");
     } catch {
       toast.error("Nem sikerült rögzíteni.");
+    }
+  }
+
+  async function handleDeleteMovement(id: string) {
+    try {
+      await deleteMovementEvent(id);
+      await load();
+      toast.success("Mozgás törölve.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Nem sikerült törölni.");
     }
   }
 
@@ -135,6 +147,7 @@ export function NyiregyhazaFoTab() {
                 <TableHead>Részletek</TableHead>
                 <TableHead>Hatás</TableHead>
                 <TableHead>Ki</TableHead>
+                {canEdit && <TableHead className="w-8" />}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -147,6 +160,20 @@ export function NyiregyhazaFoTab() {
                   <TableCell>{e.details}</TableCell>
                   <TableCell className="text-muted-foreground">{e.effect}</TableCell>
                   <TableCell className="text-muted-foreground">{e.created_by ?? "—"}</TableCell>
+                  {canEdit && (
+                    <TableCell>
+                      {e.kind === "mozgas" && (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteMovement(e.id)}
+                          title="Törlés (hibás rögzítés)"
+                          className="text-destructive/70 hover:text-destructive"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>

@@ -31,10 +31,15 @@ export function AppShell({
   const userName = useCurrentUserName();
   const [moreOpen, setMoreOpen] = useState(false);
 
-  // A bejelentkezési oldalnak, a mobil összefoglalónak és a saját érkezés
-  // nézetnek nincs (asztali méretre tervezett) oldalsávja — mindkét
-  // utóbbi saját, könnyű fejlécet rajzol.
-  if (pathname === "/login" || pathname === "/mobil" || pathname === "/erkezes") {
+  // A bejelentkezési oldalnak és az önálló, korlátozott mobil nézeteknek
+  // (mobil összefoglaló, posta, saját érkezés) nincs (asztali méretre
+  // tervezett) oldalsávja — utóbbiak saját, könnyű fejlécet rajzolnak.
+  if (
+    pathname === "/login" ||
+    pathname === "/mobil" ||
+    pathname === "/posta" ||
+    pathname === "/erkezes"
+  ) {
     return <>{children}</>;
   }
 

@@ -13,6 +13,7 @@ export type ModuleKey =
   | "jarmuvek"
   | "beallitasok"
   | "mobil"
+  | "posta"
   | "erkezes";
 
 export const MODULES: { key: ModuleKey; label: string }[] = [
@@ -25,8 +26,12 @@ export const MODULES: { key: ModuleKey; label: string }[] = [
   { key: "jarmuvek", label: "Járművek" },
   { key: "beallitasok", label: "Beállítások (típusok és árak)" },
   { key: "mobil", label: "Mobil összefoglaló (önálló, korlátozott nézet)" },
+  { key: "posta", label: "Posta (bér fuvarok postázása — önálló, korlátozott nézet)" },
   { key: "erkezes", label: "Saját érkezés (dolgozói mobil nézet)" },
 ];
+
+/** Modulok, amik utólag, opt-in jelleggel lettek bevezetve — ld. resolvePermission. */
+const OPT_IN_MODULES: ModuleKey[] = ["mobil", "posta", "erkezes"];
 
 export type ModulePermission = { view: boolean; edit: boolean };
 export type Permissions = Partial<Record<ModuleKey, ModulePermission>>;
@@ -34,15 +39,16 @@ export type Permissions = Partial<Record<ModuleKey, ModulePermission>>;
 // Hiányzó modulbejegyzés = alapértelmezetten teljes hozzáférés. Az admin
 // felhasználó ettől függetlenül mindig mindent lát/szerkeszthet.
 //
-// A "mobil" és "erkezes" modulok kivételek: ezek utólag bevezetett,
-// szándékosan opt-in jogok (ld. app/mobil/page.tsx, app/erkezes/page.tsx),
-// nem a többi modullal egyenrangú, eredettől fogva létező jogosultságok.
-// Ha a default-true szabályt rájuk is alkalmaznánk, minden, a modul
-// bevezetése ELŐTT létrehozott felhasználó (akinek a permissions JSON-ja
-// még nem tartalmazza a kulcsot) visszamenőleg megkapná ezt a jogot — a
-// mobil/saját nézeten keresztül pedig ez felülírná a Készlet/Fuvarozás
-// modulra szándékosan beállított tiltásukat is. Ezért itt hiányzó
-// bejegyzésnél false az alapértelmezés.
+// Az OPT_IN_MODULES tagjai (pl. "mobil", "posta", "erkezes") kivételek:
+// ezek utólag bevezetett, szándékosan opt-in jogok (ld. app/mobil/page.tsx,
+// app/posta/page.tsx, app/erkezes/page.tsx), nem a többi modullal
+// egyenrangú, eredettől fogva létező jogosultságok. Ha a default-true
+// szabályt rájuk is alkalmaznánk, minden, a modul bevezetése ELŐTT
+// létrehozott felhasználó (akinek a permissions JSON-ja még nem
+// tartalmazza az adott kulcsot) visszamenőleg megkapná ezt a jogot — az
+// önálló nézeteken keresztül pedig ez felülírná a teljes modulra
+// szándékosan beállított tiltásukat is. Ezért itt hiányzó bejegyzésnél
+// false az alapértelmezés.
 export function resolvePermission(
   role: string,
   permissions: Permissions | null | undefined,
@@ -50,7 +56,7 @@ export function resolvePermission(
 ): ModulePermission {
   if (role === "admin") return { view: true, edit: true };
   const p = permissions?.[module];
-  if (module === "mobil" || module === "erkezes") {
+  if (OPT_IN_MODULES.includes(module)) {
     return { view: p?.view ?? false, edit: p?.edit ?? false };
   }
   return { view: p?.view ?? true, edit: p?.edit ?? true };
