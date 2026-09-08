@@ -25,6 +25,7 @@ type UserRow = {
   role: string;
   active: boolean;
   permissions: Permissions;
+  employee_id: string | null;
 };
 
 export const verifySession = cache(async () => {
@@ -34,7 +35,8 @@ export const verifySession = cache(async () => {
   }
 
   const rows = await query<UserRow>(
-    `select id, username, name, role, active, permissions from users where id = $1`,
+    `select id, username, name, role, active, permissions, employee_id::text as employee_id
+     from users where id = $1`,
     [payload.userId]
   );
   const user = rows[0];
@@ -49,6 +51,7 @@ export const verifySession = cache(async () => {
     name: user.name,
     role: user.role,
     permissions: user.permissions,
+    employeeId: user.employee_id,
     can: (module: ModuleKey) => resolvePermission(user.role, user.permissions, module),
   };
 });

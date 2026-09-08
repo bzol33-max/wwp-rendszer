@@ -28,6 +28,14 @@ export type Feladat = {
 
 export type Site = { id: number; name: string };
 
+export type FeladatComment = {
+  id: string;
+  feladat_id: string;
+  author: string | null;
+  comment: string;
+  created_at: string;
+};
+
 // Sürgősség: 1 = piros/azonnali … 5 = zöld/ráér.
 export const URGENCY_LEVELS = [1, 2, 3, 4, 5] as const;
 

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { query } from "@/lib/db";
 import type {
   Feladat,
+  FeladatComment,
   JelenletEmployee,
   JelenletRow,
   RepeatFreq,
@@ -59,6 +60,31 @@ export async function saveJelenlet(input: {
     [input.employeeId, input.workDate, input.arrivalTime, input.departureTime]
   );
   revalidatePath("/jelenlet");
+  revalidatePath("/erkezes");
+}
+
+// Saját (mobil) nézet — egy koppintással rögzíti a jelenlegi időt
+// érkezésnek/távozásnak, dátum/idő beírása nélkül.
+export async function recordArrivalNow(employeeId: string) {
+  await query(
+    `insert into jelenletek (employee_id, work_date, arrival_time)
+     values ($1, current_date, localtime)
+     on conflict (employee_id, work_date) do update set arrival_time = excluded.arrival_time`,
+    [employeeId]
+  );
+  revalidatePath("/jelenlet");
+  revalidatePath("/erkezes");
+}
+
+export async function recordDepartureNow(employeeId: string) {
+  await query(
+    `insert into jelenletek (employee_id, work_date, departure_time)
+     values ($1, current_date, localtime)
+     on conflict (employee_id, work_date) do update set departure_time = excluded.departure_time`,
+    [employeeId]
+  );
+  revalidatePath("/jelenlet");
+  revalidatePath("/erkezes");
 }
 
 // --- Feladatok (üzenőfal) ---
@@ -104,14 +130,43 @@ export async function createFeladat(input: {
     ]
   );
   revalidatePath("/jelenlet");
+  revalidatePath("/erkezes");
 }
 
 export async function toggleFeladatDone(id: string, done: boolean) {
   await query(`update feladatok set done = $2 where id = $1`, [id, done]);
   revalidatePath("/jelenlet");
+  revalidatePath("/erkezes");
 }
 
 export async function deleteFeladat(id: string) {
   await query(`delete from feladatok where id = $1`, [id]);
   revalidatePath("/jelenlet");
+  revalidatePath("/erkezes");
+}
+
+export async function getFeladatComments(feladatId: string): Promise<FeladatComment[]> {
+  return query<FeladatComment>(
+    `select id::text, feladat_id::text, author, comment,
+       to_char(created_at, 'YYYY-MM-DD HH24:MI') as created_at
+     from feladat_megjegyzesek
+     where feladat_id = $1
+     order by created_at asc, id asc`,
+    [feladatId]
+  );
+}
+
+export async function addFeladatComment(input: {
+  feladatId: string;
+  author?: string;
+  comment: string;
+}) {
+  const comment = input.comment.trim();
+  if (!comment) throw new Error("A megjegyzés nem lehet üres.");
+  await query(
+    `insert into feladat_megjegyzesek (feladat_id, author, comment) values ($1, $2, $3)`,
+    [input.feladatId, input.author ?? null, comment]
+  );
+  revalidatePath("/jelenlet");
+  revalidatePath("/erkezes");
 }
