@@ -303,7 +303,7 @@ async function resetSzamlaRosszTotalosszMezok(pool) {
 
   await pool.query(`delete from szamla`);
   await pool.query(`delete from szamlak_poll_pending`);
-  await pool.query(`update szamlak_poll_allapot set utolso_sorszam = 0 where id = 1`);
+  await pool.query(`update szamlak_poll_allapot set utolso_sorszam = 0`);
   await pool.query(`insert into alkalmazott_javitasok (kod) values ($1)`, [JAVITAS_KOD]);
   console.log("[migrate] szamla javítás alkalmazva: cache törölve, újra fog épülni a helyes mezőkkel.");
 }
