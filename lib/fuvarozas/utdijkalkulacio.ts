@@ -157,6 +157,20 @@ type RawTariff = {
   total: number;
 };
 
+/**
+ * A route-planner válasz vonalgeometriája — nincs hivatalos dokumentáció
+ * arról, pontosan melyik mezőnéven és milyen alakban érkezik (GeoJSON
+ * LineString, nyers [lon,lat] koordinátatömb, vagy kódolt polyline-string
+ * is elképzelhető egy ilyen, Vuex store-ból visszafejtett API-nál) — az
+ * extractRouteGeometry ezért több lehetséges alakot is megpróbál értelmezni.
+ */
+type RawGeometry =
+  | { type?: string; coordinates?: unknown }
+  | [number, number][]
+  | string
+  | null
+  | undefined;
+
 type RawRoute = {
   distanceMeter: number;
   durationSecond: number;
@@ -164,6 +178,11 @@ type RawRoute = {
   tariff?: RawTariff;
   paidHighwayLength?: number;
   paidMotorwayLength?: number;
+  geometry?: RawGeometry;
+  path?: RawGeometry;
+  route?: RawGeometry;
+  overviewGeometry?: RawGeometry;
+  polyline?: RawGeometry;
 };
 
 export type TollRoute = {
@@ -176,7 +195,99 @@ export type TollRoute = {
     external: number;
     grossTotal: number;
   } | null;
+  /**
+   * A leggyorsabb útvonal vonalgeometriája, [lon, lat] pontok sorozataként
+   * (ugyanaz a sorrend, mint a fuzzySearch koordinátáknál) — a térképes
+   * megjelenítéshez. `null`, ha a kalkulátor válaszából nem sikerült
+   * kinyerni (ekkor a térkép csak az állomások közti egyenes vonalat tudja
+   * mutatni, a tényleges útvonal helyett).
+   */
+  geometryLonLat: [number, number][] | null;
 };
+
+/** Szabványos (Google-féle) kódolt polyline dekódolása [lat, lon] pontokra. */
+function decodePolyline(encoded: string): [number, number][] | null {
+  const points: [number, number][] = [];
+  let index = 0;
+  let lat = 0;
+  let lon = 0;
+  const len = encoded.length;
+
+  try {
+    while (index < len) {
+      let shift = 0;
+      let result = 0;
+      let b: number;
+      do {
+        b = encoded.charCodeAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      lat += result & 1 ? ~(result >> 1) : result >> 1;
+
+      shift = 0;
+      result = 0;
+      do {
+        b = encoded.charCodeAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      lon += result & 1 ? ~(result >> 1) : result >> 1;
+
+      points.push([lat / 1e5, lon / 1e5]);
+    }
+  } catch {
+    return null;
+  }
+  return points.length > 1 ? points : null;
+}
+
+function isLonLatPair(v: unknown): v is [number, number] {
+  return (
+    Array.isArray(v) &&
+    v.length >= 2 &&
+    typeof v[0] === "number" &&
+    typeof v[1] === "number" &&
+    Number.isFinite(v[0]) &&
+    Number.isFinite(v[1])
+  );
+}
+
+/** Egy geometria-jelölt normalizálása [lon, lat] pontsorozattá, vagy `null`, ha az alakja nem ismerhető fel. */
+function normalizeGeometry(raw: RawGeometry): [number, number][] | null {
+  if (!raw) return null;
+
+  if (typeof raw === "string") {
+    const decoded = decodePolyline(raw);
+    // A kódolt polyline hagyományosan [lat, lon] sorrendű — a belső [lon, lat]
+    // konvencióhoz igazítjuk.
+    return decoded ? decoded.map(([lat, lon]) => [lon, lat] as [number, number]) : null;
+  }
+
+  if (Array.isArray(raw)) {
+    return raw.every(isLonLatPair) && raw.length > 1 ? (raw as [number, number][]) : null;
+  }
+
+  if (typeof raw === "object" && Array.isArray(raw.coordinates)) {
+    const coords = raw.coordinates;
+    if (coords.every(isLonLatPair) && coords.length > 1) {
+      return coords as [number, number][];
+    }
+  }
+
+  return null;
+}
+
+function extractRouteGeometry(r: RawRoute): [number, number][] | null {
+  return (
+    normalizeGeometry(r.geometry) ??
+    normalizeGeometry(r.overviewGeometry) ??
+    normalizeGeometry(r.path) ??
+    normalizeGeometry(r.route) ??
+    normalizeGeometry(r.polyline) ??
+    null
+  );
+}
 
 /**
  * Csak a leggyorsabb útvonalat adja vissza (a többi opciót nem mutatjuk).
@@ -202,7 +313,11 @@ export async function calculateToll(params: TollCalcParams): Promise<TollRoute> 
       width: 0,
       length: 0,
       useFallback: true,
-      guidance: false,
+      // A "guidance" (útvonal-navigáció) bekapcsolása kell ahhoz, hogy a
+      // válasz a vonalgeometriát (route.geometry) is tartalmazza — enélkül
+      // csak a táv/idő/útdíj összegek jönnek vissza, térképi megjelenítésre
+      // alkalmas útvonalrajz nélkül.
+      guidance: true,
       ferry: true,
       motorway: true,
       waypoints: params.points.map((p) => [p.lon, p.lat]),
@@ -237,5 +352,6 @@ export async function calculateToll(params: TollCalcParams): Promise<TollRoute> 
           grossTotal: Math.round(r.tariff.total),
         }
       : null,
+    geometryLonLat: extractRouteGeometry(r),
   };
 }

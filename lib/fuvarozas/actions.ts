@@ -245,7 +245,7 @@ export async function searchAddressSuggestions(query: string): Promise<GeocodedA
 }
 
 export type TollCalcResult =
-  | { ok: true; stopLabels: string[]; route: TollRoute }
+  | { ok: true; stops: GeocodedAddress[]; route: TollRoute }
   | { ok: false; error: string };
 
 async function runTollCalc(stops: GeocodedAddress[]): Promise<TollCalcResult> {
@@ -254,7 +254,7 @@ async function runTollCalc(stops: GeocodedAddress[]): Promise<TollCalcResult> {
       points: stops.map((s) => ({ lon: s.lon, lat: s.lat })),
       ...FIXED_VEHICLE,
     });
-    return { ok: true, stopLabels: stops.map((s) => s.label), route };
+    return { ok: true, stops, route };
   } catch (err) {
     const message =
       err instanceof TollCalcError
