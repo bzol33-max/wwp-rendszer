@@ -14,7 +14,8 @@ export type ModuleKey =
   | "beallitasok"
   | "mobil"
   | "posta"
-  | "erkezes";
+  | "erkezes"
+  | "keszlet_sajat";
 
 export const MODULES: { key: ModuleKey; label: string }[] = [
   { key: "info", label: "Info (kezdőlap)" },
@@ -28,10 +29,14 @@ export const MODULES: { key: ModuleKey; label: string }[] = [
   { key: "mobil", label: "Mobil összefoglaló (önálló, korlátozott nézet)" },
   { key: "posta", label: "Posta (bér fuvarok postázása — önálló, korlátozott nézet)" },
   { key: "erkezes", label: "Saját érkezés (dolgozói mobil nézet)" },
+  {
+    key: "keszlet_sajat",
+    label: "Saját készlet (Szakoly/Balkány — dolgozói mobil nézet, az /erkezes Készlet csempéje)",
+  },
 ];
 
 /** Modulok, amik utólag, opt-in jelleggel lettek bevezetve — ld. resolvePermission. */
-const OPT_IN_MODULES: ModuleKey[] = ["mobil", "posta", "erkezes"];
+const OPT_IN_MODULES: ModuleKey[] = ["mobil", "posta", "erkezes", "keszlet_sajat"];
 
 export type ModulePermission = { view: boolean; edit: boolean };
 export type Permissions = Partial<Record<ModuleKey, ModulePermission>>;

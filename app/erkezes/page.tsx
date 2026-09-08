@@ -15,5 +15,11 @@ export default async function ErkezesPage() {
     );
   }
 
-  return <ErkezesSajatView employeeId={session.employeeId} employeeName={session.name} />;
+  return (
+    <ErkezesSajatView
+      employeeId={session.employeeId}
+      employeeName={session.name}
+      keszletPermission={session.can("keszlet_sajat")}
+    />
+  );
 }
