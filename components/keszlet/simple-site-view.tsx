@@ -158,12 +158,17 @@ export function SimpleSiteView({ site }: { site: Site }) {
                     {m.direction === "mozgatas" && (
                       <Badge className="bg-warning/15 text-warning hover:bg-warning/15">Mozgatás</Badge>
                     )}
+                    {m.direction === "mozgatas_be" && (
+                      <Badge className="bg-success/15 text-success hover:bg-success/15">Bejövő mozgatás</Badge>
+                    )}
                   </TableCell>
                   <TableCell>
-                    {m.direction === "mozgatas" ? `→ ${m.target_site}` : m.partner}
+                    {m.direction === "mozgatas" && `→ ${m.target_site}`}
+                    {m.direction === "mozgatas_be" && `← ${m.target_site}`}
+                    {m.direction !== "mozgatas" && m.direction !== "mozgatas_be" && m.partner}
                   </TableCell>
                   <TableCell className="text-right font-medium tabular-nums">
-                    {m.direction === "be" ? "+" : "−"}
+                    {m.direction === "be" || m.direction === "mozgatas_be" ? "+" : "−"}
                     {m.qty}
                   </TableCell>
                   <TableCell className="text-muted-foreground">{m.created_by ?? "—"}</TableCell>

@@ -99,6 +99,17 @@ create table if not exists keszlet_movements (
 
 create index if not exists idx_keszlet_movements_site on keszlet_movements (site_id, type_id);
 
+-- Utólagos bővítés (2026-09-08): a "mozgatas" korábban csak a forrás telep
+-- készletéből vonta le a mennyiséget, a cél telepen semmi nem történt — a
+-- mennyiség egyszerűen eltűnt. A "mozgatas_be" a mozgatás célnál keletkező
+-- párja (lásd lib/keszlet/actions.ts recordMovement): ugyanaz a mozgatás
+-- egyszerre két sorral kerül rögzítésre — a forrásnál "mozgatas" (levonás),
+-- a célnál "mozgatas_be" (jóváírás), a target_site_id mindkét soron a
+-- másik telepre mutat.
+alter table keszlet_movements drop constraint if exists keszlet_movements_direction_check;
+alter table keszlet_movements add constraint keszlet_movements_direction_check
+  check (direction in ('be', 'ki', 'mozgatas', 'mozgatas_be'));
+
 -- Nyíregyháza Havi fül: készpénzes felvásárlás.
 create table if not exists nyiregyhaza_purchases (
   id          bigserial primary key,
