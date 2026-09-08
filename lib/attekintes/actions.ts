@@ -1,0 +1,243 @@
+"use server";
+
+// Az Áttekintés (/attekintes) csempés, vezetői összefoglaló nézet
+// lekérdezései. Szándékosan nem hoz létre új adatforrást — mindenhol a
+// meglévő modulok (Készlet/Nyíregyháza, Számlák, Fuvarozás) már meglévő
+// tábláira és akcióira épít, hogy ugyanazt az adatot mutassa, mint a teljes
+// modulok, csak tömörebben, mobilra optimalizálva.
+
+import { query } from "@/lib/db";
+import { getFleetPositions } from "@/lib/fuvarozas/actions";
+import { getFuvarok } from "@/lib/fuvarozas/megbizasok";
+import { SAJAT_JARMUVEK, resolveJarmu, findJarmuByPlate, jarmuLabel, type SajatJarmu } from "@/lib/fuvarozas/vehicles";
+import { getOsszesLejartSzamla } from "@/lib/szamlak/actions";
+import type { SzamlaRow } from "@/lib/szamlak/szamla-constants";
+import type { FuvarRow } from "@/lib/fuvarozas/fuvar-constants";
+
+// ---------------------------------------------------------------------------
+// Felvásárlás csempe
+// ---------------------------------------------------------------------------
+
+const FELVASARLAS_TIPUSOK = ["EUR világos", "EUR szürke", "H1 raklap", "Gitterbox"] as const;
+
+export type FelvasarlasOsszefoglalo = {
+  eurVilagosMa: number;
+  eurSzurkeMa: number;
+  h1Ma: number;
+  gitterboxMa: number;
+  kassza: number;
+};
+
+/** A csempén megjelenő, mai (ma rögzített) mennyiségek típusonként, plusz a kassza egyenleg. */
+export async function getFelvasarlasOsszefoglalo(): Promise<FelvasarlasOsszefoglalo> {
+  const [typeRows, kasszaRows] = await Promise.all([
+    query<{ type: string; daily_qty: string }>(
+      `select t.name as type,
+         coalesce(sum(p.qty) filter (where p.created_at::date = current_date), 0) as daily_qty
+       from pallet_types t
+       left join nyiregyhaza_purchases p on p.type_id = t.id
+       where t.name = any($1::text[])
+       group by t.name`,
+      [FELVASARLAS_TIPUSOK]
+    ),
+    query<{ total: string }>(`select coalesce(sum(amount), 0) as total from kassza_movements`),
+  ]);
+
+  const byType = Object.fromEntries(typeRows.map((r) => [r.type, Number(r.daily_qty)]));
+
+  return {
+    eurVilagosMa: byType["EUR világos"] ?? 0,
+    eurSzurkeMa: byType["EUR szürke"] ?? 0,
+    h1Ma: byType["H1 raklap"] ?? 0,
+    gitterboxMa: byType["Gitterbox"] ?? 0,
+    kassza: Number(kasszaRows[0]?.total ?? 0),
+  };
+}
+
+export type FelvasarlasTetel = {
+  id: string;
+  tipus: string;
+  qty: number;
+  unitPrice: number;
+  total: number;
+  seller: string;
+  paymentMethod: string;
+  createdAt: string;
+};
+
+export type KasszaKiadasTetel = {
+  id: string;
+  description: string;
+  amount: number;
+  createdAt: string;
+};
+
+export type FelvasarlasReszletek = {
+  /** A mai nap ÖSSZES típusban rögzített felvásárlása, a legutóbbi elöl. */
+  vasarlasok: FelvasarlasTetel[];
+  /** Mai kassza-kiadás, ami NEM felvásárláshoz kötött (pl. üzemanyag, egyéb költség). */
+  kiadasok: KasszaKiadasTetel[];
+};
+
+/** A "Felvásárlás" csempére kattintva: a teljes napi felvásárlás (minden típus) és a mai kiadások. */
+export async function getFelvasarlasReszletek(): Promise<FelvasarlasReszletek> {
+  const [vasarlasRows, kiadasRows] = await Promise.all([
+    query<{
+      id: string;
+      tipus: string;
+      qty: number;
+      unit_price: number;
+      total: number;
+      seller: string;
+      payment_method: string;
+      created_at: string;
+    }>(
+      `select p.id::text, t.name as tipus, p.qty, p.unit_price, p.total, p.seller,
+         p.payment_method, p.created_at::text
+       from nyiregyhaza_purchases p
+       join pallet_types t on t.id = p.type_id
+       where p.created_at::date = current_date
+       order by p.created_at desc
+       limit 200`
+    ),
+    query<{ id: string; description: string; amount: number; created_at: string }>(
+      `select id::text, description, amount, created_at::text
+       from kassza_movements
+       where created_at::date = current_date and purchase_id is null and amount < 0
+       order by created_at desc
+       limit 100`
+    ),
+  ]);
+
+  return {
+    vasarlasok: vasarlasRows.map((r) => ({
+      id: r.id,
+      tipus: r.tipus,
+      qty: r.qty,
+      unitPrice: r.unit_price,
+      total: r.total,
+      seller: r.seller,
+      paymentMethod: r.payment_method,
+      createdAt: r.created_at,
+    })),
+    kiadasok: kiadasRows.map((r) => ({
+      id: r.id,
+      description: r.description,
+      amount: r.amount,
+      createdAt: r.created_at,
+    })),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Számlák csempe
+// ---------------------------------------------------------------------------
+
+/** A "Számlák" csempén megjelenő szám: hány lejárt esedékességű, nyitott számla van összesen. */
+export async function getLejartSzamlaSzam(): Promise<number> {
+  const rows = await getOsszesLejartSzamla();
+  return rows.length;
+}
+
+/** A "Számlák" csempére kattintva: az összes lejárt számla listája, pipálható. */
+export async function getLejartSzamlak(): Promise<SzamlaRow[]> {
+  return getOsszesLejartSzamla();
+}
+
+// ---------------------------------------------------------------------------
+// Fuvarozás csempe
+// ---------------------------------------------------------------------------
+
+export type JarmuPoziciSor = {
+  jarmu: SajatJarmu;
+  /** null, ha a jármű nincs Ecofleet-be kötve, vagy nem sikerült lekérni a pozícióját. */
+  cim: string | null;
+  sebesseg: number | null;
+  frissitve: string | null;
+};
+
+/** A "Fuvarozás" csempén: saját járművenként az utolsó ismert hely (cím) és sebesség. */
+export async function getJarmuPoziciok(): Promise<JarmuPoziciSor[]> {
+  const result = await getFleetPositions();
+  const positions = result.ok ? result.positions : [];
+
+  return SAJAT_JARMUVEK.map((jarmu) => {
+    const pos = positions.find((p) => findJarmuByPlate(p.plate) === jarmu);
+    return {
+      jarmu,
+      cim: pos?.cim ?? null,
+      sebesseg: pos?.speed ?? null,
+      frissitve: pos?.timestamp ?? null,
+    };
+  });
+}
+
+function jarmuMatch(jarmu: SajatJarmu, row: FuvarRow): boolean {
+  if (row.jarmu && resolveJarmu(row.jarmu) === jarmu) return true;
+  if (row.sofor && row.sofor.trim().toLowerCase() === jarmu.sofor.toLowerCase()) return true;
+  return false;
+}
+
+export type JarmuMegbizasSor = {
+  id: string;
+  // A UI-n megszokott (a DB "tipus" mezőjéhez képest fordított) címkézés —
+  // lásd lib/dashboard/actions.ts megjegyzését: DB tipus='ber' -> "Saját",
+  // DB tipus='sajat' -> "Bér".
+  cimke: "Saját" | "Bér";
+  date: string;
+  megrendelo: string | null;
+  felrako: string | null;
+  lerako: string;
+  statusz: string;
+};
+
+export type JarmuMegbizasCsoport = {
+  jarmu: SajatJarmu;
+  label: string;
+  megbizasok: JarmuMegbizasSor[];
+};
+
+/** A "Fuvarozás" csempére kattintva: saját járművenként a még nem lezárt megbízások, a legközelebbi elöl. */
+export async function getJarmuMegbizasok(): Promise<JarmuMegbizasCsoport[]> {
+  const [berTabRows, sajatTabRows] = await Promise.all([
+    getFuvarok("sajat"), // DB tipus='sajat' — UI-n "Bér fuvarok" fül
+    getFuvarok("ber"), // DB tipus='ber' — UI-n "Saját fuvarok" fül
+  ]);
+
+  const aktivBer = berTabRows.filter((r) => r.statusz !== "lezarva");
+  const aktivSajat = sajatTabRows.filter((r) => r.statusz !== "lezarva");
+
+  return SAJAT_JARMUVEK.map((jarmu) => {
+    const sajat: JarmuMegbizasSor[] = aktivSajat
+      .filter((row) => jarmuMatch(jarmu, row))
+      .map((row) => ({
+        id: row.id,
+        cimke: "Saját" as const,
+        date: row.date,
+        megrendelo: row.megrendelo,
+        felrako: row.felrako,
+        lerako: row.lerako,
+        statusz: row.statusz,
+      }));
+    const ber: JarmuMegbizasSor[] = aktivBer
+      .filter((row) => jarmuMatch(jarmu, row))
+      .map((row) => ({
+        id: row.id,
+        cimke: "Bér" as const,
+        date: row.date,
+        megrendelo: row.megrendelo,
+        felrako: row.felrako,
+        lerako: row.lerako,
+        statusz: row.statusz,
+      }));
+
+    // A getFuvarok() a legutóbb rögzített dátum szerint csökkenőben rendez —
+    // itt a "következő teendők" olvashatóbb, ha a régebbi (korábbi
+    // dátumú, tehát sürgősebb) tétel van elöl.
+    return {
+      jarmu,
+      label: jarmuLabel(jarmu),
+      megbizasok: [...sajat, ...ber].reverse(),
+    };
+  });
+}
