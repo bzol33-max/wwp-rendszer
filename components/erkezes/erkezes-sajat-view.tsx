@@ -1,14 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
-import { toast } from "sonner";
+import { useCallback, useEffect, useState } from "react";
 import { LogOut } from "lucide-react";
-import { Card, CardContent } from "@/components/ui/card";
+import { FeladatCommentsDialog } from "@/components/jelenlet/feladat-comments-dialog";
 import { logout } from "@/lib/auth/actions";
-import { getTodayJelenletek, recordArrivalNow, recordDepartureNow } from "@/lib/jelenlet/actions";
-import type { JelenletRow } from "@/lib/jelenlet/shared";
-import { FeladatokMobilCsempe } from "@/components/erkezes/feladatok-mobil-csempe";
+import { getSites, listFeladatok } from "@/lib/jelenlet/actions";
+import type { Feladat, Site } from "@/lib/jelenlet/shared";
+import { MaiErkezesTile } from "@/components/erkezes/mai-erkezes-tile";
+import { FeladatRogzitesTile } from "@/components/erkezes/feladat-rogzites-tile";
+import { HaviOsszesitoTile } from "@/components/erkezes/havi-osszesito-tile";
+import { TelephelyFeladatokTile } from "@/components/erkezes/telephely-feladatok-tile";
 
+// Elrendezés: felül 3, azonos méretű kis csempe (Mai érkezés, Feladat
+// rögzítése, Havi összesítő), alatta a három telephelyhez egy-egy nagy,
+// álló téglalap csempe az odaadott feladatokkal.
 export function ErkezesSajatView({
   employeeId,
   employeeName,
@@ -16,43 +21,23 @@ export function ErkezesSajatView({
   employeeId: string;
   employeeName: string;
 }) {
-  const [today, setToday] = useState<JelenletRow | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [pending, startTransition] = useTransition();
+  const [sites, setSites] = useState<Site[]>([]);
+  const [feladatok, setFeladatok] = useState<Feladat[]>([]);
+  const [loadingTasks, setLoadingTasks] = useState(true);
+  const [selected, setSelected] = useState<Feladat | null>(null);
 
-  const load = useCallback(async () => {
-    const rows = await getTodayJelenletek();
-    setToday(rows.find((r) => r.employee_id === employeeId) ?? null);
-  }, [employeeId]);
+  const loadTasks = useCallback(async () => {
+    const [siteRows, taskRows] = await Promise.all([getSites(), listFeladatok()]);
+    setSites(siteRows);
+    setFeladatok(taskRows);
+  }, []);
 
   useEffect(() => {
-    setLoading(true);
-    load().finally(() => setLoading(false));
-  }, [load]);
+    setLoadingTasks(true);
+    loadTasks().finally(() => setLoadingTasks(false));
+  }, [loadTasks]);
 
-  function markArrival() {
-    startTransition(async () => {
-      try {
-        await recordArrivalNow(employeeId);
-        await load();
-        toast.success("Érkezés rögzítve.");
-      } catch {
-        toast.error("Nem sikerült rögzíteni.");
-      }
-    });
-  }
-
-  function markDeparture() {
-    startTransition(async () => {
-      try {
-        await recordDepartureNow(employeeId);
-        await load();
-        toast.success("Távozás rögzítve.");
-      } catch {
-        toast.error("Nem sikerült rögzíteni.");
-      }
-    });
-  }
+  const openTasks = feladatok.filter((f) => !f.done);
 
   return (
     <div className="mx-auto flex min-h-screen max-w-md flex-col gap-4 bg-muted/40 px-4 py-4">
@@ -72,34 +57,34 @@ export function ErkezesSajatView({
         </form>
       </div>
 
-      <Card>
-        <CardContent className="grid grid-cols-2 gap-3 pt-4">
-          <button
-            type="button"
-            onClick={markArrival}
-            disabled={pending || loading}
-            className="flex flex-col items-center gap-1 rounded-xl border-2 border-success bg-success/10 py-6 text-success transition-colors active:bg-success/20 disabled:opacity-50"
-          >
-            <span className="text-base font-semibold">Érkezés</span>
-            <span className="text-xs">
-              {today?.arrival_time ? `Rögzítve: ${today.arrival_time}` : "Koppints"}
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={markDeparture}
-            disabled={pending || loading}
-            className="flex flex-col items-center gap-1 rounded-xl border-2 border-destructive bg-destructive/10 py-6 text-destructive transition-colors active:bg-destructive/20 disabled:opacity-50"
-          >
-            <span className="text-base font-semibold">Távozás</span>
-            <span className="text-xs">
-              {today?.departure_time ? `Rögzítve: ${today.departure_time}` : "Koppints"}
-            </span>
-          </button>
-        </CardContent>
-      </Card>
+      <div className="grid grid-cols-3 gap-2">
+        <MaiErkezesTile employeeId={employeeId} />
+        <FeladatRogzitesTile sites={sites} onCreated={loadTasks} />
+        <HaviOsszesitoTile employeeId={employeeId} />
+      </div>
 
-      <FeladatokMobilCsempe />
+      <div className="flex flex-col gap-3">
+        {loadingTasks ? (
+          <p className="text-sm text-muted-foreground">Betöltés…</p>
+        ) : (
+          sites.map((s) => (
+            <TelephelyFeladatokTile
+              key={s.id}
+              siteName={s.name}
+              feladatok={openTasks.filter((f) => f.site_id === s.id)}
+              onSelect={setSelected}
+            />
+          ))
+        )}
+      </div>
+
+      <FeladatCommentsDialog
+        feladat={selected}
+        open={selected !== null}
+        onOpenChange={(o) => !o && setSelected(null)}
+        onChanged={loadTasks}
+        showDoneToggle
+      />
     </div>
   );
 }

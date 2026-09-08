@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
+import { Check, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,50 +11,47 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { useCanEdit } from "@/components/auth/edit-permission-context";
 import { cn } from "@/lib/utils";
 import {
-  diffFromWorkday,
+  dayDiffFromWorkday,
   formatDiff,
+  summarizeByDay,
   todayIso,
   type JelenletEmployee,
-  type JelenletRow,
+  type JelenletSession,
 } from "@/lib/jelenlet/shared";
 import {
+  createJelenletSession,
+  deleteJelenletSession,
   getJelenletEmployees,
   getJelenletHistory,
   getTodayJelenletek,
-  saveJelenlet,
+  updateJelenletSession,
 } from "@/lib/jelenlet/actions";
 
-function EmployeeRow({
-  employee,
-  row,
+function SessionRow({
+  session,
   canEdit,
   onReload,
-  onOpenHistory,
 }: {
-  employee: JelenletEmployee;
-  row: JelenletRow | undefined;
+  session: JelenletSession;
   canEdit: boolean;
   onReload: () => void | Promise<void>;
-  onOpenHistory: () => void;
 }) {
-  const [arrival, setArrival] = useState(row?.arrival_time ?? "");
-  const [departure, setDeparture] = useState(row?.departure_time ?? "");
+  const [arrival, setArrival] = useState(session.arrival_time ?? "");
+  const [departure, setDeparture] = useState(session.departure_time ?? "");
   const [pending, startTransition] = useTransition();
 
   useEffect(() => {
-    setArrival(row?.arrival_time ?? "");
-    setDeparture(row?.departure_time ?? "");
-  }, [row?.arrival_time, row?.departure_time]);
+    setArrival(session.arrival_time ?? "");
+    setDeparture(session.departure_time ?? "");
+  }, [session.arrival_time, session.departure_time]);
 
   const dirty =
-    arrival !== (row?.arrival_time ?? "") || departure !== (row?.departure_time ?? "");
+    arrival !== (session.arrival_time ?? "") || departure !== (session.departure_time ?? "");
 
   function save() {
     startTransition(async () => {
       try {
-        await saveJelenlet({
-          employeeId: employee.id,
-          workDate: todayIso(),
+        await updateJelenletSession(session.id, {
           arrivalTime: arrival || null,
           departureTime: departure || null,
         });
@@ -65,40 +63,119 @@ function EmployeeRow({
     });
   }
 
+  function remove() {
+    startTransition(async () => {
+      await deleteJelenletSession(session.id);
+      await onReload();
+    });
+  }
+
+  return (
+    <div className="flex items-end gap-1.5">
+      <div className="flex-1 space-y-1">
+        <Label className="text-[11px] text-muted-foreground">Érkezés</Label>
+        <Input
+          type="time"
+          value={arrival}
+          disabled={!canEdit || pending}
+          onChange={(e) => setArrival(e.target.value)}
+          className="h-7"
+        />
+      </div>
+      <div className="flex-1 space-y-1">
+        <Label className="text-[11px] text-muted-foreground">Távozás</Label>
+        <Input
+          type="time"
+          value={departure}
+          disabled={!canEdit || pending}
+          onChange={(e) => setDeparture(e.target.value)}
+          className="h-7"
+        />
+      </div>
+      {canEdit && (
+        <div className="flex shrink-0 items-center gap-1">
+          {dirty && (
+            <Button size="icon-xs" onClick={save} disabled={pending}>
+              <Check />
+            </Button>
+          )}
+          <Button size="icon-xs" variant="ghost" disabled={pending} onClick={remove}>
+            <X />
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EmployeeBlock({
+  employee,
+  sessions,
+  canEdit,
+  onReload,
+  onOpenHistory,
+}: {
+  employee: JelenletEmployee;
+  sessions: JelenletSession[];
+  canEdit: boolean;
+  onReload: () => void | Promise<void>;
+  onOpenHistory: () => void;
+}) {
+  const [pending, startTransition] = useTransition();
+  const diff = dayDiffFromWorkday(sessions);
+
+  function addSession() {
+    startTransition(async () => {
+      await createJelenletSession({
+        employeeId: employee.id,
+        workDate: todayIso(),
+        arrivalTime: null,
+        departureTime: null,
+      });
+      await onReload();
+    });
+  }
+
   return (
     <div className="space-y-1.5 rounded-md border p-2.5">
-      <button
-        type="button"
-        onClick={onOpenHistory}
-        className="text-sm font-medium hover:underline"
-      >
-        {employee.name}
-      </button>
-      <div className="grid grid-cols-2 gap-2">
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Érkezés</Label>
-          <Input
-            type="time"
-            value={arrival}
-            disabled={!canEdit || pending}
-            onChange={(e) => setArrival(e.target.value)}
-            className="h-8"
-          />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Távozás</Label>
-          <Input
-            type="time"
-            value={departure}
-            disabled={!canEdit || pending}
-            onChange={(e) => setDeparture(e.target.value)}
-            className="h-8"
-          />
-        </div>
+      <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={onOpenHistory}
+          className="text-sm font-medium hover:underline"
+        >
+          {employee.name}
+        </button>
+        {diff !== null && (
+          <span
+            className={cn(
+              "text-xs font-semibold",
+              diff < 0 ? "text-destructive" : "text-success"
+            )}
+          >
+            {formatDiff(diff)}
+          </span>
+        )}
       </div>
-      {canEdit && dirty && (
-        <Button size="xs" onClick={save} disabled={pending}>
-          {pending ? "Mentés…" : "✓ mentés"}
+      <div className="space-y-1.5">
+        {sessions.length === 0 ? (
+          <p className="text-xs text-muted-foreground">Ma még nincs bejegyzés.</p>
+        ) : (
+          sessions.map((s) => (
+            <SessionRow key={s.id} session={s} canEdit={canEdit} onReload={onReload} />
+          ))
+        )}
+      </div>
+      {canEdit && (
+        <Button
+          size="xs"
+          variant="outline"
+          onClick={addSession}
+          disabled={pending}
+          className="w-full"
+        >
+          <Plus />
+          Új szakasz
         </Button>
       )}
     </div>
@@ -114,16 +191,18 @@ function HistoryDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const [rows, setRows] = useState<JelenletRow[]>([]);
+  const [sessions, setSessions] = useState<JelenletSession[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (!open || !employee) return;
     setLoading(true);
     getJelenletHistory(employee.id)
-      .then(setRows)
+      .then(setSessions)
       .finally(() => setLoading(false));
   }, [open, employee]);
+
+  const days = summarizeByDay(sessions);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -133,41 +212,33 @@ function HistoryDialog({
         </DialogHeader>
         {loading ? (
           <p className="text-sm text-muted-foreground">Betöltés…</p>
-        ) : rows.length === 0 ? (
+        ) : days.length === 0 ? (
           <p className="text-sm text-muted-foreground">Nincs még rögzített nap.</p>
         ) : (
-          <div className="max-h-80 overflow-y-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-xs text-muted-foreground">
-                  <th className="py-1 text-left font-medium">Dátum</th>
-                  <th className="py-1 text-left font-medium">Érkezés</th>
-                  <th className="py-1 text-left font-medium">Távozás</th>
-                  <th className="py-1 text-right font-medium">Eltérés (9 óra)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((r) => {
-                  const diff = diffFromWorkday(r.arrival_time, r.departure_time);
-                  return (
-                    <tr key={r.id} className="border-t">
-                      <td className="py-1.5">{r.work_date}</td>
-                      <td className="py-1.5">{r.arrival_time ?? "—"}</td>
-                      <td className="py-1.5">{r.departure_time ?? "—"}</td>
-                      <td
-                        className={cn(
-                          "py-1.5 text-right font-medium",
-                          diff !== null && diff < 0 && "text-destructive",
-                          diff !== null && diff >= 0 && "text-success"
-                        )}
-                      >
-                        {formatDiff(diff)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="max-h-80 space-y-2 overflow-y-auto">
+            {days.map((d) => (
+              <div key={d.date} className="rounded-md border p-2 text-xs">
+                <div className="mb-1 flex items-center justify-between font-medium">
+                  <span>{d.date}</span>
+                  <span
+                    className={cn(
+                      d.diffMinutes !== null && d.diffMinutes < 0
+                        ? "text-destructive"
+                        : "text-success"
+                    )}
+                  >
+                    {formatDiff(d.diffMinutes)}
+                  </span>
+                </div>
+                <div className="space-y-0.5 text-muted-foreground">
+                  {d.sessions.map((s) => (
+                    <div key={s.id}>
+                      {s.arrival_time ?? "—"} – {s.departure_time ?? "—"}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </DialogContent>
@@ -178,7 +249,7 @@ function HistoryDialog({
 export function ErkezesWidget() {
   const canEdit = useCanEdit();
   const [employees, setEmployees] = useState<JelenletEmployee[]>([]);
-  const [today, setToday] = useState<JelenletRow[]>([]);
+  const [today, setToday] = useState<JelenletSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [historyFor, setHistoryFor] = useState<JelenletEmployee | null>(null);
 
@@ -205,10 +276,10 @@ export function ErkezesWidget() {
           <p className="text-sm text-muted-foreground">Nincs kijelölt dolgozó.</p>
         ) : (
           employees.map((e) => (
-            <EmployeeRow
+            <EmployeeBlock
               key={e.id}
               employee={e}
-              row={today.find((r) => r.employee_id === e.id)}
+              sessions={today.filter((s) => s.employee_id === e.id)}
               canEdit={canEdit}
               onReload={load}
               onOpenHistory={() => setHistoryFor(e)}

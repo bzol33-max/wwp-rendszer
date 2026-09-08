@@ -506,10 +506,15 @@ create table if not exists jelenletek (
   work_date      date not null,
   arrival_time   time,
   departure_time time,
-  created_at     timestamptz not null default now(),
-  unique (employee_id, work_date)
+  created_at     timestamptz not null default now()
 );
 create index if not exists idx_jelenletek_employee_date on jelenletek (employee_id, work_date desc);
+
+-- (2026-09-08): egy napon belül TÖBBSZÖR is lehet érkezés/távozás (pl.
+-- hazamegy, majd visszajön kamiont pakolni) — egy sor egy munkaidő-
+-- szakaszt (session) jelent, nem a teljes napot, ezért a korábbi
+-- (employee_id, work_date) UNIQUE megkötés megszűnik.
+alter table jelenletek drop constraint if exists jelenletek_employee_id_work_date_key;
 
 -- Sürgősség: 1 = piros/azonnali … 5 = zöld/ráér.
 create table if not exists feladatok (
