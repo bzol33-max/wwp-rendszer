@@ -88,6 +88,16 @@ export function formatDiff(minutes: number | null): string {
   return `${sign}${h}:${String(m).padStart(2, "0")}`;
 }
 
+// FONTOS: NEM new Date().toISOString() — az mindig UTC-re konvertál, ami
+// éjfél körül (a böngésző helyi ideje szerinti 00:00 és a UTC-eltolódás
+// közötti sávban, pl. hajnal 1-2-ig nyáron) az ELŐZŐ napot adná vissza. A
+// getFullYear/getMonth/getDate a Date objektum böngésző szerinti HELYI
+// (a felhasználó gépén beállított, jellemzően Europe/Budapest) naptári
+// napját adja — ez a helyes "ma" egy dátum-mezőhöz.
 export function todayIso(): string {
-  return new Date().toISOString().slice(0, 10);
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }

@@ -13,6 +13,17 @@ import type {
 
 // --- Jelenlét (érkezés/távozás) ---
 
+// A Railway-konténer (és a hozzá tartozó Postgres session) alapértelmezett
+// időzónája UTC, nem Europe/Budapest — lásd lib/fuvarozas/idozona.ts
+// hasonló megjegyzését. A sima `current_date`/`localtime`/`now()` ezért a
+// szerver (UTC) faliórát adná vissza, ami nyáron 2, télen 1 órával eltér a
+// valós budapesti időtől, és éjfél körül akár a naptári napot is elcsúsztatja.
+// Minden itt rögzített/összehasonlított dátum-idő ezért explicit
+// `at time zone 'Europe/Budapest'` konverzióval számol, a szerver
+// időzóna-beállításától függetlenül.
+const BUDAPEST_NOW_DATE = `(now() at time zone 'Europe/Budapest')::date`;
+const BUDAPEST_NOW_TIME = `(now() at time zone 'Europe/Budapest')::time`;
+
 export async function getJelenletEmployees(): Promise<JelenletEmployee[]> {
   return query<JelenletEmployee>(
     `select id::text, name from alkalmazottak
@@ -27,7 +38,7 @@ export async function getTodayJelenletek(): Promise<JelenletRow[]> {
        to_char(arrival_time, 'HH24:MI') as arrival_time,
        to_char(departure_time, 'HH24:MI') as departure_time
      from jelenletek
-     where work_date = current_date`
+     where work_date = ${BUDAPEST_NOW_DATE}`
   );
 }
 
@@ -40,7 +51,7 @@ export async function getJelenletHistory(
        to_char(arrival_time, 'HH24:MI') as arrival_time,
        to_char(departure_time, 'HH24:MI') as departure_time
      from jelenletek
-     where employee_id = $1 and work_date >= current_date - $2::int
+     where employee_id = $1 and work_date >= ${BUDAPEST_NOW_DATE} - $2::int
      order by work_date desc`,
     [employeeId, days]
   );
@@ -68,7 +79,7 @@ export async function saveJelenlet(input: {
 export async function recordArrivalNow(employeeId: string) {
   await query(
     `insert into jelenletek (employee_id, work_date, arrival_time)
-     values ($1, current_date, localtime)
+     values ($1, ${BUDAPEST_NOW_DATE}, ${BUDAPEST_NOW_TIME})
      on conflict (employee_id, work_date) do update set arrival_time = excluded.arrival_time`,
     [employeeId]
   );
@@ -79,7 +90,7 @@ export async function recordArrivalNow(employeeId: string) {
 export async function recordDepartureNow(employeeId: string) {
   await query(
     `insert into jelenletek (employee_id, work_date, departure_time)
-     values ($1, current_date, localtime)
+     values ($1, ${BUDAPEST_NOW_DATE}, ${BUDAPEST_NOW_TIME})
      on conflict (employee_id, work_date) do update set departure_time = excluded.departure_time`,
     [employeeId]
   );
@@ -148,7 +159,7 @@ export async function deleteFeladat(id: string) {
 export async function getFeladatComments(feladatId: string): Promise<FeladatComment[]> {
   return query<FeladatComment>(
     `select id::text, feladat_id::text, author, comment,
-       to_char(created_at, 'YYYY-MM-DD HH24:MI') as created_at
+       to_char(created_at at time zone 'Europe/Budapest', 'YYYY-MM-DD HH24:MI') as created_at
      from feladat_megjegyzesek
      where feladat_id = $1
      order by created_at asc, id asc`,
