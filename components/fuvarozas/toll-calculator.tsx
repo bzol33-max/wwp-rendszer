@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,21 @@ import {
   type GazolajArResult,
 } from "@/lib/fuvarozas/actions";
 import type { GeocodedAddress, TollRoute } from "@/lib/fuvarozas/utdijkalkulacio";
+
+// Leaflet a böngésző `window` objektumát használja betöltéskor, ezért csak
+// kliensoldalon szabad renderelni — dynamic import + ssr:false nélkül a
+// szerveroldali renderelés elhasalna.
+const RouteMap = dynamic(
+  () => import("@/components/fuvarozas/route-map").then((m) => m.RouteMap),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-72 w-full items-center justify-center rounded-lg border text-xs text-muted-foreground sm:h-96">
+        Térkép betöltése…
+      </div>
+    ),
+  }
+);
 
 function formatDuration(min: number): string {
   const h = Math.floor(min / 60);
@@ -121,31 +137,59 @@ function nextTileId() {
 
 type ResultTile = {
   id: number;
-  stopLabels: string[];
+  stops: GeocodedAddress[];
   route: TollRoute;
   /** A számításkor érvényes gázolajár — rögzítve, hogy egy régi csempe eredménye ne változzon utólag. */
   gazolajAr: GazolajArResult | null;
 };
 
-function ResultTileCard({ tile, onClose }: { tile: ResultTile; onClose: () => void }) {
-  const { route, stopLabels, gazolajAr } = tile;
+function ResultTileCard({
+  tile,
+  selected,
+  onSelect,
+  onClose,
+}: {
+  tile: ResultTile;
+  selected: boolean;
+  onSelect: () => void;
+  onClose: () => void;
+}) {
+  const { route, stops, gazolajAr } = tile;
   const literek = (route.distanceKm * ATLAG_FOGYASZTAS_L_PER_100KM) / 100;
   const uzemanyagKoltseg = gazolajAr ? Math.round(literek * gazolajAr.ar) : null;
   const utdijKoltseg = route.tollHuf?.grossTotal ?? 0;
   const osszKoltseg = (uzemanyagKoltseg ?? 0) + utdijKoltseg;
 
   return (
-    <Card size="sm" className="relative w-full min-w-[220px] sm:w-[calc(50%-0.5rem)] lg:w-[calc(33.333%-0.667rem)]">
+    <Card
+      size="sm"
+      role="button"
+      tabIndex={0}
+      title="Mutasd a térképen"
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSelect();
+        }
+      }}
+      className={`relative w-full min-w-[220px] cursor-pointer sm:w-[calc(50%-0.5rem)] lg:w-[calc(33.333%-0.667rem)] ${
+        selected ? "ring-2 ring-primary" : ""
+      }`}
+    >
       <button
         type="button"
         aria-label="Eredmény eltávolítása"
         className="absolute top-2 right-2 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground"
-        onClick={onClose}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
       >
         <X className="h-3.5 w-3.5" />
       </button>
       <CardContent className="flex flex-col gap-1.5 pr-6 text-xs">
-        <div className="pr-2 font-medium">{stopLabels.join(" → ")}</div>
+        <div className="pr-2 font-medium">{stops.map((s) => s.label).join(" → ")}</div>
         <div className="flex flex-col gap-0.5 text-muted-foreground">
           <div>
             Táv: <span className="font-medium text-foreground">{route.distanceKm.toLocaleString("hu-HU")} km</span>
@@ -220,6 +264,11 @@ export function TollCalculator() {
   // A NAV aktuális hivatalos gázolajárát automatikusan, a szerverről kérjük
   // le (lásd lib/fuvarozas/uzemanyagar.ts) — soha nem kell kézzel frissíteni.
   const [gazolajAr, setGazolajAr] = useState<GazolajArResult | null>(null);
+  // Melyik eredménycsempe útvonala látszik a térképen — csempére kattintva
+  // válatható. `null` = nincs kézzel kiválasztva, ilyenkor (és ha a
+  // kiválasztott csempe időközben törlődött) a legutóbbi csempe számít
+  // kiválasztottnak, lásd selectedTile lentebb.
+  const [selectedTileId, setSelectedTileId] = useState<number | null>(null);
 
   useEffect(() => {
     getGazolajAr().then(setGazolajAr);
@@ -231,8 +280,12 @@ export function TollCalculator() {
       if (raw) {
         const parsed = JSON.parse(raw) as ResultTile[];
         if (Array.isArray(parsed)) {
-          setTiles(parsed);
-          const maxId = parsed.reduce((m, t) => Math.max(m, t.id), 0);
+          // A korábbi (stops mező nélküli, stopLabels-alapú) mentett
+          // csempéket eldobjuk — a térképhez szükséges koordináták azokból
+          // hiányoznak.
+          const ervenyes = parsed.filter((t) => Array.isArray(t?.stops));
+          setTiles(ervenyes);
+          const maxId = ervenyes.reduce((m, t) => Math.max(m, t.id), 0);
           if (maxId >= tileIdCounter) tileIdCounter = maxId + 1;
         }
       }
@@ -281,18 +334,20 @@ export function TollCalculator() {
     }
 
     setLoading(true);
+    // withGeometry=true: itt (a Kalkulátor fülön) kell a vonalgeometria a
+    // térképhez — máshol (pl. a megbízáslista soronkénti költségbecslése)
+    // ez nincs kérve, lásd runTollCalc megjegyzését.
     const res = kitoltottek.every((s) => s.point)
-      ? await calculateTollForPoints(kitoltottek.map((s) => s.point as GeocodedAddress))
-      : await calculateTollForAddresses(kitoltottek.map((s) => s.value));
+      ? await calculateTollForPoints(kitoltottek.map((s) => s.point as GeocodedAddress), true)
+      : await calculateTollForAddresses(kitoltottek.map((s) => s.value), true);
     setLoading(false);
 
     if (res.ok) {
       // A végére kerül, nem az elejére — a csempék sorban követik egymást
       // ahogy születnek, a legutóbbi nem ugrik előre.
-      setTiles((prev) => [
-        ...prev,
-        { id: nextTileId(), stopLabels: res.stopLabels, route: res.route, gazolajAr },
-      ]);
+      const ujCsempe: ResultTile = { id: nextTileId(), stops: res.stops, route: res.route, gazolajAr };
+      setTiles((prev) => [...prev, ujCsempe]);
+      setSelectedTileId(ujCsempe.id);
     } else {
       toast.error(res.error);
     }
@@ -301,6 +356,11 @@ export function TollCalculator() {
   function removeTile(id: number) {
     setTiles((prev) => prev.filter((t) => t.id !== id));
   }
+
+  const selectedTile =
+    (selectedTileId != null ? tiles.find((t) => t.id === selectedTileId) : undefined) ??
+    tiles[tiles.length - 1] ??
+    null;
 
   return (
     <div className="flex flex-col gap-3">
@@ -329,10 +389,37 @@ export function TollCalculator() {
         </CardContent>
       </Card>
 
+      {selectedTile && (
+        <Card size="sm">
+          <CardHeader>
+            <CardTitle className="text-sm">
+              Térkép — {selectedTile.stops.map((s) => s.label).join(" → ")}
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <RouteMap
+              stops={selectedTile.stops.map((s, i) => ({
+                role: stopLabel(i, selectedTile.stops.length),
+                label: s.label,
+                lon: s.lon,
+                lat: s.lat,
+              }))}
+              geometryLonLat={selectedTile.route.geometryLonLat}
+            />
+          </CardContent>
+        </Card>
+      )}
+
       {tiles.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {tiles.map((tile) => (
-            <ResultTileCard key={tile.id} tile={tile} onClose={() => removeTile(tile.id)} />
+            <ResultTileCard
+              key={tile.id}
+              tile={tile}
+              selected={tile.id === selectedTile?.id}
+              onSelect={() => setSelectedTileId(tile.id)}
+              onClose={() => removeTile(tile.id)}
+            />
           ))}
         </div>
       )}

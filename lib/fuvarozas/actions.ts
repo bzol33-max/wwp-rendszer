@@ -245,16 +245,17 @@ export async function searchAddressSuggestions(query: string): Promise<GeocodedA
 }
 
 export type TollCalcResult =
-  | { ok: true; stopLabels: string[]; route: TollRoute }
+  | { ok: true; stops: GeocodedAddress[]; route: TollRoute }
   | { ok: false; error: string };
 
-async function runTollCalc(stops: GeocodedAddress[]): Promise<TollCalcResult> {
+async function runTollCalc(stops: GeocodedAddress[], withGeometry?: boolean): Promise<TollCalcResult> {
   try {
     const route = await calculateToll({
       points: stops.map((s) => ({ lon: s.lon, lat: s.lat })),
       ...FIXED_VEHICLE,
+      withGeometry,
     });
-    return { ok: true, stopLabels: stops.map((s) => s.label), route };
+    return { ok: true, stops, route };
   } catch (err) {
     const message =
       err instanceof TollCalcError
@@ -264,20 +265,27 @@ async function runTollCalc(stops: GeocodedAddress[]): Promise<TollCalcResult> {
   }
 }
 
-/** Amikor a felhasználó minden állomásnál egy javasolt címre kattintott — koordináták már ismertek. */
+/**
+ * Amikor a felhasználó minden állomásnál egy javasolt címre kattintott —
+ * koordináták már ismertek. `withGeometry` csak a Kalkulátor fül térképéhez
+ * kell — a megbízáslista automatikus költségbecslése (sok, gyakori hívás)
+ * ezt nem kéri, hogy ne érintse a guidance-kapcsoló esetleges hatása.
+ */
 export async function calculateTollForPoints(
-  stops: GeocodedAddress[]
+  stops: GeocodedAddress[],
+  withGeometry?: boolean
 ): Promise<TollCalcResult> {
-  return runTollCalc(stops);
+  return runTollCalc(stops, withGeometry);
 }
 
 /** Amikor a felhasználó (legalább egy állomásnál) szabadon beírt szöveggel indította a számítást. */
 export async function calculateTollForAddresses(
-  queries: string[]
+  queries: string[],
+  withGeometry?: boolean
 ): Promise<TollCalcResult> {
   try {
     const stops = await Promise.all(queries.map((q) => geocodeAddress(q)));
-    return runTollCalc(stops);
+    return runTollCalc(stops, withGeometry);
   } catch (err) {
     const message =
       err instanceof TollCalcError
