@@ -147,6 +147,16 @@ export type TollCalcParams = {
   euroCategory: EuroCategory;
   /** tonna, HT esetén 3.5-44 közt */
   weight: number;
+  /**
+   * Kérje-e a kalkulátortól a vonalgeometriát is (térképes megjelenítéshez).
+   * Alapból kikapcsolva: ezt csak a Kalkulátor fül térképe igényli — a
+   * megbízáslista automatikus, soronkénti költségbecslése és az
+   * idővonal-becslés (sok, gyakori háttérhívás) az eredeti, bevált
+   * kéréssel fut tovább, hogy egy esetleges guidance-viselkedésbeli
+   * meglepetés (lassulás/válaszalak-eltérés) ne érinthesse a fuvarköltség-
+   * számításokat.
+   */
+  withGeometry?: boolean;
 };
 
 type RawTariff = {
@@ -316,8 +326,10 @@ export async function calculateToll(params: TollCalcParams): Promise<TollRoute> 
       // A "guidance" (útvonal-navigáció) bekapcsolása kell ahhoz, hogy a
       // válasz a vonalgeometriát (route.geometry) is tartalmazza — enélkül
       // csak a táv/idő/útdíj összegek jönnek vissza, térképi megjelenítésre
-      // alkalmas útvonalrajz nélkül.
-      guidance: true,
+      // alkalmas útvonalrajz nélkül. Csak akkor kérjük, ha ténylegesen kell
+      // (lásd TollCalcParams.withGeometry) — a gyakori, tömeges háttérhívások
+      // (költségbecslés, idővonal) az eredeti, bevált kérésalakot kapják.
+      guidance: params.withGeometry ?? false,
       ferry: true,
       motorway: true,
       waypoints: params.points.map((p) => [p.lon, p.lat]),

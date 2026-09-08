@@ -334,9 +334,12 @@ export function TollCalculator() {
     }
 
     setLoading(true);
+    // withGeometry=true: itt (a Kalkulátor fülön) kell a vonalgeometria a
+    // térképhez — máshol (pl. a megbízáslista soronkénti költségbecslése)
+    // ez nincs kérve, lásd runTollCalc megjegyzését.
     const res = kitoltottek.every((s) => s.point)
-      ? await calculateTollForPoints(kitoltottek.map((s) => s.point as GeocodedAddress))
-      : await calculateTollForAddresses(kitoltottek.map((s) => s.value));
+      ? await calculateTollForPoints(kitoltottek.map((s) => s.point as GeocodedAddress), true)
+      : await calculateTollForAddresses(kitoltottek.map((s) => s.value), true);
     setLoading(false);
 
     if (res.ok) {
