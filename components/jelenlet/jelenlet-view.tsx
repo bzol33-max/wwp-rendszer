@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
+import { buttonVariants } from "@/components/ui/button";
 import { useCanEdit } from "@/components/auth/edit-permission-context";
 import { MaiErkezesTile } from "@/components/jelenlet/erkezes-widget";
 import { FeladatRogzitesTile } from "@/components/jelenlet/feladat-rogzites-tile";
@@ -36,7 +38,15 @@ export function JelenletView() {
 
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title="Jelenléti/üzenőfal" subtitle="Napi érkezés és feladatok" />
+      <PageHeader
+        title="Jelenléti/üzenőfal"
+        subtitle="Napi érkezés és feladatok"
+        actions={
+          <Link href="/jelenlet/archivum" className={buttonVariants({ variant: "outline", size: "sm" })}>
+            Archívum
+          </Link>
+        }
+      />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <MaiErkezesTile />

@@ -25,6 +25,7 @@ export type Feladat = {
   urgency: number;
   repeat_freq: RepeatFreq;
   done: boolean;
+  elvegzes_datum: string | null;
   created_by: string | null;
   created_at: string;
 };
@@ -158,4 +159,36 @@ export function todayIso(): string {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
+}
+
+const HU_MONTH_ABBR = [
+  "jan.", "febr.", "márc.", "ápr.", "máj.", "jún.",
+  "júl.", "aug.", "szept.", "okt.", "nov.", "dec.",
+] as const;
+
+export type WeekInfo = { mondayIso: string; year: number; week: number; label: string };
+
+// ISO 8601 hét (hétfőtől indul, az 1. hét az, amiben az adott év első
+// csütörtöke van) — az Archívum ez alapján csoportosítja a kész feladatokat.
+export function weekInfo(dateStr: string): WeekInfo {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  const dow = (d.getUTCDay() + 6) % 7; // hétfő = 0
+  const monday = new Date(d);
+  monday.setUTCDate(d.getUTCDate() - dow);
+  const sunday = new Date(monday);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
+
+  const thursday = new Date(monday);
+  thursday.setUTCDate(monday.getUTCDate() + 3);
+  const isoYear = thursday.getUTCFullYear();
+  const jan4 = new Date(Date.UTC(isoYear, 0, 4));
+  const jan4Dow = (jan4.getUTCDay() + 6) % 7;
+  const week1Monday = new Date(jan4);
+  week1Monday.setUTCDate(jan4.getUTCDate() - jan4Dow);
+  const week = Math.round((thursday.getTime() - week1Monday.getTime()) / (7 * 86400000)) + 1;
+
+  const fmt = (x: Date) => `${HU_MONTH_ABBR[x.getUTCMonth()]} ${x.getUTCDate()}.`;
+  const label = `${isoYear}. ${week}. hét (${fmt(monday)} – ${fmt(sunday)})`;
+
+  return { mondayIso: monday.toISOString().slice(0, 10), year: isoYear, week, label };
 }

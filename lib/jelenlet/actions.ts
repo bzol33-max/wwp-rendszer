@@ -166,10 +166,24 @@ export async function listFeladatok(): Promise<Feladat[]> {
   return query<Feladat>(
     `select f.id::text, to_char(f.task_date, 'YYYY-MM-DD') as task_date, f.site_id,
        s.name as site_name, f.description, f.urgency, f.repeat_freq, f.done,
+       to_char(f.elvegzes_datum, 'YYYY-MM-DD') as elvegzes_datum,
        f.created_by, f.created_at
      from feladatok f
      join sites s on s.id = f.site_id
      order by f.done asc, f.urgency asc, f.task_date desc, f.id desc`
+  );
+}
+
+export async function getArchivedFeladatok(): Promise<Feladat[]> {
+  return query<Feladat>(
+    `select f.id::text, to_char(f.task_date, 'YYYY-MM-DD') as task_date, f.site_id,
+       s.name as site_name, f.description, f.urgency, f.repeat_freq, f.done,
+       to_char(f.elvegzes_datum, 'YYYY-MM-DD') as elvegzes_datum,
+       f.created_by, f.created_at
+     from feladatok f
+     join sites s on s.id = f.site_id
+     where f.done = true
+     order by f.elvegzes_datum desc nulls last, f.id desc`
   );
 }
 
@@ -203,8 +217,14 @@ export async function createFeladat(input: {
 }
 
 export async function toggleFeladatDone(id: string, done: boolean) {
-  await query(`update feladatok set done = $2 where id = $1`, [id, done]);
+  await query(
+    `update feladatok
+     set done = $2, elvegzes_datum = case when $2 then ${BUDAPEST_NOW_DATE} else null end
+     where id = $1`,
+    [id, done]
+  );
   revalidatePath("/jelenlet");
+  revalidatePath("/jelenlet/archivum");
   revalidatePath("/erkezes");
 }
 

@@ -555,3 +555,11 @@ create table if not exists feladat_megjegyzesek (
   created_at timestamptz not null default now()
 );
 create index if not exists idx_feladat_megjegyzesek_feladat on feladat_megjegyzesek (feladat_id, created_at);
+
+-- Elvégzés dátuma (2026-09-08): eddig a "kész" pipa (done) egy időpontot
+-- sem rögzített, ezért a kész feladatok csak lecsúsztak a lista aljára,
+-- nyomon követhetetlenül — lásd lib/jelenlet/actions.ts:toggleFeladatDone,
+-- ami mostantól ezt is beállítja/törli. Az Archívum fül (app/jelenlet/
+-- archivum) ez alapján, heti bontásban listázza a kész feladatokat.
+alter table feladatok add column if not exists elvegzes_datum date;
+update feladatok set elvegzes_datum = task_date where done = true and elvegzes_datum is null;
