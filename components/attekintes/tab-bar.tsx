@@ -17,7 +17,7 @@ export function AttekintesTabBar() {
 
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-40 mx-auto flex max-w-md border-t bg-card"
+      className="fixed inset-x-0 bottom-0 z-40 mx-auto flex max-w-md border-t border-[var(--at-border)] bg-[var(--at-card)]"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       {TABS.map((tab) => {
@@ -29,7 +29,7 @@ export function AttekintesTabBar() {
             href={tab.href}
             className={cn(
               "flex min-h-11 flex-1 flex-col items-center justify-center gap-0.5 py-2 text-[11px] transition-colors",
-              active ? "font-medium text-primary" : "text-muted-foreground"
+              active ? "font-medium text-[var(--at-accent)]" : "text-[var(--at-muted)]"
             )}
           >
             <Icon className="h-5 w-5" />
