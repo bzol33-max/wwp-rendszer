@@ -136,6 +136,7 @@ export type AddFuvarInput = {
   fizetesiHataridoNap?: number;
   pozicioszam?: string;
   pozicioszamNincs?: boolean;
+  postazasiCim?: string;
 };
 
 /**

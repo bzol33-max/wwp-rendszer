@@ -28,10 +28,11 @@ export async function GET(req: Request) {
     fuvardij_penznem: string;
     dokumentum_url: string | null;
     szamla_szam: string | null;
+    postazasi_cim: string | null;
   }>(
     `select id::text, megrendelo, pozicioszam, felrako, lerako,
        to_char(datum, 'YYYY-MM-DD') as datum,
-       fuvardij, fuvardij_penznem, dokumentum_url, szamla_szam
+       fuvardij, fuvardij_penznem, dokumentum_url, szamla_szam, postazasi_cim
      from fuvar_megbizasok
      where tipus = 'sajat' and statusz <> 'torolt'
        and (megrendelo ilike '%' || $1 || '%' or pozicioszam ilike '%' || $1 || '%')
@@ -52,6 +53,7 @@ export async function GET(req: Request) {
       fuvardijPenznem: s.fuvardij_penznem,
       dokumentumUrl: s.dokumentum_url,
       szamlaSzam: s.szamla_szam,
+      postazasiCim: s.postazasi_cim,
     })),
   });
 }

@@ -4,6 +4,7 @@ import {
   setFuvarFizetesiHatarido,
   setFuvarSzamlaSzam,
   setFuvarPostazva,
+  setFuvarPostazasiCim,
 } from "@/lib/fuvarozas/megbizasok";
 import type { FuvardijPenznem } from "@/lib/fuvarozas/fuvar-constants";
 
@@ -21,7 +22,7 @@ import type { FuvardijPenznem } from "@/lib/fuvarozas/fuvar-constants";
  * megtartott sorra ráírva, a másik törlése előtt) a "postázva" állapot ne
  * vesszen el, ha a törölt sor már postázva volt.
  *
- * Elvárt body: { frissitesek: [{ id, fuvardij?, fuvardijPenznem? ("Ft"|"EUR"), fizetesiHataridoNap?, szamlaSzam?, postazva? }] }
+ * Elvárt body: { frissitesek: [{ id, fuvardij?, fuvardijPenznem? ("Ft"|"EUR"), fizetesiHataridoNap?, szamlaSzam?, postazva?, postazasiCim? }] }
  */
 export async function POST(req: Request) {
   let body: {
@@ -32,6 +33,7 @@ export async function POST(req: Request) {
       fizetesiHataridoNap?: number;
       szamlaSzam?: string;
       postazva?: boolean;
+      postazasiCim?: string;
     }[];
   };
   try {
@@ -68,6 +70,9 @@ export async function POST(req: Request) {
       }
       if (f.postazva !== undefined) {
         await setFuvarPostazva(f.id, f.postazva);
+      }
+      if (f.postazasiCim !== undefined) {
+        await setFuvarPostazasiCim(f.id, f.postazasiCim);
       }
       eredmenyek.push({ index: i, ok: true });
     } catch (err) {
