@@ -303,6 +303,13 @@ alter table fuvar_megbizasok add column if not exists postazva_at timestamptz;
 alter table fuvar_megbizasok add column if not exists teljesitve boolean not null default false;
 alter table fuvar_megbizasok add column if not exists teljesitve_at timestamptz;
 
+-- A fuvardíj pénzneme (2026-09-09) — a legtöbb megbízás HUF-ban van, de van
+-- (pl. Duvenbeck) EUR-os is. A rendszer NEM vált át HUF-ra, ezért az
+-- "Eredmény" (fuvardíj - költség) jellegű Ft-alapú számítások csak
+-- penznem='Ft' esetén futnak — lásd components/fuvarozas/megbizasok.tsx.
+alter table fuvar_megbizasok add column if not exists fuvardij_penznem text not null default 'Ft'
+  check (fuvardij_penznem in ('Ft', 'EUR'));
+
 -- Fuvarozás — Kapcsolatok fül: a megbízásokból (és a hozzájuk tartozó
 -- e-mailekből) kinyert cégenkénti kapcsolattartók. Egy céghez több
 -- kapcsolattartó/telefon/e-mail sor is tartozhat.

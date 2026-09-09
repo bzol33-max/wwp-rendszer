@@ -8,6 +8,9 @@
 
 export type FuvarTipus = "sajat" | "ber";
 
+/** A fuvardíj pénzneme — a legtöbb megbízás HUF-ban van, de van (pl. külföldi megbízó) EUR-os is. */
+export type FuvardijPenznem = "Ft" | "EUR";
+
 export type FuvarStatusz =
   | "uj"
   | "tervezett"
@@ -64,6 +67,8 @@ export type FuvarRow = {
   sofor: string | null;
   alvallalkozo: string | null;
   fuvardij: number | null;
+  /** A "fuvardij" mező pénzneme — alapból "Ft", de EUR-os megbízásoknál (pl. Duvenbeck) "EUR". A rendszer nem vált át HUF-ra, ezért az összeg-jellegű számítások (pl. "Eredmény") csak Ft esetén futnak. */
+  fuvardij_penznem: FuvardijPenznem;
   koltseg: number | null;
   statusz: FuvarStatusz;
   megjegyzes: string | null;
@@ -118,6 +123,7 @@ export type AddFuvarInput = {
   sofor?: string;
   alvallalkozo?: string;
   fuvardij?: number;
+  fuvardijPenznem?: FuvardijPenznem;
   koltseg?: number;
   megjegyzes?: string;
   dokumentumUrl?: string;
@@ -165,6 +171,7 @@ export type ApproveFuvarInput = {
   sofor?: string;
   alvallalkozo?: string;
   fuvardij?: number;
+  fuvardijPenznem?: FuvardijPenznem;
   koltseg?: number;
   megjegyzes?: string;
   pozicioszam?: string;
