@@ -63,8 +63,8 @@ export async function GET() {
   }>(
     `select
        lower(regexp_replace(trim(megrendelo), '\\s+', ' ', 'g')) || '|' ||
-         lower(regexp_replace(trim(felrako), '\\s+', ' ', 'g')) || '|' ||
-         lower(regexp_replace(trim(lerako), '\\s+', ' ', 'g')) || '|' ||
+         lower(regexp_replace(trim(regexp_replace(felrako, '\\([^)]*\\)', '', 'g')), '\\s+', ' ', 'g')) || '|' ||
+         lower(regexp_replace(trim(regexp_replace(lerako, '\\([^)]*\\)', '', 'g')), '\\s+', ' ', 'g')) || '|' ||
          to_char(datum, 'YYYY-MM-DD') || '|' ||
          coalesce(fuvardij::text, '') as kulcs,
        count(*) as darab,
