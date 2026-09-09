@@ -1,17 +1,22 @@
 import { NextResponse } from "next/server";
-import { setFuvarFuvardij, setFuvarFizetesiHatarido } from "@/lib/fuvarozas/megbizasok";
+import {
+  setFuvarFuvardij,
+  setFuvarFizetesiHatarido,
+  setFuvarSzamlaSzam,
+} from "@/lib/fuvarozas/megbizasok";
 import type { FuvardijPenznem } from "@/lib/fuvarozas/fuvar-constants";
 
 /**
  * A Drive-fuvarmegbízás-figyelő automatika utólagos pótló körének
  * ellenpárja a /api/fuvarozas/drive-hianyok végponthoz: ide küldi vissza a
- * dokumentum újbóli elolvasásával most már megtalált fuvardíjat és/vagy
- * fizetési határidőt egy MÁR meglévő fuvarhoz (id alapján) — ÚJ sort nem
- * hoz létre, és a mezőt csak akkor írja felül, ha a kérésben ténylegesen
- * szerepel (undefined = nem nyúl hozzá, tehát egy korábban már kézzel
- * kitöltött értéket sem ír felül feleslegesen).
+ * dokumentum újbóli elolvasásával most már megtalált fuvardíjat, fizetési
+ * határidőt és/vagy (más forrásból, pl. feltöltött számla PDF-ből azonosított)
+ * számlaszámot egy MÁR meglévő fuvarhoz (id alapján) — ÚJ sort nem hoz létre,
+ * és a mezőt csak akkor írja felül, ha a kérésben ténylegesen szerepel
+ * (undefined = nem nyúl hozzá, tehát egy korábban már kézzel kitöltött
+ * értéket sem ír felül feleslegesen).
  *
- * Elvárt body: { frissitesek: [{ id, fuvardij?, fuvardijPenznem? ("Ft"|"EUR"), fizetesiHataridoNap? }] }
+ * Elvárt body: { frissitesek: [{ id, fuvardij?, fuvardijPenznem? ("Ft"|"EUR"), fizetesiHataridoNap?, szamlaSzam? }] }
  */
 export async function POST(req: Request) {
   let body: {
@@ -20,6 +25,7 @@ export async function POST(req: Request) {
       fuvardij?: number;
       fuvardijPenznem?: FuvardijPenznem;
       fizetesiHataridoNap?: number;
+      szamlaSzam?: string;
     }[];
   };
   try {
@@ -50,6 +56,9 @@ export async function POST(req: Request) {
       }
       if (f.fizetesiHataridoNap !== undefined) {
         await setFuvarFizetesiHatarido(f.id, f.fizetesiHataridoNap);
+      }
+      if (f.szamlaSzam !== undefined) {
+        await setFuvarSzamlaSzam(f.id, f.szamlaSzam);
       }
       eredmenyek.push({ index: i, ok: true });
     } catch (err) {
