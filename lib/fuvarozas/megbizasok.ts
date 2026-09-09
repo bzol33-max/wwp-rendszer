@@ -9,6 +9,7 @@ import type {
   AddFuvarInput,
   ApproveFuvarInput,
   TeljesitesJelolt,
+  FuvardijPenznem,
 } from "@/lib/fuvarozas/fuvar-constants";
 
 // FIGYELEM: ez egy "use server" fájl — Next.js-ben ez KIZÁRÓLAG async
@@ -24,7 +25,7 @@ const FUVAR_ROW_COLUMNS = `
   to_char(datum, '${TIME_FMT}') as date,
   idopont, felrako, lerako, megrendelo, aru, mennyiseg, suly,
   jarmu, sofor, alvallalkozo,
-  fuvardij, koltseg, statusz, megjegyzes,
+  fuvardij, fuvardij_penznem, koltseg, statusz, megjegyzes,
   dokumentum_url, forras, ellenorzott, created_by,
   to_char(erkezett_datum, '${TIME_FMT}') as erkezett_datum,
   to_char(lerakas_datum, '${TIME_FMT}') as lerakas_datum,
@@ -166,11 +167,11 @@ export async function addFuvar(input: AddFuvarInput) {
   await query(
     `insert into fuvar_megbizasok
        (tipus, datum, idopont, felrako, lerako, megrendelo, aru, mennyiseg, suly,
-        jarmu, sofor, alvallalkozo, fuvardij, koltseg, megjegyzes,
+        jarmu, sofor, alvallalkozo, fuvardij, fuvardij_penznem, koltseg, megjegyzes,
         dokumentum_url, drive_file_id, forras, ellenorzott, created_by,
         erkezett_datum, lerakas_datum, fizetesi_hatarido_nap,
         pozicioszam, pozicioszam_nincs)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
      on conflict (dokumentum_url) where dokumentum_url is not null do nothing`,
     [
       input.tipus,
@@ -186,6 +187,7 @@ export async function addFuvar(input: AddFuvarInput) {
       input.sofor || null,
       input.alvallalkozo || null,
       input.fuvardij ?? null,
+      input.fuvardijPenznem ?? "Ft",
       input.koltseg ?? null,
       input.megjegyzes || null,
       input.dokumentumUrl || null,
@@ -240,8 +242,20 @@ export async function setFuvarPostazasiCim(id: string, postazasiCim: string | nu
  * kolléga a dokumentum alapján közvetlenül a listában pótolhassa —
  * anélkül, hogy vissza kellene mennie az "Előkészített" jóváhagyó űrlaphoz.
  */
-export async function setFuvarFuvardij(id: string, fuvardij: number | null) {
-  await query(`update fuvar_megbizasok set fuvardij = $2 where id = $1`, [id, fuvardij]);
+export async function setFuvarFuvardij(
+  id: string,
+  fuvardij: number | null,
+  penznem?: FuvardijPenznem
+) {
+  if (penznem) {
+    await query(`update fuvar_megbizasok set fuvardij = $2, fuvardij_penznem = $3 where id = $1`, [
+      id,
+      fuvardij,
+      penznem,
+    ]);
+  } else {
+    await query(`update fuvar_megbizasok set fuvardij = $2 where id = $1`, [id, fuvardij]);
+  }
 }
 
 /**
@@ -408,7 +422,7 @@ export async function approveFuvar(input: ApproveFuvarInput) {
        jarmu = $11, sofor = $12, alvallalkozo = $13,
        fuvardij = $14, koltseg = $15, megjegyzes = $16,
        pozicioszam = $17, pozicioszam_nincs = $18,
-       postazasi_cim = $19,
+       postazasi_cim = $19, fuvardij_penznem = $20,
        ellenorzott = true
      where id = $1`,
     [
@@ -431,6 +445,7 @@ export async function approveFuvar(input: ApproveFuvarInput) {
       input.pozicioszam || null,
       input.pozicioszamNincs ?? false,
       input.postazasiCim || null,
+      input.fuvardijPenznem ?? "Ft",
     ]
   );
 }

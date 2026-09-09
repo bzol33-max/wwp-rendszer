@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { setFuvarFuvardij, setFuvarFizetesiHatarido } from "@/lib/fuvarozas/megbizasok";
+import type { FuvardijPenznem } from "@/lib/fuvarozas/fuvar-constants";
 
 /**
  * A Drive-fuvarmegbízás-figyelő automatika utólagos pótló körének
@@ -10,11 +11,16 @@ import { setFuvarFuvardij, setFuvarFizetesiHatarido } from "@/lib/fuvarozas/megb
  * szerepel (undefined = nem nyúl hozzá, tehát egy korábban már kézzel
  * kitöltött értéket sem ír felül feleslegesen).
  *
- * Elvárt body: { frissitesek: [{ id, fuvardij?, fizetesiHataridoNap? }] }
+ * Elvárt body: { frissitesek: [{ id, fuvardij?, fuvardijPenznem? ("Ft"|"EUR"), fizetesiHataridoNap? }] }
  */
 export async function POST(req: Request) {
   let body: {
-    frissitesek?: { id?: string; fuvardij?: number; fizetesiHataridoNap?: number }[];
+    frissitesek?: {
+      id?: string;
+      fuvardij?: number;
+      fuvardijPenznem?: FuvardijPenznem;
+      fizetesiHataridoNap?: number;
+    }[];
   };
   try {
     body = await req.json();
@@ -40,7 +46,7 @@ export async function POST(req: Request) {
     }
     try {
       if (f.fuvardij !== undefined) {
-        await setFuvarFuvardij(f.id, f.fuvardij);
+        await setFuvarFuvardij(f.id, f.fuvardij, f.fuvardijPenznem);
       }
       if (f.fizetesiHataridoNap !== undefined) {
         await setFuvarFizetesiHatarido(f.id, f.fizetesiHataridoNap);

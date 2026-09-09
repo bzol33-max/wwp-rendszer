@@ -56,6 +56,7 @@ import { calculateTollForAddresses, getGazolajAr } from "@/lib/fuvarozas/actions
 import {
   FUVAR_STATUSZ_LABEL,
   FUVAR_STATUSZOK,
+  type FuvardijPenznem,
   type FuvarRow,
   type FuvarStatusz,
   type FuvarTipus,
@@ -87,7 +88,15 @@ const SAJAT_TELEP_PARTNER = "Telephelyek közti szállítás";
 
 function eredmeny(row: FuvarRow): number | null {
   if (row.fuvardij == null || row.koltseg == null) return null;
+  // A "koltseg" mező mindig Ft — EUR-os fuvardíjnál a kettő nem vonható ki
+  // egymásból (a rendszer nem vált át HUF-ra), ezért ilyenkor nincs Eredmény.
+  if (row.fuvardij_penznem !== "Ft") return null;
   return row.fuvardij - row.koltseg;
+}
+
+/** A fuvardíj (vagy bármilyen összeg) megjelenítése a mező pénznemével — Ft vagy EUR. */
+function formatOsszeg(osszeg: number, penznem: FuvardijPenznem): string {
+  return penznem === "EUR" ? `${osszeg.toLocaleString("hu-HU")} €` : `${osszeg.toLocaleString("hu-HU")} Ft`;
 }
 
 /**
@@ -374,6 +383,56 @@ function SzamCell({
 }
 
 /**
+ * A Fuvardíj mező összetett inline szerkesztő cellája: az összeg (SzamCell)
+ * mellett egy kattintható Ft/EUR pénznem-jelölő — mert a legtöbb megbízás
+ * Ft-ban van, de van EUR-os is (pl. Duvenbeck), és ezt eddig sehol nem
+ * lehetett kézzel jelölni/javítani, csak Ft-ként (vagy sehogy) tárolni.
+ */
+function FuvardijCell({
+  fuvardij,
+  penznem,
+  onSave,
+}: {
+  fuvardij: number | null;
+  penznem: FuvardijPenznem;
+  onSave: (fuvardij: number | null, penznem: FuvardijPenznem) => Promise<void>;
+}) {
+  const [penznemSaving, setPenznemSaving] = useState(false);
+
+  async function togglePenznem() {
+    const uj: FuvardijPenznem = penznem === "Ft" ? "EUR" : "Ft";
+    setPenznemSaving(true);
+    try {
+      await onSave(fuvardij, uj);
+    } catch {
+      toast.error("Nem sikerült menteni.");
+    } finally {
+      setPenznemSaving(false);
+    }
+  }
+
+  return (
+    <div className="flex items-center justify-end gap-1">
+      <SzamCell
+        value={fuvardij}
+        placeholder="fuvardíj megadása"
+        format={(n) => formatOsszeg(n, penznem)}
+        onSave={(v) => onSave(v, penznem)}
+      />
+      <button
+        type="button"
+        title="Pénznem váltása (Ft / EUR)"
+        disabled={penznemSaving}
+        onClick={togglePenznem}
+        className="rounded px-1 text-[10px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50"
+      >
+        {penznem}
+      </button>
+    </div>
+  );
+}
+
+/**
  * A Számla/Posta nézet "Postázva" jelölője: azonnal (optimista frissítéssel)
  * pipálható, hogy a fuvar dokumentációja (számla + megbízás) ténylegesen
  * postára lett-e adva a megrendelőnek.
@@ -466,7 +525,7 @@ function FuvarDetailModal({
               <ReszletSor label="Sofőr">{row.sofor}</ReszletSor>
               <ReszletSor label="Alvállalkozó">{row.alvallalkozo}</ReszletSor>
               <ReszletSor label="Fuvardíj">
-                {row.fuvardij != null ? `${row.fuvardij.toLocaleString("hu-HU")} Ft` : null}
+                {row.fuvardij != null ? formatOsszeg(row.fuvardij, row.fuvardij_penznem) : null}
               </ReszletSor>
               <ReszletSor label="Költség">
                 {row.koltseg != null ? `${row.koltseg.toLocaleString("hu-HU")} Ft` : null}
@@ -1435,12 +1494,11 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
                     </div>
                   </TableCell>
                   <TableCell className="align-top text-right tabular-nums">
-                    <SzamCell
-                      value={row.fuvardij}
-                      placeholder="fuvardíj megadása"
-                      format={(n) => `${n.toLocaleString("hu-HU")} Ft`}
-                      onSave={async (v) => {
-                        await setFuvarFuvardij(row.id, v);
+                    <FuvardijCell
+                      fuvardij={row.fuvardij}
+                      penznem={row.fuvardij_penznem}
+                      onSave={async (v, p) => {
+                        await setFuvarFuvardij(row.id, v, p);
                         await load();
                       }}
                     />
@@ -1631,12 +1689,11 @@ function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
                     {row.felrako ? `${varosNev(row.felrako)} → ${varosNev(row.lerako)}` : varosNev(row.lerako)}
                   </TableCell>
                   <TableCell className="align-top text-right tabular-nums">
-                    <SzamCell
-                      value={row.fuvardij}
-                      placeholder="fuvardíj megadása"
-                      format={(n) => `${n.toLocaleString("hu-HU")} Ft`}
-                      onSave={async (v) => {
-                        await setFuvarFuvardij(row.id, v);
+                    <FuvardijCell
+                      fuvardij={row.fuvardij}
+                      penznem={row.fuvardij_penznem}
+                      onSave={async (v, p) => {
+                        await setFuvarFuvardij(row.id, v, p);
                         await load();
                       }}
                     />
@@ -1920,7 +1977,7 @@ function ArchivFuvarSor({
         {row.felrako ? `${varosNev(row.felrako)} → ${varosNev(row.lerako)}` : varosNev(row.lerako)}
       </TableCell>
       <TableCell className="text-right tabular-nums">
-        {row.fuvardij != null ? `${row.fuvardij.toLocaleString("hu-HU")} Ft` : "—"}
+        {row.fuvardij != null ? formatOsszeg(row.fuvardij, row.fuvardij_penznem) : "—"}
       </TableCell>
       <TableCell className="text-muted-foreground">{row.szamla_szam ?? "—"}</TableCell>
       <TableCell className="text-muted-foreground">
