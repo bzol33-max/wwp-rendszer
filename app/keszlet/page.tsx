@@ -7,8 +7,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SimpleSiteView } from "@/components/keszlet/simple-site-view";
 import { NyiregyhazaHaviTab } from "@/components/keszlet/nyiregyhaza-havi";
 import { NyiregyhazaFoTab } from "@/components/keszlet/nyiregyhaza-fo";
+import { OsszkeszletTab } from "@/components/keszlet/osszkeszlet";
 
-const TABS = ["havi", "Nyíregyháza", "Balkány", "Szakoly", "archivum"] as const;
+const TABS = ["havi", "Nyíregyháza", "Balkány", "Szakoly", "osszkeszlet", "archivum"] as const;
 type Tab = (typeof TABS)[number];
 
 function currentMonthLabel() {
@@ -33,6 +34,7 @@ function KeszletTabs() {
     Nyíregyháza: "Nyíregyháza",
     Balkány: "Balkány",
     Szakoly: "Szakoly",
+    osszkeszlet: "Összkészlet",
     archivum: "Archívum",
   };
 
@@ -63,6 +65,9 @@ function KeszletTabs() {
       </TabsContent>
       <TabsContent value="Szakoly" className="mt-5">
         <SimpleSiteView site="Szakoly" />
+      </TabsContent>
+      <TabsContent value="osszkeszlet" className="mt-5">
+        <OsszkeszletTab />
       </TabsContent>
       <TabsContent value="archivum" className="mt-5">
         <p className="text-sm text-muted-foreground">

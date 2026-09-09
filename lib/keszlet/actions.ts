@@ -273,6 +273,47 @@ export async function deleteMovementEvent(id: string) {
   await query(`delete from keszlet_events where id = $1`, [id]);
 }
 
+// --- Összkészlet (Szakoly/Archívum fülek közötti összesítő) ---
+
+export type OsszkeszletRow = {
+  type: string;
+  total: number;
+  bySite: Record<string, number>;
+};
+
+export async function getOsszkeszlet(): Promise<OsszkeszletRow[]> {
+  // Ugyanaz a be/ki/mozgatás-számítás, mint a getStock-ban, csak az összes
+  // telephelyre egyszerre, típus+telephely bontásban — a "Csere" itt sem
+  // önálló készlettétel, ld. getStock megjegyzését.
+  const rows = await query<{ type: string; site: string; qty: string }>(
+    `select t.name as type, s.name as site,
+       coalesce(sum(case
+         when m.direction in ('be','mozgatas_be') then m.qty
+         when m.direction in ('ki','mozgatas') then -m.qty
+         else 0
+       end), 0) as qty
+     from pallet_types t
+     join site_active_types sat on sat.type_id = t.id
+     join sites s on s.id = sat.site_id
+     left join keszlet_movements m on m.type_id = t.id and m.site_id = s.id
+     where t.name <> 'Csere'
+     group by t.name, s.name, t.sort_order, t.id
+     order by t.sort_order, t.id`
+  );
+  const byType = new Map<string, OsszkeszletRow>();
+  for (const r of rows) {
+    let entry = byType.get(r.type);
+    if (!entry) {
+      entry = { type: r.type, total: 0, bySite: {} };
+      byType.set(r.type, entry);
+    }
+    const qty = Number(r.qty);
+    entry.bySite[r.site] = qty;
+    entry.total += qty;
+  }
+  return Array.from(byType.values());
+}
+
 export async function getSiteSnapshot(site: string) {
   const [stock, movements, types] = await Promise.all([
     getStock(site),
