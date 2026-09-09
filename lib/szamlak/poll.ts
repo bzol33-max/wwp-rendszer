@@ -109,7 +109,48 @@ export type PollEredmeny = {
   hibak: string[];
   sztornoDarab?: number;
   szamlaSzamParositva?: number;
+  rendelesszamJavitva?: number;
 };
+
+/**
+ * Egy körben legfeljebb ennyi, korábban null rendelésszámmal mentett
+ * fuvarszámlát próbálunk újralekérdezni (lásd javitRendelesszamHianyokat) —
+ * korlátozva, hogy egy nagyobb elmaradás se terhelje túl a Számlázz.hu API-t
+ * egyetlen kör alatt; a maradék a következő körben folytatódik.
+ */
+const MAX_RENDELESSZAM_JAVITAS_KORONKENT = 30;
+
+/**
+ * A "rendelesszam" mező kiolvasása korábban egy nagybetűzés-eltérés miatt
+ * (lásd szamlazzhu-client.ts) mindig null-t adott vissza — emiatt a
+ * fuvarszámla ↔ megbízás párosítás (szinkronizalSzamlaSzamokat) egyetlen
+ * már behúzott számlánál sem működhetett, akkor sem, ha a hiv. szám
+ * egyébként pontosan egyezett. A parsing mostantól javítva van, de a MÁR
+ * elmentett számlák rendelesszam-ja emiatt még null a szamla táblában — ezt
+ * itt, korlátozott ütemben, újralekérdezéssel pótoljuk.
+ */
+async function javitRendelesszamHianyokat(agentKulcs: string): Promise<number> {
+  const hianyosak = await query<{ szamlaszam: string }>(
+    `select szamlaszam from szamla
+     where kategoria = 'fuvar' and rendelesszam is null
+     order by szamlaszam
+     limit $1`,
+    [MAX_RENDELESSZAM_JAVITAS_KORONKENT]
+  );
+  let javitva = 0;
+  for (const sor of hianyosak) {
+    try {
+      const talalat = await lekerdezSzamla(sor.szamlaszam, agentKulcs);
+      if (talalat?.rendelesszam) {
+        await mentSzamla(talalat);
+        javitva++;
+      }
+    } catch {
+      // egy hibás lekérdezés ne állítsa meg a többit — legközelebb újra próbáljuk
+    }
+  }
+  return javitva;
+}
 
 /** Egy teljes lekérdezési kör: 1) a pending sorszámok újrapróbálása, 2) a fő kereső előrehaladása. */
 export async function futtatSzamlaSzinkron(): Promise<PollEredmeny> {
@@ -194,13 +235,24 @@ export async function futtatSzamlaSzinkron(): Promise<PollEredmeny> {
     );
   }
 
-  // 3) Rontott/sztornózott számla-párok újrafelismerése — minden kör végén,
+  // 3) A korábbi rendelesszam-parsing hiba miatt null-lal mentett
+  // fuvarszámlák pótlólagos, korlátozott ütemű újralekérdezése — lásd
+  // javitRendelesszamHianyokat.
+  try {
+    eredmeny.rendelesszamJavitva = await javitRendelesszamHianyokat(agentKulcs);
+  } catch (err) {
+    eredmeny.hibak.push(
+      `Rendelésszám-javítás: ${err instanceof Error ? err.message : "ismeretlen hiba"}`
+    );
+  }
+
+  // 4) Rontott/sztornózott számla-párok újrafelismerése — minden kör végén,
   // hogy egy frissen behúzott vagy kézzel importált (pl. tömeges fizetve-
   // import) adat is azonnal helyesen legyen jelölve.
   const sztornoEredmeny = await frissitSztornoJelolest();
   eredmeny.sztornoDarab = sztornoEredmeny.sztornoDarab;
 
-  // 4) A Fuvarozás — Számla/Posta fülön a bér fuvarok "Számla szám" mezőjének
+  // 5) A Fuvarozás — Számla/Posta fülön a bér fuvarok "Számla szám" mezőjének
   // automatikus kitöltése a most már meglévő fuvarszámlák alapján (a
   // megbízó hivatkozási száma ↔ a számla rendelésszáma párosítással).
   try {
