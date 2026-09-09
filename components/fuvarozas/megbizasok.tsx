@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { X } from "lucide-react";
+import { Check, X } from "lucide-react";
 import {
   addFuvar,
   approveFuvar,
@@ -46,6 +46,7 @@ import {
   setFuvarPostazasiCim,
   setFuvarPostazva,
   setFuvarSzamlaSzam,
+  setFuvarTeljesitve,
   szinkronizalSzamlaSzamokat,
   updateFuvarStatus,
 } from "@/lib/fuvarozas/megbizasok";
@@ -398,6 +399,9 @@ function FuvarDetailModal({
               <ReszletSor label="Számla sorszáma">{row.szamla_szam}</ReszletSor>
               <ReszletSor label="Postázási cím">{row.postazasi_cim}</ReszletSor>
               <ReszletSor label="Postázva">{row.postazva ? "Igen" : null}</ReszletSor>
+              <ReszletSor label="Teljesítve">
+                {row.teljesitve ? "Igen (kézzel, a tervezett dátum előtt)" : null}
+              </ReszletSor>
               <ReszletSor label="Megjegyzés">{row.megjegyzes}</ReszletSor>
               <ReszletSor label="Rögzítette">{row.created_by}</ReszletSor>
             </div>
@@ -1269,6 +1273,12 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
     toast.success("Fuvar törölve.");
   }
 
+  async function handleTeljesitve(id: string) {
+    await setFuvarTeljesitve(id, true);
+    await load();
+    toast.success("Fuvar teljesítve — átkerült a Számla/Posta fülre.");
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -1292,13 +1302,19 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
                 >
                   Költség
                 </TableHead>
+                <TableHead
+                  className="w-16 text-center"
+                  title="Ha a fuvar a rögzített (tervezett) dátum előtt már ténylegesen befejeződött, itt azonnal átrakható a Számla/Posta fülre."
+                >
+                  Kész
+                </TableHead>
                 <TableHead className="w-8"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {!loading && rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center text-muted-foreground">
+                  <TableCell colSpan={10} className="text-center text-muted-foreground">
                     Nincs jelenleg folyamatban lévő bér fuvar. (A lerakás dátuma után a fuvar a
                     Számla/Posta fülön folytatódik.)
                   </TableCell>
@@ -1343,6 +1359,16 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
                   </TableCell>
                   <TableCell className="align-top text-right tabular-nums">
                     <KoltsegCell felrako={row.felrako} lerako={row.lerako} />
+                  </TableCell>
+                  <TableCell className="align-top text-center">
+                    <button
+                      type="button"
+                      onClick={() => handleTeljesitve(row.id)}
+                      title="Teljesítve — áthelyezés a Számla/Posta fülre"
+                      className="rounded p-1 text-muted-foreground hover:bg-success/15 hover:text-success"
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                    </button>
                   </TableCell>
                   <TableCell className="align-top">
                     <button

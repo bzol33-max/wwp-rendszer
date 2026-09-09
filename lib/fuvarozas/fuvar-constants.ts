@@ -93,6 +93,15 @@ export type FuvarRow = {
   szamla_szam: string | null;
   /** Mikor lett a "Postázva" jelölő bepipálva — ebből számít az 5 perces visszavonási ablak. */
   postazva_at: string | null;
+  /**
+   * Kézi "Teljesítve" jelölő (Bér fuvarok — folyamatban fül): igaz, ha a
+   * fuvar a rögzített (tervezett) lerakás dátum előtt lett kézzel lezárva,
+   * és emiatt már a Számla/Posta fülön szerepel a dátum-alapú automatikus
+   * mozgástól függetlenül.
+   */
+  teljesitve: boolean;
+  /** Mikor lett a "Teljesítve" jelölő bepipálva. */
+  teljesitve_at: string | null;
 };
 
 export type AddFuvarInput = {
@@ -121,6 +130,24 @@ export type AddFuvarInput = {
   fizetesiHataridoNap?: number;
   pozicioszam?: string;
   pozicioszamNincs?: boolean;
+};
+
+/**
+ * Egy "folyamatban" saját fuvar a GPS-alapú automatikus "Teljesítve"
+ * figyeléshez (lásd lib/fuvarozas/teljesites-figyeles.ts) — nyers (nem
+ * szövegre formázott) dátumokkal, hogy Date objektumot lehessen belőlük
+ * építeni az Ecofleet trip-lekérdezéshez.
+ */
+export type TeljesitesJelolt = {
+  id: string;
+  /** "Sofőr — rendszám" formátumú szöveg (lásd lib/fuvarozas/vehicles.ts) — sosem üres, a lekérdezés ezt szűri. */
+  jarmu: string;
+  felrako: string | null;
+  lerako: string;
+  /** ISO dátum (YYYY-MM-DD) — a felrakás napja. */
+  datum: string;
+  /** ISO dátum (YYYY-MM-DD), ha a lerakás más napra esik. */
+  lerakas_datum: string | null;
 };
 
 export type ApproveFuvarInput = {

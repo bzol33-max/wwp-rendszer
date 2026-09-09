@@ -269,6 +269,15 @@ alter table fuvar_megbizasok add column if not exists szamla_szam text;
 -- fülre. A jelölő visszavonásakor (kipipálás törlése) nullázódik.
 alter table fuvar_megbizasok add column if not exists postazva_at timestamptz;
 
+-- Bér fuvarok — folyamatban fül: kézi "Teljesítve" jelölő. A fülek közti
+-- automatikus mozgás alapból a lerakás dátumán múlik (lásd
+-- getFolyamatbanSajatFuvarok / getSzamlaPostaFuvarok), de a valóságban egy
+-- fuvar a rögzített (tervezett) dátum előtt is befejeződhet — ilyenkor ez a
+-- jelölő azonnal átteszi a Számla/Posta fülre, A VALÓS lerakás dátum
+-- meghamisítása (visszaírása) nélkül.
+alter table fuvar_megbizasok add column if not exists teljesitve boolean not null default false;
+alter table fuvar_megbizasok add column if not exists teljesitve_at timestamptz;
+
 -- Fuvarozás — Kapcsolatok fül: a megbízásokból (és a hozzájuk tartozó
 -- e-mailekből) kinyert cégenkénti kapcsolattartók. Egy céghez több
 -- kapcsolattartó/telefon/e-mail sor is tartozhat.
