@@ -19,6 +19,15 @@ import type { FuvarRow } from "@/lib/fuvarozas/fuvar-constants";
 // Nyíregyháza fül
 // ---------------------------------------------------------------------------
 
+// A Railway-konténer (és a hozzá tartozó Postgres session) alapértelmezett
+// időzónája UTC, nem Europe/Budapest — lásd lib/jelenlet/actions.ts hasonló
+// megjegyzését. A sima `current_date`/`::date` ezért a szerver (UTC)
+// faliórája szerinti naptári napot adná vissza, ami éjfél körül (a
+// Budapest-UTC eltolás miatt) eltérő/hiányos "mai" adatot eredményezne —
+// ezért itt is explicit `at time zone 'Europe/Budapest'` konverzióval
+// számolunk.
+const BUDAPEST_MA = `(now() at time zone 'Europe/Budapest')::date`;
+
 export type FelvasarlasTipusSor = { tipus: string; qty: number };
 
 export type FelvasarlasOsszefoglalo = {
@@ -34,7 +43,7 @@ export async function getFelvasarlasOsszefoglalo(): Promise<FelvasarlasOsszefogl
       `select t.name as type, sum(p.qty) as qty
        from nyiregyhaza_purchases p
        join pallet_types t on t.id = p.type_id
-       where p.created_at::date = current_date
+       where (p.created_at at time zone 'Europe/Budapest')::date = ${BUDAPEST_MA}
        group by t.name, t.sort_order
        order by t.sort_order nulls last, t.name`
     ),
@@ -59,7 +68,8 @@ export async function getMaiKiadasok(): Promise<KasszaKiadasTetel[]> {
   const rows = await query<{ id: string; description: string; amount: number; created_at: string }>(
     `select id::text, description, amount, created_at::text
      from kassza_movements
-     where created_at::date = current_date and purchase_id is null and amount < 0
+     where (created_at at time zone 'Europe/Budapest')::date = ${BUDAPEST_MA}
+       and purchase_id is null and amount < 0
      order by created_at desc
      limit 100`
   );

@@ -6,7 +6,11 @@ function formatFt(n: number) {
 }
 
 function formatIdo(iso: string) {
-  return new Date(iso).toLocaleTimeString("hu-HU", { hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleTimeString("hu-HU", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Budapest",
+  });
 }
 
 export default async function NyiregyhazaPage() {
