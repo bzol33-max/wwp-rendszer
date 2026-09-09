@@ -3,6 +3,7 @@ import {
   setFuvarFuvardij,
   setFuvarFizetesiHatarido,
   setFuvarSzamlaSzam,
+  setFuvarPostazva,
 } from "@/lib/fuvarozas/megbizasok";
 import type { FuvardijPenznem } from "@/lib/fuvarozas/fuvar-constants";
 
@@ -16,7 +17,11 @@ import type { FuvardijPenznem } from "@/lib/fuvarozas/fuvar-constants";
  * (undefined = nem nyúl hozzá, tehát egy korábban már kézzel kitöltött
  * értéket sem ír felül feleslegesen).
  *
- * Elvárt body: { frissitesek: [{ id, fuvardij?, fuvardijPenznem? ("Ft"|"EUR"), fizetesiHataridoNap?, szamlaSzam? }] }
+ * A postazva mező arra kell, hogy két duplikátum sor összevonásakor (a
+ * megtartott sorra ráírva, a másik törlése előtt) a "postázva" állapot ne
+ * vesszen el, ha a törölt sor már postázva volt.
+ *
+ * Elvárt body: { frissitesek: [{ id, fuvardij?, fuvardijPenznem? ("Ft"|"EUR"), fizetesiHataridoNap?, szamlaSzam?, postazva? }] }
  */
 export async function POST(req: Request) {
   let body: {
@@ -26,6 +31,7 @@ export async function POST(req: Request) {
       fuvardijPenznem?: FuvardijPenznem;
       fizetesiHataridoNap?: number;
       szamlaSzam?: string;
+      postazva?: boolean;
     }[];
   };
   try {
@@ -59,6 +65,9 @@ export async function POST(req: Request) {
       }
       if (f.szamlaSzam !== undefined) {
         await setFuvarSzamlaSzam(f.id, f.szamlaSzam);
+      }
+      if (f.postazva !== undefined) {
+        await setFuvarPostazva(f.id, f.postazva);
       }
       eredmenyek.push({ index: i, ok: true });
     } catch (err) {
