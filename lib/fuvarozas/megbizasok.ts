@@ -155,6 +155,13 @@ export async function getElokeszitettFuvarok(): Promise<FuvarRow[]> {
   );
 }
 
+/**
+ * A "dokumentum_url"-en lévő egyedi index (lásd db/schema.sql) miatt egy már
+ * ismert Drive-dokumentum ismételt beküldése (pl. ha a drive-allapot
+ * dedup-listája valamiért mégis hiányosan látná) csendben nem hoz létre új
+ * sort ("on conflict do nothing") — ez a végső védelem a duplikálás ellen,
+ * a drive-allapot végpont saját dedup-logikája mellett.
+ */
 export async function addFuvar(input: AddFuvarInput) {
   await query(
     `insert into fuvar_megbizasok
@@ -163,7 +170,8 @@ export async function addFuvar(input: AddFuvarInput) {
         dokumentum_url, drive_file_id, forras, ellenorzott, created_by,
         erkezett_datum, lerakas_datum, fizetesi_hatarido_nap,
         pozicioszam, pozicioszam_nincs)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)`,
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+     on conflict (dokumentum_url) where dokumentum_url is not null do nothing`,
     [
       input.tipus,
       input.datum,
