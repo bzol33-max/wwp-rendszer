@@ -155,6 +155,13 @@ export async function getElokeszitettFuvarok(): Promise<FuvarRow[]> {
   );
 }
 
+/**
+ * A "dokumentum_url"-en lévő egyedi index (lásd db/schema.sql) miatt egy már
+ * ismert Drive-dokumentum ismételt beküldése (pl. ha a drive-allapot
+ * dedup-listája valamiért mégis hiányosan látná) csendben nem hoz létre új
+ * sort ("on conflict do nothing") — ez a végső védelem a duplikálás ellen,
+ * a drive-allapot végpont saját dedup-logikája mellett.
+ */
 export async function addFuvar(input: AddFuvarInput) {
   await query(
     `insert into fuvar_megbizasok
@@ -163,7 +170,8 @@ export async function addFuvar(input: AddFuvarInput) {
         dokumentum_url, drive_file_id, forras, ellenorzott, created_by,
         erkezett_datum, lerakas_datum, fizetesi_hatarido_nap,
         pozicioszam, pozicioszam_nincs)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)`,
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+     on conflict (dokumentum_url) where dokumentum_url is not null do nothing`,
     [
       input.tipus,
       input.datum,
@@ -223,6 +231,27 @@ export async function setFuvarPostazasiCim(id: string, postazasiCim: string | nu
     id,
     postazasiCim || null,
   ]);
+}
+
+/**
+ * A lista soron belüli, azonnali javítása: a fuvardíj kitöltése/módosítása.
+ * Arra kell, hogy ha a Drive-automatika a megbízás dokumentumából mégsem
+ * ismerte fel a fuvardíjat (pedig az szerepel benne), az ellenőrzést végző
+ * kolléga a dokumentum alapján közvetlenül a listában pótolhassa —
+ * anélkül, hogy vissza kellene mennie az "Előkészített" jóváhagyó űrlaphoz.
+ */
+export async function setFuvarFuvardij(id: string, fuvardij: number | null) {
+  await query(`update fuvar_megbizasok set fuvardij = $2 where id = $1`, [id, fuvardij]);
+}
+
+/**
+ * A lista soron belüli, azonnali javítása: a fizetési határidő (napokban)
+ * kitöltése/módosítása — ugyanazon okból, mint setFuvarFuvardij: ha ez a
+ * megbízás dokumentumában szerepel, de az automatika nem vitte fel, itt
+ * pótolható, jóváhagyó űrlap újranyitása nélkül.
+ */
+export async function setFuvarFizetesiHatarido(id: string, nap: number | null) {
+  await query(`update fuvar_megbizasok set fizetesi_hatarido_nap = $2 where id = $1`, [id, nap]);
 }
 
 /**
@@ -349,14 +378,23 @@ export async function setFuvarSzamlaSzam(id: string, szamlaSzam: string | null) 
  */
 export async function getPostazasiCimJavaslat(megrendelo: string): Promise<string | null> {
   if (!megrendelo.trim()) return null;
+  // A "megrendelo" mezőt a Drive-automatika tölti ki, dokumentumonként
+  // újra kiolvasva a partner nevét — ugyanaz a cég két megbízáson akár
+  // eltérő írásmóddal is szerepelhet (extra szóköz, nagybetűzés, "Kft."
+  // után pont vagy anélkül). Az eredeti, egyszerű "ilike $1" (wildcard
+  // nélkül, tehát valójában kis-nagybetű-független EGZAKT egyezés) emiatt
+  // hamisan üresnek látta a javaslatot már ismert partnereknél is —
+  // whitespace-normalizálással (trim + belső szóközök összevonása)
+  // egyeztetünk, hogy ez a tipikus eltérés ne törje meg az egyezést.
   const rows = await query<{ postazasi_cim: string }>(
     `select postazasi_cim
        from fuvar_megbizasok
-      where megrendelo ilike $1
+      where lower(regexp_replace(trim(megrendelo), '\\s+', ' ', 'g'))
+              = lower(regexp_replace(trim($1), '\\s+', ' ', 'g'))
         and postazasi_cim is not null
       order by created_at desc
       limit 1`,
-    [megrendelo.trim()]
+    [megrendelo]
   );
   return rows[0]?.postazasi_cim ?? null;
 }

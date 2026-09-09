@@ -97,6 +97,22 @@ function asArray<T>(v: T | T[] | undefined): T[] {
 }
 
 /**
+ * A Számlázz.hu válasz mezőneveinek nagybetűzése nem mindig egyezik a
+ * request XML sablonjában használtéval (lásd fent: <rendelesSzam></...> a
+ * kérésben) — ez a fájlban látható több "élő válaszban ellenőrizve"
+ * megjegyzés szerint korábban már több mezőnél (nev, devizanem, totalossz)
+ * néma hibát okozott, amíg valós válaszon ki nem derült a helyes alak.
+ * Több lehetséges kulcsnév közül visszaadja az elsőt, ami tényleg jelen
+ * van a válaszban.
+ */
+function elsoTalalt(obj: Record<string, unknown>, ...kulcsok: string[]): unknown {
+  for (const k of kulcsok) {
+    if (obj[k] !== undefined) return obj[k];
+  }
+  return undefined;
+}
+
+/**
  * Lekérdez egy számlát a Számlázz.hu-ból sorszám alapján.
  * - Ha nincs ilyen sorszámú számla (hibakód 7), `null`-t ad vissza — ez NEM
  *   hiba, hanem azt jelenti, hogy ezt a sorszámot még figyelni kell (lásd
@@ -173,10 +189,19 @@ export async function lekerdezSzamla(
   // A pénznem mezője <devizanem> (pl. "Ft"), nem <penznem>.
   const penznem = alap["devizanem"] ? decodeEntities(String(alap["devizanem"]).trim()) : "Ft";
 
+  // A "rendelesszam" mező a mi oldalunkon a hiv. szám (pozicioszam) alapján
+  // párosítja a saját fuvarszámláinkat a fuvar-megbízásokhoz (lásd
+  // szinkronizalSzamlaSzamokat, lib/fuvarozas/megbizasok.ts) — ha ez a mező
+  // itt (a nagybetűzés-eltérés miatt) mindig null-t adna vissza, EGYETLEN
+  // számla sem párosodna soha, akkor sem, ha a hiv. szám egyébként pontosan
+  // egyezik. A kérés XML sablonja "rendelesSzam"-ot (camelCase) használ —
+  // a válaszban is ezt (és az eredeti, csupa kisbetűs alakot) próbáljuk.
+  const rendelesszamNyers = elsoTalalt(alap, "rendelesszam", "rendelesSzam");
+
   return {
     szamlaszam: szamlaszamValasz,
     vevoNev: decodeEntities(String(vevo["nev"] ?? "").trim()),
-    rendelesszam: alap["rendelesszam"] ? String(alap["rendelesszam"]).trim() || null : null,
+    rendelesszam: rendelesszamNyers ? String(rendelesszamNyers).trim() || null : null,
     fizmod: alap["fizmod"] ? decodeEntities(String(alap["fizmod"]).trim()) || null : null,
     penznem,
     // <telj> = teljesítés dátuma, <fizh> = fizetési határidő, <kelt> = kiállítás dátuma.

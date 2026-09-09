@@ -220,6 +220,31 @@ alter table fuvar_megbizasok add column if not exists suly text;
 alter table fuvar_megbizasok add column if not exists sofor text;
 alter table fuvar_megbizasok add column if not exists dokumentum_url text;
 alter table fuvar_megbizasok add column if not exists drive_file_id text;
+
+-- Duplikáció-tisztítás (2026-09-09), a lenti egyedi index előfeltétele: a
+-- drive-allapot végpont korábbi hibája miatt (a törölt sorok "eltűntek" a
+-- Drive-automatika ismert-dokumentumok listájából, lásd
+-- app/api/fuvarozas/drive-allapot/route.ts) egy már törölt megbízás
+-- dokumentuma újra importálódhatott, duplikátumot létrehozva. Ha egy
+-- dokumentum_url-hez több sor is tartozik, az elsőn (legkisebb id, az
+-- eredeti importálás) kívül a többiről levesszük a dokumentum_url-t — EGYETLEN
+-- más mezőt (statusz, fuvardíj stb.) sem módosítunk, egy sor sem törlődik,
+-- csak a "honnan importálódott" hivatkozás egyértelműsödik, hogy az alábbi
+-- egyedi index biztonságosan létrehozható legyen. Ismételt lefutáskor no-op.
+update fuvar_megbizasok f
+set dokumentum_url = null
+where f.dokumentum_url is not null
+  and f.id > (
+    select min(f2.id) from fuvar_megbizasok f2 where f2.dokumentum_url = f.dokumentum_url
+  );
+
+-- Duplikálás elleni védelem: a Drive-automatika ugyanazt a dokumentumot
+-- csak egyszer importálhatja be, akkor is, ha az egyik oldali
+-- (drive-allapot) dedup-logika valamiért mégis "újnak" látná (pl. jövőbeli
+-- hiba miatt) — az addFuvar insert "on conflict do nothing"-ot használ erre
+-- az indexre, lásd lib/fuvarozas/megbizasok.ts.
+create unique index if not exists idx_fuvar_megbizasok_dokumentum_url_unique
+  on fuvar_megbizasok (dokumentum_url) where dokumentum_url is not null;
 alter table fuvar_megbizasok add column if not exists forras text not null default 'kezi'
   check (forras in ('kezi', 'pdf_import'));
 alter table fuvar_megbizasok add column if not exists ellenorzott boolean not null default true;

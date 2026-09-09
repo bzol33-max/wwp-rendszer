@@ -43,6 +43,8 @@ import {
   getPostazasiCimJavaslat,
   getSzamlaPostaFuvarok,
   setFuvarPoziciszam,
+  setFuvarFizetesiHatarido,
+  setFuvarFuvardij,
   setFuvarPostazasiCim,
   setFuvarPostazva,
   setFuvarSzamlaSzam,
@@ -283,6 +285,90 @@ function SzovegCell({
       onClick={() => setEditing(true)}
     >
       {value ?? placeholder}
+    </button>
+  );
+}
+
+/**
+ * Egy sor a lista táblázatban inline szerkeszthető, szám típusú mezője
+ * (pl. fuvardíj, fizetési határidő) — ugyanaz a minta, mint a SzovegCell-nél,
+ * csak numerikus inputtal és a hívó által megadott megjelenítési formátummal
+ * (pl. "X Ft", "X nap"). Arra kell, hogy ha a Drive-automatika egy a
+ * megbízás dokumentumában ténylegesen szereplő adatot (fuvardíj, fizetési
+ * határidő) mégsem ismert fel, az ellenőrzést végző kolléga a dokumentum
+ * alapján közvetlenül a listában pótolhassa.
+ */
+function SzamCell({
+  value,
+  onSave,
+  format,
+  placeholder,
+}: {
+  value: number | null;
+  onSave: (value: number | null) => Promise<void>;
+  format: (n: number) => string;
+  placeholder: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState(value != null ? String(value) : "");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setText(value != null ? String(value) : "");
+  }, [value]);
+
+  async function persist() {
+    const szam = text.trim() ? Number(text) : null;
+    if (szam != null && !Number.isFinite(szam)) {
+      toast.error("Érvénytelen szám.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await onSave(szam);
+      setEditing(false);
+    } catch {
+      toast.error("Nem sikerült menteni.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-1.5">
+        <Input
+          autoFocus
+          type="number"
+          className="h-7 w-[100px] text-xs"
+          placeholder={placeholder}
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") persist();
+            if (e.key === "Escape") setEditing(false);
+          }}
+        />
+        <button
+          type="button"
+          className="text-xs text-primary hover:underline disabled:opacity-50"
+          disabled={saving}
+          onClick={persist}
+        >
+          Mentés
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      title="Szerkesztés"
+      className={`text-left hover:underline ${value != null ? "" : "text-muted-foreground"}`}
+      onClick={() => setEditing(true)}
+    >
+      {value != null ? format(value) : placeholder}
     </button>
   );
 }
@@ -1349,10 +1435,26 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
                     </div>
                   </TableCell>
                   <TableCell className="align-top text-right tabular-nums">
-                    {row.fuvardij != null ? `${row.fuvardij.toLocaleString("hu-HU")} Ft` : "—"}
+                    <SzamCell
+                      value={row.fuvardij}
+                      placeholder="fuvardíj megadása"
+                      format={(n) => `${n.toLocaleString("hu-HU")} Ft`}
+                      onSave={async (v) => {
+                        await setFuvarFuvardij(row.id, v);
+                        await load();
+                      }}
+                    />
                   </TableCell>
                   <TableCell className="align-top">
-                    {row.fizetesi_hatarido_nap != null ? `${row.fizetesi_hatarido_nap} nap` : "—"}
+                    <SzamCell
+                      value={row.fizetesi_hatarido_nap}
+                      placeholder="nap"
+                      format={(n) => `${n} nap`}
+                      onSave={async (v) => {
+                        await setFuvarFizetesiHatarido(row.id, v);
+                        await load();
+                      }}
+                    />
                   </TableCell>
                   <TableCell className="align-top">
                     {row.jarmu ? <JarmuJelolo value={row.jarmu} /> : "—"}
@@ -1529,10 +1631,26 @@ function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
                     {row.felrako ? `${varosNev(row.felrako)} → ${varosNev(row.lerako)}` : varosNev(row.lerako)}
                   </TableCell>
                   <TableCell className="align-top text-right tabular-nums">
-                    {row.fuvardij != null ? `${row.fuvardij.toLocaleString("hu-HU")} Ft` : "—"}
+                    <SzamCell
+                      value={row.fuvardij}
+                      placeholder="fuvardíj megadása"
+                      format={(n) => `${n.toLocaleString("hu-HU")} Ft`}
+                      onSave={async (v) => {
+                        await setFuvarFuvardij(row.id, v);
+                        await load();
+                      }}
+                    />
                   </TableCell>
                   <TableCell className="align-top">
-                    {row.fizetesi_hatarido_nap != null ? `${row.fizetesi_hatarido_nap} nap` : "—"}
+                    <SzamCell
+                      value={row.fizetesi_hatarido_nap}
+                      placeholder="nap"
+                      format={(n) => `${n} nap`}
+                      onSave={async (v) => {
+                        await setFuvarFizetesiHatarido(row.id, v);
+                        await load();
+                      }}
+                    />
                   </TableCell>
                   <TableCell className="align-top">
                     {row.jarmu ? <JarmuJelolo value={row.jarmu} /> : "—"}
