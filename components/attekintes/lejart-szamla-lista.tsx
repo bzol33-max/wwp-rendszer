@@ -34,26 +34,26 @@ export function LejartSzamlaLista({ initialRows }: { initialRows: SzamlaRow[] })
   }
 
   if (rows.length === 0) {
-    return <p className="text-sm text-muted-foreground">Nincs lejárt esedékességű, nyitott számla.</p>;
+    return <p className="text-sm text-[var(--at-muted)]">Nincs lejárt esedékességű, nyitott számla.</p>;
   }
 
   return (
     <div className="flex flex-col gap-2">
       {rows.map((row) => (
-        <div key={row.id} className="rounded-xl border bg-card p-3 text-sm">
+        <div key={row.id} className="rounded-xl border border-[var(--at-border)] bg-[var(--at-card)] p-3 text-sm">
           <div className="flex items-center justify-between gap-2">
             <span className="truncate font-medium" title={row.vevo_nev}>
               {row.vevo_nev}
             </span>
-            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+            <span className="shrink-0 rounded bg-[var(--at-tile)] px-1.5 py-0.5 text-[10px] font-medium text-[var(--at-muted)]">
               {KATEGORIA_LABEL[row.kategoria]}
             </span>
           </div>
           <div className="mt-1 flex items-center justify-between text-xs">
-            <span className="text-destructive">
+            <span className="text-[var(--at-negative)]">
               {napjaLejart(row.fizetesi_hatarido)} napja lejárt ({row.fizetesi_hatarido})
             </span>
-            <span className="font-medium tabular-nums text-foreground">
+            <span className="font-medium tabular-nums text-[var(--at-text)]">
               {formatOsszeg(row.brutto, row.penznem)}
             </span>
           </div>
@@ -61,7 +61,7 @@ export function LejartSzamlaLista({ initialRows }: { initialRows: SzamlaRow[] })
             type="button"
             disabled={pendingId === row.id}
             onClick={() => handleFizetve(row.id)}
-            className="mt-2 flex w-full min-h-9 items-center justify-center gap-1.5 rounded-lg border border-dashed py-1.5 text-xs font-medium text-primary disabled:opacity-50"
+            className="mt-2 flex w-full min-h-9 items-center justify-center gap-1.5 rounded-lg border border-dashed border-[var(--at-border)] py-1.5 text-xs font-medium text-[var(--at-accent)] disabled:opacity-50"
           >
             <Check className="h-3.5 w-3.5" />
             Fizetve
