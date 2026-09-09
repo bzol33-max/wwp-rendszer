@@ -18,6 +18,7 @@ export default async function NyiregyhazaPage() {
     getFelvasarlasOsszefoglalo(),
     getMaiKiadasok(),
   ]);
+  const kiadasOsszeg = kiadasok.reduce((sum, k) => sum + k.amount, 0);
 
   return (
     <div className="flex flex-col gap-4 py-4">
@@ -37,27 +38,29 @@ export default async function NyiregyhazaPage() {
         </div>
       </div>
 
-      <div>
-        <h2 className="mb-2 text-sm font-semibold">Mai kiadás</h2>
-        {kiadasok.length === 0 ? (
-          <p className="text-sm text-[var(--at-muted)]">Ma nem volt egyéb (nem felvásárlási) kassza-kiadás.</p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {kiadasok.map((k) => (
-              <div
-                key={k.id}
-                className="flex items-center justify-between gap-2 rounded-xl border border-[var(--at-border)] bg-[var(--at-card)] p-3 text-sm"
-              >
-                <div>
-                  <div className="font-medium">{k.description}</div>
-                  <div className="text-xs text-[var(--at-muted)]">{formatIdo(k.createdAt)}</div>
-                </div>
-                <span className="font-medium text-[var(--at-negative)]">{formatFt(k.amount)}</span>
-              </div>
-            ))}
-          </div>
-        )}
+      <div className="flex items-center justify-between rounded-xl border border-[var(--at-border)] bg-[var(--at-card)] p-4">
+        <span className="text-xs text-[var(--at-muted)]">Mai kiadás</span>
+        <span className="text-2xl font-bold tabular-nums text-[var(--at-negative)]">
+          {formatFt(kiadasOsszeg)}
+        </span>
       </div>
+
+      {kiadasok.length > 0 && (
+        <div className="flex flex-col gap-2">
+          {kiadasok.map((k) => (
+            <div
+              key={k.id}
+              className="flex items-center justify-between gap-2 rounded-lg bg-[var(--at-tile)] p-2.5 text-sm"
+            >
+              <div>
+                <div className="font-medium">{k.description}</div>
+                <div className="text-xs text-[var(--at-muted)]">{formatIdo(k.createdAt)}</div>
+              </div>
+              <span className="font-medium text-[var(--at-negative)]">{formatFt(k.amount)}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div>
         <h2 className="mb-2 text-sm font-semibold">Mai felvásárlás típusonként</h2>

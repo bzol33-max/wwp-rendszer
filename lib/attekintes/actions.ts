@@ -63,13 +63,19 @@ export type KasszaKiadasTetel = {
   createdAt: string;
 };
 
-/** A "Nyíregyháza" fülön: mai kassza-kiadás, ami NEM felvásárláshoz kötött (pl. üzemanyag, egyéb költség). */
+/**
+ * A "Nyíregyháza" fülön: minden pénz, ami ma ténylegesen kiment a kasszából —
+ * felvásárlás/csere/kifizetés (category='felvasarlas') ÉS egyéb kézzel
+ * felvitt kiadás (category='egyeb') egyaránt, kategóriától függetlenül.
+ * A felvásárláshoz kötött tételek külön (típusonkénti) mennyiségét a fenti
+ * csempék már mutatják — ez a lista a teljes mai kassza-kiáramlást adja Ft-ban.
+ */
 export async function getMaiKiadasok(): Promise<KasszaKiadasTetel[]> {
   const rows = await query<{ id: string; description: string; amount: number; created_at: string }>(
     `select id::text, description, amount, created_at::text
      from kassza_movements
      where (created_at at time zone 'Europe/Budapest')::date = ${BUDAPEST_MA}
-       and purchase_id is null and amount < 0
+       and amount < 0
      order by created_at desc
      limit 100`
   );
