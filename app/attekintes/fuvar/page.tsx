@@ -5,7 +5,9 @@ import { getJarmuMegbizasok, getJarmuPoziciok } from "@/lib/attekintes/actions";
 function formatIdo(ecofleetTimestamp: string | null) {
   if (!ecofleetTimestamp) return null;
   const d = parseEcofleetTimestamp(ecofleetTimestamp);
-  return d ? d.toLocaleTimeString("hu-HU", { hour: "2-digit", minute: "2-digit" }) : null;
+  return d
+    ? d.toLocaleTimeString("hu-HU", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Budapest" })
+    : null;
 }
 
 export default async function FuvarPage() {
