@@ -357,14 +357,23 @@ export async function setFuvarSzamlaSzam(id: string, szamlaSzam: string | null) 
  */
 export async function getPostazasiCimJavaslat(megrendelo: string): Promise<string | null> {
   if (!megrendelo.trim()) return null;
+  // A "megrendelo" mezőt a Drive-automatika tölti ki, dokumentumonként
+  // újra kiolvasva a partner nevét — ugyanaz a cég két megbízáson akár
+  // eltérő írásmóddal is szerepelhet (extra szóköz, nagybetűzés, "Kft."
+  // után pont vagy anélkül). Az eredeti, egyszerű "ilike $1" (wildcard
+  // nélkül, tehát valójában kis-nagybetű-független EGZAKT egyezés) emiatt
+  // hamisan üresnek látta a javaslatot már ismert partnereknél is —
+  // whitespace-normalizálással (trim + belső szóközök összevonása)
+  // egyeztetünk, hogy ez a tipikus eltérés ne törje meg az egyezést.
   const rows = await query<{ postazasi_cim: string }>(
     `select postazasi_cim
        from fuvar_megbizasok
-      where megrendelo ilike $1
+      where lower(regexp_replace(trim(megrendelo), '\\s+', ' ', 'g'))
+              = lower(regexp_replace(trim($1), '\\s+', ' ', 'g'))
         and postazasi_cim is not null
       order by created_at desc
       limit 1`,
-    [megrendelo.trim()]
+    [megrendelo]
   );
   return rows[0]?.postazasi_cim ?? null;
 }
