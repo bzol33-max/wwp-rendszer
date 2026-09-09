@@ -58,23 +58,6 @@ export default async function NyiregyhazaPage() {
         </span>
       </div>
 
-      {kiadasok.length > 0 && (
-        <div className="flex flex-col gap-2">
-          {kiadasok.map((k) => (
-            <div
-              key={k.id}
-              className="flex items-center justify-between gap-2 rounded-lg bg-[var(--at-tile)] p-2.5 text-sm"
-            >
-              <div>
-                <div className="font-medium">{k.description}</div>
-                <div className="text-xs text-[var(--at-muted)]">{formatIdo(k.createdAt)}</div>
-              </div>
-              <span className="font-medium text-[var(--at-negative)]">{formatFt(k.amount)}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
       <div>
         <h2 className="mb-2 text-sm font-semibold">Mai felvásárlás típusonként</h2>
         {osszefoglalo.tipusok.length === 0 ? (
@@ -90,6 +73,26 @@ export default async function NyiregyhazaPage() {
           </div>
         )}
       </div>
+
+      {kiadasok.length > 0 && (
+        <div>
+          <h2 className="mb-2 text-sm font-semibold">Mai kiadás — részletesen</h2>
+          <div className="flex flex-col gap-2">
+            {kiadasok.map((k) => (
+              <div
+                key={k.id}
+                className="flex items-center justify-between gap-2 rounded-lg bg-[var(--at-tile)] p-2.5 text-sm"
+              >
+                <div>
+                  <div className="font-medium">{k.description}</div>
+                  <div className="text-xs text-[var(--at-muted)]">{formatIdo(k.createdAt)}</div>
+                </div>
+                <span className="font-medium text-[var(--at-negative)]">{formatFt(k.amount)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
