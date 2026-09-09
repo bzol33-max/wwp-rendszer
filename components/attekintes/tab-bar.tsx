@@ -7,8 +7,8 @@ import { cn } from "@/lib/utils";
 
 const TABS = [
   { href: "/attekintes", label: "Nyíregyháza", icon: Building2 },
-  { href: "/attekintes/fuvar", label: "Fuvar", icon: Truck },
   { href: "/attekintes/szamlak", label: "Számlák", icon: Wallet },
+  { href: "/attekintes/fuvar", label: "Fuvar", icon: Truck },
   { href: "/attekintes/keszlet", label: "Készlet", icon: Package },
 ];
 
