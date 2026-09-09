@@ -356,10 +356,14 @@ export function NyiregyhazaHaviTab() {
     toast.success("Kassza-mozgás rögzítve.");
   }
 
+  // A "Havi felvásárlások" táblázat a rögzítés módjától (gyors rögzítés vagy
+  // kifizetésre váró tétel) függetlenül MINDEN vételt mutat — a pending
+  // tételek a "Kifizetésre vár" jelvénnyel különböztethetők meg (a sor
+  // renderelése ezt már eddig is kezelte, csak korábban ki voltak szűrve
+  // innen, és csak a külön "Kifizetésre váró tételek" kártyán látszottak).
   const pending = purchases.filter((p) => p.pending);
-  const settled = purchases.filter((p) => !p.pending);
-  const todayPurchases = settled.filter((p) => p.day_key === todayKey);
-  const pastPurchases = settled.filter((p) => p.day_key !== todayKey);
+  const todayPurchases = purchases.filter((p) => p.day_key === todayKey);
+  const pastPurchases = purchases.filter((p) => p.day_key !== todayKey);
 
   const pastGroups: {
     dayKey: string;
