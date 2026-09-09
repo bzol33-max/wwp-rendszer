@@ -5,6 +5,16 @@ import { query } from "@/lib/db";
 
 const TIME_FMT = "mon. DD HH24:MI";
 
+// A Railway-konténer (és a hozzá tartozó Postgres session) alapértelmezett
+// időzónája UTC, nem Europe/Budapest — lásd lib/jelenlet/actions.ts hasonló
+// megjegyzését. Sima `to_char`/`current_date`/`::date` ezért a szerver (UTC)
+// faliórát adná vissza, ami éjfél körül (kb. 1-2 órás ablakban) a naptári
+// napot is elcsúsztatná — pl. egy budapesti éjfél után rögzített "mai"
+// felvásárlás a szerver szerint még tegnapra kerülne. Minden itt
+// megjelenített/csoportosított dátum-idő ezért explicit
+// `at time zone 'Europe/Budapest'` konverzióval számol.
+const BUDAPEST_NOW_DATE = `(now() at time zone 'Europe/Budapest')::date`;
+
 // "mozgatas_be" sosem felhasználó által választott irány (a Mozgás
 // rögzítése kártyán nem is jelenik meg) — ez a telephelyek közti
 // mozgatás cél oldali, rendszer által generált párja, ld. recordMovement.
@@ -60,7 +70,7 @@ export async function getStock(site: string): Promise<Record<string, number>> {
 
 export async function getMovements(site: string, limit = 20): Promise<MovementRow[]> {
   const rows = await query<MovementRow>(
-    `select m.id::text, to_char(m.created_at, '${TIME_FMT}') as date, t.name as type,
+    `select m.id::text, to_char(m.created_at at time zone 'Europe/Budapest', '${TIME_FMT}') as date, t.name as type,
        m.direction, m.partner, m.qty, ts.name as target_site, m.created_by
      from keszlet_movements m
      join pallet_types t on t.id = m.type_id
@@ -292,8 +302,8 @@ export type PurchaseRow = {
 
 export async function getHaviSnapshot() {
   const purchases = await query<PurchaseRow>(
-    `select p.id::text, to_char(p.created_at, '${TIME_FMT}') as date,
-       to_char(p.created_at, 'YYYY-MM-DD') as day_key, t.name as type,
+    `select p.id::text, to_char(p.created_at at time zone 'Europe/Budapest', '${TIME_FMT}') as date,
+       to_char(p.created_at at time zone 'Europe/Budapest', 'YYYY-MM-DD') as day_key, t.name as type,
        p.qty, p.unit_price, p.total, p.seller, p.pending, p.payment_method, p.created_by
      from nyiregyhaza_purchases p
      join pallet_types t on t.id = p.type_id
@@ -308,11 +318,14 @@ export async function getHaviSnapshot() {
   // itt sem számít bele. Kifizetésre váró (pending) tétel csak azon a napon számít bele,
   // amikor ténylegesen kifizetésre kerül (paid_at), nem amikor felvették.
   const todayExpenseRows = await query<{ total: string; today_key: string }>(
-    `select coalesce(sum(p.total), 0) as total, to_char(current_date, 'YYYY-MM-DD') as today_key
+    `select coalesce(sum(p.total), 0) as total, to_char(${BUDAPEST_NOW_DATE}, 'YYYY-MM-DD') as today_key
      from nyiregyhaza_purchases p
      where p.payment_method = 'keszpenz'
        and p.pending = false
-       and coalesce(p.paid_at::date, p.created_at::date) = current_date`
+       and coalesce(
+         (p.paid_at at time zone 'Europe/Budapest')::date,
+         (p.created_at at time zone 'Europe/Budapest')::date
+       ) = ${BUDAPEST_NOW_DATE}`
   );
   // Gyors rögzítéshez azok a típusok jelennek meg, amik Nyíregyházán aktívak ÉS van beárazva.
   const priceRows = await query<{ name: string; default_price: number | null }>(
@@ -332,9 +345,12 @@ export async function getHaviSnapshot() {
   }>(
     `select t.name as type,
        coalesce(sum(p.qty) filter (
-         where date_trunc('month', p.created_at) = date_trunc('month', current_date)
+         where date_trunc('month', p.created_at at time zone 'Europe/Budapest')
+             = date_trunc('month', ${BUDAPEST_NOW_DATE})
        ), 0) as monthly_qty,
-       coalesce(sum(p.qty) filter (where p.created_at::date = current_date), 0) as daily_qty
+       coalesce(sum(p.qty) filter (
+         where (p.created_at at time zone 'Europe/Budapest')::date = ${BUDAPEST_NOW_DATE}
+       ), 0) as daily_qty
      from pallet_types t
      join site_active_types sat on sat.type_id = t.id
      join sites s on s.id = sat.site_id
@@ -565,8 +581,8 @@ export async function getKasszaMovements(): Promise<KasszaMovementRow[]> {
     cnt: number;
     total: number;
   }>(
-    `select to_char(date_trunc('month', created_at), 'YYYY-MM') as month_key,
-            to_char(date_trunc('month', created_at), 'mon. YYYY') as month_label,
+    `select to_char(date_trunc('month', created_at at time zone 'Europe/Budapest'), 'YYYY-MM') as month_key,
+            to_char(date_trunc('month', created_at at time zone 'Europe/Budapest'), 'mon. YYYY') as month_label,
             count(*)::int as cnt,
             sum(amount)::int as total
      from kassza_movements
@@ -576,7 +592,7 @@ export async function getKasszaMovements(): Promise<KasszaMovementRow[]> {
   );
 
   const otherRows = await query<KasszaMovementRow>(
-    `select id::text, to_char(created_at, '${TIME_FMT}') as date, description, amount, created_by
+    `select id::text, to_char(created_at at time zone 'Europe/Budapest', '${TIME_FMT}') as date, description, amount, created_by
      from kassza_movements
      where category <> 'felvasarlas'
      order by created_at desc
@@ -612,7 +628,7 @@ export async function getNyiregyhazaFoSnapshot() {
   const [stock, events] = await Promise.all([
     getStock("Nyíregyháza"),
     query<EventRow>(
-      `select id::text, to_char(created_at, '${TIME_FMT}') as date, kind, details, effect, created_by
+      `select id::text, to_char(created_at at time zone 'Europe/Budapest', '${TIME_FMT}') as date, kind, details, effect, created_by
        from keszlet_events
        where site_id = (select id from sites where name = 'Nyíregyháza')
          and kind = 'mozgas'
