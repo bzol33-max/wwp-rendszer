@@ -1,6 +1,3 @@
-import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
-import { requireSession } from "@/lib/auth/dal";
 import { JARMU_SZIN_DOT_CLASS } from "@/lib/fuvarozas/vehicles";
 import { parseEcofleetTimestamp } from "@/lib/fuvarozas/ecofleet";
 import { getJarmuMegbizasok, getJarmuPoziciok } from "@/lib/attekintes/actions";
@@ -11,25 +8,12 @@ function formatIdo(ecofleetTimestamp: string | null) {
   return d ? d.toLocaleTimeString("hu-HU", { hour: "2-digit", minute: "2-digit" }) : null;
 }
 
-export default async function FuvarozasReszletekPage() {
-  const session = await requireSession();
-  if (!session.can("attekintes").view) {
-    return (
-      <div className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center bg-muted/40 px-4 text-center text-sm text-muted-foreground">
-        Nincs jogosultságod ehhez a nézethez.
-      </div>
-    );
-  }
-
+export default async function FuvarPage() {
   const [poziciok, csoportok] = await Promise.all([getJarmuPoziciok(), getJarmuMegbizasok()]);
   const poziciokBySofor = Object.fromEntries(poziciok.map((p) => [p.jarmu.sofor, p]));
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col gap-4 bg-muted/40 px-4 py-4">
-      <Link href="/attekintes" className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
-        <ArrowLeft className="h-3.5 w-3.5" />
-        Áttekintés
-      </Link>
+    <div className="flex flex-col gap-4 py-4">
       <h1 className="text-base font-semibold">Fuvarozás — kocsinként</h1>
 
       <div className="flex flex-col gap-3">
