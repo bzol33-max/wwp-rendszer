@@ -93,6 +93,15 @@ export type FuvarRow = {
   szamla_szam: string | null;
   /** Mikor lett a "Postázva" jelölő bepipálva — ebből számít az 5 perces visszavonási ablak. */
   postazva_at: string | null;
+  /**
+   * Kézi "Teljesítve" jelölő (Bér fuvarok — folyamatban fül): igaz, ha a
+   * fuvar a rögzített (tervezett) lerakás dátum előtt lett kézzel lezárva,
+   * és emiatt már a Számla/Posta fülön szerepel a dátum-alapú automatikus
+   * mozgástól függetlenül.
+   */
+  teljesitve: boolean;
+  /** Mikor lett a "Teljesítve" jelölő bepipálva. */
+  teljesitve_at: string | null;
 };
 
 export type AddFuvarInput = {

@@ -29,7 +29,7 @@ const FUVAR_ROW_COLUMNS = `
   to_char(lerakas_datum, '${TIME_FMT}') as lerakas_datum,
   fizetesi_hatarido_nap,
   pozicioszam, pozicioszam_nincs, postazasi_cim, postazva, szamla_szam,
-  postazva_at::text
+  postazva_at::text, teljesitve, teljesitve_at::text
 `;
 
 export async function getFuvarok(tipus: FuvarTipus): Promise<FuvarRow[]> {
@@ -66,6 +66,7 @@ export async function getFolyamatbanSajatFuvarok(): Promise<FuvarRow[]> {
     `select ${FUVAR_ROW_COLUMNS}
      from fuvar_megbizasok
      where tipus = 'sajat' and statusz <> 'torolt'
+       and not teljesitve
        and coalesce(lerakas_datum, datum) >= current_date
      order by ellenorzott asc, coalesce(lerakas_datum, datum) asc, id asc
      limit 200`
@@ -214,22 +215,37 @@ export async function setFuvarPostazva(id: string, postazva: boolean) {
   );
 }
 
+/**
+ * A "Bér fuvarok — folyamatban" fül kézi "Teljesítve" gombja: a fuvart a
+ * rögzített (tervezett) lerakás dátumtól függetlenül azonnal átteszi a
+ * Számla/Posta fülre — a valós dátumot NEM módosítja, csak ezt a külön
+ * jelölőt. Lásd getSzamlaPostaFuvarok.
+ */
+export async function setFuvarTeljesitve(id: string, teljesitve: boolean) {
+  await query(
+    `update fuvar_megbizasok set teljesitve = $2, teljesitve_at = case when $2 then now() else null end where id = $1`,
+    [id, teljesitve]
+  );
+}
+
 /** Az 5 perces visszavonási ablak, amíg egy "Postázva" jelölésű fuvar még nem archiválódik automatikusan. */
 const ARCHIVALAS_ABLAK_SQL = `interval '5 minutes'`;
 
 /**
  * A Számla/Posta lista: a Bér fuvarok, DE csak azok, amiknek a munkája már
- * befejeződött (a lerakás dátuma elmúlt — amíg folyamatban van, a "Bér
- * fuvarok" fülön látszik, lásd getFolyamatbanSajatFuvarok), és amik még nem
- * "effektíve" archiváltak (postázva, és az 5 perces visszavonási ablak már
- * lejárt) — ezek helyette az Archív fülön (getArchivFuvarok) jelennek meg.
+ * befejeződött — akár mert a lerakás dátuma elmúlt, akár mert kézzel
+ * "Teljesítve"-nek lett jelölve a rögzített dátum előtt (lásd
+ * setFuvarTeljesitve; amíg egyik sem igaz, a "Bér fuvarok" fülön látszik,
+ * lásd getFolyamatbanSajatFuvarok) —, és amik még nem "effektíve"
+ * archiváltak (postázva, és az 5 perces visszavonási ablak már lejárt) —
+ * ezek helyette az Archív fülön (getArchivFuvarok) jelennek meg.
  */
 export async function getSzamlaPostaFuvarok(): Promise<FuvarRow[]> {
   return query<FuvarRow>(
     `select ${FUVAR_ROW_COLUMNS}
      from fuvar_megbizasok
      where tipus = 'sajat' and statusz <> 'torolt'
-       and coalesce(lerakas_datum, datum) < current_date
+       and (teljesitve or coalesce(lerakas_datum, datum) < current_date)
        and not (postazva and postazva_at <= now() - ${ARCHIVALAS_ABLAK_SQL})
      order by ellenorzott asc, fuvar_megbizasok.erkezett_datum desc nulls last, datum desc, id desc
      limit 200`
