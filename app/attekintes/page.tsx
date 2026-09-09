@@ -13,6 +13,16 @@ function formatIdo(iso: string) {
   });
 }
 
+function formatMaiDatum() {
+  return new Date().toLocaleDateString("hu-HU", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "long",
+    timeZone: "Europe/Budapest",
+  });
+}
+
 export default async function NyiregyhazaPage() {
   const [osszefoglalo, kiadasok] = await Promise.all([
     getFelvasarlasOsszefoglalo(),
@@ -22,7 +32,10 @@ export default async function NyiregyhazaPage() {
 
   return (
     <div className="flex flex-col gap-4 py-4">
-      <h1 className="text-base font-semibold">Nyíregyháza — mai felvásárlás</h1>
+      <div>
+        <h1 className="text-base font-semibold">Nyíregyháza — mai felvásárlás</h1>
+        <p className="text-xs text-[var(--at-muted)]">{formatMaiDatum()}</p>
+      </div>
 
       <div className="flex items-center justify-between rounded-xl border border-[var(--at-border)] bg-[var(--at-card)] p-4">
         <div className="flex items-center gap-1.5 text-xs text-[var(--at-muted)]">

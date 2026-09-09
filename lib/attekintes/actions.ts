@@ -56,6 +56,20 @@ export async function getFelvasarlasOsszefoglalo(): Promise<FelvasarlasOsszefogl
   };
 }
 
+/** A fejlécben (a kijelentkezés alatt, minden fülön) megjelenő havi összesítő: a folyó hónap felvásárlása típusonként. */
+export async function getHaviFelvasarlasOsszefoglalo(): Promise<FelvasarlasTipusSor[]> {
+  const rows = await query<{ type: string; qty: string }>(
+    `select t.name as type, sum(p.qty) as qty
+     from nyiregyhaza_purchases p
+     join pallet_types t on t.id = p.type_id
+     where date_trunc('month', p.created_at at time zone 'Europe/Budapest')
+         = date_trunc('month', now() at time zone 'Europe/Budapest')
+     group by t.name, t.sort_order
+     order by t.sort_order nulls last, t.name`
+  );
+  return rows.map((r) => ({ tipus: r.type, qty: Number(r.qty) }));
+}
+
 export type KasszaKiadasTetel = {
   id: string;
   description: string;
