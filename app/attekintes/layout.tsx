@@ -4,6 +4,7 @@ import { logout } from "@/lib/auth/actions";
 import { AttekintesTabBar } from "@/components/attekintes/tab-bar";
 import { ATTEKINTES_THEME_STYLE } from "@/lib/attekintes/theme";
 import { getHaviFelvasarlasOsszefoglalo } from "@/lib/attekintes/actions";
+import { HaviFelvasarlasButton } from "@/components/attekintes/havi-felvasarlas-modal";
 
 export default async function AttekintesLayout({ children }: { children: React.ReactNode }) {
   const session = await requireSession();
@@ -36,24 +37,7 @@ export default async function AttekintesLayout({ children }: { children: React.R
         </form>
       </div>
 
-      {haviTipusok.length > 0 && (
-        <div className="px-4 pb-2">
-          <div className="mb-1 text-[10px] font-medium uppercase tracking-wide text-[var(--at-muted)]">
-            Havi felvásárlás
-          </div>
-          <div className="flex gap-1.5 overflow-x-auto">
-            {haviTipusok.map((t) => (
-              <div
-                key={t.tipus}
-                className="shrink-0 rounded-md bg-[var(--at-tile)] px-2 py-1"
-              >
-                <div className="text-[9px] text-[var(--at-muted)]">{t.tipus}</div>
-                <div className="text-sm font-bold tabular-nums text-[var(--at-positive)]">+{t.qty}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <HaviFelvasarlasButton tipusok={haviTipusok} />
 
       <div className="flex-1 overflow-y-auto px-4 pb-20">{children}</div>
       <AttekintesTabBar />
