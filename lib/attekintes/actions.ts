@@ -19,52 +19,33 @@ import type { FuvarRow } from "@/lib/fuvarozas/fuvar-constants";
 // Nyíregyháza fül
 // ---------------------------------------------------------------------------
 
-const FELVASARLAS_TIPUSOK = ["EUR világos", "EUR szürke", "H1 raklap", "Gitterbox"] as const;
+export type FelvasarlasTipusSor = { tipus: string; qty: number };
 
 export type FelvasarlasOsszefoglalo = {
-  eurVilagosMa: number;
-  eurSzurkeMa: number;
-  h1Ma: number;
-  gitterboxMa: number;
+  /** A mai napon ténylegesen vásárolt típusok mennyisége, típusonként — csak azok, amikben ma volt forgalom. */
+  tipusok: FelvasarlasTipusSor[];
   kassza: number;
 };
 
-/** A fül tetején megjelenő, mai (ma rögzített) mennyiségek típusonként, plusz a kassza egyenleg. */
+/** A "Nyíregyháza" fül fő adatai: a mai felvásárlás típusonként (csempénként) és a kassza egyenleg. */
 export async function getFelvasarlasOsszefoglalo(): Promise<FelvasarlasOsszefoglalo> {
   const [typeRows, kasszaRows] = await Promise.all([
-    query<{ type: string; daily_qty: string }>(
-      `select t.name as type,
-         coalesce(sum(p.qty) filter (where p.created_at::date = current_date), 0) as daily_qty
-       from pallet_types t
-       left join nyiregyhaza_purchases p on p.type_id = t.id
-       where t.name = any($1::text[])
-       group by t.name`,
-      [FELVASARLAS_TIPUSOK]
+    query<{ type: string; qty: string }>(
+      `select t.name as type, sum(p.qty) as qty
+       from nyiregyhaza_purchases p
+       join pallet_types t on t.id = p.type_id
+       where p.created_at::date = current_date
+       group by t.name, t.sort_order
+       order by t.sort_order nulls last, t.name`
     ),
     query<{ total: string }>(`select coalesce(sum(amount), 0) as total from kassza_movements`),
   ]);
 
-  const byType = Object.fromEntries(typeRows.map((r) => [r.type, Number(r.daily_qty)]));
-
   return {
-    eurVilagosMa: byType["EUR világos"] ?? 0,
-    eurSzurkeMa: byType["EUR szürke"] ?? 0,
-    h1Ma: byType["H1 raklap"] ?? 0,
-    gitterboxMa: byType["Gitterbox"] ?? 0,
+    tipusok: typeRows.map((r) => ({ tipus: r.type, qty: Number(r.qty) })),
     kassza: Number(kasszaRows[0]?.total ?? 0),
   };
 }
-
-export type FelvasarlasTetel = {
-  id: string;
-  tipus: string;
-  qty: number;
-  unitPrice: number;
-  total: number;
-  seller: string;
-  paymentMethod: string;
-  createdAt: string;
-};
 
 export type KasszaKiadasTetel = {
   id: string;
@@ -73,61 +54,21 @@ export type KasszaKiadasTetel = {
   createdAt: string;
 };
 
-export type FelvasarlasReszletek = {
-  /** A mai nap ÖSSZES típusban rögzített felvásárlása, a legutóbbi elöl. */
-  vasarlasok: FelvasarlasTetel[];
-  /** Mai kassza-kiadás, ami NEM felvásárláshoz kötött (pl. üzemanyag, egyéb költség). */
-  kiadasok: KasszaKiadasTetel[];
-};
-
-/** A "Nyíregyháza" fülön: a teljes napi felvásárlás (minden típus) és a mai kiadások. */
-export async function getFelvasarlasReszletek(): Promise<FelvasarlasReszletek> {
-  const [vasarlasRows, kiadasRows] = await Promise.all([
-    query<{
-      id: string;
-      tipus: string;
-      qty: number;
-      unit_price: number;
-      total: number;
-      seller: string;
-      payment_method: string;
-      created_at: string;
-    }>(
-      `select p.id::text, t.name as tipus, p.qty, p.unit_price, p.total, p.seller,
-         p.payment_method, p.created_at::text
-       from nyiregyhaza_purchases p
-       join pallet_types t on t.id = p.type_id
-       where p.created_at::date = current_date
-       order by p.created_at desc
-       limit 200`
-    ),
-    query<{ id: string; description: string; amount: number; created_at: string }>(
-      `select id::text, description, amount, created_at::text
-       from kassza_movements
-       where created_at::date = current_date and purchase_id is null and amount < 0
-       order by created_at desc
-       limit 100`
-    ),
-  ]);
-
-  return {
-    vasarlasok: vasarlasRows.map((r) => ({
-      id: r.id,
-      tipus: r.tipus,
-      qty: r.qty,
-      unitPrice: r.unit_price,
-      total: r.total,
-      seller: r.seller,
-      paymentMethod: r.payment_method,
-      createdAt: r.created_at,
-    })),
-    kiadasok: kiadasRows.map((r) => ({
-      id: r.id,
-      description: r.description,
-      amount: r.amount,
-      createdAt: r.created_at,
-    })),
-  };
+/** A "Nyíregyháza" fülön: mai kassza-kiadás, ami NEM felvásárláshoz kötött (pl. üzemanyag, egyéb költség). */
+export async function getMaiKiadasok(): Promise<KasszaKiadasTetel[]> {
+  const rows = await query<{ id: string; description: string; amount: number; created_at: string }>(
+    `select id::text, description, amount, created_at::text
+     from kassza_movements
+     where created_at::date = current_date and purchase_id is null and amount < 0
+     order by created_at desc
+     limit 100`
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    description: r.description,
+    amount: r.amount,
+    createdAt: r.created_at,
+  }));
 }
 
 // ---------------------------------------------------------------------------
