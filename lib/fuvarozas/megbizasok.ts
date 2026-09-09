@@ -170,8 +170,8 @@ export async function addFuvar(input: AddFuvarInput) {
         jarmu, sofor, alvallalkozo, fuvardij, fuvardij_penznem, koltseg, megjegyzes,
         dokumentum_url, drive_file_id, forras, ellenorzott, created_by,
         erkezett_datum, lerakas_datum, fizetesi_hatarido_nap,
-        pozicioszam, pozicioszam_nincs)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
+        pozicioszam, pozicioszam_nincs, postazasi_cim)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
      on conflict (dokumentum_url) where dokumentum_url is not null do nothing`,
     [
       input.tipus,
@@ -200,6 +200,7 @@ export async function addFuvar(input: AddFuvarInput) {
       input.fizetesiHataridoNap ?? null,
       input.pozicioszam || null,
       input.pozicioszamNincs ?? false,
+      input.postazasiCim || null,
     ]
   );
 }
