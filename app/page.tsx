@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { Building2, MapPin, ArrowRight, Smartphone, Mail } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
@@ -11,6 +12,18 @@ import type { ModuleKey } from "@/lib/auth/permissions";
 
 export default async function Home() {
   const session = await requireSession();
+
+  // Akinek van "attekintes" (vezetői, mobilra tervezett csempés/tabsávos
+  // nézet) joga, és éppen mobil eszközről jelentkezett be (proxy.ts a
+  // User-Agent alapján állítja be a "wwp_device" sütit — lásd
+  // lib/device.ts), azt bejelentkezés után rögtön az Áttekintésre
+  // irányítjuk, akkor is, ha egyébként a teljes asztali modulrácshoz is
+  // hozzáférése van — mobilon ez az ő kezdőképernyője, nem az Info.
+  const isMobileDevice = (await cookies()).get("wwp_device")?.value === "mobile";
+  if (isMobileDevice && session.can("attekintes").view) {
+    redirect("/attekintes");
+  }
+
   const visibleModules = MODULES.filter(
     (mod) => session.can(mod.key as ModuleKey).view
   );
