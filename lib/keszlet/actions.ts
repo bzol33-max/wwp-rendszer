@@ -354,19 +354,16 @@ export async function getHaviSnapshot() {
   const kasszaRows = await query<{ total: string }>(
     `select coalesce(sum(amount), 0) as total from kassza_movements`
   );
-  // Mai kiadás: a mai napon ténylegesen kifizetett készpénzes vétel (Csere is kiadás —
-  // készpénzért veszünk raklapot). Átutalással fizetett vétel nem kassza-kiadás, ezért
-  // itt sem számít bele. Kifizetésre váró (pending) tétel csak azon a napon számít bele,
-  // amikor ténylegesen kifizetésre kerül (paid_at), nem amikor felvették.
+  // Mai kiadás: MINDEN mai kassza-kifizetés — nem csak a felvásárlás/csere/kifizetésre
+  // váró tétel kiegyenlítése (category = 'felvasarlas'), hanem az "Egyéb kassza-mozgás"
+  // kártyán kézzel rögzített kiadás (pl. számla) is. A kassza_movements a tényleges
+  // pénzmozgás pillanatában íródik (pl. Kifizetésnél a kiegyenlítéskor, nem a tétel
+  // felvételekor), ezért a created_at itt már önmagában helyesen a "mai" napot jelenti.
   const todayExpenseRows = await query<{ total: string; today_key: string }>(
-    `select coalesce(sum(p.total), 0) as total, to_char(${BUDAPEST_NOW_DATE}, 'YYYY-MM-DD') as today_key
-     from nyiregyhaza_purchases p
-     where p.payment_method = 'keszpenz'
-       and p.pending = false
-       and coalesce(
-         (p.paid_at at time zone 'Europe/Budapest')::date,
-         (p.created_at at time zone 'Europe/Budapest')::date
-       ) = ${BUDAPEST_NOW_DATE}`
+    `select coalesce(sum(-amount), 0) as total, to_char(${BUDAPEST_NOW_DATE}, 'YYYY-MM-DD') as today_key
+     from kassza_movements
+     where amount < 0
+       and (created_at at time zone 'Europe/Budapest')::date = ${BUDAPEST_NOW_DATE}`
   );
   // Gyors rögzítéshez azok a típusok jelennek meg, amik Nyíregyházán aktívak ÉS van beárazva.
   const priceRows = await query<{ name: string; default_price: number | null }>(

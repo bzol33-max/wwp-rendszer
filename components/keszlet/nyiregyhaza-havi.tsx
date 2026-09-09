@@ -418,13 +418,13 @@ export function NyiregyhazaHaviTab() {
                 minimum szélesség mellett elfér — keskeny (mobil) képernyőn
                 több sorba törik, ahelyett hogy flex-nowrap miatt egyre
                 keskenyebbre zsugorodna minden csempe. */}
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(4.25rem,1fr))] gap-1.5">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(5.5rem,1fr))] gap-1.5">
               {typeCounters.map((c) => (
                 <div
                   key={`havi-${c.type}`}
                   className={`min-w-0 rounded-lg border px-1.5 py-2 text-center ${MONTHLY_TILE_COLOR.border} ${MONTHLY_TILE_COLOR.bg}`}
                 >
-                  <div className={`truncate text-[10px] font-medium ${MONTHLY_TILE_COLOR.text}`}>
+                  <div className={`text-[11px] font-medium leading-tight ${MONTHLY_TILE_COLOR.text}`}>
                     {c.type}
                   </div>
                   <div className={`text-lg font-bold tabular-nums ${MONTHLY_TILE_COLOR.text}`}>
@@ -436,13 +436,13 @@ export function NyiregyhazaHaviTab() {
           </div>
           <div>
             <div className={`mb-1 text-xs font-semibold ${DAILY_TILE_COLOR.text}`}>Mai</div>
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(4.25rem,1fr))] gap-1.5">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(5.5rem,1fr))] gap-1.5">
               {typeCounters.map((c) => (
                 <div
                   key={`napi-${c.type}`}
                   className={`min-w-0 rounded-lg border px-1.5 py-1.5 text-center ${DAILY_TILE_COLOR.border} ${DAILY_TILE_COLOR.bg}`}
                 >
-                  <div className={`truncate text-[10px] font-medium ${DAILY_TILE_COLOR.text}`}>
+                  <div className={`text-[11px] font-medium leading-tight ${DAILY_TILE_COLOR.text}`}>
                     {c.type}
                   </div>
                   <div className={`text-sm font-semibold tabular-nums ${DAILY_TILE_COLOR.text}`}>
@@ -753,7 +753,7 @@ export function NyiregyhazaHaviTab() {
       </div>
 
       <Dialog open={kasszaDetailOpen} onOpenChange={setKasszaDetailOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>Kassza mozgások</DialogTitle>
           </DialogHeader>
@@ -772,9 +772,9 @@ export function NyiregyhazaHaviTab() {
                     .map((m) => (
                       <div
                         key={m.id}
-                        className="flex items-center justify-between rounded-md border bg-success/5 px-2.5 py-1.5 text-sm"
+                        className="flex items-start justify-between gap-2 rounded-md border bg-success/5 px-2.5 py-1.5 text-sm"
                       >
-                        <span className="truncate pr-2 text-muted-foreground">
+                        <span className="text-muted-foreground">
                           {m.date} · {m.description}
                           {m.created_by && <> · {m.created_by}</>}
                         </span>
@@ -796,9 +796,9 @@ export function NyiregyhazaHaviTab() {
                     .map((m) => (
                       <div
                         key={m.id}
-                        className="flex items-center justify-between rounded-md border bg-destructive/5 px-2.5 py-1.5 text-sm"
+                        className="flex items-start justify-between gap-2 rounded-md border bg-destructive/5 px-2.5 py-1.5 text-sm"
                       >
-                        <span className="truncate pr-2 text-muted-foreground">
+                        <span className="text-muted-foreground">
                           {m.date} · {m.description}
                           {m.created_by && <> · {m.created_by}</>}
                         </span>
