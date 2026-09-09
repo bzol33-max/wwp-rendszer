@@ -1,10 +1,11 @@
 "use server";
 
-// Az Áttekintés (/attekintes) csempés, vezetői összefoglaló nézet
-// lekérdezései. Szándékosan nem hoz létre új adatforrást — mindenhol a
-// meglévő modulok (Készlet/Nyíregyháza, Számlák, Fuvarozás) már meglévő
-// tábláira és akcióira épít, hogy ugyanazt az adatot mutassa, mint a teljes
-// modulok, csak tömörebben, mobilra optimalizálva.
+// Az Áttekintés (/attekintes) vezetői, alsó fülekkel navigálható mobil
+// nézetének lekérdezései (Nyíregyháza / Fuvar / Számlák / Készlet fülek).
+// Szándékosan nem hoz létre új adatforrást — mindenhol a meglévő modulok
+// (Készlet/Nyíregyháza, Számlák, Fuvarozás) már meglévő tábláira és
+// akcióira épít, hogy ugyanazt az adatot mutassa, mint a teljes modulok,
+// csak tömörebben, mobilra optimalizálva.
 
 import { query } from "@/lib/db";
 import { getFleetPositions } from "@/lib/fuvarozas/actions";
@@ -15,7 +16,7 @@ import type { SzamlaRow } from "@/lib/szamlak/szamla-constants";
 import type { FuvarRow } from "@/lib/fuvarozas/fuvar-constants";
 
 // ---------------------------------------------------------------------------
-// Felvásárlás csempe
+// Nyíregyháza fül
 // ---------------------------------------------------------------------------
 
 const FELVASARLAS_TIPUSOK = ["EUR világos", "EUR szürke", "H1 raklap", "Gitterbox"] as const;
@@ -28,7 +29,7 @@ export type FelvasarlasOsszefoglalo = {
   kassza: number;
 };
 
-/** A csempén megjelenő, mai (ma rögzített) mennyiségek típusonként, plusz a kassza egyenleg. */
+/** A fül tetején megjelenő, mai (ma rögzített) mennyiségek típusonként, plusz a kassza egyenleg. */
 export async function getFelvasarlasOsszefoglalo(): Promise<FelvasarlasOsszefoglalo> {
   const [typeRows, kasszaRows] = await Promise.all([
     query<{ type: string; daily_qty: string }>(
@@ -79,7 +80,7 @@ export type FelvasarlasReszletek = {
   kiadasok: KasszaKiadasTetel[];
 };
 
-/** A "Felvásárlás" csempére kattintva: a teljes napi felvásárlás (minden típus) és a mai kiadások. */
+/** A "Nyíregyháza" fülön: a teljes napi felvásárlás (minden típus) és a mai kiadások. */
 export async function getFelvasarlasReszletek(): Promise<FelvasarlasReszletek> {
   const [vasarlasRows, kiadasRows] = await Promise.all([
     query<{
@@ -130,22 +131,16 @@ export async function getFelvasarlasReszletek(): Promise<FelvasarlasReszletek> {
 }
 
 // ---------------------------------------------------------------------------
-// Számlák csempe
+// Számlák fül
 // ---------------------------------------------------------------------------
 
-/** A "Számlák" csempén megjelenő szám: hány lejárt esedékességű, nyitott számla van összesen. */
-export async function getLejartSzamlaSzam(): Promise<number> {
-  const rows = await getOsszesLejartSzamla();
-  return rows.length;
-}
-
-/** A "Számlák" csempére kattintva: az összes lejárt számla listája, pipálható. */
+/** A "Számlák" fülön: az összes lejárt számla listája, pipálható. */
 export async function getLejartSzamlak(): Promise<SzamlaRow[]> {
   return getOsszesLejartSzamla();
 }
 
 // ---------------------------------------------------------------------------
-// Fuvarozás csempe
+// Fuvar fül
 // ---------------------------------------------------------------------------
 
 export type JarmuPoziciSor = {
@@ -156,7 +151,7 @@ export type JarmuPoziciSor = {
   frissitve: string | null;
 };
 
-/** A "Fuvarozás" csempén: saját járművenként az utolsó ismert hely (cím) és sebesség. */
+/** A "Fuvar" fülön: saját járművenként az utolsó ismert hely (cím) és sebesség. */
 export async function getJarmuPoziciok(): Promise<JarmuPoziciSor[]> {
   const result = await getFleetPositions();
   const positions = result.ok ? result.positions : [];
@@ -197,7 +192,7 @@ export type JarmuMegbizasCsoport = {
   megbizasok: JarmuMegbizasSor[];
 };
 
-/** A "Fuvarozás" csempére kattintva: saját járművenként a még nem lezárt megbízások, a legközelebbi elöl. */
+/** A "Fuvar" fülön: saját járművenként a még nem lezárt megbízások, a legközelebbi elöl. */
 export async function getJarmuMegbizasok(): Promise<JarmuMegbizasCsoport[]> {
   const [berTabRows, sajatTabRows] = await Promise.all([
     getFuvarok("sajat"), // DB tipus='sajat' — UI-n "Bér fuvarok" fül
