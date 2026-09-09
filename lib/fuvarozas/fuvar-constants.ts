@@ -132,6 +132,24 @@ export type AddFuvarInput = {
   pozicioszamNincs?: boolean;
 };
 
+/**
+ * Egy "folyamatban" saját fuvar a GPS-alapú automatikus "Teljesítve"
+ * figyeléshez (lásd lib/fuvarozas/teljesites-figyeles.ts) — nyers (nem
+ * szövegre formázott) dátumokkal, hogy Date objektumot lehessen belőlük
+ * építeni az Ecofleet trip-lekérdezéshez.
+ */
+export type TeljesitesJelolt = {
+  id: string;
+  /** "Sofőr — rendszám" formátumú szöveg (lásd lib/fuvarozas/vehicles.ts) — sosem üres, a lekérdezés ezt szűri. */
+  jarmu: string;
+  felrako: string | null;
+  lerako: string;
+  /** ISO dátum (YYYY-MM-DD) — a felrakás napja. */
+  datum: string;
+  /** ISO dátum (YYYY-MM-DD), ha a lerakás más napra esik. */
+  lerakas_datum: string | null;
+};
+
 export type ApproveFuvarInput = {
   id: string;
   tipus: FuvarTipus;

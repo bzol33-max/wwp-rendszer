@@ -8,6 +8,7 @@ import type {
   MaiFuvarSor,
   AddFuvarInput,
   ApproveFuvarInput,
+  TeljesitesJelolt,
 } from "@/lib/fuvarozas/fuvar-constants";
 
 // FIGYELEM: ez egy "use server" fájl — Next.js-ben ez KIZÁRÓLAG async
@@ -69,6 +70,28 @@ export async function getFolyamatbanSajatFuvarok(): Promise<FuvarRow[]> {
        and not teljesitve
        and coalesce(lerakas_datum, datum) >= current_date
      order by ellenorzott asc, coalesce(lerakas_datum, datum) asc, id asc
+     limit 200`
+  );
+}
+
+/**
+ * A GPS-alapú automatikus "Teljesítve" figyeléshez (lásd
+ * lib/fuvarozas/teljesites-figyeles.ts): a jelenleg folyamatban lévő saját
+ * fuvarok, amiknek van hozzárendelt jármű — nyers dátumokkal, hogy Date
+ * objektumot lehessen belőlük építeni az Ecofleet trip-lekérdezéshez.
+ * Ugyanaz a "folyamatban" feltétel, mint getFolyamatbanSajatFuvarok-nál.
+ */
+export async function getTeljesitesJeloltek(): Promise<TeljesitesJelolt[]> {
+  return query<TeljesitesJelolt>(
+    `select id::text, jarmu, felrako, lerako,
+       to_char(datum, 'YYYY-MM-DD') as datum,
+       to_char(lerakas_datum, 'YYYY-MM-DD') as lerakas_datum
+     from fuvar_megbizasok
+     where tipus = 'sajat' and statusz <> 'torolt'
+       and not teljesitve
+       and coalesce(lerakas_datum, datum) >= current_date
+       and jarmu is not null and jarmu <> ''
+     order by id asc
      limit 200`
   );
 }
