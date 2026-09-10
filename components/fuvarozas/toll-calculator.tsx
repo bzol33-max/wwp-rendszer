@@ -362,6 +362,42 @@ export function TollCalculator() {
     tiles[tiles.length - 1] ??
     null;
 
+  // Élő előnézet: amint a beütött (és a javaslatlistából kiválasztott, tehát
+  // koordinátával rendelkező) címekből legalább kettő van, azonnal megjelenik
+  // a térképen — nem kell megvárni a "Számítás" gombot. Ahogy újabb címet
+  // választunk, a térkép automatikusan bővül. Ha a jelenlegi mezők pontosan
+  // megegyeznek egy már kiszámított eredménnyel, helyette az ott kapott,
+  // valódi HU-GO útvonalat mutatjuk (nem a közelítő egyenest).
+  const elonezetAllomasok = stops
+    .map((s, i) => ({ s, i }))
+    .filter(({ s }) => s.point)
+    .map(({ s, i }) => ({
+      role: stopLabel(i, stops.length),
+      label: (s.point as GeocodedAddress).label,
+      lon: (s.point as GeocodedAddress).lon,
+      lat: (s.point as GeocodedAddress).lat,
+    }));
+  const koordAlairas = (list: { lon: number; lat: number }[]) =>
+    list.map((p) => `${p.lon.toFixed(5)},${p.lat.toFixed(5)}`).join("|");
+  const elonezetEgyezikSzamitottal =
+    selectedTile != null &&
+    koordAlairas(elonezetAllomasok) === koordAlairas(selectedTile.stops);
+
+  const terkepAdat =
+    elonezetAllomasok.length >= 2 && !elonezetEgyezikSzamitottal
+      ? { stops: elonezetAllomasok, geometryLonLat: null as [number, number][] | null }
+      : selectedTile
+        ? {
+            stops: selectedTile.stops.map((s, i) => ({
+              role: stopLabel(i, selectedTile.stops.length),
+              label: s.label,
+              lon: s.lon,
+              lat: s.lat,
+            })),
+            geometryLonLat: selectedTile.route.geometryLonLat,
+          }
+        : null;
+
   return (
     <div className="flex flex-col gap-3">
       {/* overflow-visible: a Card alapból overflow-hidden, ami levágta a
@@ -389,23 +425,15 @@ export function TollCalculator() {
         </CardContent>
       </Card>
 
-      {selectedTile && (
+      {terkepAdat && (
         <Card size="sm">
           <CardHeader>
             <CardTitle className="text-sm">
-              Térkép — {selectedTile.stops.map((s) => s.label).join(" → ")}
+              Térkép — {terkepAdat.stops.map((s) => s.label).join(" → ")}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <RouteMap
-              stops={selectedTile.stops.map((s, i) => ({
-                role: stopLabel(i, selectedTile.stops.length),
-                label: s.label,
-                lon: s.lon,
-                lat: s.lat,
-              }))}
-              geometryLonLat={selectedTile.route.geometryLonLat}
-            />
+            <RouteMap stops={terkepAdat.stops} geometryLonLat={terkepAdat.geometryLonLat} />
           </CardContent>
         </Card>
       )}
