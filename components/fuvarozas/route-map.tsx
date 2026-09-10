@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from "react-leaflet";
+import { useMemo } from "react";
+import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet";
 import L, { type LatLngExpression, type LatLngBoundsExpression } from "leaflet";
 import "leaflet/dist/leaflet.css";
 
@@ -13,110 +13,91 @@ export type RouteMapStop = {
   lat: number;
 };
 
-const ROLE_SZIN: Record<string, string> = {
-  honnan: "#16a34a",
-  hova: "#dc2626",
+export type RouteMapRoute = {
+  id: number;
+  /** Ez a szín köti össze a térképi vonalat/jelölőket a hozzá tartozó eredmény-csempével. */
+  color: string;
+  stops: RouteMapStop[];
+  geometryLonLat: [number, number][] | null;
+  /** A kiválasztott csempéhez tartozó útvonal vastagabb vonalat kap, hogy sok egyidejű útvonal közt is kitűnjön. */
+  kiemelt?: boolean;
 };
 
-function allomasIkon(index: number, role: string) {
-  const kulcs = role.toLowerCase().normalize("NFD").replace(/\p{Diacritic}/gu, "");
-  const bg = ROLE_SZIN[kulcs] ?? "#2563eb";
+// Magyarország nagyjábóli határai — a térkép induláskor mindig erre a
+// kivágatra igazodik, és utána NEM igazodik újra egyes útvonalakhoz: a
+// felhasználó kérése szerint a nézet fixen Magyarországot mutatja, akkor is,
+// ha egy útvonal (pl. külföldi cím miatt) ezen kívülre esik.
+const MAGYARORSZAG_HATAROK: LatLngBoundsExpression = [
+  [45.7, 16.0],
+  [48.6, 23.0],
+];
+
+function allomasIkon(index: number, szin: string) {
   return L.divIcon({
     className: "",
-    html: `<span style="display:flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:9999px;background:${bg};color:#fff;font-size:11px;font-weight:600;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,.4)">${index + 1}</span>`,
-    iconSize: [22, 22],
-    iconAnchor: [11, 11],
+    html: `<span style="display:flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:9999px;background:${szin};color:#fff;font-size:10px;font-weight:600;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,.4)">${index + 1}</span>`,
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
   });
-}
-
-/** A MapContainer belsejéből (useMap) automatikusan ráigazítja a nézetet az adott pontokra/vonalra. */
-function FitBounds({ bounds }: { bounds: LatLngBoundsExpression | null }) {
-  const map = useMap();
-  useEffect(() => {
-    if (!bounds) return;
-    map.fitBounds(bounds, { padding: [24, 24], maxZoom: 14 });
-  }, [map, bounds]);
-  return null;
 }
 
 /**
  * A Kalkulátor fülön beütött állomásokat és a HU-GO kalkulátor által
- * kiszámított leggyorsabb útvonalat mutató térkép. Ha a HU-GO válaszából nem
- * sikerül vonalgeometriát kinyerni (lásd extractRouteGeometry a
- * utdijkalkulacio.ts-ben), az állomásokat egy szaggatott, jól láthatóan
- * "közelítő" egyenes köti össze a tényleges útvonal helyett.
+ * kiszámított útvonalakat mutató térkép. A nézet fixen Magyarországra van
+ * igazítva (nem "ugrál" az egyes számításokkal), és egyszerre AZ ÖSSZES
+ * kiszámított útvonalat mutatja — mindegyiket a saját (route.color) színén,
+ * hogy az alattuk megjelenő eredmény-csempékkel színben összepárosíthatók
+ * legyenek (lásd toll-calculator.tsx). Ha egy útvonalhoz nem sikerült
+ * pontos vonalgeometriát kinyerni a HU-GO válaszából, helyette az
+ * állomásokat összekötő szaggatott, közelítő egyenes látszik.
  */
-export function RouteMap({
-  stops,
-  geometryLonLat,
-}: {
-  stops: RouteMapStop[];
-  geometryLonLat: [number, number][] | null;
-}) {
-  const pontosVonal = geometryLonLat && geometryLonLat.length > 1;
-
-  const routeLine: LatLngExpression[] | null = useMemo(() => {
-    if (geometryLonLat && geometryLonLat.length > 1) {
-      return geometryLonLat.map(([lon, lat]) => [lat, lon] as LatLngExpression);
-    }
-    if (stops.length > 1) {
-      return stops.map((s) => [s.lat, s.lon] as LatLngExpression);
-    }
-    return null;
-  }, [geometryLonLat, stops]);
-
-  const bounds: LatLngBoundsExpression | null = useMemo(() => {
-    const pontok = routeLine ?? stops.map((s) => [s.lat, s.lon] as LatLngExpression);
-    return pontok.length > 0 ? L.latLngBounds(pontok) : null;
-  }, [routeLine, stops]);
-
-  if (stops.length === 0) return null;
+export function RouteMap({ routes }: { routes: RouteMapRoute[] }) {
+  const vonalak = useMemo(
+    () =>
+      routes.map((r) => {
+        const pontos = r.geometryLonLat != null && r.geometryLonLat.length > 1;
+        const positions: LatLngExpression[] = pontos
+          ? (r.geometryLonLat as [number, number][]).map(([lon, lat]) => [lat, lon] as LatLngExpression)
+          : r.stops.map((s) => [s.lat, s.lon] as LatLngExpression);
+        return { ...r, positions, pontos };
+      }),
+    [routes]
+  );
 
   return (
     <div className="overflow-hidden rounded-lg border">
-      <MapContainer
-        center={[stops[0].lat, stops[0].lon]}
-        zoom={7}
-        scrollWheelZoom
-        className="h-72 w-full sm:h-96"
-      >
+      <MapContainer bounds={MAGYARORSZAG_HATAROK} scrollWheelZoom className="h-72 w-full sm:h-96">
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> közreműködői'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        {routeLine && (
-          <Polyline
-            positions={routeLine}
-            pathOptions={
-              pontosVonal
-                ? { color: "#2563eb", weight: 4 }
-                : { color: "#94a3b8", weight: 3, dashArray: "6 6" }
-            }
-          />
+        {vonalak.map(
+          (r) =>
+            r.positions.length > 1 && (
+              <Polyline
+                key={r.id}
+                positions={r.positions}
+                pathOptions={{
+                  color: r.color,
+                  weight: r.kiemelt ? 6 : 4,
+                  dashArray: r.pontos ? undefined : "6 6",
+                }}
+              />
+            )
         )}
-        {stops.map((s, i) => (
-          <Marker
-            key={`${s.lon},${s.lat},${i}`}
-            position={[s.lat, s.lon]}
-            icon={allomasIkon(i, s.role)}
-          >
-            <Popup>
-              <div className="text-xs">
-                <div className="font-semibold">{s.role}</div>
-                {s.label}
-              </div>
-            </Popup>
-          </Marker>
-        ))}
-        <FitBounds bounds={bounds} />
+        {vonalak.flatMap((r) =>
+          r.stops.map((s, i) => (
+            <Marker key={`${r.id}-${i}`} position={[s.lat, s.lon]} icon={allomasIkon(i, r.color)}>
+              <Popup>
+                <div className="text-xs">
+                  <div className="font-semibold">{s.role}</div>
+                  {s.label}
+                </div>
+              </Popup>
+            </Marker>
+          ))
+        )}
       </MapContainer>
-      {!pontosVonal && (
-        <p className="border-t bg-muted/50 px-2.5 py-1.5 text-xs text-muted-foreground">
-          A HU-GO kalkulátor válaszából nem sikerült pontos útvonal-geometriát kinyerni ehhez a
-          számításhoz — a szaggatott vonal itt csak az állomásokat köti össze egyenesen, nem a
-          tényleges útvonalat mutatja.
-        </p>
-      )}
     </div>
   );
 }

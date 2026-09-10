@@ -50,6 +50,34 @@ function formatLiter(l: number): string {
   return `${l.toLocaleString("hu-HU", { maximumFractionDigits: 1 })} l`;
 }
 
+// Az egyes eredmény-csempék és a hozzájuk tartozó térképi útvonal színpárja —
+// szándékosan kerüli a pirosat/kéket/zöldet, mert azok már a km-alapú
+// tájékoztató díjszabás (lásd DIJSZABASOK lentebb) színeiként foglaltak.
+const UTVONAL_SZINEK = [
+  "#f97316", // narancs
+  "#9333ea", // lila
+  "#0d9488", // sötétcián
+  "#db2777", // pink
+  "#ca8a04", // sárgásbarna
+  "#4f46e5", // indigó
+  "#0891b2", // türkiz
+  "#c026d3", // magenta
+];
+
+function utvonalSzin(tileId: number): string {
+  return UTVONAL_SZINEK[tileId % UTVONAL_SZINEK.length];
+}
+
+// Tájékoztató, gyors km-alapú díjszabás-becslés (nem a tényleges HU-GO
+// útdíj+üzemanyag számítás helyett, hanem amellett) — három szokásos
+// Ft/km kilövési ár, hogy egy adott útvonalra gyorsan lehessen ajánlatot
+// mondani. A felhasználó kérésére rögzített színekkel.
+const DIJSZABASOK: { rate: number; color: string }[] = [
+  { rate: 500, color: "#dc2626" }, // piros
+  { rate: 600, color: "#2563eb" }, // kék
+  { rate: 700, color: "#16a34a" }, // zöld
+];
+
 function AddressField({
   placeholder,
   value,
@@ -145,11 +173,14 @@ type ResultTile = {
 
 function ResultTileCard({
   tile,
+  color,
   selected,
   onSelect,
   onClose,
 }: {
   tile: ResultTile;
+  /** A csempe térképi útvonalával megegyező szín — a bal szegély ezt kapja, hogy a kettő összepárosítható legyen. */
+  color: string;
   selected: boolean;
   onSelect: () => void;
   onClose: () => void;
@@ -173,7 +204,8 @@ function ResultTileCard({
           onSelect();
         }
       }}
-      className={`relative w-full min-w-[220px] cursor-pointer sm:w-[calc(50%-0.5rem)] lg:w-[calc(33.333%-0.667rem)] ${
+      style={{ borderLeftColor: color, borderLeftWidth: 4, borderLeftStyle: "solid" }}
+      className={`relative w-full min-w-[260px] cursor-pointer sm:w-[calc(50%-0.5rem)] lg:w-[calc(33.333%-0.667rem)] ${
         selected ? "ring-2 ring-primary" : ""
       }`}
     >
@@ -188,33 +220,48 @@ function ResultTileCard({
       >
         <X className="h-3.5 w-3.5" />
       </button>
-      <CardContent className="flex flex-col gap-1.5 pr-6 text-xs">
-        <div className="pr-2 font-medium">{stops.map((s) => s.label).join(" → ")}</div>
-        <div className="flex flex-col gap-0.5 text-muted-foreground">
-          <div>
-            Táv: <span className="font-medium text-foreground">{route.distanceKm.toLocaleString("hu-HU")} km</span>
-            {" "}({formatDuration(route.durationMin)})
-          </div>
-          {route.tollHuf ? (
+      <CardContent className="flex gap-2 pr-6 text-xs">
+        <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+          <div className="pr-2 font-medium">{stops.map((s) => s.label).join(" → ")}</div>
+          <div className="flex flex-col gap-0.5 text-muted-foreground">
             <div>
-              Útdíj: <span className="font-medium text-foreground">{formatHuf(route.tollHuf.grossTotal)}</span>
+              Táv: <span className="font-medium text-foreground">{route.distanceKm.toLocaleString("hu-HU")} km</span>
+              {" "}({formatDuration(route.durationMin)})
             </div>
-          ) : (
-            <div>Útdíj: nincs útdíjköteles szakasz.</div>
-          )}
-          <div>
-            Üzemanyag: <span className="font-medium text-foreground">{formatLiter(literek)}</span>
-            {gazolajAr && uzemanyagKoltseg != null && (
-              <>
-                {" "}({formatHuf(uzemanyagKoltseg)}, {gazolajAr.ar} Ft/l – {gazolajAr.cimke}, NAV {gazolajAr.navAr}{" "}
-                Ft/l - {gazolajAr.kedvezmeny} Ft/l tankolási kedvezmény
-                {!gazolajAr.friss && ", nem sikerült frissíteni"})
-              </>
+            {route.tollHuf ? (
+              <div>
+                Útdíj: <span className="font-medium text-foreground">{formatHuf(route.tollHuf.grossTotal)}</span>
+              </div>
+            ) : (
+              <div>Útdíj: nincs útdíjköteles szakasz.</div>
             )}
+            <div>
+              Üzemanyag: <span className="font-medium text-foreground">{formatLiter(literek)}</span>
+              {gazolajAr && uzemanyagKoltseg != null && (
+                <>
+                  {" "}({formatHuf(uzemanyagKoltseg)}, {gazolajAr.ar} Ft/l – {gazolajAr.cimke}, NAV {gazolajAr.navAr}{" "}
+                  Ft/l - {gazolajAr.kedvezmeny} Ft/l tankolási kedvezmény
+                  {!gazolajAr.friss && ", nem sikerült frissíteni"})
+                </>
+              )}
+            </div>
+            <div className="pt-0.5 text-sm font-semibold text-foreground">
+              Össz. költség: {formatHuf(osszKoltseg)}
+            </div>
           </div>
-          <div className="pt-0.5 text-sm font-semibold text-foreground">
-            Össz. költség: {formatHuf(osszKoltseg)}
-          </div>
+        </div>
+        {/* Tájékoztató km-alapú díjszabás-becslés (500/600/700 Ft/km), a
+            térképi/csempe-színtől független, mindig ugyanezzel a 3 rögzített
+            színnel. */}
+        <div className="flex flex-col justify-center gap-1 border-l pl-2 text-right">
+          {DIJSZABASOK.map(({ rate, color: dijColor }) => (
+            <div key={rate}>
+              <div className="font-semibold tabular-nums" style={{ color: dijColor }}>
+                {formatHuf(Math.round(route.distanceKm * rate))}
+              </div>
+              <div className="text-[10px] text-muted-foreground">{rate} Ft/km</div>
+            </div>
+          ))}
         </div>
       </CardContent>
     </Card>
@@ -366,8 +413,8 @@ export function TollCalculator() {
   // koordinátával rendelkező) címekből legalább kettő van, azonnal megjelenik
   // a térképen — nem kell megvárni a "Számítás" gombot. Ahogy újabb címet
   // választunk, a térkép automatikusan bővül. Ha a jelenlegi mezők pontosan
-  // megegyeznek egy már kiszámított eredménnyel, helyette az ott kapott,
-  // valódi HU-GO útvonalat mutatjuk (nem a közelítő egyenest).
+  // megegyeznek egy már kiszámított eredménnyel, azt nem duplikáljuk —
+  // az a saját (valódi HU-GO útvonalú) csempéjeként már úgyis szerepel.
   const elonezetAllomasok = stops
     .map((s, i) => ({ s, i }))
     .filter(({ s }) => s.point)
@@ -379,24 +426,38 @@ export function TollCalculator() {
     }));
   const koordAlairas = (list: { lon: number; lat: number }[]) =>
     list.map((p) => `${p.lon.toFixed(5)},${p.lat.toFixed(5)}`).join("|");
-  const elonezetEgyezikSzamitottal =
-    selectedTile != null &&
-    koordAlairas(elonezetAllomasok) === koordAlairas(selectedTile.stops);
+  const elonezetEgyezikValamelyikkel = tiles.some(
+    (t) => koordAlairas(elonezetAllomasok) === koordAlairas(t.stops)
+  );
 
-  const terkepAdat =
-    elonezetAllomasok.length >= 2 && !elonezetEgyezikSzamitottal
-      ? { stops: elonezetAllomasok, geometryLonLat: null as [number, number][] | null }
-      : selectedTile
-        ? {
-            stops: selectedTile.stops.map((s, i) => ({
-              role: stopLabel(i, selectedTile.stops.length),
-              label: s.label,
-              lon: s.lon,
-              lat: s.lat,
-            })),
-            geometryLonLat: selectedTile.route.geometryLonLat,
-          }
-        : null;
+  // A térkép fixen Magyarországra van igazítva (lásd RouteMap), és egyszerre
+  // AZ ÖSSZES eddigi számítást mutatja, mindegyiket a csempéjével megegyező
+  // színnel — a csempére kattintva a hozzá tartozó vonal kiemelődik
+  // (vastagabb lesz), de a többi útvonal nem tűnik el.
+  const terkepUtvonalak = [
+    ...tiles.map((t) => ({
+      id: t.id,
+      color: utvonalSzin(t.id),
+      stops: t.stops.map((s, i) => ({
+        role: stopLabel(i, t.stops.length),
+        label: s.label,
+        lon: s.lon,
+        lat: s.lat,
+      })),
+      geometryLonLat: t.route.geometryLonLat,
+      kiemelt: t.id === selectedTile?.id,
+    })),
+    ...(elonezetAllomasok.length >= 2 && !elonezetEgyezikValamelyikkel
+      ? [
+          {
+            id: -1,
+            color: "#94a3b8",
+            stops: elonezetAllomasok,
+            geometryLonLat: null as [number, number][] | null,
+          },
+        ]
+      : []),
+  ];
 
   return (
     <div className="flex flex-col gap-3">
@@ -425,18 +486,14 @@ export function TollCalculator() {
         </CardContent>
       </Card>
 
-      {terkepAdat && (
-        <Card size="sm">
-          <CardHeader>
-            <CardTitle className="text-sm">
-              Térkép — {terkepAdat.stops.map((s) => s.label).join(" → ")}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <RouteMap stops={terkepAdat.stops} geometryLonLat={terkepAdat.geometryLonLat} />
-          </CardContent>
-        </Card>
-      )}
+      <Card size="sm">
+        <CardHeader>
+          <CardTitle className="text-sm">Térkép — Magyarország</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <RouteMap routes={terkepUtvonalak} />
+        </CardContent>
+      </Card>
 
       {tiles.length > 0 && (
         <div className="flex flex-wrap gap-2">
@@ -444,6 +501,7 @@ export function TollCalculator() {
             <ResultTileCard
               key={tile.id}
               tile={tile}
+              color={utvonalSzin(tile.id)}
               selected={tile.id === selectedTile?.id}
               onSelect={() => setSelectedTileId(tile.id)}
               onClose={() => removeTile(tile.id)}
