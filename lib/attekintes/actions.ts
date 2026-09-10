@@ -70,6 +70,29 @@ export async function getHaviFelvasarlasOsszefoglalo(): Promise<FelvasarlasTipus
   return rows.map((r) => ({ tipus: r.type, qty: Number(r.qty) }));
 }
 
+export type HaviKasszaOsszesito = {
+  /** A folyó hónapban a kasszába befolyt összeg (pozitív tételek összege). */
+  bevetel: number;
+  /** A folyó hónapban a kasszából kifizetett összeg — negatív előjellel. */
+  kiadas: number;
+};
+
+/** A Kassza egyenlegre kattintva megnyíló havi összesítő: folyó havi be- és kifizetés. */
+export async function getHaviKasszaOsszesito(): Promise<HaviKasszaOsszesito> {
+  const rows = await query<{ bevetel: string; kiadas: string }>(
+    `select
+       coalesce(sum(amount) filter (where amount > 0), 0) as bevetel,
+       coalesce(sum(amount) filter (where amount < 0), 0) as kiadas
+     from kassza_movements
+     where date_trunc('month', created_at at time zone 'Europe/Budapest')
+         = date_trunc('month', now() at time zone 'Europe/Budapest')`
+  );
+  return {
+    bevetel: Number(rows[0]?.bevetel ?? 0),
+    kiadas: Number(rows[0]?.kiadas ?? 0),
+  };
+}
+
 export type KasszaKiadasTetel = {
   id: string;
   description: string;
