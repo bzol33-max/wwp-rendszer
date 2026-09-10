@@ -341,6 +341,21 @@ export type PurchaseRow = {
   created_by: string | null;
 };
 
+export type PriceRow = { name: string; default_price: number | null };
+
+// Gyors rögzítéshez (Havi fül és a /felvasarlas mobil nézet) azok a típusok
+// jelennek meg, amik Nyíregyházán aktívak ÉS van beárazva.
+export async function getNyiregyhazaPurchasePrices(): Promise<PriceRow[]> {
+  return query<PriceRow>(
+    `select t.name, t.default_price
+     from pallet_types t
+     join site_active_types sat on sat.type_id = t.id
+     join sites s on s.id = sat.site_id
+     where s.name = 'Nyíregyháza' and t.default_price is not null
+     order by t.sort_order, t.id`
+  );
+}
+
 export async function getHaviSnapshot() {
   const purchases = await query<PurchaseRow>(
     `select p.id::text, to_char(p.created_at at time zone 'Europe/Budapest', '${TIME_FMT}') as date,
@@ -365,15 +380,7 @@ export async function getHaviSnapshot() {
      where amount < 0
        and (created_at at time zone 'Europe/Budapest')::date = ${BUDAPEST_NOW_DATE}`
   );
-  // Gyors rögzítéshez azok a típusok jelennek meg, amik Nyíregyházán aktívak ÉS van beárazva.
-  const priceRows = await query<{ name: string; default_price: number | null }>(
-    `select t.name, t.default_price
-     from pallet_types t
-     join site_active_types sat on sat.type_id = t.id
-     join sites s on s.id = sat.site_id
-     where s.name = 'Nyíregyháza' and t.default_price is not null
-     order by t.sort_order, t.id`
-  );
+  const priceRows = await getNyiregyhazaPurchasePrices();
   // Típusonkénti darabszám-számláló: havi (aktuális naptári hónap) és mai összesítés.
   // Pending tétel is beleszámít, mert a darabszám a felvételkor azonnal a készletben van.
   const typeCounterRows = await query<{
