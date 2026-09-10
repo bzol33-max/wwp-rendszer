@@ -3,8 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { getIdovonalak, type JarmuIdovonalEredmeny } from "@/lib/fuvarozas/actions";
 import { SAJAT_JARMUVEK, JARMU_SZIN_DOT_CLASS, type JarmuSzin } from "@/lib/fuvarozas/vehicles";
+import { budapestNapISO } from "@/lib/fuvarozas/idozona";
 import type { IdovonalSzakasz, TervezettFuvarSzakasz } from "@/lib/fuvarozas/idovonal";
 
 // 3 vízszintes idővonal-csík (egy-egy saját jármű, a kártyáin is használt
@@ -44,6 +47,19 @@ function pctFromMinutes(min: number): number {
 
 function formatIdo(d: Date): string {
   return d.toLocaleTimeString("hu-HU", { hour: "2-digit", minute: "2-digit" });
+}
+
+/** Egy "YYYY-MM-DD" naptári naphoz `delta` nappal odébbi nap — dél (UTC) horgonnyal, hogy DST-váltás körül se csúszhasson el. */
+function napEltolva(napISO: string, delta: number): string {
+  const [ev, ho, nap] = napISO.split("-").map(Number);
+  const d = new Date(Date.UTC(ev, ho - 1, nap + delta, 12));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
+function formatNapCim(napISO: string): string {
+  const [ev, ho, nap] = napISO.split("-").map(Number);
+  const d = new Date(Date.UTC(ev, ho - 1, nap, 12));
+  return d.toLocaleDateString("hu-HU", { month: "long", day: "numeric", weekday: "long", timeZone: "UTC" });
 }
 
 function formatIdotartam(sec: number): string {
@@ -189,25 +205,58 @@ function IdovonalCsik({ jarmu, eredmeny }: { jarmu: (typeof SAJAT_JARMUVEK)[numb
 }
 
 export function JarmuIdovonalak() {
+  const maiNapISO = budapestNapISO();
+  const [napISO, setNapISO] = useState(maiNapISO);
   const [adatok, setAdatok] = useState<JarmuIdovonalEredmeny[]>([]);
   const [loading, setLoading] = useState(true);
+  const maiNap = napISO === maiNapISO;
 
-  const load = useCallback(async () => {
-    const res = await getIdovonalak();
+  const load = useCallback(async (nap: string) => {
+    const res = await getIdovonalak(nap);
     setAdatok(res);
   }, []);
 
   useEffect(() => {
     setLoading(true);
-    load().finally(() => setLoading(false));
-    const interval = setInterval(load, 5 * 60 * 1000);
+    load(napISO).finally(() => setLoading(false));
+    // A múltbeli (lezárt) napok adata nem változik — csak a mai napi nézetet frissítjük periodikusan.
+    if (napISO !== budapestNapISO()) return;
+    const interval = setInterval(() => load(napISO), 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [load]);
+  }, [load, napISO]);
+
+  const hetiFigyelmezetesek = adatok.flatMap((a) =>
+    a.hetiFigyelmezetesek.map((f) => ({ ...f, sofor: a.sofor }))
+  );
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-sm">Mai idővonal (vezetés / állás)</CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm">
+            Idővonal (vezetés / állás) — {formatNapCim(napISO)}
+            {maiNap && " (ma)"}
+          </CardTitle>
+          <div className="flex items-center gap-1">
+            <Button
+              size="icon-sm"
+              variant="outline"
+              title="Előző nap"
+              onClick={() => setNapISO((n) => napEltolva(n, -1))}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <Button
+              size="icon-sm"
+              variant="outline"
+              title="Következő nap"
+              disabled={maiNap}
+              onClick={() => setNapISO((n) => napEltolva(n, 1))}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
       </CardHeader>
       <CardContent>
         {loading && adatok.length === 0 ? (
@@ -222,6 +271,18 @@ export function JarmuIdovonalak() {
             {SAJAT_JARMUVEK.map((jarmu) => (
               <IdovonalCsik key={jarmu.sofor} jarmu={jarmu} eredmeny={adatok.find((a) => a.sofor === jarmu.sofor)} />
             ))}
+            {hetiFigyelmezetesek.length > 0 && (
+              <div className="flex flex-col gap-1 rounded-lg border border-dashed p-2">
+                <span className="text-xs font-medium text-muted-foreground">Heti AETR (hétfőtől eddig a napig)</span>
+                <ul className="flex flex-col gap-0.5 pl-1 text-[11px] text-muted-foreground">
+                  {hetiFigyelmezetesek.map((f, i) => (
+                    <li key={i} className={f.sulyossag === "hiba" ? "text-destructive" : undefined}>
+                      ⚠️ {f.sofor}: {f.uzenet}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <p className="text-[11px] text-muted-foreground">
               A narancssárga szakaszok valószínű rakodást/ügyintézést, a szürke szakaszok pihenőt vagy rövid megállást jelölnek — időtartam alapú
               becslés, a tényleges okot érdemes ellenőrizni. A vastag sáv alatti szaggatott/keretes téglalapok a mai saját megbízások becsült

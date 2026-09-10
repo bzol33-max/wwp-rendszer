@@ -13,7 +13,7 @@ import {
 } from "./utdijkalkulacio";
 import { fetchGazolajAr, GazolajArError } from "./uzemanyagar";
 import { epitsIdovonal, kiegesziteloAllapottal, parseIdopontSzoveg, type EloPozicio, type IdovonalSzakasz, type TervezettFuvarSzakasz } from "./idovonal";
-import { ellenorizAetr, type AetrFigyelmezetes } from "./aetr";
+import { ellenorizAetr, ellenorizHetiVezetes, szamitsAetrKoltsegvetes, type AetrFigyelmezetes, type AetrKoltsegvetes } from "./aetr";
 import { SAJAT_JARMUVEK, resolveJarmu, type SajatJarmu } from "./vehicles";
 import { getMaiSajatFuvarok } from "./megbizasok";
 import type { MaiFuvarSor } from "./fuvar-constants";
@@ -104,6 +104,10 @@ export type JarmuIdovonalEredmeny = {
   /** null, ha a jármű nincs (még) Ecofleet-be kötve. */
   szakaszok: IdovonalSzakasz[] | null;
   figyelmezetesek: AetrFigyelmezetes[];
+  /** Heti (hétfőtől a megjelenített napig) összesített vezetési idő AETR-ellenőrzése — lásd getHetiVezetesOsszesites. */
+  hetiFigyelmezetesek: AetrFigyelmezetes[];
+  /** Csak a mai napra, éppen vezetés közben: meddig kötelező/lehet még menni. Lásd szamitsAetrKoltsegvetes. */
+  koltsegvetes: AetrKoltsegvetes | null;
   hiba: string | null;
   /** Az adott napra ehhez a sofőrhöz rendelt saját fuvarok, becsült időponttal az idővonalra helyezve. */
   tervezettFuvarok: TervezettFuvarSzakasz[];
@@ -124,6 +128,77 @@ function budapestNapHatarok(nap?: string): { kezdet: Date; veg: Date; napISO: st
   const maiNap = celNap === maiNapISO;
   const veg = maiNap ? new Date() : budapestFalioraToInstant(ev, ho, napSzam, 23, 59, 59);
   return { kezdet, veg, napISO: celNap, maiNap };
+}
+
+/**
+ * Egy "YYYY-MM-DD" naptári naphoz `delta` nappal odébbi naptári nap
+ * ("YYYY-MM-DD") — dél (UTC 12:00) horgonnyal számolva, hogy a naptári nap
+ * a nyári/téli időszámítás-váltás körül se csúszhasson el.
+ */
+function napIsoEltolva(napISO: string, delta: number): string {
+  const [ev, ho, napSzam] = napISO.split("-").map(Number);
+  const d = new Date(Date.UTC(ev, ho - 1, napSzam + delta, 12));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
+/** Az adott naptári napot tartalmazó hét hétfője ("YYYY-MM-DD"). */
+function hetElejeIso(napISO: string): string {
+  const [ev, ho, napSzam] = napISO.split("-").map(Number);
+  const dow = new Date(Date.UTC(ev, ho - 1, napSzam, 12)).getUTCDay(); // 0=vas .. 6=szo
+  const napokHetfoig = (dow + 6) % 7;
+  return napIsoEltolva(napISO, -napokHetfoig);
+}
+
+export type HetiVezetesEredmeny = {
+  /** Napi vezetési összesek másodpercben, hétfőtől a megadott napig (azt is beleértve), időrendben. */
+  napiOsszesekSec: number[];
+  figyelmezetesek: AetrFigyelmezetes[];
+  /** Hány, a megadott napot MEGELŐZŐ napon volt 9 óránál több a napi vezetés a héten — ez dönti el, hogy a megadott nap még lehet-e hosszabbított (10 órás) vezetési nap. */
+  kiterjesztettNapokElotte: number;
+};
+
+/**
+ * Egy jármű heti (a napISO-t tartalmazó hét hétfőjétől napISO-ig)
+ * összesített napi vezetési idejét adja vissza, ÉS lefuttatja rá a
+ * meglévő, eddig sehol nem hívott ellenorizHetiVezetes()-t (56/90 órás heti
+ * korlátok). Egyetlen getVehicleTrips-hívással (a hét egészére) dolgozik,
+ * a trip-eket a kezdésük budapesti naptári napja szerint csoportosítva —
+ * nem kell naponta külön lekérdezni.
+ */
+export async function getHetiVezetesOsszesites(objectId: string, napISO: string): Promise<HetiVezetesEredmeny> {
+  const hetfo = hetElejeIso(napISO);
+  const { kezdet } = budapestNapHatarok(hetfo);
+  const { veg } = budapestNapHatarok(napISO);
+
+  const trips = await getVehicleTrips(objectId, kezdet, veg);
+  const napiOsszesekTerkep = new Map<string, number>();
+  for (const t of trips) {
+    const start = parseEcofleetTimestamp(t.startTimestamp);
+    if (!start) continue;
+    const nap = budapestNapISO(start);
+    napiOsszesekTerkep.set(nap, (napiOsszesekTerkep.get(nap) ?? 0) + t.duration);
+  }
+
+  const [hEv, hHo, hNap] = hetfo.split("-").map(Number);
+  const [cEv, cHo, cNap] = napISO.split("-").map(Number);
+  const napokSzama =
+    Math.round(
+      (Date.UTC(cEv, cHo - 1, cNap, 12) - Date.UTC(hEv, hHo - 1, hNap, 12)) / 86400000
+    ) + 1;
+
+  const napiOsszesekSec: number[] = [];
+  for (let i = 0; i < napokSzama; i++) {
+    napiOsszesekSec.push(napiOsszesekTerkep.get(napIsoEltolva(hetfo, i)) ?? 0);
+  }
+
+  const KILENC_ORA_SEC = 9 * 3600;
+  const kiterjesztettNapokElotte = napiOsszesekSec.slice(0, -1).filter((s) => s > KILENC_ORA_SEC).length;
+
+  return {
+    napiOsszesekSec,
+    figyelmezetesek: ellenorizHetiVezetes(napiOsszesekSec),
+    kiterjesztettNapokElotte,
+  };
 }
 
 const RAKODAS_PUFFER_PERC = 30;
@@ -203,10 +278,24 @@ export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny
       const tervezettFuvarok = await Promise.all(sajatSorok.map(becsulFuvarSzakasz));
 
       if (!jarmu.ecofleetObjectId) {
-        return { sofor: jarmu.sofor, szin: jarmu.szin, szakaszok: null, figyelmezetesek: [], hiba: null, tervezettFuvarok };
+        return {
+          sofor: jarmu.sofor,
+          szin: jarmu.szin,
+          szakaszok: null,
+          figyelmezetesek: [],
+          hetiFigyelmezetesek: [],
+          koltsegvetes: null,
+          hiba: null,
+          tervezettFuvarok,
+        };
       }
       try {
-        const trips = await getVehicleTrips(jarmu.ecofleetObjectId, kezdet, veg);
+        const [trips, heti] = await Promise.all([
+          getVehicleTrips(jarmu.ecofleetObjectId, kezdet, veg),
+          getHetiVezetesOsszesites(jarmu.ecofleetObjectId, napISO).catch(
+            (): HetiVezetesEredmeny => ({ napiOsszesekSec: [], figyelmezetesek: [], kiterjesztettNapokElotte: 0 })
+          ),
+        ]);
         let szakaszok = epitsIdovonal(trips);
 
         if (maiNap) {
@@ -227,10 +316,31 @@ export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny
         }
 
         const figyelmezetesek = ellenorizAetr(szakaszok);
-        return { sofor: jarmu.sofor, szin: jarmu.szin, szakaszok, figyelmezetesek, hiba: null, tervezettFuvarok };
+        const koltsegvetes = maiNap
+          ? szamitsAetrKoltsegvetes(szakaszok, veg, heti.kiterjesztettNapokElotte)
+          : null;
+        return {
+          sofor: jarmu.sofor,
+          szin: jarmu.szin,
+          szakaszok,
+          figyelmezetesek,
+          hetiFigyelmezetesek: heti.figyelmezetesek,
+          koltsegvetes,
+          hiba: null,
+          tervezettFuvarok,
+        };
       } catch (err) {
         const message = err instanceof EcofleetError ? err.message : "Nem sikerült lekérni az idővonalat.";
-        return { sofor: jarmu.sofor, szin: jarmu.szin, szakaszok: null, figyelmezetesek: [], hiba: message, tervezettFuvarok };
+        return {
+          sofor: jarmu.sofor,
+          szin: jarmu.szin,
+          szakaszok: null,
+          figyelmezetesek: [],
+          hetiFigyelmezetesek: [],
+          koltsegvetes: null,
+          hiba: message,
+          tervezettFuvarok,
+        };
       }
     })
   );
