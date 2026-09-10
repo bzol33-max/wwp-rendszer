@@ -32,7 +32,7 @@ function PostazvaCheckbox({
   }
 
   return (
-    <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-dashed p-3 active:bg-muted">
+    <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-dashed border-[var(--mob-border)] p-3 active:bg-[var(--mob-tile)]">
       <Checkbox
         checked={false}
         disabled={saving}
@@ -69,7 +69,7 @@ function PostazasiCimMezo({ id, initialValue }: { id: string; initialValue: stri
       onBlur={handleBlur}
       disabled={saving}
       placeholder="Postázási cím megadása"
-      className="text-sm"
+      className="border-[var(--mob-border)] bg-[var(--mob-card)] text-sm text-[var(--mob-text)]"
     />
   );
 }
@@ -82,11 +82,11 @@ function PostaCsempe({
   onPostazva: (id: string) => void;
 }) {
   return (
-    <div className="rounded-xl border bg-card p-4 shadow-sm">
+    <div className="rounded-xl border border-[var(--mob-border)] bg-[var(--mob-card)] p-4 shadow-sm">
       <div className="flex items-start justify-between gap-2">
         <div>
           <div className="font-semibold">{row.megrendelo ?? "—"}</div>
-          <div className="text-xs text-muted-foreground">
+          <div className="text-xs text-[var(--mob-muted)]">
             {row.erkezett_datum ?? row.date}
             {row.pozicioszam ? ` · ${row.pozicioszam}` : ""}
           </div>
@@ -94,7 +94,7 @@ function PostaCsempe({
       </div>
 
       <div className="mt-3 flex flex-col gap-1">
-        <div className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        <div className="text-[11px] font-medium tracking-wide text-[var(--mob-muted)] uppercase">
           Postázási cím
         </div>
         <PostazasiCimMezo id={row.id} initialValue={row.postazasi_cim} />
@@ -116,7 +116,7 @@ export function PostaLista({ initialRows }: { initialRows: FuvarRow[] }) {
 
   if (rows.length === 0) {
     return (
-      <p className="text-sm text-muted-foreground">
+      <p className="text-sm text-[var(--mob-muted)]">
         Nincs postázásra váró fuvar.
       </p>
     );

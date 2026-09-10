@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { logout } from "@/lib/auth/actions";
+import { MOBIL_THEME } from "@/lib/mobil-theme";
+import { PullToRefresh } from "@/components/mobil/pull-to-refresh";
 import { EditPermissionProvider } from "@/components/auth/edit-permission-context";
 import {
   getTodayJelenletek,
@@ -27,6 +29,21 @@ type ModulePermission = { view: boolean; edit: boolean };
 const KESZLET_SITES = ["Szakoly", "Balkány"] as const;
 type KeszletSite = (typeof KESZLET_SITES)[number];
 
+// Közös keret minden képernyőhöz: Menta-antracit színséma + lehúzásra
+// frissítés (ld. AGENTS.md "Mobil felület — kötelező konvenciók").
+function Shell({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={MOBIL_THEME}
+      className="mx-auto flex h-dvh max-w-md flex-col overflow-hidden bg-[var(--mob-bg)] text-[var(--mob-text)]"
+    >
+      <PullToRefresh className="flex-1 overflow-y-auto">
+        <div className="flex flex-col gap-4 px-4 py-4">{children}</div>
+      </PullToRefresh>
+    </div>
+  );
+}
+
 function Header({
   employeeName,
   onBack,
@@ -41,20 +58,20 @@ function Header({
           <button
             type="button"
             onClick={onBack}
-            className="flex items-center justify-center rounded-md p-1 text-muted-foreground hover:bg-muted"
+            className="flex items-center justify-center rounded-md p-1 text-[var(--mob-muted)] hover:bg-[var(--mob-tile)]"
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
         )}
         <div>
           <h1 className="text-base font-semibold">{employeeName}</h1>
-          <p className="text-xs text-muted-foreground">Jelenlét</p>
+          <p className="text-xs text-[var(--mob-muted)]">Jelenlét</p>
         </div>
       </div>
       <form action={logout}>
         <button
           type="submit"
-          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          className="flex items-center gap-1 text-xs text-[var(--mob-muted)] hover:text-[var(--mob-text)]"
         >
           <LogOut className="h-3.5 w-3.5" />
           Kijelentkezés
@@ -74,13 +91,13 @@ function HomeScreen({
   onSelect: (screen: Screen) => void;
 }) {
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col gap-4 bg-muted/40 px-4 py-4">
+    <Shell>
       <Header employeeName={employeeName} />
       <div className="flex flex-1 flex-col gap-3 pt-4">
         <button
           type="button"
           onClick={() => onSelect("jelenlet")}
-          className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-border bg-card py-10 transition-colors active:bg-muted"
+          className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-[var(--mob-border)] bg-[var(--mob-card)] py-10 transition-colors active:bg-[var(--mob-tile)]"
         >
           <CalendarClock className="h-7 w-7" />
           <span className="text-base font-semibold">Jelenléti</span>
@@ -88,7 +105,7 @@ function HomeScreen({
         <button
           type="button"
           onClick={() => onSelect("feladatok")}
-          className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-border bg-card py-10 transition-colors active:bg-muted"
+          className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-[var(--mob-border)] bg-[var(--mob-card)] py-10 transition-colors active:bg-[var(--mob-tile)]"
         >
           <ClipboardList className="h-7 w-7" />
           <span className="text-base font-semibold">Feladatok</span>
@@ -97,14 +114,14 @@ function HomeScreen({
           <button
             type="button"
             onClick={() => onSelect("keszlet")}
-            className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-border bg-card py-10 transition-colors active:bg-muted"
+            className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-[var(--mob-border)] bg-[var(--mob-card)] py-10 transition-colors active:bg-[var(--mob-tile)]"
           >
             <Package className="h-7 w-7" />
             <span className="text-base font-semibold">Készlet</span>
           </button>
         )}
       </div>
-    </div>
+    </Shell>
   );
 }
 
@@ -153,10 +170,10 @@ function JelenletiScreen({
   const todayBeteg = sessions.some((s) => s.day_type === "beteg");
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col gap-4 bg-muted/40 px-4 py-4">
+    <Shell>
       <Header employeeName={employeeName} onBack={onBack} />
 
-      <Card>
+      <Card className="border border-[var(--mob-border)] bg-[var(--mob-card)] ring-0">
         <CardContent className="grid grid-cols-2 gap-3 pt-4">
           <button
             type="button"
@@ -198,11 +215,11 @@ function JelenletiScreen({
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="Megjegyzés (opcionális)"
-            className="col-span-2"
+            className="col-span-2 border-[var(--mob-border)] bg-[var(--mob-card)] text-[var(--mob-text)]"
           />
         </CardContent>
       </Card>
-    </div>
+    </Shell>
   );
 }
 
@@ -214,10 +231,10 @@ function FeladatokScreen({
   onBack: () => void;
 }) {
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col gap-4 bg-muted/40 px-4 py-4">
+    <Shell>
       <Header employeeName={employeeName} onBack={onBack} />
       <FeladatokMobilCsempe />
-    </div>
+    </Shell>
   );
 }
 
@@ -226,7 +243,9 @@ function FeladatokScreen({
 // kikapcsolva, mert ezen a korlátozott mobil nézeten csak Be/Ki kell, nem
 // telephelyek közti mozgatás), a szerkesztési jogot a "keszlet_sajat" modul
 // dönti el (NEM a teljes "keszlet" modulét, hogy ez a dolgozó ne kapjon
-// hozzáférést a desktop Készlet oldalhoz/Nyíregyházához is).
+// hozzáférést a desktop Készlet oldalhoz/Nyíregyházához is). A MovementForm/
+// InventoryDialog a desktop Készlet modullal közös komponens, ezért a saját
+// (globális) színeivel jelenik meg, nem a mobil Menta-antracit sémával.
 function KeszletScreen({
   employeeName,
   canEdit,
@@ -254,7 +273,7 @@ function KeszletScreen({
   }, [load]);
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-md flex-col gap-4 bg-muted/40 px-4 py-4">
+    <Shell>
       <Header employeeName={employeeName} onBack={onBack} />
 
       <div className="grid grid-cols-2 gap-2">
@@ -266,8 +285,8 @@ function KeszletScreen({
             className={cn(
               "rounded-xl border-2 py-3 text-sm font-semibold transition-colors",
               site === s
-                ? "border-primary bg-accent text-accent-foreground"
-                : "border-border text-muted-foreground hover:bg-muted"
+                ? "border-[var(--mob-accent)] bg-[var(--mob-tile)] text-[var(--mob-text)]"
+                : "border-[var(--mob-border)] text-[var(--mob-muted)] hover:bg-[var(--mob-tile)]"
             )}
           >
             {s}
@@ -276,12 +295,12 @@ function KeszletScreen({
       </div>
 
       {loading ? (
-        <p className="text-sm text-muted-foreground">Betöltés…</p>
+        <p className="text-sm text-[var(--mob-muted)]">Betöltés…</p>
       ) : (
         <EditPermissionProvider canEdit={canEdit}>
           <MovementForm site={site} types={types} otherSites={[]} onRecorded={load} allowTransfer={false} />
 
-          <Card>
+          <Card className="border border-[var(--mob-border)] bg-[var(--mob-card)] ring-0">
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-sm">Jelenlegi készlet — {site}</CardTitle>
               {canEdit && (
@@ -294,7 +313,7 @@ function KeszletScreen({
               {Object.entries(stock).map(([t, q]) => (
                 <div
                   key={t}
-                  className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm"
+                  className="flex items-center justify-between rounded-md border border-[var(--mob-border)] bg-[var(--mob-tile)] px-3 py-2 text-sm"
                 >
                   <span>{t}</span>
                   <span className="font-semibold tabular-nums">{q}</span>
@@ -313,7 +332,7 @@ function KeszletScreen({
           />
         </EditPermissionProvider>
       )}
-    </div>
+    </Shell>
   );
 }
 
