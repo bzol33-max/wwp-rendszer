@@ -4,12 +4,10 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { SimpleSiteView } from "@/components/keszlet/simple-site-view";
 import { NyiregyhazaHaviTab } from "@/components/keszlet/nyiregyhaza-havi";
-import { NyiregyhazaFoTab } from "@/components/keszlet/nyiregyhaza-fo";
-import { OsszkeszletTab } from "@/components/keszlet/osszkeszlet";
+import { TelephelyekView } from "@/components/keszlet/telephelyek-view";
 
-const TABS = ["havi", "Nyíregyháza", "Balkány", "Szakoly", "osszkeszlet", "archivum"] as const;
+const TABS = ["havi", "telephelyek", "archivum"] as const;
 type Tab = (typeof TABS)[number];
 
 function currentMonthLabel() {
@@ -31,10 +29,7 @@ function KeszletTabs() {
 
   const tabLabel: Record<Tab, string> = {
     havi: currentMonthLabel(),
-    Nyíregyháza: "Nyíregyháza",
-    Balkány: "Balkány",
-    Szakoly: "Szakoly",
-    osszkeszlet: "Összkészlet",
+    telephelyek: "Telephelyek",
     archivum: "Archívum",
   };
 
@@ -57,17 +52,8 @@ function KeszletTabs() {
       <TabsContent value="havi" className="mt-5">
         <NyiregyhazaHaviTab />
       </TabsContent>
-      <TabsContent value="Nyíregyháza" className="mt-5">
-        <NyiregyhazaFoTab />
-      </TabsContent>
-      <TabsContent value="Balkány" className="mt-5">
-        <SimpleSiteView site="Balkány" />
-      </TabsContent>
-      <TabsContent value="Szakoly" className="mt-5">
-        <SimpleSiteView site="Szakoly" />
-      </TabsContent>
-      <TabsContent value="osszkeszlet" className="mt-5">
-        <OsszkeszletTab />
+      <TabsContent value="telephelyek" className="mt-5">
+        <TelephelyekView />
       </TabsContent>
       <TabsContent value="archivum" className="mt-5">
         <p className="text-sm text-muted-foreground">

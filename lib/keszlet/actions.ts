@@ -135,12 +135,15 @@ export async function addMovement(input: {
 // hogy egy törlés (deleteMovement / deleteMovementEvent) mindkét oldalt
 // együtt vonja vissza — különben egy féloldalas törlés újra egyensúlyt
 // bontana, pont úgy, mint az eredeti hiba.
+// FONTOS (2026-09-10-i bővítés): egy "mozgatás" mentésben soronként ELTÉRŐ
+// cél telephely is megadható (pl. 10 db EUR világos Szakolyra, 5 db EUR
+// szürke Balkányra, egy mentésben) — ezért a cél telephely soronkénti
+// (items[].targetSite), nem egyetlen, a teljes mentésre érvényes mező.
 export async function recordMovements(input: {
   site: string;
   direction: Direction;
-  items: { type: string; qty: number }[];
+  items: { type: string; qty: number; targetSite?: string }[];
   partner?: string;
-  targetSite?: string;
   createdBy?: string;
 }) {
   if (input.items.length === 0) return;
@@ -153,15 +156,16 @@ export async function recordMovements(input: {
       direction: input.direction,
       qty: item.qty,
       partner: input.partner,
-      targetSite: input.targetSite,
+      targetSite: input.direction === "mozgatas" ? item.targetSite : undefined,
       createdBy: input.createdBy,
       movementGroup,
     });
   }
-  if (input.direction === "mozgatas" && input.targetSite) {
+  if (input.direction === "mozgatas") {
     for (const item of input.items) {
+      if (!item.targetSite) continue;
       await addMovement({
-        site: input.targetSite,
+        site: item.targetSite,
         type: item.type,
         direction: "mozgatas_be",
         qty: item.qty,
@@ -173,10 +177,13 @@ export async function recordMovements(input: {
   }
 
   if (input.site === "Nyíregyháza") {
-    const itemsText = input.items.map((i) => `${i.qty} db ${i.type}`).join(", ");
+    const itemsText =
+      input.direction === "mozgatas"
+        ? input.items.map((i) => `${i.qty} db ${i.type} → ${i.targetSite}`).join(", ")
+        : input.items.map((i) => `${i.qty} db ${i.type}`).join(", ");
     const details =
       input.direction === "mozgatas"
-        ? `${itemsText} átszállítva ide: ${input.targetSite}`
+        ? itemsText
         : `${itemsText}${input.partner ? ` — ${input.partner}` : ""}`;
     const effect = input.items
       .map((i) =>
@@ -184,7 +191,7 @@ export async function recordMovements(input: {
           ? `${i.type} +${i.qty}`
           : input.direction === "ki"
             ? `${i.type} −${i.qty}`
-            : `${i.type} −${i.qty} → ${input.targetSite}`
+            : `${i.type} −${i.qty} → ${i.targetSite}`
       )
       .join(" · ");
     await query(
@@ -193,18 +200,21 @@ export async function recordMovements(input: {
       [details, effect, input.createdBy ?? null, movementGroup]
     );
   }
-  if (input.direction === "mozgatas" && input.targetSite === "Nyíregyháza") {
-    const itemsText = input.items.map((i) => `${i.qty} db ${i.type}`).join(", ");
-    await query(
-      `insert into keszlet_events (site_id, kind, details, effect, created_by, movement_group)
-       values ((select id from sites where name = 'Nyíregyháza'), 'mozgas', $1, $2, $3, $4)`,
-      [
-        `${itemsText} érkezett innen: ${input.site}`,
-        input.items.map((i) => `${i.type} +${i.qty}`).join(" · "),
-        input.createdBy ?? null,
-        movementGroup,
-      ]
-    );
+  if (input.direction === "mozgatas") {
+    const toNyiregyhaza = input.items.filter((i) => i.targetSite === "Nyíregyháza");
+    if (toNyiregyhaza.length > 0) {
+      const itemsText = toNyiregyhaza.map((i) => `${i.qty} db ${i.type}`).join(", ");
+      await query(
+        `insert into keszlet_events (site_id, kind, details, effect, created_by, movement_group)
+         values ((select id from sites where name = 'Nyíregyháza'), 'mozgas', $1, $2, $3, $4)`,
+        [
+          `${itemsText} érkezett innen: ${input.site}`,
+          toNyiregyhaza.map((i) => `${i.type} +${i.qty}`).join(" · "),
+          input.createdBy ?? null,
+          movementGroup,
+        ]
+      );
+    }
   }
 }
 
@@ -314,6 +324,36 @@ export async function getOsszkeszlet(): Promise<OsszkeszletRow[]> {
   return Array.from(byType.values());
 }
 
+export type OsszkeszletMovementRow = {
+  id: string;
+  date: string;
+  site: string;
+  type: string;
+  direction: "be" | "ki";
+  partner: string | null;
+  qty: number;
+  created_by: string | null;
+};
+
+// Összes telephely be/ki mozgása egy közös listában — a telephelyek közti
+// mozgatás (mozgatas/mozgatas_be) szándékosan KIMARAD innen: az nem valódi
+// készletváltozás a cégen belül összesítve, csak áthelyezés a telephelyek
+// között, a getOsszkeszlet() tábláiban is így (be/ki/mozgatas előjeles
+// összegzéssel) semlegesíti egymást a forrás- és céloldal.
+export async function getOsszkeszletMovements(limit = 40): Promise<OsszkeszletMovementRow[]> {
+  return query<OsszkeszletMovementRow>(
+    `select m.id::text, to_char(m.created_at at time zone 'Europe/Budapest', '${TIME_FMT}') as date,
+       s.name as site, t.name as type, m.direction, m.partner, m.qty, m.created_by
+     from keszlet_movements m
+     join sites s on s.id = m.site_id
+     join pallet_types t on t.id = m.type_id
+     where m.direction in ('be', 'ki')
+     order by m.created_at desc
+     limit $1`,
+    [limit]
+  );
+}
+
 export async function getSiteSnapshot(site: string) {
   const [stock, movements, types] = await Promise.all([
     getStock(site),
@@ -341,6 +381,21 @@ export type PurchaseRow = {
   created_by: string | null;
 };
 
+export type PriceRow = { name: string; default_price: number | null };
+
+// Gyors rögzítéshez (Havi fül és a /felvasarlas mobil nézet) azok a típusok
+// jelennek meg, amik Nyíregyházán aktívak ÉS van beárazva.
+export async function getNyiregyhazaPurchasePrices(): Promise<PriceRow[]> {
+  return query<PriceRow>(
+    `select t.name, t.default_price
+     from pallet_types t
+     join site_active_types sat on sat.type_id = t.id
+     join sites s on s.id = sat.site_id
+     where s.name = 'Nyíregyháza' and t.default_price is not null
+     order by t.sort_order, t.id`
+  );
+}
+
 export async function getHaviSnapshot() {
   const purchases = await query<PurchaseRow>(
     `select p.id::text, to_char(p.created_at at time zone 'Europe/Budapest', '${TIME_FMT}') as date,
@@ -365,15 +420,7 @@ export async function getHaviSnapshot() {
      where amount < 0
        and (created_at at time zone 'Europe/Budapest')::date = ${BUDAPEST_NOW_DATE}`
   );
-  // Gyors rögzítéshez azok a típusok jelennek meg, amik Nyíregyházán aktívak ÉS van beárazva.
-  const priceRows = await query<{ name: string; default_price: number | null }>(
-    `select t.name, t.default_price
-     from pallet_types t
-     join site_active_types sat on sat.type_id = t.id
-     join sites s on s.id = sat.site_id
-     where s.name = 'Nyíregyháza' and t.default_price is not null
-     order by t.sort_order, t.id`
-  );
+  const priceRows = await getNyiregyhazaPurchasePrices();
   // Típusonkénti darabszám-számláló: havi (aktuális naptári hónap) és mai összesítés.
   // Pending tétel is beleszámít, mert a darabszám a felvételkor azonnal a készletben van.
   const typeCounterRows = await query<{

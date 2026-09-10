@@ -85,6 +85,27 @@ async function main() {
       posta: { view: true, edit: true },
     },
   });
+  // Csak a mobil felvásárlás-rögzítő nézetet látja (a Havi fül "gyors
+  // rögzítés" kártyájának mobilra optimalizált, önálló verziója) — minden
+  // más modul le van tiltva neki. Lásd app/felvasarlas/page.tsx.
+  await seedUserOnce(pool, {
+    code: "user-mobil-2026-09-10",
+    username: "mobil",
+    password: process.env.SEED_MOBIL_PASSWORD,
+    name: "Mobil",
+    role: "felhasznalo",
+    permissions: {
+      info: { view: false, edit: false },
+      fuvarozas: { view: false, edit: false },
+      keszlet: { view: false, edit: false },
+      szamlak: { view: false, edit: false },
+      dolgozok: { view: false, edit: false },
+      jelenlet: { view: false, edit: false },
+      jarmuvek: { view: false, edit: false },
+      beallitasok: { view: false, edit: false },
+      felvasarlas_mobil: { view: true, edit: true },
+    },
+  });
 
   await applyKapcsolatokUpdates(pool, dbDir);
   await applyPoziciszamUpdates(pool, dbDir);

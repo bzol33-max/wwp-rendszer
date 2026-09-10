@@ -36,6 +36,7 @@ export default async function Home() {
     if (session.can("mobil").view) redirect("/mobil");
     if (session.can("posta").view) redirect("/posta");
     if (session.can("erkezes").view) redirect("/erkezes");
+    if (session.can("felvasarlas_mobil").view) redirect("/felvasarlas");
   }
 
   return (
