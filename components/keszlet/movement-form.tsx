@@ -19,7 +19,7 @@ import { recordMovements, type Direction } from "@/lib/keszlet/actions";
 import { getCurrentUser } from "@/lib/current-user";
 import { useCanEdit } from "@/components/auth/edit-permission-context";
 
-type Sor = { key: number; type: string; qty: string };
+type Sor = { key: number; type: string; qty: string; targetSite: string };
 
 const DIRECTION_OPTIONS: readonly [Direction, string][] = [
   ["be", "Beérkezés"],
@@ -28,8 +28,8 @@ const DIRECTION_OPTIONS: readonly [Direction, string][] = [
 ];
 
 let nextKey = 1;
-function ujSor(type: string): Sor {
-  return { key: nextKey++, type, qty: "" };
+function ujSor(type: string, targetSite: string): Sor {
+  return { key: nextKey++, type, qty: "", targetSite };
 }
 
 /**
@@ -37,7 +37,9 @@ function ujSor(type: string): Sor {
  * közti mozgatás) — Nyíregyháza, Szakoly és Balkány fülön egységesen ugyanez
  * a komponens rögzíti a mozgásokat, hogy mindhárom telepről lehessen a másik
  * kettő felé átszállítani. Egy mentésen belül több típus (soronként külön
- * darabszámmal) is rögzíthető, ugyanahhoz a partnerhez/cél telephelyhez.
+ * darabszámmal) is rögzíthető, ugyanahhoz a partnerhez; mozgatásnál a cél
+ * telephely is SORONKÉNT eltérő lehet (pl. egy típus Szakolyra, egy másik
+ * Balkányra, egy mentésben).
  */
 export function MovementForm({
   site,
@@ -55,9 +57,8 @@ export function MovementForm({
 }) {
   const canEdit = useCanEdit();
   const [direction, setDirection] = useState<Direction>("be");
-  const [sorok, setSorok] = useState<Sor[]>([ujSor(types[0] ?? "")]);
+  const [sorok, setSorok] = useState<Sor[]>([ujSor(types[0] ?? "", otherSites[0] ?? "")]);
   const [partner, setPartner] = useState("");
-  const [targetSite, setTargetSite] = useState(otherSites[0] ?? "");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -67,7 +68,13 @@ export function MovementForm({
   }, [types]);
 
   useEffect(() => {
-    setTargetSite((prev) => (prev && otherSites.includes(prev) ? prev : otherSites[0] ?? ""));
+    setSorok((prev) =>
+      prev.map((s) =>
+        s.targetSite && otherSites.includes(s.targetSite)
+          ? s
+          : { ...s, targetSite: otherSites[0] ?? "" }
+      )
+    );
   }, [otherSites]);
 
   function updateSor(key: number, patch: Partial<Sor>) {
@@ -78,7 +85,7 @@ export function MovementForm({
     // Alapértelmezésben egy még nem használt típust ajánl fel, ha van ilyen.
     const hasznaltak = new Set(sorok.map((s) => s.type));
     const kovetkezo = types.find((t) => !hasznaltak.has(t)) ?? types[0] ?? "";
-    setSorok((prev) => [...prev, ujSor(kovetkezo)]);
+    setSorok((prev) => [...prev, ujSor(kovetkezo, otherSites[0] ?? "")]);
   }
 
   function removeSor(key: number) {
@@ -86,7 +93,7 @@ export function MovementForm({
   }
 
   async function submit() {
-    const items: { type: string; qty: number }[] = [];
+    const items: { type: string; qty: number; targetSite?: string }[] = [];
     for (const s of sorok) {
       const n = Number(s.qty);
       if (!s.qty && sorok.length === 1) {
@@ -102,7 +109,11 @@ export function MovementForm({
         toast.error("Válassz típust minden sorhoz.");
         return;
       }
-      items.push({ type: s.type, qty: n });
+      if (direction === "mozgatas" && !s.targetSite) {
+        toast.error(`Válaszd ki, hová megy ez a tétel: ${s.type}.`);
+        return;
+      }
+      items.push({ type: s.type, qty: n, targetSite: direction === "mozgatas" ? s.targetSite : undefined });
     }
     if (items.length === 0) {
       toast.error("Adj meg legalább egy típust és darabszámot.");
@@ -112,10 +123,6 @@ export function MovementForm({
       toast.error("A partner megadása kötelező.");
       return;
     }
-    if (direction === "mozgatas" && !targetSite) {
-      toast.error("Válaszd ki, hová megy a szállítmány.");
-      return;
-    }
     setSubmitting(true);
     try {
       await recordMovements({
@@ -123,10 +130,9 @@ export function MovementForm({
         direction,
         items,
         partner: direction === "mozgatas" ? undefined : partner,
-        targetSite: direction === "mozgatas" ? targetSite : undefined,
         createdBy: getCurrentUser() || undefined,
       });
-      setSorok([ujSor(types[0] ?? "")]);
+      setSorok([ujSor(types[0] ?? "", otherSites[0] ?? "")]);
       setPartner("");
       await onRecorded();
       toast.success(
@@ -153,7 +159,7 @@ export function MovementForm({
                 type="button"
                 onClick={() => setDirection(value)}
                 className={cn(
-                  "rounded-md border px-2 py-2 text-xs font-medium transition-colors",
+                  "rounded-md border px-2 py-2 text-xs font-medium transition-colors max-md:min-h-11",
                   direction === value
                     ? "border-primary bg-accent text-accent-foreground"
                     : "border-border text-muted-foreground hover:bg-muted"
@@ -167,7 +173,15 @@ export function MovementForm({
 
         <div className="space-y-2">
           {sorok.map((sor, i) => (
-            <div key={sor.key} className="grid grid-cols-[1fr_auto_auto] items-end gap-2">
+            <div
+              key={sor.key}
+              className={cn(
+                "grid items-end gap-2",
+                direction === "mozgatas"
+                  ? "grid-cols-1 sm:grid-cols-[1fr_5.5rem_1fr_auto]"
+                  : "grid-cols-[1fr_auto_auto]"
+              )}
+            >
               <div className="space-y-1.5">
                 {i === 0 && <Label>Típus</Label>}
                 <Select value={sor.type} onValueChange={(v) => v && updateSor(sor.key, { type: v })}>
@@ -183,7 +197,7 @@ export function MovementForm({
                   </SelectContent>
                 </Select>
               </div>
-              <div className="w-24 space-y-1.5">
+              <div className={cn("space-y-1.5", direction !== "mozgatas" && "w-24")}>
                 {i === 0 && <Label>Darabszám</Label>}
                 <Input
                   type="number"
@@ -192,6 +206,26 @@ export function MovementForm({
                   onChange={(e) => updateSor(sor.key, { qty: e.target.value })}
                 />
               </div>
+              {direction === "mozgatas" && (
+                <div className="space-y-1.5">
+                  {i === 0 && <Label>Hová</Label>}
+                  <Select
+                    value={sor.targetSite}
+                    onValueChange={(v) => v && updateSor(sor.key, { targetSite: v })}
+                  >
+                    <SelectTrigger className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {otherSites.map((s) => (
+                        <SelectItem key={s} value={s}>
+                          {s}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               <Button
                 type="button"
                 variant="outline"
@@ -217,7 +251,7 @@ export function MovementForm({
           </Button>
         </div>
 
-        {direction !== "mozgatas" ? (
+        {direction !== "mozgatas" && (
           <div className="space-y-1.5">
             <Label>Partner</Label>
             <Input
@@ -225,22 +259,6 @@ export function MovementForm({
               value={partner}
               onChange={(e) => setPartner(e.target.value)}
             />
-          </div>
-        ) : (
-          <div className="space-y-1.5">
-            <Label>Hová</Label>
-            <Select value={targetSite} onValueChange={(v) => v && setTargetSite(v)}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {otherSites.map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {s}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
         )}
 
