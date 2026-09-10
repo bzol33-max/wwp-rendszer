@@ -95,12 +95,18 @@ function TervezettFuvarSav({ jarmu, tervezettFuvarok }: { jarmu: (typeof SAJAT_J
             key={f.id}
             title={`${f.megrendelo ?? "Megbízás"}${f.pozicioszam ? ` (${f.pozicioszam})` : ""}\n${f.honnan ?? "?"} → ${f.hova}\nBecsült: ${formatIdo(
               f.kezdet
-            )}–${formatIdo(f.veg)}${bizonytalan ? "\n(becslés — " + (f.idoBizonytalan ? "nincs megadott időpont" : "") + (f.idoBizonytalan && f.utvonalBizonytalan ? ", " : "") + (f.utvonalBizonytalan ? "átalány menetidő" : "") + ")" : ""}`}
-            className={`absolute top-0 h-full rounded-sm bg-white/70 dark:bg-black/30 ${SZIN_TERVEZETT_BORDER[jarmu.szin]}`}
+            )}–${formatIdo(f.veg)}${bizonytalan ? "\n(becslés — " + (f.idoBizonytalan ? "nincs megadott időpont" : "") + (f.idoBizonytalan && f.utvonalBizonytalan ? ", " : "") + (f.utvonalBizonytalan ? "átalány menetidő" : "") + ")" : ""}${
+              f.tullepiAKeretet
+                ? "\n⚠️ A jelenlegi tempó mellett ez a fuvar túlnyúlik a megengedett napi vezetési időn."
+                : ""
+            }`}
+            className={`absolute top-0 h-full rounded-sm bg-white/70 dark:bg-black/30 ${
+              f.tullepiAKeretet ? "border-destructive" : SZIN_TERVEZETT_BORDER[jarmu.szin]
+            }`}
             style={{
               left: `${left}%`,
               width: `${width}%`,
-              borderWidth: 1.5,
+              borderWidth: f.tullepiAKeretet ? 2 : 1.5,
               borderStyle: bizonytalan ? "dashed" : "solid",
             }}
           />

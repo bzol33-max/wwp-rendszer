@@ -194,6 +194,13 @@ export type TervezettFuvarSzakasz = {
   idoBizonytalan: boolean;
   /** Igaz, ha a menetidőt nem sikerült kiszámolni (cím hiányzik/nem geokódolható), ezért egy átalány (2 óra) szerepel. */
   utvonalBizonytalan: boolean;
+  /**
+   * Igaz, ha a becsült befejezés (`veg`) a jelenlegi tempó mellett túlnyúlik
+   * a sofőr aznapi megengedett vezetési idejének végén (lásd
+   * szamitsAetrKoltsegvetes az aetr.ts-ben) — csak a mai napra, éppen
+   * vezető járműnél számolható, egyébként mindig false.
+   */
+  tullepiAKeretet: boolean;
 };
 
 export type EloPozicio = {
