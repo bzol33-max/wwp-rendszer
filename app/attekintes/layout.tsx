@@ -3,12 +3,14 @@ import { requireSession } from "@/lib/auth/dal";
 import { logout } from "@/lib/auth/actions";
 import { AttekintesTabBar } from "@/components/attekintes/tab-bar";
 import { getAttekintesTheme } from "@/lib/attekintes/theme";
+import { getAttekintesProfil } from "@/lib/attekintes/tabs";
 import { getHaviFelvasarlasOsszefoglalo } from "@/lib/attekintes/actions";
 import { HaviFelvasarlasButton } from "@/components/attekintes/havi-felvasarlas-modal";
 
 export default async function AttekintesLayout({ children }: { children: React.ReactNode }) {
   const session = await requireSession();
   const theme = getAttekintesTheme(session.name);
+  const profil = getAttekintesProfil(session.name);
 
   if (!session.can("attekintes").view) {
     return (
@@ -41,7 +43,7 @@ export default async function AttekintesLayout({ children }: { children: React.R
       <HaviFelvasarlasButton tipusok={haviTipusok} />
 
       <div className="flex-1 overflow-y-auto px-4 pb-20">{children}</div>
-      <AttekintesTabBar />
+      <AttekintesTabBar profil={profil} />
     </div>
   );
 }
