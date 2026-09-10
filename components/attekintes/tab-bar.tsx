@@ -2,13 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Building2, Mail, Truck, Wallet } from "lucide-react";
+import { Building2, Mail, Truck } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const TABS = [
   { href: "/attekintes", label: "Nyíregyháza", icon: Building2 },
-  { href: "/attekintes/szamlak", label: "Számlák", icon: Wallet },
-  { href: "/posta", label: "Posta", icon: Mail },
+  { href: "/attekintes/posta", label: "Posta", icon: Mail },
   { href: "/attekintes/fuvar", label: "Fuvar", icon: Truck },
 ];
 
