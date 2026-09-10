@@ -21,7 +21,7 @@
 
 import { query } from "@/lib/db";
 import { lekerdezSzamla, SzamlazzHuError, type SzamlazzHuSzamla } from "./szamlazzhu-client";
-import { kategorizalSzamla, alkategorizalRaklap } from "./categorize";
+import { kategorizalSzamla, alkategorizalRaklap, keszpenzesE } from "./categorize";
 import { frissitSztornoJelolest } from "./sztorno";
 import { szinkronizalSzamlaSzamokat } from "@/lib/fuvarozas/megbizasok";
 
@@ -46,12 +46,20 @@ function budapestEv(): number {
 async function mentSzamla(adat: SzamlazzHuSzamla) {
   const kategoria = kategorizalSzamla(adat.tetelekSzoveg);
   const alkategoria = kategoria === "raklap" ? alkategorizalRaklap(adat.vevoNev) : null;
+  // Készpénzes számlát a vevő a pult mellett, kiállításkor azonnal kifizet —
+  // ezért ezeket rögtön "fizetve"-ként mentjük (lásd categorize.ts
+  // keszpenzesE), különben a rendszer "nyitott"-ként kezelné, és a
+  // (jellemzően a kiállítás napjára eső) fizetési határidő elteltével
+  // tévesen "Lejárt"-ként jelenne meg. A fizetve_datum a kiállítás napja,
+  // nem a szinkron időpontja — így a "Visszavon" 5 perces ablaka nem nyílik
+  // fel feleslegesen egy már régi, automatikusan jelölt tételnél.
+  const fizetve = keszpenzesE(adat.fizmod);
   await query(
     `insert into szamla
        (szamlaszam, vevo_nev, rendelesszam, fizmod, penznem, teljesites_datum,
         kiallitas_datum, fizetesi_hatarido, netto, afa, brutto, kategoria,
-        alkategoria, tetelek_szoveg, raw_xml, lekerdezve_at)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, now())
+        alkategoria, tetelek_szoveg, raw_xml, fizetve, fizetve_datum, lekerdezve_at)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17::timestamptz, now())
      on conflict (szamlaszam) do update set
        vevo_nev = excluded.vevo_nev,
        rendelesszam = excluded.rendelesszam,
@@ -84,6 +92,8 @@ async function mentSzamla(adat: SzamlazzHuSzamla) {
       alkategoria,
       adat.tetelekSzoveg,
       adat.rawXml,
+      fizetve,
+      fizetve ? adat.kiallitasDatum : null,
     ]
   );
 }

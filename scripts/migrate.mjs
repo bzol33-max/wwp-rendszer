@@ -113,6 +113,7 @@ async function main() {
   await applyPostazasiCimUpdates(pool, dbDir);
   await resetSzamlaRosszTotalosszMezok(pool);
   await applySzamlaFizetveImport(pool, dbDir);
+  await fixKeszpenzesSzamlakFizetve(pool);
   await backfillMozgatasBe(pool);
   await seedAlkalmazottakOnce(pool);
   await seedJelenletAktivOnce(pool);
@@ -573,6 +574,28 @@ async function applySzamlaFizetveImport(pool, dbDir) {
   }
 
   console.log(`[migrate] számla fizetve-import: ${updated} sor jelölve kifizetettnek.`);
+}
+
+// Számlák — készpénzes tételek visszamenőleges javítása (2026-09-10): a
+// lib/szamlak/poll.ts mentSzamla mostantól az ÚJONNAN behúzott készpénzes
+// számlákat azonnal "fizetve"-ként menti (a vevő a pult mellett, kiállításkor
+// kifizeti) — a MÁR korábban, e nélkül behúzott készpénzes számlák viszont
+// "nyitva" maradtak, és a (jellemzően a kiállítás napjára eső) fizetési
+// határidő elteltével tévesen "Lejárt"-ként, pirosan jelentek meg. Minden
+// induláskor lefut, biztonságosan újrafuttatható — csak a MÉG "nincs fizetve"
+// állapotú sorokat érinti, egy kézzel "Fizetve"-ként megjelölt/visszavont
+// sort nem ír felül.
+async function fixKeszpenzesSzamlakFizetve(pool) {
+  const { rowCount } = await pool.query(
+    `update szamla
+       set fizetve = true,
+           fizetve_datum = kiallitas_datum::timestamptz
+     where fizetve = false
+       and fizmod ~* 'készpénz|keszpenz'`
+  );
+  if (rowCount) {
+    console.log(`[migrate] készpénzes számlák utólag fizetve-nek jelölve: ${rowCount} sor.`);
+  }
 }
 
 main().catch((err) => {
