@@ -7,8 +7,11 @@ import { jeloltFizetve } from "@/lib/szamlak/actions";
 import { KATEGORIA_LABEL } from "@/lib/szamlak/szamla-constants";
 import type { SzamlaRow } from "@/lib/szamlak/szamla-constants";
 
+// A pg-rétegből a numerikus (numeric) oszlopok stringként érkeznek —
+// Number() nélkül a toLocaleString a stringen nem csinál semmit (nincs
+// ezres tagolás), lásd components/szamlak/szamlak-view.tsx formatOsszeg.
 function formatOsszeg(n: number, penznem: string) {
-  return `${n.toLocaleString("hu-HU")} ${penznem}`;
+  return `${Number(n).toLocaleString("hu-HU")} ${penznem}`;
 }
 
 function napjaLejart(hatarido: string | null): number {
