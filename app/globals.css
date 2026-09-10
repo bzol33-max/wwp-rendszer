@@ -52,77 +52,88 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* "Rozsda-krém" — a fő (asztali) alkalmazás megosztott design tokenjei.
+   A korábbi kék séma helyett: meleg krémszín háttér, közel-fekete,
+   barnás-meleg oldalsáv, rozsda/terrakotta elsődleges szín — a
+   felhasználó által mutatott referencia-terv (raklap-leltár irányítópult
+   mockup) színvilága alapján. Ez a globals.css-ben él, tehát minden
+   modulra (Info, Fuvarozás, Készlet, Számlák, Dolgozók, Jelenléti,
+   Járművek, Beállítások) automatikusan érvényes — a különálló, korlátozott
+   mobil nézetek (mobil/posta/erkezes/felvasarlas/attekintes) SZÁNDÉKOSAN
+   nem ide tartoznak, azok saját "--mob-"/"--at-" előtagú, felhasználónkénti
+   sémákat használnak (lásd lib/mobil-theme.ts, lib/attekintes/theme.ts) —
+   ezt itt nem érintjük. */
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.546 0.215 262.1);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0.003 260);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0.003 260);
-  --muted-foreground: oklch(0.556 0.01 260);
-  --accent: oklch(0.94 0.03 262.1);
-  --accent-foreground: oklch(0.35 0.15 262.1);
+  --background: oklch(0.97 0.014 75);
+  --foreground: oklch(0.24 0.025 55);
+  --card: oklch(0.995 0.006 80);
+  --card-foreground: oklch(0.24 0.025 55);
+  --popover: oklch(0.995 0.006 80);
+  --popover-foreground: oklch(0.24 0.025 55);
+  --primary: oklch(0.53 0.14 42);
+  --primary-foreground: oklch(0.99 0.005 80);
+  --secondary: oklch(0.93 0.02 65);
+  --secondary-foreground: oklch(0.28 0.03 50);
+  --muted: oklch(0.94 0.016 70);
+  --muted-foreground: oklch(0.52 0.02 55);
+  --accent: oklch(0.91 0.035 50);
+  --accent-foreground: oklch(0.38 0.09 42);
   --success: oklch(0.6 0.15 150);
   --success-foreground: oklch(0.985 0 0);
-  --warning: oklch(0.65 0.15 70);
-  --warning-foreground: oklch(0.985 0 0);
+  --warning: oklch(0.68 0.15 60);
+  --warning-foreground: oklch(0.99 0 0);
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.915 0.005 260);
-  --input: oklch(0.915 0.005 260);
-  --ring: oklch(0.546 0.215 262.1);
+  --border: oklch(0.87 0.018 65);
+  --input: oklch(0.87 0.018 65);
+  --ring: oklch(0.53 0.14 42);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
   --radius: 0.55rem;
-  --sidebar: oklch(0.17 0.015 260);
-  --sidebar-foreground: oklch(0.85 0.01 260);
-  --sidebar-primary: oklch(0.546 0.215 262.1);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.25 0.02 260);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(0.25 0.02 260);
-  --sidebar-ring: oklch(0.546 0.215 262.1);
+  --sidebar: oklch(0.18 0.02 50);
+  --sidebar-foreground: oklch(0.87 0.02 70);
+  --sidebar-primary: oklch(0.53 0.14 42);
+  --sidebar-primary-foreground: oklch(0.99 0.005 80);
+  --sidebar-accent: oklch(0.27 0.028 48);
+  --sidebar-accent-foreground: oklch(0.99 0.005 80);
+  --sidebar-border: oklch(0.27 0.028 48);
+  --sidebar-ring: oklch(0.53 0.14 42);
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --background: oklch(0.16 0.016 50);
+  --foreground: oklch(0.93 0.016 70);
+  --card: oklch(0.21 0.02 50);
+  --card-foreground: oklch(0.93 0.016 70);
+  --popover: oklch(0.21 0.02 50);
+  --popover-foreground: oklch(0.93 0.016 70);
+  --primary: oklch(0.68 0.15 48);
+  --primary-foreground: oklch(0.15 0.015 50);
+  --secondary: oklch(0.27 0.02 50);
+  --secondary-foreground: oklch(0.93 0.016 70);
+  --muted: oklch(0.27 0.02 50);
+  --muted-foreground: oklch(0.66 0.02 60);
+  --accent: oklch(0.3 0.03 48);
+  --accent-foreground: oklch(0.93 0.016 70);
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);
   --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --ring: oklch(0.68 0.15 48);
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar: oklch(0.13 0.015 50);
+  --sidebar-foreground: oklch(0.9 0.016 70);
+  --sidebar-primary: oklch(0.68 0.15 48);
+  --sidebar-primary-foreground: oklch(0.15 0.015 50);
+  --sidebar-accent: oklch(0.22 0.022 48);
+  --sidebar-accent-foreground: oklch(0.93 0.016 70);
   --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar-ring: oklch(0.68 0.15 48);
 }
 
 @layer base {
