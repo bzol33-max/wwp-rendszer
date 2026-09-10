@@ -17,7 +17,6 @@ import { MovementForm } from "@/components/keszlet/movement-form";
 import { VegyesSplitRow } from "@/components/keszlet/vegyes-split-row";
 import { X } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
 import {
   getNyiregyhazaFoSnapshot,
   getSiteSnapshot,
@@ -34,8 +33,7 @@ import {
 import { getCurrentUser } from "@/lib/current-user";
 import { useCanEdit } from "@/components/auth/edit-permission-context";
 
-const SITES = ["Nyíregyháza", "Balkány", "Szakoly", "Összkészlet"] as const;
-type SiteKey = (typeof SITES)[number];
+type SiteKey = "Nyíregyháza" | "Balkány" | "Szakoly" | "Összkészlet";
 
 const OTHER_SITES: Record<string, string[]> = {
   "Nyíregyháza": ["Szakoly", "Balkány"],
@@ -67,14 +65,13 @@ function Tile({ name, qty }: { name: string; qty: number }) {
 }
 
 /**
- * Egységes, csempés "Telephelyek" nézet — Nyíregyháza / Balkány / Szakoly /
- * Összkészlet egy közös sablonban, felül telephely-váltóval (a korábbi 4
- * külön fül helyett). Asztalon és mobilon is ugyanez a komponens fut, a
- * reszponzív osztályok (lg:) döntik el az elrendezést.
+ * Csempés stílusú telephely-nézet — a Készlet modul saját fülén (Nyíregyháza/
+ * Balkány/Szakoly/Összkészlet, ahogy eddig is) ugyanez a komponens fut,
+ * a `site` prop dönti el melyiket mutatja. Asztalon és mobilon is ugyanez a
+ * komponens, a reszponzív osztályok (lg:) döntik el az elrendezést.
  */
-export function TelephelyekView() {
+export function TelephelyekView({ site: active }: { site: SiteKey }) {
   const canEdit = useCanEdit();
-  const [active, setActive] = useState<SiteKey>("Nyíregyháza");
   const [loading, setLoading] = useState(true);
   const [stock, setStock] = useState<Record<string, number>>({});
   const [types, setTypes] = useState<string[]>([]);
@@ -150,24 +147,6 @@ export function TelephelyekView() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap gap-2">
-        {SITES.map((s) => (
-          <button
-            key={s}
-            type="button"
-            onClick={() => setActive(s)}
-            className={cn(
-              "min-h-9 rounded-full border px-4 py-1.5 text-sm font-medium transition-colors max-md:min-h-11",
-              active === s
-                ? "border-primary bg-accent text-accent-foreground"
-                : "border-border text-muted-foreground hover:bg-muted"
-            )}
-          >
-            {s}
-          </button>
-        ))}
-      </div>
-
       {loading ? (
         <p className="text-sm text-muted-foreground">Betöltés…</p>
       ) : isSummary ? (
@@ -256,13 +235,6 @@ export function TelephelyekView() {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.4fr_1fr]">
-          <MovementForm
-            site={active}
-            types={types}
-            otherSites={OTHER_SITES[active]}
-            onRecorded={load}
-          />
-
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -291,6 +263,13 @@ export function TelephelyekView() {
                 ))}
             </CardContent>
           </Card>
+
+          <MovementForm
+            site={active}
+            types={types}
+            otherSites={OTHER_SITES[active]}
+            onRecorded={load}
+          />
 
           <Card className="lg:col-span-2">
             <CardHeader>
