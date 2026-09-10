@@ -34,14 +34,25 @@ const OCEANTURKIZ = {
   "--at-accent": "#12706a",
 } as CSSProperties;
 
+// Az összehasonlítást ékezettől, szóköztől és kis/nagybetűtől függetlenné
+// tesszük, hogy a felhasználó nevének pontos rögzített formája (szóközzel
+// vagy anélkül, ékezettel vagy anélkül) ne számítson a párosításnál.
+function normalizeNev(nev: string): string {
+  return nev
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .toLowerCase();
+}
+
 // Felhasználónkénti színséma-választás — a bejelentkezett felhasználó
 // megjelenítendő neve (session.name) alapján. Akinek nincs itt
 // bejegyzése, az alapértelmezett (Menta-antracit) sémát kapja.
 const THEME_BY_USER: Record<string, CSSProperties> = {
-  "Budaházi Zoltán": MENTA_ANTRACIT,
-  "Budaházi Szabina": OCEANTURKIZ,
+  [normalizeNev("Budaházi Zoltán")]: MENTA_ANTRACIT,
+  [normalizeNev("Budaházi Szabina")]: OCEANTURKIZ,
 };
 
 export function getAttekintesTheme(userName: string): CSSProperties {
-  return THEME_BY_USER[userName] ?? MENTA_ANTRACIT;
+  return THEME_BY_USER[normalizeNev(userName)] ?? MENTA_ANTRACIT;
 }
