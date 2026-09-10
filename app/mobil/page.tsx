@@ -3,6 +3,7 @@ import { ArrowLeft, LogOut } from "lucide-react";
 import { requireSession } from "@/lib/auth/dal";
 import { getMobilOsszefoglalo } from "@/lib/dashboard/actions";
 import { JARMU_SZIN_DOT_CLASS } from "@/lib/fuvarozas/vehicles";
+import { varosNev } from "@/lib/fuvarozas/varos";
 import { RefreshButton } from "@/components/mobil/refresh-button";
 import { logout } from "@/lib/auth/actions";
 
@@ -125,7 +126,7 @@ export default async function MobilPage() {
                         <div className="mt-1 font-medium">{f.megrendelo}</div>
                       )}
                       <div className="text-xs text-muted-foreground">
-                        {f.felrako ?? "?"} → {f.lerako}
+                        {f.felrako ? varosNev(f.felrako) : "?"} → {varosNev(f.lerako)}
                       </div>
                     </div>
                   ))}
