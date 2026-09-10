@@ -335,11 +335,14 @@ export type OsszkeszletMovementRow = {
   created_by: string | null;
 };
 
-// Összes telephely be/ki mozgása egy közös listában — a telephelyek közti
-// mozgatás (mozgatas/mozgatas_be) szándékosan KIMARAD innen: az nem valódi
-// készletváltozás a cégen belül összesítve, csak áthelyezés a telephelyek
-// között, a getOsszkeszlet() tábláiban is így (be/ki/mozgatas előjeles
-// összegzéssel) semlegesíti egymást a forrás- és céloldal.
+// Összes telephely be/ki mozgása egy közös listában. Kimarad innen:
+// - a telephelyek közti mozgatás (mozgatas/mozgatas_be) — az nem valódi
+//   készletváltozás a cégen belül összesítve, csak áthelyezés a telephelyek
+//   között, a getOsszkeszlet() tábláiban is így (be/ki/mozgatas előjeles
+//   összegzéssel) semlegesíti egymást a forrás- és céloldal;
+// - a felvásárláshoz kötött tételek (purchase_id not null) — a nyíregyházi
+//   napi felvásárlás darabonként a Havi fülön már részletesen látszik, itt
+//   csak zajként jelenne meg.
 export async function getOsszkeszletMovements(limit = 40): Promise<OsszkeszletMovementRow[]> {
   return query<OsszkeszletMovementRow>(
     `select m.id::text, to_char(m.created_at at time zone 'Europe/Budapest', '${TIME_FMT}') as date,
@@ -347,7 +350,7 @@ export async function getOsszkeszletMovements(limit = 40): Promise<OsszkeszletMo
      from keszlet_movements m
      join sites s on s.id = m.site_id
      join pallet_types t on t.id = m.type_id
-     where m.direction in ('be', 'ki')
+     where m.direction in ('be', 'ki') and m.purchase_id is null
      order by m.created_at desc
      limit $1`,
     [limit]

@@ -1,5 +1,5 @@
-import { Wallet } from "lucide-react";
-import { getFelvasarlasOsszefoglalo, getMaiKiadasok } from "@/lib/attekintes/actions";
+import { getFelvasarlasOsszefoglalo, getHaviKasszaOsszesito, getMaiKiadasok } from "@/lib/attekintes/actions";
+import { KasszaEgyenlegCard } from "@/components/attekintes/kassza-egyenleg-card";
 
 function formatFt(n: number) {
   return `${n.toLocaleString("hu-HU")} Ft`;
@@ -24,9 +24,10 @@ function formatMaiDatum() {
 }
 
 export default async function NyiregyhazaPage() {
-  const [osszefoglalo, kiadasok] = await Promise.all([
+  const [osszefoglalo, kiadasok, havi] = await Promise.all([
     getFelvasarlasOsszefoglalo(),
     getMaiKiadasok(),
+    getHaviKasszaOsszesito(),
   ]);
   const kiadasOsszeg = kiadasok.reduce((sum, k) => sum + k.amount, 0);
 
@@ -37,19 +38,7 @@ export default async function NyiregyhazaPage() {
         <p className="text-xs text-[var(--at-muted)]">{formatMaiDatum()}</p>
       </div>
 
-      <div className="flex items-center justify-between rounded-xl border border-[var(--at-border)] bg-[var(--at-card)] p-4">
-        <div className="flex items-center gap-1.5 text-xs text-[var(--at-muted)]">
-          <Wallet className="h-4 w-4" />
-          Kassza egyenleg
-        </div>
-        <div
-          className={`text-2xl font-bold tabular-nums ${
-            osszefoglalo.kassza < 0 ? "text-[var(--at-negative)]" : ""
-          }`}
-        >
-          {formatFt(osszefoglalo.kassza)}
-        </div>
-      </div>
+      <KasszaEgyenlegCard egyenleg={osszefoglalo.kassza} havi={havi} />
 
       <div className="flex items-center justify-between rounded-xl border border-[var(--at-border)] bg-[var(--at-card)] p-4">
         <span className="text-xs text-[var(--at-muted)]">Mai kiadás</span>
