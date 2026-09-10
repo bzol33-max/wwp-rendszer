@@ -253,7 +253,26 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor): Promise<TervezettFuvarSzaka
     veg,
     idoBizonytalan,
     utvonalBizonytalan,
+    tullepiAKeretet: false,
   };
+}
+
+/**
+ * Egy már kiszámolt tervezett-fuvar szakaszt összevet a sofőr aznapi élő
+ * vezetési-idő költségvetésével (lásd szamitsAetrKoltsegvetes) — ha a
+ * becsült befejezés túlnyúlik a napi vezetés legkésőbbi végén, a szakasz
+ * `tullepiAKeretet` jelölést kap. Csak jelölés, semmilyen hálózati hívást
+ * nem igényel (a geokódolás/útvonalszámítás már megtörtént
+ * becsulFuvarSzakasz-ban) — a napi kötelező szünet (4,5 órás korlát)
+ * önmagában nem tiltja a fuvart, csak útközbeni megállást igényelne, ezért
+ * azt itt nem vesszük figyelembe, csak a kőkemény napi vezetési keretet.
+ */
+function illesztKoltsegvetesbe(
+  szakasz: TervezettFuvarSzakasz,
+  koltsegvetes: AetrKoltsegvetes | null
+): TervezettFuvarSzakasz {
+  if (!koltsegvetes?.napiVezetesVegeIdo) return szakasz;
+  return { ...szakasz, tullepiAKeretet: szakasz.veg.getTime() > koltsegvetes.napiVezetesVegeIdo.getTime() };
 }
 
 /**
@@ -327,7 +346,7 @@ export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny
           hetiFigyelmezetesek: heti.figyelmezetesek,
           koltsegvetes,
           hiba: null,
-          tervezettFuvarok,
+          tervezettFuvarok: tervezettFuvarok.map((f) => illesztKoltsegvetesbe(f, koltsegvetes)),
         };
       } catch (err) {
         const message = err instanceof EcofleetError ? err.message : "Nem sikerült lekérni az idővonalat.";
