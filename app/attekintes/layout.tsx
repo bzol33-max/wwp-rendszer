@@ -6,6 +6,7 @@ import { getAttekintesTheme } from "@/lib/attekintes/theme";
 import { getAttekintesProfil } from "@/lib/attekintes/tabs";
 import { getHaviFelvasarlasOsszefoglalo } from "@/lib/attekintes/actions";
 import { HaviFelvasarlasButton } from "@/components/attekintes/havi-felvasarlas-modal";
+import { PullToRefresh } from "@/components/mobil/pull-to-refresh";
 
 export default async function AttekintesLayout({ children }: { children: React.ReactNode }) {
   const session = await requireSession();
@@ -28,9 +29,9 @@ export default async function AttekintesLayout({ children }: { children: React.R
   return (
     <div
       style={theme}
-      className="mx-auto flex min-h-screen max-w-md flex-col bg-[var(--at-bg)] text-[var(--at-text)]"
+      className="mx-auto flex h-dvh max-w-md flex-col overflow-hidden bg-[var(--at-bg)] text-[var(--at-text)]"
     >
-      <div className="flex items-center justify-between px-4 py-3 text-xs text-[var(--at-muted)]">
+      <div className="flex shrink-0 items-center justify-between px-4 py-3 text-xs text-[var(--at-muted)]">
         <span>{session.name}</span>
         <form action={logout}>
           <button type="submit" className="flex items-center gap-1 hover:text-[var(--at-text)]">
@@ -42,7 +43,9 @@ export default async function AttekintesLayout({ children }: { children: React.R
 
       <HaviFelvasarlasButton tipusok={haviTipusok} />
 
-      <div className="flex-1 overflow-y-auto px-4 pb-20">{children}</div>
+      <PullToRefresh className="flex-1 overflow-y-auto" indicatorClassName="text-[var(--at-muted)]">
+        <div className="px-4 pb-20">{children}</div>
+      </PullToRefresh>
       <AttekintesTabBar profil={profil} />
     </div>
   );
