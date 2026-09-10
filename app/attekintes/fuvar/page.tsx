@@ -1,6 +1,7 @@
 import { JARMU_SZIN_DOT_CLASS } from "@/lib/fuvarozas/vehicles";
 import { parseEcofleetTimestamp } from "@/lib/fuvarozas/ecofleet";
 import { getJarmuMegbizasok, getJarmuPoziciok } from "@/lib/attekintes/actions";
+import { varosNev } from "@/lib/fuvarozas/varos";
 
 function formatIdo(ecofleetTimestamp: string | null) {
   if (!ecofleetTimestamp) return null;
@@ -65,7 +66,7 @@ export default async function FuvarPage() {
                       </div>
                       {m.megrendelo && <div className="mt-1 font-medium">{m.megrendelo}</div>}
                       <div className="text-xs text-[var(--at-muted)]">
-                        {m.felrako ?? "?"} → {m.lerako}
+                        {m.felrako ? varosNev(m.felrako) : "?"} → {varosNev(m.lerako)}
                       </div>
                     </div>
                   ))}
