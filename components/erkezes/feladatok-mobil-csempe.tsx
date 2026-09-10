@@ -33,19 +33,19 @@ export function FeladatokMobilCsempe() {
   }
 
   return (
-    <Card>
+    <Card className="border border-[var(--mob-border)] bg-[var(--mob-card)] ring-0">
       <CardHeader>
         <CardTitle className="text-sm">Feladatok</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         {loading ? (
-          <p className="text-sm text-muted-foreground">Betöltés…</p>
+          <p className="text-sm text-[var(--mob-muted)]">Betöltés…</p>
         ) : open.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nincs aktuális feladat.</p>
+          <p className="text-sm text-[var(--mob-muted)]">Nincs aktuális feladat.</p>
         ) : (
           Array.from(bySite.entries()).map(([site, tasks]) => (
             <div key={site} className="space-y-1.5">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="text-xs font-semibold tracking-wide text-[var(--mob-muted)] uppercase">
                 {site}
               </p>
               {tasks.map((f) => (
@@ -53,14 +53,14 @@ export function FeladatokMobilCsempe() {
                   key={f.id}
                   type="button"
                   onClick={() => setSelected(f)}
-                  className="flex w-full items-start gap-2 rounded-md border bg-card p-2.5 text-left text-xs active:bg-muted"
+                  className="flex w-full items-start gap-2 rounded-md border border-[var(--mob-border)] bg-[var(--mob-tile)] p-2.5 text-left text-xs active:opacity-80"
                 >
                   <span
                     className={cn("mt-0.5 size-2.5 shrink-0 rounded-full", URGENCY_COLORS[f.urgency])}
                   />
                   <span className="min-w-0 flex-1">
                     <span className="block font-medium">{f.description}</span>
-                    <span className="text-muted-foreground">{f.task_date}</span>
+                    <span className="text-[var(--mob-muted)]">{f.task_date}</span>
                   </span>
                 </button>
               ))}

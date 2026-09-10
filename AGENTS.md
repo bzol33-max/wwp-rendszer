@@ -24,6 +24,7 @@ ezután készülő hasonló oldal) az alábbi két dolgot kapja meg alapból:
    tetejéről" gesztussal (`router.refresh()`-t hív).
 
 Lásd `components/felvasarlas/felvasarlas-mobil-view.tsx` mint referencia-
-megvalósítás. A meglévő (a szabály bevezetése előtti) önálló mobil nézetek
-(`/mobil`, `/posta`, `/erkezes`) egyelőre a saját, korábbi kinézetüket
-tartják meg — ezeket csak külön kérésre kell átállítani.
+megvalósítás. A meglévő önálló mobil nézetek (`/mobil`, `/posta`, `/erkezes`)
+is át lettek állítva erre a sémára (2026-09-10) — a MovementForm/
+InventoryDialog kivétel, mert azok a desktop Készlet modullal közösek, azokat
+nem szabad átszínezni.
