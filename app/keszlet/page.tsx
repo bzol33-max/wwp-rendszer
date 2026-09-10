@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { NyiregyhazaHaviTab } from "@/components/keszlet/nyiregyhaza-havi";
 import { TelephelyekView } from "@/components/keszlet/telephelyek-view";
 
-const TABS = ["havi", "telephelyek", "archivum"] as const;
+const TABS = ["havi", "Nyíregyháza", "Balkány", "Szakoly", "osszkeszlet", "archivum"] as const;
 type Tab = (typeof TABS)[number];
 
 function currentMonthLabel() {
@@ -29,7 +29,10 @@ function KeszletTabs() {
 
   const tabLabel: Record<Tab, string> = {
     havi: currentMonthLabel(),
-    telephelyek: "Telephelyek",
+    Nyíregyháza: "Nyíregyháza",
+    Balkány: "Balkány",
+    Szakoly: "Szakoly",
+    osszkeszlet: "Összkészlet",
     archivum: "Archívum",
   };
 
@@ -52,8 +55,17 @@ function KeszletTabs() {
       <TabsContent value="havi" className="mt-5">
         <NyiregyhazaHaviTab />
       </TabsContent>
-      <TabsContent value="telephelyek" className="mt-5">
-        <TelephelyekView />
+      <TabsContent value="Nyíregyháza" className="mt-5">
+        <TelephelyekView site="Nyíregyháza" />
+      </TabsContent>
+      <TabsContent value="Balkány" className="mt-5">
+        <TelephelyekView site="Balkány" />
+      </TabsContent>
+      <TabsContent value="Szakoly" className="mt-5">
+        <TelephelyekView site="Szakoly" />
+      </TabsContent>
+      <TabsContent value="osszkeszlet" className="mt-5">
+        <TelephelyekView site="Összkészlet" />
       </TabsContent>
       <TabsContent value="archivum" className="mt-5">
         <p className="text-sm text-muted-foreground">
