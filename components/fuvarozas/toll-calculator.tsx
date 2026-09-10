@@ -24,7 +24,7 @@ const RouteMap = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex h-72 w-full items-center justify-center rounded-lg border text-xs text-muted-foreground sm:h-96">
+      <div className="flex h-72 w-full items-center justify-center rounded-lg border text-xs text-muted-foreground">
         Térkép betöltése…
       </div>
     ),
@@ -486,7 +486,10 @@ export function TollCalculator() {
         </CardContent>
       </Card>
 
-      <Card size="sm">
+      {/* max-w-3xl: a térkép ne nyúljon szélesebbre az oldalon, mint amekkora
+          méretet a felhasználó a rögzített nézethez szánt — ne foglaljon
+          feleslegesen sok helyet egy széles asztali elrendezésben. */}
+      <Card size="sm" className="max-w-3xl">
         <CardHeader>
           <CardTitle className="text-sm">Térkép — Magyarország</CardTitle>
         </CardHeader>

@@ -66,7 +66,15 @@ export function RouteMap({ routes }: { routes: RouteMapRoute[] }) {
 
   return (
     <div className="overflow-hidden rounded-lg border">
-      <MapContainer bounds={MAGYARORSZAG_HATAROK} scrollWheelZoom className="h-72 w-full sm:h-96">
+      <MapContainer
+        bounds={MAGYARORSZAG_HATAROK}
+        // padding: 0 — Leaflet fitBounds alapból még hozzáad egy kis
+        // margót, ami jobban kizoomol, mint amit a felhasználó a rögzített
+        // nézethez kért ("pont akkorára nagyítottam amekkorát akarok").
+        boundsOptions={{ padding: [0, 0] }}
+        scrollWheelZoom
+        className="h-72 w-full"
+      >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> közreműködői'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
