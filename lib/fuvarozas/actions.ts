@@ -108,6 +108,8 @@ export type JarmuIdovonalEredmeny = {
   hetiFigyelmezetesek: AetrFigyelmezetes[];
   /** Csak a mai napra, éppen vezetés közben: meddig kötelező/lehet még menni. Lásd szamitsAetrKoltsegvetes. */
   koltsegvetes: AetrKoltsegvetes | null;
+  /** Élő GPS-pozícióból becsült érkezés a legközelebbi (még hátralévő) tervezett fuvar célcíméhez — csak a mai napra. */
+  eloEta: { cel: string; erkezes: Date } | null;
   hiba: string | null;
   /** Az adott napra ehhez a sofőrhöz rendelt saját fuvarok, becsült időponttal az idővonalra helyezve. */
   tervezettFuvarok: TervezettFuvarSzakasz[];
@@ -276,6 +278,32 @@ function illesztKoltsegvetesbe(
 }
 
 /**
+ * Élő GPS-pozícióból (nem a tervezett indulásból!) becsüli meg, mikor ér
+ * oda a jármű egy adott célcímre — ugyanazzal a geokódolás+útvonaltervezés
+ * lépéssel, mint amit becsulFuvarSzakasz a tervezéskor használ, csak a
+ * kezdőpont most a jelenlegi valós pozíció.
+ */
+async function becsulEloEta(
+  eloPoz: { lat: number; lon: number },
+  celCim: string,
+  most: Date
+): Promise<{ cel: string; erkezes: Date } | null> {
+  try {
+    const cel = await geocodeAddress(celCim);
+    const route = await calculateToll({
+      points: [
+        { lon: eloPoz.lon, lat: eloPoz.lat },
+        { lon: cel.lon, lat: cel.lat },
+      ],
+      ...FIXED_VEHICLE,
+    });
+    return { cel: celCim, erkezes: new Date(most.getTime() + route.durationMin * 60000) };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Minden saját jármű mai (vagy megadott napi) idővonala valós Ecofleet
  * trip-előzményből, AETR-figyelmeztetésekkel, PLUSZ az adott napra
  * ütemezett saját megbízások becsült időpontokkal az idővonalra helyezve
@@ -304,6 +332,7 @@ export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny
           figyelmezetesek: [],
           hetiFigyelmezetesek: [],
           koltsegvetes: null,
+          eloEta: null,
           hiba: null,
           tervezettFuvarok,
         };
@@ -317,20 +346,21 @@ export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny
         ]);
         let szakaszok = epitsIdovonal(trips);
 
-        if (maiNap) {
-          const livePos = eloPoziciok.find((p) => p.objectId === jarmu.ecofleetObjectId);
-          if (livePos) {
-            const parsedTs = parseEcofleetTimestamp(livePos.timestamp);
-            if (parsedTs) {
-              const elo: EloPozicio = {
-                lat: livePos.latitude,
-                lon: livePos.longitude,
-                cim: null,
-                mozog: livePos.engineOn || livePos.speed > 0,
-                idobelyeg: parsedTs,
-              };
-              szakaszok = kiegesziteloAllapottal(szakaszok, elo, veg);
-            }
+        const livePos = maiNap ? eloPoziciok.find((p) => p.objectId === jarmu.ecofleetObjectId) : undefined;
+        if (livePos) {
+          const parsedTs = parseEcofleetTimestamp(livePos.timestamp);
+          if (parsedTs) {
+            const elo: EloPozicio = {
+              lat: livePos.latitude,
+              lon: livePos.longitude,
+              // A cím csak megjelenítéshez kell (tooltip) — ha a fordított
+              // geokódolás elakadna, ne akassza meg emiatt az idővonal
+              // felépítését, csak maradjon "ismeretlen hely".
+              cim: await reverseGeocodeCoords(livePos.latitude, livePos.longitude).catch(() => null),
+              mozog: livePos.engineOn || livePos.speed > 0,
+              idobelyeg: parsedTs,
+            };
+            szakaszok = kiegesziteloAllapottal(szakaszok, elo, veg);
           }
         }
 
@@ -338,6 +368,21 @@ export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny
         const koltsegvetes = maiNap
           ? szamitsAetrKoltsegvetes(szakaszok, veg, heti.kiterjesztettNapokElotte)
           : null;
+        const illesztettFuvarok = tervezettFuvarok.map((f) => illesztKoltsegvetesbe(f, koltsegvetes));
+
+        // Élő ETA: a legközelebbi még hátralévő (be nem fejeződött) tervezett
+        // fuvar célcíméhez, a jelenlegi élő pozícióból számolva — csak akkor,
+        // ha ténylegesen van élő pozíciónk és van még hátralévő fuvar mára.
+        let eloEta: { cel: string; erkezes: Date } | null = null;
+        if (livePos) {
+          const kovetkezo = illesztettFuvarok
+            .filter((f) => f.veg.getTime() > veg.getTime())
+            .sort((a, b) => a.kezdet.getTime() - b.kezdet.getTime())[0];
+          if (kovetkezo) {
+            eloEta = await becsulEloEta({ lat: livePos.latitude, lon: livePos.longitude }, kovetkezo.hova, veg);
+          }
+        }
+
         return {
           sofor: jarmu.sofor,
           szin: jarmu.szin,
@@ -345,8 +390,9 @@ export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny
           figyelmezetesek,
           hetiFigyelmezetesek: heti.figyelmezetesek,
           koltsegvetes,
+          eloEta,
           hiba: null,
-          tervezettFuvarok: tervezettFuvarok.map((f) => illesztKoltsegvetesbe(f, koltsegvetes)),
+          tervezettFuvarok: illesztettFuvarok,
         };
       } catch (err) {
         const message = err instanceof EcofleetError ? err.message : "Nem sikerült lekérni az idővonalat.";
@@ -357,6 +403,7 @@ export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny
           figyelmezetesek: [],
           hetiFigyelmezetesek: [],
           koltsegvetes: null,
+          eloEta: null,
           hiba: message,
           tervezettFuvarok,
         };

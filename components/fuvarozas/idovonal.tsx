@@ -136,6 +136,7 @@ function IdovonalCsik({
   const figyelmezetesek = eredmeny?.figyelmezetesek ?? [];
   const tervezettFuvarok = eredmeny?.tervezettFuvarok ?? [];
   const koltsegvetes = eredmeny?.koltsegvetes;
+  const eloEta = eredmeny?.eloEta;
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -143,6 +144,14 @@ function IdovonalCsik({
         <span className="flex items-center gap-1.5 font-medium">
           <span className={`h-2 w-2 shrink-0 rounded-full ${JARMU_SZIN_DOT_CLASS[jarmu.szin]}`} />
           {jarmu.sofor} — {jarmu.label}
+          {eloEta && (
+            <span
+              className="font-normal text-muted-foreground"
+              title={`Élő GPS-pozícióból becsülve, a jelenlegi forgalommal/tempóval — a tényleges érkezés eltérhet.`}
+            >
+              · becsült érkezés ({eloEta.cel}): {formatIdo(eloEta.erkezes)}
+            </span>
+          )}
         </span>
         {figyelmezetesek.length > 0 && (
           <span className="flex gap-1">
