@@ -28,3 +28,10 @@ megvalósítás. A meglévő önálló mobil nézetek (`/mobil`, `/posta`, `/erk
 is át lettek állítva erre a sémára (2026-09-10) — a MovementForm/
 InventoryDialog kivétel, mert azok a desktop Készlet modullal közösek, azokat
 nem szabad átszínezni.
+
+Az **Áttekintés** (`/attekintes`) más eset: annak saját, felhasználónkénti
+színséma-választása van (`getAttekintesTheme()` — Budaházi Zoltán Menta-
+antracitot, Budaházi Szabina Óceánturkizt lát), ezt a MOBIL_THEME nem írja
+felül. A `PullToRefresh`-t viszont ez is megkapta (2026-09-10,
+`app/attekintes/layout.tsx`), az `indicatorClassName` prop-pal a pörgő ikon
+az adott felhasználó `--at-muted` színét használja, nem a `--mob-muted`-et.

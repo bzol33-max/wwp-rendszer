@@ -16,9 +16,12 @@ const MAX_PULL = 96;
 export function PullToRefresh({
   children,
   className,
+  indicatorClassName = "text-[var(--mob-muted)]",
 }: {
   children: ReactNode;
   className?: string;
+  /** A pörgő ikon színe — más --xx-muted tokent használó nézeten (pl. Áttekintés) felülírható. */
+  indicatorClassName?: string;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -58,7 +61,7 @@ export function PullToRefresh({
       className={`overscroll-y-contain ${className ?? ""}`}
     >
       <div
-        className="flex items-center justify-center overflow-hidden text-[var(--mob-muted)] transition-[height]"
+        className={`flex items-center justify-center overflow-hidden transition-[height] ${indicatorClassName}`}
         style={{ height: indicatorHeight }}
       >
         <RefreshCw className={`h-4 w-4 ${pending || pull >= PULL_THRESHOLD ? "animate-spin" : ""}`} />
