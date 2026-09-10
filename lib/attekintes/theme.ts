@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { normalizeNev } from "@/lib/attekintes/nev";
 
 // Az Áttekintés (/attekintes) színsémái — a felhasználók a bemutatott 20
 // mockup közül választottak (BudahaziZoltan: #14 Menta-antracit,
@@ -33,17 +34,6 @@ const OCEANTURKIZ = {
   "--at-negative": "#b0402f",
   "--at-accent": "#12706a",
 } as CSSProperties;
-
-// Az összehasonlítást ékezettől, szóköztől és kis/nagybetűtől függetlenné
-// tesszük, hogy a felhasználó nevének pontos rögzített formája (szóközzel
-// vagy anélkül, ékezettel vagy anélkül) ne számítson a párosításnál.
-function normalizeNev(nev: string): string {
-  return nev
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-zA-Z0-9]/g, "")
-    .toLowerCase();
-}
 
 // Felhasználónkénti színséma-választás — a bejelentkezett felhasználó
 // megjelenítendő neve (session.name) alapján. Akinek nincs itt
