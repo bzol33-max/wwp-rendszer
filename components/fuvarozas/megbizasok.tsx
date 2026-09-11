@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, X } from "lucide-react";
+import { Check, ChevronDown, X } from "lucide-react";
 import {
   addFuvar,
   approveFuvar,
@@ -40,8 +40,10 @@ import {
   getElokeszitettFuvarok,
   getFolyamatbanSajatFuvarok,
   getFuvarok,
+  getKimutatasOsszesites,
   getPostazasiCimJavaslat,
   getSzamlaPostaFuvarok,
+  keresKimutatasFuvarok,
   setFuvarPoziciszam,
   setFuvarFizetesiHatarido,
   setFuvarFuvardij,
@@ -60,6 +62,7 @@ import {
   type FuvarRow,
   type FuvarStatusz,
   type FuvarTipus,
+  type KimutatasSor,
 } from "@/lib/fuvarozas/fuvar-constants";
 import { getCurrentUser } from "@/lib/current-user";
 import { talalVaros, varosNev } from "@/lib/fuvarozas/varos";
@@ -86,6 +89,21 @@ function todayISO() {
 }
 
 const SAJAT_TELEP_PARTNER = "Telephelyek közti szállítás";
+/** A saját fuvaroknak (tipus='ber') nincs mindig valódi külső megrendelőjük — az Archív és a Kimutatás fülön ez alatt a "cég" alatt jelennek meg. */
+const SAJAT_CEG_NEV = "Well-worn Pallet";
+
+// FIGYELEM: fordított UI-címkézés (történelmi okokból, lásd getMaiSajatFuvarok
+// megjegyzését lib/fuvarozas/megbizasok.ts-ben): a DB tipus='sajat' sorok a
+// "Bér fuvarok" fülön jelennek meg, tipus='ber' a "Saját fuvarok" fülön.
+const FUVAR_TIPUS_CIMKE: Record<FuvarTipus, string> = {
+  sajat: "Bér fuvar",
+  ber: "Saját fuvar",
+};
+
+const FUVAR_TIPUS_BADGE: Record<FuvarTipus, string> = {
+  sajat: "bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300",
+  ber: "bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300",
+};
 
 function eredmeny(row: FuvarRow): number | null {
   if (row.fuvardij == null || row.koltseg == null) return null;
@@ -1880,7 +1898,7 @@ function ArchivFuvarSor({
   mutatMegrendelot,
 }: {
   row: FuvarRow;
-  onVisszaallitas: (id: string) => void;
+  onVisszaallitas: (id: string, tipus: FuvarTipus) => void;
   mutatMegrendelot: boolean;
 }) {
   return (
@@ -1888,7 +1906,7 @@ function ArchivFuvarSor({
       <TableCell className="text-muted-foreground">{row.erkezett_datum ?? row.date}</TableCell>
       {mutatMegrendelot && (
         <TableCell className="max-w-[140px] whitespace-normal break-words leading-tight">
-          {row.megrendelo ?? "—"}
+          {row.tipus === "ber" ? row.megrendelo?.trim() || SAJAT_CEG_NEV : row.megrendelo ?? "—"}
         </TableCell>
       )}
       <TableCell>{row.pozicioszam ?? "—"}</TableCell>
@@ -1906,7 +1924,7 @@ function ArchivFuvarSor({
         <button
           type="button"
           className="text-xs text-muted-foreground hover:underline"
-          onClick={() => onVisszaallitas(row.id)}
+          onClick={() => onVisszaallitas(row.id, row.tipus)}
         >
           Visszaállítás
         </button>
@@ -1921,7 +1939,7 @@ function ArchivCsoportTablazat({
   mutatMegrendelot = false,
 }: {
   rows: FuvarRow[];
-  onVisszaallitas: (id: string) => void;
+  onVisszaallitas: (id: string, tipus: FuvarTipus) => void;
   mutatMegrendelot?: boolean;
 }) {
   return (
@@ -1954,10 +1972,53 @@ function ArchivCsoportTablazat({
   );
 }
 
+/** Egy összecsukható cégcsoport az Archív fülön — kereséskor mindig nyitva, egyébként a felhasználó nyitja/csukja. */
+function ArchivCegCsoport({
+  cim,
+  cimClassName,
+  rows,
+  onVisszaallitas,
+  open,
+  onToggle,
+  mutatMegrendelot,
+}: {
+  cim: string;
+  cimClassName?: string;
+  rows: FuvarRow[];
+  onVisszaallitas: (id: string, tipus: FuvarTipus) => void;
+  open: boolean;
+  onToggle: () => void;
+  mutatMegrendelot?: boolean;
+}) {
+  return (
+    <div className="rounded-md border">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-muted/50"
+      >
+        <span className="flex items-center gap-2">
+          <span className={cimClassName ?? "text-sm font-medium"}>{cim}</span>
+          <Badge variant="secondary">{rows.length} megbízás</Badge>
+        </span>
+        <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="border-t">
+          <ArchivCsoportTablazat rows={rows} onVisszaallitas={onVisszaallitas} mutatMegrendelot={mutatMegrendelot} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+const ARCHIV_EGYEB_KULCS = "__egyeb";
+
 function ArchivLista() {
   const [rows, setRows] = useState<FuvarRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [kereso, setKereso] = useState("");
+  const [nyitottCsoportok, setNyitottCsoportok] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     const data = await getArchivFuvarok();
@@ -1969,10 +2030,30 @@ function ArchivLista() {
     load().finally(() => setLoading(false));
   }, [load]);
 
-  async function handleVisszaallitas(id: string) {
-    await setFuvarPostazva(id, false);
+  function toggleCsoport(kulcs: string) {
+    setNyitottCsoportok((prev) => {
+      const next = new Set(prev);
+      if (next.has(kulcs)) {
+        next.delete(kulcs);
+      } else {
+        next.add(kulcs);
+      }
+      return next;
+    });
+  }
+
+  async function handleVisszaallitas(id: string, tipus: FuvarTipus) {
+    if (tipus === "ber") {
+      // A saját fuvaroknak nincs postázási munkafolyamatuk — a "Visszaállítás"
+      // itt a lezárt/számlázott státuszt vonja vissza "Úton"-ra.
+      await updateFuvarStatus(id, "uton");
+    } else {
+      await setFuvarPostazva(id, false);
+    }
     await load();
-    toast.success("Visszaállítva a Számla/Posta listába.");
+    toast.success(
+      tipus === "ber" ? "Visszaállítva — a Saját fuvarok fülön folytatódik." : "Visszaállítva a Számla/Posta listába."
+    );
   }
 
   const keresoNorm = kereso.trim().toLowerCase();
@@ -1980,28 +2061,31 @@ function ArchivLista() {
     ? rows.filter((row) => archivKeresoSzoveg(row).includes(keresoNorm))
     : rows;
 
-  // Cégenkénti csoportosítás — csak azok a megrendelők kapnak külön, névvel
-  // jelölt csoportot, akiktől legalább 2 (a keresés utáni listában is) fuvar
-  // van; az egy-fuvaros megrendelők az "Egyéb" csoportba kerülnek, hogy ne
-  // legyen tucatnyi egysoros "csoport" a listában.
+  // Cégenkénti csoportosítás — a saját fuvarok (tipus='ber', nincs mindig
+  // valódi külső megrendelőjük) mind a "Well-worn Pallet" csoportba kerülnek
+  // (ez mindig névvel jelölt, önálló csoport). A bér fuvaroknál (tipus='sajat')
+  // csak azok a megrendelők kapnak külön, névvel jelölt csoportot, akiktől
+  // legalább 2 (a keresés utáni listában is) fuvar van; az egy-fuvaros
+  // megrendelők az "Egyéb" csoportba kerülnek, hogy ne legyen tucatnyi
+  // egysoros "csoport" a listában.
   const csoportok = new Map<string, FuvarRow[]>();
   for (const row of szurtRows) {
-    const kulcs = row.megrendelo?.trim() || "(nincs megrendelő)";
+    const kulcs = row.tipus === "ber" ? SAJAT_CEG_NEV : row.megrendelo?.trim() || "(nincs megrendelő)";
     const lista = csoportok.get(kulcs) ?? [];
     lista.push(row);
     csoportok.set(kulcs, lista);
   }
   const nagyCsoportok = [...csoportok.entries()]
-    .filter(([, lista]) => lista.length >= 2)
-    .sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0], "hu"));
+    .filter(([kulcs, lista]) => kulcs === SAJAT_CEG_NEV || lista.length >= 2)
+    .sort((a, b) => (a[0] === SAJAT_CEG_NEV ? -1 : b[0] === SAJAT_CEG_NEV ? 1 : b[1].length - a[1].length || a[0].localeCompare(b[0], "hu")));
   const egyebSorok = [...csoportok.entries()]
-    .filter(([, lista]) => lista.length < 2)
+    .filter(([kulcs, lista]) => kulcs !== SAJAT_CEG_NEV && lista.length < 2)
     .flatMap(([, lista]) => lista);
 
   return (
     <Card>
       <CardHeader className="gap-3">
-        <CardTitle className="text-sm">Archív — postázott bér fuvarok</CardTitle>
+        <CardTitle className="text-sm">Archív</CardTitle>
         <Input
           placeholder="Keresés: cég, útvonal, rendszám, pozíciószám, számlaszám…"
           value={kereso}
@@ -2009,30 +2093,280 @@ function ArchivLista() {
           className="max-w-md"
         />
       </CardHeader>
-      <CardContent className="flex flex-col gap-6">
+      <CardContent className="flex flex-col gap-3">
         {!loading && szurtRows.length === 0 && (
           <p className="text-center text-sm text-muted-foreground">
             {kereso ? "Nincs a keresésnek megfelelő archivált fuvar." : "Még nincs archivált fuvar."}
           </p>
         )}
-        {nagyCsoportok.map(([megrendelo, lista]) => (
-          <div key={megrendelo} className="flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-medium">{megrendelo}</h3>
-              <Badge variant="secondary">{lista.length} megbízás</Badge>
-            </div>
-            <ArchivCsoportTablazat rows={lista} onVisszaallitas={handleVisszaallitas} />
-          </div>
+        {nagyCsoportok.map(([nev, lista]) => (
+          <ArchivCegCsoport
+            key={nev}
+            cim={nev}
+            rows={lista}
+            onVisszaallitas={handleVisszaallitas}
+            open={keresoNorm.length > 0 || nyitottCsoportok.has(nev)}
+            onToggle={() => toggleCsoport(nev)}
+            mutatMegrendelot={nev === SAJAT_CEG_NEV}
+          />
         ))}
         {egyebSorok.length > 0 && (
+          <ArchivCegCsoport
+            key={ARCHIV_EGYEB_KULCS}
+            cim="Egyéb (1 megbízásos partnerek)"
+            cimClassName="text-sm font-medium text-muted-foreground"
+            rows={egyebSorok}
+            onVisszaallitas={handleVisszaallitas}
+            open={keresoNorm.length > 0 || nyitottCsoportok.has(ARCHIV_EGYEB_KULCS)}
+            onToggle={() => toggleCsoport(ARCHIV_EGYEB_KULCS)}
+            mutatMegrendelot
+          />
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+type KimutatasBontas = "week" | "month";
+
+/** Egy periódus (hét/hónap) kártyája: "2026. szeptember" vagy "2026. szept. 8 – szept. 14." — csak megjelenítésre, nem dátum-számításhoz. */
+function formatPeriodusCimke(periodus: string, bontas: KimutatasBontas): string {
+  const [ev, ho, nap] = periodus.split("-").map(Number);
+  const kezdet = new Date(ev, ho - 1, nap);
+  if (bontas === "month") {
+    return kezdet.toLocaleDateString("hu-HU", { year: "numeric", month: "long" });
+  }
+  const veg = new Date(kezdet.getTime() + 6 * 86400000);
+  const honapNap = (dt: Date) => dt.toLocaleDateString("hu-HU", { month: "short", day: "numeric" });
+  return `${kezdet.getFullYear()}. ${honapNap(kezdet)} – ${honapNap(veg)}`;
+}
+
+type KimutatasPeriodusSor = {
+  periodus: string;
+  sajatDarab: number;
+  sajatFt: number;
+  sajatEur: number;
+  berDarab: number;
+  berFt: number;
+  berEur: number;
+};
+
+function KimutatasKeresoSor({ row }: { row: FuvarRow }) {
+  return (
+    <TableRow>
+      <TableCell className="text-muted-foreground">{row.date}</TableCell>
+      <TableCell>
+        <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${FUVAR_TIPUS_BADGE[row.tipus]}`}>
+          {FUVAR_TIPUS_CIMKE[row.tipus]}
+        </span>
+      </TableCell>
+      <TableCell className="max-w-[160px] whitespace-normal break-words leading-tight">
+        {row.tipus === "ber" ? row.megrendelo?.trim() || SAJAT_CEG_NEV : row.megrendelo ?? "—"}
+      </TableCell>
+      <TableCell>
+        {row.felrako ? `${varosNev(row.felrako)} → ${varosNev(row.lerako)}` : varosNev(row.lerako)}
+      </TableCell>
+      <TableCell className="text-right tabular-nums">
+        {row.fuvardij != null ? formatOsszeg(row.fuvardij, row.fuvardij_penznem) : "—"}
+      </TableCell>
+      <TableCell>
+        <Badge className={`${STATUSZ_BADGE_CLASS[row.statusz]} text-xs`}>{FUVAR_STATUSZ_LABEL[row.statusz]}</Badge>
+      </TableCell>
+    </TableRow>
+  );
+}
+
+/**
+ * Kimutatás fül: heti/havi bontásban a saját fuvarok (tipus='ber') és a bér
+ * fuvarok (tipus='sajat') darabszáma/összege, dátumtartomány-szűréssel, és
+ * egy szabad szöveges kereséssel (cég/útvonal/rendszám/pozíciószám), ami a
+ * mögöttes fuvarokat listázza ki — visszakereshetőség a heti/havi
+ * összesítés mellett.
+ */
+function KimutatasView() {
+  const [bontas, setBontas] = useState<KimutatasBontas>("month");
+  const [kezdet, setKezdet] = useState("");
+  const [veg, setVeg] = useState("");
+  const [kereso, setKereso] = useState("");
+  const [sorok, setSorok] = useState<KimutatasSor[]>([]);
+  const [talalatok, setTalalatok] = useState<FuvarRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [keresLoading, setKeresLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    const data = await getKimutatasOsszesites(bontas, kezdet || undefined, veg || undefined);
+    setSorok(data);
+  }, [bontas, kezdet, veg]);
+
+  useEffect(() => {
+    setLoading(true);
+    load().finally(() => setLoading(false));
+  }, [load]);
+
+  const keresoNorm = kereso.trim();
+  useEffect(() => {
+    if (!keresoNorm) {
+      setTalalatok([]);
+      return;
+    }
+    let elveszett = false;
+    setKeresLoading(true);
+    keresKimutatasFuvarok(keresoNorm, kezdet || undefined, veg || undefined)
+      .then((data) => {
+        if (!elveszett) setTalalatok(data);
+      })
+      .finally(() => {
+        if (!elveszett) setKeresLoading(false);
+      });
+    return () => {
+      elveszett = true;
+    };
+  }, [keresoNorm, kezdet, veg]);
+
+  const periodusok = new Map<string, KimutatasPeriodusSor>();
+  for (const s of sorok) {
+    const bejegyzes = periodusok.get(s.periodus) ?? {
+      periodus: s.periodus,
+      sajatDarab: 0,
+      sajatFt: 0,
+      sajatEur: 0,
+      berDarab: 0,
+      berFt: 0,
+      berEur: 0,
+    };
+    if (s.tipus === "ber") {
+      bejegyzes.sajatDarab += s.darab;
+      bejegyzes.sajatFt += s.osszegFt;
+      bejegyzes.sajatEur += s.osszegEur;
+    } else {
+      bejegyzes.berDarab += s.darab;
+      bejegyzes.berFt += s.osszegFt;
+      bejegyzes.berEur += s.osszegEur;
+    }
+    periodusok.set(s.periodus, bejegyzes);
+  }
+  const periodusLista = [...periodusok.values()].sort((a, b) => b.periodus.localeCompare(a.periodus));
+
+  return (
+    <Card>
+      <CardHeader className="gap-3">
+        <CardTitle className="text-sm">Kimutatás — saját és bér fuvarok összesítése</CardTitle>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs text-muted-foreground">Bontás</Label>
+            <Select value={bontas} onValueChange={(v) => v && setBontas(v as KimutatasBontas)}>
+              <SelectTrigger className="h-8 w-[110px] text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="week">Heti</SelectItem>
+                <SelectItem value="month">Havi</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs text-muted-foreground">Tól</Label>
+            <Input
+              type="date"
+              value={kezdet}
+              onChange={(e) => setKezdet(e.target.value)}
+              className="h-8 w-[150px] text-xs"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label className="text-xs text-muted-foreground">Ig</Label>
+            <Input
+              type="date"
+              value={veg}
+              onChange={(e) => setVeg(e.target.value)}
+              className="h-8 w-[150px] text-xs"
+            />
+          </div>
+          <div className="flex min-w-[220px] flex-1 flex-col gap-1">
+            <Label className="text-xs text-muted-foreground">Keresés</Label>
+            <Input
+              placeholder="Cég, útvonal, rendszám, pozíciószám…"
+              value={kereso}
+              onChange={(e) => setKereso(e.target.value)}
+              className="h-8 text-xs"
+            />
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {keresoNorm ? (
           <div className="flex flex-col gap-2">
-            {nagyCsoportok.length > 0 && (
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-medium text-muted-foreground">Egyéb (1 megbízásos partnerek)</h3>
-                <Badge variant="secondary">{egyebSorok.length} megbízás</Badge>
-              </div>
-            )}
-            <ArchivCsoportTablazat rows={egyebSorok} onVisszaallitas={handleVisszaallitas} mutatMegrendelot />
+            <p className="text-xs text-muted-foreground">
+              {keresLoading ? "Keresés…" : `${talalatok.length} találat "${keresoNorm}" keresésre.`}
+            </p>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Dátum</TableHead>
+                    <TableHead>Típus</TableHead>
+                    <TableHead>Cég</TableHead>
+                    <TableHead>Honnan → Hová</TableHead>
+                    <TableHead className="text-right">Fuvardíj</TableHead>
+                    <TableHead>Státusz</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {!keresLoading && talalatok.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center text-muted-foreground">
+                        Nincs a keresésnek megfelelő fuvar.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {talalatok.map((row) => (
+                    <KimutatasKeresoSor key={row.id} row={row} />
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Időszak</TableHead>
+                  <TableHead className="text-right">Saját fuvarok (db)</TableHead>
+                  <TableHead className="text-right">Saját fuvarok (összeg)</TableHead>
+                  <TableHead className="text-right">Bér fuvarok (db)</TableHead>
+                  <TableHead className="text-right">Bér fuvarok (összeg)</TableHead>
+                  <TableHead className="text-right">Összesen (Ft)</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {!loading && periodusLista.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-muted-foreground">
+                      Nincs adat a megadott időszakra.
+                    </TableCell>
+                  </TableRow>
+                )}
+                {periodusLista.map((p) => (
+                  <TableRow key={p.periodus}>
+                    <TableCell className="font-medium">{formatPeriodusCimke(p.periodus, bontas)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{p.sajatDarab || "—"}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {p.sajatFt ? `${p.sajatFt.toLocaleString("hu-HU")} Ft` : "—"}
+                      {p.sajatEur ? ` + ${p.sajatEur.toLocaleString("hu-HU")} €` : ""}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{p.berDarab || "—"}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {p.berFt ? `${p.berFt.toLocaleString("hu-HU")} Ft` : "—"}
+                      {p.berEur ? ` + ${p.berEur.toLocaleString("hu-HU")} €` : ""}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums font-medium">
+                      {(p.sajatFt + p.berFt).toLocaleString("hu-HU")} Ft
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </div>
         )}
       </CardContent>
@@ -2073,7 +2407,7 @@ function ElokeszitettView() {
   );
 }
 
-const MEGBIZASOK_TABS = ["sajat", "ber", "kapcsolatok", "szamla-posta", "archiv"] as const;
+const MEGBIZASOK_TABS = ["sajat", "ber", "kapcsolatok", "szamla-posta", "archiv", "kimutatas"] as const;
 type MegbizasokTab = (typeof MEGBIZASOK_TABS)[number];
 
 function isMegbizasokTab(v: string | null): v is MegbizasokTab {
@@ -2105,6 +2439,7 @@ export function Megbizasok() {
         <TabsTrigger value="kapcsolatok">Kapcsolatok</TabsTrigger>
         <TabsTrigger value="szamla-posta">Számla/Posta</TabsTrigger>
         <TabsTrigger value="archiv">Archív</TabsTrigger>
+        <TabsTrigger value="kimutatas">Kimutatás</TabsTrigger>
       </TabsList>
       <TabsContent value="sajat" className="mt-4">
         <div className="flex flex-col gap-4">
@@ -2137,6 +2472,9 @@ export function Megbizasok() {
       </TabsContent>
       <TabsContent value="archiv" className="mt-4">
         <ArchivLista />
+      </TabsContent>
+      <TabsContent value="kimutatas" className="mt-4">
+        <KimutatasView />
       </TabsContent>
     </Tabs>
   );

@@ -179,3 +179,17 @@ export type ApproveFuvarInput = {
   pozicioszamNincs?: boolean;
   postazasiCim?: string;
 };
+
+/**
+ * Egy periódus (hét vagy hónap) egy fuvar-típusának összesítése a
+ * Megbízások "Kimutatás" füléhez — darabszám és fuvardíj-összeg,
+ * pénznemenként külön (a rendszer nem vált át HUF-ra).
+ */
+export type KimutatasSor = {
+  /** A periódus kezdete, ISO dátum — hétnél a hét hétfője, hónapnál a hónap 1. napja. */
+  periodus: string;
+  tipus: FuvarTipus;
+  darab: number;
+  osszegFt: number;
+  osszegEur: number;
+};
