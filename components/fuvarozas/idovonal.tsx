@@ -3,20 +3,18 @@
 import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Check } from "lucide-react";
+import { Check } from "lucide-react";
 import { getIdovonalak, type JarmuIdovonalEredmeny } from "@/lib/fuvarozas/actions";
 import { setFuvarTeljesitve } from "@/lib/fuvarozas/megbizasok";
 import { SAJAT_JARMUVEK, JARMU_SZIN_DOT_CLASS, type JarmuSzin } from "@/lib/fuvarozas/vehicles";
-import { budapestNapISO } from "@/lib/fuvarozas/idozona";
-import type { IdovonalSzakasz, TervezettFuvarSzakasz } from "@/lib/fuvarozas/idovonal";
+import type { IdovonalSzakasz, TervezettFuvarSzakasz, TervezettMegallo } from "@/lib/fuvarozas/idovonal";
 
-// 3 vízszintes idővonal-csík (egy-egy saját jármű, a kártyáin is használt
-// színében) a GPS-pozíció kártyák alatt. Minden csík a mai naptári napot
-// (00:00–24:00, Európa/Budapest) mutatja: apró pont az induláskor, tömör
-// szín-szakasz vezetés közben, világosabb/csíkozott szakasz álláskor
-// (rakodás/pihenő becsléssel), és AETR-figyelmeztetések a csík alatt.
+// Egy csempe = egy saját jármű: fent egy kompakt, a jármű színével
+// kiemelt infó-doboz (jelenlegi hely, sebesség, utolsó adat, óraállás),
+// alatta az aznapi saját megbízások időrendben, egy vízszintes idővonalon.
+// Az idővonal 0 pontja NEM éjfél, hanem amikor a jármű ténylegesen elindult
+// (motor be + mozgás) — nincs AETR-szabály, csak egy fix, tájékoztató
+// jellegű maximális munkanap-hossz szabja meg a csík végét.
 
 const SZIN_BAR: Record<JarmuSzin, string> = {
   blue: "bg-blue-500",
@@ -30,38 +28,25 @@ const SZIN_DOT_RING: Record<JarmuSzin, string> = {
   green: "ring-green-300",
 };
 
-const SZIN_TERVEZETT_BORDER: Record<JarmuSzin, string> = {
-  blue: "border-blue-500",
-  yellow: "border-yellow-600",
-  green: "border-green-600",
+const SZIN_DOBOZ: Record<JarmuSzin, string> = {
+  blue: "border-blue-300 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/40",
+  yellow: "border-yellow-300 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950/40",
+  green: "border-green-300 bg-green-50 dark:border-green-800 dark:bg-green-950/40",
 };
 
-const NAP_KEZDETE_PERC = 0;
-const NAP_VEGE_PERC = 24 * 60;
+/** A csík ennyi órát ölel fel az indulástól — tisztán megjelenítési korlát, nem jogi szabály. */
+const MAX_MUNKANAP_ORA = 15;
 
-function percTolNapkezdettol(d: Date): number {
-  return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
+function percTolIndulastol(d: Date, indulas: Date): number {
+  return (d.getTime() - indulas.getTime()) / 60000;
 }
 
 function pctFromMinutes(min: number): number {
-  return Math.max(0, Math.min(100, ((min - NAP_KEZDETE_PERC) / (NAP_VEGE_PERC - NAP_KEZDETE_PERC)) * 100));
+  return Math.max(0, Math.min(100, (min / (MAX_MUNKANAP_ORA * 60)) * 100));
 }
 
 function formatIdo(d: Date): string {
   return d.toLocaleTimeString("hu-HU", { hour: "2-digit", minute: "2-digit" });
-}
-
-/** Egy "YYYY-MM-DD" naptári naphoz `delta` nappal odébbi nap — dél (UTC) horgonnyal, hogy DST-váltás körül se csúszhasson el. */
-function napEltolva(napISO: string, delta: number): string {
-  const [ev, ho, nap] = napISO.split("-").map(Number);
-  const d = new Date(Date.UTC(ev, ho - 1, nap + delta, 12));
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
-}
-
-function formatNapCim(napISO: string): string {
-  const [ev, ho, nap] = napISO.split("-").map(Number);
-  const d = new Date(Date.UTC(ev, ho - 1, nap, 12));
-  return d.toLocaleDateString("hu-HU", { month: "long", day: "numeric", weekday: "long", timeZone: "UTC" });
 }
 
 function formatIdotartam(sec: number): string {
@@ -83,315 +68,256 @@ function AllasStilus(kategoria: Extract<IdovonalSzakasz, { tipus: "allas" }>["ka
   }
 }
 
-function TervezettFuvarSav({
-  jarmu,
-  tervezettFuvarok,
+/** Egy fuvar minden megállója "elhagyva" (kész), és van legalább egy megálló — ekkor a lista-sorban zöld pipa jár. */
+function fuvarKesz(f: TervezettFuvarSzakasz): boolean {
+  return f.megallok.length > 0 && f.megallok.every((m) => m.elhagyva);
+}
+
+/** Egy megálló idővonalon való elhelyezéséhez: elhagyott pontnál a tényleges (GPS szerinti) idő, egyébként a tervezett/becsült. */
+function megalloIdopontja(f: TervezettFuvarSzakasz, m: TervezettMegallo): Date {
+  if (m.elhagyva && m.tenylegesIdo) return m.tenylegesIdo;
+  return m.tipus === "felrako" ? f.kezdet : f.veg;
+}
+
+function MegalloPont({
+  f,
+  m,
+  indulas,
+}: {
+  f: TervezettFuvarSzakasz;
+  m: TervezettMegallo;
+  indulas: Date;
+}) {
+  const idopont = megalloIdopontja(f, m);
+  const left = pctFromMinutes(percTolIndulastol(idopont, indulas));
+  const cimke = m.tipus === "felrako" ? "Felrakó" : "Lerakó";
+  return (
+    <span
+      title={`${cimke}: ${m.cim}${f.megrendelo ? ` — ${f.megrendelo}` : ""}${f.pozicioszam ? ` (${f.pozicioszam})` : ""}\n${
+        m.elhagyva ? `Elhagyva: ${formatIdo(idopont)}` : `Tervezett: ${formatIdo(idopont)}`
+      }`}
+      className={`absolute top-1/2 z-20 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full border ${
+        m.elhagyva ? "border-success bg-success" : "border-foreground/40 bg-background"
+      }`}
+      style={{ left: `${left}%` }}
+    />
+  );
+}
+
+function MegbizasSor({
+  f,
   onKeszJelolve,
 }: {
-  jarmu: (typeof SAJAT_JARMUVEK)[number];
-  tervezettFuvarok: TervezettFuvarSzakasz[];
-  /** A "Bér fuvarok" lista Kész gombjával és az automatikus GPS-figyelővel megegyező setFuvarTeljesitve()-t hívja — lásd handleKesz. */
+  f: TervezettFuvarSzakasz;
   onKeszJelolve: () => void;
 }) {
-  const [folyamatban, setFolyamatban] = useState<string | null>(null);
+  const [folyamatban, setFolyamatban] = useState(false);
+  const kesz = fuvarKesz(f);
+  const bizonytalan = f.idoBizonytalan || f.utvonalBizonytalan;
 
-  if (tervezettFuvarok.length === 0) return null;
-
-  async function handleKesz(id: string) {
-    setFolyamatban(id);
+  async function handleKesz() {
+    setFolyamatban(true);
     try {
-      await setFuvarTeljesitve(id, true);
+      await setFuvarTeljesitve(f.id, true);
       toast.success("Fuvar készre jelölve — a Bér fuvarok listán a Számla/Posta fülre került.");
       onKeszJelolve();
     } catch {
       toast.error("Nem sikerült készre jelölni a fuvart.");
     } finally {
-      setFolyamatban(null);
+      setFolyamatban(false);
     }
   }
 
   return (
-    <div className="relative h-4 w-full">
-      {tervezettFuvarok.map((f) => {
-        const left = pctFromMinutes(percTolNapkezdettol(f.kezdet));
-        const right = pctFromMinutes(percTolNapkezdettol(f.veg));
-        const width = Math.max(0.5, right - left);
-        const bizonytalan = f.idoBizonytalan || f.utvonalBizonytalan;
-        return (
-          <button
-            key={f.id}
-            type="button"
-            disabled={folyamatban === f.id}
-            onClick={() => handleKesz(f.id)}
-            title={`${f.megrendelo ?? "Megbízás"}${f.pozicioszam ? ` (${f.pozicioszam})` : ""}\n${f.honnan ?? "?"} → ${f.hova}\nBecsült: ${formatIdo(
-              f.kezdet
-            )}–${formatIdo(f.veg)}${bizonytalan ? "\n(becslés — " + (f.idoBizonytalan ? "nincs megadott időpont" : "") + (f.idoBizonytalan && f.utvonalBizonytalan ? ", " : "") + (f.utvonalBizonytalan ? "átalány menetidő" : "") + ")" : ""}${
-              f.tullepiAKeretet
-                ? "\n⚠️ A jelenlegi tempó mellett ez a fuvar túlnyúlik a megengedett napi vezetési időn."
-                : ""
-            }\n\nKattintás: megjelölés készre.`}
-            className={`group absolute top-0 h-full cursor-pointer rounded-sm bg-white/70 hover:bg-success/20 disabled:cursor-wait disabled:opacity-50 dark:bg-black/30 ${
-              f.tullepiAKeretet ? "border-destructive" : SZIN_TERVEZETT_BORDER[jarmu.szin]
-            }`}
-            style={{
-              left: `${left}%`,
-              width: `${width}%`,
-              borderWidth: f.tullepiAKeretet ? 2 : 1.5,
-              borderStyle: bizonytalan ? "dashed" : "solid",
-            }}
-          >
-            <Check className="mx-auto hidden h-2.5 w-2.5 text-success group-hover:block" />
-          </button>
-        );
-      })}
+    <div
+      className={`flex items-center justify-between gap-2 rounded px-1.5 py-1 text-[11px] ${
+        kesz ? "bg-success/10" : ""
+      }`}
+    >
+      <span className={`truncate ${bizonytalan ? "italic text-muted-foreground" : ""}`} title={`${f.honnan ?? "?"} → ${f.hova}`}>
+        {f.honnan ?? "?"} → {f.hova}
+        <span className="ml-1.5 text-muted-foreground">
+          {formatIdo(f.kezdet)}–{formatIdo(f.veg)}
+        </span>
+      </span>
+      <button
+        type="button"
+        disabled={folyamatban || kesz}
+        onClick={handleKesz}
+        title={kesz ? "Készre jelölve" : "Kattintás: megjelölés készre"}
+        className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
+          kesz
+            ? "border-success bg-success text-success-foreground"
+            : "border-muted-foreground/40 text-transparent hover:border-success hover:text-success disabled:cursor-wait"
+        }`}
+      >
+        <Check className="h-2.5 w-2.5" />
+      </button>
     </div>
   );
 }
 
-/** Igaz, ha egy időpont a kliens mai naptári napjára esik — a korlát-jelölők csak ekkor helyezhetők el értelmesen a 00–24 órás csíkon. */
-function maiNapon(d: Date): boolean {
-  return d.toDateString() === new Date().toDateString();
-}
-
-function IdovonalCsik({
+function JarmuInfoDoboz({
   jarmu,
   eredmeny,
-  mostPct,
-  onKeszJelolve,
 }: {
   jarmu: (typeof SAJAT_JARMUVEK)[number];
   eredmeny: JarmuIdovonalEredmeny | undefined;
-  /** A "most" függőleges vonal vízszintes pozíciója (%), vagy null, ha nem a mai nap nézete (nincs mit mutatni). */
-  mostPct: number | null;
-  onKeszJelolve: () => void;
 }) {
-  const szakaszok = eredmeny?.szakaszok;
-  const hiba = eredmeny?.hiba;
-  const figyelmezetesek = eredmeny?.figyelmezetesek ?? [];
-  const tervezettFuvarok = eredmeny?.tervezettFuvarok ?? [];
-  const koltsegvetes = eredmeny?.koltsegvetes;
-  const eloEta = eredmeny?.eloEta;
-
+  const pos = eredmeny?.eloPozicio;
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center justify-between text-xs">
-        <span className="flex items-center gap-1.5 font-medium">
-          <span className={`h-2 w-2 shrink-0 rounded-full ${JARMU_SZIN_DOT_CLASS[jarmu.szin]}`} />
-          {jarmu.sofor} — {jarmu.label}
-          {eloEta && (
-            <span
-              className="font-normal text-muted-foreground"
-              title={`Élő GPS-pozícióból becsülve, a jelenlegi forgalommal/tempóval — a tényleges érkezés eltérhet.`}
-            >
-              · becsült érkezés ({eloEta.cel}): {formatIdo(eloEta.erkezes)}
-            </span>
-          )}
-        </span>
-        {figyelmezetesek.length > 0 && (
-          <span className="flex gap-1">
-            {figyelmezetesek.some((f) => f.sulyossag === "hiba") && (
-              <Badge variant="destructive" className="text-[10px]">
-                {figyelmezetesek.filter((f) => f.sulyossag === "hiba").length} AETR hiba
-              </Badge>
-            )}
-            {figyelmezetesek.some((f) => f.sulyossag === "figyelmeztetes") && (
-              <Badge variant="secondary" className="text-[10px]">
-                {figyelmezetesek.filter((f) => f.sulyossag === "figyelmeztetes").length} figyelmeztetés
-              </Badge>
+    <div className={`flex flex-col gap-1 rounded-lg border px-3 py-2 text-xs ${SZIN_DOBOZ[jarmu.szin]}`}>
+      <div className="flex items-center gap-1.5 font-medium">
+        <span className={`h-2 w-2 shrink-0 rounded-full ${JARMU_SZIN_DOT_CLASS[jarmu.szin]}`} />
+        {jarmu.sofor} <span className="font-normal text-muted-foreground">{jarmu.label}</span>
+      </div>
+      {jarmu.ecofleetObjectId === null ? (
+        <span className="text-muted-foreground">Nincs GPS-kapcsolat.</span>
+      ) : eredmeny?.hiba ? (
+        <span className="text-destructive">{eredmeny.hiba}</span>
+      ) : pos ? (
+        <>
+          <span>{pos.cim ?? "ismeretlen hely"}</span>
+          <span className="flex flex-wrap gap-x-2 text-muted-foreground">
+            <span>{pos.sebesseg} km/h</span>
+            <span>·</span>
+            <span>{formatIdo(pos.utolsoAdat)}</span>
+            {pos.oraallasKm !== null && (
+              <>
+                <span>·</span>
+                <span>{pos.oraallasKm.toLocaleString("hu-HU")} km</span>
+              </>
             )}
           </span>
-        )}
-      </div>
-
-      <div className="relative">
-        {jarmu.ecofleetObjectId === null ? (
-          <div className="flex h-6 w-full items-center rounded bg-muted px-2 text-[11px] text-muted-foreground">Nincs GPS-adat.</div>
-        ) : hiba ? (
-          <div className="flex h-6 w-full items-center rounded bg-muted px-2 text-[11px] text-destructive">{hiba}</div>
-        ) : !szakaszok || szakaszok.length === 0 ? (
-          <div className="flex h-6 w-full items-center rounded bg-muted px-2 text-[11px] text-muted-foreground">Ma még nem indult el.</div>
-        ) : (
-          <div className="relative h-6 w-full overflow-hidden rounded bg-muted">
-            {szakaszok.map((sz, i) => {
-              if (sz.tipus === "indulas") {
-                const left = pctFromMinutes(percTolNapkezdettol(sz.idopont));
-                return (
-                  <span
-                    key={i}
-                    title={`Indulás ${formatIdo(sz.idopont)} — ${sz.cim ?? "ismeretlen hely"}`}
-                    className={`absolute top-1/2 z-10 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white ring-2 ${SZIN_DOT_RING[jarmu.szin]}`}
-                    style={{ left: `${left}%` }}
-                  />
-                );
-              }
-              const left = pctFromMinutes(percTolNapkezdettol(sz.kezdet));
-              const right = pctFromMinutes(percTolNapkezdettol(sz.veg));
-              const width = Math.max(0.3, right - left);
-              if (sz.tipus === "vezetes") {
-                return (
-                  <span
-                    key={i}
-                    title={`Vezetés ${formatIdo(sz.kezdet)}–${formatIdo(sz.veg)} (${sz.tavKm.toFixed(0)} km, ${formatIdotartam(sz.idotartamSec)})\n${sz.honnan ?? "?"} → ${sz.hova ?? "?"}${
-                      sz.elo ? "\n(élő GPS-pozícióból becsülve — a fuvar még nem zárult le)" : ""
-                    }`}
-                    className={`absolute top-0 h-full ${SZIN_BAR[jarmu.szin]} ${sz.elo ? "animate-pulse opacity-80" : ""}`}
-                    style={{ left: `${left}%`, width: `${width}%` }}
-                  />
-                );
-              }
-              return (
-                <span
-                  key={i}
-                  title={`Állás ${formatIdo(sz.kezdet)}–${formatIdo(sz.veg)} (${formatIdotartam(sz.idotartamSec)})\n${sz.cim ?? "ismeretlen hely"}${
-                    sz.kategoria === "rakodas" ? "\n(valószínűleg rakodás/ügyintézés)" : sz.kategoria === "piheno" ? "\n(pihenő)" : ""
-                  }${sz.elo ? "\n(még tart — élő pozícióból meghosszabbítva)" : ""}`}
-                  className={`absolute top-0 h-full ${AllasStilus(sz.kategoria)} ${sz.elo ? "animate-pulse" : ""}`}
-                  style={{ left: `${left}%`, width: `${width}%` }}
-                />
-              );
-            })}
-          </div>
-        )}
-
-        <TervezettFuvarSav jarmu={jarmu} tervezettFuvarok={tervezettFuvarok} onKeszJelolve={onKeszJelolve} />
-
-        {mostPct != null && (
-          <div
-            className="pointer-events-none absolute inset-y-0 z-30 w-px bg-foreground/70"
-            title={`Most — ${formatIdo(new Date())}`}
-            style={{ left: `${mostPct}%` }}
-          />
-        )}
-        {koltsegvetes?.kotelezoMegallasIdo && maiNapon(koltsegvetes.kotelezoMegallasIdo) && (
-          <div
-            className="pointer-events-none absolute inset-y-0 z-20 w-px border-l border-dashed border-amber-500"
-            title={`Kötelező megállás legkésőbb: ${formatIdo(koltsegvetes.kotelezoMegallasIdo)} (4,5 órás folyamatos vezetési korlát)`}
-            style={{ left: `${pctFromMinutes(percTolNapkezdettol(koltsegvetes.kotelezoMegallasIdo))}%` }}
-          />
-        )}
-        {koltsegvetes?.napiVezetesVegeIdo && maiNapon(koltsegvetes.napiVezetesVegeIdo) && (
-          <div
-            className="pointer-events-none absolute inset-y-0 z-20 w-px border-l border-dashed border-destructive"
-            title={`Napi vezetés vége legkésőbb: ${formatIdo(koltsegvetes.napiVezetesVegeIdo)} (napi ${(koltsegvetes.napiVezetesKeretSec / 3600).toFixed(0)} órás keret)`}
-            style={{ left: `${pctFromMinutes(percTolNapkezdettol(koltsegvetes.napiVezetesVegeIdo))}%` }}
-          />
-        )}
-      </div>
-
-      {figyelmezetesek.length > 0 && (
-        <ul className="flex flex-col gap-0.5 pl-1 text-[11px] text-muted-foreground">
-          {figyelmezetesek.map((f, i) => (
-            <li key={i} className={f.sulyossag === "hiba" ? "text-destructive" : undefined}>
-              {f.sulyossag === "hiba" ? "⚠️ " : f.sulyossag === "figyelmeztetes" ? "⚠️ " : "💡 "}
-              {f.uzenet}
-            </li>
-          ))}
-        </ul>
+        </>
+      ) : (
+        <span className="text-muted-foreground">Nincs élő pozíció.</span>
       )}
     </div>
   );
 }
 
-export function JarmuIdovonalak() {
-  const maiNapISO = budapestNapISO();
-  const [napISO, setNapISO] = useState(maiNapISO);
+function JarmuCsempe({
+  jarmu,
+  eredmeny,
+  onKeszJelolve,
+}: {
+  jarmu: (typeof SAJAT_JARMUVEK)[number];
+  eredmeny: JarmuIdovonalEredmeny | undefined;
+  onKeszJelolve: () => void;
+}) {
+  const szakaszok = eredmeny?.szakaszok;
+  const tervezettFuvarok = eredmeny?.tervezettFuvarok ?? [];
+  const napKezdete = eredmeny?.napKezdete ?? null;
+  const eloEta = eredmeny?.eloEta;
+
+  return (
+    <div className="flex flex-col gap-3">
+      <JarmuInfoDoboz jarmu={jarmu} eredmeny={eredmeny} />
+
+      {eloEta && (
+        <p className="text-[11px] text-muted-foreground" title="Élő GPS-pozícióból becsülve, a jelenlegi forgalommal/tempóval — a tényleges érkezés eltérhet.">
+          Becsült érkezés ({eloEta.cel}): <span className="font-medium text-foreground">{formatIdo(eloEta.erkezes)}</span>
+        </p>
+      )}
+
+      {jarmu.ecofleetObjectId !== null && !eredmeny?.hiba && (!napKezdete ? (
+        <div className="flex h-6 w-full items-center rounded bg-muted px-2 text-[11px] text-muted-foreground">
+          Ma még nem indult el.
+        </div>
+      ) : (
+        <div className="relative h-6 w-full overflow-hidden rounded bg-muted">
+          {szakaszok?.map((sz, i) => {
+            if (sz.tipus === "indulas") {
+              const left = pctFromMinutes(percTolIndulastol(sz.idopont, napKezdete));
+              return (
+                <span
+                  key={i}
+                  title={`Indulás ${formatIdo(sz.idopont)} — ${sz.cim ?? "ismeretlen hely"}`}
+                  className={`absolute top-1/2 z-10 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white ring-2 ${SZIN_DOT_RING[jarmu.szin]}`}
+                  style={{ left: `${left}%` }}
+                />
+              );
+            }
+            const left = pctFromMinutes(percTolIndulastol(sz.kezdet, napKezdete));
+            const right = pctFromMinutes(percTolIndulastol(sz.veg, napKezdete));
+            const width = Math.max(0.3, right - left);
+            if (sz.tipus === "vezetes") {
+              return (
+                <span
+                  key={i}
+                  title={`Vezetés ${formatIdo(sz.kezdet)}–${formatIdo(sz.veg)} (${sz.tavKm.toFixed(0)} km, ${formatIdotartam(sz.idotartamSec)})\n${sz.honnan ?? "?"} → ${sz.hova ?? "?"}${
+                    sz.elo ? "\n(élő GPS-pozícióból becsülve — a fuvar még nem zárult le)" : ""
+                  }`}
+                  className={`absolute top-0 h-full ${SZIN_BAR[jarmu.szin]} ${sz.elo ? "animate-pulse opacity-80" : ""}`}
+                  style={{ left: `${left}%`, width: `${width}%` }}
+                />
+              );
+            }
+            return (
+              <span
+                key={i}
+                title={`Állás ${formatIdo(sz.kezdet)}–${formatIdo(sz.veg)} (${formatIdotartam(sz.idotartamSec)})\n${sz.cim ?? "ismeretlen hely"}${
+                  sz.kategoria === "rakodas" ? "\n(valószínűleg rakodás/ügyintézés)" : sz.kategoria === "piheno" ? "\n(pihenő)" : ""
+                }${sz.elo ? "\n(még tart — élő pozícióból meghosszabbítva)" : ""}`}
+                className={`absolute top-0 h-full ${AllasStilus(sz.kategoria)} ${sz.elo ? "animate-pulse" : ""}`}
+                style={{ left: `${left}%`, width: `${width}%` }}
+              />
+            );
+          })}
+          {tervezettFuvarok.flatMap((f) =>
+            f.megallok
+              .filter((m) => m.lat != null && m.lon != null)
+              .map((m, i) => <MegalloPont key={`${f.id}-${i}`} f={f} m={m} indulas={napKezdete} />)
+          )}
+        </div>
+      ))}
+
+      {tervezettFuvarok.length > 0 && (
+        <div className="flex flex-col gap-0.5">
+          {tervezettFuvarok.map((f) => (
+            <MegbizasSor key={f.id} f={f} onKeszJelolve={onKeszJelolve} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function GpsStatus() {
   const [adatok, setAdatok] = useState<JarmuIdovonalEredmeny[]>([]);
   const [loading, setLoading] = useState(true);
-  const maiNap = napISO === maiNapISO;
-  const [mostPct, setMostPct] = useState(() => pctFromMinutes(percTolNapkezdettol(new Date())));
 
-  const load = useCallback(async (nap: string) => {
-    const res = await getIdovonalak(nap);
+  const load = useCallback(async () => {
+    const res = await getIdovonalak();
     setAdatok(res);
   }, []);
 
   useEffect(() => {
     setLoading(true);
-    load(napISO).finally(() => setLoading(false));
-    // A múltbeli (lezárt) napok adata nem változik — csak a mai napi nézetet frissítjük periodikusan.
-    if (napISO !== budapestNapISO()) return;
-    const interval = setInterval(() => load(napISO), 5 * 60 * 1000);
+    load().finally(() => setLoading(false));
+    const interval = setInterval(() => load(), 5 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [load, napISO]);
-
-  // A "most" függőleges vonal percenként frissül, csak a mai nap nézetén.
-  useEffect(() => {
-    if (!maiNap) return;
-    const interval = setInterval(() => setMostPct(pctFromMinutes(percTolNapkezdettol(new Date()))), 60 * 1000);
-    return () => clearInterval(interval);
-  }, [maiNap]);
-
-  const hetiFigyelmezetesek = adatok.flatMap((a) =>
-    a.hetiFigyelmezetesek.map((f) => ({ ...f, sofor: a.sofor }))
-  );
+  }, [load]);
 
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-sm">
-            Idővonal (vezetés / állás) — {formatNapCim(napISO)}
-            {maiNap && " (ma)"}
-          </CardTitle>
-          <div className="flex items-center gap-1">
-            <Button
-              size="icon-sm"
-              variant="outline"
-              title="Előző nap"
-              onClick={() => setNapISO((n) => napEltolva(n, -1))}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <Button
-              size="icon-sm"
-              variant="outline"
-              title="Következő nap"
-              disabled={maiNap}
-              onClick={() => setNapISO((n) => napEltolva(n, 1))}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
+        <CardTitle className="text-sm">Járművek</CardTitle>
       </CardHeader>
       <CardContent>
         {loading && adatok.length === 0 ? (
           <p className="text-sm text-muted-foreground">Betöltés…</p>
         ) : (
-          <div className="flex flex-col gap-4">
-            <div className="flex justify-between px-1 text-[10px] text-muted-foreground">
-              {["00", "04", "08", "12", "16", "20", "24"].map((h) => (
-                <span key={h}>{h}</span>
-              ))}
-            </div>
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
             {SAJAT_JARMUVEK.map((jarmu) => (
-              <IdovonalCsik
+              <JarmuCsempe
                 key={jarmu.sofor}
                 jarmu={jarmu}
                 eredmeny={adatok.find((a) => a.sofor === jarmu.sofor)}
-                mostPct={maiNap ? mostPct : null}
-                onKeszJelolve={() => load(napISO)}
+                onKeszJelolve={load}
               />
             ))}
-            {hetiFigyelmezetesek.length > 0 && (
-              <div className="flex flex-col gap-1 rounded-lg border border-dashed p-2">
-                <span className="text-xs font-medium text-muted-foreground">Heti AETR (hétfőtől eddig a napig)</span>
-                <ul className="flex flex-col gap-0.5 pl-1 text-[11px] text-muted-foreground">
-                  {hetiFigyelmezetesek.map((f, i) => (
-                    <li key={i} className={f.sulyossag === "hiba" ? "text-destructive" : undefined}>
-                      ⚠️ {f.sofor}: {f.uzenet}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            <p className="text-[11px] text-muted-foreground">
-              A narancssárga szakaszok valószínű rakodást/ügyintézést, a szürke szakaszok pihenőt vagy rövid megállást jelölnek — időtartam alapú
-              becslés, a tényleges okot érdemes ellenőrizni. A vastag sáv alatti szaggatott/keretes téglalapok a mai saját megbízások becsült
-              időpontjai (időpont + felrakó/lerakó cím + útvonal-menetidő + rakodási/lerakodási puffer alapján) — szaggatott keret jelzi, ha nincs
-              megadva pontos időpont vagy nem sikerült az útvonalat kiszámolni, ilyenkor csak durva becslés. Az AETR-figyelmeztetések a napi
-              vezetési/pihenő szabályok egyszerűsített ellenőrzéséből származnak, jogi teljeskörűséget nem helyettesítenek.
-            </p>
           </div>
         )}
       </CardContent>
