@@ -15,6 +15,7 @@ import { fetchGazolajAr, GazolajArError } from "./uzemanyagar";
 import { epitsIdovonal, kiegesziteloAllapottal, parseIdopontSzoveg, type EloPozicio, type IdovonalSzakasz, type TervezettFuvarSzakasz } from "./idovonal";
 import { ellenorizAetr, ellenorizHetiVezetes, szamitsAetrKoltsegvetes, type AetrFigyelmezetes, type AetrKoltsegvetes } from "./aetr";
 import { SAJAT_JARMUVEK, resolveJarmu, type SajatJarmu } from "./vehicles";
+import { bontsMegallokra, varosNev } from "./varos";
 import { getMaiSajatFuvarok } from "./megbizasok";
 import type { MaiFuvarSor } from "./fuvar-constants";
 import { budapestFalioraToInstant, budapestNapISO } from "./idozona";
@@ -222,28 +223,32 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor): Promise<TervezettFuvarSzaka
   const [ev, ho, napSzam] = row.datum.split("-").map(Number);
   const kezdet = new Date(ev, ho - 1, napSzam, parsedIdo?.ora ?? ALAPERTELMEZETT_FELRAKAS_ORA, parsedIdo?.perc ?? 0, 0);
 
+  // A felrakó/lerakó mező néha több állomást tartalmaz egyetlen szövegben
+  // összefűzve (pl. két lerakóhely egy körjáraton) — bontsMegallokra ezt
+  // ismeri fel, és állomásonként (a teljes, geokódolható szöveggel) adja
+  // vissza, hogy se a geokódolás (egy összefűzött szövegen próbálva
+  // megbízhatatlan), se a megjelenítés (varosNev, lásd honnan/hova lentebb)
+  // ne törjön el rajta.
+  const megallok = [...bontsMegallokra(row.felrako), ...bontsMegallokra(row.lerako)];
+
   let utvonalPercek = ALAPERTELMEZETT_UTVONAL_PERC;
   let utvonalBizonytalan = true;
-  let honnanLat: number | null = null;
-  let honnanLon: number | null = null;
-  let hovaLat: number | null = null;
-  let hovaLon: number | null = null;
-  if (row.felrako && row.lerako) {
+  let megallokKoordinatak: ({ lat: number; lon: number } | null)[] = megallok.map(() => null);
+
+  if (megallok.length >= 2) {
     try {
-      const [honnan, hova] = await Promise.all([geocodeAddress(row.felrako), geocodeAddress(row.lerako)]);
-      const route = await calculateToll({
-        points: [
-          { lon: honnan.lon, lat: honnan.lat },
-          { lon: hova.lon, lat: hova.lat },
-        ],
-        ...FIXED_VEHICLE,
-      });
-      utvonalPercek = route.durationMin;
-      utvonalBizonytalan = false;
-      honnanLat = honnan.lat;
-      honnanLon = honnan.lon;
-      hovaLat = hova.lat;
-      hovaLon = hova.lon;
+      const geokodolt = await Promise.all(megallok.map((m) => geocodeAddress(m).catch(() => null)));
+      megallokKoordinatak = geokodolt.map((g) => (g ? { lat: g.lat, lon: g.lon } : null));
+      const ervenyesPontok = geokodolt.filter((g): g is GeocodedAddress => g !== null);
+      if (ervenyesPontok.length >= 2) {
+        const route = await calculateToll({
+          points: ervenyesPontok.map((p) => ({ lon: p.lon, lat: p.lat })),
+          ...FIXED_VEHICLE,
+        });
+        utvonalPercek = route.durationMin;
+        // Ha egy állomást nem sikerült geokódolni, a menetidő hiányos (kimaradt egy szakasz) — ezt jelezzük bizonytalannak.
+        utvonalBizonytalan = ervenyesPontok.length < geokodolt.length;
+      }
     } catch {
       // marad az alapértelmezett átalány-menetidő, koordináták nélkül
     }
@@ -257,12 +262,9 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor): Promise<TervezettFuvarSzaka
     id: row.id,
     megrendelo: row.megrendelo,
     pozicioszam: row.pozicioszam,
-    honnan: row.felrako,
-    hova: row.lerako,
-    honnanLat,
-    honnanLon,
-    hovaLat,
-    hovaLon,
+    honnan: row.felrako ? varosNev(row.felrako) : null,
+    hova: varosNev(row.lerako) || row.lerako,
+    megallokKoordinatak,
     kezdet,
     veg,
     idoBizonytalan,
@@ -291,17 +293,17 @@ function illesztKoltsegvetesbe(
 
 /**
  * Élő GPS-pozícióból (nem a tervezett indulásból!) becsüli meg, mikor ér
- * oda a jármű egy adott célcímre — ugyanazzal a geokódolás+útvonaltervezés
- * lépéssel, mint amit becsulFuvarSzakasz a tervezéskor használ, csak a
- * kezdőpont most a jelenlegi valós pozíció.
+ * oda a jármű a következő tervezett fuvar végső céljához — a célkoordinátát
+ * a hívó adja át (a becsulFuvarSzakasz-ban már úgyis megtörtént geokódolás
+ * eredménye, lásd megallokKoordinatak), nincs szükség újabb geokódolásra.
  */
 async function becsulEloEta(
   eloPoz: { lat: number; lon: number },
-  celCim: string,
+  cel: { lat: number; lon: number },
+  celLabel: string,
   most: Date
 ): Promise<{ cel: string; erkezes: Date } | null> {
   try {
-    const cel = await geocodeAddress(celCim);
     const route = await calculateToll({
       points: [
         { lon: eloPoz.lon, lat: eloPoz.lat },
@@ -309,7 +311,7 @@ async function becsulEloEta(
       ],
       ...FIXED_VEHICLE,
     });
-    return { cel: celCim, erkezes: new Date(most.getTime() + route.durationMin * 60000) };
+    return { cel: celLabel, erkezes: new Date(most.getTime() + route.durationMin * 60000) };
   } catch {
     return null;
   }
@@ -360,12 +362,9 @@ export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny
         // GPS-idővonal állás-szakaszainak helyalapú kategorizálásához
         // (allasKategoria): ha egy állás egy ilyen cím közelében van,
         // biztosan rakodás/ügyintézés, függetlenül az időtartamtól.
-        const tervezettCimek = tervezettFuvarok.flatMap((f) => {
-          const pontok: { lat: number; lon: number }[] = [];
-          if (f.honnanLat != null && f.honnanLon != null) pontok.push({ lat: f.honnanLat, lon: f.honnanLon });
-          if (f.hovaLat != null && f.hovaLon != null) pontok.push({ lat: f.hovaLat, lon: f.hovaLon });
-          return pontok;
-        });
+        const tervezettCimek = tervezettFuvarok.flatMap((f) =>
+          f.megallokKoordinatak.filter((k): k is { lat: number; lon: number } => k !== null)
+        );
         let szakaszok = epitsIdovonal(trips, tervezettCimek);
 
         const livePos = maiNap ? eloPoziciok.find((p) => p.objectId === jarmu.ecofleetObjectId) : undefined;
@@ -400,8 +399,9 @@ export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny
           const kovetkezo = illesztettFuvarok
             .filter((f) => f.veg.getTime() > veg.getTime())
             .sort((a, b) => a.kezdet.getTime() - b.kezdet.getTime())[0];
-          if (kovetkezo) {
-            eloEta = await becsulEloEta({ lat: livePos.latitude, lon: livePos.longitude }, kovetkezo.hova, veg);
+          const vegsoCel = [...kovetkezo?.megallokKoordinatak ?? []].reverse().find((k) => k !== null);
+          if (kovetkezo && vegsoCel) {
+            eloEta = await becsulEloEta({ lat: livePos.latitude, lon: livePos.longitude }, vegsoCel, kovetkezo.hova, veg);
           }
         }
 
