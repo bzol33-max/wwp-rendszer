@@ -32,8 +32,18 @@ const OSSZEVONAS_KM = 1.5;
 
 export type AllasKategoria = "rovid" | "rakodas" | "piheno";
 
-/** Egyszerű, időtartam alapú becslés arra, hogy egy állás inkább rövid megállás, rakodás/ügyintézés, vagy (napi/heti) pihenő volt-e. Tájékoztató jellegű. */
-function allasKategoria(durationSec: number): AllasKategoria {
+/** Ennél közelebb (km) egy geokódolt tervezett felrakó/lerakó címhez az állást — időtartamtól függetlenül — rakodásnak tekintjük. */
+const RAKODAS_TAVOLSAG_KM = 1;
+
+/**
+ * Becslés arra, hogy egy állás inkább rövid megállás, rakodás/ügyintézés,
+ * vagy (napi/heti) pihenő volt-e. Elsősorban helyalapú: ha az állás
+ * RAKODAS_TAVOLSAG_KM-en belül van a nap tervezett fuvarjainak geokódolt
+ * fel-/lerakó címéhez, biztosan rakodás/ügyintézés, függetlenül attól, meddig
+ * tartott. Enélkül tisztán időtartam-alapú heurisztika. Tájékoztató jellegű.
+ */
+function allasKategoria(durationSec: number, lat: number, lon: number, tervezettCimek: { lat: number; lon: number }[]): AllasKategoria {
+  if (tervezettCimek.some((c) => haversineKm(lat, lon, c.lat, c.lon) < RAKODAS_TAVOLSAG_KM)) return "rakodas";
   if (durationSec >= 6 * 3600) return "piheno";
   if (durationSec >= 15 * 60) return "rakodas";
   return "rovid";
@@ -79,8 +89,12 @@ export type IdovonalSzakasz =
 /**
  * Egy jármű egy napi (vagy tetszőleges) trip-listájából felépíti a
  * megjelenítendő idővonal-szakaszokat, időrendben.
+ *
+ * `tervezettCimek`: a nap tervezett saját fuvarjainak geokódolt fel-/lerakó
+ * koordinátái (lásd allasKategoria) — csak a helyalapú állás-kategorizáláshoz
+ * kell, a szakaszok felépítését nem befolyásolja.
  */
-export function epitsIdovonal(trips: EcofleetTrip[]): IdovonalSzakasz[] {
+export function epitsIdovonal(trips: EcofleetTrip[], tervezettCimek: { lat: number; lon: number }[] = []): IdovonalSzakasz[] {
   const rendezett = [...trips]
     .filter((t) => parseEcofleetTimestamp(t.startTimestamp) && parseEcofleetTimestamp(t.endTimestamp))
     .sort((a, b) => parseEcofleetTimestamp(a.startTimestamp)!.getTime() - parseEcofleetTimestamp(b.startTimestamp)!.getTime());
@@ -148,7 +162,7 @@ export function epitsIdovonal(trips: EcofleetTrip[]): IdovonalSzakasz[] {
         cim: stopCim,
         lat: stopLat,
         lon: stopLon,
-        kategoria: allasKategoria(stopSzek),
+        kategoria: allasKategoria(stopSzek, stopLat, stopLon, tervezettCimek),
         osszevontLepesek,
       });
     }
@@ -186,6 +200,11 @@ export type TervezettFuvarSzakasz = {
   pozicioszam: string | null;
   honnan: string | null;
   hova: string;
+  /** Felrakó/lerakó cím geokódolt koordinátái, ha sikerült (helyalapú állás-kategorizáláshoz, lásd allasKategoria) — null, ha nem geokódolható. */
+  honnanLat: number | null;
+  honnanLon: number | null;
+  hovaLat: number | null;
+  hovaLon: number | null;
   /** Becsült felrakás-kezdés időpontja. */
   kezdet: Date;
   /** Becsült lerakás-befejezés időpontja. */
@@ -222,8 +241,15 @@ export type EloPozicio = {
  * jár az utolsó ismert megállási helytől), egy "élő" vezetés-szakaszt told
  * hozzá; ha áll és közel van, az utolsó állás-szakaszt hosszabbítja meg a
  * jelenig.
+ *
+ * `tervezettCimek`: lásd epitsIdovonal — ugyanaz a lista, a most meghosszabbított/újonnan létrehozott élő állás-szakasz kategorizálásához.
  */
-export function kiegesziteloAllapottal(szakaszok: IdovonalSzakasz[], elo: EloPozicio | null, most: Date): IdovonalSzakasz[] {
+export function kiegesziteloAllapottal(
+  szakaszok: IdovonalSzakasz[],
+  elo: EloPozicio | null,
+  most: Date,
+  tervezettCimek: { lat: number; lon: number }[] = []
+): IdovonalSzakasz[] {
   if (!elo || szakaszok.length === 0) return szakaszok;
 
   const utolso = szakaszok[szakaszok.length - 1];
@@ -279,7 +305,7 @@ export function kiegesziteloAllapottal(szakaszok: IdovonalSzakasz[], elo: EloPoz
     cim: utolsoHely.cim,
     lat: utolsoHely.lat,
     lon: utolsoHely.lon,
-    kategoria: allasKategoria(idotartamSec),
+    kategoria: allasKategoria(idotartamSec, utolsoHely.lat, utolsoHely.lon, tervezettCimek),
     osszevontLepesek: 0,
     elo: true,
   };
