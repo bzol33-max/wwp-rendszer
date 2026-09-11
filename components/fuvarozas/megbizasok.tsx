@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, ChevronDown, X } from "lucide-react";
+import { Check, ChevronDown, Pencil, X } from "lucide-react";
 import {
   addFuvar,
   approveFuvar,
@@ -39,11 +39,10 @@ import {
   getArchivFuvarok,
   getElokeszitettFuvarok,
   getFolyamatbanSajatFuvarok,
-  getFuvarok,
-  getKimutatasOsszesites,
+  getFolyamatbanValodiSajatFuvarok,
+  getKimutatasJarmuFuvarok,
   getPostazasiCimJavaslat,
   getSzamlaPostaFuvarok,
-  keresKimutatasFuvarok,
   setFuvarPoziciszam,
   setFuvarFizetesiHatarido,
   setFuvarFuvardij,
@@ -57,12 +56,10 @@ import {
 import { calculateTollForAddresses, getGazolajAr } from "@/lib/fuvarozas/actions";
 import {
   FUVAR_STATUSZ_LABEL,
-  FUVAR_STATUSZOK,
   type FuvardijPenznem,
   type FuvarRow,
-  type FuvarStatusz,
   type FuvarTipus,
-  type KimutatasSor,
+  type KimutatasJarmuSor,
 } from "@/lib/fuvarozas/fuvar-constants";
 import { getCurrentUser } from "@/lib/current-user";
 import { talalVaros, varosNev } from "@/lib/fuvarozas/varos";
@@ -72,17 +69,8 @@ import {
   JARMU_SZIN_DOT_CLASS,
   jarmuLabel,
   resolveJarmu,
+  type SajatJarmu,
 } from "@/lib/fuvarozas/vehicles";
-
-const STATUSZ_BADGE_CLASS: Record<FuvarStatusz, string> = {
-  uj: "bg-muted text-muted-foreground hover:bg-muted",
-  tervezett: "bg-blue-100 text-blue-700 hover:bg-blue-100",
-  uton: "bg-primary/15 text-primary hover:bg-primary/15",
-  lezarva: "bg-success/15 text-success hover:bg-success/15",
-  szamlazva: "bg-success/25 text-success hover:bg-success/25",
-  problemas: "bg-destructive/15 text-destructive hover:bg-destructive/15",
-  torolt: "bg-muted text-muted-foreground hover:bg-muted",
-};
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -91,19 +79,6 @@ function todayISO() {
 const SAJAT_TELEP_PARTNER = "Telephelyek közti szállítás";
 /** A saját fuvaroknak (tipus='ber') nincs mindig valódi külső megrendelőjük — az Archív és a Kimutatás fülön ez alatt a "cég" alatt jelennek meg. */
 const SAJAT_CEG_NEV = "Well-worn Pallet";
-
-// FIGYELEM: fordított UI-címkézés (történelmi okokból, lásd getMaiSajatFuvarok
-// megjegyzését lib/fuvarozas/megbizasok.ts-ben): a DB tipus='sajat' sorok a
-// "Bér fuvarok" fülön jelennek meg, tipus='ber' a "Saját fuvarok" fülön.
-const FUVAR_TIPUS_CIMKE: Record<FuvarTipus, string> = {
-  sajat: "Bér fuvar",
-  ber: "Saját fuvar",
-};
-
-const FUVAR_TIPUS_BADGE: Record<FuvarTipus, string> = {
-  sajat: "bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300",
-  ber: "bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300",
-};
 
 function eredmeny(row: FuvarRow): number | null {
   if (row.fuvardij == null || row.koltseg == null) return null;
@@ -635,7 +610,7 @@ function emptyForm(tipus: FuvarTipus): FormState {
 function formFromRow(row: FuvarRow): FormState {
   return {
     tipus: row.tipus,
-    datum: todayISO(), // a szerver "mon. DD" formátumot ad vissza, dátum-inputhoz nem használható újra
+    datum: row.datum_iso,
     idopont: row.idopont ?? "",
     felrako: row.felrako ?? "",
     lerako: row.lerako,
@@ -1165,39 +1140,123 @@ function KoltsegCell({
   return <span className="tabular-nums">{koltseg.toLocaleString("hu-HU")} Ft</span>;
 }
 
-function FuvarList({
-  tipus,
-  refreshKey,
-  titleOverride,
-  showJarmu,
-  partnerColumnLabel,
+/** A Saját fuvarok fül szerkesztő ablaka — a felvitelnél is használt mezőkkel (dátum, partner, felrakó, lerakó, kocsi). */
+function SajatFuvarSzerkesztoDialog({
+  row,
+  onClose,
+  onSaved,
 }: {
-  tipus: FuvarTipus;
-  refreshKey: number;
-  titleOverride?: string;
-  /** Melyik oszlopot mutassa a jármű-oszlopban — alapból tipus alapján dől el. */
-  showJarmu?: boolean;
-  partnerColumnLabel?: string;
+  row: FuvarRow | null;
+  onClose: () => void;
+  onSaved: () => void | Promise<void>;
 }) {
-  const jarmuOszlop = showJarmu ?? tipus === "sajat";
+  return (
+    <Dialog open={row != null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        {row && <SajatFuvarSzerkesztoForm key={row.id} row={row} onClose={onClose} onSaved={onSaved} />}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function SajatFuvarSzerkesztoForm({
+  row,
+  onClose,
+  onSaved,
+}: {
+  row: FuvarRow;
+  onClose: () => void;
+  onSaved: () => void | Promise<void>;
+}) {
+  const [form, setForm] = useState<FormState>(formFromRow(row));
+  const [saving, setSaving] = useState(false);
+
+  function patch(p: Partial<FormState>) {
+    setForm((f) => ({ ...f, ...p }));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.felrako.trim() || !form.lerako.trim()) {
+      toast.error("Add meg a felrakó és lerakó helyet.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await approveFuvar({
+        id: row.id,
+        tipus: "ber",
+        datum: form.datum,
+        felrako: form.felrako,
+        lerako: form.lerako,
+        megrendelo: form.megrendelo || undefined,
+        jarmu: form.jarmu || undefined,
+        // A minimál űrlap ezeket nem szerkeszti — a meglévő értékkel visszük tovább, hogy a mentés ne írja felül üresre.
+        idopont: row.idopont ?? undefined,
+        aru: row.aru ?? undefined,
+        mennyiseg: row.mennyiseg ?? undefined,
+        suly: row.suly ?? undefined,
+        sofor: row.sofor ?? undefined,
+        alvallalkozo: row.alvallalkozo ?? undefined,
+        fuvardij: row.fuvardij ?? undefined,
+        koltseg: row.koltseg ?? undefined,
+        megjegyzes: row.megjegyzes ?? undefined,
+        pozicioszam: row.pozicioszam ?? undefined,
+        pozicioszamNincs: row.pozicioszam_nincs,
+        postazasiCim: row.postazasi_cim ?? undefined,
+      });
+      await onSaved();
+      onClose();
+      toast.success("Fuvar módosítva.");
+    } catch {
+      toast.error("Nem sikerült menteni.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Saját fuvar szerkesztése</DialogTitle>
+      </DialogHeader>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <MinimalFuvarFields form={form} onChange={patch} />
+        <div className="flex gap-2">
+          <Button type="submit" disabled={saving}>
+            {saving ? "Mentés…" : "Mentés"}
+          </Button>
+          <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+            Mégse
+          </Button>
+        </div>
+      </form>
+    </>
+  );
+}
+
+/**
+ * "Saját fuvarok" fül (tipus='ber') aktív listája — csak a folyamatban
+ * lévők (lásd getFolyamatbanValodiSajatFuvarok); a teljesítettek (kézzel
+ * "Kész"-re jelölve, vagy a dátumuk elmúlt) innen eltűnnek és az Archívba
+ * kerülnek. A sorok szerkeszthetők (ceruza ikon — lásd
+ * SajatFuvarSzerkesztoDialog).
+ */
+function ValodiSajatFuvarLista({ refreshKey }: { refreshKey: number }) {
   const [rows, setRows] = useState<FuvarRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [reszletek, setReszletek] = useState<FuvarRow | null>(null);
+  const [szerkesztett, setSzerkesztett] = useState<FuvarRow | null>(null);
 
   const load = useCallback(async () => {
-    const data = await getFuvarok(tipus);
+    const data = await getFolyamatbanValodiSajatFuvarok();
     setRows(data);
-  }, [tipus]);
+  }, []);
 
   useEffect(() => {
     setLoading(true);
     load().finally(() => setLoading(false));
   }, [load, refreshKey]);
-
-  async function handleStatusChange(id: string, statusz: FuvarStatusz) {
-    await updateFuvarStatus(id, statusz);
-    await load();
-  }
 
   async function handleDelete(id: string) {
     await deleteFuvar(id);
@@ -1205,12 +1264,16 @@ function FuvarList({
     toast.success("Fuvar törölve.");
   }
 
+  async function handleTeljesitve(id: string) {
+    await setFuvarTeljesitve(id, true);
+    await load();
+    toast.success("Fuvar teljesítve — átkerült az Archívba.");
+  }
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-sm">
-          {titleOverride ?? (tipus === "sajat" ? "Saját fuvarok" : "Bér fuvarok")}
-        </CardTitle>
+        <CardTitle className="text-sm">Saját fuvarok — folyamatban</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">
@@ -1218,94 +1281,74 @@ function FuvarList({
             <TableHeader>
               <TableRow>
                 <TableHead>Dátum</TableHead>
+                <TableHead>Partner</TableHead>
                 <TableHead>Honnan → Hová</TableHead>
-                <TableHead>{partnerColumnLabel ?? "Megrendelő"}</TableHead>
-                <TableHead>{jarmuOszlop ? "Kocsi" : "Alvállalkozó"}</TableHead>
-                <TableHead className="text-right" title="A fel- és lerakó városok alapján automatikusan számított útdíj+üzemanyag költség.">
-                  Fuvardíj (számított)
+                <TableHead>Kocsi</TableHead>
+                <TableHead
+                  className="text-right"
+                  title="A fel- és lerakó városok alapján automatikusan számított útdíj+üzemanyag költség."
+                >
+                  Költség (számított)
                 </TableHead>
-                <TableHead className="text-right">Eredmény</TableHead>
-                <TableHead>Státusz</TableHead>
-                <TableHead>Ki</TableHead>
-                <TableHead className="w-8"></TableHead>
+                <TableHead
+                  className="w-16 text-center"
+                  title="Ha a fuvar ténylegesen befejeződött, itt azonnal átrakható az Archívba."
+                >
+                  Kész
+                </TableHead>
+                <TableHead className="w-16"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {!loading && rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center text-muted-foreground">
-                    Még nincs rögzített fuvar.
+                  <TableCell colSpan={7} className="text-center text-muted-foreground">
+                    Nincs jelenleg folyamatban lévő saját fuvar.
                   </TableCell>
                 </TableRow>
               )}
-              {rows.map((row) => {
-                const res = eredmeny(row);
-                return (
-                  <TableRow key={row.id}>
-                    <TableCell className="text-muted-foreground">
+              {rows.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell className="text-muted-foreground">
+                    <button
+                      type="button"
+                      title="Megbízás megnyitása"
+                      className="hover:underline"
+                      onClick={() => setReszletek(row)}
+                    >
+                      {row.date}
+                    </button>
+                  </TableCell>
+                  <TableCell>{row.megrendelo ?? "—"}</TableCell>
+                  <TableCell>
+                    {row.felrako
+                      ? `${varosNev(row.felrako)} → ${varosNev(row.lerako)}`
+                      : varosNev(row.lerako)}
+                  </TableCell>
+                  <TableCell>{row.jarmu ? <JarmuJelolo value={row.jarmu} /> : "—"}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    <KoltsegCell felrako={row.felrako} lerako={row.lerako} />
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <button
+                      type="button"
+                      onClick={() => handleTeljesitve(row.id)}
+                      title="Teljesítve — áthelyezés az Archívba"
+                      className="rounded p-1 text-muted-foreground hover:bg-success/15 hover:text-success"
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                    </button>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        title="Megbízás megnyitása"
-                        className="hover:underline"
-                        onClick={() => setReszletek(row)}
+                        onClick={() => setSzerkesztett(row)}
+                        title="Szerkesztés"
+                        className="text-muted-foreground hover:text-foreground"
                       >
-                        {row.date}
+                        <Pencil className="h-3.5 w-3.5" />
                       </button>
-                    </TableCell>
-                    <TableCell>
-                      {row.felrako
-                        ? `${varosNev(row.felrako)} → ${varosNev(row.lerako)}`
-                        : varosNev(row.lerako)}
-                    </TableCell>
-                    <TableCell>{row.megrendelo ?? "—"}</TableCell>
-                    <TableCell>
-                      {jarmuOszlop ? (
-                        row.jarmu ? (
-                          <JarmuJelolo value={row.jarmu} />
-                        ) : (
-                          "—"
-                        )
-                      ) : (
-                        row.alvallalkozo ?? "—"
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      <KoltsegCell felrako={row.felrako} lerako={row.lerako} />
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {res != null ? (
-                        <span className={res < 0 ? "text-destructive" : "text-success"}>
-                          {res.toLocaleString("hu-HU")} Ft
-                        </span>
-                      ) : (
-                        "—"
-                      )}
-                    </TableCell>
-                    <TableCell>
-                      <Select
-                        value={row.statusz}
-                        onValueChange={(v) => v && handleStatusChange(row.id, v as FuvarStatusz)}
-                      >
-                        <SelectTrigger className="h-7 w-[130px] text-xs">
-                          <SelectValue>
-                            <Badge className={`${STATUSZ_BADGE_CLASS[row.statusz]} text-xs`}>
-                              {FUVAR_STATUSZ_LABEL[row.statusz]}
-                            </Badge>
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          {FUVAR_STATUSZOK.filter((s) => s !== "torolt").map((s) => (
-                            <SelectItem key={s} value={s}>
-                              {FUVAR_STATUSZ_LABEL[s]}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {row.created_by ?? "—"}
-                    </TableCell>
-                    <TableCell>
                       <button
                         type="button"
                         onClick={() => handleDelete(row.id)}
@@ -1314,15 +1357,16 @@ function FuvarList({
                       >
                         <X className="h-3.5 w-3.5" />
                       </button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </div>
       </CardContent>
       <FuvarDetailModal row={reszletek} onClose={() => setReszletek(null)} />
+      <SajatFuvarSzerkesztoDialog row={szerkesztett} onClose={() => setSzerkesztett(null)} onSaved={load} />
     </Card>
   );
 }
@@ -1693,49 +1737,19 @@ function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
   );
 }
 
-function FuvarTypeView({
-  tipus,
-  minimal,
-  formTitle,
-  listTitle,
-  showJarmu,
-  partnerColumnLabel,
-  noForm,
-  noFormNote,
-}: {
-  tipus: FuvarTipus;
-  minimal?: boolean;
-  formTitle?: string;
-  listTitle?: string;
-  showJarmu?: boolean;
-  partnerColumnLabel?: string;
-  /** Ha true, nincs kézi rögzítő űrlap — csak lista + egy magyarázó kártya. */
-  noForm?: boolean;
-  noFormNote?: string;
-}) {
+/** A "Saját fuvarok" fül (tipus='ber'): kézi rögzítő űrlap + az aktív (folyamatban lévő) lista. */
+function SajatFuvarokTab() {
   const [refreshKey, setRefreshKey] = useState(0);
 
   return (
     <div className="flex flex-col gap-4">
-      {noForm ? (
-        <Card className="bg-muted/40">
-          <CardContent className="py-4 text-sm text-muted-foreground">{noFormNote}</CardContent>
-        </Card>
-      ) : (
-        <FuvarForm
-          tipus={tipus}
-          onSaved={() => setRefreshKey((k) => k + 1)}
-          minimal={minimal}
-          titleOverride={formTitle}
-        />
-      )}
-      <FuvarList
-        tipus={tipus}
-        refreshKey={refreshKey}
-        partnerColumnLabel={partnerColumnLabel}
-        titleOverride={listTitle}
-        showJarmu={showJarmu}
+      <FuvarForm
+        tipus="ber"
+        onSaved={() => setRefreshKey((k) => k + 1)}
+        minimal
+        titleOverride="Új saját fuvar"
       />
+      <ValodiSajatFuvarLista refreshKey={refreshKey} />
     </div>
   );
 }
@@ -2012,8 +2026,6 @@ function ArchivCegCsoport({
   );
 }
 
-const ARCHIV_EGYEB_KULCS = "__egyeb";
-
 function ArchivLista() {
   const [rows, setRows] = useState<FuvarRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2061,13 +2073,10 @@ function ArchivLista() {
     ? rows.filter((row) => archivKeresoSzoveg(row).includes(keresoNorm))
     : rows;
 
-  // Cégenkénti csoportosítás — a saját fuvarok (tipus='ber', nincs mindig
-  // valódi külső megrendelőjük) mind a "Well-worn Pallet" csoportba kerülnek
-  // (ez mindig névvel jelölt, önálló csoport). A bér fuvaroknál (tipus='sajat')
-  // csak azok a megrendelők kapnak külön, névvel jelölt csoportot, akiktől
-  // legalább 2 (a keresés utáni listában is) fuvar van; az egy-fuvaros
-  // megrendelők az "Egyéb" csoportba kerülnek, hogy ne legyen tucatnyi
-  // egysoros "csoport" a listában.
+  // Cégenkénti csoportosítás — MINDEN megrendelő (és a saját fuvarok közös
+  // "Well-worn Pallet" csoportja) önálló, névvel jelölt, összecsukható
+  // mappát kap, akkor is, ha csak 1 fuvar van benne — ugyanaz a minta, mint
+  // a Kapcsolatok fülön.
   const csoportok = new Map<string, FuvarRow[]>();
   for (const row of szurtRows) {
     const kulcs = row.tipus === "ber" ? SAJAT_CEG_NEV : row.megrendelo?.trim() || "(nincs megrendelő)";
@@ -2075,12 +2084,9 @@ function ArchivLista() {
     lista.push(row);
     csoportok.set(kulcs, lista);
   }
-  const nagyCsoportok = [...csoportok.entries()]
-    .filter(([kulcs, lista]) => kulcs === SAJAT_CEG_NEV || lista.length >= 2)
-    .sort((a, b) => (a[0] === SAJAT_CEG_NEV ? -1 : b[0] === SAJAT_CEG_NEV ? 1 : b[1].length - a[1].length || a[0].localeCompare(b[0], "hu")));
-  const egyebSorok = [...csoportok.entries()]
-    .filter(([kulcs, lista]) => kulcs !== SAJAT_CEG_NEV && lista.length < 2)
-    .flatMap(([, lista]) => lista);
+  const csoportLista = [...csoportok.entries()].sort((a, b) =>
+    a[0] === SAJAT_CEG_NEV ? -1 : b[0] === SAJAT_CEG_NEV ? 1 : a[0].localeCompare(b[0], "hu")
+  );
 
   return (
     <Card>
@@ -2099,7 +2105,7 @@ function ArchivLista() {
             {kereso ? "Nincs a keresésnek megfelelő archivált fuvar." : "Még nincs archivált fuvar."}
           </p>
         )}
-        {nagyCsoportok.map(([nev, lista]) => (
+        {csoportLista.map(([nev, lista]) => (
           <ArchivCegCsoport
             key={nev}
             cim={nev}
@@ -2110,267 +2116,315 @@ function ArchivLista() {
             mutatMegrendelot={nev === SAJAT_CEG_NEV}
           />
         ))}
-        {egyebSorok.length > 0 && (
-          <ArchivCegCsoport
-            key={ARCHIV_EGYEB_KULCS}
-            cim="Egyéb (1 megbízásos partnerek)"
-            cimClassName="text-sm font-medium text-muted-foreground"
-            rows={egyebSorok}
-            onVisszaallitas={handleVisszaallitas}
-            open={keresoNorm.length > 0 || nyitottCsoportok.has(ARCHIV_EGYEB_KULCS)}
-            onToggle={() => toggleCsoport(ARCHIV_EGYEB_KULCS)}
-            mutatMegrendelot
-          />
-        )}
       </CardContent>
     </Card>
   );
 }
 
-type KimutatasBontas = "week" | "month";
-
-/** Egy periódus (hét/hónap) kártyája: "2026. szeptember" vagy "2026. szept. 8 – szept. 14." — csak megjelenítésre, nem dátum-számításhoz. */
-function formatPeriodusCimke(periodus: string, bontas: KimutatasBontas): string {
-  const [ev, ho, nap] = periodus.split("-").map(Number);
-  const kezdet = new Date(ev, ho - 1, nap);
-  if (bontas === "month") {
-    return kezdet.toLocaleDateString("hu-HU", { year: "numeric", month: "long" });
-  }
-  const veg = new Date(kezdet.getTime() + 6 * 86400000);
-  const honapNap = (dt: Date) => dt.toLocaleDateString("hu-HU", { month: "short", day: "numeric" });
-  return `${kezdet.getFullYear()}. ${honapNap(kezdet)} – ${honapNap(veg)}`;
+/** A hét hétfője/vasárnapja (kliens-időzóna, csak megjelenítés-szűréshez, nem tárolt adathoz). */
+function aktualisHetHatarok(): { kezdetISO: string; vegISO: string; cimke: string } {
+  const ma = new Date();
+  const nap = ma.getDay();
+  const elToljHetfoig = nap === 0 ? 6 : nap - 1;
+  const hetfo = new Date(ma.getFullYear(), ma.getMonth(), ma.getDate() - elToljHetfoig);
+  const vasarnap = new Date(hetfo.getTime() + 6 * 86400000);
+  const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  const honapNap = (d: Date) => d.toLocaleDateString("hu-HU", { month: "short", day: "numeric" });
+  return { kezdetISO: iso(hetfo), vegISO: iso(vasarnap), cimke: `${honapNap(hetfo)} – ${honapNap(vasarnap)}` };
 }
 
-type KimutatasPeriodusSor = {
-  periodus: string;
-  sajatDarab: number;
-  sajatFt: number;
-  sajatEur: number;
-  berDarab: number;
-  berFt: number;
-  berEur: number;
-};
+/** "2026-09" -> "2026. szeptember" — csak megjelenítésre. */
+function formatHonapCimke(honapKulcs: string): string {
+  const [ev, ho] = honapKulcs.split("-").map(Number);
+  return new Date(ev, ho - 1, 1).toLocaleDateString("hu-HU", { year: "numeric", month: "long" });
+}
 
-function KimutatasKeresoSor({ row }: { row: FuvarRow }) {
+/** Egy sor a heti mini-listákban (Aktuális hét): dátum, útvonal, díj. */
+function KimutatasHetiSor({ sor, koltseg }: { sor: KimutatasJarmuSor; koltseg?: number }) {
+  const dij =
+    sor.tipus === "ber"
+      ? koltseg != null
+        ? `${koltseg.toLocaleString("hu-HU")} Ft`
+        : "…"
+      : sor.fuvardij != null
+        ? formatOsszeg(sor.fuvardij, sor.fuvardij_penznem)
+        : "—";
   return (
-    <TableRow>
-      <TableCell className="text-muted-foreground">{row.date}</TableCell>
-      <TableCell>
-        <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${FUVAR_TIPUS_BADGE[row.tipus]}`}>
-          {FUVAR_TIPUS_CIMKE[row.tipus]}
+    <div className="flex items-center justify-between gap-2 text-xs">
+      <span className="shrink-0 text-muted-foreground">{sor.datum.slice(5)}</span>
+      <span className="flex-1 truncate">
+        {sor.felrako ? `${varosNev(sor.felrako)} → ${varosNev(sor.lerako)}` : varosNev(sor.lerako)}
+      </span>
+      <span className="shrink-0 tabular-nums">{dij}</span>
+    </div>
+  );
+}
+
+/** Egy hónap összecsukható mappája: zárva a 4 összesítő szám, nyitva a fuvarok listája (Megbízó, Honnan → Hová, Díj). */
+function HonapMappa({
+  cim,
+  berDarab,
+  berOsszegFt,
+  berOsszegEur,
+  sajatDarab,
+  sajatOsszeg,
+  sorok,
+  koltsegek,
+  open,
+  onToggle,
+}: {
+  cim: string;
+  berDarab: number;
+  berOsszegFt: number;
+  berOsszegEur: number;
+  sajatDarab: number;
+  sajatOsszeg: number;
+  sorok: KimutatasJarmuSor[];
+  koltsegek: Map<string, number>;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const rendezett = [...sorok].sort((a, b) => b.datum.localeCompare(a.datum));
+  return (
+    <div className="rounded-md border">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full flex-wrap items-center justify-between gap-2 px-3 py-2 text-left hover:bg-muted/50"
+      >
+        <span className="flex items-center gap-2 text-sm font-medium">
+          <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+          {cim}
         </span>
-      </TableCell>
-      <TableCell className="max-w-[160px] whitespace-normal break-words leading-tight">
-        {row.tipus === "ber" ? row.megrendelo?.trim() || SAJAT_CEG_NEV : row.megrendelo ?? "—"}
-      </TableCell>
-      <TableCell>
-        {row.felrako ? `${varosNev(row.felrako)} → ${varosNev(row.lerako)}` : varosNev(row.lerako)}
-      </TableCell>
-      <TableCell className="text-right tabular-nums">
-        {row.fuvardij != null ? formatOsszeg(row.fuvardij, row.fuvardij_penznem) : "—"}
-      </TableCell>
-      <TableCell>
-        <Badge className={`${STATUSZ_BADGE_CLASS[row.statusz]} text-xs`}>{FUVAR_STATUSZ_LABEL[row.statusz]}</Badge>
-      </TableCell>
-    </TableRow>
+        <span className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+          <span>
+            Bér fuvarok: <strong className="text-foreground">{berDarab} db</strong>,{" "}
+            {berOsszegFt.toLocaleString("hu-HU")} Ft
+            {berOsszegEur ? ` + ${berOsszegEur.toLocaleString("hu-HU")} €` : ""}
+          </span>
+          <span>
+            Saját fuvarok: <strong className="text-foreground">{sajatDarab} db</strong>,{" "}
+            {sajatOsszeg.toLocaleString("hu-HU")} Ft
+          </span>
+        </span>
+      </button>
+      {open && (
+        <div className="overflow-x-auto border-t">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Dátum</TableHead>
+                <TableHead>Megbízó</TableHead>
+                <TableHead>Honnan → Hová</TableHead>
+                <TableHead className="text-right">Díj</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rendezett.map((s) => (
+                <TableRow key={s.id}>
+                  <TableCell className="text-muted-foreground">{s.datum}</TableCell>
+                  <TableCell>{s.tipus === "ber" ? s.megrendelo?.trim() || SAJAT_CEG_NEV : s.megrendelo ?? "—"}</TableCell>
+                  <TableCell>
+                    {s.felrako ? `${varosNev(s.felrako)} → ${varosNev(s.lerako)}` : varosNev(s.lerako)}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {s.tipus === "ber"
+                      ? koltsegek.get(s.id) != null
+                        ? `${koltsegek.get(s.id)!.toLocaleString("hu-HU")} Ft`
+                        : "…"
+                      : s.fuvardij != null
+                        ? formatOsszeg(s.fuvardij, s.fuvardij_penznem)
+                        : "—"}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </div>
   );
 }
 
 /**
- * Kimutatás fül: heti/havi bontásban a saját fuvarok (tipus='ber') és a bér
- * fuvarok (tipus='sajat') darabszáma/összege, dátumtartomány-szűréssel, és
- * egy szabad szöveges kereséssel (cég/útvonal/rendszám/pozíciószám), ami a
- * mögöttes fuvarokat listázza ki — visszakereshetőség a heti/havi
- * összesítés mellett.
+ * Egy jármű kártyája a Kimutatás fülön: felül sofőr — rendszám, alatta az
+ * aktuális hét saját/bér fuvar listája (mindkettő összegével), majd
+ * összecsukható havi mappák (db+összeg zárva, teljes fuvarlista nyitva). A
+ * saját fuvarok (tipus='ber') díja a Saját fuvarok fülön is használt,
+ * számított útdíj+üzemanyag becslés (szamitottUtKoltseg) — nincs mindig
+ * valódi fuvardíjuk, ezt vesszük annak.
+ */
+function JarmuKimutatasCard({ jarmu, sorok }: { jarmu: SajatJarmu; sorok: KimutatasJarmuSor[] }) {
+  const [koltsegek, setKoltsegek] = useState<Map<string, number>>(new Map());
+  const [nyitottHonapok, setNyitottHonapok] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    let elveszett = false;
+    const sajatSorok = sorok.filter((s) => s.tipus === "ber");
+    Promise.all(
+      sajatSorok.map(async (s) => ({ id: s.id, koltseg: await szamitottUtKoltseg(s.felrako, s.lerako) }))
+    ).then((eredmenyek) => {
+      if (elveszett) return;
+      setKoltsegek((prev) => {
+        const next = new Map(prev);
+        for (const { id, koltseg } of eredmenyek) {
+          if (koltseg != null) next.set(id, koltseg);
+        }
+        return next;
+      });
+    });
+    return () => {
+      elveszett = true;
+    };
+  }, [sorok]);
+
+  function toggleHonap(honap: string) {
+    setNyitottHonapok((prev) => {
+      const next = new Set(prev);
+      if (next.has(honap)) {
+        next.delete(honap);
+      } else {
+        next.add(honap);
+      }
+      return next;
+    });
+  }
+
+  const het = aktualisHetHatarok();
+  const hetiSorok = sorok.filter((s) => s.datum >= het.kezdetISO && s.datum <= het.vegISO);
+  const hetiSajat = hetiSorok.filter((s) => s.tipus === "ber").sort((a, b) => a.datum.localeCompare(b.datum));
+  const hetiBer = hetiSorok.filter((s) => s.tipus === "sajat").sort((a, b) => a.datum.localeCompare(b.datum));
+  const hetiSajatOsszeg = hetiSajat.reduce((sum, s) => sum + (koltsegek.get(s.id) ?? 0), 0);
+  const hetiBerOsszegFt = hetiBer
+    .filter((s) => s.fuvardij_penznem === "Ft")
+    .reduce((sum, s) => sum + (s.fuvardij ?? 0), 0);
+  const hetiBerOsszegEur = hetiBer
+    .filter((s) => s.fuvardij_penznem === "EUR")
+    .reduce((sum, s) => sum + (s.fuvardij ?? 0), 0);
+
+  const honapok = new Map<string, KimutatasJarmuSor[]>();
+  for (const s of sorok) {
+    const honap = s.datum.slice(0, 7);
+    const lista = honapok.get(honap) ?? [];
+    lista.push(s);
+    honapok.set(honap, lista);
+  }
+  const honapLista = [...honapok.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${JARMU_SZIN_DOT_CLASS[jarmu.szin]}`} />
+          {jarmuLabel(jarmu)}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2">
+          <h4 className="text-xs font-medium text-muted-foreground">Aktuális hét ({het.cimke})</h4>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="flex flex-col gap-1 rounded-md border p-2">
+              <span className="text-xs font-medium text-muted-foreground">Saját fuvarok</span>
+              {hetiSajat.length === 0 && <span className="text-xs text-muted-foreground">Nincs erre a hétre.</span>}
+              {hetiSajat.map((s) => (
+                <KimutatasHetiSor key={s.id} sor={s} koltseg={koltsegek.get(s.id)} />
+              ))}
+              <div className="mt-1 border-t pt-1 text-right text-xs font-medium">
+                Összesen: {hetiSajatOsszeg.toLocaleString("hu-HU")} Ft
+              </div>
+            </div>
+            <div className="flex flex-col gap-1 rounded-md border p-2">
+              <span className="text-xs font-medium text-muted-foreground">Bér fuvarok</span>
+              {hetiBer.length === 0 && <span className="text-xs text-muted-foreground">Nincs erre a hétre.</span>}
+              {hetiBer.map((s) => (
+                <KimutatasHetiSor key={s.id} sor={s} />
+              ))}
+              <div className="mt-1 border-t pt-1 text-right text-xs font-medium">
+                Összesen: {hetiBerOsszegFt.toLocaleString("hu-HU")} Ft
+                {hetiBerOsszegEur ? ` + ${hetiBerOsszegEur.toLocaleString("hu-HU")} €` : ""}
+              </div>
+            </div>
+          </div>
+          <div className="text-right text-sm font-medium">
+            Mindkettő összesen: {(hetiSajatOsszeg + hetiBerOsszegFt).toLocaleString("hu-HU")} Ft
+            {hetiBerOsszegEur ? ` + ${hetiBerOsszegEur.toLocaleString("hu-HU")} €` : ""}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <h4 className="text-xs font-medium text-muted-foreground">Havi bontás</h4>
+          {honapLista.length === 0 && <p className="text-xs text-muted-foreground">Még nincs adat.</p>}
+          <div className="flex flex-col gap-2">
+            {honapLista.map(([honap, lista]) => {
+              const sajat = lista.filter((s) => s.tipus === "ber");
+              const ber = lista.filter((s) => s.tipus === "sajat");
+              const sajatOsszeg = sajat.reduce((sum, s) => sum + (koltsegek.get(s.id) ?? 0), 0);
+              const berOsszegFt = ber
+                .filter((s) => s.fuvardij_penznem === "Ft")
+                .reduce((sum, s) => sum + (s.fuvardij ?? 0), 0);
+              const berOsszegEur = ber
+                .filter((s) => s.fuvardij_penznem === "EUR")
+                .reduce((sum, s) => sum + (s.fuvardij ?? 0), 0);
+              return (
+                <HonapMappa
+                  key={honap}
+                  cim={formatHonapCimke(honap)}
+                  berDarab={ber.length}
+                  berOsszegFt={berOsszegFt}
+                  berOsszegEur={berOsszegEur}
+                  sajatDarab={sajat.length}
+                  sajatOsszeg={sajatOsszeg}
+                  sorok={lista}
+                  koltsegek={koltsegek}
+                  open={nyitottHonapok.has(honap)}
+                  onToggle={() => toggleHonap(honap)}
+                />
+              );
+            })}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * Kimutatás fül: három kártya, egy-egy a saját járműveknek (SAJAT_JARMUVEK)
+ * — a "jarmu" mező szabad szöveges tartalmát resolveJarmu egyezteti a
+ * jármű-listával (rendszám vagy sofőrnév alapján is), hogy a régebbi,
+ * eltérő formátumú bejegyzések is a megfelelő kártyához kerüljenek.
  */
 function KimutatasView() {
-  const [bontas, setBontas] = useState<KimutatasBontas>("month");
-  const [kezdet, setKezdet] = useState("");
-  const [veg, setVeg] = useState("");
-  const [kereso, setKereso] = useState("");
-  const [sorok, setSorok] = useState<KimutatasSor[]>([]);
-  const [talalatok, setTalalatok] = useState<FuvarRow[]>([]);
+  const [sorok, setSorok] = useState<KimutatasJarmuSor[]>([]);
   const [loading, setLoading] = useState(true);
-  const [keresLoading, setKeresLoading] = useState(false);
 
   const load = useCallback(async () => {
-    const data = await getKimutatasOsszesites(bontas, kezdet || undefined, veg || undefined);
+    const data = await getKimutatasJarmuFuvarok();
     setSorok(data);
-  }, [bontas, kezdet, veg]);
+  }, []);
 
   useEffect(() => {
     setLoading(true);
     load().finally(() => setLoading(false));
   }, [load]);
 
-  const keresoNorm = kereso.trim();
-  useEffect(() => {
-    if (!keresoNorm) {
-      setTalalatok([]);
-      return;
-    }
-    let elveszett = false;
-    setKeresLoading(true);
-    keresKimutatasFuvarok(keresoNorm, kezdet || undefined, veg || undefined)
-      .then((data) => {
-        if (!elveszett) setTalalatok(data);
-      })
-      .finally(() => {
-        if (!elveszett) setKeresLoading(false);
-      });
-    return () => {
-      elveszett = true;
-    };
-  }, [keresoNorm, kezdet, veg]);
+  if (loading) return <p className="text-sm text-muted-foreground">Betöltés…</p>;
 
-  const periodusok = new Map<string, KimutatasPeriodusSor>();
+  const jarmuSorok = new Map<string, KimutatasJarmuSor[]>();
   for (const s of sorok) {
-    const bejegyzes = periodusok.get(s.periodus) ?? {
-      periodus: s.periodus,
-      sajatDarab: 0,
-      sajatFt: 0,
-      sajatEur: 0,
-      berDarab: 0,
-      berFt: 0,
-      berEur: 0,
-    };
-    if (s.tipus === "ber") {
-      bejegyzes.sajatDarab += s.darab;
-      bejegyzes.sajatFt += s.osszegFt;
-      bejegyzes.sajatEur += s.osszegEur;
-    } else {
-      bejegyzes.berDarab += s.darab;
-      bejegyzes.berFt += s.osszegFt;
-      bejegyzes.berEur += s.osszegEur;
-    }
-    periodusok.set(s.periodus, bejegyzes);
+    const jarmu = s.jarmu ? resolveJarmu(s.jarmu) : null;
+    if (!jarmu) continue;
+    const lista = jarmuSorok.get(jarmu.sofor) ?? [];
+    lista.push(s);
+    jarmuSorok.set(jarmu.sofor, lista);
   }
-  const periodusLista = [...periodusok.values()].sort((a, b) => b.periodus.localeCompare(a.periodus));
 
   return (
-    <Card>
-      <CardHeader className="gap-3">
-        <CardTitle className="text-sm">Kimutatás — saját és bér fuvarok összesítése</CardTitle>
-        <div className="flex flex-wrap items-end gap-3">
-          <div className="flex flex-col gap-1">
-            <Label className="text-xs text-muted-foreground">Bontás</Label>
-            <Select value={bontas} onValueChange={(v) => v && setBontas(v as KimutatasBontas)}>
-              <SelectTrigger className="h-8 w-[110px] text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="week">Heti</SelectItem>
-                <SelectItem value="month">Havi</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex flex-col gap-1">
-            <Label className="text-xs text-muted-foreground">Tól</Label>
-            <Input
-              type="date"
-              value={kezdet}
-              onChange={(e) => setKezdet(e.target.value)}
-              className="h-8 w-[150px] text-xs"
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <Label className="text-xs text-muted-foreground">Ig</Label>
-            <Input
-              type="date"
-              value={veg}
-              onChange={(e) => setVeg(e.target.value)}
-              className="h-8 w-[150px] text-xs"
-            />
-          </div>
-          <div className="flex min-w-[220px] flex-1 flex-col gap-1">
-            <Label className="text-xs text-muted-foreground">Keresés</Label>
-            <Input
-              placeholder="Cég, útvonal, rendszám, pozíciószám…"
-              value={kereso}
-              onChange={(e) => setKereso(e.target.value)}
-              className="h-8 text-xs"
-            />
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {keresoNorm ? (
-          <div className="flex flex-col gap-2">
-            <p className="text-xs text-muted-foreground">
-              {keresLoading ? "Keresés…" : `${talalatok.length} találat "${keresoNorm}" keresésre.`}
-            </p>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Dátum</TableHead>
-                    <TableHead>Típus</TableHead>
-                    <TableHead>Cég</TableHead>
-                    <TableHead>Honnan → Hová</TableHead>
-                    <TableHead className="text-right">Fuvardíj</TableHead>
-                    <TableHead>Státusz</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {!keresLoading && talalatok.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={6} className="text-center text-muted-foreground">
-                        Nincs a keresésnek megfelelő fuvar.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  {talalatok.map((row) => (
-                    <KimutatasKeresoSor key={row.id} row={row} />
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Időszak</TableHead>
-                  <TableHead className="text-right">Saját fuvarok (db)</TableHead>
-                  <TableHead className="text-right">Saját fuvarok (összeg)</TableHead>
-                  <TableHead className="text-right">Bér fuvarok (db)</TableHead>
-                  <TableHead className="text-right">Bér fuvarok (összeg)</TableHead>
-                  <TableHead className="text-right">Összesen (Ft)</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {!loading && periodusLista.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground">
-                      Nincs adat a megadott időszakra.
-                    </TableCell>
-                  </TableRow>
-                )}
-                {periodusLista.map((p) => (
-                  <TableRow key={p.periodus}>
-                    <TableCell className="font-medium">{formatPeriodusCimke(p.periodus, bontas)}</TableCell>
-                    <TableCell className="text-right tabular-nums">{p.sajatDarab || "—"}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {p.sajatFt ? `${p.sajatFt.toLocaleString("hu-HU")} Ft` : "—"}
-                      {p.sajatEur ? ` + ${p.sajatEur.toLocaleString("hu-HU")} €` : ""}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums">{p.berDarab || "—"}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {p.berFt ? `${p.berFt.toLocaleString("hu-HU")} Ft` : "—"}
-                      {p.berEur ? ` + ${p.berEur.toLocaleString("hu-HU")} €` : ""}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums font-medium">
-                      {(p.sajatFt + p.berFt).toLocaleString("hu-HU")} Ft
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <div className="flex flex-col gap-4">
+      {SAJAT_JARMUVEK.map((jarmu) => (
+        <JarmuKimutatasCard key={jarmu.sofor} jarmu={jarmu} sorok={jarmuSorok.get(jarmu.sofor) ?? []} />
+      ))}
+    </div>
   );
 }
 
@@ -2455,14 +2509,7 @@ export function Megbizasok() {
         </div>
       </TabsContent>
       <TabsContent value="ber" className="mt-4">
-        <FuvarTypeView
-          tipus="ber"
-          minimal
-          formTitle="Új saját fuvar"
-          listTitle="Saját fuvarok"
-          showJarmu
-          partnerColumnLabel="Partner"
-        />
+        <SajatFuvarokTab />
       </TabsContent>
       <TabsContent value="kapcsolatok" className="mt-4">
         <Kapcsolatok />

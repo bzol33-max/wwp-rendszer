@@ -10,7 +10,7 @@ import type {
   ApproveFuvarInput,
   TeljesitesJelolt,
   FuvardijPenznem,
-  KimutatasSor,
+  KimutatasJarmuSor,
 } from "@/lib/fuvarozas/fuvar-constants";
 
 // FIGYELEM: ez egy "use server" fájl — Next.js-ben ez KIZÁRÓLAG async
@@ -24,6 +24,7 @@ const TIME_FMT = "mon. DD";
 const FUVAR_ROW_COLUMNS = `
   id::text, tipus,
   to_char(datum, '${TIME_FMT}') as date,
+  to_char(datum, 'YYYY-MM-DD') as datum_iso,
   idopont, felrako, lerako, megrendelo, aru, mennyiseg, suly,
   jarmu, sofor, alvallalkozo,
   fuvardij, fuvardij_penznem, koltseg, statusz, megjegyzes,
@@ -72,6 +73,27 @@ export async function getFolyamatbanSajatFuvarok(): Promise<FuvarRow[]> {
        and not teljesitve
        and coalesce(lerakas_datum, datum) >= current_date
      order by ellenorzott asc, coalesce(lerakas_datum, datum) asc, id asc
+     limit 200`
+  );
+}
+
+/**
+ * A "Saját fuvarok" fül (tipus='ber') aktív listája — ugyanaz a
+ * "folyamatban" logika, mint getFolyamatbanSajatFuvarok-nál (nem
+ * "Kész"-re jelölve, és a lerakás/felrakás dátuma még nem múlt el), csak a
+ * másik fuvar-típusra. A teljesítettek innen eltűnnek és az Archívba
+ * kerülnek (lásd getArchivFuvarok) — nincs külön Számla/Posta köztes
+ * állapotuk, mert nincs postázási/számlázási munkafolyamatuk (belső, saját
+ * célú szállítás).
+ */
+export async function getFolyamatbanValodiSajatFuvarok(): Promise<FuvarRow[]> {
+  return query<FuvarRow>(
+    `select ${FUVAR_ROW_COLUMNS}
+     from fuvar_megbizasok
+     where tipus = 'ber' and statusz <> 'torolt'
+       and not teljesitve
+       and coalesce(lerakas_datum, datum) >= current_date
+     order by coalesce(lerakas_datum, datum) asc, id asc
      limit 200`
   );
 }
@@ -345,12 +367,14 @@ export async function getSzamlaPostaFuvarok(): Promise<FuvarRow[]> {
 
 /**
  * Archív fül: a postázott (és az 5 perces visszavonási ablakon már
- * túljutott) BÉR fuvarok (tipus='sajat'), ÉS a lezárt/számlázott SAJÁT
- * fuvarok (tipus='ber') — utóbbiaknak nincs postázási/számlázási
- * munkafolyamatuk (belső, saját célú szállítás, nincs mindig valódi külső
- * megrendelőjük), ezért náluk a "Lezárva"/"Számlázva" státusz jelenti a
- * teljesítést. A UI-n (ArchivLista) a saját fuvarok mind egy közös
- * "Well-worn Pallet" csoportba kerülnek.
+ * túljutott) BÉR fuvarok (tipus='sajat'), ÉS a teljesített SAJÁT fuvarok
+ * (tipus='ber') — utóbbiaknak nincs postázási/számlázási munkafolyamatuk
+ * (belső, saját célú szállítás, nincs mindig valódi külső megrendelőjük),
+ * ezért náluk ugyanaz a "teljesítve" feltétel jelenti az archiválást, mint
+ * getFolyamatbanValodiSajatFuvarok "folyamatban" feltételének az ellentéte
+ * (kézzel "Kész"-re jelölve, vagy a lerakás/felrakás dátuma már elmúlt). A
+ * UI-n (ArchivLista) a saját fuvarok mind egy közös "Well-worn Pallet"
+ * csoportba kerülnek.
  */
 export async function getArchivFuvarok(): Promise<FuvarRow[]> {
   return query<FuvarRow>(
@@ -359,7 +383,7 @@ export async function getArchivFuvarok(): Promise<FuvarRow[]> {
      where statusz <> 'torolt'
        and (
          (tipus = 'sajat' and postazva and postazva_at <= now() - ${ARCHIVALAS_ABLAK_SQL})
-         or (tipus = 'ber' and statusz in ('lezarva', 'szamlazva'))
+         or (tipus = 'ber' and (teljesitve or coalesce(lerakas_datum, datum) < current_date))
        )
      order by postazva_at desc nulls last, datum desc
      limit 200`
@@ -367,71 +391,25 @@ export async function getArchivFuvarok(): Promise<FuvarRow[]> {
 }
 
 /**
- * Heti/havi bontású összesítés a Megbízások "Kimutatás" füléhez: mindkét
- * fuvar-típus (Bér fuvarok ÉS Saját fuvarok, lásd a fordított UI-címkézésről
- * szóló megjegyzést getMaiSajatFuvarok-nál) darabszáma és fuvardíj-összege
- * periódusonként, pénznemenként külön.
+ * A Megbízások "Kimutatás" füléhez: mindkét fuvar-típus (Bér fuvarok ÉS
+ * Saját fuvarok, lásd a fordított UI-címkézésről szóló megjegyzést
+ * getMaiSajatFuvarok-nál) fuvarjai jármű szerint, nyers (YYYY-MM-DD)
+ * dátummal — a jármű-egyeztetést (resolveJarmu, fuzzy: rendszám vagy
+ * sofőrnév is elfogadott) és a heti/havi csoportosítást a kliens végzi,
+ * mert a "jarmu" mező szabad szöveg. Csak a hozzárendelt kocsival
+ * rendelkező sorokat adja vissza — kocsi nélkül nincs hova sorolni a
+ * kimutatásban.
  */
-export async function getKimutatasOsszesites(
-  egyseg: "week" | "month",
-  kezdetISO?: string,
-  vegISO?: string
-): Promise<KimutatasSor[]> {
-  const rows = await query<{
-    periodus: string;
-    tipus: FuvarTipus;
-    darab: string;
-    osszeg_ft: string;
-    osszeg_eur: string;
-  }>(
-    `select
-       to_char(date_trunc($1, datum), 'YYYY-MM-DD') as periodus,
-       tipus,
-       count(*) as darab,
-       coalesce(sum(fuvardij) filter (where fuvardij_penznem = 'Ft'), 0) as osszeg_ft,
-       coalesce(sum(fuvardij) filter (where fuvardij_penznem = 'EUR'), 0) as osszeg_eur
+export async function getKimutatasJarmuFuvarok(): Promise<KimutatasJarmuSor[]> {
+  return query<KimutatasJarmuSor>(
+    `select id::text, tipus,
+       to_char(datum, 'YYYY-MM-DD') as datum,
+       jarmu, megrendelo, felrako, lerako, fuvardij, fuvardij_penznem
      from fuvar_megbizasok
      where statusz <> 'torolt' and tipus in ('sajat', 'ber')
-       and ($2::date is null or datum >= $2::date)
-       and ($3::date is null or datum <= $3::date)
-     group by periodus, tipus
-     order by periodus desc`,
-    [egyseg, kezdetISO ?? null, vegISO ?? null]
-  );
-  return rows.map((r) => ({
-    periodus: r.periodus,
-    tipus: r.tipus,
-    darab: Number(r.darab),
-    osszegFt: Number(r.osszeg_ft),
-    osszegEur: Number(r.osszeg_eur),
-  }));
-}
-
-/**
- * Szabad szöveges keresés a Kimutatás fülön — mindkét fuvar-típus között, a
- * megadott (opcionális) dátumtartományon belül, cég/útvonal/rendszám/
- * pozíciószám/számlaszám/alvállalkozó alapján.
- */
-export async function keresKimutatasFuvarok(
-  kereso: string,
-  kezdetISO?: string,
-  vegISO?: string
-): Promise<FuvarRow[]> {
-  const mintazat = `%${kereso.trim()}%`;
-  return query<FuvarRow>(
-    `select ${FUVAR_ROW_COLUMNS}
-     from fuvar_megbizasok
-     where statusz <> 'torolt' and tipus in ('sajat', 'ber')
-       and ($2::date is null or datum >= $2::date)
-       and ($3::date is null or datum <= $3::date)
-       and (
-         megrendelo ilike $1 or felrako ilike $1 or lerako ilike $1
-         or jarmu ilike $1 or sofor ilike $1 or pozicioszam ilike $1
-         or szamla_szam ilike $1 or alvallalkozo ilike $1
-       )
-     order by datum desc, id desc
-     limit 200`,
-    [mintazat, kezdetISO ?? null, vegISO ?? null]
+       and jarmu is not null and jarmu <> ''
+     order by datum desc
+     limit 1000`
   );
 }
 

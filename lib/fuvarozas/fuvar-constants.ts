@@ -56,6 +56,8 @@ export type FuvarRow = {
   id: string;
   tipus: FuvarTipus;
   date: string;
+  /** A "date" mező nyers (YYYY-MM-DD) alakja — szerkesztő űrlap dátum-inputjának előtöltéséhez, ahol a "mon. DD" formátum nem használható. */
+  datum_iso: string;
   idopont: string | null;
   felrako: string | null;
   lerako: string;
@@ -181,15 +183,20 @@ export type ApproveFuvarInput = {
 };
 
 /**
- * Egy periódus (hét vagy hónap) egy fuvar-típusának összesítése a
- * Megbízások "Kimutatás" füléhez — darabszám és fuvardíj-összeg,
- * pénznemenként külön (a rendszer nem vált át HUF-ra).
+ * Egy fuvar a Megbízások "Kimutatás" füléhez — jármű/hét/hónap szerinti
+ * csoportosításhoz a kliensen (ezért nyers, YYYY-MM-DD dátummal, nem a
+ * FuvarRow "mon. DD" formázott mezőjével), csak a kimutatáshoz szükséges
+ * mezőkkel.
  */
-export type KimutatasSor = {
-  /** A periódus kezdete, ISO dátum — hétnél a hét hétfője, hónapnál a hónap 1. napja. */
-  periodus: string;
+export type KimutatasJarmuSor = {
+  id: string;
   tipus: FuvarTipus;
-  darab: number;
-  osszegFt: number;
-  osszegEur: number;
+  /** ISO dátum (YYYY-MM-DD). */
+  datum: string;
+  jarmu: string | null;
+  megrendelo: string | null;
+  felrako: string | null;
+  lerako: string;
+  fuvardij: number | null;
+  fuvardij_penznem: FuvardijPenznem;
 };
