@@ -224,6 +224,10 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor): Promise<TervezettFuvarSzaka
 
   let utvonalPercek = ALAPERTELMEZETT_UTVONAL_PERC;
   let utvonalBizonytalan = true;
+  let honnanLat: number | null = null;
+  let honnanLon: number | null = null;
+  let hovaLat: number | null = null;
+  let hovaLon: number | null = null;
   if (row.felrako && row.lerako) {
     try {
       const [honnan, hova] = await Promise.all([geocodeAddress(row.felrako), geocodeAddress(row.lerako)]);
@@ -236,8 +240,12 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor): Promise<TervezettFuvarSzaka
       });
       utvonalPercek = route.durationMin;
       utvonalBizonytalan = false;
+      honnanLat = honnan.lat;
+      honnanLon = honnan.lon;
+      hovaLat = hova.lat;
+      hovaLon = hova.lon;
     } catch {
-      // marad az alapértelmezett átalány-menetidő
+      // marad az alapértelmezett átalány-menetidő, koordináták nélkül
     }
   }
 
@@ -251,6 +259,10 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor): Promise<TervezettFuvarSzaka
     pozicioszam: row.pozicioszam,
     honnan: row.felrako,
     hova: row.lerako,
+    honnanLat,
+    honnanLon,
+    hovaLat,
+    hovaLon,
     kezdet,
     veg,
     idoBizonytalan,
@@ -344,7 +356,17 @@ export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny
             (): HetiVezetesEredmeny => ({ napiOsszesekSec: [], figyelmezetesek: [], kiterjesztettNapokElotte: 0 })
           ),
         ]);
-        let szakaszok = epitsIdovonal(trips);
+        // A nap tervezett fuvarjainak geokódolt fel-/lerakó koordinátái — a
+        // GPS-idővonal állás-szakaszainak helyalapú kategorizálásához
+        // (allasKategoria): ha egy állás egy ilyen cím közelében van,
+        // biztosan rakodás/ügyintézés, függetlenül az időtartamtól.
+        const tervezettCimek = tervezettFuvarok.flatMap((f) => {
+          const pontok: { lat: number; lon: number }[] = [];
+          if (f.honnanLat != null && f.honnanLon != null) pontok.push({ lat: f.honnanLat, lon: f.honnanLon });
+          if (f.hovaLat != null && f.hovaLon != null) pontok.push({ lat: f.hovaLat, lon: f.hovaLon });
+          return pontok;
+        });
+        let szakaszok = epitsIdovonal(trips, tervezettCimek);
 
         const livePos = maiNap ? eloPoziciok.find((p) => p.objectId === jarmu.ecofleetObjectId) : undefined;
         if (livePos) {
@@ -360,7 +382,7 @@ export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny
               mozog: livePos.engineOn || livePos.speed > 0,
               idobelyeg: parsedTs,
             };
-            szakaszok = kiegesziteloAllapottal(szakaszok, elo, veg);
+            szakaszok = kiegesziteloAllapottal(szakaszok, elo, veg, tervezettCimek);
           }
         }
 
