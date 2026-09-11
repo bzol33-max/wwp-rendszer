@@ -10,6 +10,7 @@ import type {
   ApproveFuvarInput,
   TeljesitesJelolt,
   FuvardijPenznem,
+  KimutatasSor,
 } from "@/lib/fuvarozas/fuvar-constants";
 
 // FIGYELEM: ez egy "use server" fájl — Next.js-ben ez KIZÁRÓLAG async
@@ -342,15 +343,95 @@ export async function getSzamlaPostaFuvarok(): Promise<FuvarRow[]> {
   );
 }
 
-/** Archív fül: a postázott és az 5 perces visszavonási ablakon már túljutott fuvarok, legutóbb postázott elöl. */
+/**
+ * Archív fül: a postázott (és az 5 perces visszavonási ablakon már
+ * túljutott) BÉR fuvarok (tipus='sajat'), ÉS a lezárt/számlázott SAJÁT
+ * fuvarok (tipus='ber') — utóbbiaknak nincs postázási/számlázási
+ * munkafolyamatuk (belső, saját célú szállítás, nincs mindig valódi külső
+ * megrendelőjük), ezért náluk a "Lezárva"/"Számlázva" státusz jelenti a
+ * teljesítést. A UI-n (ArchivLista) a saját fuvarok mind egy közös
+ * "Well-worn Pallet" csoportba kerülnek.
+ */
 export async function getArchivFuvarok(): Promise<FuvarRow[]> {
   return query<FuvarRow>(
     `select ${FUVAR_ROW_COLUMNS}
      from fuvar_megbizasok
-     where tipus = 'sajat' and statusz <> 'torolt'
-       and postazva and postazva_at <= now() - ${ARCHIVALAS_ABLAK_SQL}
-     order by postazva_at desc
+     where statusz <> 'torolt'
+       and (
+         (tipus = 'sajat' and postazva and postazva_at <= now() - ${ARCHIVALAS_ABLAK_SQL})
+         or (tipus = 'ber' and statusz in ('lezarva', 'szamlazva'))
+       )
+     order by postazva_at desc nulls last, datum desc
      limit 200`
+  );
+}
+
+/**
+ * Heti/havi bontású összesítés a Megbízások "Kimutatás" füléhez: mindkét
+ * fuvar-típus (Bér fuvarok ÉS Saját fuvarok, lásd a fordított UI-címkézésről
+ * szóló megjegyzést getMaiSajatFuvarok-nál) darabszáma és fuvardíj-összege
+ * periódusonként, pénznemenként külön.
+ */
+export async function getKimutatasOsszesites(
+  egyseg: "week" | "month",
+  kezdetISO?: string,
+  vegISO?: string
+): Promise<KimutatasSor[]> {
+  const rows = await query<{
+    periodus: string;
+    tipus: FuvarTipus;
+    darab: string;
+    osszeg_ft: string;
+    osszeg_eur: string;
+  }>(
+    `select
+       to_char(date_trunc($1, datum), 'YYYY-MM-DD') as periodus,
+       tipus,
+       count(*) as darab,
+       coalesce(sum(fuvardij) filter (where fuvardij_penznem = 'Ft'), 0) as osszeg_ft,
+       coalesce(sum(fuvardij) filter (where fuvardij_penznem = 'EUR'), 0) as osszeg_eur
+     from fuvar_megbizasok
+     where statusz <> 'torolt' and tipus in ('sajat', 'ber')
+       and ($2::date is null or datum >= $2::date)
+       and ($3::date is null or datum <= $3::date)
+     group by periodus, tipus
+     order by periodus desc`,
+    [egyseg, kezdetISO ?? null, vegISO ?? null]
+  );
+  return rows.map((r) => ({
+    periodus: r.periodus,
+    tipus: r.tipus,
+    darab: Number(r.darab),
+    osszegFt: Number(r.osszeg_ft),
+    osszegEur: Number(r.osszeg_eur),
+  }));
+}
+
+/**
+ * Szabad szöveges keresés a Kimutatás fülön — mindkét fuvar-típus között, a
+ * megadott (opcionális) dátumtartományon belül, cég/útvonal/rendszám/
+ * pozíciószám/számlaszám/alvállalkozó alapján.
+ */
+export async function keresKimutatasFuvarok(
+  kereso: string,
+  kezdetISO?: string,
+  vegISO?: string
+): Promise<FuvarRow[]> {
+  const mintazat = `%${kereso.trim()}%`;
+  return query<FuvarRow>(
+    `select ${FUVAR_ROW_COLUMNS}
+     from fuvar_megbizasok
+     where statusz <> 'torolt' and tipus in ('sajat', 'ber')
+       and ($2::date is null or datum >= $2::date)
+       and ($3::date is null or datum <= $3::date)
+       and (
+         megrendelo ilike $1 or felrako ilike $1 or lerako ilike $1
+         or jarmu ilike $1 or sofor ilike $1 or pozicioszam ilike $1
+         or szamla_szam ilike $1 or alvallalkozo ilike $1
+       )
+     order by datum desc, id desc
+     limit 200`,
+    [mintazat, kezdetISO ?? null, vegISO ?? null]
   );
 }
 
