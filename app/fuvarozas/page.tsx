@@ -4,7 +4,7 @@ import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { GpsStatus } from "@/components/fuvarozas/gps-status";
+import { GpsStatus } from "@/components/fuvarozas/idovonal";
 import { TollCalculator } from "@/components/fuvarozas/toll-calculator";
 import { Megbizasok } from "@/components/fuvarozas/megbizasok";
 

@@ -201,14 +201,12 @@ export type TervezettFuvarSzakasz = {
   honnan: string | null;
   hova: string;
   /**
-   * A felrakó + az összes lerakó állomás geokódolt koordinátája, útvonal-
-   * sorrendben (előbb a felrakó, utána a lerakó(k) — több-megállós lerakó
-   * mezőnél állomásonként, lásd bontsMegallokra a varos.ts-ben); egy elem
-   * null, ha az adott állomás nem volt geokódolható. Helyalapú állás-
-   * kategorizáláshoz (lásd allasKategoria) és élő ETA-hoz (az utolsó nem-
-   * null elem a végső cél).
+   * A felrakó + az összes lerakó állomás, útvonal-sorrendben (előbb a
+   * felrakó, utána a lerakó(k) — több-megállós mezőnél állomásonként, lásd
+   * bontsMegallokra a varos.ts-ben). A dot-jelölőkhöz és az "elhagyva"
+   * (kész) jelöléshez kell (lásd jelolMegallokElhagyottkent).
    */
-  megallokKoordinatak: ({ lat: number; lon: number } | null)[];
+  megallok: TervezettMegallo[];
   /** Becsült felrakás-kezdés időpontja. */
   kezdet: Date;
   /** Becsült lerakás-befejezés időpontja. */
@@ -217,13 +215,19 @@ export type TervezettFuvarSzakasz = {
   idoBizonytalan: boolean;
   /** Igaz, ha a menetidőt nem sikerült kiszámolni (cím hiányzik/nem geokódolható), ezért egy átalány (2 óra) szerepel. */
   utvonalBizonytalan: boolean;
-  /**
-   * Igaz, ha a becsült befejezés (`veg`) a jelenlegi tempó mellett túlnyúlik
-   * a sofőr aznapi megengedett vezetési idejének végén (lásd
-   * szamitsAetrKoltsegvetes az aetr.ts-ben) — csak a mai napra, éppen
-   * vezető járműnél számolható, egyébként mindig false.
-   */
-  tullepiAKeretet: boolean;
+};
+
+/** Egy tervezett fuvar egyetlen fel- vagy lerakó állomása, az idővonalon egy kis ponttal jelölve. */
+export type TervezettMegallo = {
+  tipus: "felrako" | "lerako";
+  /** Rövid, csak városnév alapú címke (lásd varosNev a varos.ts-ben). */
+  cim: string;
+  lat: number | null;
+  lon: number | null;
+  /** Igaz, ha a valós GPS-nyomvonal szerint a jármű már járt itt, és azóta tovább is ment — lásd jelolMegallokElhagyottkent. */
+  elhagyva: boolean;
+  /** Ha elhagyva, a legutolsó ismert időpont, amikor a jármű a közelben volt — ide kerül a pont az idővonalon. */
+  tenylegesIdo: Date | null;
 };
 
 export type EloPozicio = {
@@ -325,4 +329,47 @@ export function parseIdopontSzoveg(text: string | null): { ora: number; perc: nu
   const perc = Number(m[2]);
   if (ora > 23 || perc > 59) return null;
   return { ora, perc };
+}
+
+/**
+ * A valós (GPS-alapú) idővonal-szakaszokból egy időrendi ponthalmazt épít —
+ * minden szakasz egyetlen reprezentatív hely+idő párral: indulásnál a
+ * kezdőpont, vezetésnél az ÉRKEZÉS helye/ideje, álláson az ONNAN VALÓ
+ * TOVÁBBINDULÁS ideje. Ez adja az alapot annak eldöntéséhez, hogy egy
+ * tervezett fel-/lerakó pontot a jármű ténylegesen érintett-e, és mikor
+ * ment tovább onnan — lásd jelolMegallokElhagyottkent.
+ */
+export function idovonalPontjai(szakaszok: IdovonalSzakasz[]): { lat: number; lon: number; at: number }[] {
+  return szakaszok.map((sz) => {
+    if (sz.tipus === "indulas") return { lat: sz.lat, lon: sz.lon, at: sz.idopont.getTime() };
+    if (sz.tipus === "vezetes") return { lat: sz.hovaLat, lon: sz.hovaLon, at: sz.veg.getTime() };
+    return { lat: sz.lat, lon: sz.lon, at: sz.veg.getTime() };
+  });
+}
+
+/** Ennél közelebb (km) tekintjük úgy, hogy a jármű ténylegesen "ott volt" egy tervezett fel-/lerakó ponton. */
+const ELHAGYVA_TAVOLSAG_KM = 0.5;
+
+/**
+ * Megjelöli, mely tervezett fel-/lerakó pontokat hagyta már el a jármű: ha
+ * a valós GPS-nyomvonalon (idovonalPontjai) volt egy időpont, amikor a
+ * jármű ELHAGYVA_TAVOLSAG_KM-en belül volt egy ponthoz, ÉS ez után van még
+ * (időben későbbi) nyomvonal-pont — vagyis a jármű azóta továbbment —,
+ * akkor a megálló "elhagyva" (kész). Ha a jármű a legutolsó ismert
+ * pillanatban is még a közelben van (nincs utána semmi), akkor még ott
+ * tartózkodik, nem elhagyott.
+ */
+export function jelolMegallokElhagyottkent(
+  megallok: TervezettMegallo[],
+  pontok: { lat: number; lon: number; at: number }[]
+): TervezettMegallo[] {
+  return megallok.map((m) => {
+    if (m.elhagyva || m.lat == null || m.lon == null) return m;
+    let utolsoKozeliIdx = -1;
+    for (let i = 0; i < pontok.length; i++) {
+      if (haversineKm(m.lat, m.lon, pontok[i].lat, pontok[i].lon) < ELHAGYVA_TAVOLSAG_KM) utolsoKozeliIdx = i;
+    }
+    if (utolsoKozeliIdx === -1 || utolsoKozeliIdx >= pontok.length - 1) return m;
+    return { ...m, elhagyva: true, tenylegesIdo: new Date(pontok[utolsoKozeliIdx].at) };
+  });
 }
