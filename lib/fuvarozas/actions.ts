@@ -1,6 +1,6 @@
 "use server";
 
-import { getFleetLastPositions, getVehicleTrips, parseEcofleetTimestamp, EcofleetError, type EcofleetPosition } from "./ecofleet";
+import { getFleetLastPositions, getVehicleTrips, parseEcofleetTimestamp, EcofleetError, type EcofleetPosition, type EcofleetTrip } from "./ecofleet";
 import {
   calculateToll,
   FIXED_VEHICLE,
@@ -217,6 +217,90 @@ function talalSajatTelephelyet(lat: number, lon: number, telephelyek: TelephelyP
   return telephelyek.find((t) => haversineKm(lat, lon, t.lat, t.lon) < TELEPHELY_TAVOLSAG_KM)?.nev ?? null;
 }
 
+// --- Önmagát kalibráló menetidő-becslés ---
+//
+// A HU-GO route-planner (calculateToll) egy statikus úthálózat-modell
+// alapján számol (lásd utdijkalkulacio.ts) — nincs benne élő forgalom,
+// ezért a valóságban (torlódás, rakodóhelyi keresgélés, pihenő stb. miatt)
+// rendszerint tovább tart egy út, mint amit mond. Ahelyett, hogy egy új,
+// fizetős forgalmi API-t vonnánk be, a MEGLÉVŐ Ecofleet GPS-előzményből
+// (a ténylegesen megtett fuvarok valós menetideje) tanulunk egy korrekciós
+// szorzót: ha a mintában vett trip-ek átlagosan X%-kal tovább tartottak,
+// mint amit a HU-GO ugyanarra az útvonalra becsült volna, ugyanezt a
+// szorzót alkalmazzuk a jövőbeli becslésekre is.
+
+/** Ennél rövidebb (km) trip-eket kihagyjuk a kalibrációs mintából (telephelyi/portai mozgás, túl zajos). */
+const KALIBRACIO_MIN_TAV_KM = 25;
+/** Ennyi napra visszamenőleg gyűjtünk trip-eket a mintához. */
+const KALIBRACIO_MINTA_NAP = 14;
+/** Legfeljebb ennyi trip-et vetünk össze a HU-GO-val (korlátozza a hálózati hívások számát). */
+const KALIBRACIO_MAX_MINTA = 25;
+/** Ennél kevesebb sikeres összevetés esetén nem bízunk a mintában, marad az 1.0 (nincs korrekció). */
+const KALIBRACIO_MIN_MINTASZAM = 5;
+/** Ennyi óránként frissítjük legfeljebb a kalibrációt — nem kell minden getIdovonalak-híváskor újraszámolni. */
+const KALIBRACIO_ERVENYESSEG_ORA = 24;
+
+type KalibraciosEredmeny = { szorzo: number; mintaSzam: number; szamitva: Date };
+
+let kalibraciosCache: KalibraciosEredmeny | null = null;
+
+/**
+ * A saját flotta legutóbbi (KALIBRACIO_MINTA_NAP napnyi) trip-jeiből egy
+ * véletlenszerű mintát vet össze a HU-GO ugyanarra az útvonalra adott
+ * elméleti becslésével, és visszaadja a valós/HU-GO menetidő-arányt —
+ * gyorsítótárazva, hogy ne kelljen minden hívásnál újraszámolni (ez
+ * mintánként egy calculateToll hálózati hívással jár).
+ */
+async function szamitsKalibraciot(): Promise<KalibraciosEredmeny> {
+  const most = new Date();
+  if (kalibraciosCache && most.getTime() - kalibraciosCache.szamitva.getTime() < KALIBRACIO_ERVENYESSEG_ORA * 3600000) {
+    return kalibraciosCache;
+  }
+
+  const veg = most;
+  const kezdet = new Date(most.getTime() - KALIBRACIO_MINTA_NAP * 86400000);
+  const jarmuvek = SAJAT_JARMUVEK.filter((j) => j.ecofleetObjectId !== null);
+
+  const mindenTrip = (
+    await Promise.all(jarmuvek.map((j) => getVehicleTrips(j.ecofleetObjectId!, kezdet, veg).catch(() => [] as EcofleetTrip[])))
+  ).flat();
+
+  const jelentosTripek = mindenTrip
+    .filter((t) => t.distance >= KALIBRACIO_MIN_TAV_KM)
+    .sort(() => Math.random() - 0.5)
+    .slice(0, KALIBRACIO_MAX_MINTA);
+
+  let valosSzumSec = 0;
+  let hugoSzumSec = 0;
+  let mintaSzam = 0;
+
+  for (const t of jelentosTripek) {
+    try {
+      const route = await calculateToll({
+        points: [
+          { lon: t.startLongitude, lat: t.startLatitude },
+          { lon: t.endLongitude, lat: t.endLatitude },
+        ],
+        ...FIXED_VEHICLE,
+      });
+      valosSzumSec += t.duration;
+      hugoSzumSec += route.durationMin * 60;
+      mintaSzam++;
+    } catch {
+      // egy sikertelen összevetés nem számít bele — a többi mintából még lehet becsülni
+    }
+  }
+
+  const nyersSzorzo = mintaSzam >= KALIBRACIO_MIN_MINTASZAM && hugoSzumSec > 0 ? valosSzumSec / hugoSzumSec : 1;
+  // 1 alá sosem visz (a HU-GO becslésnél gyorsabb valós menetidőt nem
+  // valószínűsítünk), és 2x-nél jobban sem torzítja — kiugró minták ne
+  // vigyék el a becslést irreális irányba.
+  const szorzo = Math.min(2, Math.max(1, nyersSzorzo));
+
+  kalibraciosCache = { szorzo, mintaSzam, szamitva: most };
+  return kalibraciosCache;
+}
+
 /** Egy jövőbeli nap egyetlen fel-/lerakó pontja a "következő napok" előnézetben — csak városnévvel, geokódolás/útvonalszámítás nélkül. */
 export type KovetkezoNapMegallo = {
   fuvarId: string;
@@ -271,7 +355,7 @@ export async function getKovetkezoNapokElonezet(napokSzama = 3): Promise<Record<
   return eredmeny;
 }
 
-async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus): Promise<TervezettFuvarSzakasz> {
+async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus, kalibraciosSzorzo: number): Promise<TervezettFuvarSzakasz> {
   const parsedIdo = parseIdopontSzoveg(row.idopont);
   const idoBizonytalan = !parsedIdo;
   const [ev, ho, napSzam] = row.datum.split("-").map(Number);
@@ -302,7 +386,11 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus): Pro
           points: ervenyesPontok.map((p) => ({ lon: p.lon, lat: p.lat })),
           ...FIXED_VEHICLE,
         });
-        utvonalPercek = route.durationMin;
+        // A HU-GO elméleti menetidejét a valós GPS-előzményből tanult
+        // korrekciós szorzóval igazítjuk (lásd szamitsKalibraciot) — a
+        // statikus úthálózat-modell magában rendszerint optimistább, mint a
+        // tényleges menetidő.
+        utvonalPercek = route.durationMin * kalibraciosSzorzo;
         // Ha egy állomást nem sikerült geokódolni, a menetidő hiányos (kimaradt egy szakasz) — ezt jelezzük bizonytalannak.
         utvonalBizonytalan = ervenyesPontok.length < geokodolt.length;
       }
@@ -375,7 +463,8 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus): Pro
 async function lancoltEloBecsles(
   fuvarok: TervezettFuvarSzakasz[],
   eloPoz: { lat: number; lon: number },
-  most: Date
+  most: Date,
+  kalibraciosSzorzo: number
 ): Promise<TervezettFuvarSzakasz[]> {
   const sorrend = fuvarok
     .flatMap((f, fi) => f.megallok.map((m, mi) => ({ fi, mi, m })))
@@ -397,7 +486,7 @@ async function lancoltEloBecsles(
         ],
         ...FIXED_VEHICLE,
       });
-      const erkezes = new Date(idoPont.getTime() + route.durationMin * 60000);
+      const erkezes = new Date(idoPont.getTime() + route.durationMin * kalibraciosSzorzo * 60000);
       const puffer = m.tipus === "felrako" ? RAKODAS_PUFFER_PERC : LERAKODAS_PUFFER_PERC;
       eredmeny[fi].megallok[mi] = { ...m, idopont: erkezes };
       pozicio = { lat: m.lat, lon: m.lon };
@@ -473,11 +562,17 @@ export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny
   // kiegészíteni) — feleslegesen sem hívjuk, ha nem kell.
   const eloPoziciok = maiNap ? await getFleetLastPositions().catch(() => []) : [];
   const telephelyPontok = maiNap ? await getTelephelyPontok().catch(() => [] as TelephelyPont[]) : [];
+  // A valós GPS-előzményből tanult korrekciós szorzó (lásd szamitsKalibraciot)
+  // csak a mai napi becslésekhez kell — múltbeli napoknál a tényleges
+  // (lezárult) szakaszok már úgyis a valós időt mutatják.
+  const kalibraciosSzorzo = maiNap ? (await szamitsKalibraciot().catch(() => ({ szorzo: 1 } as KalibraciosEredmeny))).szorzo : 1;
 
   return Promise.all(
     SAJAT_JARMUVEK.map(async (jarmu): Promise<JarmuIdovonalEredmeny> => {
       const sajatSorok = maiFuvarok.filter(({ row }) => driverMatchesRow(jarmu, row));
-      const tervezettFuvarok = await Promise.all(sajatSorok.map(({ row, tipus }) => becsulFuvarSzakasz(row, tipus)));
+      const tervezettFuvarok = await Promise.all(
+        sajatSorok.map(({ row, tipus }) => becsulFuvarSzakasz(row, tipus, kalibraciosSzorzo))
+      );
 
       if (!jarmu.ecofleetObjectId) {
         return {
@@ -540,7 +635,7 @@ export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny
         // frissítjük, hogy a jármű tényleges mai haladását tükrözzék, ne
         // csak a megbízásban rögzített (csak irányadó) statikus menetrendet.
         const lancoltFuvarok = livePos
-          ? await lancoltEloBecsles(jeloltFuvarok, { lat: livePos.latitude, lon: livePos.longitude }, veg)
+          ? await lancoltEloBecsles(jeloltFuvarok, { lat: livePos.latitude, lon: livePos.longitude }, veg, kalibraciosSzorzo)
           : jeloltFuvarok;
         const bejegyzesek = laposMegallok(lancoltFuvarok);
 
