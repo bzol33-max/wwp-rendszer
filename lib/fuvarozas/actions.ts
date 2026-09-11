@@ -14,6 +14,7 @@ import {
 import { fetchGazolajAr, GazolajArError } from "./uzemanyagar";
 import {
   epitsIdovonal,
+  haversineKm,
   idovonalPontjai,
   jelolMegallokElhagyottkent,
   kiegesziteloAllapottal,
@@ -27,6 +28,7 @@ import { bontsMegallokra, varosNev } from "./varos";
 import { getFuvarokIdoszakban, getMaiSajatFuvarok, getMaiValodiSajatFuvarok } from "./megbizasok";
 import type { FuvarTipus, MaiFuvarSor } from "./fuvar-constants";
 import { budapestFalioraToInstant, budapestNapISO } from "./idozona";
+import { SAJAT_TELEPHELYEK } from "./telephelyek";
 
 // Ha a NAV oldala nem érhető el (átmeneti hiba, oldalszerkezet-változás),
 // ez a tartalék érték jelenik meg — utoljára kézzel ellenőrizve 2026.
@@ -181,6 +183,38 @@ function driverMatchesRow(jarmu: SajatJarmu, row: MaiFuvarSor): boolean {
   if (row.jarmu && resolveJarmu(row.jarmu) === jarmu) return true;
   if (row.sofor && row.sofor.trim().toLowerCase() === jarmu.sofor.toLowerCase()) return true;
   return false;
+}
+
+/** Ennél közelebb (km) egy saját telephelyhez/parkolóhoz a pozíciót "ott vagyunk"-nak tekintjük. */
+const TELEPHELY_TAVOLSAG_KM = 0.6;
+
+type TelephelyPont = { nev: string; lat: number; lon: number };
+
+// SAJAT_TELEPHELYEK címei csak egyszer, a szerver-folyamat élettartama alatt
+// gyorsítótárazva geokódolódnak (ugyanazzal a HU-GO címkereséssel, amit a
+// megbízások fel-/lerakó címeinél is használunk) — nem kell minden
+// getIdovonalak-híváskor újra lekérni, mert ezek a címek nem változnak.
+let telephelyPontokCache: Promise<TelephelyPont[]> | null = null;
+
+function getTelephelyPontok(): Promise<TelephelyPont[]> {
+  if (!telephelyPontokCache) {
+    telephelyPontokCache = Promise.all(
+      SAJAT_TELEPHELYEK.map(async (t) => {
+        try {
+          const g = await geocodeAddress(t.cim);
+          return { nev: t.nev, lat: g.lat, lon: g.lon };
+        } catch {
+          return null;
+        }
+      })
+    ).then((pontok) => pontok.filter((p): p is TelephelyPont => p !== null));
+  }
+  return telephelyPontokCache;
+}
+
+/** Ha a megadott koordináta egy saját telephely/parkoló közelében van, annak olvasható neve — egyébként null. */
+function talalSajatTelephelyet(lat: number, lon: number, telephelyek: TelephelyPont[]): string | null {
+  return telephelyek.find((t) => haversineKm(lat, lon, t.lat, t.lon) < TELEPHELY_TAVOLSAG_KM)?.nev ?? null;
 }
 
 /** Egy jövőbeli nap egyetlen fel-/lerakó pontja a "következő napok" előnézetben — csak városnévvel, geokódolás/útvonalszámítás nélkül. */
@@ -438,6 +472,7 @@ export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny
   // korábbi nap lezárt idővonalát nem kell/nem szabad "élő" adattal
   // kiegészíteni) — feleslegesen sem hívjuk, ha nem kell.
   const eloPoziciok = maiNap ? await getFleetLastPositions().catch(() => []) : [];
+  const telephelyPontok = maiNap ? await getTelephelyPontok().catch(() => [] as TelephelyPont[]) : [];
 
   return Promise.all(
     SAJAT_JARMUVEK.map(async (jarmu): Promise<JarmuIdovonalEredmeny> => {
@@ -472,10 +507,14 @@ export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny
         if (livePos) {
           const parsedTs = parseEcofleetTimestamp(livePos.timestamp);
           if (parsedTs) {
-            // A cím csak megjelenítéshez kell — ha a fordított geokódolás
-            // elakadna, ne akassza meg emiatt az idővonal felépítését, csak
-            // maradjon "ismeretlen hely".
-            const cim = await reverseGeocodeCoords(livePos.latitude, livePos.longitude).catch(() => null);
+            // Ha a jármű éppen egy saját telephelyen/parkolóban áll, azt
+            // olvashatóbb névvel mutatjuk (pl. "Szakoly (parkoló)"), mint a
+            // nyers, visszafordított utca-cím — a cím egyébként csak
+            // megjelenítéshez kell, ha a fordított geokódolás elakadna, ne
+            // akassza meg emiatt az idővonal felépítését, csak maradjon
+            // "ismeretlen hely".
+            const sajatTelephely = talalSajatTelephelyet(livePos.latitude, livePos.longitude, telephelyPontok);
+            const cim = sajatTelephely ?? (await reverseGeocodeCoords(livePos.latitude, livePos.longitude).catch(() => null));
             const elo: EloPozicio = {
               lat: livePos.latitude,
               lon: livePos.longitude,
