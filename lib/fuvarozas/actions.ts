@@ -19,14 +19,13 @@ import {
   kiegesziteloAllapottal,
   parseIdopontSzoveg,
   type EloPozicio,
-  type IdovonalSzakasz,
   type TervezettFuvarSzakasz,
   type TervezettMegallo,
 } from "./idovonal";
 import { SAJAT_JARMUVEK, resolveJarmu, type JarmuSzin, type SajatJarmu } from "./vehicles";
 import { bontsMegallokra, varosNev } from "./varos";
-import { getMaiSajatFuvarok } from "./megbizasok";
-import type { MaiFuvarSor } from "./fuvar-constants";
+import { getMaiSajatFuvarok, getMaiValodiSajatFuvarok } from "./megbizasok";
+import type { FuvarTipus, MaiFuvarSor } from "./fuvar-constants";
 import { budapestFalioraToInstant, budapestNapISO } from "./idozona";
 
 // Ha a NAV oldala nem érhető el (átmeneti hiba, oldalszerkezet-változás),
@@ -108,11 +107,23 @@ export async function getFleetPositions(): Promise<FleetPositionResult> {
   }
 }
 
+/** Egy tervezett fuvar egyetlen fel-/lerakó pontja, a napi megbízás-listán egy sorral — a megjelenített napra vagy a rákövetkezőre eső időponttal (lásd JarmuIdovonalEredmeny.holnapiMegallok). */
+export type MegalloBejegyzes = {
+  fuvarId: string;
+  /** FIGYELEM: fordított UI-címkézés, lásd TervezettFuvarSzakasz.fuvarTipus. */
+  fuvarTipus: FuvarTipus;
+  megrendelo: string | null;
+  pozicioszam: string | null;
+  tipus: "felrako" | "lerako";
+  cim: string;
+  /** Elhagyott pontnál a tényleges (GPS szerinti) időpont, egyébként a tervezett/becsült. */
+  idopont: Date;
+  elhagyva: boolean;
+};
+
 export type JarmuIdovonalEredmeny = {
   sofor: string;
   szin: JarmuSzin;
-  /** null, ha a jármű nincs (még) Ecofleet-be kötve, vagy ma még nem indult el. */
-  szakaszok: IdovonalSzakasz[] | null;
   /** Élő GPS-pozíció a jármű-csempe infó-dobozához (cím, sebesség, utolsó adat ideje, óraállás) — csak a mai napra. */
   eloPozicio: {
     cim: string | null;
@@ -120,13 +131,13 @@ export type JarmuIdovonalEredmeny = {
     utolsoAdat: Date;
     oraallasKm: number | null;
   } | null;
-  /** Az első tényleges indulás (motor be + mozgás) időpontja ma — ez az idővonal 0 pontja. Null, ha a jármű ma még nem indult el. */
-  napKezdete: Date | null;
   /** Élő GPS-pozícióból becsült érkezés a legközelebbi, még el nem hagyott fel-/lerakó ponthoz — csak a mai napra. */
   eloEta: { cel: string; erkezes: Date } | null;
   hiba: string | null;
-  /** Az adott napra ehhez a sofőrhöz rendelt saját fuvarok, becsült időponttal az idővonalra helyezve. */
-  tervezettFuvarok: TervezettFuvarSzakasz[];
+  /** A megjelenített napra eső fel-/lerakó pontok, időrendben (a fuvar-szintű adatok is elérhetők belőlük: megrendelo/pozicioszam/fuvarTipus). */
+  maiMegallok: MegalloBejegyzes[];
+  /** Azok a fel-/lerakó pontok, amik a becsült/tényleges időpontjuk szerint a következő naptári napra csúsztak át (pl. hosszú út miatt éjfél után érne oda). */
+  holnapiMegallok: MegalloBejegyzes[];
 };
 
 /**
@@ -159,7 +170,7 @@ function driverMatchesRow(jarmu: SajatJarmu, row: MaiFuvarSor): boolean {
   return false;
 }
 
-async function becsulFuvarSzakasz(row: MaiFuvarSor): Promise<TervezettFuvarSzakasz> {
+async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus): Promise<TervezettFuvarSzakasz> {
   const parsedIdo = parseIdopontSzoveg(row.idopont);
   const idoBizonytalan = !parsedIdo;
   const [ev, ho, napSzam] = row.datum.split("-").map(Number);
@@ -212,6 +223,7 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor): Promise<TervezettFuvarSzaka
 
   return {
     id: row.id,
+    fuvarTipus,
     megrendelo: row.megrendelo,
     pozicioszam: row.pozicioszam,
     honnan: row.felrako ? varosNev(row.felrako) : null,
@@ -251,18 +263,63 @@ async function becsulEloEta(
 }
 
 /**
- * Minden saját jármű mai (vagy megadott napi) idővonala valós Ecofleet
- * trip-előzményből, PLUSZ az adott napra ütemezett saját megbízások becsült
- * időpontokkal az idővonalra helyezve (felrakó/lerakó cím + útvonal-
- * menetidő + rakodási/lerakodási puffer alapján — ha nincs megadva pontos
- * időpont vagy nem sikerül a geokódolás/útvonalszámítás, a szakasz
- * "bizonytalan" jelölést kap). A fel-/lerakó pontokat a valós GPS-nyomvonal
- * alapján "elhagyva" (kész) jelöli, ha a jármű már ott járt és azóta
- * tovább is ment — lásd jelolMegallokElhagyottkent.
+ * Egy sofőrhöz tartozó tervezett fuvarok fel-/lerakó pontjait sima,
+ * időrendbe rendezett listává lapítja (a fuvar-szintű adatok — megrendelő,
+ * pozíciószám, fuvarTipus — minden ponton elérhetők) — ez kerül a
+ * jármű-csempe megbízás-listájára a régi, fuvaronkénti sávok helyett.
+ */
+function laposMegallok(tervezettFuvarok: TervezettFuvarSzakasz[]): MegalloBejegyzes[] {
+  return tervezettFuvarok
+    .flatMap((f) =>
+      f.megallok.map(
+        (m): MegalloBejegyzes => ({
+          fuvarId: f.id,
+          fuvarTipus: f.fuvarTipus,
+          megrendelo: f.megrendelo,
+          pozicioszam: f.pozicioszam,
+          tipus: m.tipus,
+          cim: m.cim,
+          idopont: m.elhagyva && m.tenylegesIdo ? m.tenylegesIdo : m.tipus === "felrako" ? f.kezdet : f.veg,
+          elhagyva: m.elhagyva,
+        })
+      )
+    )
+    .sort((a, b) => a.idopont.getTime() - b.idopont.getTime());
+}
+
+/** A megjelenített napra eső és a rákövetkező naptári napra átcsúszott pontok szétválasztása. */
+function szetvalasztNapSzerint(bejegyzesek: MegalloBejegyzes[], napISO: string): { maiMegallok: MegalloBejegyzes[]; holnapiMegallok: MegalloBejegyzes[] } {
+  const maiMegallok: MegalloBejegyzes[] = [];
+  const holnapiMegallok: MegalloBejegyzes[] = [];
+  for (const b of bejegyzesek) {
+    (budapestNapISO(b.idopont) === napISO ? maiMegallok : holnapiMegallok).push(b);
+  }
+  return { maiMegallok, holnapiMegallok };
+}
+
+/**
+ * Minden saját jármű mai (vagy megadott napi) idővonala: az adott napra
+ * ütemezett fuvarok (Bér fuvarok ÉS Saját fuvarok fül, lásd
+ * TervezettFuvarSzakasz.fuvarTipus) fel-/lerakó pontjai időrendbe lapítva,
+ * becsült időponttal (felrakó/lerakó cím + útvonal-menetidő + rakodási/
+ * lerakodási puffer alapján — ha nincs megadva pontos időpont vagy nem
+ * sikerül a geokódolás/útvonalszámítás, a fuvar "bizonytalan" jelölést
+ * kap). A pontokat a valós Ecofleet GPS-nyomvonal alapján "elhagyva"
+ * (kész) jelöli, ha a jármű már ott járt és azóta tovább is ment — lásd
+ * jelolMegallokElhagyottkent.
  */
 export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny[]> {
   const { kezdet, veg, napISO, maiNap } = budapestNapHatarok(nap);
-  const maiFuvarok = await getMaiSajatFuvarok(napISO).catch(() => [] as MaiFuvarSor[]);
+  const [berFuvarok, sajatFuvarok] = await Promise.all([
+    getMaiSajatFuvarok(napISO).catch(() => [] as MaiFuvarSor[]),
+    getMaiValodiSajatFuvarok(napISO).catch(() => [] as MaiFuvarSor[]),
+  ]);
+  // FIGYELEM: a DB tipus='sajat' sorok a "Bér fuvarok" fülön jelennek meg,
+  // tipus='ber' pedig a "Saját fuvarok" fülön — lásd megbizasok.ts.
+  const maiFuvarok: { row: MaiFuvarSor; tipus: FuvarTipus }[] = [
+    ...berFuvarok.map((row) => ({ row, tipus: "sajat" as const })),
+    ...sajatFuvarok.map((row) => ({ row, tipus: "ber" as const })),
+  ];
   // Az élő GPS-pozíciót csak a mai napra vonatkozó idővonalhoz kell (egy
   // korábbi nap lezárt idővonalát nem kell/nem szabad "élő" adattal
   // kiegészíteni) — feleslegesen sem hívjuk, ha nem kell.
@@ -270,19 +327,17 @@ export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny
 
   return Promise.all(
     SAJAT_JARMUVEK.map(async (jarmu): Promise<JarmuIdovonalEredmeny> => {
-      const sajatSorok = maiFuvarok.filter((row) => driverMatchesRow(jarmu, row));
-      const tervezettFuvarok = await Promise.all(sajatSorok.map(becsulFuvarSzakasz));
+      const sajatSorok = maiFuvarok.filter(({ row }) => driverMatchesRow(jarmu, row));
+      const tervezettFuvarok = await Promise.all(sajatSorok.map(({ row, tipus }) => becsulFuvarSzakasz(row, tipus)));
 
       if (!jarmu.ecofleetObjectId) {
         return {
           sofor: jarmu.sofor,
           szin: jarmu.szin,
-          szakaszok: null,
           eloPozicio: null,
-          napKezdete: null,
           eloEta: null,
           hiba: null,
-          tervezettFuvarok,
+          ...szetvalasztNapSzerint(laposMegallok(tervezettFuvarok), napISO),
         };
       }
       try {
@@ -324,20 +379,14 @@ export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny
           }
         }
 
-        // A nap kezdete: a tényleges első indulás (motor be + mozgás)
-        // időpontja — ez az idővonal 0 pontja, NEM éjfél.
-        const napKezdete = szakaszok[0]?.tipus === "indulas" ? szakaszok[0].idopont : null;
-
-        // A tervezett fel-/lerakó pontok "elhagyva" (kész) jelölése a valós
-        // GPS-nyomvonal alapján, időrendben rendezve, hogy a "következő,
-        // még el nem hagyott pont" keresése (lentebb) helyes sorrendben történjen.
+        // A tervezett fel-/lerakó pontok "elhagyva" (kész) jelölése a valós GPS-nyomvonal alapján.
         const pontok = idovonalPontjai(szakaszok);
-        const jeloltFuvarok = [...tervezettFuvarok]
-          .sort((a, b) => a.kezdet.getTime() - b.kezdet.getTime())
-          .map((f) => ({ ...f, megallok: jelolMegallokElhagyottkent(f.megallok, pontok) }));
+        const jeloltFuvarok = tervezettFuvarok.map((f) => ({ ...f, megallok: jelolMegallokElhagyottkent(f.megallok, pontok) }));
+        const bejegyzesek = laposMegallok(jeloltFuvarok);
 
         // Élő ETA: a legközelebbi, még el nem hagyott fel-/lerakó ponthoz,
-        // élő GPS-pozícióból számolva.
+        // élő GPS-pozícióból számolva — ez adja a jármű-csempén a kamion-
+        // ikon melletti becsült időt.
         let eloEta: { cel: string; erkezes: Date } | null = null;
         if (livePos) {
           const kovetkezoMegallo = jeloltFuvarok
@@ -356,24 +405,20 @@ export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny
         return {
           sofor: jarmu.sofor,
           szin: jarmu.szin,
-          szakaszok,
           eloPozicio: eloPozicioEredmeny,
-          napKezdete,
           eloEta,
           hiba: null,
-          tervezettFuvarok: jeloltFuvarok,
+          ...szetvalasztNapSzerint(bejegyzesek, napISO),
         };
       } catch (err) {
         const message = err instanceof EcofleetError ? err.message : "Nem sikerült lekérni az idővonalat.";
         return {
           sofor: jarmu.sofor,
           szin: jarmu.szin,
-          szakaszok: null,
           eloPozicio: null,
-          napKezdete: null,
           eloEta: null,
           hiba: message,
-          tervezettFuvarok,
+          ...szetvalasztNapSzerint(laposMegallok(tervezettFuvarok), napISO),
         };
       }
     })
