@@ -15,6 +15,7 @@
 
 import type { EcofleetTrip } from "./ecofleet";
 import { parseEcofleetTimestamp } from "./ecofleet";
+import type { FuvarTipus } from "./fuvar-constants";
 
 /** Két koordináta közti távolság km-ben (haversine). */
 export function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -196,6 +197,8 @@ export function napiTavKm(szakaszok: IdovonalSzakasz[]): number {
  */
 export type TervezettFuvarSzakasz = {
   id: string;
+  /** A megbízás DB-beli `tipus` mezője — FIGYELEM: a felület a két értéket történelmi okokból fordítva címkézi ("sajat" → "Bér fuvar", "ber" → "Saját fuvar"), lásd megbizasok.ts. */
+  fuvarTipus: FuvarTipus;
   megrendelo: string | null;
   pozicioszam: string | null;
   honnan: string | null;
