@@ -27,7 +27,7 @@ import { SAJAT_JARMUVEK, resolveJarmu, type JarmuSzin, type SajatJarmu } from ".
 import { bontsMegallokra, varosNev } from "./varos";
 import { getFuvarokIdoszakban, getMaiSajatFuvarok, getMaiValodiSajatFuvarok } from "./megbizasok";
 import type { FuvarTipus, MaiFuvarSor } from "./fuvar-constants";
-import { budapestFalioraToInstant, budapestNapISO } from "./idozona";
+import { budapestFalioraToInstant, budapestHetNapja, budapestNapISO, budapestOra } from "./idozona";
 import { SAJAT_TELEPHELYEK } from "./telephelyek";
 
 // Ha a NAV oldala nem érhető el (átmeneti hiba, oldalszerkezet-változás),
@@ -217,39 +217,73 @@ function talalSajatTelephelyet(lat: number, lon: number, telephelyek: TelephelyP
   return telephelyek.find((t) => haversineKm(lat, lon, t.lat, t.lon) < TELEPHELY_TAVOLSAG_KM)?.nev ?? null;
 }
 
-// --- Önmagát kalibráló menetidő-becslés ---
+// --- Önmagát kalibráló menetidő-becslés, napszak/nap-típus szerint ---
 //
 // A HU-GO route-planner (calculateToll) egy statikus úthálózat-modell
 // alapján számol (lásd utdijkalkulacio.ts) — nincs benne élő forgalom,
 // ezért a valóságban (torlódás, rakodóhelyi keresgélés, pihenő stb. miatt)
-// rendszerint tovább tart egy út, mint amit mond. Ahelyett, hogy egy új,
-// fizetős forgalmi API-t vonnánk be, a MEGLÉVŐ Ecofleet GPS-előzményből
-// (a ténylegesen megtett fuvarok valós menetideje) tanulunk egy korrekciós
-// szorzót: ha a mintában vett trip-ek átlagosan X%-kal tovább tartottak,
-// mint amit a HU-GO ugyanarra az útvonalra becsült volna, ugyanezt a
-// szorzót alkalmazzuk a jövőbeli becslésekre is.
+// rendszerint tovább tart egy út, mint amit mond. Élő forgalmi API (Waze,
+// Google Maps stb.) nincs bevonva — nincs rá se hivatalos, ingyenes elérés
+// (Waze), se ingyenes út (Google Maps Routes API fizetős). Ehelyett a
+// MEGLÉVŐ Ecofleet GPS-előzményből tanulunk: a torlódás nagy része nem
+// véletlenszerű, hanem visszatérő mintázat (reggeli/délutáni csúcsforgalom,
+// hétvégi vs. hétköznapi forgalom) — ezt a saját trip-előzményünkből,
+// napszakonként/nap-típusonként külön korrekciós szorzóval közelítjük,
+// nem egyetlen globális átlaggal. Ez nem helyettesíti a valódi élő
+// (baleset/útlezárás-szintű) forgalmi adatot, de a tervezéshez releváns
+// "mikor szokott lassabb lenni" mintázatot new API/költség nélkül megadja.
 
 /** Ennél rövidebb (km) trip-eket kihagyjuk a kalibrációs mintából (telephelyi/portai mozgás, túl zajos). */
 const KALIBRACIO_MIN_TAV_KM = 25;
 /** Ennyi napra visszamenőleg gyűjtünk trip-eket a mintához. */
-const KALIBRACIO_MINTA_NAP = 14;
+const KALIBRACIO_MINTA_NAP = 21;
 /** Legfeljebb ennyi trip-et vetünk össze a HU-GO-val (korlátozza a hálózati hívások számát). */
-const KALIBRACIO_MAX_MINTA = 25;
-/** Ennél kevesebb sikeres összevetés esetén nem bízunk a mintában, marad az 1.0 (nincs korrekció). */
+const KALIBRACIO_MAX_MINTA = 40;
+/** Ennél kevesebb sikeres összevetés esetén nem bízunk a (globális vagy napszaki) mintában, marad az 1.0 / a globális szorzó. */
 const KALIBRACIO_MIN_MINTASZAM = 5;
+const KALIBRACIO_MIN_MINTASZAM_IDOSAV = 3;
 /** Ennyi óránként frissítjük legfeljebb a kalibrációt — nem kell minden getIdovonalak-híváskor újraszámolni. */
 const KALIBRACIO_ERVENYESSEG_ORA = 24;
 
-type KalibraciosEredmeny = { szorzo: number; mintaSzam: number; szamitva: Date };
+/** Napszak/nap-típus sáv, aminek külön korrekciós szorzót tanulunk — a hétvége azért külön, mert a fuvarozási forgalom ott jellemzően egészen más képet mutat, mint hétköznap. */
+type Idosav = "hetvege" | "csucs_reggel" | "napkozben" | "csucs_delutan" | "esti_ejszakai";
+
+function idosavja(d: Date): Idosav {
+  const hetNapja = budapestHetNapja(d);
+  if (hetNapja === 0 || hetNapja === 6) return "hetvege";
+  const ora = budapestOra(d);
+  if (ora >= 6 && ora < 9) return "csucs_reggel";
+  if (ora >= 9 && ora < 15) return "napkozben";
+  if (ora >= 15 && ora < 19) return "csucs_delutan";
+  return "esti_ejszakai";
+}
+
+type KalibraciosEredmeny = {
+  globalisSzorzo: number;
+  idosavSzorzok: Partial<Record<Idosav, number>>;
+  mintaSzam: number;
+  szamitva: Date;
+};
 
 let kalibraciosCache: KalibraciosEredmeny | null = null;
+
+/** [valós mp, HU-GO mp] összegekből 1.0-2.0 közé szorított arányt számol, vagy null-t, ha nincs elég minta. */
+function aranySzamitasa(valosSzumSec: number, hugoSzumSec: number, mintaSzam: number, minMintaszam: number): number | null {
+  if (mintaSzam < minMintaszam || hugoSzumSec <= 0) return null;
+  // 1 alá sosem visz (a HU-GO becslésnél gyorsabb valós menetidőt nem
+  // valószínűsítünk), és 2x-nél jobban sem torzítja — kiugró minták ne
+  // vigyék el a becslést irreális irányba.
+  return Math.min(2, Math.max(1, valosSzumSec / hugoSzumSec));
+}
 
 /**
  * A saját flotta legutóbbi (KALIBRACIO_MINTA_NAP napnyi) trip-jeiből egy
  * véletlenszerű mintát vet össze a HU-GO ugyanarra az útvonalra adott
- * elméleti becslésével, és visszaadja a valós/HU-GO menetidő-arányt —
- * gyorsítótárazva, hogy ne kelljen minden hívásnál újraszámolni (ez
- * mintánként egy calculateToll hálózati hívással jár).
+ * elméleti becslésével — egyszerre egy globális arányt (minden mintából),
+ * és napszakonkénti/nap-típusonkénti arányokat (lásd Idosav) is számol,
+ * hogy egy adott indulási időponthoz a hozzá illő korrekció legyen
+ * alkalmazható. Gyorsítótárazva, hogy ne kelljen minden hívásnál
+ * újraszámolni (ez mintánként egy calculateToll hálózati hívással jár).
  */
 async function szamitsKalibraciot(): Promise<KalibraciosEredmeny> {
   const most = new Date();
@@ -266,13 +300,20 @@ async function szamitsKalibraciot(): Promise<KalibraciosEredmeny> {
   ).flat();
 
   const jelentosTripek = mindenTrip
-    .filter((t) => t.distance >= KALIBRACIO_MIN_TAV_KM)
+    .filter((t) => t.distance >= KALIBRACIO_MIN_TAV_KM && parseEcofleetTimestamp(t.startTimestamp))
     .sort(() => Math.random() - 0.5)
     .slice(0, KALIBRACIO_MAX_MINTA);
 
-  let valosSzumSec = 0;
-  let hugoSzumSec = 0;
-  let mintaSzam = 0;
+  let globalisValosSec = 0;
+  let globalisHugoSec = 0;
+  let globalisMinta = 0;
+  const idosavOsszesek: Record<Idosav, { valosSec: number; hugoSec: number; minta: number }> = {
+    hetvege: { valosSec: 0, hugoSec: 0, minta: 0 },
+    csucs_reggel: { valosSec: 0, hugoSec: 0, minta: 0 },
+    napkozben: { valosSec: 0, hugoSec: 0, minta: 0 },
+    csucs_delutan: { valosSec: 0, hugoSec: 0, minta: 0 },
+    esti_ejszakai: { valosSec: 0, hugoSec: 0, minta: 0 },
+  };
 
   for (const t of jelentosTripek) {
     try {
@@ -283,22 +324,35 @@ async function szamitsKalibraciot(): Promise<KalibraciosEredmeny> {
         ],
         ...FIXED_VEHICLE,
       });
-      valosSzumSec += t.duration;
-      hugoSzumSec += route.durationMin * 60;
-      mintaSzam++;
+      const hugoSec = route.durationMin * 60;
+      globalisValosSec += t.duration;
+      globalisHugoSec += hugoSec;
+      globalisMinta++;
+
+      const sav = idosavja(parseEcofleetTimestamp(t.startTimestamp)!);
+      idosavOsszesek[sav].valosSec += t.duration;
+      idosavOsszesek[sav].hugoSec += hugoSec;
+      idosavOsszesek[sav].minta++;
     } catch {
       // egy sikertelen összevetés nem számít bele — a többi mintából még lehet becsülni
     }
   }
 
-  const nyersSzorzo = mintaSzam >= KALIBRACIO_MIN_MINTASZAM && hugoSzumSec > 0 ? valosSzumSec / hugoSzumSec : 1;
-  // 1 alá sosem visz (a HU-GO becslésnél gyorsabb valós menetidőt nem
-  // valószínűsítünk), és 2x-nél jobban sem torzítja — kiugró minták ne
-  // vigyék el a becslést irreális irányba.
-  const szorzo = Math.min(2, Math.max(1, nyersSzorzo));
+  const globalisSzorzo = aranySzamitasa(globalisValosSec, globalisHugoSec, globalisMinta, KALIBRACIO_MIN_MINTASZAM) ?? 1;
 
-  kalibraciosCache = { szorzo, mintaSzam, szamitva: most };
+  const idosavSzorzok: Partial<Record<Idosav, number>> = {};
+  for (const [sav, osszeg] of Object.entries(idosavOsszesek) as [Idosav, { valosSec: number; hugoSec: number; minta: number }][]) {
+    const szorzo = aranySzamitasa(osszeg.valosSec, osszeg.hugoSec, osszeg.minta, KALIBRACIO_MIN_MINTASZAM_IDOSAV);
+    if (szorzo !== null) idosavSzorzok[sav] = szorzo;
+  }
+
+  kalibraciosCache = { globalisSzorzo, idosavSzorzok, mintaSzam: globalisMinta, szamitva: most };
   return kalibraciosCache;
+}
+
+/** A megadott (várható indulási) időponthoz illő korrekciós szorzó: a napszak/nap-típus szerinti, ha van rá elég minta, egyébként a globális. */
+function valasszKalibraciosSzorzot(kalibracio: KalibraciosEredmeny, idopont: Date): number {
+  return kalibracio.idosavSzorzok[idosavja(idopont)] ?? kalibracio.globalisSzorzo;
 }
 
 /** Egy jövőbeli nap egyetlen fel-/lerakó pontja a "következő napok" előnézetben — csak városnévvel, geokódolás/útvonalszámítás nélkül. */
@@ -355,7 +409,7 @@ export async function getKovetkezoNapokElonezet(napokSzama = 3): Promise<Record<
   return eredmeny;
 }
 
-async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus, kalibraciosSzorzo: number): Promise<TervezettFuvarSzakasz> {
+async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus, kalibracio: KalibraciosEredmeny): Promise<TervezettFuvarSzakasz> {
   const parsedIdo = parseIdopontSzoveg(row.idopont);
   const idoBizonytalan = !parsedIdo;
   const [ev, ho, napSzam] = row.datum.split("-").map(Number);
@@ -386,11 +440,11 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus, kali
           points: ervenyesPontok.map((p) => ({ lon: p.lon, lat: p.lat })),
           ...FIXED_VEHICLE,
         });
-        // A HU-GO elméleti menetidejét a valós GPS-előzményből tanult
-        // korrekciós szorzóval igazítjuk (lásd szamitsKalibraciot) — a
-        // statikus úthálózat-modell magában rendszerint optimistább, mint a
-        // tényleges menetidő.
-        utvonalPercek = route.durationMin * kalibraciosSzorzo;
+        // A HU-GO elméleti menetidejét a valós GPS-előzményből tanult,
+        // a felrakás időpontjához illő napszaki korrekciós szorzóval
+        // igazítjuk (lásd szamitsKalibraciot) — a statikus úthálózat-modell
+        // magában rendszerint optimistább, mint a tényleges menetidő.
+        utvonalPercek = route.durationMin * valasszKalibraciosSzorzot(kalibracio, kezdet);
         // Ha egy állomást nem sikerült geokódolni, a menetidő hiányos (kimaradt egy szakasz) — ezt jelezzük bizonytalannak.
         utvonalBizonytalan = ervenyesPontok.length < geokodolt.length;
       }
@@ -464,7 +518,7 @@ async function lancoltEloBecsles(
   fuvarok: TervezettFuvarSzakasz[],
   eloPoz: { lat: number; lon: number },
   most: Date,
-  kalibraciosSzorzo: number
+  kalibracio: KalibraciosEredmeny
 ): Promise<TervezettFuvarSzakasz[]> {
   const sorrend = fuvarok
     .flatMap((f, fi) => f.megallok.map((m, mi) => ({ fi, mi, m })))
@@ -486,7 +540,10 @@ async function lancoltEloBecsles(
         ],
         ...FIXED_VEHICLE,
       });
-      const erkezes = new Date(idoPont.getTime() + route.durationMin * kalibraciosSzorzo * 60000);
+      // A szorzót az induláshoz (idoPont, ez a jelenlegi szakasz elindulási
+      // ideje, nem a mai "most") illő napszak alapján választjuk — egy
+      // láncban a nap előrehaladtával más-más napszaki szorzó léphet érvénybe.
+      const erkezes = new Date(idoPont.getTime() + route.durationMin * valasszKalibraciosSzorzot(kalibracio, idoPont) * 60000);
       const puffer = m.tipus === "felrako" ? RAKODAS_PUFFER_PERC : LERAKODAS_PUFFER_PERC;
       eredmeny[fi].megallok[mi] = { ...m, idopont: erkezes };
       pozicio = { lat: m.lat, lon: m.lon };
@@ -565,13 +622,14 @@ export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny
   // A valós GPS-előzményből tanult korrekciós szorzó (lásd szamitsKalibraciot)
   // csak a mai napi becslésekhez kell — múltbeli napoknál a tényleges
   // (lezárult) szakaszok már úgyis a valós időt mutatják.
-  const kalibraciosSzorzo = maiNap ? (await szamitsKalibraciot().catch(() => ({ szorzo: 1 } as KalibraciosEredmeny))).szorzo : 1;
+  const NINCS_KOREKCIO: KalibraciosEredmeny = { globalisSzorzo: 1, idosavSzorzok: {}, mintaSzam: 0, szamitva: veg };
+  const kalibracio = maiNap ? await szamitsKalibraciot().catch(() => NINCS_KOREKCIO) : NINCS_KOREKCIO;
 
   return Promise.all(
     SAJAT_JARMUVEK.map(async (jarmu): Promise<JarmuIdovonalEredmeny> => {
       const sajatSorok = maiFuvarok.filter(({ row }) => driverMatchesRow(jarmu, row));
       const tervezettFuvarok = await Promise.all(
-        sajatSorok.map(({ row, tipus }) => becsulFuvarSzakasz(row, tipus, kalibraciosSzorzo))
+        sajatSorok.map(({ row, tipus }) => becsulFuvarSzakasz(row, tipus, kalibracio))
       );
 
       if (!jarmu.ecofleetObjectId) {
@@ -635,7 +693,7 @@ export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny
         // frissítjük, hogy a jármű tényleges mai haladását tükrözzék, ne
         // csak a megbízásban rögzített (csak irányadó) statikus menetrendet.
         const lancoltFuvarok = livePos
-          ? await lancoltEloBecsles(jeloltFuvarok, { lat: livePos.latitude, lon: livePos.longitude }, veg, kalibraciosSzorzo)
+          ? await lancoltEloBecsles(jeloltFuvarok, { lat: livePos.latitude, lon: livePos.longitude }, veg, kalibracio)
           : jeloltFuvarok;
         const bejegyzesek = laposMegallok(lancoltFuvarok);
 

@@ -61,6 +61,19 @@ export function budapestFalioraToInstant(
   return new Date(becsles - offset);
 }
 
+/** Budapesti helyi óra (0-23) egy adott pillanatra. */
+export function budapestOra(instant: Date): number {
+  const dtf = new Intl.DateTimeFormat("en-US", { timeZone: BUDAPEST_TZ, hourCycle: "h23", hour: "2-digit" });
+  return Number(dtf.format(instant));
+}
+
+/** Budapesti helyi hét napja (0 = vasárnap .. 6 = szombat) egy adott pillanatra. */
+export function budapestHetNapja(instant: Date): number {
+  const dtf = new Intl.DateTimeFormat("en-US", { timeZone: BUDAPEST_TZ, weekday: "short" });
+  const terkep: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  return terkep[dtf.format(instant)] ?? 0;
+}
+
 /** Egy Date objektumból az Ecofleet API által elvárt "YYYY-MM-DD HH:MM:SS" budapesti falióra-szöveg. */
 export function formatBudapestFaliora(instant: Date): string {
   const dtf = new Intl.DateTimeFormat("en-US", {
