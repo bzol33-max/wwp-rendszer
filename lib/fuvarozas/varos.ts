@@ -8,19 +8,48 @@ const UTCA_SZAVAK = /\b(utca|út|tér|krt\.?|körút|sor|dűlő|park|ipartelep|t
 const CEGFORMA_SZAVAK = /\b(kft\.?|zrt\.?|bt\.?|nyrt\.?|kkt\.?)\b/i;
 
 /**
+ * Több-megállós felrakó/lerakó mezőket elválasztó jelek — szóközzel
+ * körülvéve (vagy pontosvessző/sortörés), hogy házszám-tartományokat (pl.
+ * "12-14") ne szakítsunk szét. A Drive-automatika " + "-szal fűzi össze a
+ * teljes címeket egy több-megállós megbízásnál, a kézi javítások (lásd
+ * db/fuvar-corrections.json) " – " (nagykötőjel) jellel, már csak
+ * városnevekkel.
+ */
+const MEGALLO_ELVALASZTO = /\s*\+\s*|\s+[–—]\s+|;\s*|\n+/;
+
+/** Egy felrakó/lerakó mező felbontása egyedi állomásokra, a teljes (geokódolható) szöveggel állomásonként. Egymegállós mezőnél az egyetlen elemű tömböt adja vissza. */
+export function bontsMegallokra(cim: string | null | undefined): string[] {
+  if (!cim) return [];
+  return cim
+    .split(MEGALLO_ELVALASZTO)
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+/**
  * Egy felrakó/lerakó cím vesszővel tagolt részei közül megkeresi a
  * városnevet (és ha van, az irányítószámot) — akkor is, ha nincs
  * irányítószám a szövegben (pl. "Cégnév, Város, utca házszám" formátum,
  * ahol a "Város" rész önmagában áll, számok és utcatípus-szavak nélkül).
- * Sorrend: 1) irányítószám + városnév egy darabban, 2) ismert telephely-kód
- * (pl. "Budapest (BILK)"), 3) heurisztika — az első olyan darab, ami nem
+ * Sorrend: 1) irányítószám + városnév egy darabban (pl. "4400 Nyíregyháza"),
+ * 2) városnév + zárójelezett irányítószám/utca egy darabban (pl.
+ * "Nyíregyháza (4400 Móricz Zsigmond u. 24.)"), 3) ismert telephely-kód
+ * (pl. "Budapest (BILK)"), 4) heurisztika — az első olyan darab, ami nem
  * szám, nem utcatípus-szó és nem cégforma-toldalék (3+ darabnál az elsőt,
  * jellemzően a cégnevet, kihagyva).
  */
 export function talalVaros(parts: string[]): { zip: string; city: string; idx: number } | null {
+  // A lookbehind kizárja azt az esetet, amikor az irányítószám egy MÁSIK
+  // minta (lásd lentebb) zárójelezett részében van — ott a városnév a
+  // zárójel ELŐTT van, nem az irányítószám UTÁN.
   for (let i = 0; i < parts.length; i++) {
-    const m = parts[i].match(/(\d{4})\s+([^(]+)/);
+    const m = parts[i].match(/(?<!\()(\d{4})\s+([^(]+)/);
     if (m) return { zip: m[1], city: m[2].trim(), idx: i };
+  }
+
+  for (let i = 0; i < parts.length; i++) {
+    const m = parts[i].match(/^([^(]+?)\s*\((\d{4})\b/);
+    if (m) return { zip: m[2], city: m[1].trim(), idx: i };
   }
 
   for (let i = 0; i < parts.length; i++) {
@@ -40,13 +69,28 @@ export function talalVaros(parts: string[]): { zip: string; city: string; idx: n
   return null;
 }
 
-/** Egy felrakó/lerakó cím szövegéből csak a városnév (irányítószám, utca és partner nélkül) — minden fuvarlistán ez jelenik meg. */
-export function varosNev(value: string | null | undefined): string {
-  if (!value) return "";
+/** Egyetlen állomás (nem több-megállós!) szövegéből a városnév kinyerése, vesszős tagolással. */
+function varosNevEgyMegallobol(value: string): string {
   const parts = value
     .split(",")
     .map((p) => p.trim())
     .filter(Boolean);
 
   return talalVaros(parts)?.city || value;
+}
+
+/**
+ * Egy felrakó/lerakó cím szövegéből csak a városnév (irányítószám, utca és
+ * partner nélkül) — minden fuvarlistán ez jelenik meg. Több-megállós
+ * mezőknél (lásd bontsMegallokra) mindegyik állomás városát kinyeri, és
+ * " + "-szal összefűzve adja vissza (szomszédos duplikátumokat kiszűrve —
+ * pl. ha a felrakó és az első lerakó ugyanabban a városban van).
+ */
+export function varosNev(value: string | null | undefined): string {
+  if (!value) return "";
+  const megallok = bontsMegallokra(value);
+  if (megallok.length <= 1) return varosNevEgyMegallobol(value);
+
+  const varosok = megallok.map(varosNevEgyMegallobol);
+  return varosok.filter((v, i) => i === 0 || v !== varosok[i - 1]).join(" + ");
 }

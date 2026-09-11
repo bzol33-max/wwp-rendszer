@@ -200,11 +200,15 @@ export type TervezettFuvarSzakasz = {
   pozicioszam: string | null;
   honnan: string | null;
   hova: string;
-  /** Felrakó/lerakó cím geokódolt koordinátái, ha sikerült (helyalapú állás-kategorizáláshoz, lásd allasKategoria) — null, ha nem geokódolható. */
-  honnanLat: number | null;
-  honnanLon: number | null;
-  hovaLat: number | null;
-  hovaLon: number | null;
+  /**
+   * A felrakó + az összes lerakó állomás geokódolt koordinátája, útvonal-
+   * sorrendben (előbb a felrakó, utána a lerakó(k) — több-megállós lerakó
+   * mezőnél állomásonként, lásd bontsMegallokra a varos.ts-ben); egy elem
+   * null, ha az adott állomás nem volt geokódolható. Helyalapú állás-
+   * kategorizáláshoz (lásd allasKategoria) és élő ETA-hoz (az utolsó nem-
+   * null elem a végső cél).
+   */
+  megallokKoordinatak: ({ lat: number; lon: number } | null)[];
   /** Becsült felrakás-kezdés időpontja. */
   kezdet: Date;
   /** Becsült lerakás-befejezés időpontja. */
