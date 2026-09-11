@@ -174,6 +174,8 @@ const LERAKODAS_PUFFER_PERC = 45;
 const ALAPERTELMEZETT_FELRAKAS_ORA = 7;
 /** Ha a cím nem geokódolható / az útvonal nem számolható, ennyi menetidőt feltételezünk. */
 const ALAPERTELMEZETT_UTVONAL_PERC = 120;
+/** Ha a lerakás a felrakástól eltérő napra esik (row.lerakas_datum), ezt tekintjük durva alapértelmezett lerakási órának azon a napon — élő GPS-pozíció esetén a lancoltEloBecsles felülírja. */
+const ALAPERTELMEZETT_LERAKAS_ORA = 8;
 
 function driverMatchesRow(jarmu: SajatJarmu, row: MaiFuvarSor): boolean {
   if (row.jarmu && resolveJarmu(row.jarmu) === jarmu) return true;
@@ -218,12 +220,18 @@ export async function getKovetkezoNapokElonezet(napokSzama = 3): Promise<Record<
   for (const row of sorok) {
     const jarmu = SAJAT_JARMUVEK.find((j) => driverMatchesRow(j, row));
     if (!jarmu) continue;
-    const nap = eredmeny[jarmu.sofor].find((n) => n.napISO === row.datum);
-    if (!nap) continue;
-    if (row.felrako) {
-      nap.megallok.push({ fuvarId: row.id, fuvarTipus: row.tipus, megrendelo: row.megrendelo, tipus: "felrako", cim: varosNev(row.felrako) });
+    // A felrakás és a lerakás külön napra eshet (row.lerakas_datum) — pl.
+    // ha a fuvar egy éjszakai (saját telephelyi) megállással jár, a
+    // felrakás és a lerakás más-más napi bontásba kerül, nem mindkettő a
+    // felrakás napjára.
+    const felrakoNap = eredmeny[jarmu.sofor].find((n) => n.napISO === row.datum);
+    if (row.felrako && felrakoNap) {
+      felrakoNap.megallok.push({ fuvarId: row.id, fuvarTipus: row.tipus, megrendelo: row.megrendelo, tipus: "felrako", cim: varosNev(row.felrako) });
     }
-    nap.megallok.push({ fuvarId: row.id, fuvarTipus: row.tipus, megrendelo: row.megrendelo, tipus: "lerako", cim: varosNev(row.lerako) });
+    const lerakoNap = eredmeny[jarmu.sofor].find((n) => n.napISO === (row.lerakas_datum ?? row.datum));
+    if (lerakoNap) {
+      lerakoNap.megallok.push({ fuvarId: row.id, fuvarTipus: row.tipus, megrendelo: row.megrendelo, tipus: "lerako", cim: varosNev(row.lerako) });
+    }
   }
 
   return eredmeny;
@@ -269,9 +277,28 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus): Pro
     }
   }
 
-  const felrakasVeg = new Date(kezdet.getTime() + RAKODAS_PUFFER_PERC * 60000);
-  const erkezes = new Date(felrakasVeg.getTime() + utvonalPercek * 60000);
-  const veg = new Date(erkezes.getTime() + LERAKODAS_PUFFER_PERC * 60000);
+  // Ha a megbízás külön lerakási dátumot ad meg (row.lerakas_datum), és az
+  // eltér a felrakás napjától, a fuvar TÖBBNAPOS (pl. késő este megérkezik
+  // egy saját telephelyre, és csak másnap/később adja le az árut) — ilyenkor
+  // a lerakás időpontját NEM a felrakástól folyamatosan számolt
+  // menetidővel/pufferekkel kapjuk (az napon belülre esne), hanem a
+  // lerakás napjára horgonyozzuk, egy durva alapértelmezett órával. Ez csak
+  // kiinduló becslés: ha ez a nap ténylegesen elérkezik és van élő
+  // GPS-pozíció, a lancoltEloBecsles (getIdovonalak) felülírja a valós
+  // haladás szerint.
+  const tobbNaposFuvar = !!row.lerakas_datum && row.lerakas_datum !== row.datum;
+
+  let veg: Date;
+  if (tobbNaposFuvar) {
+    const [lev, lho, lnap] = row.lerakas_datum!.split("-").map(Number);
+    veg = new Date(lev, lho - 1, lnap, ALAPERTELMEZETT_LERAKAS_ORA, 0, 0);
+    // A lerakás napi órája itt csak durva alapértelmezés — jelöljük bizonytalannak, amíg élő pozícióból nem pontosodik.
+    utvonalBizonytalan = true;
+  } else {
+    const felrakasVeg = new Date(kezdet.getTime() + RAKODAS_PUFFER_PERC * 60000);
+    const erkezes = new Date(felrakasVeg.getTime() + utvonalPercek * 60000);
+    veg = new Date(erkezes.getTime() + LERAKODAS_PUFFER_PERC * 60000);
+  }
 
   const megallok: TervezettMegallo[] = megallokSzovegei.map((m, i) => ({
     tipus: m.tipus,
