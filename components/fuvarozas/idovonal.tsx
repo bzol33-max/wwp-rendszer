@@ -54,6 +54,11 @@ function formatIdo(d: Date): string {
   return d.toLocaleTimeString("hu-HU", { hour: "2-digit", minute: "2-digit" });
 }
 
+/** Rövid dátum + idő (pl. "szept. 15., 08:00") — olyan pontokhoz, amik nem a mai vagy a holnapi napra esnek, hogy a felhasználó lássa, melyik napról van szó. */
+function formatIdoNappal(d: Date): string {
+  return `${d.toLocaleDateString("hu-HU", { month: "short", day: "numeric" })}, ${formatIdo(d)}`;
+}
+
 /** Egy "YYYY-MM-DD" naptári naphoz `delta` nappal odébbi nap — dél (UTC) horgonnyal, hogy DST-váltás körül se csúszhasson el. */
 function napEltolva(napISO: string, delta: number): string {
   const [ev, ho, nap] = napISO.split("-").map(Number);
@@ -153,11 +158,14 @@ function KamionSor({ jarmu, eta }: { jarmu: (typeof SAJAT_JARMUVEK)[number]; eta
 function MegalloSor({
   b,
   aktiv,
+  mutassNapot,
   onKeszJelolve,
 }: {
   b: MegalloBejegyzes;
   /** Igaz, ha ez a fuvar van éppen folyamatban (a kamion-ikon a hozzá tartozó ponthoz áll legközelebb). */
   aktiv: boolean;
+  /** Igaz, ha a pont dátuma nem magától értetődő (nem a mai nap nézete) — ilyenkor a nap is megjelenik az idő mellett. */
+  mutassNapot?: boolean;
   onKeszJelolve: () => void;
 }) {
   const [folyamatban, setFolyamatban] = useState(false);
@@ -191,7 +199,7 @@ function MegalloSor({
           {aktiv && !b.elhagyva && (
             <span className="shrink-0 rounded bg-primary/20 px-1 py-0.5 text-[9px] font-medium text-primary">Folyamatban</span>
           )}
-          <span className="shrink-0 text-muted-foreground">{formatIdo(b.idopont)}</span>
+          <span className="shrink-0 text-muted-foreground">{mutassNapot ? formatIdoNappal(b.idopont) : formatIdo(b.idopont)}</span>
         </span>
         {b.tipus === "lerako" && (
           <button
@@ -258,9 +266,9 @@ function JarmuCsempe({
 
       {holnapiMegallok.length > 0 && (
         <div className="flex flex-col gap-0.5 rounded-lg border border-dashed p-2">
-          <span className="text-[10px] font-medium text-muted-foreground">Következő napra átcsúszva</span>
+          <span className="text-[10px] font-medium text-muted-foreground">Későbbi napra átcsúszva</span>
           {holnapiMegallok.map((b, i) => (
-            <MegalloSor key={`${b.fuvarId}-${b.tipus}-${i}`} b={b} aktiv={false} onKeszJelolve={onKeszJelolve} />
+            <MegalloSor key={`${b.fuvarId}-${b.tipus}-${i}`} b={b} aktiv={false} mutassNapot onKeszJelolve={onKeszJelolve} />
           ))}
         </div>
       )}
