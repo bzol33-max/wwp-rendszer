@@ -145,6 +145,29 @@ export async function getMaiValodiSajatFuvarok(nap?: string): Promise<MaiFuvarSo
   );
 }
 
+/**
+ * A [kezdetNapISO, vegNapISO] (mindkét vég zárt) intervallumba eső fuvarok
+ * (Bér fuvarok ÉS Saját fuvarok fül egyaránt, lásd getMaiSajatFuvarok fenti
+ * megjegyzését a fordított UI-címkézésről), a felrakás dátuma szerint — a
+ * GPS lap "következő napok" előnézetéhez, ahol csak a napi bontás és a
+ * városnév kell, geokódolás/útvonalszámítás nélkül.
+ */
+export async function getFuvarokIdoszakban(kezdetNapISO: string, vegNapISO: string): Promise<(MaiFuvarSor & { tipus: FuvarTipus })[]> {
+  return query<MaiFuvarSor & { tipus: FuvarTipus }>(
+    `select
+       id::text, tipus, megrendelo, felrako, lerako, idopont,
+       to_char(datum, 'YYYY-MM-DD') as datum,
+       to_char(lerakas_datum, 'YYYY-MM-DD') as lerakas_datum,
+       jarmu, sofor, pozicioszam
+     from fuvar_megbizasok
+     where tipus in ('sajat', 'ber') and statusz <> 'torolt'
+       and datum between $1::date and $2::date
+     order by datum asc, idopont nulls last, id asc
+     limit 200`,
+    [kezdetNapISO, vegNapISO]
+  );
+}
+
 /** A PDF-ből előkészített, még jóvá nem hagyott fuvarok — típustól függetlenül. */
 export async function getElokeszitettFuvarok(): Promise<FuvarRow[]> {
   return query<FuvarRow>(

@@ -227,6 +227,14 @@ export type TervezettMegallo = {
   cim: string;
   lat: number | null;
   lon: number | null;
+  /**
+   * Becsült időpont — kezdetben a statikus formula alapján (a szülő fuvar
+   * kezdet/veg mezőjéből), a mai napon, élő pozíció esetén viszont az
+   * actions.ts láncba fűzi (előző, még el nem hagyott megállótól az élő
+   * pozíción át számolva), hogy a valós haladást tükrözze, ne csak a
+   * tervezett menetrendet.
+   */
+  idopont: Date;
   /** Igaz, ha a valós GPS-nyomvonal szerint a jármű már járt itt, és azóta tovább is ment — lásd jelolMegallokElhagyottkent. */
   elhagyva: boolean;
   /** Ha elhagyva, a legutolsó ismert időpont, amikor a jármű a közelben volt — ide kerül a pont az idővonalon. */

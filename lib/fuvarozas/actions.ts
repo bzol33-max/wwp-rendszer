@@ -24,7 +24,7 @@ import {
 } from "./idovonal";
 import { SAJAT_JARMUVEK, resolveJarmu, type JarmuSzin, type SajatJarmu } from "./vehicles";
 import { bontsMegallokra, varosNev } from "./varos";
-import { getMaiSajatFuvarok, getMaiValodiSajatFuvarok } from "./megbizasok";
+import { getFuvarokIdoszakban, getMaiSajatFuvarok, getMaiValodiSajatFuvarok } from "./megbizasok";
 import type { FuvarTipus, MaiFuvarSor } from "./fuvar-constants";
 import { budapestFalioraToInstant, budapestNapISO } from "./idozona";
 
@@ -157,6 +157,17 @@ function budapestNapHatarok(nap?: string): { kezdet: Date; veg: Date; napISO: st
   return { kezdet, veg, napISO: celNap, maiNap };
 }
 
+/**
+ * Egy "YYYY-MM-DD" naptári naphoz `delta` nappal odébbi naptári nap
+ * ("YYYY-MM-DD") — dél (UTC 12:00) horgonnyal számolva, hogy a naptári nap
+ * a nyári/téli időszámítás-váltás körül se csúszhasson el.
+ */
+function napIsoEltolva(napISO: string, delta: number): string {
+  const [ev, ho, napSzam] = napISO.split("-").map(Number);
+  const d = new Date(Date.UTC(ev, ho - 1, napSzam + delta, 12));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
 const RAKODAS_PUFFER_PERC = 30;
 const LERAKODAS_PUFFER_PERC = 45;
 /** Ha egy megbízáson nincs megadva időpont, ezt tekintjük becsült felrakás-kezdésnek. */
@@ -168,6 +179,54 @@ function driverMatchesRow(jarmu: SajatJarmu, row: MaiFuvarSor): boolean {
   if (row.jarmu && resolveJarmu(row.jarmu) === jarmu) return true;
   if (row.sofor && row.sofor.trim().toLowerCase() === jarmu.sofor.toLowerCase()) return true;
   return false;
+}
+
+/** Egy jövőbeli nap egyetlen fel-/lerakó pontja a "következő napok" előnézetben — csak városnévvel, geokódolás/útvonalszámítás nélkül. */
+export type KovetkezoNapMegallo = {
+  fuvarId: string;
+  fuvarTipus: FuvarTipus;
+  megrendelo: string | null;
+  tipus: "felrako" | "lerako";
+  cim: string;
+};
+
+export type KovetkezoNap = {
+  napISO: string;
+  megallok: KovetkezoNapMegallo[];
+};
+
+/**
+ * A mai napot követő `napokSzama` naptári nap tervezett fuvarjainak gyors
+ * előnézete, saját járművenként, napi bontásban — csak városnévvel (nincs
+ * geokódolás/útvonalszámítás, hogy a nézet gyors maradjon; a pontos
+ * időbecslés úgyis csak akkor lenne értelmes, ha az adott nap ténylegesen
+ * elérkezett és van élő GPS-pozíció, lásd getIdovonalak).
+ */
+export async function getKovetkezoNapokElonezet(napokSzama = 3): Promise<Record<string, KovetkezoNap[]>> {
+  const maiNapISO = budapestNapISO();
+  const elsoNap = napIsoEltolva(maiNapISO, 1);
+  const utolsoNap = napIsoEltolva(maiNapISO, napokSzama);
+  const sorok = await getFuvarokIdoszakban(elsoNap, utolsoNap).catch(() => []);
+
+  const eredmeny: Record<string, KovetkezoNap[]> = {};
+  for (const jarmu of SAJAT_JARMUVEK) {
+    const napok: KovetkezoNap[] = [];
+    for (let i = 1; i <= napokSzama; i++) napok.push({ napISO: napIsoEltolva(maiNapISO, i), megallok: [] });
+    eredmeny[jarmu.sofor] = napok;
+  }
+
+  for (const row of sorok) {
+    const jarmu = SAJAT_JARMUVEK.find((j) => driverMatchesRow(j, row));
+    if (!jarmu) continue;
+    const nap = eredmeny[jarmu.sofor].find((n) => n.napISO === row.datum);
+    if (!nap) continue;
+    if (row.felrako) {
+      nap.megallok.push({ fuvarId: row.id, fuvarTipus: row.tipus, megrendelo: row.megrendelo, tipus: "felrako", cim: varosNev(row.felrako) });
+    }
+    nap.megallok.push({ fuvarId: row.id, fuvarTipus: row.tipus, megrendelo: row.megrendelo, tipus: "lerako", cim: varosNev(row.lerako) });
+  }
+
+  return eredmeny;
 }
 
 async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus): Promise<TervezettFuvarSzakasz> {
@@ -189,19 +248,12 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus): Pro
 
   let utvonalPercek = ALAPERTELMEZETT_UTVONAL_PERC;
   let utvonalBizonytalan = true;
-  let megallok: TervezettMegallo[] = megallokSzovegei.map((m) => ({
-    tipus: m.tipus,
-    cim: varosNev(m.szoveg),
-    lat: null,
-    lon: null,
-    elhagyva: false,
-    tenylegesIdo: null,
-  }));
+  let megallokKoordinatak: (GeocodedAddress | null)[] = megallokSzovegei.map(() => null);
 
   if (megallokSzovegei.length >= 2) {
     try {
       const geokodolt = await Promise.all(megallokSzovegei.map((m) => geocodeAddress(m.szoveg).catch(() => null)));
-      megallok = megallok.map((m, i) => (geokodolt[i] ? { ...m, lat: geokodolt[i]!.lat, lon: geokodolt[i]!.lon } : m));
+      megallokKoordinatak = geokodolt;
       const ervenyesPontok = geokodolt.filter((g): g is GeocodedAddress => g !== null);
       if (ervenyesPontok.length >= 2) {
         const route = await calculateToll({
@@ -221,6 +273,18 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus): Pro
   const erkezes = new Date(felrakasVeg.getTime() + utvonalPercek * 60000);
   const veg = new Date(erkezes.getTime() + LERAKODAS_PUFFER_PERC * 60000);
 
+  const megallok: TervezettMegallo[] = megallokSzovegei.map((m, i) => ({
+    tipus: m.tipus,
+    cim: varosNev(m.szoveg),
+    lat: megallokKoordinatak[i]?.lat ?? null,
+    lon: megallokKoordinatak[i]?.lon ?? null,
+    // Kezdeti, statikus becslés — ha van élő pozíció, actions.ts a mai
+    // napra láncba fűzve (lásd chainEloEta) ezt felülírja.
+    idopont: m.tipus === "felrako" ? kezdet : veg,
+    elhagyva: false,
+    tenylegesIdo: null,
+  }));
+
   return {
     id: row.id,
     fuvarTipus,
@@ -237,29 +301,52 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus): Pro
 }
 
 /**
- * Élő GPS-pozícióból (nem a tervezett indulásból!) becsüli meg, mikor ér
- * oda a jármű egy adott fel-/lerakó ponthoz — a célkoordinátát a hívó adja
- * át (a becsulFuvarSzakasz-ban már úgyis megtörtént geokódolás eredménye),
- * nincs szükség újabb geokódolásra.
+ * Élő GPS-pozícióból indulva, láncba fűzve frissíti a mai nap még el nem
+ * hagyott fel-/lerakó pontjainak becsült idejét: az elsőt az élő
+ * pozícióból számolja, utána minden további pontot az előzőtől (annak
+ * várható indulási idejétől) — így minden hátralévő becslés a jármű
+ * TÉNYLEGES mai haladását tükrözi, nem csak a megbízásban rögzített (csak
+ * irányadó) statikus menetrendet. A már elhagyott pontok (tenylegesIdo
+ * alapján) és a geokódolatlan (lat/lon nélküli) pontok időpontja
+ * változatlan marad — egy geokódolatlan vagy hálózati hibát adó pontnál a
+ * lánc megszakad, az onnantól hátralévők a statikus becslésüket tartják.
  */
-async function becsulEloEta(
+async function lancoltEloBecsles(
+  fuvarok: TervezettFuvarSzakasz[],
   eloPoz: { lat: number; lon: number },
-  cel: { lat: number; lon: number },
-  celLabel: string,
   most: Date
-): Promise<{ cel: string; erkezes: Date } | null> {
-  try {
-    const route = await calculateToll({
-      points: [
-        { lon: eloPoz.lon, lat: eloPoz.lat },
-        { lon: cel.lon, lat: cel.lat },
-      ],
-      ...FIXED_VEHICLE,
-    });
-    return { cel: celLabel, erkezes: new Date(most.getTime() + route.durationMin * 60000) };
-  } catch {
-    return null;
+): Promise<TervezettFuvarSzakasz[]> {
+  const sorrend = fuvarok
+    .flatMap((f, fi) => f.megallok.map((m, mi) => ({ fi, mi, m })))
+    .filter(({ m }) => !m.elhagyva)
+    .sort((a, b) => a.m.idopont.getTime() - b.m.idopont.getTime());
+
+  const eredmeny = fuvarok.map((f) => ({ ...f, megallok: [...f.megallok] }));
+
+  let pozicio = eloPoz;
+  let idoPont = most;
+
+  for (const { fi, mi, m } of sorrend) {
+    if (m.lat == null || m.lon == null) break;
+    try {
+      const route = await calculateToll({
+        points: [
+          { lon: pozicio.lon, lat: pozicio.lat },
+          { lon: m.lon, lat: m.lat },
+        ],
+        ...FIXED_VEHICLE,
+      });
+      const erkezes = new Date(idoPont.getTime() + route.durationMin * 60000);
+      const puffer = m.tipus === "felrako" ? RAKODAS_PUFFER_PERC : LERAKODAS_PUFFER_PERC;
+      eredmeny[fi].megallok[mi] = { ...m, idopont: erkezes };
+      pozicio = { lat: m.lat, lon: m.lon };
+      idoPont = new Date(erkezes.getTime() + puffer * 60000);
+    } catch {
+      break;
+    }
   }
+
+  return eredmeny;
 }
 
 /**
@@ -279,7 +366,7 @@ function laposMegallok(tervezettFuvarok: TervezettFuvarSzakasz[]): MegalloBejegy
           pozicioszam: f.pozicioszam,
           tipus: m.tipus,
           cim: m.cim,
-          idopont: m.elhagyva && m.tenylegesIdo ? m.tenylegesIdo : m.tipus === "felrako" ? f.kezdet : f.veg,
+          idopont: m.elhagyva && m.tenylegesIdo ? m.tenylegesIdo : m.idopont,
           elhagyva: m.elhagyva,
         })
       )
@@ -382,23 +469,23 @@ export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny
         // A tervezett fel-/lerakó pontok "elhagyva" (kész) jelölése a valós GPS-nyomvonal alapján.
         const pontok = idovonalPontjai(szakaszok);
         const jeloltFuvarok = tervezettFuvarok.map((f) => ({ ...f, megallok: jelolMegallokElhagyottkent(f.megallok, pontok) }));
-        const bejegyzesek = laposMegallok(jeloltFuvarok);
 
-        // Élő ETA: a legközelebbi, még el nem hagyott fel-/lerakó ponthoz,
-        // élő GPS-pozícióból számolva — ez adja a jármű-csempén a kamion-
-        // ikon melletti becsült időt.
+        // A hátralévő pontok becsült idejét élő pozícióból láncba fűzve
+        // frissítjük, hogy a jármű tényleges mai haladását tükrözzék, ne
+        // csak a megbízásban rögzített (csak irányadó) statikus menetrendet.
+        const lancoltFuvarok = livePos
+          ? await lancoltEloBecsles(jeloltFuvarok, { lat: livePos.latitude, lon: livePos.longitude }, veg)
+          : jeloltFuvarok;
+        const bejegyzesek = laposMegallok(lancoltFuvarok);
+
+        // Élő ETA: a legközelebbi, még el nem hagyott fel-/lerakó pont
+        // frissen láncolt becsült ideje — ez adja a jármű-csempén a
+        // kamion-ikon melletti becsült időt.
         let eloEta: { cel: string; erkezes: Date } | null = null;
         if (livePos) {
-          const kovetkezoMegallo = jeloltFuvarok
-            .flatMap((f) => f.megallok)
-            .find((m) => !m.elhagyva && m.lat != null && m.lon != null);
+          const kovetkezoMegallo = lancoltFuvarok.flatMap((f) => f.megallok).find((m) => !m.elhagyva);
           if (kovetkezoMegallo) {
-            eloEta = await becsulEloEta(
-              { lat: livePos.latitude, lon: livePos.longitude },
-              { lat: kovetkezoMegallo.lat!, lon: kovetkezoMegallo.lon! },
-              kovetkezoMegallo.cim,
-              veg
-            );
+            eloEta = { cel: kovetkezoMegallo.cim, erkezes: kovetkezoMegallo.idopont };
           }
         }
 
