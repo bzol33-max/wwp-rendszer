@@ -513,6 +513,14 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus, kali
  * alapján) és a geokódolatlan (lat/lon nélküli) pontok időpontja
  * változatlan marad — egy geokódolatlan vagy hálózati hibát adó pontnál a
  * lánc megszakad, az onnantól hátralévők a statikus becslésüket tartják.
+ *
+ * FONTOS: csak a MAI napra (most napja) horgonyzott pontokat láncoljuk —
+ * egy többnapos fuvar (lásd becsulFuvarSzakasz tobbNaposFuvar ága) lerakó
+ * pontja szándékosan egy KÉSŐBBI napra van horgonyozva (pl. hétfő reggel,
+ * mert a jármű éjszakára a saját telephelyre áll be). Ha ezt is bevonnánk a
+ * folyamatos menetidő-láncba, a lánc pusztán az aktuális pozíciótól számolt
+ * útvonal-idővel "ma, X perc múlva" időpontra tolná — felülírva a helyes,
+ * jövőbeli napi horgonyt, és a pont hamisan a mai listán jelenne meg.
  */
 async function lancoltEloBecsles(
   fuvarok: TervezettFuvarSzakasz[],
@@ -520,9 +528,10 @@ async function lancoltEloBecsles(
   most: Date,
   kalibracio: KalibraciosEredmeny
 ): Promise<TervezettFuvarSzakasz[]> {
+  const maiNapISO = budapestNapISO(most);
   const sorrend = fuvarok
     .flatMap((f, fi) => f.megallok.map((m, mi) => ({ fi, mi, m })))
-    .filter(({ m }) => !m.elhagyva)
+    .filter(({ m }) => !m.elhagyva && budapestNapISO(m.idopont) === maiNapISO)
     .sort((a, b) => a.m.idopont.getTime() - b.m.idopont.getTime());
 
   const eredmeny = fuvarok.map((f) => ({ ...f, megallok: [...f.megallok] }));
