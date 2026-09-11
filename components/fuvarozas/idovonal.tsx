@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Check } from "lucide-react";
 import { getIdovonalak, type JarmuIdovonalEredmeny } from "@/lib/fuvarozas/actions";
+import { setFuvarTeljesitve } from "@/lib/fuvarozas/megbizasok";
 import { SAJAT_JARMUVEK, JARMU_SZIN_DOT_CLASS, type JarmuSzin } from "@/lib/fuvarozas/vehicles";
 import { budapestNapISO } from "@/lib/fuvarozas/idozona";
 import type { IdovonalSzakasz, TervezettFuvarSzakasz } from "@/lib/fuvarozas/idovonal";
@@ -81,8 +83,33 @@ function AllasStilus(kategoria: Extract<IdovonalSzakasz, { tipus: "allas" }>["ka
   }
 }
 
-function TervezettFuvarSav({ jarmu, tervezettFuvarok }: { jarmu: (typeof SAJAT_JARMUVEK)[number]; tervezettFuvarok: TervezettFuvarSzakasz[] }) {
+function TervezettFuvarSav({
+  jarmu,
+  tervezettFuvarok,
+  onKeszJelolve,
+}: {
+  jarmu: (typeof SAJAT_JARMUVEK)[number];
+  tervezettFuvarok: TervezettFuvarSzakasz[];
+  /** A "Bér fuvarok" lista Kész gombjával és az automatikus GPS-figyelővel megegyező setFuvarTeljesitve()-t hívja — lásd handleKesz. */
+  onKeszJelolve: () => void;
+}) {
+  const [folyamatban, setFolyamatban] = useState<string | null>(null);
+
   if (tervezettFuvarok.length === 0) return null;
+
+  async function handleKesz(id: string) {
+    setFolyamatban(id);
+    try {
+      await setFuvarTeljesitve(id, true);
+      toast.success("Fuvar készre jelölve — a Bér fuvarok listán a Számla/Posta fülre került.");
+      onKeszJelolve();
+    } catch {
+      toast.error("Nem sikerült készre jelölni a fuvart.");
+    } finally {
+      setFolyamatban(null);
+    }
+  }
+
   return (
     <div className="relative h-4 w-full">
       {tervezettFuvarok.map((f) => {
@@ -91,16 +118,19 @@ function TervezettFuvarSav({ jarmu, tervezettFuvarok }: { jarmu: (typeof SAJAT_J
         const width = Math.max(0.5, right - left);
         const bizonytalan = f.idoBizonytalan || f.utvonalBizonytalan;
         return (
-          <span
+          <button
             key={f.id}
+            type="button"
+            disabled={folyamatban === f.id}
+            onClick={() => handleKesz(f.id)}
             title={`${f.megrendelo ?? "Megbízás"}${f.pozicioszam ? ` (${f.pozicioszam})` : ""}\n${f.honnan ?? "?"} → ${f.hova}\nBecsült: ${formatIdo(
               f.kezdet
             )}–${formatIdo(f.veg)}${bizonytalan ? "\n(becslés — " + (f.idoBizonytalan ? "nincs megadott időpont" : "") + (f.idoBizonytalan && f.utvonalBizonytalan ? ", " : "") + (f.utvonalBizonytalan ? "átalány menetidő" : "") + ")" : ""}${
               f.tullepiAKeretet
                 ? "\n⚠️ A jelenlegi tempó mellett ez a fuvar túlnyúlik a megengedett napi vezetési időn."
                 : ""
-            }`}
-            className={`absolute top-0 h-full rounded-sm bg-white/70 dark:bg-black/30 ${
+            }\n\nKattintás: megjelölés készre.`}
+            className={`group absolute top-0 h-full cursor-pointer rounded-sm bg-white/70 hover:bg-success/20 disabled:cursor-wait disabled:opacity-50 dark:bg-black/30 ${
               f.tullepiAKeretet ? "border-destructive" : SZIN_TERVEZETT_BORDER[jarmu.szin]
             }`}
             style={{
@@ -109,7 +139,9 @@ function TervezettFuvarSav({ jarmu, tervezettFuvarok }: { jarmu: (typeof SAJAT_J
               borderWidth: f.tullepiAKeretet ? 2 : 1.5,
               borderStyle: bizonytalan ? "dashed" : "solid",
             }}
-          />
+          >
+            <Check className="mx-auto hidden h-2.5 w-2.5 text-success group-hover:block" />
+          </button>
         );
       })}
     </div>
@@ -125,11 +157,13 @@ function IdovonalCsik({
   jarmu,
   eredmeny,
   mostPct,
+  onKeszJelolve,
 }: {
   jarmu: (typeof SAJAT_JARMUVEK)[number];
   eredmeny: JarmuIdovonalEredmeny | undefined;
   /** A "most" függőleges vonal vízszintes pozíciója (%), vagy null, ha nem a mai nap nézete (nincs mit mutatni). */
   mostPct: number | null;
+  onKeszJelolve: () => void;
 }) {
   const szakaszok = eredmeny?.szakaszok;
   const hiba = eredmeny?.hiba;
@@ -219,7 +253,7 @@ function IdovonalCsik({
           </div>
         )}
 
-        <TervezettFuvarSav jarmu={jarmu} tervezettFuvarok={tervezettFuvarok} />
+        <TervezettFuvarSav jarmu={jarmu} tervezettFuvarok={tervezettFuvarok} onKeszJelolve={onKeszJelolve} />
 
         {mostPct != null && (
           <div
@@ -336,6 +370,7 @@ export function JarmuIdovonalak() {
                 jarmu={jarmu}
                 eredmeny={adatok.find((a) => a.sofor === jarmu.sofor)}
                 mostPct={maiNap ? mostPct : null}
+                onKeszJelolve={() => load(napISO)}
               />
             ))}
             {hetiFigyelmezetesek.length > 0 && (
