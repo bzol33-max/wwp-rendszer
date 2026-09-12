@@ -46,10 +46,16 @@ export const FUVAR_STATUSZOK = Object.keys(FUVAR_STATUSZ_LABEL) as FuvarStatusz[
  */
 export const CEG_ALIAS_CSOPORTOK: { kanonikus: string; alias: string[] }[] = [
   { kanonikus: "RBT Europe", alias: ["rbt", "rbt europe", "europe"] },
+  // "ÁB SPEED Kft." és "ÁB Speed Szállítmányozási Kft." ugyanaz a partner —
+  // a "Szállítmányozási" egy plusz, leíró szó a kettő között, amit a puszta
+  // cégforma-toldalék-levágás (normalizaltCegKulcs) nem tud kiegyenlíteni,
+  // mert nem a végén, hanem a névben középen áll.
+  { kanonikus: "ÁB Speed", alias: ["ab speed", "ab speed szallitmanyozasi"] },
 ];
 
 /**
- * Cégnév normalizálása csoportosításhoz/egyeztetéshez: kisbetűs, a
+ * Cégnév normalizálása csoportosításhoz/egyeztetéshez: kisbetűs, ékezetek
+ * nélkül (pl. "ÁB Speed" és "AB Speed" ugyanarra a kulcsra esik), a
  * kötőjelek/pontok/vesszők szóközre cserélve, a végén álló gyakori
  * cégforma-toldalék (kft/zrt/bt/nyrt/kkt) levágva, többszörös szóköz
  * összevonva — így pl. "FLOTT-TRANS KFT" és "Flott Trans" ugyanarra a
@@ -59,6 +65,8 @@ export const CEG_ALIAS_CSOPORTOK: { kanonikus: string; alias: string[] }[] = [
 export function normalizaltCegKulcs(nev: string): string {
   const alap = nev
     .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
     .replace(/[-.,]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
