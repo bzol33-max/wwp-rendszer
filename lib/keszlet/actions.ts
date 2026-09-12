@@ -324,37 +324,62 @@ export async function getOsszkeszlet(): Promise<OsszkeszletRow[]> {
   return Array.from(byType.values());
 }
 
-export type OsszkeszletMovementRow = {
-  id: string;
-  date: string;
-  site: string;
+export type OsszkeszletHaviRow = {
   type: string;
-  direction: "be" | "ki";
-  partner: string | null;
-  qty: number;
-  created_by: string | null;
+  months: { label: string; be: number; ki: number }[];
 };
 
-// Összes telephely be/ki mozgása egy közös listában. Kimarad innen:
-// - a telephelyek közti mozgatás (mozgatas/mozgatas_be) — az nem valódi
-//   készletváltozás a cégen belül összesítve, csak áthelyezés a telephelyek
-//   között, a getOsszkeszlet() tábláiban is így (be/ki/mozgatas előjeles
-//   összegzéssel) semlegesíti egymást a forrás- és céloldal;
-// - a felvásárláshoz kötött tételek (purchase_id not null) — a nyíregyházi
-//   napi felvásárlás darabonként a Havi fülön már részletesen látszik, itt
-//   csak zajként jelenne meg.
-export async function getOsszkeszletMovements(limit = 40): Promise<OsszkeszletMovementRow[]> {
-  return query<OsszkeszletMovementRow>(
-    `select m.id::text, to_char(m.created_at at time zone 'Europe/Budapest', '${TIME_FMT}') as date,
-       s.name as site, t.name as type, m.direction, m.partner, m.qty, m.created_by
-     from keszlet_movements m
-     join sites s on s.id = m.site_id
-     join pallet_types t on t.id = m.type_id
-     where m.direction in ('be', 'ki') and m.purchase_id is null
-     order by m.created_at desc
-     limit $1`,
-    [limit]
+// Típusonkénti havi Be/Ki összesítés, az utolsó `monthsBack` naptári hónapra
+// (a jelenlegit is beleértve) — sosincs típusok közti összeadás, csak
+// ugyanaz a típus, hónapról hónapra. Kimarad innen ugyanaz a két dolog, mint
+// getOsszkeszlet()-ből: a telephelyek közti mozgatás (mozgatas/mozgatas_be —
+// nem valódi készletváltozás, csak áthelyezés) és a felvásárláshoz kötött
+// tételek (purchase_id not null — a Havi fülön már darabonként látszanak).
+export async function getOsszkeszletHavibontas(monthsBack = 4): Promise<OsszkeszletHaviRow[]> {
+  // Minden aktív típusra és minden hónapra ad vissza egy sort (0-val
+  // feltöltve, ha nem volt mozgás), így a UI-nak nem kell hiányzó
+  // típus/hónap kombinációkat pótolnia.
+  const rows = await query<{ type: string; sort_order: number; month_key: string; be: string; ki: string }>(
+    `with months as (
+       select date_trunc('month', ${BUDAPEST_NOW_DATE}) - (n || ' months')::interval as month_start
+       from generate_series(0, $1 - 1) as n
+     ),
+     types as (
+       select distinct t.id, t.name, t.sort_order
+       from pallet_types t
+       join site_active_types sat on sat.type_id = t.id
+       where t.name <> 'Csere'
+     )
+     select ty.name as type, ty.sort_order,
+       to_char(mo.month_start, 'YYYY-MM') as month_key,
+       coalesce(sum(m.qty) filter (where m.direction = 'be'), 0) as be,
+       coalesce(sum(m.qty) filter (where m.direction = 'ki'), 0) as ki
+     from types ty
+     cross join months mo
+     left join keszlet_movements m
+       on m.type_id = ty.id
+       and m.direction in ('be', 'ki') and m.purchase_id is null
+       and date_trunc('month', m.created_at at time zone 'Europe/Budapest') = mo.month_start
+     group by ty.name, ty.sort_order, mo.month_start
+     order by ty.sort_order, mo.month_start`,
+    [monthsBack]
   );
+
+  const monthLabel = (key: string) => {
+    const [y, m] = key.split("-").map(Number);
+    return new Date(y, m - 1, 1).toLocaleDateString("hu-HU", { month: "short" });
+  };
+
+  const byType = new Map<string, OsszkeszletHaviRow>();
+  for (const r of rows) {
+    let entry = byType.get(r.type);
+    if (!entry) {
+      entry = { type: r.type, months: [] };
+      byType.set(r.type, entry);
+    }
+    entry.months.push({ label: monthLabel(r.month_key), be: Number(r.be), ki: Number(r.ki) });
+  }
+  return Array.from(byType.values());
 }
 
 export async function getSiteSnapshot(site: string) {

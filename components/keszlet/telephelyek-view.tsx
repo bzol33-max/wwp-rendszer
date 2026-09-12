@@ -15,20 +15,20 @@ import {
 import { InventoryDialog } from "@/components/keszlet/inventory-dialog";
 import { MovementForm } from "@/components/keszlet/movement-form";
 import { VegyesSplitRow } from "@/components/keszlet/vegyes-split-row";
-import { X } from "lucide-react";
+import { Package, X } from "lucide-react";
 import { toast } from "sonner";
 import {
   getNyiregyhazaFoSnapshot,
   getSiteSnapshot,
   getOsszkeszlet,
-  getOsszkeszletMovements,
+  getOsszkeszletHavibontas,
   recordSzetvalogatas,
   deleteMovement,
   deleteMovementEvent,
   type EventRow,
   type MovementRow,
   type OsszkeszletRow,
-  type OsszkeszletMovementRow,
+  type OsszkeszletHaviRow,
 } from "@/lib/keszlet/actions";
 import { getCurrentUser } from "@/lib/current-user";
 import { useCanEdit } from "@/components/auth/edit-permission-context";
@@ -64,6 +64,43 @@ function Tile({ name, qty }: { name: string; qty: number }) {
   );
 }
 
+const SITE_ORDER = ["Nyíregyháza", "Balkány", "Szakoly"];
+const SITE_OPACITY_CLASS = ["bg-foreground/55", "bg-foreground/30", "bg-foreground/15"];
+
+function siteShares(bySite: Record<string, number>, total: number) {
+  return SITE_ORDER.filter((s) => s in bySite).map((site, i) => ({
+    site,
+    qty: bySite[site],
+    pct: total > 0 ? (bySite[site] / total) * 100 : 0,
+    opacityClass: SITE_OPACITY_CLASS[i] ?? "bg-foreground/15",
+  }));
+}
+
+// Kis oszlopdiagram — típusonként külön skálázva (a magasság csak az adott
+// típus saját Be/Ki értékeihez viszonyít, más típussal nem összevethető).
+function MiniMonthlyChart({ months }: { months: { label: string; be: number; ki: number }[] }) {
+  const max = Math.max(1, ...months.flatMap((m) => [m.be, m.ki]));
+  const colWidth = 240 / Math.max(1, months.length);
+  const barW = 8;
+  const maxH = 40;
+  return (
+    <svg viewBox="0 0 240 46" className="h-[46px] w-full">
+      <line x1={0} y1={44} x2={240} y2={44} stroke="var(--border)" strokeWidth={1} />
+      {months.map((m, i) => {
+        const center = colWidth * (i + 0.5);
+        const beH = m.be > 0 ? Math.max(2, Math.round((m.be / max) * maxH)) : 0;
+        const kiH = m.ki > 0 ? Math.max(2, Math.round((m.ki / max) * maxH)) : 0;
+        return (
+          <g key={m.label + i}>
+            {beH > 0 && <rect x={center - barW - 1} y={44 - beH} width={barW} height={beH} rx={2} fill="var(--success)" />}
+            {kiH > 0 && <rect x={center + 1} y={44 - kiH} width={barW} height={kiH} rx={2} fill="var(--destructive)" />}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 /**
  * Csempés stílusú telephely-nézet — a Készlet modul saját fülén (Nyíregyháza/
  * Balkány/Szakoly/Összkészlet, ahogy eddig is) ugyanez a komponens fut,
@@ -78,14 +115,14 @@ export function TelephelyekView({ site: active }: { site: SiteKey }) {
   const [movements, setMovements] = useState<MovementRow[]>([]);
   const [events, setEvents] = useState<EventRow[]>([]);
   const [ossz, setOssz] = useState<OsszkeszletRow[]>([]);
-  const [osszMovements, setOsszMovements] = useState<OsszkeszletMovementRow[]>([]);
+  const [osszHavi, setOsszHavi] = useState<OsszkeszletHaviRow[]>([]);
   const [inventoryOpen, setInventoryOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (active === "Összkészlet") {
-      const [rows, mv] = await Promise.all([getOsszkeszlet(), getOsszkeszletMovements()]);
+      const [rows, havi] = await Promise.all([getOsszkeszlet(), getOsszkeszletHavibontas()]);
       setOssz(rows);
-      setOsszMovements(mv);
+      setOsszHavi(havi);
       return;
     }
     if (active === "Nyíregyháza") {
@@ -153,29 +190,66 @@ export function TelephelyekView({ site: active }: { site: SiteKey }) {
         <div className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm">Összkészlet — típusonként, telephelyenkénti bontásban</CardTitle>
+              <CardTitle className="text-sm">Mozgások — típusonként</CardTitle>
             </CardHeader>
             <CardContent>
               {ossz.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Nincs aktivált típus egyik telephelyen sem.</p>
               ) : (
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(9rem,1fr))] gap-3">
-                  {ossz.map((r) => (
-                    <div key={r.type} className="rounded-lg border bg-muted/30 px-3 py-3">
-                      <div className="truncate text-xs font-medium text-muted-foreground">{r.type}</div>
-                      <div className="text-2xl font-bold tabular-nums">{r.total}</div>
-                      <div className="mt-1.5 space-y-0.5">
-                        {["Nyíregyháza", "Balkány", "Szakoly"]
-                          .filter((s) => s in r.bySite)
-                          .map((s) => (
-                            <div key={s} className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-                              <span className="truncate">{s}</span>
-                              <span className="shrink-0 font-medium tabular-nums text-foreground">{r.bySite[s]}</span>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {ossz.map((r) => {
+                    const shares = siteShares(r.bySite, r.total);
+                    const havi = osszHavi.find((h) => h.type === r.type);
+                    const months = havi?.months ?? [];
+                    const lastMonth = months[months.length - 1];
+                    return (
+                      <div key={r.type} className="flex flex-col gap-3 rounded-xl border p-3.5">
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-accent text-accent-foreground">
+                            <Package className="h-4 w-4" />
+                          </div>
+                          <div className="truncate text-sm font-medium">{r.type}</div>
+                        </div>
+
+                        <div>
+                          <div className="text-2xl leading-none font-bold">
+                            {r.total} <span className="text-sm font-normal text-muted-foreground">db</span>
+                          </div>
+                          <div className="mt-2 flex h-1.5 overflow-hidden rounded-full bg-muted">
+                            {shares.map((s) => (
+                              <div key={s.site} className={`h-full ${s.opacityClass}`} style={{ width: `${s.pct}%` }} />
+                            ))}
+                          </div>
+                          <div className="mt-1 flex justify-between text-[10.5px] text-muted-foreground">
+                            {shares.map((s) => (
+                              <span key={s.site}>
+                                {s.site.slice(0, 3)}. {s.qty}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+
+                        {months.length > 0 && (
+                          <div className="border-t pt-2.5">
+                            <MiniMonthlyChart months={months} />
+                            <div className="grid" style={{ gridTemplateColumns: `repeat(${months.length}, 1fr)` }}>
+                              {months.map((m, i) => (
+                                <div key={i} className="text-center text-[10px] text-muted-foreground">
+                                  {m.label}
+                                </div>
+                              ))}
                             </div>
-                          ))}
+                            {lastMonth && (
+                              <div className="mt-1.5 flex gap-3 text-xs">
+                                <span className="font-semibold text-success">Be {lastMonth.be}</span>
+                                <span className="font-semibold text-destructive">Ki {lastMonth.ki}</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -183,53 +257,44 @@ export function TelephelyekView({ site: active }: { site: SiteKey }) {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-sm">Mozgások — összes telephely (be/ki, mozgatás nélkül)</CardTitle>
+              <CardTitle className="text-sm">Mozgások — típusonként, havi bontásban</CardTitle>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Dátum/idő</TableHead>
-                    <TableHead>Telephely</TableHead>
-                    <TableHead>Típus</TableHead>
-                    <TableHead>Irány</TableHead>
-                    <TableHead>Partner</TableHead>
-                    <TableHead className="text-right">Db</TableHead>
-                    <TableHead>Ki</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {osszMovements.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center text-muted-foreground">
-                        Nincs rögzített mozgás.
-                      </TableCell>
-                    </TableRow>
-                  )}
-                  {osszMovements.map((m) => (
-                    <TableRow key={m.id}>
-                      <TableCell className="text-muted-foreground">{m.date}</TableCell>
-                      <TableCell>{m.site}</TableCell>
-                      <TableCell>{m.type}</TableCell>
-                      <TableCell>
-                        {m.direction === "be" ? (
-                          <Badge className="bg-success/15 text-success hover:bg-success/15">Be</Badge>
-                        ) : (
-                          <Badge variant="destructive" className="bg-destructive/10 text-destructive hover:bg-destructive/10">
-                            Ki
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>{m.partner}</TableCell>
-                      <TableCell className="text-right font-medium tabular-nums">
-                        {m.direction === "be" ? "+" : "−"}
-                        {m.qty}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">{m.created_by ?? "—"}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              {osszHavi.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nincs rögzített mozgás.</p>
+              ) : (
+                <>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Típus</TableHead>
+                        {osszHavi[0].months.map((m, i) => (
+                          <TableHead key={i} className="text-right">
+                            {m.label}
+                          </TableHead>
+                        ))}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {osszHavi.map((row) => (
+                        <TableRow key={row.type}>
+                          <TableCell className="font-medium">{row.type}</TableCell>
+                          {row.months.map((m, i) => (
+                            <TableCell key={i} className="text-right tabular-nums">
+                              <span className="font-medium text-success">{m.be}</span>
+                              {" / "}
+                              <span className="font-medium text-destructive">{m.ki}</span>
+                            </TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Zöld = Be, piros = Ki. Minden szám kizárólag a saját sorának típusára vonatkozik.
+                  </p>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>
