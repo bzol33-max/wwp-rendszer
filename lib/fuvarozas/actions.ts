@@ -179,10 +179,23 @@ const ALAPERTELMEZETT_UTVONAL_PERC = 120;
 /** Ha a lerakás a felrakástól eltérő napra esik (row.lerakas_datum), ezt tekintjük durva alapértelmezett lerakási órának azon a napon — élő GPS-pozíció esetén a lancoltEloBecsles felülírja. */
 const ALAPERTELMEZETT_LERAKAS_ORA = 8;
 
+/**
+ * Egy megbízás sora AKKOR és CSAK AKKOR tartozik egy adott saját járműhöz,
+ * ha a "jarmu" mező (a "Kocsi" választó, az elsődleges, hiteles jelölő)
+ * arra a járműre mutat. A "sofor" (szabad szöveg) mezőt csak akkor vonjuk
+ * be, ha a "jarmu" mező teljesen üres — SOHA nem a kettőt egymástól
+ * függetlenül, "vagy" kapcsolattal, mert az korábban valódi hibát okozott:
+ * ha egy megbízáson a két mező (adatbeviteli hiba miatt) egymásnak
+ * ellentmond — pl. a "Kocsi" Gergő rendszámára van állítva, de a "Sofőr"
+ * szabad szöveg mezőbe tévedésből "Micó" került —, a régi "vagy" logika a
+ * sort MINDKÉT jármű idővonalára belistázta, így Micónál olyan
+ * fel-/lerakók is megjelentek, amik valójában nem az ő fuvarjai voltak.
+ */
 function driverMatchesRow(jarmu: SajatJarmu, row: MaiFuvarSor): boolean {
-  if (row.jarmu && resolveJarmu(row.jarmu) === jarmu) return true;
-  if (row.sofor && row.sofor.trim().toLowerCase() === jarmu.sofor.toLowerCase()) return true;
-  return false;
+  if (row.jarmu) {
+    return resolveJarmu(row.jarmu) === jarmu;
+  }
+  return !!row.sofor && row.sofor.trim().toLowerCase() === jarmu.sofor.toLowerCase();
 }
 
 /** Ennél közelebb (km) egy saját telephelyhez/parkolóhoz a pozíciót "ott vagyunk"-nak tekintjük. */
