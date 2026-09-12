@@ -621,6 +621,8 @@ function FuvarDetailModal({
 type FormState = {
   tipus: FuvarTipus;
   datum: string;
+  /** Üres, ha a lerakás a felrakással azonos napra esik — csak akkor kell kitölteni, ha eltér. */
+  lerakasDatum: string;
   idopont: string;
   felrako: string;
   lerako: string;
@@ -644,6 +646,7 @@ function emptyForm(tipus: FuvarTipus): FormState {
   return {
     tipus,
     datum: todayISO(),
+    lerakasDatum: "",
     idopont: "",
     felrako: "",
     lerako: "",
@@ -668,6 +671,7 @@ function formFromRow(row: FuvarRow): FormState {
   return {
     tipus: row.tipus,
     datum: row.datum_iso,
+    lerakasDatum: row.lerakas_datum_iso ?? "",
     idopont: row.idopont ?? "",
     felrako: row.felrako ?? "",
     lerako: row.lerako,
@@ -772,7 +776,7 @@ function FuvarFields({
 }) {
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-5">
         <div className="flex flex-col gap-1.5">
           <Label>Dátum</Label>
           <Input
@@ -803,6 +807,16 @@ function FuvarFields({
             placeholder="pl. Budapest"
             value={form.lerako}
             onChange={(e) => onChange({ lerako: e.target.value })}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label title="Csak akkor add meg, ha a lerakás más napra esik, mint a felrakás (pl. éjszakázás egy saját telephelyen).">
+            Lerakás dátuma (ha eltér)
+          </Label>
+          <Input
+            type="date"
+            value={form.lerakasDatum}
+            onChange={(e) => onChange({ lerakasDatum: e.target.value })}
           />
         </div>
       </div>
@@ -1277,6 +1291,7 @@ function SajatFuvarSzerkesztoForm({
         pozicioszam: row.pozicioszam ?? undefined,
         pozicioszamNincs: row.pozicioszam_nincs,
         postazasiCim: row.postazasi_cim ?? undefined,
+        lerakasDatum: row.lerakas_datum_iso ?? undefined,
       });
       await onSaved();
       onClose();
@@ -1454,6 +1469,102 @@ function ValodiSajatFuvarLista({ refreshKey }: { refreshKey: number }) {
   );
 }
 
+/** A Bér fuvarok fül szerkesztő ablaka — a jóváhagyáskor is használt teljes mezőkészlettel (FuvarFields), a "Lerakás dátuma" mezővel együtt — ez teszi lehetővé egy tévesen rögzített dátum utólagos javítását. */
+function BerFuvarSzerkesztoDialog({
+  row,
+  onClose,
+  onSaved,
+}: {
+  row: FuvarRow | null;
+  onClose: () => void;
+  onSaved: () => void | Promise<void>;
+}) {
+  return (
+    <Dialog open={row != null} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="sm:max-w-2xl">
+        {row && <BerFuvarSzerkesztoForm key={row.id} row={row} onClose={onClose} onSaved={onSaved} />}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function BerFuvarSzerkesztoForm({
+  row,
+  onClose,
+  onSaved,
+}: {
+  row: FuvarRow;
+  onClose: () => void;
+  onSaved: () => void | Promise<void>;
+}) {
+  const [form, setForm] = useState<FormState>(formFromRow(row));
+  const [saving, setSaving] = useState(false);
+
+  function patch(p: Partial<FormState>) {
+    setForm((f) => ({ ...f, ...p }));
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!form.felrako.trim() || !form.lerako.trim()) {
+      toast.error("Add meg a felrakó és lerakó helyet.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await approveFuvar({
+        id: row.id,
+        tipus: "sajat",
+        datum: form.datum,
+        lerakasDatum: form.lerakasDatum || undefined,
+        idopont: form.idopont || undefined,
+        felrako: form.felrako,
+        lerako: form.lerako,
+        megrendelo: form.megrendelo || undefined,
+        aru: form.aru || undefined,
+        mennyiseg: form.mennyiseg || undefined,
+        suly: form.suly || undefined,
+        jarmu: form.jarmu || undefined,
+        sofor: form.sofor || undefined,
+        alvallalkozo: form.alvallalkozo || undefined,
+        fuvardij: form.fuvardij ? Number(form.fuvardij) : undefined,
+        fuvardijPenznem: form.fuvardijPenznem,
+        koltseg: form.koltseg ? Number(form.koltseg) : undefined,
+        megjegyzes: form.megjegyzes || undefined,
+        pozicioszam: form.pozicioszam || undefined,
+        pozicioszamNincs: form.pozicioszamNincs,
+        postazasiCim: form.postazasiCim || undefined,
+      });
+      await onSaved();
+      onClose();
+      toast.success("Fuvar módosítva.");
+    } catch {
+      toast.error("Nem sikerült menteni.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <>
+      <DialogHeader>
+        <DialogTitle>Bér fuvar szerkesztése</DialogTitle>
+      </DialogHeader>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+        <FuvarFields form={form} onChange={patch} />
+        <div className="flex gap-2">
+          <Button type="submit" disabled={saving}>
+            {saving ? "Mentés…" : "Mentés"}
+          </Button>
+          <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+            Mégse
+          </Button>
+        </div>
+      </form>
+    </>
+  );
+}
+
 /**
  * A "Bér fuvarok" (tipus="sajat") lista — kizárólag a megbízás-specifikus 7
  * oszloppal: 1) Dátum = a megbízás beérkezési dátuma, 2) Megrendelő,
@@ -1465,6 +1576,7 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
   const [rows, setRows] = useState<FuvarRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [reszletek, setReszletek] = useState<FuvarRow | null>(null);
+  const [szerkesztett, setSzerkesztett] = useState<FuvarRow | null>(null);
   const [utkozesek, setUtkozesek] = useState<Map<string, UtkozesJelolt[]>>(new Map());
 
   const load = useCallback(async () => {
@@ -1603,14 +1715,24 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
                     </button>
                   </TableCell>
                   <TableCell className="align-top">
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(row.id)}
-                      title="Törlés"
-                      className="text-destructive/70 hover:text-destructive"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setSzerkesztett(row)}
+                        title="Szerkesztés"
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(row.id)}
+                        title="Törlés"
+                        className="text-destructive/70 hover:text-destructive"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -1619,6 +1741,7 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
         </div>
       </CardContent>
       <FuvarDetailModal row={reszletek} onClose={() => setReszletek(null)} />
+      <BerFuvarSzerkesztoDialog row={szerkesztett} onClose={() => setSzerkesztett(null)} onSaved={load} />
     </Card>
   );
 }
@@ -1889,6 +2012,7 @@ function ElokeszitettCard({
         id: row.id,
         tipus: form.tipus,
         datum: form.datum,
+        lerakasDatum: form.lerakasDatum || undefined,
         idopont: form.idopont || undefined,
         felrako: form.felrako,
         lerako: form.lerako,

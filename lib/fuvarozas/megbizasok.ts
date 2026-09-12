@@ -32,6 +32,7 @@ const FUVAR_ROW_COLUMNS = `
   dokumentum_url, forras, ellenorzott, created_by,
   to_char(erkezett_datum, '${TIME_FMT}') as erkezett_datum,
   to_char(lerakas_datum, '${TIME_FMT}') as lerakas_datum,
+  to_char(lerakas_datum, 'YYYY-MM-DD') as lerakas_datum_iso,
   fizetesi_hatarido_nap,
   pozicioszam, pozicioszam_nincs, postazasi_cim, postazva, szamla_szam,
   postazva_at::text, teljesitve, teljesitve_at::text
@@ -539,6 +540,7 @@ export async function approveFuvar(input: ApproveFuvarInput) {
        fuvardij = $14, koltseg = $15, megjegyzes = $16,
        pozicioszam = $17, pozicioszam_nincs = $18,
        postazasi_cim = $19, fuvardij_penznem = $20,
+       lerakas_datum = $21,
        ellenorzott = true
      where id = $1`,
     [
@@ -562,6 +564,7 @@ export async function approveFuvar(input: ApproveFuvarInput) {
       input.pozicioszamNincs ?? false,
       input.postazasiCim || null,
       input.fuvardijPenznem ?? "Ft",
+      input.lerakasDatum || null,
     ]
   );
 }

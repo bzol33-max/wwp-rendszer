@@ -82,6 +82,8 @@ export type FuvarRow = {
   erkezett_datum: string | null;
   /** A lerakás dátuma, ha eltér a felrakás dátumától ("date" mezőtől) — formázva. */
   lerakas_datum: string | null;
+  /** A "lerakas_datum" mező nyers (YYYY-MM-DD) alakja — szerkesztő űrlap dátum-inputjának előtöltéséhez. */
+  lerakas_datum_iso: string | null;
   /** A megbízásban szereplő fizetési határidő, napokban (pl. 30/45/60). */
   fizetesi_hatarido_nap: number | null;
   /**
@@ -163,6 +165,8 @@ export type ApproveFuvarInput = {
   id: string;
   tipus: FuvarTipus;
   datum: string;
+  /** ISO dátum (YYYY-MM-DD) — csak akkor add meg, ha a lerakás más napra esik, mint a felrakás. */
+  lerakasDatum?: string;
   idopont?: string;
   felrako: string;
   lerako: string;
