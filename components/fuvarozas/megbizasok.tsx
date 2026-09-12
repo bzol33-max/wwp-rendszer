@@ -31,11 +31,12 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Check, ChevronDown, Pencil, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, Pencil, X } from "lucide-react";
 import {
   addFuvar,
   approveFuvar,
   deleteFuvar,
+  getAktivFuvarokUtkozeshez,
   getArchivFuvarok,
   getElokeszitettFuvarok,
   getFolyamatbanSajatFuvarok,
@@ -60,6 +61,7 @@ import {
   type FuvarRow,
   type FuvarTipus,
   type KimutatasJarmuSor,
+  type UtkozesJelolt,
 } from "@/lib/fuvarozas/fuvar-constants";
 import { getCurrentUser } from "@/lib/current-user";
 import { talalVaros, varosNev } from "@/lib/fuvarozas/varos";
@@ -91,6 +93,59 @@ function eredmeny(row: FuvarRow): number | null {
 /** A fuvardíj (vagy bármilyen összeg) megjelenítése a mező pénznemével — Ft vagy EUR. */
 function formatOsszeg(osszeg: number, penznem: FuvardijPenznem): string {
   return penznem === "EUR" ? `${osszeg.toLocaleString("hu-HU")} €` : `${osszeg.toLocaleString("hu-HU")} Ft`;
+}
+
+/**
+ * Jármű-ütközések (kettős beosztás) keresése: két fuvar ütközik, ha
+ * ugyanahhoz a járműhöz van rendelve (resolveJarmu-val egyeztetve, mert a
+ * "jarmu" mező szabad szöveg), és a [datum, lerakas_datum] dátumtartományuk
+ * átfedi egymást — egy kocsi fizikailag nem lehet egyszerre két helyen. A
+ * visszaadott Map minden ütköző fuvar id-jéhez a VELE ütköző többi fuvart
+ * rendeli, hogy a figyelmeztetés meg tudja mondani, mivel ütközik.
+ */
+function talalJarmuUtkozeseket(sorok: UtkozesJelolt[]): Map<string, UtkozesJelolt[]> {
+  const csoportok = new Map<string, UtkozesJelolt[]>();
+  for (const s of sorok) {
+    const jarmu = s.jarmu ? resolveJarmu(s.jarmu) : null;
+    if (!jarmu) continue;
+    const lista = csoportok.get(jarmu.sofor) ?? [];
+    lista.push(s);
+    csoportok.set(jarmu.sofor, lista);
+  }
+  const utkozesek = new Map<string, UtkozesJelolt[]>();
+  for (const lista of csoportok.values()) {
+    for (let i = 0; i < lista.length; i++) {
+      for (let j = i + 1; j < lista.length; j++) {
+        const a = lista[i];
+        const b = lista[j];
+        const aVeg = a.lerakas_datum ?? a.datum;
+        const bVeg = b.lerakas_datum ?? b.datum;
+        if (a.datum <= bVeg && b.datum <= aVeg) {
+          utkozesek.set(a.id, [...(utkozesek.get(a.id) ?? []), b]);
+          utkozesek.set(b.id, [...(utkozesek.get(b.id) ?? []), a]);
+        }
+      }
+    }
+  }
+  return utkozesek;
+}
+
+/** Figyelmeztető ikon, ha egy fuvar más(ok)ra átfedő időszakban ugyanarra a járműre van beosztva — a tooltip felsorolja, mivel ütközik. */
+function JarmuUtkozesJel({ masokkal }: { masokkal: UtkozesJelolt[] }) {
+  const reszletek = masokkal
+    .map((m) => {
+      const datumSzoveg = m.lerakas_datum && m.lerakas_datum !== m.datum ? `${m.datum} – ${m.lerakas_datum}` : m.datum;
+      return `${m.megrendelo ?? "—"}: ${varosNev(m.felrako)} → ${varosNev(m.lerako)} (${datumSzoveg})`;
+    })
+    .join("\n");
+  return (
+    <span
+      title={`Ütközés — ugyanez a jármű egy másik, átfedő időszakú fuvarra is be van osztva:\n${reszletek}`}
+      className="inline-flex shrink-0 items-center text-destructive"
+    >
+      <AlertTriangle className="h-3.5 w-3.5" />
+    </span>
+  );
 }
 
 /**
@@ -1265,10 +1320,15 @@ function ValodiSajatFuvarLista({ refreshKey }: { refreshKey: number }) {
   const [loading, setLoading] = useState(true);
   const [reszletek, setReszletek] = useState<FuvarRow | null>(null);
   const [szerkesztett, setSzerkesztett] = useState<FuvarRow | null>(null);
+  const [utkozesek, setUtkozesek] = useState<Map<string, UtkozesJelolt[]>>(new Map());
 
   const load = useCallback(async () => {
-    const data = await getFolyamatbanValodiSajatFuvarok();
+    const [data, utkozesSorok] = await Promise.all([
+      getFolyamatbanValodiSajatFuvarok(),
+      getAktivFuvarokUtkozeshez().catch(() => [] as UtkozesJelolt[]),
+    ]);
     setRows(data);
+    setUtkozesek(talalJarmuUtkozeseket(utkozesSorok));
   }, []);
 
   useEffect(() => {
@@ -1343,7 +1403,12 @@ function ValodiSajatFuvarLista({ refreshKey }: { refreshKey: number }) {
                       ? `${varosNev(row.felrako)} → ${varosNev(row.lerako)}`
                       : varosNev(row.lerako)}
                   </TableCell>
-                  <TableCell>{row.jarmu ? <JarmuJelolo value={row.jarmu} /> : "—"}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-1">
+                      {row.jarmu ? <JarmuJelolo value={row.jarmu} /> : "—"}
+                      {utkozesek.has(row.id) && <JarmuUtkozesJel masokkal={utkozesek.get(row.id)!} />}
+                    </div>
+                  </TableCell>
                   <TableCell className="text-right tabular-nums">
                     <KoltsegCell felrako={row.felrako} lerako={row.lerako} />
                   </TableCell>
@@ -1400,10 +1465,15 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
   const [rows, setRows] = useState<FuvarRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [reszletek, setReszletek] = useState<FuvarRow | null>(null);
+  const [utkozesek, setUtkozesek] = useState<Map<string, UtkozesJelolt[]>>(new Map());
 
   const load = useCallback(async () => {
-    const data = await getFolyamatbanSajatFuvarok();
+    const [data, utkozesSorok] = await Promise.all([
+      getFolyamatbanSajatFuvarok(),
+      getAktivFuvarokUtkozeshez().catch(() => [] as UtkozesJelolt[]),
+    ]);
     setRows(data);
+    setUtkozesek(talalJarmuUtkozeseket(utkozesSorok));
   }, []);
 
   useEffect(() => {
@@ -1514,7 +1584,10 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
                     />
                   </TableCell>
                   <TableCell className="align-top">
-                    {row.jarmu ? <JarmuJelolo value={row.jarmu} /> : "—"}
+                    <div className="flex items-center gap-1">
+                      {row.jarmu ? <JarmuJelolo value={row.jarmu} /> : "—"}
+                      {utkozesek.has(row.id) && <JarmuUtkozesJel masokkal={utkozesek.get(row.id)!} />}
+                    </div>
                   </TableCell>
                   <TableCell className="align-top text-right tabular-nums">
                     <KoltsegCell felrako={row.felrako} lerako={row.lerako} />
