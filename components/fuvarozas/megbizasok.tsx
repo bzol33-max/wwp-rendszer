@@ -2026,6 +2026,27 @@ function ArchivCegCsoport({
   );
 }
 
+/**
+ * Cégnév-aliasok — amikor a Drive-automatika ugyanazt a partnert eltérő,
+ * TARTALMILAG is eltérő (nem csak kis/nagybetűs vagy szóköz-) néven olvassa
+ * ki különböző megbízásokból (pl. "RBT" / "RBT Europe" / önmagában
+ * "EUROPE" — mind ugyanaz a partner), itt vonható össze egy közös,
+ * megjelenítendő névre. Csak pontos (whitespace/kis-nagybetű-normalizált)
+ * egyezésre illeszkedik, nem részleges/tartalmazó egyezésre — bővíthető,
+ * ha újabb ilyen, megerősített esetet találunk.
+ */
+const CEG_ALIAS_CSOPORTOK: { kanonikus: string; alias: string[] }[] = [
+  { kanonikus: "RBT Europe", alias: ["rbt", "rbt europe", "europe"] },
+];
+
+function ceglNevKanonikusan(nyersNev: string): string {
+  const norm = nyersNev.toLowerCase();
+  const csoport = CEG_ALIAS_CSOPORTOK.find((c) => c.alias.includes(norm));
+  return csoport?.kanonikus ?? nyersNev;
+}
+
+const ARCHIV_EGYEB_KULCS = "__egyeb";
+
 function ArchivLista() {
   const [rows, setRows] = useState<FuvarRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -2073,32 +2094,41 @@ function ArchivLista() {
     ? rows.filter((row) => archivKeresoSzoveg(row).includes(keresoNorm))
     : rows;
 
-  // Cégenkénti csoportosítás — MINDEN megrendelő (és a saját fuvarok közös
-  // "Well-worn Pallet" csoportja) önálló, névvel jelölt, összecsukható
-  // mappát kap, akkor is, ha csak 1 fuvar van benne — ugyanaz a minta, mint
-  // a Kapcsolatok fülön. A csoportosítás kulcsa kis-nagybetűtől és a
+  // Cégenkénti csoportosítás. A csoportosítás kulcsa kis-nagybetűtől és a
   // szóközöktől (elejétől/végétől, több egymás utánitól) FÜGGETLEN — a
   // Drive-automatika ugyanazt a partnert néha eltérő írásmóddal olvassa ki
-  // (pl. "RBT", "rbt Europe", "  EUROPE") —, hogy ez ne törje szét egy
-  // partner fuvarjait több külön mappára. A csoport címeként az elsőként
-  // (itt: legutóbb archivált sorrendben) látott, whitespace-normalizált —
-  // de nem kisbetűsített — írásmód marad látható.
+  // (pl. "RBT", "rbt Europe", "  EUROPE") —, plusz a CEG_ALIAS_CSOPORTOK
+  // listával a ténylegesen ugyanazt jelentő, de tartalmilag is eltérő
+  // neveket (pl. "RBT" / "RBT Europe" / "EUROPE" mind ugyanaz a partner)
+  // egy közös, kanonikus névre vonjuk össze.
+  //
+  // A saját fuvarok közös "Well-worn Pallet" csoportja mindig önálló,
+  // névvel jelölt mappát kap; a bér fuvaroknál (megrendelő szerint) csak
+  // azok a partnerek, akiktől legalább 2 fuvar van — az 1 megbízásos
+  // partnerek egy közös "Egyéb" mappába kerülnek, hogy ne legyen tucatnyi
+  // egysoros "csoport" a listában.
   const csoportok = new Map<string, { cim: string; rows: FuvarRow[] }>();
   for (const row of szurtRows) {
     const nyersNev =
       row.tipus === "ber" ? SAJAT_CEG_NEV : row.megrendelo?.trim().replace(/\s+/g, " ") || "(nincs megrendelő)";
-    const kulcs = nyersNev.toLowerCase();
+    const kanonikusNev = row.tipus === "ber" ? nyersNev : ceglNevKanonikusan(nyersNev);
+    const kulcs = kanonikusNev.toLowerCase();
     const csoport = csoportok.get(kulcs);
     if (csoport) {
       csoport.rows.push(row);
     } else {
-      csoportok.set(kulcs, { cim: nyersNev, rows: [row] });
+      csoportok.set(kulcs, { cim: kanonikusNev, rows: [row] });
     }
   }
   const sajatKulcs = SAJAT_CEG_NEV.toLowerCase();
-  const csoportLista = [...csoportok.entries()].sort(([kulcsA, a], [kulcsB, b]) =>
-    kulcsA === sajatKulcs ? -1 : kulcsB === sajatKulcs ? 1 : a.cim.localeCompare(b.cim, "hu")
-  );
+  const nevesCsoportok = [...csoportok.entries()]
+    .filter(([kulcs, csoport]) => kulcs === sajatKulcs || csoport.rows.length >= 2)
+    .sort(([kulcsA, a], [kulcsB, b]) =>
+      kulcsA === sajatKulcs ? -1 : kulcsB === sajatKulcs ? 1 : a.cim.localeCompare(b.cim, "hu")
+    );
+  const egyebSorok = [...csoportok.entries()]
+    .filter(([kulcs, csoport]) => kulcs !== sajatKulcs && csoport.rows.length < 2)
+    .flatMap(([, csoport]) => csoport.rows);
 
   return (
     <Card>
@@ -2117,7 +2147,7 @@ function ArchivLista() {
             {kereso ? "Nincs a keresésnek megfelelő archivált fuvar." : "Még nincs archivált fuvar."}
           </p>
         )}
-        {csoportLista.map(([kulcs, { cim, rows: lista }]) => (
+        {nevesCsoportok.map(([kulcs, { cim, rows: lista }]) => (
           <ArchivCegCsoport
             key={kulcs}
             cim={cim}
@@ -2128,6 +2158,18 @@ function ArchivLista() {
             mutatMegrendelot={kulcs === sajatKulcs}
           />
         ))}
+        {egyebSorok.length > 0 && (
+          <ArchivCegCsoport
+            key={ARCHIV_EGYEB_KULCS}
+            cim="Egyéb (1 megbízásos partnerek)"
+            cimClassName="text-sm font-medium text-muted-foreground"
+            rows={egyebSorok}
+            onVisszaallitas={handleVisszaallitas}
+            open={keresoNorm.length > 0 || nyitottCsoportok.has(ARCHIV_EGYEB_KULCS)}
+            onToggle={() => toggleCsoport(ARCHIV_EGYEB_KULCS)}
+            mutatMegrendelot
+          />
+        )}
       </CardContent>
     </Card>
   );
