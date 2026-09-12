@@ -577,6 +577,7 @@ type FormState = {
   sofor: string;
   alvallalkozo: string;
   fuvardij: string;
+  fuvardijPenznem: FuvardijPenznem;
   koltseg: string;
   megjegyzes: string;
   pozicioszam: string;
@@ -599,6 +600,7 @@ function emptyForm(tipus: FuvarTipus): FormState {
     sofor: "",
     alvallalkozo: "",
     fuvardij: "",
+    fuvardijPenznem: "Ft",
     koltseg: "",
     megjegyzes: "",
     pozicioszam: "",
@@ -622,6 +624,7 @@ function formFromRow(row: FuvarRow): FormState {
     sofor: row.sofor ?? "",
     alvallalkozo: row.alvallalkozo ?? "",
     fuvardij: row.fuvardij != null ? String(row.fuvardij) : "",
+    fuvardijPenznem: row.fuvardij_penznem,
     koltseg: row.koltseg != null ? String(row.koltseg) : "",
     megjegyzes: row.megjegyzes ?? "",
     pozicioszam: row.pozicioszam ?? "",
@@ -821,12 +824,22 @@ function FuvarFields({
           </div>
         )}
         <div className="flex flex-col gap-1.5">
-          <Label>Fuvardíj (Ft)</Label>
-          <Input
-            type="number"
-            value={form.fuvardij}
-            onChange={(e) => onChange({ fuvardij: e.target.value })}
-          />
+          <Label>Fuvardíj</Label>
+          <div className="flex items-center gap-1">
+            <Input
+              type="number"
+              value={form.fuvardij}
+              onChange={(e) => onChange({ fuvardij: e.target.value })}
+            />
+            <button
+              type="button"
+              title="Pénznem váltása (Ft / EUR)"
+              onClick={() => onChange({ fuvardijPenznem: form.fuvardijPenznem === "Ft" ? "EUR" : "Ft" })}
+              className="shrink-0 rounded px-2 py-2 text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              {form.fuvardijPenznem}
+            </button>
+          </div>
         </div>
         <div className="flex flex-col gap-1.5">
           <Label>{form.tipus === "sajat" ? "Költség (Ft)" : "Alvállalkozói díj (Ft)"}</Label>
@@ -964,6 +977,7 @@ function FuvarForm({
         sofor: minimal ? undefined : form.sofor || undefined,
         alvallalkozo: minimal ? undefined : form.alvallalkozo || undefined,
         fuvardij: minimal ? undefined : form.fuvardij ? Number(form.fuvardij) : undefined,
+        fuvardijPenznem: minimal ? undefined : form.fuvardijPenznem,
         koltseg: minimal ? undefined : form.koltseg ? Number(form.koltseg) : undefined,
         megjegyzes: minimal ? undefined : form.megjegyzes || undefined,
         pozicioszam: form.pozicioszam || undefined,
@@ -1074,7 +1088,10 @@ async function szamitottUtKoltseg(
   const from = felrako?.trim();
   const to = lerako?.trim();
   if (!from || !to) return null;
-  const key = `${from} ${to}`;
+  // A "->" elválasztó (nem sima szóköz) kell, különben pl. "Nyíregyháza Ipari
+  // Park" -> "Debrecen" és "Nyíregyháza" -> "Ipari Park Debrecen" ugyanarra
+  // a kulcsra futna, és tévesen megosztanák a gyorsítótárazott költséget.
+  const key = `${from}->${to}`;
 
   if (koltsegCache.has(key)) return koltsegCache.get(key) ?? null;
   const inFlight = koltsegInFlight.get(key);
@@ -1199,6 +1216,7 @@ function SajatFuvarSzerkesztoForm({
         sofor: row.sofor ?? undefined,
         alvallalkozo: row.alvallalkozo ?? undefined,
         fuvardij: row.fuvardij ?? undefined,
+        fuvardijPenznem: row.fuvardij_penznem,
         koltseg: row.koltseg ?? undefined,
         megjegyzes: row.megjegyzes ?? undefined,
         pozicioszam: row.pozicioszam ?? undefined,
@@ -1809,6 +1827,7 @@ function ElokeszitettCard({
         sofor: form.sofor || undefined,
         alvallalkozo: form.alvallalkozo || undefined,
         fuvardij: form.fuvardij ? Number(form.fuvardij) : undefined,
+        fuvardijPenznem: form.fuvardijPenznem,
         koltseg: form.koltseg ? Number(form.koltseg) : undefined,
         megjegyzes: form.megjegyzes || undefined,
         pozicioszam: form.pozicioszam || undefined,

@@ -194,14 +194,26 @@ export function Kapcsolatok() {
     );
   }, [rows, kereses_norm]);
 
+  // A cégenkénti csoportosítás kulcsa kis-nagybetűtől és a szóközöktől
+  // (elejétől/végétől, több egymás utánitól) FÜGGETLEN — ugyanaz a cég
+  // eltérő írásmóddal is bekerülhet (pl. Gmail-ből származó adatnál), és
+  // enélkül ez szétszórná egy partner kapcsolatait több külön mappára
+  // (ugyanaz a hibaosztály, amit az Archív fülön is javítottunk). A mappa
+  // címeként az elsőként látott, whitespace-normalizált írásmód marad
+  // látható.
   const csoportok = useMemo(() => {
-    const map = new Map<string, KapcsolatRow[]>();
+    const map = new Map<string, { cim: string; rows: KapcsolatRow[] }>();
     for (const row of szurtRows) {
-      const lista = map.get(row.ceg) ?? [];
-      lista.push(row);
-      map.set(row.ceg, lista);
+      const nyersNev = row.ceg.trim().replace(/\s+/g, " ");
+      const kulcs = nyersNev.toLowerCase();
+      const csoport = map.get(kulcs);
+      if (csoport) {
+        csoport.rows.push(row);
+      } else {
+        map.set(kulcs, { cim: nyersNev, rows: [row] });
+      }
     }
-    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0], "hu"));
+    return Array.from(map.entries()).sort((a, b) => a[1].cim.localeCompare(b[1].cim, "hu"));
   }, [szurtRows]);
 
   function toggleCeg(ceg: string) {
@@ -257,14 +269,14 @@ export function Kapcsolatok() {
         )}
 
         <div className="flex flex-col gap-2">
-          {csoportok.map(([ceg, kapcsolatok]) => (
+          {csoportok.map(([kulcs, { cim, rows: kapcsolatok }]) => (
             <CegCsoport
-              key={ceg}
-              ceg={ceg}
+              key={kulcs}
+              ceg={cim}
               kapcsolatok={kapcsolatok}
               onDelete={handleDelete}
-              open={kereses_norm.length > 0 || nyitottCegek.has(ceg)}
-              onToggle={() => toggleCeg(ceg)}
+              open={kereses_norm.length > 0 || nyitottCegek.has(kulcs)}
+              onToggle={() => toggleCeg(kulcs)}
             />
           ))}
         </div>

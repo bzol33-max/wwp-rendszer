@@ -92,5 +92,12 @@ export function varosNev(value: string | null | undefined): string {
   if (megallok.length <= 1) return varosNevEgyMegallobol(value);
 
   const varosok = megallok.map(varosNevEgyMegallobol);
-  return varosok.filter((v, i) => i === 0 || v !== varosok[i - 1]).join(" + ");
+  // Kis-nagybetűtől és a szóközöktől független összehasonlítás — a
+  // talalVaros a városnevet a nyers, szabad szöveges címből vágja ki,
+  // írásmód-kanonizálás nélkül, így ugyanaz a város két szomszédos
+  // állomásnál eltérő írásmóddal is szerepelhet (pl. "Budapest" és
+  // "BUDAPEST"), amit a sima "!==" nem ismerne fel duplikátumnak.
+  return varosok
+    .filter((v, i) => i === 0 || v.trim().toLowerCase() !== varosok[i - 1].trim().toLowerCase())
+    .join(" + ");
 }
