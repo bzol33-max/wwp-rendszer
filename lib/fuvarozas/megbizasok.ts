@@ -1,6 +1,7 @@
 "use server";
 
 import { query } from "@/lib/db";
+import { ceglNevKanonikusan, normalizaltCegKulcs } from "@/lib/fuvarozas/fuvar-constants";
 import type {
   FuvarTipus,
   FuvarStatusz,
@@ -218,7 +219,40 @@ export async function getElokeszitettFuvarok(): Promise<FuvarRow[]> {
  * sort ("on conflict do nothing") — ez a végső védelem a duplikálás ellen,
  * a drive-allapot végpont saját dedup-logikája mellett.
  */
+/**
+ * A Drive/Gmail-automatika minden megbízást a saját dokumentumának
+ * szövegéből olvas ki újra, cégnyilvántartás nélkül — ezért ugyanaz a
+ * partner megbízásonként eltérő írásmóddal (kis/nagybetű, kötőjel,
+ * cégforma-toldalék, vagy a CEG_ALIAS_CSOPORTOK-ban rögzített, tartalmilag
+ * eltérő névváltozat) kerülhet be. Ez a lépés az addFuvar/approveFuvar
+ * mentés ELŐTT lefutva a DB-ben MÁR meglévő megrendelő-nevek közül
+ * kiválasztja azt, amelyik ugyanarra a normalizált kulcsra esik (a
+ * leggyakrabban előfordulót, ha korábbról több variáns is létezne), és azt
+ * írja be — így maga a tárolt adat is egységesedik egyetlen írásmódra,
+ * nem csak az Archív/Kapcsolatok fülek megjelenítési csoportosítása.
+ * Teljesen új partnernél (nincs egyező kulcs) a whitespace-normalizált
+ * nyers nevet adja vissza.
+ */
+async function kanonikusMegrendeloNev(nyersNev: string | null | undefined): Promise<string | null> {
+  const nev = nyersNev?.trim().replace(/\s+/g, " ");
+  if (!nev) return null;
+  const kulcs = normalizaltCegKulcs(ceglNevKanonikusan(nev));
+  const meglevok = await query<{ megrendelo: string }>(
+    `select megrendelo from fuvar_megbizasok
+     where megrendelo is not null
+     group by megrendelo
+     order by count(*) desc`
+  );
+  for (const { megrendelo } of meglevok) {
+    if (normalizaltCegKulcs(ceglNevKanonikusan(megrendelo)) === kulcs) {
+      return megrendelo;
+    }
+  }
+  return nev;
+}
+
 export async function addFuvar(input: AddFuvarInput) {
+  const megrendelo = await kanonikusMegrendeloNev(input.megrendelo);
   await query(
     `insert into fuvar_megbizasok
        (tipus, datum, idopont, felrako, lerako, megrendelo, aru, mennyiseg, suly,
@@ -234,7 +268,7 @@ export async function addFuvar(input: AddFuvarInput) {
       input.idopont || null,
       input.felrako || null,
       input.lerako,
-      input.megrendelo || null,
+      megrendelo,
       input.aru || null,
       input.mennyiseg || null,
       input.suly || null,
@@ -532,6 +566,7 @@ export async function getPostazasiCimJavaslat(megrendelo: string): Promise<strin
 
 /** A "Jóváhagy" / "Módosít" gomb: a mezőket (esetleg módosítva) menti, és ellenorzott = true. */
 export async function approveFuvar(input: ApproveFuvarInput) {
+  const megrendelo = await kanonikusMegrendeloNev(input.megrendelo);
   await query(
     `update fuvar_megbizasok set
        tipus = $2, datum = $3, idopont = $4, felrako = $5, lerako = $6,
@@ -550,7 +585,7 @@ export async function approveFuvar(input: ApproveFuvarInput) {
       input.idopont || null,
       input.felrako,
       input.lerako,
-      input.megrendelo || null,
+      megrendelo,
       input.aru || null,
       input.mennyiseg || null,
       input.suly || null,
