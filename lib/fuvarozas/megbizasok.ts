@@ -122,9 +122,16 @@ export async function getTeljesitesJeloltek(): Promise<TeljesitesJelolt[]> {
 
 /**
  * Egy adott nap (alapértelmezetten a mai) saját fuvarjai — akár aznap
- * kell felrakni, akár aznap kell lerakni —, nyers dátumokkal, a napi
- * jármű-idővonalra (GPS-idővonal + tervezett fuvarok) történő
- * időpont-becsléshez.
+ * kell felrakni, akár aznap kell lerakni, AKÁR a kettő közé eső napon (egy
+ * többnapos fuvar felrakás és lerakás közti napjain, pl. amíg a jármű a
+ * saját telephelyen áll) —, nyers dátumokkal, a napi jármű-idővonalra
+ * (GPS-idővonal + tervezett fuvarok) történő időpont-becsléshez.
+ *
+ * FONTOS: korábban ez csak a felrakás VAGY a lerakás napjára illeszkedett
+ * (egyenlőségvizsgálattal) — egy péntek-hétfő közti többnapos fuvar emiatt
+ * szombaton/vasárnap teljesen eltűnt a GPS idővonalról (majd hétfőn
+ * "visszatért"), holott a fuvar ezeken a napokon is folyamatban van (csak
+ * éppen áll). A tartomány-illesztés ezt a hézagot zárja be.
  */
 export async function getMaiSajatFuvarok(nap?: string): Promise<MaiFuvarSor[]> {
   return query<MaiFuvarSor>(
@@ -135,8 +142,8 @@ export async function getMaiSajatFuvarok(nap?: string): Promise<MaiFuvarSor[]> {
        jarmu, sofor, pozicioszam
      from fuvar_megbizasok
      where tipus = 'sajat' and statusz <> 'torolt'
-       and (datum = coalesce($1::date, current_date)
-            or coalesce(lerakas_datum, datum) = coalesce($1::date, current_date))
+       and datum <= coalesce($1::date, current_date)
+       and coalesce(lerakas_datum, datum) >= coalesce($1::date, current_date)
      order by idopont nulls last, id asc
      limit 100`,
     [nap ?? null]
@@ -160,8 +167,8 @@ export async function getMaiValodiSajatFuvarok(nap?: string): Promise<MaiFuvarSo
        jarmu, sofor, pozicioszam
      from fuvar_megbizasok
      where tipus = 'ber' and statusz <> 'torolt'
-       and (datum = coalesce($1::date, current_date)
-            or coalesce(lerakas_datum, datum) = coalesce($1::date, current_date))
+       and datum <= coalesce($1::date, current_date)
+       and coalesce(lerakas_datum, datum) >= coalesce($1::date, current_date)
      order by idopont nulls last, id asc
      limit 100`,
     [nap ?? null]

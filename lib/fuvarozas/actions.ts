@@ -607,11 +607,25 @@ function laposMegallok(tervezettFuvarok: TervezettFuvarSzakasz[]): MegalloBejegy
 }
 
 /** A megjelenített napra eső és a rákövetkező naptári napra átcsúszott pontok szétválasztása. */
+/**
+ * A megjelenített napra eső, a rákövetkező napokra átcsúszott, ÉS (a
+ * getMaiSajatFuvarok/getMaiValodiSajatFuvarok tartomány-illesztése miatt)
+ * egy KORÁBBI napról áthúzódó pont is előfordulhat itt — egy többnapos
+ * fuvar már lezajlott felrakója, miközben a lerakó napja még hátravan.
+ * Az ilyen, a megjelenített napnál KORÁBBI pontot egyszerűen kihagyjuk:
+ * már megtörtént, a "Későbbi napra átcsúszva" doboz (ami kifejezetten a
+ * JÖVŐBELI napra eső pontoknak szól) félrevezető helye lenne neki.
+ */
 function szetvalasztNapSzerint(bejegyzesek: MegalloBejegyzes[], napISO: string): { maiMegallok: MegalloBejegyzes[]; holnapiMegallok: MegalloBejegyzes[] } {
   const maiMegallok: MegalloBejegyzes[] = [];
   const holnapiMegallok: MegalloBejegyzes[] = [];
   for (const b of bejegyzesek) {
-    (budapestNapISO(b.idopont) === napISO ? maiMegallok : holnapiMegallok).push(b);
+    const napja = budapestNapISO(b.idopont);
+    if (napja === napISO) {
+      maiMegallok.push(b);
+    } else if (napja > napISO) {
+      holnapiMegallok.push(b);
+    }
   }
   return { maiMegallok, holnapiMegallok };
 }
