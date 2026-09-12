@@ -98,15 +98,26 @@ export async function fetchGazolajAr(): Promise<GazolajAr> {
   const evMatch = headerCells[0].match(/\d{4}/);
   const ev = evMatch ? evMatch[0] : String(new Date().getFullYear());
 
+  // FONTOS: nem az első érvényes sort fogadjuk el — nem tudhatjuk előre,
+  // hogy a NAV táblázata időrendben növekvő vagy csökkenő sorrendben
+  // sorolja-e fel a hónapokat, egy növekvő sorrend esetén az "első találat"
+  // logika egész évben a januári (legrégebbi) árat adná vissza a friss
+  // helyett. Ehelyett minden érvényes sort összegyűjtünk, és a legnagyobb
+  // hónap-sorszámút (= a legfrissebbet) választjuk.
+  const talalatok: { honapIdx: number; honap: string; ar: number }[] = [];
   for (const row of rows.slice(1)) {
     const cells = extractCells(row);
     const honap = cells[0]?.toLowerCase();
-    if (!honap || !HONAPOK.includes(honap)) continue;
+    const honapIdx = honap ? HONAPOK.indexOf(honap) : -1;
+    if (honapIdx === -1) continue;
     const arSzoveg = cells[gazolajPiaciIdx];
     const ar = Number(arSzoveg?.replace(/[^\d]/g, ""));
     if (!ar || ar < 200 || ar > 2000) continue; // életszerűtlen érték — kihagyjuk
-    return { ar, cimke: `${ev}. ${honap}` };
+    talalatok.push({ honapIdx, honap, ar });
   }
-
-  throw new GazolajArError("Nem található érvényes havi gázolajár a táblázatban.");
+  if (talalatok.length === 0) {
+    throw new GazolajArError("Nem található érvényes havi gázolajár a táblázatban.");
+  }
+  const legfrissebb = talalatok.reduce((a, b) => (b.honapIdx > a.honapIdx ? b : a));
+  return { ar: legfrissebb.ar, cimke: `${ev}. ${legfrissebb.honap}` };
 }

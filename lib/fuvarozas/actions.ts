@@ -413,7 +413,10 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus, kali
   const parsedIdo = parseIdopontSzoveg(row.idopont);
   const idoBizonytalan = !parsedIdo;
   const [ev, ho, napSzam] = row.datum.split("-").map(Number);
-  const kezdet = new Date(ev, ho - 1, napSzam, parsedIdo?.ora ?? ALAPERTELMEZETT_FELRAKAS_ORA, parsedIdo?.perc ?? 0, 0);
+  // budapestFalioraToInstant (NEM a nyers new Date(...) konstruktor) kell
+  // ide — a szerver (Railway, UTC) helyi ideje eltér Budapesttől, a nyers
+  // konstruktor a megadott órát tévesen szerver-időként értelmezné.
+  const kezdet = budapestFalioraToInstant(ev, ho, napSzam, parsedIdo?.ora ?? ALAPERTELMEZETT_FELRAKAS_ORA, parsedIdo?.perc ?? 0, 0);
 
   // A felrakó/lerakó mező néha több állomást tartalmaz egyetlen szövegben
   // összefűzve (pl. két lerakóhely egy körjáraton) — bontsMegallokra ezt
@@ -467,7 +470,7 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus, kali
   let veg: Date;
   if (tobbNaposFuvar) {
     const [lev, lho, lnap] = row.lerakas_datum!.split("-").map(Number);
-    veg = new Date(lev, lho - 1, lnap, ALAPERTELMEZETT_LERAKAS_ORA, 0, 0);
+    veg = budapestFalioraToInstant(lev, lho, lnap, ALAPERTELMEZETT_LERAKAS_ORA, 0, 0);
     // A lerakás napi órája itt csak durva alapértelmezés — jelöljük bizonytalannak, amíg élő pozícióból nem pontosodik.
     utvonalBizonytalan = true;
   } else {
