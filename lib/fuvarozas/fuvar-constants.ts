@@ -200,3 +200,23 @@ export type KimutatasJarmuSor = {
   fuvardij: number | null;
   fuvardij_penznem: FuvardijPenznem;
 };
+
+/**
+ * Egy fuvar a jármű-ütközés (kettős beosztás) kereséshez — csak a
+ * jármű-hozzárendeléshez és a dátumtartományhoz szükséges mezőkkel. Két
+ * fuvar akkor "ütközik", ha ugyanahhoz a járműhöz tartoznak, és a
+ * [datum, lerakas_datum] dátumtartományuk átfedi egymást — egy kocsi
+ * fizikailag nem lehet egyszerre két helyen.
+ */
+export type UtkozesJelolt = {
+  id: string;
+  jarmu: string | null;
+  sofor: string | null;
+  /** ISO dátum (YYYY-MM-DD) — a felrakás napja. */
+  datum: string;
+  /** ISO dátum (YYYY-MM-DD), ha a lerakás más napra esik. */
+  lerakas_datum: string | null;
+  felrako: string | null;
+  lerako: string;
+  megrendelo: string | null;
+};

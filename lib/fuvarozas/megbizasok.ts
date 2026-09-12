@@ -11,6 +11,7 @@ import type {
   TeljesitesJelolt,
   FuvardijPenznem,
   KimutatasJarmuSor,
+  UtkozesJelolt,
 } from "@/lib/fuvarozas/fuvar-constants";
 
 // FIGYELEM: ez egy "use server" fájl — Next.js-ben ez KIZÁRÓLAG async
@@ -417,6 +418,31 @@ export async function getKimutatasJarmuFuvarok(): Promise<KimutatasJarmuSor[]> {
        and jarmu is not null and jarmu <> ''
      order by datum desc
      limit 1000`
+  );
+}
+
+/**
+ * Minden még aktív (a lerakás — vagy ha nincs külön megadva, a felrakás —
+ * dátuma még nem múlt el) saját ÉS bér fuvar jármű-ütközés kereséshez. Két
+ * fuvar "ütközik", ha ugyanahhoz a járműhöz van rendelve, és a [datum,
+ * lerakas_datum] dátumtartományuk átfedi egymást — egy kocsi fizikailag
+ * nem lehet egyszerre két helyen (lásd a konkrét esetet: egy fuvar Sopronból
+ * indul, egy másik ugyanaznap Debrecenből — ugyanarra a kocsira rögzítve).
+ * A kliens (talalJarmuUtkozeseket) végzi a jármű-egyeztetést (resolveJarmu)
+ * és az átfedés-vizsgálatot, mert a "jarmu" mező szabad szöveg.
+ */
+export async function getAktivFuvarokUtkozeshez(): Promise<UtkozesJelolt[]> {
+  return query<UtkozesJelolt>(
+    `select id::text, jarmu, sofor,
+       to_char(datum, 'YYYY-MM-DD') as datum,
+       to_char(lerakas_datum, 'YYYY-MM-DD') as lerakas_datum,
+       felrako, lerako, megrendelo
+     from fuvar_megbizasok
+     where statusz <> 'torolt' and tipus in ('sajat', 'ber')
+       and jarmu is not null and jarmu <> ''
+       and coalesce(lerakas_datum, datum) >= current_date
+     order by datum asc
+     limit 500`
   );
 }
 
