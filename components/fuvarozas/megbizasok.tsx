@@ -2076,16 +2076,28 @@ function ArchivLista() {
   // Cégenkénti csoportosítás — MINDEN megrendelő (és a saját fuvarok közös
   // "Well-worn Pallet" csoportja) önálló, névvel jelölt, összecsukható
   // mappát kap, akkor is, ha csak 1 fuvar van benne — ugyanaz a minta, mint
-  // a Kapcsolatok fülön.
-  const csoportok = new Map<string, FuvarRow[]>();
+  // a Kapcsolatok fülön. A csoportosítás kulcsa kis-nagybetűtől és a
+  // szóközöktől (elejétől/végétől, több egymás utánitól) FÜGGETLEN — a
+  // Drive-automatika ugyanazt a partnert néha eltérő írásmóddal olvassa ki
+  // (pl. "RBT", "rbt Europe", "  EUROPE") —, hogy ez ne törje szét egy
+  // partner fuvarjait több külön mappára. A csoport címeként az elsőként
+  // (itt: legutóbb archivált sorrendben) látott, whitespace-normalizált —
+  // de nem kisbetűsített — írásmód marad látható.
+  const csoportok = new Map<string, { cim: string; rows: FuvarRow[] }>();
   for (const row of szurtRows) {
-    const kulcs = row.tipus === "ber" ? SAJAT_CEG_NEV : row.megrendelo?.trim() || "(nincs megrendelő)";
-    const lista = csoportok.get(kulcs) ?? [];
-    lista.push(row);
-    csoportok.set(kulcs, lista);
+    const nyersNev =
+      row.tipus === "ber" ? SAJAT_CEG_NEV : row.megrendelo?.trim().replace(/\s+/g, " ") || "(nincs megrendelő)";
+    const kulcs = nyersNev.toLowerCase();
+    const csoport = csoportok.get(kulcs);
+    if (csoport) {
+      csoport.rows.push(row);
+    } else {
+      csoportok.set(kulcs, { cim: nyersNev, rows: [row] });
+    }
   }
-  const csoportLista = [...csoportok.entries()].sort((a, b) =>
-    a[0] === SAJAT_CEG_NEV ? -1 : b[0] === SAJAT_CEG_NEV ? 1 : a[0].localeCompare(b[0], "hu")
+  const sajatKulcs = SAJAT_CEG_NEV.toLowerCase();
+  const csoportLista = [...csoportok.entries()].sort(([kulcsA, a], [kulcsB, b]) =>
+    kulcsA === sajatKulcs ? -1 : kulcsB === sajatKulcs ? 1 : a.cim.localeCompare(b.cim, "hu")
   );
 
   return (
@@ -2105,15 +2117,15 @@ function ArchivLista() {
             {kereso ? "Nincs a keresésnek megfelelő archivált fuvar." : "Még nincs archivált fuvar."}
           </p>
         )}
-        {csoportLista.map(([nev, lista]) => (
+        {csoportLista.map(([kulcs, { cim, rows: lista }]) => (
           <ArchivCegCsoport
-            key={nev}
-            cim={nev}
+            key={kulcs}
+            cim={cim}
             rows={lista}
             onVisszaallitas={handleVisszaallitas}
-            open={keresoNorm.length > 0 || nyitottCsoportok.has(nev)}
-            onToggle={() => toggleCsoport(nev)}
-            mutatMegrendelot={nev === SAJAT_CEG_NEV}
+            open={keresoNorm.length > 0 || nyitottCsoportok.has(kulcs)}
+            onToggle={() => toggleCsoport(kulcs)}
+            mutatMegrendelot={kulcs === sajatKulcs}
           />
         ))}
       </CardContent>
