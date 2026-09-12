@@ -33,6 +33,46 @@ export const FUVAR_STATUSZ_LABEL: Record<FuvarStatusz, string> = {
 export const FUVAR_STATUSZOK = Object.keys(FUVAR_STATUSZ_LABEL) as FuvarStatusz[];
 
 /**
+ * Cégnév-aliasok — amikor a Drive/Gmail-automatika ugyanazt a partnert
+ * eltérő, TARTALMILAG is eltérő (nem csak kis/nagybetűs, szóköz- vagy
+ * cégforma-toldalék-) néven olvassa ki különböző megbízásokból (pl. "RBT" /
+ * "RBT Europe" / önmagában "EUROPE" — mind ugyanaz a partner), itt vonható
+ * össze egy közös, kanonikus névre. Csak pontos, normalizált egyezésre
+ * illeszkedik, nem részleges/tartalmazó egyezésre — bővíthető, ha újabb
+ * ilyen, megerősített esetet találunk. Ezt használja mind a megjelenítési
+ * csoportosítás (Archív, Kapcsolatok), mind az addFuvar/approveFuvar
+ * mentéskori névegyeztetése (lib/fuvarozas/megbizasok.ts), hogy a tárolt
+ * adat is konvergáljon egy közös írásmódra, ne csak a felület.
+ */
+export const CEG_ALIAS_CSOPORTOK: { kanonikus: string; alias: string[] }[] = [
+  { kanonikus: "RBT Europe", alias: ["rbt", "rbt europe", "europe"] },
+];
+
+/**
+ * Cégnév normalizálása csoportosításhoz/egyeztetéshez: kisbetűs, a
+ * kötőjelek/pontok/vesszők szóközre cserélve, a végén álló gyakori
+ * cégforma-toldalék (kft/zrt/bt/nyrt/kkt) levágva, többszörös szóköz
+ * összevonva — így pl. "FLOTT-TRANS KFT" és "Flott Trans" ugyanarra a
+ * kulcsra normalizálódik, anélkül hogy két valójában különböző céget
+ * összemosna.
+ */
+export function normalizaltCegKulcs(nev: string): string {
+  const alap = nev
+    .toLowerCase()
+    .replace(/[-.,]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return alap.replace(/\s+(kft|zrt|bt|nyrt|kkt)$/, "").trim();
+}
+
+/** A nyers cégnevet a CEG_ALIAS_CSOPORTOK alapján kanonikus névre cseréli, ha van egyezés — egyébként változatlanul visszaadja. */
+export function ceglNevKanonikusan(nyersNev: string): string {
+  const norm = normalizaltCegKulcs(nyersNev);
+  const csoport = CEG_ALIAS_CSOPORTOK.find((c) => c.alias.includes(norm));
+  return csoport?.kanonikus ?? nyersNev;
+}
+
+/**
  * Egy nap saját fuvarjai az idővonal-becsléshez — nyers (nem szövegre
  * formázott) dátumokkal, hogy Date objektumot lehessen belőlük építeni.
  */

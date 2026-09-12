@@ -9,22 +9,7 @@ import { toast } from "sonner";
 import { ChevronDown, Search, X } from "lucide-react";
 import { addKapcsolat, deleteKapcsolat, getKapcsolatok } from "@/lib/fuvarozas/kapcsolatok";
 import type { KapcsolatRow } from "@/lib/fuvarozas/kapcsolatok-constants";
-
-/**
- * Cégnév normalizálása csoportosításhoz: kisbetűs, a kötőjelek/pontok/
- * vesszők szóközre cserélve, a végén álló gyakori cégforma-toldalék (kft/
- * zrt/bt/nyrt/kkt) levágva, többszörös szóköz összevonva — így pl. "FLOTT-
- * TRANS KFT" és "Flott Trans" egy csoportba kerül, anélkül hogy két
- * valójában különböző céget összemosna.
- */
-function normalizaltCegKulcs(nev: string): string {
-  const alap = nev
-    .toLowerCase()
-    .replace(/[-.,]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  return alap.replace(/\s+(kft|zrt|bt|nyrt|kkt)$/, "").trim();
-}
+import { normalizaltCegKulcs } from "@/lib/fuvarozas/fuvar-constants";
 
 type UjKapcsolatForm = {
   ceg: string;

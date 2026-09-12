@@ -56,7 +56,9 @@ import {
 } from "@/lib/fuvarozas/megbizasok";
 import { calculateTollForAddresses, getGazolajAr } from "@/lib/fuvarozas/actions";
 import {
+  ceglNevKanonikusan,
   FUVAR_STATUSZ_LABEL,
+  normalizaltCegKulcs,
   type FuvardijPenznem,
   type FuvarRow,
   type FuvarTipus,
@@ -2242,43 +2244,10 @@ function ArchivCegCsoport({
   );
 }
 
-/**
- * Cégnév-aliasok — amikor a Drive-automatika ugyanazt a partnert eltérő,
- * TARTALMILAG is eltérő (nem csak kis/nagybetűs vagy szóköz-) néven olvassa
- * ki különböző megbízásokból (pl. "RBT" / "RBT Europe" / önmagában
- * "EUROPE" — mind ugyanaz a partner), itt vonható össze egy közös,
- * megjelenítendő névre. Csak pontos (whitespace/kis-nagybetű-normalizált)
- * egyezésre illeszkedik, nem részleges/tartalmazó egyezésre — bővíthető,
- * ha újabb ilyen, megerősített esetet találunk.
- */
-const CEG_ALIAS_CSOPORTOK: { kanonikus: string; alias: string[] }[] = [
-  { kanonikus: "RBT Europe", alias: ["rbt", "rbt europe", "europe"] },
-];
-
-/**
- * Cégnév normalizálása csoportosításhoz/egyeztetéshez: kisbetűs, a
- * kötőjelek/pontok/vesszők szóközre cserélve, a végén álló gyakori
- * cégforma-toldalék (kft/zrt/bt/nyrt/kkt) levágva, többszörös szóköz
- * összevonva. Ez teszi lehetővé, hogy pl. "FLOTT-TRANS KFT" és "Flott
- * Trans" (vagy "RBT Europe Kft." és "RBT Europe") kézi alias-lista nélkül
- * is egy csoportba kerüljön — csak a formázásbeli, nem a tartalmi
- * eltéréseket egyenlíti ki, ezért nem kockáztatja, hogy két valójában
- * különböző cég összemosódjon.
- */
-function normalizaltCegKulcs(nev: string): string {
-  const alap = nev
-    .toLowerCase()
-    .replace(/[-.,]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-  return alap.replace(/\s+(kft|zrt|bt|nyrt|kkt)$/, "").trim();
-}
-
-function ceglNevKanonikusan(nyersNev: string): string {
-  const norm = normalizaltCegKulcs(nyersNev);
-  const csoport = CEG_ALIAS_CSOPORTOK.find((c) => c.alias.includes(norm));
-  return csoport?.kanonikus ?? nyersNev;
-}
+// CEG_ALIAS_CSOPORTOK / normalizaltCegKulcs / ceglNevKanonikusan mostantól
+// lib/fuvarozas/fuvar-constants.ts-ben él (megosztva a szerveroldali
+// addFuvar/approveFuvar mentéskori névegyeztetésével is), lásd az ottani
+// dokumentációt.
 
 const ARCHIV_EGYEB_KULCS = "__egyeb";
 
