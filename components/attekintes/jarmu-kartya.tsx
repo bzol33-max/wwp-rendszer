@@ -19,15 +19,29 @@ function formatEltelt(iso: string | null) {
   return d.toLocaleDateString("hu-HU", { day: "numeric", month: "short", timeZone: "Europe/Budapest" });
 }
 
+function budapestMaIso(): string {
+  return new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Budapest" });
+}
+
 /** "Ma" / "Holnap" — null, ha se nem ma, se nem holnap (ilyenkor a m.date jelenik meg helyette). */
 function napCimke(datumIso: string): string | null {
-  const ma = new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Budapest" });
+  const ma = budapestMaIso();
   if (datumIso === ma) return "Ma";
   const holnapDate = new Date();
   holnapDate.setDate(holnapDate.getDate() + 1);
   const holnap = holnapDate.toLocaleDateString("sv-SE", { timeZone: "Europe/Budapest" });
   if (datumIso === holnap) return "Holnap";
   return null;
+}
+
+/**
+ * Igaz, ha a megbízás dátuma már elmúlt — mivel a `megbizasok` lista eleve
+ * csak a "lezarva" státuszútól eltérőeket tartalmazza (lásd
+ * getJarmuMegbizasok), ez pontosan azt jelenti, hogy a megbízás
+ * elmúlt dátummal még mindig nyitott — feltehetően csúszásban van.
+ */
+function csuszasban(m: JarmuMegbizasSor): boolean {
+  return m.datumIso < budapestMaIso();
 }
 
 function Utvonal({ megallok }: { megallok: JarmuMegbizasMegallo[] }) {
@@ -77,6 +91,7 @@ function MegbizasSor({
   szamlalo?: string;
 }) {
   const nap = napCimke(m.datumIso);
+  const lejart = csuszasban(m);
   return (
     <div className="border-t border-[var(--at-border)] pt-2.5">
       <div className="flex items-center justify-between gap-2">
@@ -84,7 +99,13 @@ function MegbizasSor({
           {cim}
           {szamlalo && ` · ${szamlalo}`}
         </span>
-        <span className="text-[11px] font-medium text-[var(--at-muted)]">{nap ?? m.date}</span>
+        {lejart ? (
+          <span className="rounded bg-[var(--at-negative)]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[var(--at-negative)]">
+            Csúszásban
+          </span>
+        ) : (
+          <span className="text-[11px] font-medium text-[var(--at-muted)]">{nap ?? m.date}</span>
+        )}
       </div>
       <div className="mt-1 flex items-center justify-between gap-2 text-sm font-medium">
         <span>{m.felrako ? varosNev(m.felrako) : "?"}</span>
@@ -98,6 +119,7 @@ function MegbizasSor({
 
 function MegbizasReszlet({ m }: { m: JarmuMegbizasSor }) {
   const nap = napCimke(m.datumIso);
+  const lejart = csuszasban(m);
   return (
     <div className="rounded-lg bg-[var(--at-tile)] p-3 text-sm">
       <div className="flex flex-wrap items-center gap-1.5">
@@ -108,6 +130,11 @@ function MegbizasReszlet({ m }: { m: JarmuMegbizasSor }) {
         >
           {m.cimke} fuvar
         </span>
+        {lejart && (
+          <span className="rounded bg-[var(--at-negative)]/15 px-1.5 py-0.5 text-[10px] font-semibold text-[var(--at-negative)]">
+            Csúszásban
+          </span>
+        )}
         {nap && (
           <span className="rounded bg-[var(--at-accent)]/15 px-1.5 py-0.5 text-[10px] font-medium text-[var(--at-accent)]">
             {nap}

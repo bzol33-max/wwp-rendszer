@@ -247,13 +247,20 @@ export async function getJarmuMegbizasok(): Promise<JarmuMegbizasCsoport[]> {
         statusz: row.statusz,
       }));
 
-    // A getFuvarok() a legutóbb rögzített dátum szerint csökkenőben rendez —
-    // itt a "következő teendők" olvashatóbb, ha a régebbi (korábbi
-    // dátumú, tehát sürgősebb) tétel van elöl.
+    // FONTOS: a getFuvarok() mindkét listát (saját, bér) külön-külön,
+    // dátum szerint csökkenőben adja vissza — a sajat/ber összefűzése után
+    // egyetlen .reverse() NEM ad globálisan dátum szerint növekvő sorrendet
+    // (csak a két, egymástól függetlenül csökkenő listát fordítja meg és
+    // fűzi egymás után, a két típus tételei nem keverednek meg egymással).
+    // Ezért itt explicit módon, dátum (datumIso) szerint kell rendezni,
+    // hogy a legkorábbi (legsürgősebb) tétel kerüljön előre — akkor is, ha
+    // az egy másik típusú (saját/bér) megbízás, mint az előtte lévő.
+    const megbizasok = [...sajat, ...ber].sort((a, b) => a.datumIso.localeCompare(b.datumIso));
+
     return {
       jarmu,
       label: jarmuLabel(jarmu),
-      megbizasok: [...sajat, ...ber].reverse(),
+      megbizasok,
     };
   });
 }
