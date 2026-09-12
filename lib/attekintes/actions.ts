@@ -14,6 +14,7 @@ import { SAJAT_JARMUVEK, resolveJarmu, findJarmuByPlate, jarmuLabel, type SajatJ
 import { getOsszesLejartSzamla } from "@/lib/szamlak/actions";
 import type { SzamlaRow } from "@/lib/szamlak/szamla-constants";
 import type { FuvarRow } from "@/lib/fuvarozas/fuvar-constants";
+import { bontsMegallokra, varosNev } from "@/lib/fuvarozas/varos";
 
 // ---------------------------------------------------------------------------
 // Nyíregyháza fül
@@ -170,6 +171,8 @@ function jarmuMatch(jarmu: SajatJarmu, row: FuvarRow): boolean {
   return false;
 }
 
+export type JarmuMegbizasMegallo = { tipus: "felrako" | "lerako"; varos: string };
+
 export type JarmuMegbizasSor = {
   id: string;
   // A UI-n megszokott (a DB "tipus" mezőjéhez képest fordított) címkézés —
@@ -177,11 +180,24 @@ export type JarmuMegbizasSor = {
   // DB tipus='sajat' -> "Bér".
   cimke: "Saját" | "Bér";
   date: string;
+  /** YYYY-MM-DD — a "holnapi" megbízások kiszűréséhez a kártyán. */
+  datumIso: string;
+  idopont: string | null;
   megrendelo: string | null;
+  pozicioszam: string | null;
   felrako: string | null;
   lerako: string;
+  /** A felrakó + az összes lerakó állomás (több-megállós lerakónál szétbontva), útvonal-sorrendben. */
+  megallok: JarmuMegbizasMegallo[];
   statusz: string;
 };
+
+function megbizasMegallok(felrako: string | null, lerako: string): JarmuMegbizasMegallo[] {
+  return [
+    ...bontsMegallokra(felrako).map((cim) => ({ tipus: "felrako" as const, varos: varosNev(cim) })),
+    ...bontsMegallokra(lerako).map((cim) => ({ tipus: "lerako" as const, varos: varosNev(cim) })),
+  ];
+}
 
 export type JarmuMegbizasCsoport = {
   jarmu: SajatJarmu;
@@ -206,9 +222,13 @@ export async function getJarmuMegbizasok(): Promise<JarmuMegbizasCsoport[]> {
         id: row.id,
         cimke: "Saját" as const,
         date: row.date,
+        datumIso: row.datum_iso,
+        idopont: row.idopont,
         megrendelo: row.megrendelo,
+        pozicioszam: row.pozicioszam,
         felrako: row.felrako,
         lerako: row.lerako,
+        megallok: megbizasMegallok(row.felrako, row.lerako),
         statusz: row.statusz,
       }));
     const ber: JarmuMegbizasSor[] = aktivBer
@@ -217,9 +237,13 @@ export async function getJarmuMegbizasok(): Promise<JarmuMegbizasCsoport[]> {
         id: row.id,
         cimke: "Bér" as const,
         date: row.date,
+        datumIso: row.datum_iso,
+        idopont: row.idopont,
         megrendelo: row.megrendelo,
+        pozicioszam: row.pozicioszam,
         felrako: row.felrako,
         lerako: row.lerako,
+        megallok: megbizasMegallok(row.felrako, row.lerako),
         statusz: row.statusz,
       }));
 
