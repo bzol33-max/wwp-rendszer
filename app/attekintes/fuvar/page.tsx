@@ -3,12 +3,17 @@ import { parseEcofleetTimestamp } from "@/lib/fuvarozas/ecofleet";
 import { getJarmuMegbizasok, getJarmuPoziciok } from "@/lib/attekintes/actions";
 import { varosNev } from "@/lib/fuvarozas/varos";
 
-function formatIdo(ecofleetTimestamp: string | null) {
+/** "6 perce" / "2 órája" formátum — a pontos óra helyett, mennyivel ezelőtti az adat. */
+function formatEltelt(ecofleetTimestamp: string | null) {
   if (!ecofleetTimestamp) return null;
   const d = parseEcofleetTimestamp(ecofleetTimestamp);
-  return d
-    ? d.toLocaleTimeString("hu-HU", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Budapest" })
-    : null;
+  if (!d) return null;
+  const diffMin = Math.round((Date.now() - d.getTime()) / 60000);
+  if (diffMin < 1) return "most";
+  if (diffMin < 60) return `${diffMin} perce`;
+  const diffH = Math.round(diffMin / 60);
+  if (diffH < 24) return `${diffH} órája`;
+  return d.toLocaleDateString("hu-HU", { day: "numeric", month: "short", timeZone: "Europe/Budapest" });
 }
 
 export default async function FuvarPage() {
@@ -22,29 +27,48 @@ export default async function FuvarPage() {
       <div className="flex flex-col gap-3">
         {csoportok.map((cs) => {
           const pozicio = poziciokBySofor[cs.jarmu.sofor];
-          const ido = formatIdo(pozicio?.frissitve ?? null);
-          return (
-            <div key={cs.jarmu.sofor} className="rounded-xl border border-[var(--at-border)] bg-[var(--at-card)] p-4">
-              <div className="mb-1 flex items-center gap-2 text-sm font-medium">
-                <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${JARMU_SZIN_DOT_CLASS[cs.jarmu.szin]}`} />
-                {cs.label}
-              </div>
+          const eltelt = formatEltelt(pozicio?.frissitve ?? null);
+          const vanGps = !!pozicio?.cim;
+          const csikSzin = !vanGps
+            ? "var(--at-border)"
+            : pozicio?.motorFut
+              ? "var(--at-accent)"
+              : "var(--at-muted)";
 
-              <div className="mb-3 rounded-lg bg-[var(--at-tile)] p-2.5 text-xs">
-                {pozicio?.cim ? (
-                  <>
-                    <div className="text-[var(--at-text)]">{pozicio.cim}</div>
-                    <div className="mt-0.5 flex items-center justify-between text-[var(--at-muted)]">
-                      <span>
-                        {pozicio.sebesseg !== null ? `${Math.round(pozicio.sebesseg)} km/h` : "—"}
-                      </span>
-                      {ido && <span>Frissítve: {ido}</span>}
-                    </div>
-                  </>
-                ) : (
-                  <span className="text-[var(--at-muted)]">Nincs GPS-adat.</span>
+          return (
+            <div
+              key={cs.jarmu.sofor}
+              className="rounded-xl border border-[var(--at-border)] bg-[var(--at-card)] p-4"
+              style={{ borderLeft: `4px solid ${csikSzin}` }}
+            >
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${JARMU_SZIN_DOT_CLASS[cs.jarmu.szin]}`} />
+                  {cs.jarmu.sofor}
+                </div>
+                {vanGps && (
+                  <span
+                    className={`rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                      pozicio?.motorFut
+                        ? "bg-[var(--at-accent)]/15 text-[var(--at-accent)]"
+                        : "bg-[var(--at-muted)]/15 text-[var(--at-muted)]"
+                    }`}
+                  >
+                    {pozicio?.motorFut ? "Úton" : "Áll"}
+                  </span>
                 )}
               </div>
+
+              {vanGps ? (
+                <div className="mb-3 text-xs text-[var(--at-muted)]">
+                  {pozicio?.cim}
+                  {" · "}
+                  {pozicio?.sebesseg !== null ? `${Math.round(pozicio!.sebesseg!)} km/h` : "—"}
+                  {eltelt && ` · ${eltelt}`}
+                </div>
+              ) : (
+                <p className="mb-3 text-xs text-[var(--at-muted)]">Nincs GPS-adat.</p>
+              )}
 
               {cs.megbizasok.length === 0 ? (
                 <p className="text-xs text-[var(--at-muted)]">Nincs folyamatban lévő megbízás.</p>

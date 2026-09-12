@@ -143,9 +143,11 @@ export type JarmuPoziciSor = {
   cim: string | null;
   sebesseg: number | null;
   frissitve: string | null;
+  /** null, ha nincs GPS-adat — nem tudjuk, fut-e a motor. */
+  motorFut: boolean | null;
 };
 
-/** A "Fuvar" fülön: saját járművenként az utolsó ismert hely (cím) és sebesség. */
+/** A "Fuvar" fülön: saját járművenként az utolsó ismert hely, sebesség és motorállapot. */
 export async function getJarmuPoziciok(): Promise<JarmuPoziciSor[]> {
   const result = await getFleetPositions();
   const positions = result.ok ? result.positions : [];
@@ -157,6 +159,7 @@ export async function getJarmuPoziciok(): Promise<JarmuPoziciSor[]> {
       cim: pos?.cim ?? null,
       sebesseg: pos?.speed ?? null,
       frissitve: pos?.timestamp ?? null,
+      motorFut: pos?.engineOn ?? null,
     };
   });
 }
