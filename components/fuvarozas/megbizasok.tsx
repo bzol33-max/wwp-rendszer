@@ -2255,8 +2255,27 @@ const CEG_ALIAS_CSOPORTOK: { kanonikus: string; alias: string[] }[] = [
   { kanonikus: "RBT Europe", alias: ["rbt", "rbt europe", "europe"] },
 ];
 
+/**
+ * Cégnév normalizálása csoportosításhoz/egyeztetéshez: kisbetűs, a
+ * kötőjelek/pontok/vesszők szóközre cserélve, a végén álló gyakori
+ * cégforma-toldalék (kft/zrt/bt/nyrt/kkt) levágva, többszörös szóköz
+ * összevonva. Ez teszi lehetővé, hogy pl. "FLOTT-TRANS KFT" és "Flott
+ * Trans" (vagy "RBT Europe Kft." és "RBT Europe") kézi alias-lista nélkül
+ * is egy csoportba kerüljön — csak a formázásbeli, nem a tartalmi
+ * eltéréseket egyenlíti ki, ezért nem kockáztatja, hogy két valójában
+ * különböző cég összemosódjon.
+ */
+function normalizaltCegKulcs(nev: string): string {
+  const alap = nev
+    .toLowerCase()
+    .replace(/[-.,]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return alap.replace(/\s+(kft|zrt|bt|nyrt|kkt)$/, "").trim();
+}
+
 function ceglNevKanonikusan(nyersNev: string): string {
-  const norm = nyersNev.toLowerCase();
+  const norm = normalizaltCegKulcs(nyersNev);
   const csoport = CEG_ALIAS_CSOPORTOK.find((c) => c.alias.includes(norm));
   return csoport?.kanonikus ?? nyersNev;
 }
@@ -2328,7 +2347,7 @@ function ArchivLista() {
     const nyersNev =
       row.tipus === "ber" ? SAJAT_CEG_NEV : row.megrendelo?.trim().replace(/\s+/g, " ") || "(nincs megrendelő)";
     const kanonikusNev = row.tipus === "ber" ? nyersNev : ceglNevKanonikusan(nyersNev);
-    const kulcs = kanonikusNev.toLowerCase();
+    const kulcs = normalizaltCegKulcs(kanonikusNev);
     const csoport = csoportok.get(kulcs);
     if (csoport) {
       csoport.rows.push(row);
@@ -2336,7 +2355,7 @@ function ArchivLista() {
       csoportok.set(kulcs, { cim: kanonikusNev, rows: [row] });
     }
   }
-  const sajatKulcs = SAJAT_CEG_NEV.toLowerCase();
+  const sajatKulcs = normalizaltCegKulcs(SAJAT_CEG_NEV);
   const nevesCsoportok = [...csoportok.entries()]
     .filter(([kulcs, csoport]) => kulcs === sajatKulcs || csoport.rows.length >= 2)
     .sort(([kulcsA, a], [kulcsB, b]) =>

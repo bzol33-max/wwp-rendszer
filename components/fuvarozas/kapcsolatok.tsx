@@ -10,6 +10,22 @@ import { ChevronDown, Search, X } from "lucide-react";
 import { addKapcsolat, deleteKapcsolat, getKapcsolatok } from "@/lib/fuvarozas/kapcsolatok";
 import type { KapcsolatRow } from "@/lib/fuvarozas/kapcsolatok-constants";
 
+/**
+ * Cégnév normalizálása csoportosításhoz: kisbetűs, a kötőjelek/pontok/
+ * vesszők szóközre cserélve, a végén álló gyakori cégforma-toldalék (kft/
+ * zrt/bt/nyrt/kkt) levágva, többszörös szóköz összevonva — így pl. "FLOTT-
+ * TRANS KFT" és "Flott Trans" egy csoportba kerül, anélkül hogy két
+ * valójában különböző céget összemosna.
+ */
+function normalizaltCegKulcs(nev: string): string {
+  const alap = nev
+    .toLowerCase()
+    .replace(/[-.,]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return alap.replace(/\s+(kft|zrt|bt|nyrt|kkt)$/, "").trim();
+}
+
 type UjKapcsolatForm = {
   ceg: string;
   kapcsolattarto: string;
@@ -194,18 +210,19 @@ export function Kapcsolatok() {
     );
   }, [rows, kereses_norm]);
 
-  // A cégenkénti csoportosítás kulcsa kis-nagybetűtől és a szóközöktől
-  // (elejétől/végétől, több egymás utánitól) FÜGGETLEN — ugyanaz a cég
-  // eltérő írásmóddal is bekerülhet (pl. Gmail-ből származó adatnál), és
-  // enélkül ez szétszórná egy partner kapcsolatait több külön mappára
-  // (ugyanaz a hibaosztály, amit az Archív fülön is javítottunk). A mappa
-  // címeként az elsőként látott, whitespace-normalizált írásmód marad
-  // látható.
+  // A cégenkénti csoportosítás kulcsa kis-nagybetűtől, a szóközöktől
+  // (elejétől/végétől, több egymás utánitól), a kötőjelektől/pontoktól ÉS a
+  // gyakori cégforma-toldalékoktól (kft/zrt/bt/nyrt/kkt) FÜGGETLEN — ugyanaz
+  // a cég eltérő írásmóddal is bekerülhet (pl. "Flott Trans" vs.
+  // "FLOTT-TRANS KFT", Gmail-ből származó adatnál), és enélkül ez szétszórná
+  // egy partner kapcsolatait több külön mappára (ugyanaz a hibaosztály,
+  // amit az Archív fülön is javítottunk). A mappa címeként az elsőként
+  // látott, whitespace-normalizált írásmód marad látható.
   const csoportok = useMemo(() => {
     const map = new Map<string, { cim: string; rows: KapcsolatRow[] }>();
     for (const row of szurtRows) {
       const nyersNev = row.ceg.trim().replace(/\s+/g, " ");
-      const kulcs = nyersNev.toLowerCase();
+      const kulcs = normalizaltCegKulcs(nyersNev);
       const csoport = map.get(kulcs);
       if (csoport) {
         csoport.rows.push(row);
