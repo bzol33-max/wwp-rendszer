@@ -23,6 +23,7 @@ import {
 import { toast } from "sonner";
 import {
   frissitesMost,
+  getSzamlaEgyebCegenkent,
   getSzamlaLejaratLista,
   getSzamlaLista,
   getSzamlaOsszesito,
@@ -30,6 +31,7 @@ import {
   jeloltFizetve,
   visszavonFizetve,
   type SzamlaAllapot,
+  type SzamlaEgyebCegSor,
   type SzamlaLejaratLista,
   type SzamlaListaSzuro,
 } from "@/lib/szamlak/actions";
@@ -267,7 +269,7 @@ type Csempe = {
 function OsszesitoCsempek({ csempek }: { csempek: Csempe[] }) {
   if (csempek.length === 0) return null;
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
       {csempek.map((c) => (
         <Card
           key={c.kulcs}
@@ -552,6 +554,7 @@ function LejaratCsempek({ refreshKey, onChanged }: { refreshKey: number; onChang
 
 export function SzamlakView() {
   const [osszesito, setOsszesito] = useState<SzamlaOsszesitoSor[]>([]);
+  const [egyebCegek, setEgyebCegek] = useState<SzamlaEgyebCegSor[]>([]);
   const [allapot, setAllapot] = useState<SzamlaAllapot | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [frissitve, setFrissitve] = useState(false);
@@ -559,9 +562,14 @@ export function SzamlakView() {
   const [listaSzuro, setListaSzuro] = useState<SzamlaListaSzuro | null>(null);
 
   const loadOsszesito = useCallback(async () => {
-    const [o, a] = await Promise.all([getSzamlaOsszesito(), getSzamlaSzinkronAllapot()]);
+    const [o, a, e] = await Promise.all([
+      getSzamlaOsszesito(),
+      getSzamlaSzinkronAllapot(),
+      getSzamlaEgyebCegenkent(),
+    ]);
     setOsszesito(o);
     setAllapot(a);
+    setEgyebCegek(e);
   }, []);
 
   useEffect(() => {
@@ -635,6 +643,32 @@ export function SzamlakView() {
           };
         })}
       />
+
+      {egyebCegek.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold">Raklap — Egyéb (cégenkénti bontás)</h2>
+          <OsszesitoCsempek
+            csempek={egyebCegek.map((c) => ({
+              kulcs: `egyeb-${c.vevo_nev}-${c.penznem}`,
+              cim: `${c.vevo_nev} (${c.penznem})`,
+              nyitottOsszeg: c.nyitott_osszeg,
+              lejartOsszeg: c.lejart_osszeg,
+              penznem: c.penznem,
+              nyitottDarab: c.nyitott_darab,
+              lejartDarab: c.lejart_darab,
+              onClick: () => {
+                setListaCim(`Raklap — Egyéb — ${c.vevo_nev} (${c.penznem})`);
+                setListaSzuro({
+                  kategoria: "raklap",
+                  alkategoria: "egyeb",
+                  vevoNev: c.vevo_nev,
+                  penznem: c.penznem,
+                });
+              },
+            }))}
+          />
+        </div>
+      )}
 
       <LejaratCsempek refreshKey={refreshKey} onChanged={loadOsszesito} />
 
