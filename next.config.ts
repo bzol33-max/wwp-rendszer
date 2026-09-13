@@ -11,6 +11,13 @@ const nextConfig: NextConfig = {
   // kizárja ezeket a bundlingből, így natív node_modules-os require-dal
   // töltődnek be, ahol a worker-fájl ténylegesen megtalálható.
   serverExternalPackages: ["pdf-parse", "pdfjs-dist"],
+  experimental: {
+    // A kontókivonat-feltöltés (lib/szamlak/kontokivonat.ts) az .xlsx-et
+    // base64-ként küldi a Server Actionnek — a Next.js alapértelmezett 1MB-os
+    // korlátja egy több hónapos, több száz tranzakciós kivonatnál (~33%
+    // base64-többlettel) szűk lehet.
+    serverActions: { bodySizeLimit: "10mb" },
+  },
 };
 
 export default nextConfig;

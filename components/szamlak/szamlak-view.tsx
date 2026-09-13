@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckIcon, InfoIcon } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
+import { KontokivonatDialog } from "@/components/szamlak/kontokivonat-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -616,6 +617,7 @@ export function SzamlakView() {
         actions={
           <>
             <SzinkronInfoGomb szoveg={infoSzoveg} />
+            <KontokivonatDialog onChanged={loadOsszesito} />
             <Button variant="outline" size="sm" disabled={frissitve} onClick={handleFrissites}>
               {frissitve ? "Frissítés…" : "Frissítés most"}
             </Button>
