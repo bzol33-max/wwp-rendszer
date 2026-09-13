@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
 import { query } from "@/lib/db";
 import { createSession, deleteSession } from "@/lib/auth/session";
+import { checkLoginAttempt, recordLoginAttempt } from "@/lib/auth/rate-limit";
 
 export type LoginState = {
   error?: string;
@@ -29,6 +30,11 @@ export async function login(
     return { error: "Add meg a felhasználóneved és a jelszavad." };
   }
 
+  const rateLimitCheck = checkLoginAttempt(username);
+  if (!rateLimitCheck.allowed) {
+    return { error: rateLimitCheck.error };
+  }
+
   const rows = await query<UserRow>(
     `select id, username, password_hash, name, role, active
      from users
@@ -38,14 +44,17 @@ export async function login(
   const user = rows[0];
 
   if (!user || !user.active) {
+    recordLoginAttempt(username, false);
     return { error: "Hibás felhasználónév vagy jelszó." };
   }
 
   const passwordOk = await bcrypt.compare(password, user.password_hash);
   if (!passwordOk) {
+    recordLoginAttempt(username, false);
     return { error: "Hibás felhasználónév vagy jelszó." };
   }
 
+  recordLoginAttempt(username, true);
   await createSession(user.id, user.name);
 
   redirect("/");

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { query } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth/dal";
 import { MODULES, type Permissions } from "@/lib/auth/permissions";
+import { validatePassword } from "@/lib/auth/password-validation";
 
 // Minden ebben a fájlban lévő akció admin-jogosultsághoz kötött
 // (requireAdmin — átirányít, ha a hívó nem admin). Ez a Felhasználók
@@ -57,8 +58,10 @@ export async function createUser(input: {
   const username = input.username.trim();
   const name = input.name.trim();
   if (!username || !name) throw new Error("A felhasználónév és a név megadása kötelező.");
-  if (!input.password || input.password.length < 6) {
-    throw new Error("A jelszónak legalább 6 karakternek kell lennie.");
+
+  const passwordValidation = validatePassword(input.password);
+  if (!passwordValidation.valid) {
+    throw new Error(passwordValidation.error);
   }
 
   const passwordHash = await bcrypt.hash(input.password, 12);
@@ -106,8 +109,10 @@ export async function updateUserPermissions(input: { id: string; permissions: un
 
 export async function resetUserPassword(input: { id: string; password: string }) {
   await requireAdmin();
-  if (!input.password || input.password.length < 6) {
-    throw new Error("A jelszónak legalább 6 karakternek kell lennie.");
+
+  const passwordValidation = validatePassword(input.password);
+  if (!passwordValidation.valid) {
+    throw new Error(passwordValidation.error);
   }
 
   const passwordHash = await bcrypt.hash(input.password, 12);
