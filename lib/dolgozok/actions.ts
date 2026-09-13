@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { query } from "@/lib/db";
+import { query, withTransaction } from "@/lib/db";
 import {
   HU_MONTHS,
   wageMode,
@@ -36,22 +36,50 @@ async function getActiveEmployees(): Promise<Employee[]> {
   );
 }
 
-async function isMonthFullyPaid(year: number, month: number): Promise<boolean> {
-  const employees = await getActiveEmployees();
+async function isMonthFullyPaid(
+  year: number,
+  month: number,
+  queryFn: <T = unknown>(text: string, params?: unknown[]) => Promise<T[]> = query
+): Promise<boolean> {
+  const employees = await queryFn<Employee>(
+    `select id::text, name, position, weekly_wage, daily_wage, monthly_wage,
+       fixed_deduction, show_letiltas, show_uzemanyag, active
+     from alkalmazottak
+     where active = true
+     order by position, id`
+  );
+
+  const [weeklies, dailyMonthly] = await Promise.all([
+    queryFn<{ employee_id: string; paid: boolean }>(
+      `select employee_id::text, paid from alkalmazott_heti_ber where year = $1 and month = $2`,
+      [year, month]
+    ),
+    queryFn<{ employee_id: string; paid: boolean }>(
+      `select employee_id::text, paid from alkalmazott_napi_havi_ber where year = $1 and month = $2`,
+      [year, month]
+    ),
+  ]);
+
+  const weeklyMap = new Map<string, { paid: boolean }[]>();
+  const dailyMap = new Map<string, { paid: boolean }>();
+
+  for (const row of weeklies) {
+    if (!weeklyMap.has(row.employee_id)) weeklyMap.set(row.employee_id, []);
+    weeklyMap.get(row.employee_id)!.push(row);
+  }
+
+  for (const row of dailyMonthly) {
+    dailyMap.set(row.employee_id, row);
+  }
+
   for (const e of employees) {
     const mode = wageMode(e);
     if (mode === "heti") {
-      const rows = await query<{ paid: boolean }>(
-        `select paid from alkalmazott_heti_ber where employee_id = $1 and year = $2 and month = $3`,
-        [e.id, year, month]
-      );
+      const rows = weeklyMap.get(e.id) || [];
       if (rows.length < 4 || rows.some((r) => !r.paid)) return false;
     } else if (mode === "napi" || mode === "havi") {
-      const rows = await query<{ paid: boolean }>(
-        `select paid from alkalmazott_napi_havi_ber where employee_id = $1 and year = $2 and month = $3`,
-        [e.id, year, month]
-      );
-      if (rows.length === 0 || !rows[0].paid) return false;
+      const row = dailyMap.get(e.id);
+      if (!row || !row.paid) return false;
     }
   }
   return true;
@@ -83,14 +111,19 @@ export async function getPointer(): Promise<Pointer> {
 }
 
 async function checkAndAdvancePointer() {
-  const pointer = await getPointer();
-  if (await isMonthFullyPaid(pointer.year, pointer.month)) {
-    const next = nextMonth(pointer);
-    await query(`update alkalmazottak_allapot set year = $1, month = $2 where id = 1`, [
-      next.year,
-      next.month,
-    ]);
-  }
+  await withTransaction(async (txnQuery) => {
+    const rows = await txnQuery<Pointer>(`select year, month from alkalmazottak_allapot where id = 1`);
+    const pointer = rows[0];
+    if (!pointer) return;
+
+    if (await isMonthFullyPaid(pointer.year, pointer.month, txnQuery)) {
+      const next = nextMonth(pointer);
+      await txnQuery(`update alkalmazottak_allapot set year = $1, month = $2 where id = 1`, [
+        next.year,
+        next.month,
+      ]);
+    }
+  });
 }
 
 // Minden dolgozóhoz, akinek a mutató hónapjára még nincs sora, létrehozza az

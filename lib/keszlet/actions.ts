@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { query } from "@/lib/db";
+import { query, withTransaction } from "@/lib/db";
 
 const TIME_FMT = "mon. DD HH24:MI";
 
@@ -83,18 +83,21 @@ export async function getMovements(site: string, limit = 20): Promise<MovementRo
   return rows;
 }
 
-export async function addMovement(input: {
-  site: string;
-  type: string;
-  direction: Direction;
-  qty: number;
-  partner?: string;
-  targetSite?: string;
-  purchaseId?: string;
-  createdBy?: string;
-  movementGroup?: string;
-}) {
-  await query(
+async function addMovementInternal(
+  input: {
+    site: string;
+    type: string;
+    direction: Direction;
+    qty: number;
+    partner?: string;
+    targetSite?: string;
+    purchaseId?: string;
+    createdBy?: string;
+    movementGroup?: string;
+  },
+  queryFn: <T = unknown>(text: string, params?: unknown[]) => Promise<T[]> = query
+) {
+  await queryFn(
     `insert into keszlet_movements (site_id, type_id, direction, qty, partner, target_site_id, purchase_id, created_by, movement_group)
      values (
        (select id from sites where name = $1),
@@ -115,6 +118,20 @@ export async function addMovement(input: {
       input.movementGroup ?? null,
     ]
   );
+}
+
+export async function addMovement(input: {
+  site: string;
+  type: string;
+  direction: Direction;
+  qty: number;
+  partner?: string;
+  targetSite?: string;
+  purchaseId?: string;
+  createdBy?: string;
+  movementGroup?: string;
+}) {
+  return addMovementInternal(input, query);
 }
 
 // Mozgás rögzítése (Beérkezés / Kiszállítás / Telephelyek közti mozgatás) — a
@@ -148,74 +165,76 @@ export async function recordMovements(input: {
 }) {
   if (input.items.length === 0) return;
 
-  const movementGroup = randomUUID();
-  for (const item of input.items) {
-    await addMovement({
-      site: input.site,
-      type: item.type,
-      direction: input.direction,
-      qty: item.qty,
-      partner: input.partner,
-      targetSite: input.direction === "mozgatas" ? item.targetSite : undefined,
-      createdBy: input.createdBy,
-      movementGroup,
-    });
-  }
-  if (input.direction === "mozgatas") {
+  await withTransaction(async (txnQuery) => {
+    const movementGroup = randomUUID();
     for (const item of input.items) {
-      if (!item.targetSite) continue;
-      await addMovement({
-        site: item.targetSite,
+      await addMovementInternal({
+        site: input.site,
         type: item.type,
-        direction: "mozgatas_be",
+        direction: input.direction,
         qty: item.qty,
-        targetSite: input.site,
+        partner: input.partner,
+        targetSite: input.direction === "mozgatas" ? item.targetSite : undefined,
         createdBy: input.createdBy,
         movementGroup,
-      });
+      }, txnQuery);
     }
-  }
+    if (input.direction === "mozgatas") {
+      for (const item of input.items) {
+        if (!item.targetSite) continue;
+        await addMovementInternal({
+          site: item.targetSite,
+          type: item.type,
+          direction: "mozgatas_be",
+          qty: item.qty,
+          targetSite: input.site,
+          createdBy: input.createdBy,
+          movementGroup,
+        }, txnQuery);
+      }
+    }
 
-  if (input.site === "Nyíregyháza") {
-    const itemsText =
-      input.direction === "mozgatas"
-        ? input.items.map((i) => `${i.qty} db ${i.type} → ${i.targetSite}`).join(", ")
-        : input.items.map((i) => `${i.qty} db ${i.type}`).join(", ");
-    const details =
-      input.direction === "mozgatas"
-        ? itemsText
-        : `${itemsText}${input.partner ? ` — ${input.partner}` : ""}`;
-    const effect = input.items
-      .map((i) =>
-        input.direction === "be"
-          ? `${i.type} +${i.qty}`
-          : input.direction === "ki"
-            ? `${i.type} −${i.qty}`
-            : `${i.type} −${i.qty} → ${i.targetSite}`
-      )
-      .join(" · ");
-    await query(
-      `insert into keszlet_events (site_id, kind, details, effect, created_by, movement_group)
-       values ((select id from sites where name = 'Nyíregyháza'), 'mozgas', $1, $2, $3, $4)`,
-      [details, effect, input.createdBy ?? null, movementGroup]
-    );
-  }
-  if (input.direction === "mozgatas") {
-    const toNyiregyhaza = input.items.filter((i) => i.targetSite === "Nyíregyháza");
-    if (toNyiregyhaza.length > 0) {
-      const itemsText = toNyiregyhaza.map((i) => `${i.qty} db ${i.type}`).join(", ");
-      await query(
+    if (input.site === "Nyíregyháza") {
+      const itemsText =
+        input.direction === "mozgatas"
+          ? input.items.map((i) => `${i.qty} db ${i.type} → ${i.targetSite}`).join(", ")
+          : input.items.map((i) => `${i.qty} db ${i.type}`).join(", ");
+      const details =
+        input.direction === "mozgatas"
+          ? itemsText
+          : `${itemsText}${input.partner ? ` — ${input.partner}` : ""}`;
+      const effect = input.items
+        .map((i) =>
+          input.direction === "be"
+            ? `${i.type} +${i.qty}`
+            : input.direction === "ki"
+              ? `${i.type} −${i.qty}`
+              : `${i.type} −${i.qty} → ${i.targetSite}`
+        )
+        .join(" · ");
+      await txnQuery(
         `insert into keszlet_events (site_id, kind, details, effect, created_by, movement_group)
          values ((select id from sites where name = 'Nyíregyháza'), 'mozgas', $1, $2, $3, $4)`,
-        [
-          `${itemsText} érkezett innen: ${input.site}`,
-          toNyiregyhaza.map((i) => `${i.type} +${i.qty}`).join(" · "),
-          input.createdBy ?? null,
-          movementGroup,
-        ]
+        [details, effect, input.createdBy ?? null, movementGroup]
       );
     }
-  }
+    if (input.direction === "mozgatas") {
+      const toNyiregyhaza = input.items.filter((i) => i.targetSite === "Nyíregyháza");
+      if (toNyiregyhaza.length > 0) {
+        const itemsText = toNyiregyhaza.map((i) => `${i.qty} db ${i.type}`).join(", ");
+        await txnQuery(
+          `insert into keszlet_events (site_id, kind, details, effect, created_by, movement_group)
+           values ((select id from sites where name = 'Nyíregyháza'), 'mozgas', $1, $2, $3, $4)`,
+          [
+            `${itemsText} érkezett innen: ${input.site}`,
+            toNyiregyhaza.map((i) => `${i.type} +${i.qty}`).join(" · "),
+            input.createdBy ?? null,
+            movementGroup,
+          ]
+        );
+      }
+    }
+  });
 }
 
 // Egyetlen mozgás-sor törlése a "Legutóbbi mozgások" listából (Szakoly,
