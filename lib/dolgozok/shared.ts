@@ -58,6 +58,9 @@ export type AdvanceRow = {
   auto_key: string | null;
   created_by: string | null;
   created_at: string;
+  /** Mikor nyugtázta a dolgozó a Profil > Előlegek "ELFOGADOM" gombjával — null, ha még nem. Utólag nem módosítható. */
+  accepted_at: string | null;
+  accepted_by: string | null;
 };
 
 export type Pointer = { year: number; month: number };

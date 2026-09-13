@@ -158,6 +158,53 @@ async function main() {
   });
   await grantKeszletSajatOnce(pool);
 
+  // Sofőr bejelentkezés (2026-09-13): Vadon Gergő és Takács Micó (a
+  // fuvarozási GPS-kártyák "Gergő"/"Micó" sofőrjei) saját belépéssel érik
+  // el a dolgozói mobil nézet Profil és Fuvarok csempéjét. Csak a saját
+  // fuvarjaikhoz (fuvarozas_sajat), a jelenléthez (erkezes) és a saját
+  // előlegeikhez (elolegek_sajat) kapnak jogot — a teljes Fuvarozás modulhoz
+  // (minden kocsi, szerkesztés) nem. Az employeeName a törzsadatban szereplő
+  // pontos névvel köti össze a felhasználót az alkalmazottak sorral (lásd
+  // seedAlkalmazottakOnce) — Takács Miklós törzsadat-neve "Takács Micó".
+  const soforPermissions = {
+    info: { view: false, edit: false },
+    fuvarozas: { view: false, edit: false },
+    keszlet: { view: false, edit: false },
+    szamlak: { view: false, edit: false },
+    dolgozok: { view: false, edit: false },
+    jelenlet: { view: false, edit: false },
+    jarmuvek: { view: false, edit: false },
+    beallitasok: { view: false, edit: false },
+    mobil: { view: false, edit: false },
+    erkezes: { view: true, edit: true },
+    fuvarozas_sajat: { view: true, edit: true },
+    elolegek_sajat: { view: true, edit: true },
+  };
+  await seedUserOnce(pool, {
+    code: "user-vadongergo-2026-09-13",
+    username: "VadonGergo",
+    password: process.env.SEED_VADONGERGO_PASSWORD,
+    name: "Vadon Gergő",
+    role: "sofor",
+    permissions: soforPermissions,
+    employeeName: "Vadon Gergő",
+  });
+  await seedUserOnce(pool, {
+    code: "user-takacsmiklos-2026-09-13",
+    username: "TakacsMiklos",
+    password: process.env.SEED_TAKACSMIKLOS_PASSWORD,
+    name: "Takács Miklós",
+    role: "sofor",
+    permissions: soforPermissions,
+    employeeName: "Takács Micó",
+  });
+  // Előlegek elfogadása (2026-09-13): Bodogán Gábor és Vadon Gábor is
+  // megkapja a saját előlegeik megtekintésének/elfogadásának jogát a Profil
+  // csempén — ők a seedUserOnce ELSŐ lefutásakor még nem kaptak ilyet (a
+  // modul csak utólag került be), a seedUserOnce pedig csak létrehozáskor ír
+  // jogosultságot, meglévő felhasználónál nem nyúl hozzá.
+  await grantElolegekSajatOnce(pool);
+
   await pool.end();
 }
 
@@ -179,6 +226,24 @@ async function grantKeszletSajatOnce(pool) {
   );
   await pool.query(`insert into alkalmazott_javitasok (kod) values ($1)`, [JAVITAS_KOD]);
   console.log("[migrate] BodoganGabor megkapta a saját készlet (Szakoly/Balkány) jogot.");
+}
+
+// Egyszeri javítás (2026-09-13): a BodoganGabor/VadonGabor felhasználók a
+// seedUserOnce hívásuk ELSŐ (élesítéskori) lefutásakor még nem kapták meg az
+// "elolegek_sajat" jogot (a modul csak utólag került be a dolgozói mobil
+// Profil csempével) — ugyanaz a helyzet, mint grantKeszletSajatOnce-nél.
+async function grantElolegekSajatOnce(pool) {
+  const JAVITAS_KOD = "dolgozoi-profil-elolegek-sajat-2026-09-13";
+  const { rows } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (rows.length > 0) return;
+
+  await pool.query(
+    `update users
+     set permissions = permissions || '{"elolegek_sajat": {"view": true, "edit": true}}'::jsonb
+     where username in ('BodoganGabor', 'VadonGabor')`
+  );
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1)`, [JAVITAS_KOD]);
+  console.log("[migrate] BodoganGabor és VadonGabor megkapták a saját előlegek jogot.");
 }
 
 // Dolgozók modul — egyszeri törzsadat-feltöltés (2026-09-07): a tényleges
