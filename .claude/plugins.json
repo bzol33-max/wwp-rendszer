@@ -1,0 +1,11 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/claude-code/main/schemas/claude.json",
+  "plugins": [
+    {
+      "name": "open-design",
+      "source": "./plugins/open-design",
+      "enabled": true,
+      "description": "OpenDesign — local-first design app exposed to coding agents over MCP. Provides 139 skills, design projects, files, and preview tools."
+    }
+  ]
+}
