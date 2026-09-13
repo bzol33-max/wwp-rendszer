@@ -1,3 +1,6 @@
+import { AlertCircle } from "lucide-react";
+import { PageHeader } from "@/components/layout/page-header";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireSession } from "@/lib/auth/dal";
 import { ErkezesSajatView } from "@/components/erkezes/erkezes-sajat-view";
 
@@ -6,11 +9,27 @@ export default async function ErkezesPage() {
 
   if (!session.can("erkezes").view || !session.employeeId) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-1 p-4 text-center">
-        <p className="text-sm font-medium">Nincs jogosultságod ehhez a nézethez.</p>
-        <p className="text-xs text-muted-foreground">
-          Ha úgy gondolod, hogy hozzá kellene férned, keresd meg az adminisztrátort.
-        </p>
+      <div className="flex flex-col gap-4">
+        <PageHeader
+          title="Saját érkezés"
+          subtitle="Dolgozói mobil nézet — bejelentkezés, feladatok, előlegek"
+        />
+        <Card className="border-amber-200 bg-amber-50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <AlertCircle className="h-4 w-4 text-amber-600" />
+              <span className="text-amber-900">
+                Nincs jogosultságod ehhez a nézethez
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="text-xs text-amber-800">
+            <p>
+              Ha úgy gondolod, hogy hozzá kellene férned, keresd meg az
+              adminisztrátort.
+            </p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
