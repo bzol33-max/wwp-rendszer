@@ -3,6 +3,8 @@
 // oldal saját Vuex store-jából (routePlanner.routeParams / routeResult) lett
 // visszafejtve.
 
+import { withRetry } from "@/lib/external-api/retry";
+
 const BASE = "https://utdijkalkulacio.hu";
 
 export class TollCalcError extends Error {}
@@ -23,20 +25,22 @@ export type GeocodedAddress = {
 };
 
 async function fuzzySearch(query: string): Promise<GeocodedAddress[]> {
-  const url = new URL(`${BASE}/location/fuzzy`);
-  url.searchParams.set("query", query);
-  url.searchParams.set("types", "hnum,road,cos,admin,poi");
+  return withRetry(async () => {
+    const url = new URL(`${BASE}/location/fuzzy`);
+    url.searchParams.set("query", query);
+    url.searchParams.set("types", "hnum,road,cos,admin,poi");
 
-  const res = await fetch(url.toString(), { cache: "no-store" });
-  if (!res.ok) {
-    throw new TollCalcError(`Címkeresés sikertelen (HTTP ${res.status}).`);
-  }
-  const data = (await res.json()) as FuzzyResponse;
-  return (data.result?.features ?? []).map((f) => ({
-    label: f.properties.address,
-    lon: f.geometry.coordinates[0],
-    lat: f.geometry.coordinates[1],
-  }));
+    const res = await fetch(url.toString(), { cache: "no-store" });
+    if (!res.ok) {
+      throw new TollCalcError(`Címkeresés sikertelen (HTTP ${res.status}).`);
+    }
+    const data = (await res.json()) as FuzzyResponse;
+    return (data.result?.features ?? []).map((f) => ({
+      label: f.properties.address,
+      lon: f.geometry.coordinates[0],
+      lat: f.geometry.coordinates[1],
+    }));
+  });
 }
 
 /** Cím -> legjobb találat (koordináta + a kalkulátor által ismert cím-alak). */
@@ -309,61 +313,63 @@ export async function calculateToll(params: TollCalcParams): Promise<TollRoute> 
     throw new TollCalcError("Legalább két cím szükséges az útvonalhoz.");
   }
 
-  const res = await fetch(`${BASE}/route-planner`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    cache: "no-store",
-    body: JSON.stringify({
-      vehicleType: "HT",
-      vehicleCategory: params.vehicleCategory,
-      euroCategory: params.euroCategory,
-      weight: params.weight,
-      axleWeight: 0,
-      height: 0,
-      width: 0,
-      length: 0,
-      useFallback: true,
-      // A "guidance" (útvonal-navigáció) bekapcsolása kell ahhoz, hogy a
-      // válasz a vonalgeometriát (route.geometry) is tartalmazza — enélkül
-      // csak a táv/idő/útdíj összegek jönnek vissza, térképi megjelenítésre
-      // alkalmas útvonalrajz nélkül. Csak akkor kérjük, ha ténylegesen kell
-      // (lásd TollCalcParams.withGeometry) — a gyakori, tömeges háttérhívások
-      // (költségbecslés, idővonal) az eredeti, bevált kérésalakot kapják.
-      guidance: params.withGeometry ?? false,
-      ferry: true,
-      motorway: true,
-      waypoints: params.points.map((p) => [p.lon, p.lat]),
-    }),
+  return withRetry(async () => {
+    const res = await fetch(`${BASE}/route-planner`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      body: JSON.stringify({
+        vehicleType: "HT",
+        vehicleCategory: params.vehicleCategory,
+        euroCategory: params.euroCategory,
+        weight: params.weight,
+        axleWeight: 0,
+        height: 0,
+        width: 0,
+        length: 0,
+        useFallback: true,
+        // A "guidance" (útvonal-navigáció) bekapcsolása kell ahhoz, hogy a
+        // válasz a vonalgeometriát (route.geometry) is tartalmazza — enélkül
+        // csak a táv/idő/útdíj összegek jönnek vissza, térképi megjelenítésre
+        // alkalmas útvonalrajz nélkül. Csak akkor kérjük, ha ténylegesen kell
+        // (lásd TollCalcParams.withGeometry) — a gyakori, tömeges háttérhívások
+        // (költségbecslés, idővonal) az eredeti, bevált kérésalakot kapják.
+        guidance: params.withGeometry ?? false,
+        ferry: true,
+        motorway: true,
+        waypoints: params.points.map((p) => [p.lon, p.lat]),
+      }),
+    });
+
+    if (!res.ok) {
+      throw new TollCalcError(`Az útdíjkalkulátor hibát adott (HTTP ${res.status}).`);
+    }
+
+    let routes: RawRoute[];
+    try {
+      routes = (await res.json()) as RawRoute[];
+    } catch {
+      throw new TollCalcError("Az útdíjkalkulátor válasza nem értelmezhető.");
+    }
+
+    if (!Array.isArray(routes) || routes.length === 0) {
+      throw new TollCalcError("Nem található útvonal a megadott címek között.");
+    }
+
+    const r = routes.find((x) => x.method === "FAST") ?? routes[0];
+
+    return {
+      method: r.method,
+      distanceKm: Math.round((r.distanceMeter / 1000) * 10) / 10,
+      durationMin: Math.round(r.durationSecond / 60),
+      tollHuf: r.tariff
+        ? {
+            infrastructure: Math.round(r.tariff.infrastructure),
+            external: Math.round(r.tariff.external),
+            grossTotal: Math.round(r.tariff.total),
+          }
+        : null,
+      geometryLonLat: extractRouteGeometry(r),
+    };
   });
-
-  if (!res.ok) {
-    throw new TollCalcError(`Az útdíjkalkulátor hibát adott (HTTP ${res.status}).`);
-  }
-
-  let routes: RawRoute[];
-  try {
-    routes = (await res.json()) as RawRoute[];
-  } catch {
-    throw new TollCalcError("Az útdíjkalkulátor válasza nem értelmezhető.");
-  }
-
-  if (!Array.isArray(routes) || routes.length === 0) {
-    throw new TollCalcError("Nem található útvonal a megadott címek között.");
-  }
-
-  const r = routes.find((x) => x.method === "FAST") ?? routes[0];
-
-  return {
-    method: r.method,
-    distanceKm: Math.round((r.distanceMeter / 1000) * 10) / 10,
-    durationMin: Math.round(r.durationSecond / 60),
-    tollHuf: r.tariff
-      ? {
-          infrastructure: Math.round(r.tariff.infrastructure),
-          external: Math.round(r.tariff.external),
-          grossTotal: Math.round(r.tariff.total),
-        }
-      : null,
-    geometryLonLat: extractRouteGeometry(r),
-  };
 }
