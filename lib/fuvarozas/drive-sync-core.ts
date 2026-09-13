@@ -220,6 +220,22 @@ function resolveJarmuMezo(rendszamVagySofor: string | null): string | undefined 
   return jarmu ? jarmuLabel(jarmu) : undefined;
 }
 
+/**
+ * Az LLM válasza a "fuvardijPenznem" mezőre a kérés ellenére sem mindig
+ * pontosan "Ft"/"EUR" (pl. a dokumentumban szereplő "HUF" felirat szó
+ * szerint visszaköszönhet) — a fuvar_megbizasok tábla `check
+ * (fuvardij_penznem in ('Ft', 'EUR'))` megkötése viszont pontos egyezést
+ * követel, egyébként az INSERT/UPDATE elszáll. Itt normalizáljuk a
+ * lehetséges változatokat, mielőtt bármelyik DB-hívásba kerülne.
+ */
+function normalizaltFuvardijPenznem(nyers: string | null | undefined): FuvardijPenznem | undefined {
+  if (!nyers) return undefined;
+  const n = nyers.trim().toLowerCase();
+  if (n === "eur" || n === "euro" || n === "€") return "EUR";
+  if (n === "ft" || n === "huf" || n === "forint") return "Ft";
+  return undefined;
+}
+
 async function ismertDokumentumUrlak(): Promise<Set<string>> {
   const sorok = await query<{ dokumentum_url: string }>(
     `select dokumentum_url from fuvar_megbizasok where dokumentum_url is not null`
@@ -253,7 +269,7 @@ async function ujFajlokFeldolgozasa(
         jarmu: resolveJarmuMezo(kivont.rendszamVagySofor),
         sofor: kivont.rendszamVagySofor || undefined,
         fuvardij: kivont.fuvardij ?? undefined,
-        fuvardijPenznem: (kivont.fuvardijPenznem as FuvardijPenznem) || undefined,
+        fuvardijPenznem: normalizaltFuvardijPenznem(kivont.fuvardijPenznem),
         fizetesiHataridoNap: kivont.fizetesiHataridoNap ?? undefined,
         postazasiCim: kivont.postazasiCim || undefined,
         pozicioszam: kivont.pozicioszam || undefined,
@@ -310,7 +326,7 @@ async function hianyokPotlasa(drive: ReturnType<typeof driveClient>, hibak: stri
       if (!kivont) continue;
       let valamitPotoltunk = false;
       if (sor.hianyzik_fuvardij && kivont.fuvardij != null) {
-        await setFuvarFuvardij(sor.id, kivont.fuvardij, (kivont.fuvardijPenznem as FuvardijPenznem) || undefined);
+        await setFuvarFuvardij(sor.id, kivont.fuvardij, normalizaltFuvardijPenznem(kivont.fuvardijPenznem));
         valamitPotoltunk = true;
       }
       if (sor.hianyzik_fizetesi_hatarido && kivont.fizetesiHataridoNap != null) {
