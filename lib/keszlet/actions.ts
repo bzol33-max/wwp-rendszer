@@ -95,6 +95,7 @@ export async function addMovement(input: {
   createdBy?: string;
   movementGroup?: string;
 }) {
+  await requireEditPermission("keszlet");
   await query(
     `insert into keszlet_movements (site_id, type_id, direction, qty, partner, target_site_id, purchase_id, created_by, movement_group)
      values (
@@ -147,6 +148,7 @@ export async function recordMovements(input: {
   partner?: string;
   createdBy?: string;
 }) {
+  await requireEditPermission("keszlet");
   if (input.items.length === 0) return;
 
   const movementGroup = randomUUID();
@@ -231,6 +233,7 @@ export async function recordMovements(input: {
 // egyensúly-bontó hibát okozná újra, amit a jóváírás bevezetése (lásd
 // recordMovements) megszüntetett.
 export async function deleteMovement(id: string) {
+  await requireEditPermission("keszlet");
   const rows = await query<{
     purchase_id: string | null;
     direction: Direction;
@@ -263,6 +266,7 @@ export async function deleteMovement(id: string) {
 // (recordMovements egy mentésben több típust is felvehet — ezeket a közös
 // movement_group köti össze, lásd db/schema.sql).
 export async function deleteMovementEvent(id: string) {
+  await requireEditPermission("keszlet");
   const rows = await query<{ movement_group: string | null }>(
     `select movement_group::text from keszlet_events where id = $1 and kind = 'mozgas'`,
     [id]
@@ -497,6 +501,7 @@ export async function addPurchase(input: {
   date?: string;
   createdBy?: string;
 }) {
+  await requireEditPermission("keszlet");
   const seller = input.seller ?? "";
   const total = input.qty * input.unitPrice;
   const method: PaymentMethod = input.method ?? "keszpenz";
@@ -558,6 +563,7 @@ export async function addPurchase(input: {
 }
 
 export async function deletePurchase(id: string) {
+  await requireEditPermission("keszlet");
   // Visszavonja a felvásárlás összes hatását: mozgás(ok), kassza-tétel, esemény, majd maga a tétel.
   const purchaseRows = await query<{
     total: number;
@@ -597,6 +603,7 @@ export async function addPendingPurchase(input: {
   date: string;
   createdBy?: string;
 }) {
+  await requireEditPermission("keszlet");
   const priceRows = await query<{ default_price: number | null }>(
     `select default_price from pallet_types where name = $1`,
     [input.type]
@@ -617,6 +624,7 @@ export async function updatePendingPurchase(
   id: string,
   input: { type: string; qty: number; date: string; createdBy?: string }
 ) {
+  await requireEditPermission("keszlet");
   const priceRows = await query<{ default_price: number | null }>(
     `select default_price from pallet_types where name = $1`,
     [input.type]
@@ -646,6 +654,7 @@ export async function updatePendingPurchase(
 }
 
 export async function payPendingSeller(seller: string, createdBy?: string) {
+  await requireEditPermission("keszlet");
   const rows = await query<{ id: string; total: number }>(
     `select id::text, total from nyiregyhaza_purchases where seller = $1 and pending = true`,
     [seller]
@@ -668,6 +677,7 @@ export async function payPendingSeller(seller: string, createdBy?: string) {
 }
 
 export async function addKasszaMovement(description: string, amount: number, createdBy?: string) {
+  await requireEditPermission("keszlet");
   await query(`insert into kassza_movements (description, amount, created_by) values ($1, $2, $3)`, [
     description,
     amount,
@@ -760,6 +770,7 @@ export async function recordSzetvalogatas(input: {
   torott?: number;
   createdBy?: string;
 }) {
+  await requireEditPermission("keszlet");
   const torott = input.torott ?? 0;
   const total = input.vilagos + input.szurke + torott;
   if (total > 0) {
@@ -797,6 +808,7 @@ export async function recordInventoryCount(input: {
   comment?: string;
   createdBy?: string;
 }) {
+  await requireEditPermission("keszlet");
   await query(
     `insert into inventory_counts (site_id, type_id, expected_qty, counted_qty, accepted, comment, created_by)
      values ((select id from sites where name = $1), (select id from pallet_types where name = $2), $3, $4, $5, $6, $7)`,
@@ -839,10 +851,12 @@ export async function getAllTypesAdmin(): Promise<TypeAdminRow[]> {
 }
 
 export async function updateTypePrice(typeId: number, price: number | null) {
+  await requireEditPermission("keszlet");
   await query(`update pallet_types set default_price = $1 where id = $2`, [price, typeId]);
 }
 
 export async function setTypeSiteActive(typeId: number, site: string, active: boolean) {
+  await requireEditPermission("keszlet");
   if (active) {
     await query(
       `insert into site_active_types (site_id, type_id)
