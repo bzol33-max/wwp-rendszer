@@ -31,7 +31,7 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { AlertTriangle, Check, ChevronDown, Pencil, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, Pencil, RefreshCw, X } from "lucide-react";
 import {
   addFuvar,
   approveFuvar,
@@ -55,6 +55,7 @@ import {
   updateFuvarStatus,
 } from "@/lib/fuvarozas/megbizasok";
 import { calculateTollForAddresses, getGazolajAr } from "@/lib/fuvarozas/actions";
+import { frissitsDriveBol } from "@/lib/fuvarozas/drive-sync";
 import {
   ceglNevKanonikusan,
   FUVAR_STATUSZ_LABEL,
@@ -1580,6 +1581,7 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
   const [reszletek, setReszletek] = useState<FuvarRow | null>(null);
   const [szerkesztett, setSzerkesztett] = useState<FuvarRow | null>(null);
   const [utkozesek, setUtkozesek] = useState<Map<string, UtkozesJelolt[]>>(new Map());
+  const [driveFrissitesFolyamatban, setDriveFrissitesFolyamatban] = useState(false);
 
   const load = useCallback(async () => {
     const [data, utkozesSorok] = await Promise.all([
@@ -1607,10 +1609,43 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
     toast.success("Fuvar teljesítve — átkerült a Számla/Posta fülre.");
   }
 
+  async function handleDriveFrissites() {
+    setDriveFrissitesFolyamatban(true);
+    try {
+      const eredmeny = await frissitsDriveBol();
+      if (eredmeny.hibak.length > 0) {
+        toast.error(`Hiba történt: ${eredmeny.hibak[0]}`);
+      } else if (eredmeny.ujFuvarok === 0 && eredmeny.potoltSorok === 0) {
+        toast.success("Nincs új fuvarmegbízás a Drive-ban.");
+      } else {
+        toast.success(
+          `${eredmeny.ujFuvarok} új fuvar felvéve, ${eredmeny.potoltSorok} sor pótolva.`
+        );
+      }
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Nem sikerült a Drive-frissítés.");
+    } finally {
+      setDriveFrissitesFolyamatban(false);
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-sm">Bér fuvarok — folyamatban</CardTitle>
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="text-sm">Bér fuvarok — folyamatban</CardTitle>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={driveFrissitesFolyamatban}
+            onClick={handleDriveFrissites}
+            title="Azonnal megnézi a Drive-mappát új fuvarmegbízásokért, ahelyett hogy az óránkénti automatikára várnánk."
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${driveFrissitesFolyamatban ? "animate-spin" : ""}`} />
+            Frissítés
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="overflow-x-auto">
