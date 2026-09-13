@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { query } from "@/lib/db";
+import { requireEditPermission } from "@/lib/auth/require-permission";
 import type {
   Feladat,
   FeladatComment,
@@ -89,6 +90,7 @@ export async function createJelenletSession(input: {
   arrivalTime: string | null;
   departureTime: string | null;
 }) {
+  await requireEditPermission("jelenlet");
   await query(
     `insert into jelenletek (employee_id, work_date, arrival_time, departure_time)
      values ($1, $2, $3, $4)`,
@@ -102,6 +104,7 @@ export async function updateJelenletSession(
   id: string,
   input: { arrivalTime: string | null; departureTime: string | null }
 ) {
+  await requireEditPermission("jelenlet");
   await query(`update jelenletek set arrival_time = $2, departure_time = $3 where id = $1`, [
     id,
     input.arrivalTime,
@@ -112,6 +115,7 @@ export async function updateJelenletSession(
 }
 
 export async function deleteJelenletSession(id: string) {
+  await requireEditPermission("jelenlet");
   await query(`delete from jelenletek where id = $1`, [id]);
   revalidatePath("/jelenlet");
   revalidatePath("/erkezes");
@@ -124,6 +128,7 @@ export async function deleteJelenletSession(id: string) {
 // majd később visszajön (pl. kamiont pakolni).
 
 export async function recordArrivalNow(employeeId: string, note?: string) {
+  await requireEditPermission("jelenlet");
   await query(
     `insert into jelenletek (employee_id, work_date, arrival_time, note)
      values ($1, ${BUDAPEST_NOW_DATE}, ${BUDAPEST_NOW_TIME}, $2)`,
@@ -134,6 +139,7 @@ export async function recordArrivalNow(employeeId: string, note?: string) {
 }
 
 export async function recordDepartureNow(employeeId: string, note?: string) {
+  await requireEditPermission("jelenlet");
   const updated = await query<{ id: string }>(
     `update jelenletek
      set departure_time = ${BUDAPEST_NOW_TIME}, note = coalesce($2, note)
@@ -168,6 +174,7 @@ export async function recordAbszenciaNow(
   dayType: "szabadsag" | "beteg",
   note?: string
 ) {
+  await requireEditPermission("jelenlet");
   const updated = await query<{ id: string }>(
     `update jelenletek
      set note = coalesce($3, note)
@@ -229,6 +236,7 @@ export async function createFeladat(input: {
   repeatFreq: RepeatFreq;
   createdBy?: string;
 }) {
+  await requireEditPermission("jelenlet");
   const description = input.description.trim();
   if (!description) throw new Error("A feladat leírása kötelező.");
   if (input.urgency < 1 || input.urgency > 5) {
@@ -251,6 +259,7 @@ export async function createFeladat(input: {
 }
 
 export async function toggleFeladatDone(id: string, done: boolean) {
+  await requireEditPermission("jelenlet");
   await query(
     `update feladatok
      set done = $2, elvegzes_datum = case when $2 then ${BUDAPEST_NOW_DATE} else null end
@@ -263,6 +272,7 @@ export async function toggleFeladatDone(id: string, done: boolean) {
 }
 
 export async function deleteFeladat(id: string) {
+  await requireEditPermission("jelenlet");
   await query(`delete from feladatok where id = $1`, [id]);
   revalidatePath("/jelenlet");
   revalidatePath("/erkezes");
@@ -284,6 +294,7 @@ export async function addFeladatComment(input: {
   author?: string;
   comment: string;
 }) {
+  await requireEditPermission("jelenlet");
   const comment = input.comment.trim();
   if (!comment) throw new Error("A megjegyzés nem lehet üres.");
   await query(

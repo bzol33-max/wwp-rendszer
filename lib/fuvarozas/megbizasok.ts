@@ -1,6 +1,7 @@
 "use server";
 
 import { query } from "@/lib/db";
+import { requireEditPermission } from "@/lib/auth/require-permission";
 import { ceglNevKanonikusan, normalizaltCegKulcs } from "@/lib/fuvarozas/fuvar-constants";
 import type {
   FuvarTipus,
@@ -252,6 +253,7 @@ async function kanonikusMegrendeloNev(nyersNev: string | null | undefined): Prom
 }
 
 export async function addFuvar(input: AddFuvarInput) {
+  await requireEditPermission("fuvarozas");
   const megrendelo = await kanonikusMegrendeloNev(input.megrendelo);
   await query(
     `insert into fuvar_megbizasok
@@ -295,10 +297,12 @@ export async function addFuvar(input: AddFuvarInput) {
 }
 
 export async function updateFuvarStatus(id: string, statusz: FuvarStatusz) {
+  await requireEditPermission("fuvarozas");
   await query(`update fuvar_megbizasok set statusz = $2 where id = $1`, [id, statusz]);
 }
 
 export async function deleteFuvar(id: string) {
+  await requireEditPermission("fuvarozas");
   // Nem töröljük fizikailag — "Törölt" státuszba kerül, hogy a naplózás megmaradjon.
   await query(`update fuvar_megbizasok set statusz = 'torolt' where id = $1`, [id]);
 }
@@ -308,6 +312,7 @@ export async function setFuvarPoziciszam(
   id: string,
   input: { pozicioszam?: string | null; nincs?: boolean }
 ) {
+  await requireEditPermission("fuvarozas");
   await query(
     `update fuvar_megbizasok set
        pozicioszam = $2,
@@ -319,6 +324,7 @@ export async function setFuvarPoziciszam(
 
 /** A Számla/Posta nézet soron belüli, azonnali javítása: postázási cím kitöltése. */
 export async function setFuvarPostazasiCim(id: string, postazasiCim: string | null) {
+  await requireEditPermission("fuvarozas");
   await query(`update fuvar_megbizasok set postazasi_cim = $2 where id = $1`, [
     id,
     postazasiCim || null,
@@ -337,6 +343,7 @@ export async function setFuvarFuvardij(
   fuvardij: number | null,
   penznem?: FuvardijPenznem
 ) {
+  await requireEditPermission("fuvarozas");
   if (penznem) {
     await query(`update fuvar_megbizasok set fuvardij = $2, fuvardij_penznem = $3 where id = $1`, [
       id,
@@ -355,6 +362,7 @@ export async function setFuvarFuvardij(
  * pótolható, jóváhagyó űrlap újranyitása nélkül.
  */
 export async function setFuvarFizetesiHatarido(id: string, nap: number | null) {
+  await requireEditPermission("fuvarozas");
   await query(`update fuvar_megbizasok set fizetesi_hatarido_nap = $2 where id = $1`, [id, nap]);
 }
 
@@ -365,6 +373,7 @@ export async function setFuvarFizetesiHatarido(id: string, nap: number | null) {
  * archiváltnak számít, lásd getSzamlaPostaFuvarok / getArchivFuvarok.
  */
 export async function setFuvarPostazva(id: string, postazva: boolean) {
+  await requireEditPermission("fuvarozas");
   await query(
     `update fuvar_megbizasok set postazva = $2, postazva_at = case when $2 then now() else null end where id = $1`,
     [id, postazva]
@@ -378,6 +387,7 @@ export async function setFuvarPostazva(id: string, postazva: boolean) {
  * jelölőt. Lásd getSzamlaPostaFuvarok.
  */
 export async function setFuvarTeljesitve(id: string, teljesitve: boolean) {
+  await requireEditPermission("fuvarozas");
   await query(
     `update fuvar_megbizasok set teljesitve = $2, teljesitve_at = case when $2 then now() else null end where id = $1`,
     [id, teljesitve]
@@ -492,6 +502,7 @@ export async function getAktivFuvarokUtkozeshez(): Promise<UtkozesJelolt[]> {
  * körre várni.
  */
 export async function szinkronizalSzamlaSzamokat(): Promise<number> {
+  await requireEditPermission("fuvarozas");
   const hianyzoSorok = await query<{ id: string; pozicioszam: string }>(
     `select id::text, pozicioszam
      from fuvar_megbizasok
@@ -529,6 +540,7 @@ export async function szinkronizalSzamlaSzamokat(): Promise<number> {
 
 /** A Számla/Posta nézet soron belüli, azonnali javítása: a kiállított számla sorszámának kitöltése. */
 export async function setFuvarSzamlaSzam(id: string, szamlaSzam: string | null) {
+  await requireEditPermission("fuvarozas");
   await query(`update fuvar_megbizasok set szamla_szam = $2 where id = $1`, [
     id,
     szamlaSzam || null,
@@ -566,6 +578,7 @@ export async function getPostazasiCimJavaslat(megrendelo: string): Promise<strin
 
 /** A "Jóváhagy" / "Módosít" gomb: a mezőket (esetleg módosítva) menti, és ellenorzott = true. */
 export async function approveFuvar(input: ApproveFuvarInput) {
+  await requireEditPermission("fuvarozas");
   const megrendelo = await kanonikusMegrendeloNev(input.megrendelo);
   await query(
     `update fuvar_megbizasok set

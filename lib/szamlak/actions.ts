@@ -4,6 +4,7 @@
 // lib/fuvarozas/megbizasok.ts mintáját. Típusok: szamla-constants.ts.
 
 import { query } from "@/lib/db";
+import { requireEditPermission } from "@/lib/auth/require-permission";
 import { futtatSzamlaSzinkron, type PollEredmeny } from "./poll";
 import type { SzamlaAlkategoria, SzamlaKategoria, SzamlaOsszesitoSor, SzamlaRow } from "./szamla-constants";
 
@@ -186,16 +187,19 @@ export async function getSzamlaOsszesito(): Promise<SzamlaOsszesitoSor[]> {
 
 /** "Fizetve" jelölés — kézi, mert a Számlázz.hu nem küld fizetettségi visszajelzést ehhez a workflow-hoz. */
 export async function jeloltFizetve(id: string) {
+  await requireEditPermission("szamlak");
   await query(`update szamla set fizetve = true, fizetve_datum = now() where id = $1`, [id]);
 }
 
 /** Visszavonás — csak az 5 perces ablakon belül van értelme (a UI ez alapján kínálja fel). */
 export async function visszavonFizetve(id: string) {
+  await requireEditPermission("szamlak");
   await query(`update szamla set fizetve = false, fizetve_datum = null where id = $1`, [id]);
 }
 
 /** A "Frissítés most" gomb: azonnal lefuttat egy szinkron kört, a napszaktól függetlenül. */
 export async function frissitesMost(): Promise<PollEredmeny> {
+  await requireEditPermission("szamlak");
   return futtatSzamlaSzinkron();
 }
 

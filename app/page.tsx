@@ -37,6 +37,8 @@ export default async function Home() {
     if (session.can("posta").view) redirect("/posta");
     if (session.can("erkezes").view) redirect("/erkezes");
     if (session.can("felvasarlas_mobil").view) redirect("/felvasarlas");
+    // Ha egyik nézet sem elérhető, kijelentkeztess (nincs hozzáférés)
+    redirect("/login");
   }
 
   return (
