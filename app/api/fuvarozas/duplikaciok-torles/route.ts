@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { withSession } from "@/lib/auth/require-session";
 
 /**
  * A /api/fuvarozas/duplikaciok végpont által feltárt duplikátum-sorok
@@ -10,7 +11,7 @@ import { query } from "@/lib/db";
  *
  * Elvárt body: { ids: string[] }
  */
-export async function POST(req: Request) {
+export const POST = withSession(async (req, session) => {
   let body: { ids?: string[] };
   try {
     body = await req.json();
@@ -33,4 +34,4 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ torolve });
-}
+});

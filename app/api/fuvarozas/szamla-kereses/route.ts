@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { withSession } from "@/lib/auth/require-session";
+import { escapeLike } from "@/lib/sql/like-escape";
 
 /**
  * Diagnosztikai kereső a Számlák modul (szamla tábla) felé: szabad
@@ -11,13 +13,14 @@ import { query } from "@/lib/db";
  *
  * Használat: GET /api/fuvarozas/szamla-kereses?q=Duvenbeck
  */
-export async function GET(req: Request) {
+export const GET = withSession(async (req, session) => {
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q")?.trim();
   if (!q) {
     return NextResponse.json({ hiba: "Hiányzó 'q' lekérdezési paraméter." }, { status: 400 });
   }
 
+  const escapedQ = escapeLike(q);
   const sorok = await query<{
     szamlaszam: string;
     vevo_nev: string;
@@ -29,11 +32,11 @@ export async function GET(req: Request) {
   }>(
     `select szamlaszam, vevo_nev, rendelesszam, kategoria, kiallitas_datum, brutto, fizetve
      from szamla
-     where vevo_nev ilike '%' || $1 || '%' or rendelesszam ilike '%' || $1 || '%'
+     where vevo_nev ilike '%' || $1 || '%' escape '\\' or rendelesszam ilike '%' || $1 || '%' escape '\\'
      order by kiallitas_datum desc
      limit 30`,
-    [q]
+    [escapedQ]
   );
 
   return NextResponse.json({ talalatok: sorok });
-}
+});

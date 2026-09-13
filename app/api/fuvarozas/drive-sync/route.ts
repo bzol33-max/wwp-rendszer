@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { vegrehajtDriveSync } from "@/lib/fuvarozas/drive-sync-core";
+import { withSession } from "@/lib/auth/require-session";
 
 /**
  * A Google Drive-fuvarmegbízás-import önálló, óránkénti belépési pontja —
@@ -16,7 +17,7 @@ import { vegrehajtDriveSync } from "@/lib/fuvarozas/drive-sync-core";
  * (a többi, már meglévő /api/fuvarozas/drive-* végponttal konzisztensen)
  * hitelesítés nélkül fut — ERŐSEN AJÁNLOTT beállítani.
  */
-export async function POST(req: Request) {
+export const POST = withSession(async (req, session) => {
   const titok = process.env.DRIVE_SYNC_SECRET;
   if (titok) {
     const authFejlec = req.headers.get("authorization");
@@ -34,4 +35,4 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
-}
+});

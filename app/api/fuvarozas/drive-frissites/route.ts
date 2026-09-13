@@ -7,6 +7,7 @@ import {
   setFuvarPostazasiCim,
 } from "@/lib/fuvarozas/megbizasok";
 import type { FuvardijPenznem } from "@/lib/fuvarozas/fuvar-constants";
+import { withSession } from "@/lib/auth/require-session";
 
 /**
  * A Drive-fuvarmegbízás-figyelő automatika utólagos pótló körének
@@ -24,7 +25,7 @@ import type { FuvardijPenznem } from "@/lib/fuvarozas/fuvar-constants";
  *
  * Elvárt body: { frissitesek: [{ id, fuvardij?, fuvardijPenznem? ("Ft"|"EUR"), fizetesiHataridoNap?, szamlaSzam?, postazva?, postazasiCim? }] }
  */
-export async function POST(req: Request) {
+export const POST = withSession(async (req, session) => {
   let body: {
     frissitesek?: {
       id?: string;
@@ -85,4 +86,4 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ eredmenyek });
-}
+});

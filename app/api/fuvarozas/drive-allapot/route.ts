@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { withSession } from "@/lib/auth/require-session";
 
 /**
  * A Drive-fuvarmegbízás-figyelő automatika (ütemezett Claude-feladat) ezzel
@@ -16,7 +17,7 @@ import { query } from "@/lib/db";
  * újabb sort. A törölt sorokat is látnia kell az automatikának ahhoz, hogy
  * egy adott dokumentumot véglegesen (a törlés után is) "ismertnek" tartson.
  */
-export async function GET() {
+export const GET = withSession(async (req, session) => {
   const sorok = await query<{ dokumentum_url: string }>(
     `select dokumentum_url
      from fuvar_megbizasok
@@ -25,4 +26,4 @@ export async function GET() {
   return NextResponse.json({
     dokumentumUrlak: sorok.map((s) => s.dokumentum_url),
   });
-}
+});

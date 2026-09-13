@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { withSession } from "@/lib/auth/require-session";
 
 /**
  * A Drive-fuvarmegbízás-figyelő automatika utólagos pótló körének ezzel
@@ -10,7 +11,7 @@ import { query } from "@/lib/db";
  * /api/fuvarozas/drive-frissites. Csak azokat adjuk vissza, amikhez tényleg
  * van dokumentum — enélkül nincs miből pótolni.
  */
-export async function GET() {
+export const GET = withSession(async (req, session) => {
   const sorok = await query<{
     id: string;
     dokumentum_url: string;
@@ -39,4 +40,4 @@ export async function GET() {
       hianyzikPostazasiCim: s.hianyzik_postazasi_cim,
     })),
   });
-}
+});

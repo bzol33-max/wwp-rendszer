@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { withSession } from "@/lib/auth/require-session";
+import { escapeLike } from "@/lib/sql/like-escape";
 
 /**
  * Általános diagnosztikai kereső végpont: szabad szöveggel (megrendelő vagy
@@ -10,13 +12,14 @@ import { query } from "@/lib/db";
  *
  * Használat: GET /api/fuvarozas/kereses?q=Duvenbeck
  */
-export async function GET(req: Request) {
+export const GET = withSession(async (req, session) => {
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q")?.trim();
   if (!q) {
     return NextResponse.json({ hiba: "Hiányzó 'q' lekérdezési paraméter." }, { status: 400 });
   }
 
+  const escapedQ = escapeLike(q);
   const sorok = await query<{
     id: string;
     megrendelo: string | null;
@@ -35,10 +38,10 @@ export async function GET(req: Request) {
        fuvardij, fuvardij_penznem, dokumentum_url, szamla_szam, postazasi_cim
      from fuvar_megbizasok
      where tipus = 'sajat' and statusz <> 'torolt'
-       and (megrendelo ilike '%' || $1 || '%' or pozicioszam ilike '%' || $1 || '%')
+       and (megrendelo ilike '%' || $1 || '%' escape '\\' or pozicioszam ilike '%' || $1 || '%' escape '\\')
      order by id desc
      limit 50`,
-    [q]
+    [escapedQ]
   );
 
   return NextResponse.json({
@@ -56,4 +59,4 @@ export async function GET(req: Request) {
       postazasiCim: s.postazasi_cim,
     })),
   });
-}
+});

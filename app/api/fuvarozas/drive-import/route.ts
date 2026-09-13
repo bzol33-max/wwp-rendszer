@@ -1,12 +1,13 @@
 import { NextResponse } from "next/server";
 import { addFuvar } from "@/lib/fuvarozas/megbizasok";
 import type { AddFuvarInput } from "@/lib/fuvarozas/fuvar-constants";
+import { withSession } from "@/lib/auth/require-session";
 
 /**
  * A Drive-fuvarmegbízás-figyelő automatika (ütemezett Claude-feladat, lásd
  * projekt-attekintes.md) ezzel viszi fel az újonnan talált, Drive-ból
  * kiolvasott fuvarmegbízásokat — pontosan úgy, mint egy kézi PDF-import:
- * forras = "pdf_import", ellenorzott = false, tehát a "Fuvarozás →
+ * forras = "pdf_import", ellenorzett = false, tehát a "Fuvarozás →
  * Előkészített" listán jelenik meg jóváhagyásra váró sorként, NEM kerül
  * automatikusan véglegesnek számító állapotba (lásd a rendszerspecifikáció
  * 8. pontja: "Ne kerüljön automatikusan végleges állapotba").
@@ -14,7 +15,7 @@ import type { AddFuvarInput } from "@/lib/fuvarozas/fuvar-constants";
  * Elvárt body: { fuvarok: AddFuvarInput[] } — minden elemnek legalább
  * `lerako` és `datum` mezője legyen (ezek kötelezőek az addFuvar-nál is).
  */
-export async function POST(req: Request) {
+export const POST = withSession(async (req, session) => {
   let body: { fuvarok?: Partial<AddFuvarInput>[] };
   try {
     body = await req.json();
@@ -55,4 +56,4 @@ export async function POST(req: Request) {
   }
 
   return NextResponse.json({ eredmenyek });
-}
+});

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { withSession } from "@/lib/auth/require-session";
 
 /**
  * Egyszeri diagnosztikai/karbantartó végpont: megkeresi azokat a "sajat"
@@ -18,7 +19,7 @@ import { query } from "@/lib/db";
  *    Hajdúspedíció Nyírjákó→Ikrény párt, aminek egyik sora sem kapott
  *    pozicioszámot, így az 1. szabály nem vette észre).
  */
-export async function GET() {
+export const GET = withSession(async (req, session) => {
   const pozicioszamosCsoportok = await query<{
     kulcs: string;
     darab: number;
@@ -105,4 +106,4 @@ export async function GET() {
       ...pozicioszamNelkuliCsoportok.map(map),
     ],
   });
-}
+});
