@@ -2,6 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import { query } from "@/lib/db";
+import { requireEditPermission } from "@/lib/auth/require-permission";
 
 const TIME_FMT = "mon. DD HH24:MI";
 
