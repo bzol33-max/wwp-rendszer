@@ -17,7 +17,9 @@ export type ModuleKey =
   | "erkezes"
   | "keszlet_sajat"
   | "attekintes"
-  | "felvasarlas_mobil";
+  | "felvasarlas_mobil"
+  | "fuvarozas_sajat"
+  | "elolegek_sajat";
 
 export const MODULES: { key: ModuleKey; label: string }[] = [
   { key: "info", label: "Info (kezdőlap)" },
@@ -40,6 +42,14 @@ export const MODULES: { key: ModuleKey; label: string }[] = [
     key: "felvasarlas_mobil",
     label: "Felvásárlás mobil rögzítés (önálló, korlátozott nézet — /felvasarlas)",
   },
+  {
+    key: "fuvarozas_sajat",
+    label: "Saját fuvarok (sofőr — dolgozói mobil nézet, az /erkezes Fuvarok csempéje)",
+  },
+  {
+    key: "elolegek_sajat",
+    label: "Saját előlegek megtekintése/elfogadása (dolgozói mobil nézet, az /erkezes Profil csempéje)",
+  },
 ];
 
 /** Modulok, amik utólag, opt-in jelleggel lettek bevezetve — ld. resolvePermission. */
@@ -50,6 +60,8 @@ const OPT_IN_MODULES: ModuleKey[] = [
   "keszlet_sajat",
   "attekintes",
   "felvasarlas_mobil",
+  "fuvarozas_sajat",
+  "elolegek_sajat",
 ];
 
 export type ModulePermission = { view: boolean; edit: boolean };

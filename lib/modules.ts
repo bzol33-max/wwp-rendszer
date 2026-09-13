@@ -75,6 +75,6 @@ export const MODULES: ModuleInfo[] = [
     icon: MessageSquare,
     status: "fejlesztes-alatt",
     description:
-      "Két dolgozó napi érkezés/távozás idejének rögzítése (napi 9 órához viszonyított eltéréssel), plusz telephelyenkénti, sürgősség szerint jelölt feladat-üzenőfal.",
+      "Dolgozói mobil bejelentkezés (napi érkezés/távozás, feladat-üzenőfal, Profil — alapadatok és előleg-elfogadás; sofőröknél saját fuvar-nézet is).",
   },
 ];

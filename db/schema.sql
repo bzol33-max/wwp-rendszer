@@ -614,3 +614,31 @@ update feladatok set elvegzes_datum = task_date where done = true and elvegzes_d
 alter table jelenletek add column if not exists day_type text not null default 'munka'
   check (day_type in ('munka', 'szabadsag', 'beteg'));
 alter table jelenletek add column if not exists note text;
+
+-- Előleg-elfogadás (dolgozói mobil Profil > Előlegek, sofőr bevezetéssel):
+-- a dolgozó egy "ELFOGADOM" gombbal nyugtázza a rá kirótt előleget — az
+-- elfogadás pontos időpontja és neve egy napló-bejegyzés, ezért a
+-- szerver-akció (lib/dolgozok/actions.ts:acceptAdvance) csak akkor írja be,
+-- ha még nincs kitöltve; utólag nem módosítható/törölhető.
+alter table alkalmazott_elolegek add column if not exists accepted_at timestamptz;
+alter table alkalmazott_elolegek add column if not exists accepted_by text;
+
+-- Sofőr mobil nézet (dolgozói mobil "Fuvarok" fül): egy adott megbízás
+-- fel-/lerakó állomásainak kézi "kész" jelölése — külön a GPS-alapú, csak
+-- becslésre szolgáló "elhagyva" jelzéstől (lib/fuvarozas/idovonal.ts), mert
+-- ez a sofőr saját, explicit megerősítése (időbélyeggel, névvel), nem
+-- utólagos GPS-becslés. A megallo_index a fuvar_megbizasok egy sorának
+-- teljes (felrakó + az összes lerakó) állomás-sorrendjében számolt index
+-- (0 = felrakó, 1.. = lerakó állomások — lásd lib/fuvarozas/varos.ts
+-- bontsMegallokra), NEM önálló idegen kulcs egy külön megálló-táblára,
+-- mert a megallók ma is a felrako/lerako szabad szöveges mezőkből
+-- származnak, nincs önálló megálló-tábla.
+create table if not exists fuvar_megallo_allapot (
+  id            bigserial primary key,
+  fuvar_id      bigint not null references fuvar_megbizasok(id) on delete cascade,
+  megallo_index integer not null,
+  kesz          boolean not null default false,
+  kesz_at       timestamptz,
+  kesz_by       text,
+  unique (fuvar_id, megallo_index)
+);

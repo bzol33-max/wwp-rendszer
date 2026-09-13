@@ -14,6 +14,7 @@ import {
   type ArchiveMonth,
   type ArchivedSnapshot,
   type EmployeeInput,
+  type WageMode,
 } from "@/lib/dolgozok/shared";
 
 // Alkalmazottak modul — szerver akciók. Az oldal NEM a naptári hónapot
@@ -138,7 +139,7 @@ export async function getAlkalmazottakSnapshot(): Promise<Snapshot> {
     ),
     query<AdvanceRow>(
       `select id::text, employee_id::text, to_char(advance_date, 'YYYY-MM-DD') as advance_date,
-         amount, note, auto_key, created_by, created_at
+         amount, note, auto_key, created_by, created_at, accepted_at, accepted_by
        from alkalmazott_elolegek
        order by advance_date desc, id desc`
     ),
@@ -281,6 +282,29 @@ export async function setNapiHaviPaid(id: string, paid: boolean, paidBy?: string
   revalidatePath("/dolgozok");
 }
 
+// --- Dolgozói mobil Profil (saját alapadatok) ---
+
+export type EmployeeAlapadatok = {
+  name: string;
+  wageMode: WageMode;
+  wageAmount: number;
+};
+
+/** A dolgozói mobil nézet (Profil > Alapadatok) saját, szűkített lekérdezése. */
+export async function getEmployeeAlapadatok(employeeId: string): Promise<EmployeeAlapadatok | null> {
+  const rows = await query<Employee>(
+    `select id::text, name, position, weekly_wage, daily_wage, monthly_wage,
+       fixed_deduction, show_letiltas, show_uzemanyag, active
+     from alkalmazottak where id = $1`,
+    [employeeId]
+  );
+  const e = rows[0];
+  if (!e) return null;
+  const mode = wageMode(e);
+  const wageAmount = mode === "heti" ? e.weekly_wage : mode === "napi" ? e.daily_wage : mode === "havi" ? e.monthly_wage : 0;
+  return { name: e.name, wageMode: mode, wageAmount };
+}
+
 // --- Előlegek ---
 
 export async function addAdvance(input: {
@@ -309,6 +333,65 @@ export async function deleteAdvance(id: string) {
     throw new Error("Ez a tétel a bérkártya „Előleg” mezőjéből szinkronizálódik — ott módosítsd.");
   }
   await query(`delete from alkalmazott_elolegek where id = $1`, [id]);
+  revalidatePath("/dolgozok");
+}
+
+export type EmployeeElolegSor = {
+  id: string;
+  date: string;
+  amount: number;
+  note: string | null;
+  acceptedAt: string | null;
+  acceptedBy: string | null;
+};
+
+export type EmployeeElolegekOsszesito = {
+  /** Az összes tétel (pozitív előleg + a bérből automatikusan levont negatív tétel) összege — ez a jelenleg még "nyitott", el nem számolt egyenleg. */
+  osszesen: number;
+  tetelek: EmployeeElolegSor[];
+};
+
+// A dolgozói mobil nézet (Profil > Előlegek) saját, szűkített lekérdezése —
+// csak a bejelentkezett dolgozó saját tételeit adja vissza.
+export async function getEmployeeElolegek(employeeId: string): Promise<EmployeeElolegekOsszesito> {
+  const rows = await query<{
+    id: string;
+    advance_date: string;
+    amount: number;
+    note: string | null;
+    accepted_at: string | null;
+    accepted_by: string | null;
+  }>(
+    `select id::text, to_char(advance_date, 'YYYY-MM-DD') as advance_date, amount, note, accepted_at, accepted_by
+     from alkalmazott_elolegek
+     where employee_id = $1
+     order by advance_date desc, id desc`,
+    [employeeId]
+  );
+  return {
+    osszesen: rows.reduce((sum, r) => sum + r.amount, 0),
+    tetelek: rows.map((r) => ({
+      id: r.id,
+      date: r.advance_date,
+      amount: r.amount,
+      note: r.note,
+      acceptedAt: r.accepted_at,
+      acceptedBy: r.accepted_by,
+    })),
+  };
+}
+
+// A dolgozó nyugtázza a rá kirótt előleget — napló-bejegyzés, ezért csak
+// akkor ír, ha még nincs elfogadva (utólag nem módosítható), és csak a saját
+// (employeeId) tételét fogadhatja el.
+export async function acceptAdvance(id: string, employeeId: string, acceptedByName: string) {
+  await query(
+    `update alkalmazott_elolegek
+     set accepted_at = now(), accepted_by = $3
+     where id = $1 and employee_id = $2 and accepted_at is null`,
+    [id, employeeId, acceptedByName]
+  );
+  revalidatePath("/erkezes");
   revalidatePath("/dolgozok");
 }
 

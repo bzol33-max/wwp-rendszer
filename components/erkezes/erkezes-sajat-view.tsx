@@ -1,8 +1,18 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { ArrowLeft, CalendarClock, ClipboardList, LogOut, Package } from "lucide-react";
+import {
+  ArrowLeft,
+  CalendarClock,
+  CheckCircle2,
+  ClipboardList,
+  FileText,
+  IdCard,
+  LogOut,
+  Package,
+  Truck,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -22,8 +32,17 @@ import { FeladatokMobilCsempe } from "@/components/erkezes/feladatok-mobil-csemp
 import { getSiteSnapshot } from "@/lib/keszlet/actions";
 import { MovementForm } from "@/components/keszlet/movement-form";
 import { InventoryDialog } from "@/components/keszlet/inventory-dialog";
+import {
+  acceptAdvance,
+  getEmployeeAlapadatok,
+  getEmployeeElolegek,
+  type EmployeeAlapadatok,
+  type EmployeeElolegekOsszesito,
+} from "@/lib/dolgozok/actions";
+import { HU_MONTHS, ft } from "@/lib/dolgozok/shared";
+import { getSoforAktualisTura, markMegalloKesz, type SoforTura } from "@/lib/fuvarozas/sofor";
 
-type Screen = "home" | "jelenlet" | "feladatok" | "keszlet";
+type Screen = "home" | "jelenlet" | "feladatok" | "keszlet" | "profil" | "fuvarok";
 type ModulePermission = { view: boolean; edit: boolean };
 
 const KESZLET_SITES = ["Szakoly", "Balkány"] as const;
@@ -84,16 +103,30 @@ function Header({
 function HomeScreen({
   employeeName,
   showKeszlet,
+  showFuvarok,
+  showProfil,
   onSelect,
 }: {
   employeeName: string;
   showKeszlet: boolean;
+  showFuvarok: boolean;
+  showProfil: boolean;
   onSelect: (screen: Screen) => void;
 }) {
   return (
     <Shell>
       <Header employeeName={employeeName} />
       <div className="flex flex-1 flex-col gap-3 pt-4">
+        {showFuvarok && (
+          <button
+            type="button"
+            onClick={() => onSelect("fuvarok")}
+            className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-[var(--mob-border)] bg-[var(--mob-card)] py-10 transition-colors active:bg-[var(--mob-tile)]"
+          >
+            <Truck className="h-7 w-7" />
+            <span className="text-base font-semibold">Fuvarok</span>
+          </button>
+        )}
         <button
           type="button"
           onClick={() => onSelect("jelenlet")}
@@ -118,6 +151,16 @@ function HomeScreen({
           >
             <Package className="h-7 w-7" />
             <span className="text-base font-semibold">Készlet</span>
+          </button>
+        )}
+        {showProfil && (
+          <button
+            type="button"
+            onClick={() => onSelect("profil")}
+            className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-[var(--mob-border)] bg-[var(--mob-card)] py-10 transition-colors active:bg-[var(--mob-tile)]"
+          >
+            <IdCard className="h-7 w-7" />
+            <span className="text-base font-semibold">Profil</span>
           </button>
         )}
       </div>
@@ -238,6 +281,304 @@ function FeladatokScreen({
   );
 }
 
+const ROLE_LABEL: Record<string, string> = {
+  sofor: "Sofőr",
+  dolgozo: "Dolgozó",
+};
+
+const WAGE_MODE_LABEL: Record<string, string> = {
+  heti: "Heti bér",
+  napi: "Napi bér",
+  havi: "Fix havi bér",
+  none: "Nincs megadva",
+};
+
+// Alapadatok + Előlegek (elfogadási folyamattal) — minden dolgozói mobil
+// bejelentkezés megkapja, az elolegek_sajat jogosultság dönti el, hogy az
+// Előlegek szakasz megjelenik-e (lásd lib/auth/permissions.ts).
+function ProfilScreen({
+  employeeId,
+  employeeName,
+  role,
+  showElolegek,
+  onBack,
+}: {
+  employeeId: string;
+  employeeName: string;
+  role: string;
+  showElolegek: boolean;
+  onBack: () => void;
+}) {
+  const [alapadatok, setAlapadatok] = useState<EmployeeAlapadatok | null>(null);
+  const [elolegek, setElolegek] = useState<EmployeeElolegekOsszesito | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [pending, startTransition] = useTransition();
+
+  const load = useCallback(async () => {
+    const [a, e] = await Promise.all([
+      getEmployeeAlapadatok(employeeId),
+      showElolegek ? getEmployeeElolegek(employeeId) : Promise.resolve(null),
+    ]);
+    setAlapadatok(a);
+    setElolegek(e);
+  }, [employeeId, showElolegek]);
+
+  useEffect(() => {
+    setLoading(true);
+    load().finally(() => setLoading(false));
+  }, [load]);
+
+  const honapok = useMemo(() => {
+    if (!elolegek) return [];
+    const groups: { key: string; label: string; tetelek: typeof elolegek.tetelek }[] = [];
+    for (const t of elolegek.tetelek) {
+      const [yearStr, monthStr] = t.date.split("-");
+      const key = `${yearStr}-${monthStr}`;
+      let group = groups.find((g) => g.key === key);
+      if (!group) {
+        group = { key, label: `${HU_MONTHS[Number(monthStr) - 1]} ${yearStr}`, tetelek: [] };
+        groups.push(group);
+      }
+      group.tetelek.push(t);
+    }
+    return groups;
+  }, [elolegek]);
+
+  function accept(id: string) {
+    startTransition(async () => {
+      try {
+        await acceptAdvance(id, employeeId, employeeName);
+        await load();
+        toast.success("Előleg elfogadva.");
+      } catch {
+        toast.error("Nem sikerült elfogadni.");
+      }
+    });
+  }
+
+  return (
+    <Shell>
+      <Header employeeName={employeeName} onBack={onBack} />
+
+      {loading ? (
+        <p className="text-sm text-[var(--mob-muted)]">Betöltés…</p>
+      ) : (
+        <div className="flex flex-col gap-4">
+          <Card className="border border-[var(--mob-border)] bg-[var(--mob-card)] ring-0">
+            <CardContent className="flex flex-col gap-2.5 pt-4 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-[var(--mob-muted)]">Szerepkör</span>
+                <span className="font-semibold">{ROLE_LABEL[role] ?? role}</span>
+              </div>
+              {alapadatok && (
+                <div className="flex items-center justify-between border-t border-[var(--mob-border)] pt-2.5">
+                  <span className="text-[var(--mob-muted)]">Bérezés</span>
+                  <span className="font-semibold">
+                    {WAGE_MODE_LABEL[alapadatok.wageMode]}
+                    {alapadatok.wageAmount > 0 && ` · ${ft(alapadatok.wageAmount)}`}
+                  </span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {showElolegek && elolegek && (
+            <>
+              <div className="rounded-xl bg-[var(--mob-text)] p-4 text-[var(--mob-bg)]">
+                <p className="text-xs opacity-70">Aktuális, el nem számolt előleg</p>
+                <p className="text-2xl font-bold text-[var(--mob-accent)]">{ft(elolegek.osszesen)}</p>
+              </div>
+
+              {honapok.length === 0 && (
+                <p className="text-sm text-[var(--mob-muted)]">Nincs rögzített előleged.</p>
+              )}
+
+              {honapok.map((honap) => (
+                <div key={honap.key} className="flex flex-col gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[var(--mob-muted)]">
+                    {honap.label}
+                  </p>
+                  {honap.tetelek.map((t) => (
+                    <Card key={t.id} className="border border-[var(--mob-border)] bg-[var(--mob-card)] ring-0">
+                      <CardContent className="flex flex-col gap-2 pt-4">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-base font-semibold">{ft(t.amount)}</p>
+                            <p className="text-xs text-[var(--mob-muted)]">{t.date}</p>
+                          </div>
+                          {t.acceptedAt ? (
+                            <span className="flex items-center gap-1 rounded-full bg-[var(--mob-accent)]/15 px-2.5 py-1 text-xs font-semibold text-[var(--mob-positive)]">
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              Elfogadva
+                            </span>
+                          ) : (
+                            <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">
+                              Megerősítésre vár
+                            </span>
+                          )}
+                        </div>
+                        {t.acceptedAt ? (
+                          <p className="text-xs text-[var(--mob-muted)]">
+                            Elfogadva: {t.acceptedAt} · {t.acceptedBy}
+                          </p>
+                        ) : (
+                          <Button
+                            size="sm"
+                            disabled={pending}
+                            onClick={() => accept(t.id)}
+                            className="bg-[var(--mob-accent)] text-white hover:bg-[var(--mob-accent)]/90"
+                          >
+                            ELFOGADOM
+                          </Button>
+                        )}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+    </Shell>
+  );
+}
+
+const MEGALLO_TIPUS_LABEL: Record<string, string> = {
+  felrako: "Felrakás",
+  lerako: "Lerakóhely",
+};
+
+// Sofőr saját, aktuális fuvarja — a fuvarozas_sajat jogosultsághoz kötött
+// csempe (lásd lib/auth/permissions.ts). A megállók sorban jelennek meg, a
+// már megerősítettek pipával, a soron következő megálló akciógombbal
+// (FELRAKVA/LERAKVA — lib/fuvarozas/sofor.ts:markMegalloKesz), a még hátra
+// lévők zárolva, amíg az előző meg nem történt.
+function FuvarokScreen({
+  employeeId,
+  employeeName,
+  onBack,
+}: {
+  employeeId: string;
+  employeeName: string;
+  onBack: () => void;
+}) {
+  const [tura, setTura] = useState<SoforTura | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [pending, startTransition] = useTransition();
+
+  const load = useCallback(async () => {
+    setTura(await getSoforAktualisTura(employeeId));
+  }, [employeeId]);
+
+  useEffect(() => {
+    setLoading(true);
+    load().finally(() => setLoading(false));
+  }, [load]);
+
+  function confirm(megalloIndex: number) {
+    startTransition(async () => {
+      try {
+        await markMegalloKesz(tura!.fuvarId, megalloIndex, employeeName);
+        await load();
+        toast.success("Rögzítve.");
+      } catch {
+        toast.error("Nem sikerült rögzíteni.");
+      }
+    });
+  }
+
+  let lerakoSorszam = 0;
+
+  return (
+    <Shell>
+      <Header employeeName={employeeName} onBack={onBack} />
+
+      {loading ? (
+        <p className="text-sm text-[var(--mob-muted)]">Betöltés…</p>
+      ) : !tura ? (
+        <p className="text-sm text-[var(--mob-muted)]">Nincs aktív fuvarod.</p>
+      ) : (
+        <div className="flex flex-col gap-4">
+          <p className="text-sm text-[var(--mob-muted)]">
+            {tura.aktualisIndex !== null
+              ? `Megálló ${tura.aktualisIndex + 1}/${tura.megallok.length} a mai túrán`
+              : `Mind a(z) ${tura.megallok.length} megálló kész`}
+          </p>
+
+          <Card className="border border-[var(--mob-border)] bg-[var(--mob-card)] ring-0">
+            <CardContent className="flex flex-col gap-1 pt-4 text-sm">
+              {tura.pozicioszam && <p className="text-[var(--mob-muted)]">Pozíció: {tura.pozicioszam}</p>}
+              {tura.megrendelo && <p className="font-semibold">Megbízó: {tura.megrendelo}</p>}
+              {(tura.mennyiseg || tura.aru) && (
+                <p className="text-[var(--mob-muted)]">
+                  {[tura.mennyiseg, tura.aru].filter(Boolean).join(" · ")}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          <div className="flex flex-col gap-2">
+            {tura.megallok.map((m) => {
+              if (m.tipus === "lerako") lerakoSorszam++;
+              const cimke = m.tipus === "lerako" ? `${MEGALLO_TIPUS_LABEL.lerako} ${lerakoSorszam}` : MEGALLO_TIPUS_LABEL.felrako;
+              const isAktualis = tura.aktualisIndex === m.index;
+              const isZarolt = tura.aktualisIndex !== null && m.index > tura.aktualisIndex;
+              return (
+                <Card
+                  key={m.index}
+                  className={cn(
+                    "border bg-[var(--mob-card)] ring-0",
+                    isAktualis ? "border-2 border-[var(--mob-accent)]" : "border-[var(--mob-border)]",
+                    isZarolt && "opacity-50"
+                  )}
+                >
+                  <CardContent className="flex flex-col gap-2 pt-4">
+                    <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-[var(--mob-muted)]">
+                      <span>{cimke}</span>
+                      {m.datumIso && <span>{m.datumIso}</span>}
+                    </div>
+                    <p className="text-base font-semibold">{m.varos}</p>
+                    {m.kesz ? (
+                      <span className="flex w-fit items-center gap-1 rounded-full bg-[var(--mob-accent)]/15 px-2.5 py-1 text-xs font-semibold text-[var(--mob-positive)]">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        {m.tipus === "felrako" ? "Felrakva" : "Lerakva"}
+                      </span>
+                    ) : (
+                      isAktualis && (
+                        <Button
+                          size="sm"
+                          disabled={pending}
+                          onClick={() => confirm(m.index)}
+                          className="bg-[var(--mob-accent)] text-white hover:bg-[var(--mob-accent)]/90"
+                        >
+                          {m.tipus === "felrako" ? "FELRAKVA" : "LERAKVA"}
+                        </Button>
+                      )
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+
+          <Button
+            variant="outline"
+            disabled={!tura.dokumentumUrl}
+            className="border-[var(--mob-border)]"
+            onClick={() => {
+              if (tura.dokumentumUrl) window.open(tura.dokumentumUrl, "_blank", "noopener,noreferrer");
+            }}
+          >
+            <FileText className="h-4 w-4" />
+            {tura.dokumentumUrl ? "Dokumentum" : "Nincs dokumentum"}
+          </Button>
+        </div>
+      )}
+    </Shell>
+  );
+}
+
 // Leltár + Be/Ki mozgás rögzítés Szakolyra és Balkányra — a meglévő
 // MovementForm/InventoryDialog komponensek adják a logikát (allowTransfer
 // kikapcsolva, mert ezen a korlátozott mobil nézeten csak Be/Ki kell, nem
@@ -339,11 +680,17 @@ function KeszletScreen({
 export function ErkezesSajatView({
   employeeId,
   employeeName,
+  role,
   keszletPermission,
+  fuvarozasPermission,
+  elolegekPermission,
 }: {
   employeeId: string;
   employeeName: string;
+  role: string;
   keszletPermission: ModulePermission;
+  fuvarozasPermission: ModulePermission;
+  elolegekPermission: ModulePermission;
 }) {
   const [screen, setScreen] = useState<Screen>("home");
 
@@ -368,10 +715,32 @@ export function ErkezesSajatView({
       />
     );
   }
+  if (screen === "fuvarok" && fuvarozasPermission.view) {
+    return (
+      <FuvarokScreen
+        employeeId={employeeId}
+        employeeName={employeeName}
+        onBack={() => setScreen("home")}
+      />
+    );
+  }
+  if (screen === "profil") {
+    return (
+      <ProfilScreen
+        employeeId={employeeId}
+        employeeName={employeeName}
+        role={role}
+        showElolegek={elolegekPermission.view}
+        onBack={() => setScreen("home")}
+      />
+    );
+  }
   return (
     <HomeScreen
       employeeName={employeeName}
       showKeszlet={keszletPermission.view}
+      showFuvarok={fuvarozasPermission.view}
+      showProfil
       onSelect={setScreen}
     />
   );
