@@ -46,3 +46,27 @@ export type SzamlaOsszesitoSor = {
   nyitott_darab: number;
   lejart_darab: number;
 };
+
+/** Egy hónap Fuvar/Raklap bontású bevétele (kiállítás dátuma szerint, csak HUF) a fejléc-diagramhoz. */
+export type SzamlaHaviBevetelSor = {
+  /** 1-12. */
+  honap: number;
+  fuvar: number;
+  raklap: number;
+  osszes: number;
+};
+
+/** A fejléc-diagram alatti 6 statisztika-csempéhez — csak HUF, a folyó évre. */
+export type SzamlaKiemeltStatisztika = {
+  lejartOsszegHuf: number;
+  lejartDarabHuf: number;
+  evesYtdHuf: number;
+  haviAtlagHuf: number;
+  /** null, ha még nincs egyetlen teljes hónap sem az évben. */
+  csucsHonap: number | null;
+  csucsHonapOsszegHuf: number;
+  /** Előző hónaphoz képesti változás %-ban; null, ha nincs elég adat (pl. januárban). */
+  novekedesSzazalek: number | null;
+  legnagyobbNyitottVevo: string | null;
+  legnagyobbNyitottVevoOsszegHuf: number;
+};
