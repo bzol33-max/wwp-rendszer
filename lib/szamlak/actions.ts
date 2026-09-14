@@ -6,7 +6,14 @@
 import { query } from "@/lib/db";
 import { requireEditPermission } from "@/lib/auth/require-permission";
 import { futtatSzamlaSzinkron, type PollEredmeny } from "./poll";
-import type { SzamlaAlkategoria, SzamlaKategoria, SzamlaOsszesitoSor, SzamlaRow } from "./szamla-constants";
+import type {
+  SzamlaAlkategoria,
+  SzamlaHaviBevetelSor,
+  SzamlaKategoria,
+  SzamlaKiemeltStatisztika,
+  SzamlaOsszesitoSor,
+  SzamlaRow,
+} from "./szamla-constants";
 
 const TIME_FMT = "YYYY-MM-DD";
 
@@ -20,13 +27,16 @@ const SZAMLA_COLUMNS = `
 `;
 
 export type SzamlaListaSzuro = {
-  kategoria: SzamlaKategoria;
+  /** undefined = minden kategória (pl. a Kifizetett-listánál nincs értelme kategóriára szűrni). */
+  kategoria?: SzamlaKategoria;
   /** undefined = nem szűr alkategóriára; null = kifejezetten az alkategória nélküli (pl. Fuvar) sorokra. */
   alkategoria?: SzamlaAlkategoria | null;
   vevoNev?: string;
   penznem?: string;
   /** true = kiállítás dátuma szerint, időrendben (a legrégebbi elöl) — pl. a több céget összefogó "Egyéb" csempénél hasznos. */
   idorendben?: boolean;
+  /** true = csak a kifizetett számlák (a "Kifizetve" összecsukott szekcióhoz). */
+  csakFizetve?: boolean;
 };
 
 /**
@@ -36,9 +46,13 @@ export type SzamlaListaSzuro = {
  * sztornózott számla-párok (lib/szamlak/sztorno.ts) ki vannak zárva.
  */
 export async function getSzamlaLista(szuro: SzamlaListaSzuro): Promise<SzamlaRow[]> {
-  const feltetelek: string[] = ["kategoria = $1", "not sztorno", "not sztornozva"];
-  const parameterek: unknown[] = [szuro.kategoria];
+  const feltetelek: string[] = ["not sztorno", "not sztornozva"];
+  const parameterek: unknown[] = [];
 
+  if (szuro.kategoria) {
+    parameterek.push(szuro.kategoria);
+    feltetelek.push(`kategoria = $${parameterek.length}`);
+  }
   if (szuro.alkategoria === null) {
     feltetelek.push("alkategoria is null");
   } else if (szuro.alkategoria !== undefined) {
@@ -53,10 +67,15 @@ export async function getSzamlaLista(szuro: SzamlaListaSzuro): Promise<SzamlaRow
     parameterek.push(szuro.penznem);
     feltetelek.push(`penznem = $${parameterek.length}`);
   }
+  if (szuro.csakFizetve) {
+    feltetelek.push("fizetve");
+  }
 
   const rendezes = szuro.idorendben
     ? "kiallitas_datum asc, szamlaszam asc"
-    : "fizetve asc, fizetesi_hatarido asc nulls last, kiallitas_datum desc";
+    : szuro.csakFizetve
+      ? "fizetve_datum desc"
+      : "fizetve asc, fizetesi_hatarido asc nulls last, kiallitas_datum desc";
 
   return query<SzamlaRow>(
     `select ${SZAMLA_COLUMNS}
@@ -182,6 +201,111 @@ export async function getSzamlaOsszesito(): Promise<SzamlaOsszesitoSor[]> {
      where not sztorno and not sztornozva
      group by kategoria, alkategoria, penznem
      order by kategoria, alkategoria nulls first, penznem`
+  );
+}
+
+/**
+ * Havi bevétel-bontás (Fuvar/Raklap, csak HUF) a folyó évre, a fejléc
+ * diagramjához — kiállítás dátuma szerint, csak a már ténylegesen eltelt
+ * hónapokra (nincs kitalált előrejelzés a jövőbeli hónapokra).
+ */
+export async function getSzamlaHaviBevetel(): Promise<SzamlaHaviBevetelSor[]> {
+  const sorok = await query<{ honap: number; kategoria: SzamlaKategoria; osszeg: number }>(
+    `select
+       extract(month from kiallitas_datum)::int as honap,
+       kategoria,
+       sum(brutto)::float8 as osszeg
+     from szamla
+     where penznem = 'HUF'
+       and not sztorno and not sztornozva
+       and extract(year from kiallitas_datum) = extract(year from current_date)
+       and kiallitas_datum <= current_date
+     group by honap, kategoria`
+  );
+
+  const jelenlegiHonap = new Date().getMonth() + 1;
+  const map = new Map<number, SzamlaHaviBevetelSor>();
+  for (let h = 1; h <= jelenlegiHonap; h++) {
+    map.set(h, { honap: h, fuvar: 0, raklap: 0, osszes: 0 });
+  }
+  for (const s of sorok) {
+    const sor = map.get(s.honap);
+    if (!sor) continue;
+    if (s.kategoria === "fuvar") sor.fuvar = s.osszeg;
+    else sor.raklap = s.osszeg;
+    sor.osszes = sor.fuvar + sor.raklap;
+  }
+  return [...map.values()];
+}
+
+/** A fejléc-diagram alatti 6 statisztika-csempéhez — csak HUF adatok. */
+export async function getSzamlaKiemeltStatisztika(): Promise<SzamlaKiemeltStatisztika> {
+  const [lejart, legnagyobbVevo] = await Promise.all([
+    query<{ osszeg: number; darab: number }>(
+      `select coalesce(sum(brutto), 0)::float8 as osszeg, count(*)::int as darab
+       from szamla
+       where not fizetve and not sztorno and not sztornozva
+         and penznem = 'HUF' and fizetesi_hatarido < current_date`
+    ),
+    query<{ vevo_nev: string; osszeg: number }>(
+      `select vevo_nev, sum(brutto)::float8 as osszeg
+       from szamla
+       where not fizetve and not sztorno and not sztornozva and penznem = 'HUF'
+       group by vevo_nev
+       order by osszeg desc
+       limit 1`
+    ),
+  ]);
+
+  const havi = await getSzamlaHaviBevetel();
+  const evesYtdHuf = havi.reduce((sum, h) => sum + h.osszes, 0);
+  const haviAtlagHuf = havi.length > 0 ? evesYtdHuf / havi.length : 0;
+
+  let csucsHonap: number | null = null;
+  let csucsHonapOsszegHuf = 0;
+  for (const h of havi) {
+    if (h.osszes > csucsHonapOsszegHuf) {
+      csucsHonapOsszegHuf = h.osszes;
+      csucsHonap = h.honap;
+    }
+  }
+
+  let novekedesSzazalek: number | null = null;
+  if (havi.length >= 2) {
+    const utolso = havi[havi.length - 1];
+    const elozo = havi[havi.length - 2];
+    if (elozo.osszes > 0) {
+      novekedesSzazalek = ((utolso.osszes - elozo.osszes) / elozo.osszes) * 100;
+    }
+  }
+
+  return {
+    lejartOsszegHuf: lejart[0]?.osszeg ?? 0,
+    lejartDarabHuf: lejart[0]?.darab ?? 0,
+    evesYtdHuf,
+    haviAtlagHuf,
+    csucsHonap,
+    csucsHonapOsszegHuf,
+    novekedesSzazalek,
+    legnagyobbNyitottVevo: legnagyobbVevo[0]?.vevo_nev ?? null,
+    legnagyobbNyitottVevoOsszegHuf: legnagyobbVevo[0]?.osszeg ?? 0,
+  };
+}
+
+export type SzamlaKifizetettOsszesitoSor = {
+  penznem: string;
+  osszeg: number;
+  darab: number;
+};
+
+/** A "Kifizetve" összecsukott szekció fejlécéhez — darabszám és összeg pénznemenként. */
+export async function getKifizetettOsszesito(): Promise<SzamlaKifizetettOsszesitoSor[]> {
+  return query<SzamlaKifizetettOsszesitoSor>(
+    `select penznem, sum(brutto)::float8 as osszeg, count(*)::int as darab
+     from szamla
+     where fizetve and not sztorno and not sztornozva
+     group by penznem
+     order by penznem`
   );
 }
 

@@ -3,9 +3,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckIcon, InfoIcon } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
+import { KontokivonatDialog } from "@/components/szamlak/kontokivonat-dialog";
+import { SzamlaBevetelDiagram } from "@/components/szamlak/szamla-bevetel-diagram";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -23,6 +25,10 @@ import {
 import { toast } from "sonner";
 import {
   frissitesMost,
+  getKifizetettOsszesito,
+  getSzamlaEgyebCegenkent,
+  getSzamlaHaviBevetel,
+  getSzamlaKiemeltStatisztika,
   getSzamlaLejaratLista,
   getSzamlaLista,
   getSzamlaOsszesito,
@@ -30,13 +36,17 @@ import {
   jeloltFizetve,
   visszavonFizetve,
   type SzamlaAllapot,
+  type SzamlaEgyebCegSor,
+  type SzamlaKifizetettOsszesitoSor,
   type SzamlaLejaratLista,
   type SzamlaListaSzuro,
 } from "@/lib/szamlak/actions";
 import {
   ALKATEGORIA_LABEL,
   KATEGORIA_LABEL,
+  type SzamlaHaviBevetelSor,
   type SzamlaKategoria,
+  type SzamlaKiemeltStatisztika,
   type SzamlaOsszesitoSor,
   type SzamlaRow,
 } from "@/lib/szamlak/szamla-constants";
@@ -267,7 +277,7 @@ type Csempe = {
 function OsszesitoCsempek({ csempek }: { csempek: Csempe[] }) {
   if (csempek.length === 0) return null;
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
       {csempek.map((c) => (
         <Card
           key={c.kulcs}
@@ -305,47 +315,39 @@ function osszegzesPenznemenkent(osszesito: SzamlaOsszesitoSor[], szuro?: (s: Sza
   return [...map.entries()].filter(([, osszeg]) => osszeg !== 0);
 }
 
-/** A leíró szöveges kártya helyén: a teljes kintlévőség összesen, plusz Fuvar/Raklap bontás pénznemenként. */
-function OsszesitesCsempe({ osszesito }: { osszesito: SzamlaOsszesitoSor[] }) {
+/** Keskeny, egy-oszlopos csempesor (HUF/EUR, Fuvar/Raklap/Összes) — a fejléc diagram mellé, a felszabaduló hely a diagramé legyen. */
+function OsszesitesKompakt({ osszesito }: { osszesito: SzamlaOsszesitoSor[] }) {
   if (osszesito.length === 0) return null;
   const osszesen = osszegzesPenznemenkent(osszesito);
   const fuvar = osszegzesPenznemenkent(osszesito, (s) => s.kategoria === "fuvar");
   const raklap = osszegzesPenznemenkent(osszesito, (s) => s.kategoria === "raklap");
+  const penznemek = osszesen.map(([penznem]) => penznem);
 
   return (
-    <Card>
-      <CardContent className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-3">
-        <div className="flex min-w-0 flex-col gap-1">
-          <div className="text-xs text-muted-foreground">Összes kintlévőség</div>
-          {osszesen.map(([penznem, osszeg]) => (
-            <div
-              key={penznem}
-              className="text-lg font-semibold tabular-nums sm:text-xl"
-            >
-              {formatOsszeg(osszeg, penznem)}
+    <div className="flex flex-col gap-3">
+      {penznemek.map((penznem) => {
+        const f = fuvar.find(([p]) => p === penznem)?.[1] ?? 0;
+        const r = raklap.find(([p]) => p === penznem)?.[1] ?? 0;
+        const o = osszesen.find(([p]) => p === penznem)?.[1] ?? 0;
+        return (
+          <div key={penznem} className="flex flex-col gap-1">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{penznem}</div>
+            <div className="rounded-md border-l-2 border-l-primary bg-card px-2 py-1.5 shadow-sm">
+              <div className="text-[9px] text-muted-foreground">Fuvar</div>
+              <div className="text-sm font-bold tabular-nums">{formatOsszeg(f, penznem)}</div>
             </div>
-          ))}
-        </div>
-        <div className="flex min-w-0 flex-col gap-1">
-          <div className="text-xs text-muted-foreground">Fuvar</div>
-          {fuvar.length === 0 && <div className="text-sm text-muted-foreground">—</div>}
-          {fuvar.map(([penznem, osszeg]) => (
-            <div key={penznem} className="text-base font-medium tabular-nums">
-              {formatOsszeg(osszeg, penznem)}
+            <div className="rounded-md border-l-2 bg-card px-2 py-1.5 shadow-sm" style={{ borderLeftColor: "#f97316" }}>
+              <div className="text-[9px] text-muted-foreground">Raklap</div>
+              <div className="text-sm font-bold tabular-nums">{formatOsszeg(r, penznem)}</div>
             </div>
-          ))}
-        </div>
-        <div className="flex min-w-0 flex-col gap-1">
-          <div className="text-xs text-muted-foreground">Raklap</div>
-          {raklap.length === 0 && <div className="text-sm text-muted-foreground">—</div>}
-          {raklap.map(([penznem, osszeg]) => (
-            <div key={penznem} className="text-base font-medium tabular-nums">
-              {formatOsszeg(osszeg, penznem)}
+            <div className="rounded-md border bg-muted/30 px-2 py-1.5">
+              <div className="text-[9px] text-muted-foreground">Összes</div>
+              <div className="text-sm font-bold tabular-nums">{formatOsszeg(o, penznem)}</div>
             </div>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -358,7 +360,7 @@ function LejaratMiniTabla({
   onFizetve,
   onVisszavon,
 }: {
-  cim: string;
+  cim?: string;
   sorok: SzamlaRow[];
   lejartStilus: boolean;
   ures: string;
@@ -367,7 +369,7 @@ function LejaratMiniTabla({
 }) {
   return (
     <div className="flex flex-col gap-2">
-      <div className={`text-sm font-semibold ${lejartStilus ? "text-destructive" : ""}`}>{cim}</div>
+      {cim && <div className={`text-sm font-semibold ${lejartStilus ? "text-destructive" : ""}`}>{cim}</div>}
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
@@ -520,48 +522,76 @@ function LejaratCsempek({ refreshKey, onChanged }: { refreshKey: number; onChang
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
       {csempek.map(({ kategoria, adat }) => (
-        <Card key={kategoria}>
-          <CardHeader>
-            <CardTitle className="text-sm">{KATEGORIA_LABEL[kategoria]} — esedékesség szerint</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-5">
-            <LejaratMiniTabla
-              cim="Következő 10 lejárat"
-              sorok={adat?.kovetkezo ?? []}
-              lejartStilus={false}
-              ures="Nincs közelgő esedékesség."
-              onFizetve={handleFizetve}
-              onVisszavon={handleVisszavon}
-            />
-            <LejaratMiniTabla
-              cim={`Lejárt (${adat?.lejartOsszesen ?? 0})`}
-              sorok={adat?.lejart ?? []}
-              lejartStilus
-              ures="Nincs lejárt számla."
-              onFizetve={handleFizetve}
-              onVisszavon={handleVisszavon}
-            />
-          </CardContent>
-        </Card>
+        <div key={`${kategoria}-kovetkezo`} className="rounded-lg border border-warning/40 bg-warning/5 p-4">
+          <div className="mb-2 text-sm font-semibold">{KATEGORIA_LABEL[kategoria]} — Következő 10 lejárat</div>
+          <LejaratMiniTabla
+            sorok={adat?.kovetkezo ?? []}
+            lejartStilus={false}
+            ures="Nincs közelgő esedékesség."
+            onFizetve={handleFizetve}
+            onVisszavon={handleVisszavon}
+          />
+        </div>
+      ))}
+      {csempek.map(({ kategoria, adat }) => (
+        <div key={`${kategoria}-lejart`} className="rounded-lg border border-destructive/40 bg-destructive/5 p-4">
+          <div className="mb-2 text-sm font-semibold text-destructive">
+            {KATEGORIA_LABEL[kategoria]} — Lejárt ({adat?.lejartOsszesen ?? 0})
+          </div>
+          <LejaratMiniTabla
+            sorok={adat?.lejart ?? []}
+            lejartStilus
+            ures="Nincs lejárt számla."
+            onFizetve={handleFizetve}
+            onVisszavon={handleVisszavon}
+          />
+        </div>
       ))}
     </div>
   );
 }
 
+const URES_STATISZTIKA: SzamlaKiemeltStatisztika = {
+  lejartOsszegHuf: 0,
+  lejartDarabHuf: 0,
+  evesYtdHuf: 0,
+  haviAtlagHuf: 0,
+  csucsHonap: null,
+  csucsHonapOsszegHuf: 0,
+  novekedesSzazalek: null,
+  legnagyobbNyitottVevo: null,
+  legnagyobbNyitottVevoOsszegHuf: 0,
+};
+
 export function SzamlakView() {
   const [osszesito, setOsszesito] = useState<SzamlaOsszesitoSor[]>([]);
+  const [egyebCegek, setEgyebCegek] = useState<SzamlaEgyebCegSor[]>([]);
   const [allapot, setAllapot] = useState<SzamlaAllapot | null>(null);
+  const [havi, setHavi] = useState<SzamlaHaviBevetelSor[]>([]);
+  const [statisztika, setStatisztika] = useState<SzamlaKiemeltStatisztika>(URES_STATISZTIKA);
+  const [kifizetettOsszesito, setKifizetettOsszesito] = useState<SzamlaKifizetettOsszesitoSor[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [frissitve, setFrissitve] = useState(false);
   const [listaCim, setListaCim] = useState<string | null>(null);
   const [listaSzuro, setListaSzuro] = useState<SzamlaListaSzuro | null>(null);
 
   const loadOsszesito = useCallback(async () => {
-    const [o, a] = await Promise.all([getSzamlaOsszesito(), getSzamlaSzinkronAllapot()]);
+    const [o, a, e, h, s, k] = await Promise.all([
+      getSzamlaOsszesito(),
+      getSzamlaSzinkronAllapot(),
+      getSzamlaEgyebCegenkent(),
+      getSzamlaHaviBevetel(),
+      getSzamlaKiemeltStatisztika(),
+      getKifizetettOsszesito(),
+    ]);
     setOsszesito(o);
     setAllapot(a);
+    setEgyebCegek(e);
+    setHavi(h);
+    setStatisztika(s);
+    setKifizetettOsszesito(k);
   }, []);
 
   useEffect(() => {
@@ -608,6 +638,7 @@ export function SzamlakView() {
         actions={
           <>
             <SzinkronInfoGomb szoveg={infoSzoveg} />
+            <KontokivonatDialog onChanged={loadOsszesito} />
             <Button variant="outline" size="sm" disabled={frissitve} onClick={handleFrissites}>
               {frissitve ? "Frissítés…" : "Frissítés most"}
             </Button>
@@ -615,7 +646,10 @@ export function SzamlakView() {
         }
       />
 
-      <OsszesitesCsempe osszesito={osszesito} />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[180px_1fr]">
+        <OsszesitesKompakt osszesito={osszesito} />
+        <SzamlaBevetelDiagram havi={havi} statisztika={statisztika} />
+      </div>
 
       <OsszesitoCsempek
         csempek={osszesito.map((s) => {
@@ -636,7 +670,51 @@ export function SzamlakView() {
         })}
       />
 
+      {egyebCegek.length > 0 && (
+        <div className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold">Raklap — Egyéb (cégenkénti bontás)</h2>
+          <OsszesitoCsempek
+            csempek={egyebCegek.map((c) => ({
+              kulcs: `egyeb-${c.vevo_nev}-${c.penznem}`,
+              cim: `${c.vevo_nev} (${c.penznem})`,
+              nyitottOsszeg: c.nyitott_osszeg,
+              lejartOsszeg: c.lejart_osszeg,
+              penznem: c.penznem,
+              nyitottDarab: c.nyitott_darab,
+              lejartDarab: c.lejart_darab,
+              onClick: () => {
+                setListaCim(`Raklap — Egyéb — ${c.vevo_nev} (${c.penznem})`);
+                setListaSzuro({
+                  kategoria: "raklap",
+                  alkategoria: "egyeb",
+                  vevoNev: c.vevo_nev,
+                  penznem: c.penznem,
+                });
+              },
+            }))}
+          />
+        </div>
+      )}
+
       <LejaratCsempek refreshKey={refreshKey} onChanged={loadOsszesito} />
+
+      <button
+        type="button"
+        onClick={() => {
+          setListaCim(`Kifizetve (${kifizetettOsszesito.reduce((sum, k) => sum + k.darab, 0)})`);
+          setListaSzuro({ csakFizetve: true });
+        }}
+        className="flex w-full items-center justify-between rounded-lg border border-success/40 bg-success/5 p-4 text-left transition-colors hover:bg-success/10"
+      >
+        <span className="flex items-center gap-2 text-sm font-semibold text-success">
+          <CheckIcon className="h-4 w-4" /> Kifizetve ({kifizetettOsszesito.reduce((sum, k) => sum + k.darab, 0)})
+        </span>
+        <span className="text-xs text-muted-foreground">
+          {kifizetettOsszesito.length > 0
+            ? kifizetettOsszesito.map((k) => formatOsszeg(k.osszeg, k.penznem)).join(" · ")
+            : "—"}
+        </span>
+      </button>
 
       <SzamlaListaDialog
         cim={listaCim}
