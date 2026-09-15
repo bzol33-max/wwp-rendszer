@@ -147,11 +147,26 @@ function KovetkezoNapokDoboz({ napok }: { napok: KovetkezoNap[] }) {
   );
 }
 
-function KamionSor({ jarmu, eta }: { jarmu: (typeof SAJAT_JARMUVEK)[number]; eta: Date }) {
+function KamionSor({
+  jarmu,
+  eta,
+}: {
+  jarmu: (typeof SAJAT_JARMUVEK)[number];
+  eta: { erkezes: Date; bizonytalan: boolean };
+}) {
   return (
     <div className="flex items-center gap-1.5 py-0.5 text-[11px] font-medium">
       <Truck className={`h-3.5 w-3.5 shrink-0 ${SZIN_KAMION[jarmu.szin]}`} />
-      <span className={SZIN_KAMION[jarmu.szin]}>Becsült érkezés: {formatIdo(eta)}</span>
+      {/* Bizonytalan becslésnél szándékosan NEM írunk ki órát: a régi
+          változat ilyenkor a megbízás statikus menetrendjét mutatta, ami
+          gyakran több órával korábbi időpont volt, mint a jelen pillanat. */}
+      {eta.bizonytalan ? (
+        <span className="text-muted-foreground" title="Nem sikerült élő útvonalat számolni ehhez a ponthoz — ellenőrizd a megbízáson a címet.">
+          Érkezés: nem becsülhető
+        </span>
+      ) : (
+        <span className={SZIN_KAMION[jarmu.szin]}>Becsült érkezés: {formatIdo(eta.erkezes)}</span>
+      )}
     </div>
   );
 }
@@ -160,6 +175,7 @@ function MegalloSor({
   b,
   aktiv,
   mutassNapot,
+  mutasdTeljesCimet,
   onKeszJelolve,
 }: {
   b: MegalloBejegyzes;
@@ -167,6 +183,8 @@ function MegalloSor({
   aktiv: boolean;
   /** Igaz, ha a pont dátuma nem magától értetődő (nem a mai nap nézete) — ilyenkor a nap is megjelenik az idő mellett. */
   mutassNapot?: boolean;
+  /** Igaz, ha ezen a listán több megálló is ugyanabban a városban van — ilyenkor a puszta városnév nem különbözteti meg őket, ezért a teljes cím is kiírjuk. */
+  mutasdTeljesCimet?: boolean;
   onKeszJelolve: () => void;
 }) {
   const [folyamatban, setFolyamatban] = useState(false);
@@ -209,8 +227,17 @@ function MegalloSor({
             )
           )}
           {/* Már érintett pontnál a GPS szerinti tényleges megérkezés idejét mutatjuk, nem a becslést. */}
-          <span className="shrink-0 text-muted-foreground" title={b.elhagyva || b.eppenItt ? "Tényleges érkezés (GPS)" : "Becsült érkezés"}>
-            {b.elhagyva || b.eppenItt ? "" : "~"}
+          <span
+            className="shrink-0 text-muted-foreground"
+            title={
+              b.elhagyva || b.eppenItt
+                ? b.bizonytalanFelismeres
+                  ? "A GPS szerint a jármű a város közelében állt meg — a megbízáson csak a város szerepel, ezért ez nem biztos, hogy EZ a rakodás volt."
+                  : "Tényleges érkezés (GPS)"
+                : "Becsült érkezés"
+            }
+          >
+            {b.elhagyva || b.eppenItt ? (b.bizonytalanFelismeres ? "?" : "") : "~"}
             {mutassNapot ? formatIdoNappal(b.idopont) : formatIdo(b.idopont)}
           </span>
         </span>
@@ -234,6 +261,13 @@ function MegalloSor({
         {b.megrendelo ?? "Megbízó ismeretlen"}
         {b.pozicioszam ? ` · ${b.pozicioszam}` : ""}
       </span>
+      {/* Ha két megálló ugyanabba a városba esik, a puszta városnév alapján
+          duplikátumnak látszanának — a teljes cím különbözteti meg őket. */}
+      {mutasdTeljesCimet && b.nyersCim && b.nyersCim !== b.cim && (
+        <span className="truncate pl-11 text-[10px] text-muted-foreground/80" title={b.nyersCim}>
+          {b.nyersCim}
+        </span>
+      )}
     </div>
   );
 }
@@ -261,6 +295,13 @@ function JarmuCsempe({
   const aktivFuvarId =
     maiMegallok.find((b) => b.eppenItt)?.fuvarId ?? (kovetkezoIdx >= 0 ? maiMegallok[kovetkezoIdx].fuvarId : null);
 
+  // Azok a városok, amik a listán többször is szerepelnek — ott a puszta
+  // városnév alapján két külön rakodóhely duplikált sornak látszana, ezért
+  // náluk a teljes címet is kiírjuk.
+  const tobbszorosVarosok = new Set(
+    maiMegallok.map((b) => b.cim).filter((cim, i, t) => t.indexOf(cim) !== i)
+  );
+
   return (
     <div className="flex flex-col gap-3">
       <JarmuInfoDoboz jarmu={jarmu} eredmeny={eredmeny} maiNap={maiNap} />
@@ -269,11 +310,16 @@ function JarmuCsempe({
         <p className="text-[11px] text-muted-foreground">Nincs megbízás ezen a napon.</p>
       ) : (
         <div className="flex flex-col gap-0.5">
-          {maiNap && kovetkezoIdx === 0 && eloEta && <KamionSor jarmu={jarmu} eta={eloEta.erkezes} />}
+          {maiNap && kovetkezoIdx === 0 && eloEta && <KamionSor jarmu={jarmu} eta={eloEta} />}
           {maiMegallok.map((b, i) => (
             <div key={`${b.fuvarId}-${b.tipus}-${i}`}>
-              <MegalloSor b={b} aktiv={maiNap && b.fuvarId === aktivFuvarId} onKeszJelolve={onKeszJelolve} />
-              {maiNap && i === kovetkezoIdx - 1 && eloEta && <KamionSor jarmu={jarmu} eta={eloEta.erkezes} />}
+              <MegalloSor
+                b={b}
+                aktiv={maiNap && b.fuvarId === aktivFuvarId}
+                mutasdTeljesCimet={tobbszorosVarosok.has(b.cim)}
+                onKeszJelolve={onKeszJelolve}
+              />
+              {maiNap && i === kovetkezoIdx - 1 && eloEta && <KamionSor jarmu={jarmu} eta={eloEta} />}
             </div>
           ))}
         </div>
@@ -326,6 +372,14 @@ function ElakadtakDoboz({ elakadtak }: { elakadtak: ElakadtFuvar[] }) {
               ? "nincs kitöltve a Kocsi/Sofőr mező"
               : `ismeretlen kocsi: „${f.jarmuSzoveg}”`}
           </span>
+          {/* Elgépelt rendszámnál megmondjuk, mire gondolhatott a kitöltő —
+              de a hozzárendelést nem végezzük el magunktól, mert egy téves
+              találat a fuvart rossz kocsi idővonalára tenné. */}
+          {f.javasoltSofor && (
+            <span className="rounded bg-amber-200/60 px-1 py-0.5 font-medium text-amber-900 dark:bg-amber-900/50 dark:text-amber-200">
+              talán {f.javasoltSofor}? — elgépelés lehet
+            </span>
+          )}
         </div>
       ))}
     </div>

@@ -16,6 +16,7 @@
 import type { EcofleetTrip } from "./ecofleet";
 import { parseEcofleetTimestamp } from "./ecofleet";
 import type { FuvarTipus } from "./fuvar-constants";
+import type { CimPontossag } from "./varos";
 
 /** Két koordináta közti távolság km-ben (haversine). */
 export function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -242,6 +243,10 @@ export type TervezettMegallo = {
   tipus: "felrako" | "lerako";
   /** Rövid, csak városnév alapú címke (lásd varosNev a varos.ts-ben). */
   cim: string;
+  /** A megálló teljes, nyers címszövege — akkor kell, ha egy fuvaron belül két megálló ugyanabban a városban van, és a puszta városnév nem különbözteti meg őket. */
+  nyersCim: string;
+  /** Mennyire pontosan azonosítható a cím (lásd cimPontossaga a varos.ts-ben) — ettől függ, mennyire bízhatunk a GPS-alapú felismerésben. */
+  pontossag: CimPontossag;
   lat: number | null;
   lon: number | null;
   /**
@@ -260,6 +265,12 @@ export type TervezettMegallo = {
   tenylegesIdo: Date | null;
   /** Ha a jármű már tovább is ment, a tényleges (GPS szerinti) TOVÁBBINDULÁS ideje. Amíg itt áll, null. */
   tenylegesTavozas: Date | null;
+  /**
+   * Igaz, ha a felismerés csak valószínűsítés, nem bizonyosság — mert a cím
+   * csak városnév szintjén ismert, így a koordináta a városközépre mutat, és
+   * a közelben történt megállás nem feltétlenül EZ a rakodás volt.
+   */
+  bizonytalanFelismeres: boolean;
 };
 
 export type EloPozicio = {
@@ -402,50 +413,86 @@ const TOVABBHALADAS_TAVOLSAG_KM = 3;
 const ERINTES_MIN_IDOTARTAM_SEC = 10 * 60;
 
 /**
- * Megjelöli, mely tervezett fel-/lerakó pontokat érintette már a jármű, és
- * melyeket hagyta el. Két lépés:
+ * Megjelöli a jármű EGÉSZ NAPJÁRA, mely tervezett fel-/lerakó pontokat
+ * érintette már, és melyeket hagyta el. Három lépés:
  *
  * 1. ÉRINTÉS — a valós GPS-idővonal ÁLLÁS-szakaszai közül keressük a
  *    legutolsót, ami CIM_TAVOLSAG_KM-en belül van a ponthoz, és elég sokáig
  *    tartott (vagy a helye alapján eleve rakodásnak minősült). Kifejezetten
  *    csak állásokat nézünk: aki csak elhajtott a cím mellett, az nem volt ott.
  *
- * 2. TOVÁBBHALADÁS — az érintés után volt-e a jármű TOVABBHALADAS_TAVOLSAG_KM-nél
+ * 2. PÁROSÍTÁS — a lehetséges érintéseket a legközelebbi párral kezdve,
+ *    kölcsönösen egyszer osztjuk ki, a nap összes megbízására együtt.
+ *
+ * 3. TOVÁBBHALADÁS — az érintés után volt-e a jármű TOVABBHALADAS_TAVOLSAG_KM-nél
  *    messzebb. Ha igen, a megálló "elhagyva" (kész). Ha nem, a jármű még ott
  *    van: `eppenItt`.
  *
  * Mindkét esetben `tenylegesIdo` az érintés KEZDETE, vagyis a tényleges
  * megérkezés ideje — ezt mutatja az idővonal a becsült időpont helyett.
  */
-export function jelolMegallokElhagyottkent(
-  megallok: TervezettMegallo[],
+export function jelolMegallokat(
+  fuvarokMegalloi: TervezettMegallo[][],
   szakaszok: IdovonalSzakasz[]
-): TervezettMegallo[] {
+): TervezettMegallo[][] {
   const allasok = szakaszok.filter((sz): sz is Extract<IdovonalSzakasz, { tipus: "allas" }> => sz.tipus === "allas");
   const pontok = idovonalPontjai(szakaszok);
 
-  return megallok.map((m) => {
-    const { lat, lon } = m;
-    if (lat == null || lon == null) return m;
+  // A nap ÖSSZES tervezett megállója egy listában, hogy a párosítás a jármű
+  // egész napjára érvényes legyen, ne fuvaronként külön. Enélkül ugyanaz a
+  // valós megállás több, egymástól független megbízás megállóját is
+  // igazolhatta — a felületen ez úgy látszott, hogy három különböző cím
+  // ugyanabban a másodpercben lett kész.
+  const lapos = fuvarokMegalloi.flatMap((megallok, fi) => megallok.map((m, mi) => ({ fi, mi, m })));
 
-    const erintesek = allasok.filter(
-      (a) =>
-        haversineKm(lat, lon, a.lat, a.lon) < CIM_TAVOLSAG_KM &&
-        (a.idotartamSec >= ERINTES_MIN_IDOTARTAM_SEC || a.kategoria === "rakodas")
-    );
-    const erintes = erintesek[erintesek.length - 1];
-    if (!erintes) return m;
-
-    const tovabbment = pontok.some(
-      (p) => p.at > erintes.kezdet.getTime() && haversineKm(lat, lon, p.lat, p.lon) >= TOVABBHALADAS_TAVOLSAG_KM
-    );
-
-    return {
-      ...m,
-      elhagyva: tovabbment,
-      eppenItt: !tovabbment,
-      tenylegesIdo: erintes.kezdet,
-      tenylegesTavozas: tovabbment ? erintes.veg : null,
-    };
+  const parok: { fi: number; mi: number; ai: number; tav: number }[] = [];
+  lapos.forEach(({ fi, mi, m }) => {
+    // Felismerhetetlen címnél nincs mihez hasonlítani — ilyet nem jelölünk késznek.
+    if (m.lat == null || m.lon == null || m.pontossag === "ismeretlen") return;
+    allasok.forEach((a, ai) => {
+      if (a.idotartamSec < ERINTES_MIN_IDOTARTAM_SEC && a.kategoria !== "rakodas") return;
+      const tav = haversineKm(m.lat as number, m.lon as number, a.lat, a.lon);
+      if (tav < CIM_TAVOLSAG_KM) parok.push({ fi, mi, ai, tav });
+    });
   });
+
+  // Párosítás a legközelebbi párral kezdve, KÖLCSÖNÖSEN egyszer: egy valós
+  // megállás egyetlen tervezett megállót igazol, és egy tervezett megállót
+  // egyetlen valós megállás igazol. Így két, egymáshoz közeli cím közül az
+  // kapja a találatot, amelyikhez a kamion ténylegesen közelebb állt.
+  parok.sort((x, y) => x.tav - y.tav);
+  const foglaltMegallo = new Set<string>();
+  const foglaltAllas = new Set<number>();
+  const parositas = new Map<string, (typeof allasok)[number]>();
+  for (const p of parok) {
+    const kulcs = `${p.fi}:${p.mi}`;
+    if (foglaltMegallo.has(kulcs) || foglaltAllas.has(p.ai)) continue;
+    foglaltMegallo.add(kulcs);
+    foglaltAllas.add(p.ai);
+    parositas.set(kulcs, allasok[p.ai]);
+  }
+
+  return fuvarokMegalloi.map((megallok, fi) =>
+    megallok.map((m, mi) => {
+      const erintes = parositas.get(`${fi}:${mi}`);
+      if (!erintes) return m;
+
+      const tovabbment = pontok.some(
+        (p) =>
+          p.at > erintes.kezdet.getTime() &&
+          haversineKm(m.lat as number, m.lon as number, p.lat, p.lon) >= TOVABBHALADAS_TAVOLSAG_KM
+      );
+
+      return {
+        ...m,
+        elhagyva: tovabbment,
+        eppenItt: !tovabbment,
+        tenylegesIdo: erintes.kezdet,
+        tenylegesTavozas: tovabbment ? erintes.veg : null,
+        // Csak városnév szintjén ismert címnél a koordináta a városközépre
+        // mutat, tehát a közeli megállás nem bizonyíték, csak jel.
+        bizonytalanFelismeres: m.pontossag !== "pontos",
+      };
+    })
+  );
 }
