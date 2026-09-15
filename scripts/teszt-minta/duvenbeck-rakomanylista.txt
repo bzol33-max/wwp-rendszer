@@ -1,0 +1,55 @@
+/
+Rakomanylista: ID 2222222/1 Fuvar Megbizas: ID 1111111
+Cargo list: ID 2222222/1 Transport order: ID 1111111
+Oldal:
+Page:
+1
+Megbizas
+Megbizas
+ORDER
+ORDER
+Felado
+Felado
+Cimzett
+Cimzett
+Duvenbeck Logisztikai Kft. -
+Ut ID: / Tour ID8888888
+Tura utemterve / Tour schedule
+Turaallomas / TOURSTOP 1
+Turaallomas / TOURSTOP 2
+BERAKODAS / LOADING
+KIRAKODAS / UNLOADING
+Minta Logisztika Kft.
+Proba utca 1
+HU 1111 Mintavaros
+Fogado Raktar Zrt.
+Masik utca 2
+HU 2222 Masikvaros
+ABC123
+ABC123
+Suly
+Weight
+Referencia
+REFERENCE
+Berakodasi tajekoztatas
+Kirakodasi tajekoztatas
+77777777
+77777777
+Minta Logisztika Kft. Mintavaros
+Fogado Raktar Zrt. UH111222 Masikvaros
+Loading:
+Unloading:
+KAPU1
+1000
+1000
+20,0000
+10,0000
+- - - - - #NA#/
+Bordero: S0099887766
+Bordero: S0099887766
+PV: 01.02.2026 08:00
+PB: 01.02.2026 10:00
+PV: 02.02.2026 07:00
+PB: 02.02.2026 15:00
+Alv¿lalkoz¿ / contractor: Well Worn Pallet Kft....Szakoly
+1

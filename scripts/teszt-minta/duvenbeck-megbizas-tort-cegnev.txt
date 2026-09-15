@@ -1,0 +1,25 @@
+/
+Berakodas/
+Loading
+Kirakodas/
+Unloading
+Hosszu Nevu Minta
+Logisztika
+Masik Hosszu
+Fogado Zrt.
+Proba utca 1
+1111 Mintavaros
+HU
+Masik utca 2
+2222 Masikvaros
+HU
+PV: 01.02.2026 08:00
+PB: 01.02.2026 10:00
+PV: 02.02.2026 07:00
+PB: 02.02.2026 15:00
+Teljes osszeg / Total 500,00 EUR
+Fuvar Megbizas: ID 1111111/1
+Duvenbeck Logisztikai Kft.
+Ut ID:
+Trip ID:
+8888888

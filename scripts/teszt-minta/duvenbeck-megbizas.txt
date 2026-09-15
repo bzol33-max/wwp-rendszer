@@ -1,0 +1,77 @@
+/
+Tura utemterve
+Tour schedule
+Akcio
+Action
+NevCim
+Name Address
+Rakodasi eszkozok / men
+Weight / Loading meter
+Hatarido *
+Deadlines *
+1
+2
+Berakodas/
+Loading
+Kirakodas/
+Unloading
+Minta Logisztika Kft.
+Fogado Raktar Zrt.
+Proba utca 1
+1111 Mintavaros
+HU
+Masik utca 2
+2222 Masikvaros
+HU
+1000KG
+20,00LM 10,00LMJ
+1000KG
+20,00LM 10,00LMJ
+PV: 01.02.2026 08:00
+PB: 01.02.2026 10:00
+PV: 02.02.2026 07:00
+PB: 02.02.2026 15:00
+Megjegyzes:
+Megjegyzes:
+Comment:
+Comment:
+Fuvardij / Freight price 1.234,00 EUR
+¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯¯
+Teljes osszeg / Total 1.234,00 EUR
+Megbizott:
+Contractor:
+Fuvar Megbizas: ID 1111111/1
+Transport order: ID 1111111/1
+Oldal:
+Page:
+1
+Well Worn Pallet Kft.
+Rakoczi ut. 26
+4234 Szakoly
+Telefon:
+Phone:
+Megbizo:
+Client:
+Duvenbeck Logisztikai Kft.
+Újtelep utca 41
+8445 Csehbánya
+Tura reszletei
+Tour details
+Empty km:
+/
+Tura ID:
+Tour ID:
+9999999
+Ut ID:
+Trip ID:
+8888888
+Car_O ut:
+Car_O Trip:
+111/ABC/H/01.02.2026
+Group ID:
+Csoport ID: Teherauto rendsz
+Truck:
+ABC123
+PV: Felrako/ kirako datum (tol) / PV: Loading / unloading date from
+PB: Felrako/ Kirako datum (ig) / PB: Loading / unloading date to
+A szamlakat es a fuvarpapirokat következö cimre kerjük:: minta-szamla@duvenbeck.de
