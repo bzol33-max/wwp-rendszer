@@ -398,6 +398,19 @@ export async function setFuvarTeljesitve(id: string, teljesitve: boolean) {
 const ARCHIVALAS_ABLAK_SQL = `interval '5 minutes'`;
 
 /**
+ * "Effektíve archivált" bér fuvar — a Számla/Posta és az Archív fül közös
+ * választóvonala, ezért egy helyen definiálva: ha a két hívási hely eltérne,
+ * egy sor vagy mindkét fülön megjelenne, vagy egyiken sem.
+ *
+ * A hiányzó postazva_at-ot "régen archivált"-nak vesszük. Enélkül a NULL
+ * továbbterjedne a <= összehasonlításon (`true and NULL` = NULL), és a sor
+ * MINDKÉT fül where-feltételén elbukna — vagyis sehol nem látszana. Ilyen sor
+ * a setFuvarPostazva-n keresztül nem keletkezik (az együtt írja a két mezőt),
+ * de importból vagy kézi DB-javításból igen.
+ */
+const EFFEKTIVE_ARCHIVALT_SQL = `(postazva and coalesce(postazva_at, '-infinity'::timestamptz) <= now() - ${ARCHIVALAS_ABLAK_SQL})`;
+
+/**
  * A Számla/Posta lista: a Bér fuvarok, DE csak azok, amiknek a munkája már
  * befejeződött — akár mert a lerakás dátuma elmúlt, akár mert kézzel
  * "Teljesítve"-nek lett jelölve a rögzített dátum előtt (lásd
@@ -412,7 +425,7 @@ export async function getSzamlaPostaFuvarok(): Promise<FuvarRow[]> {
      from fuvar_megbizasok
      where tipus = 'sajat' and statusz <> 'torolt'
        and (teljesitve or coalesce(lerakas_datum, datum) < current_date)
-       and not (postazva and postazva_at <= now() - ${ARCHIVALAS_ABLAK_SQL})
+       and not ${EFFEKTIVE_ARCHIVALT_SQL}
      order by ellenorzott asc, fuvar_megbizasok.erkezett_datum desc nulls last, datum desc, id desc
      limit 200`
   );
@@ -435,7 +448,7 @@ export async function getArchivFuvarok(): Promise<FuvarRow[]> {
      from fuvar_megbizasok
      where statusz <> 'torolt'
        and (
-         (tipus = 'sajat' and postazva and postazva_at <= now() - ${ARCHIVALAS_ABLAK_SQL})
+         (tipus = 'sajat' and ${EFFEKTIVE_ARCHIVALT_SQL})
          or (tipus = 'ber' and (teljesitve or coalesce(lerakas_datum, datum) < current_date))
        )
      order by postazva_at desc nulls last, datum desc
