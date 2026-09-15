@@ -38,9 +38,20 @@ import { findJarmuByPlate, jarmuLabel } from "@/lib/fuvarozas/vehicles";
 import {
   mentDuvenbeckDokumentumot,
   ismertDriveFileIdk,
+  ujUtonFeldolgozottFileIdk,
 } from "@/lib/fuvarozas/duvenbeck-import";
 
 const DRIVE_FOLDER_ID = "1JNUvwN30It3_rooGkeTGTpkO4K9bix2n";
+
+/**
+ * A Duvenbeck gépi fájlnevei. Csak arra szolgál, hogy eldöntsük: egy MÁR ISMERT
+ * fájlt érdemes-e újraolvasni. Ha egy Duvenbeck-iratot még nem a
+ * determinisztikus úton dolgoztunk fel, akkor a hozzá tartozó (nyelvi modellel
+ * készült, hibás) sor még fogja a fájlt, és csak újraolvasással váltható le.
+ * Az újraolvasás ingyenes — reguláris kifejezés, nem nyelvi modell —, és a
+ * fájl utána bekerül a fuvar_dokumentumok táblába, tehát legfeljebb egyszer fut le.
+ */
+const DUVENBECK_FAJLNEV = /^(TA|FRALI)\d+_V\d+\.pdf$/i;
 const MAX_POTLAS_SORONKENT = 5;
 
 export type DriveSyncEredmeny = {
@@ -49,6 +60,10 @@ export type DriveSyncEredmeny = {
   vizsgaltFajlok: number;
   /** Meglévő fuvarhoz csatolt dokumentumok (pl. egy megbízás rakománylistája) — lásd lib/fuvarozas/duvenbeck-import.ts. */
   osszefuzottDokumentumok: number;
+  /** Régi, nyelvi modellel beolvasott sorok, amiket a determinisztikus feldolgozás leváltott. */
+  levaltottRegiSorok: number;
+  /** Emberi döntést igénylő esetek (pl. már kiszámlázott régi sor) — nem hiba. */
+  figyelmeztetesek: string[];
   hibak: string[];
 };
 
@@ -260,20 +275,31 @@ async function ismertDokumentumUrlak(): Promise<Set<string>> {
 async function ujFajlokFeldolgozasa(
   drive: ReturnType<typeof driveClient>,
   hibak: string[]
-): Promise<{ ujFuvarok: number; vizsgaltFajlok: number; osszefuzottDokumentumok: number }> {
-  const [fajlok, ismertUrlak, ismertFileIdk] = await Promise.all([
+): Promise<{
+  ujFuvarok: number;
+  vizsgaltFajlok: number;
+  osszefuzottDokumentumok: number;
+  levaltottRegiSorok: number;
+  figyelmeztetesek: string[];
+}> {
+  const [fajlok, ismertUrlak, ismertFileIdk, ujUtonKeszek] = await Promise.all([
     listazDriveFajlok(drive),
     ismertDokumentumUrlak(),
     ismertDriveFileIdk(),
+    ujUtonFeldolgozottFileIdk(),
   ]);
   let ujFuvarok = 0;
   let osszefuzottDokumentumok = 0;
+  let levaltottRegiSorok = 0;
+  const figyelmeztetesek: string[] = [];
   for (const file of fajlok) {
     const url = driveViewUrl(file.id);
     // A fájl-ID a megbízhatóbb jel: egy meglévő fuvarhoz CSATOLT dokumentum
     // (pl. a megbízás rakománylistája) nem a fuvar dokumentum_url-je, de
     // ettől még fel van dolgozva — a fuvar_dokumentumok tábla tudja.
-    if (ismertUrlak.has(url) || ismertFileIdk.has(file.id)) continue;
+    const regiUtonIsmert = ismertUrlak.has(url) || ismertFileIdk.has(file.id);
+    const duvenbeckUjrafeldolgozando = DUVENBECK_FAJLNEV.test(file.name) && !ujUtonKeszek.has(file.id);
+    if (regiUtonIsmert && !duvenbeckUjrafeldolgozando) continue;
     try {
       const szoveg = await fajlSzovege(drive, file);
       if (!szoveg.trim()) continue;
@@ -289,8 +315,18 @@ async function ujFajlokFeldolgozasa(
       if (duvenbeck) {
         if (duvenbeck.statusz === "uj") ujFuvarok++;
         else osszefuzottDokumentumok++;
+        levaltottRegiSorok += duvenbeck.levaltottSorok;
+        for (const szamla of duvenbeck.szamlazottRegiSorok) {
+          figyelmeztetesek.push(
+            `${file.name}: a régi sor már ki van számlázva (${szamla}), ezért nem váltottuk le — nézd át kézzel.`
+          );
+        }
         continue;
       }
+
+      // Egy már ismert, de nem Duvenbeck-iratot nem adunk oda újra a nyelvi
+      // modellnek: az csak duplikált sort csinálna belőle.
+      if (regiUtonIsmert) continue;
 
       const kivont = await kivonatolFuvarAdatot(szoveg);
       if (!kivont || !kivont.isFuvarmegbizas || !kivont.lerako || !kivont.felrakasDatum) continue;
@@ -321,7 +357,7 @@ async function ujFajlokFeldolgozasa(
       hibak.push(`${file.name}: ${err instanceof Error ? err.message : "ismeretlen hiba"}`);
     }
   }
-  return { ujFuvarok, vizsgaltFajlok: fajlok.length, osszefuzottDokumentumok };
+  return { ujFuvarok, vizsgaltFajlok: fajlok.length, osszefuzottDokumentumok, levaltottRegiSorok, figyelmeztetesek };
 }
 
 /** A korábban felvitt, de hiányos sorok pótlása — az /api/fuvarozas/drive-hianyok + drive-frissites páros eddig végzett lépése. */
@@ -403,6 +439,8 @@ export async function vegrehajtDriveSync(): Promise<DriveSyncEredmeny> {
     ujFuvarok: uj.ujFuvarok,
     vizsgaltFajlok: uj.vizsgaltFajlok,
     osszefuzottDokumentumok: uj.osszefuzottDokumentumok,
+    levaltottRegiSorok: uj.levaltottRegiSorok,
+    figyelmeztetesek: uj.figyelmeztetesek,
     potoltSorok,
     hibak,
   };
