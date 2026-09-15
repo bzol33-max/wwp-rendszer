@@ -33,18 +33,26 @@ const OSSZEVONAS_KM = 1.5;
 
 export type AllasKategoria = "rovid" | "rakodas" | "piheno";
 
-/** Ennél közelebb (km) egy geokódolt tervezett felrakó/lerakó címhez az állást — időtartamtól függetlenül — rakodásnak tekintjük. */
-const RAKODAS_TAVOLSAG_KM = 1;
+/**
+ * Ennél közelebb (km) tekintjük úgy, hogy a jármű egy tervezett fel-/lerakó
+ * CÍMNÉL van. Szándékosan nagyobb, mint amilyen pontos egy geokódolt cím:
+ * egy telephelyen a kamion a portától a külső parkolón át a rámpáig több
+ * száz métert, nagyobb ipari parkban akár egy-két kilométert is mozog
+ * (lásd OSSZEVONAS_KM), és a megbízáson szereplő cím is gyakran csak a cég
+ * székhelye, nem a konkrét kapu. Ennél szűkebb sugárral a rendszer
+ * rendszeresen NEM ismerné fel a ténylegesen megtörtént rakodást.
+ */
+const CIM_TAVOLSAG_KM = 2;
 
 /**
  * Becslés arra, hogy egy állás inkább rövid megállás, rakodás/ügyintézés,
  * vagy (napi/heti) pihenő volt-e. Elsősorban helyalapú: ha az állás
- * RAKODAS_TAVOLSAG_KM-en belül van a nap tervezett fuvarjainak geokódolt
+ * CIM_TAVOLSAG_KM-en belül van a nap tervezett fuvarjainak geokódolt
  * fel-/lerakó címéhez, biztosan rakodás/ügyintézés, függetlenül attól, meddig
  * tartott. Enélkül tisztán időtartam-alapú heurisztika. Tájékoztató jellegű.
  */
 function allasKategoria(durationSec: number, lat: number, lon: number, tervezettCimek: { lat: number; lon: number }[]): AllasKategoria {
-  if (tervezettCimek.some((c) => haversineKm(lat, lon, c.lat, c.lon) < RAKODAS_TAVOLSAG_KM)) return "rakodas";
+  if (tervezettCimek.some((c) => haversineKm(lat, lon, c.lat, c.lon) < CIM_TAVOLSAG_KM)) return "rakodas";
   if (durationSec >= 6 * 3600) return "piheno";
   if (durationSec >= 15 * 60) return "rakodas";
   return "rovid";
@@ -133,7 +141,7 @@ export function epitsIdovonal(trips: EcofleetTrip[], tervezettCimek: { lat: numb
     // Állás e trip után — és amíg a következő trip(ek) csak apró, helyben
     // maradó mozgások, összevonjuk egyetlen állás-blokká.
     let stopSzek = trip.stoppedAfter;
-    let stopKezdet = veg;
+    const stopKezdet = veg;
     let stopLat = trip.endLatitude;
     let stopLon = trip.endLongitude;
     let stopCim = trip.endLocation;
@@ -237,7 +245,9 @@ export type TervezettMegallo = {
   idopont: Date;
   /** Igaz, ha a valós GPS-nyomvonal szerint a jármű már járt itt, és azóta tovább is ment — lásd jelolMegallokElhagyottkent. */
   elhagyva: boolean;
-  /** Ha elhagyva, a legutolsó ismert időpont, amikor a jármű a közelben volt — ide kerül a pont az idővonalon. */
+  /** Igaz, ha a jármű a GPS szerint MOST is itt áll (megérkezett, de még nem indult tovább) — lásd jelolMegallokElhagyottkent. */
+  eppenItt: boolean;
+  /** Ha a jármű járt itt, a tényleges (GPS szerinti) MEGÉRKEZÉS ideje — ide kerül a pont az idővonalon. */
   tenylegesIdo: Date | null;
 };
 
@@ -358,29 +368,67 @@ export function idovonalPontjai(szakaszok: IdovonalSzakasz[]): { lat: number; lo
   });
 }
 
-/** Ennél közelebb (km) tekintjük úgy, hogy a jármű ténylegesen "ott volt" egy tervezett fel-/lerakó ponton. */
-const ELHAGYVA_TAVOLSAG_KM = 0.5;
+/**
+ * Ennyit (km) kell a járműnek egy érintett cím UTÁN ténylegesen távolodnia
+ * ahhoz, hogy a megállót elhagyottnak (késznek) vegyük.
+ *
+ * Ez a küszöb önmagában egy valódi hibát javít: korábban elég volt, hogy a
+ * cím közeli érintése után legyen BÁRMILYEN későbbi nyomvonal-pont. Egy
+ * telephelyen viszont a rakodás közben is folyamatosan keletkeznek ilyenek
+ * (portáról a parkolóba, parkolóból a rámpához) — a rendszer tehát már a
+ * rakodás kezdetén késznek jelölte a megállót, holott a kamion még ott állt.
+ * Azt akarjuk látni, hogy a jármű valóban elindult a következő cél felé,
+ * nem azt, hogy a telepen belül arrébb gurult.
+ */
+const TOVABBHALADAS_TAVOLSAG_KM = 3;
 
 /**
- * Megjelöli, mely tervezett fel-/lerakó pontokat hagyta már el a jármű: ha
- * a valós GPS-nyomvonalon (idovonalPontjai) volt egy időpont, amikor a
- * jármű ELHAGYVA_TAVOLSAG_KM-en belül volt egy ponthoz, ÉS ez után van még
- * (időben későbbi) nyomvonal-pont — vagyis a jármű azóta továbbment —,
- * akkor a megálló "elhagyva" (kész). Ha a jármű a legutolsó ismert
- * pillanatban is még a közelben van (nincs utána semmi), akkor még ott
- * tartózkodik, nem elhagyott.
+ * Ennél rövidebb állás nem számít fel-/lerakásnak — pusztán áthaladás
+ * (lámpa, körforgalom, sorompó, egy cím melletti elhajtás). Rakodásnak
+ * kategorizált állásnál (az a helyhez kötött, lásd allasKategoria) ez a
+ * feltétel nem érvényes.
+ */
+const ERINTES_MIN_IDOTARTAM_SEC = 10 * 60;
+
+/**
+ * Megjelöli, mely tervezett fel-/lerakó pontokat érintette már a jármű, és
+ * melyeket hagyta el. Két lépés:
+ *
+ * 1. ÉRINTÉS — a valós GPS-idővonal ÁLLÁS-szakaszai közül keressük a
+ *    legutolsót, ami CIM_TAVOLSAG_KM-en belül van a ponthoz, és elég sokáig
+ *    tartott (vagy a helye alapján eleve rakodásnak minősült). Kifejezetten
+ *    csak állásokat nézünk: aki csak elhajtott a cím mellett, az nem volt ott.
+ *
+ * 2. TOVÁBBHALADÁS — az érintés után volt-e a jármű TOVABBHALADAS_TAVOLSAG_KM-nél
+ *    messzebb. Ha igen, a megálló "elhagyva" (kész). Ha nem, a jármű még ott
+ *    van: `eppenItt`.
+ *
+ * Mindkét esetben `tenylegesIdo` az érintés KEZDETE, vagyis a tényleges
+ * megérkezés ideje — ezt mutatja az idővonal a becsült időpont helyett.
  */
 export function jelolMegallokElhagyottkent(
   megallok: TervezettMegallo[],
-  pontok: { lat: number; lon: number; at: number }[]
+  szakaszok: IdovonalSzakasz[]
 ): TervezettMegallo[] {
+  const allasok = szakaszok.filter((sz): sz is Extract<IdovonalSzakasz, { tipus: "allas" }> => sz.tipus === "allas");
+  const pontok = idovonalPontjai(szakaszok);
+
   return megallok.map((m) => {
-    if (m.elhagyva || m.lat == null || m.lon == null) return m;
-    let utolsoKozeliIdx = -1;
-    for (let i = 0; i < pontok.length; i++) {
-      if (haversineKm(m.lat, m.lon, pontok[i].lat, pontok[i].lon) < ELHAGYVA_TAVOLSAG_KM) utolsoKozeliIdx = i;
-    }
-    if (utolsoKozeliIdx === -1 || utolsoKozeliIdx >= pontok.length - 1) return m;
-    return { ...m, elhagyva: true, tenylegesIdo: new Date(pontok[utolsoKozeliIdx].at) };
+    const { lat, lon } = m;
+    if (lat == null || lon == null) return m;
+
+    const erintesek = allasok.filter(
+      (a) =>
+        haversineKm(lat, lon, a.lat, a.lon) < CIM_TAVOLSAG_KM &&
+        (a.idotartamSec >= ERINTES_MIN_IDOTARTAM_SEC || a.kategoria === "rakodas")
+    );
+    const erintes = erintesek[erintesek.length - 1];
+    if (!erintes) return m;
+
+    const tovabbment = pontok.some(
+      (p) => p.at > erintes.kezdet.getTime() && haversineKm(lat, lon, p.lat, p.lon) >= TOVABBHALADAS_TAVOLSAG_KM
+    );
+
+    return { ...m, elhagyva: tovabbment, eppenItt: !tovabbment, tenylegesIdo: erintes.kezdet };
   });
 }

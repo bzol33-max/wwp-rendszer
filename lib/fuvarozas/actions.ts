@@ -15,7 +15,6 @@ import { fetchGazolajAr, GazolajArError } from "./uzemanyagar";
 import {
   epitsIdovonal,
   haversineKm,
-  idovonalPontjai,
   jelolMegallokElhagyottkent,
   kiegesziteloAllapottal,
   parseIdopontSzoveg,
@@ -124,9 +123,38 @@ export type MegalloBejegyzes = {
   pozicioszam: string | null;
   tipus: "felrako" | "lerako";
   cim: string;
-  /** Elhagyott pontnál a tényleges (GPS szerinti) időpont, egyébként a tervezett/becsült. */
+  /** Már érintett pontnál a tényleges (GPS szerinti) megérkezés, egyébként a tervezett/becsült időpont. */
   idopont: Date;
+  /** A jármű járt itt, és azóta tovább is ment — kész. */
   elhagyva: boolean;
+  /** A jármű a GPS szerint MOST is itt áll (megérkezett, de még nem indult tovább). */
+  eppenItt: boolean;
+};
+
+/**
+ * Egy olyan fuvar, ami az adott napra be van ütemezve, de EGYIK saját
+ * járműhöz sem sikerült hozzárendelni. Korábban az ilyen sor egyszerűen
+ * eltűnt a GPS idővonalról — senki nem látta, hogy van egy fuvar, amire
+ * nincs kocsi kijelölve. Ezért kerül külön, látható listára.
+ */
+export type ElakadtFuvar = {
+  fuvarId: string;
+  /** FIGYELEM: fordított UI-címkézés, lásd TervezettFuvarSzakasz.fuvarTipus. */
+  fuvarTipus: FuvarTipus;
+  megrendelo: string | null;
+  pozicioszam: string | null;
+  honnan: string | null;
+  hova: string | null;
+  /** "nincs_kocsi": se Kocsi, se Sofőr mező. "ismeretlen_kocsi": van beírva valami, de nem felismerhető saját jármű. */
+  ok: "nincs_kocsi" | "ismeretlen_kocsi";
+  /** A megbízáson szereplő nyers Kocsi/Sofőr szöveg — hogy látszódjon, mit nem sikerült feloldani. */
+  jarmuSzoveg: string | null;
+};
+
+/** A GPS lap egy napjának teljes adata: járművenkénti idővonalak + a hozzá nem rendelt fuvarok. */
+export type IdovonalNap = {
+  jarmuvek: JarmuIdovonalEredmeny[];
+  elakadtak: ElakadtFuvar[];
 };
 
 export type JarmuIdovonalEredmeny = {
@@ -198,10 +226,39 @@ const ALAPERTELMEZETT_LERAKAS_ORA = 8;
  * fel-/lerakók is megjelentek, amik valójában nem az ő fuvarjai voltak.
  */
 function driverMatchesRow(jarmu: SajatJarmu, row: { jarmu: string | null; sofor: string | null }): boolean {
-  if (row.jarmu) {
-    return resolveJarmu(row.jarmu) === jarmu;
+  if (row.jarmu?.trim()) {
+    const feloldott = resolveJarmu(row.jarmu);
+    // Kitöltött ÉS felismerhető "Kocsi" mező: ez az egyetlen hiteles jelölő.
+    if (feloldott) return feloldott === jarmu;
+    // Kitöltött, de fel NEM ismerhető (elgépelés, régi/kivont jármű neve) —
+    // ilyenkor nem dobjuk el a sort némán, hanem a "Sofőr" mező a tartalék.
+    // Ha az sem egyezik, a sor az "elakadt" listára kerül (lásd elakadtFuvar).
   }
-  return !!row.sofor && row.sofor.trim().toLowerCase() === jarmu.sofor.toLowerCase();
+  return soforEgyezik(row.sofor, jarmu);
+}
+
+/** Ékezet- és írásjel-független összehasonlító alak ("Vadon Gergő" → "vadon gergo"). */
+function normalizeNev(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/**
+ * A szabad szöveges "Sofőr" mező illesztése egy saját járműhöz. Elnéző, mert
+ * a mezőbe évek óta bármi kerülhetett: "Gergő", "gergo", "Vadon Gergő",
+ * "AOPU-427". A korábbi szigorú (pontos, kisbetűs egyezés) változat emiatt a
+ * sorok egy részét sehová nem tudta besorolni, és azok némán eltűntek a GPS
+ * idővonalról. Szóhatáros névegyezést fogadunk el, hogy egy vezetéknévvel
+ * kiegészített beírás se vesszen el, de egy másik név része ne egyezzen.
+ */
+function soforEgyezik(sofor: string | null, jarmu: SajatJarmu): boolean {
+  if (!sofor?.trim()) return false;
+  if (resolveJarmu(sofor) === jarmu) return true;
+  return normalizeNev(sofor).split(" ").includes(normalizeNev(jarmu.sofor));
 }
 
 /** Ennél közelebb (km) egy saját telephelyhez/parkolóhoz a pozíciót "ott vagyunk"-nak tekintjük. */
@@ -507,6 +564,7 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus, kali
     // napra láncba fűzve (lásd chainEloEta) ezt felülírja.
     idopont: m.tipus === "felrako" ? kezdet : veg,
     elhagyva: false,
+    eppenItt: false,
     tenylegesIdo: null,
   }));
 
@@ -553,13 +611,30 @@ async function lancoltEloBecsles(
   const maiNapISO = budapestNapISO(most);
   const sorrend = fuvarok
     .flatMap((f, fi) => f.megallok.map((m, mi) => ({ fi, mi, m })))
-    .filter(({ m }) => !m.elhagyva && budapestNapISO(m.idopont) === maiNapISO)
+    // Az `eppenItt` pontok is kimaradnak: a jármű ott áll, nincs mit becsülni —
+    // és ha bevonnánk, a lánc a nulla távolságú "út" miatt a rá következő
+    // pontok idejét is a jelen pillanattól számolná, mintha a rakodás már
+    // véget ért volna.
+    .filter(({ m }) => !m.elhagyva && !m.eppenItt && budapestNapISO(m.idopont) === maiNapISO)
     .sort((a, b) => a.m.idopont.getTime() - b.m.idopont.getTime());
 
   const eredmeny = fuvarok.map((f) => ({ ...f, megallok: [...f.megallok] }));
 
+  // Ha a jármű éppen egy megállónál áll, a következő pont felé csak a rakodás
+  // hátralévő ideje után indul el — a lánc tehát nem "most"-tól, hanem onnantól
+  // számol. A már eltelt állásidőt levonjuk: egy két órája rakodó kamionnál a
+  // puffer nyilván nincs hátra.
+  const hatralevoPufferPerc = fuvarok
+    .flatMap((f) => f.megallok)
+    .filter((m) => m.eppenItt)
+    .reduce((sum, m) => {
+      const teljesPuffer = m.tipus === "felrako" ? RAKODAS_PUFFER_PERC : LERAKODAS_PUFFER_PERC;
+      const elteltPerc = m.tenylegesIdo ? (most.getTime() - m.tenylegesIdo.getTime()) / 60000 : 0;
+      return sum + Math.max(0, teljesPuffer - elteltPerc);
+    }, 0);
+
   let pozicio = eloPoz;
-  let idoPont = most;
+  let idoPont = new Date(most.getTime() + hatralevoPufferPerc * 60000);
 
   for (const { fi, mi, m } of sorrend) {
     if (m.lat == null || m.lon == null) break;
@@ -604,8 +679,9 @@ function laposMegallok(tervezettFuvarok: TervezettFuvarSzakasz[]): MegalloBejegy
           pozicioszam: f.pozicioszam,
           tipus: m.tipus,
           cim: m.cim,
-          idopont: m.elhagyva && m.tenylegesIdo ? m.tenylegesIdo : m.idopont,
+          idopont: m.tenylegesIdo ?? m.idopont,
           elhagyva: m.elhagyva,
+          eppenItt: m.eppenItt,
         })
       )
     )
@@ -689,7 +765,7 @@ export async function getPapirNyugtazasJavaslat(): Promise<PapirNyugtazasJavasla
   return javaslatok;
 }
 
-export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny[]> {
+export async function getIdovonalak(nap?: string): Promise<IdovonalNap> {
   const { kezdet, veg, napISO, maiNap } = budapestNapHatarok(nap);
   const [berFuvarok, sajatFuvarok] = await Promise.all([
     getMaiSajatFuvarok(napISO).catch(() => [] as MaiFuvarSor[]),
@@ -712,7 +788,25 @@ export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny
   const NINCS_KOREKCIO: KalibraciosEredmeny = { globalisSzorzo: 1, idosavSzorzok: {}, mintaSzam: 0, szamitva: veg };
   const kalibracio = maiNap ? await szamitsKalibraciot().catch(() => NINCS_KOREKCIO) : NINCS_KOREKCIO;
 
-  return Promise.all(
+  // Amelyik sor egyik járműhöz sem illeszkedik, az nem vész el: külön,
+  // látható listára kerül, hogy ki lehessen javítani a Kocsi mezőt.
+  const elakadtak: ElakadtFuvar[] = maiFuvarok
+    .filter(({ row }) => !SAJAT_JARMUVEK.some((j) => driverMatchesRow(j, row)))
+    .map(({ row, tipus }) => {
+      const jarmuSzoveg = row.jarmu?.trim() || row.sofor?.trim() || null;
+      return {
+        fuvarId: row.id,
+        fuvarTipus: tipus,
+        megrendelo: row.megrendelo,
+        pozicioszam: row.pozicioszam,
+        honnan: row.felrako ? varosNev(row.felrako) : null,
+        hova: row.lerako ? varosNev(row.lerako) : null,
+        ok: jarmuSzoveg ? ("ismeretlen_kocsi" as const) : ("nincs_kocsi" as const),
+        jarmuSzoveg,
+      };
+    });
+
+  const jarmuvek = await Promise.all(
     SAJAT_JARMUVEK.map(async (jarmu): Promise<JarmuIdovonalEredmeny> => {
       const sajatSorok = maiFuvarok.filter(({ row }) => driverMatchesRow(jarmu, row));
       const tervezettFuvarok = await Promise.all(
@@ -772,9 +866,8 @@ export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny
           }
         }
 
-        // A tervezett fel-/lerakó pontok "elhagyva" (kész) jelölése a valós GPS-nyomvonal alapján.
-        const pontok = idovonalPontjai(szakaszok);
-        const jeloltFuvarok = tervezettFuvarok.map((f) => ({ ...f, megallok: jelolMegallokElhagyottkent(f.megallok, pontok) }));
+        // A tervezett fel-/lerakó pontok "érintve"/"elhagyva" jelölése a valós GPS-nyomvonal alapján.
+        const jeloltFuvarok = tervezettFuvarok.map((f) => ({ ...f, megallok: jelolMegallokElhagyottkent(f.megallok, szakaszok) }));
 
         // A hátralévő pontok becsült idejét élő pozícióból láncba fűzve
         // frissítjük, hogy a jármű tényleges mai haladását tükrözzék, ne
@@ -789,7 +882,13 @@ export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny
         // kamion-ikon melletti becsült időt.
         let eloEta: { cel: string; erkezes: Date } | null = null;
         if (livePos) {
-          const kovetkezoMegallo = lancoltFuvarok.flatMap((f) => f.megallok).find((m) => !m.elhagyva);
+          // A fuvarok sorrendje nem feltétlenül időrendi (több megbízás
+          // futhat egy napon), ezért a "következő" pontot idő szerint
+          // választjuk ki. Az `eppenItt` pont sem cél: oda már megérkezett.
+          const kovetkezoMegallo = lancoltFuvarok
+            .flatMap((f) => f.megallok)
+            .filter((m) => !m.elhagyva && !m.eppenItt)
+            .sort((a, b) => a.idopont.getTime() - b.idopont.getTime())[0];
           if (kovetkezoMegallo) {
             eloEta = { cel: kovetkezoMegallo.cim, erkezes: kovetkezoMegallo.idopont };
           }
@@ -816,6 +915,8 @@ export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny
       }
     })
   );
+
+  return { jarmuvek, elakadtak };
 }
 
 export async function searchAddressSuggestions(query: string): Promise<GeocodedAddress[]> {

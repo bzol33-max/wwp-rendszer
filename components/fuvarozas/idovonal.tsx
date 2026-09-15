@@ -4,10 +4,11 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Check, ChevronLeft, ChevronRight, Truck } from "lucide-react";
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Truck } from "lucide-react";
 import {
   getIdovonalak,
   getKovetkezoNapokElonezet,
+  type ElakadtFuvar,
   type JarmuIdovonalEredmeny,
   type KovetkezoNap,
   type MegalloBejegyzes,
@@ -186,7 +187,7 @@ function MegalloSor({
   return (
     <div
       className={`flex flex-col gap-0.5 rounded px-1.5 py-1 text-[11px] ${
-        b.elhagyva ? "bg-success/10" : aktiv ? "bg-primary/10" : ""
+        b.elhagyva ? "bg-success/10" : b.eppenItt ? "bg-primary/15" : aktiv ? "bg-primary/10" : ""
       }`}
     >
       <div className="flex items-center justify-between gap-2">
@@ -196,10 +197,22 @@ function MegalloSor({
           <span className={`shrink-0 rounded px-1 py-0.5 text-[9px] font-medium ${FUVAR_TIPUS_BADGE[b.fuvarTipus]}`}>
             {FUVAR_TIPUS_CIMKE[b.fuvarTipus]}
           </span>
-          {aktiv && !b.elhagyva && (
-            <span className="shrink-0 rounded bg-primary/20 px-1 py-0.5 text-[9px] font-medium text-primary">Folyamatban</span>
+          {b.eppenItt ? (
+            <span className="flex shrink-0 items-center gap-1 rounded bg-primary/25 px-1 py-0.5 text-[9px] font-medium text-primary">
+              <Truck className="h-2.5 w-2.5" />
+              Itt van most
+            </span>
+          ) : (
+            aktiv &&
+            !b.elhagyva && (
+              <span className="shrink-0 rounded bg-primary/20 px-1 py-0.5 text-[9px] font-medium text-primary">Folyamatban</span>
+            )
           )}
-          <span className="shrink-0 text-muted-foreground">{mutassNapot ? formatIdoNappal(b.idopont) : formatIdo(b.idopont)}</span>
+          {/* Már érintett pontnál a GPS szerinti tényleges megérkezés idejét mutatjuk, nem a becslést. */}
+          <span className="shrink-0 text-muted-foreground" title={b.elhagyva || b.eppenItt ? "Tényleges érkezés (GPS)" : "Becsült érkezés"}>
+            {b.elhagyva || b.eppenItt ? "" : "~"}
+            {mutassNapot ? formatIdoNappal(b.idopont) : formatIdo(b.idopont)}
+          </span>
         </span>
         {b.tipus === "lerako" && (
           <button
@@ -241,10 +254,12 @@ function JarmuCsempe({
   const maiMegallok = eredmeny?.maiMegallok ?? [];
   const holnapiMegallok = eredmeny?.holnapiMegallok ?? [];
   const eloEta = eredmeny?.eloEta;
-  // A kamion-ikon az utolsó elhagyott és az első még el nem hagyott pont közé kerül.
-  const kovetkezoIdx = maiMegallok.findIndex((b) => !b.elhagyva);
-  // "Folyamatban" jelölést az kap, amelyik fuvarhoz a következő (még el nem hagyott) pont tartozik.
-  const aktivFuvarId = kovetkezoIdx >= 0 ? maiMegallok[kovetkezoIdx].fuvarId : null;
+  // A kamion-ikon (becsült érkezéssel) az első olyan pont elé kerül, ahol a
+  // jármű MÉG NEM járt — ha éppen egy megállónál áll, az a pont már mögötte van.
+  const kovetkezoIdx = maiMegallok.findIndex((b) => !b.elhagyva && !b.eppenItt);
+  // "Folyamatban": ahol a kamion most áll, egyébként amelyik fuvarhoz a következő pont tartozik.
+  const aktivFuvarId =
+    maiMegallok.find((b) => b.eppenItt)?.fuvarId ?? (kovetkezoIdx >= 0 ? maiMegallok[kovetkezoIdx].fuvarId : null);
 
   return (
     <div className="flex flex-col gap-3">
@@ -278,17 +293,58 @@ function JarmuCsempe({
   );
 }
 
+/**
+ * Azok a fuvarok, amiket egyik saját kocsihoz sem sikerült hozzárendelni.
+ * Korábban ezek némán eltűntek a GPS idővonalról — most látszanak, hogy ki
+ * lehessen javítani a megbízáson a Kocsi mezőt.
+ */
+function ElakadtakDoboz({ elakadtak }: { elakadtak: ElakadtFuvar[] }) {
+  if (elakadtak.length === 0) return null;
+  return (
+    <div className="mb-4 flex flex-col gap-1.5 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/40">
+      <span className="flex items-center gap-1.5 text-xs font-medium text-amber-900 dark:text-amber-200">
+        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+        Nincs kocsi hozzárendelve ({elakadtak.length})
+      </span>
+      <span className="text-[11px] text-amber-800 dark:text-amber-300/80">
+        Ezek a fuvarok erre a napra be vannak ütemezve, de egyik kocsi idővonalán sem jelennek meg. Nyisd meg a megbízást, és állítsd
+        be a „Kocsi” mezőt.
+      </span>
+      {elakadtak.map((f) => (
+        <div key={f.fuvarId} className="flex flex-wrap items-center gap-1.5 pl-5 text-[11px]">
+          <span className={`shrink-0 rounded px-1 py-0.5 text-[9px] font-medium ${FUVAR_TIPUS_BADGE[f.fuvarTipus]}`}>
+            {FUVAR_TIPUS_CIMKE[f.fuvarTipus]}
+          </span>
+          <span className="font-medium">{f.megrendelo ?? "Megbízó ismeretlen"}</span>
+          {f.pozicioszam && <span className="text-muted-foreground">· {f.pozicioszam}</span>}
+          <span className="text-muted-foreground">
+            · {f.honnan ?? "?"} → {f.hova ?? "?"}
+          </span>
+          <span className="text-amber-800 dark:text-amber-300">
+            ·{" "}
+            {f.ok === "nincs_kocsi"
+              ? "nincs kitöltve a Kocsi/Sofőr mező"
+              : `ismeretlen kocsi: „${f.jarmuSzoveg}”`}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function GpsStatus() {
   const maiNapISO = budapestNapISO();
   const [napISO, setNapISO] = useState(maiNapISO);
   const [adatok, setAdatok] = useState<JarmuIdovonalEredmeny[]>([]);
+  const [elakadtak, setElakadtak] = useState<ElakadtFuvar[]>([]);
   const [kovetkezoNapok, setKovetkezoNapok] = useState<Record<string, KovetkezoNap[]>>({});
   const [loading, setLoading] = useState(true);
   const maiNap = napISO === maiNapISO;
 
   const load = useCallback(async (nap: string) => {
     const res = await getIdovonalak(nap);
-    setAdatok(res);
+    setAdatok(res.jarmuvek);
+    setElakadtak(res.elakadtak);
   }, []);
 
   useEffect(() => {
@@ -326,7 +382,9 @@ export function GpsStatus() {
         {loading && adatok.length === 0 ? (
           <p className="text-sm text-muted-foreground">Betöltés…</p>
         ) : (
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
+          <>
+            <ElakadtakDoboz elakadtak={elakadtak} />
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
             {SAJAT_JARMUVEK.map((jarmu) => (
               <JarmuCsempe
                 key={jarmu.sofor}
@@ -336,8 +394,9 @@ export function GpsStatus() {
                 kovetkezoNapok={kovetkezoNapok[jarmu.sofor] ?? []}
                 onKeszJelolve={() => load(napISO)}
               />
-            ))}
-          </div>
+              ))}
+            </div>
+          </>
         )}
       </CardContent>
     </Card>
