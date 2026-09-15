@@ -25,7 +25,13 @@ import {
 } from "./idovonal";
 import { SAJAT_JARMUVEK, resolveJarmu, type JarmuSzin, type SajatJarmu } from "./vehicles";
 import { bontsMegallokra, varosNev } from "./varos";
-import { getFuvarokIdoszakban, getMaiSajatFuvarok, getMaiValodiSajatFuvarok } from "./megbizasok";
+import {
+  getFuvarokIdoszakban,
+  getMaiSajatFuvarok,
+  getMaiValodiSajatFuvarok,
+  getPapirraVaroFuvarok,
+  type PapirraVaroFuvar,
+} from "./megbizasok";
 import type { FuvarTipus, MaiFuvarSor } from "./fuvar-constants";
 import { budapestFalioraToInstant, budapestHetNapja, budapestNapISO, budapestOra } from "./idozona";
 import { SAJAT_TELEPHELYEK } from "./telephelyek";
@@ -191,7 +197,7 @@ const ALAPERTELMEZETT_LERAKAS_ORA = 8;
  * sort MINDKÉT jármű idővonalára belistázta, így Micónál olyan
  * fel-/lerakók is megjelentek, amik valójában nem az ő fuvarjai voltak.
  */
-function driverMatchesRow(jarmu: SajatJarmu, row: MaiFuvarSor): boolean {
+function driverMatchesRow(jarmu: SajatJarmu, row: { jarmu: string | null; sofor: string | null }): boolean {
   if (row.jarmu) {
     return resolveJarmu(row.jarmu) === jarmu;
   }
@@ -641,6 +647,48 @@ function szetvalasztNapSzerint(bejegyzesek: MegalloBejegyzes[], napISO: string):
  * (kész) jelöli, ha a jármű már ott járt és azóta tovább is ment — lásd
  * jelolMegallokElhagyottkent.
  */
+export type PapirNyugtazasJavaslat = {
+  sofor: string;
+  szin: JarmuSzin;
+  /** A telephely olvasható neve, ahol a kocsi éppen áll (pl. "Szakoly (telephely)"). */
+  telephely: string;
+  fuvarok: PapirraVaroFuvar[];
+};
+
+/**
+ * Melyik kocsi ért haza úgy, hogy van nála papírra váró fuvar — ebből lesz a
+ * Számla/Posta fül tetején a nyugtázó sáv.
+ *
+ * Szándékosan csak JAVASLAT, nem automatikus lépés: a kamion behajthat a
+ * telephelyre anélkül, hogy a sofőr behozná a papírokat, és egy fordulóból
+ * több megbízás papírja is érkezhet egyszerre. A rendszer tehát megszólal, a
+ * nyugtázás viszont mindig emberi kattintás.
+ *
+ * A még munkába nem állt (Ecofleet-azonosító nélküli) járműveket kihagyja —
+ * azoknál nincs mit figyelni, amíg meg nem kapják az azonosítót.
+ */
+export async function getPapirNyugtazasJavaslat(): Promise<PapirNyugtazasJavaslat[]> {
+  const [papirraVarok, poziciok, telephelyek] = await Promise.all([
+    getPapirraVaroFuvarok().catch(() => [] as PapirraVaroFuvar[]),
+    getFleetLastPositions().catch(() => [] as EcofleetPosition[]),
+    getTelephelyPontok().catch(() => [] as TelephelyPont[]),
+  ]);
+  if (papirraVarok.length === 0) return [];
+
+  const javaslatok: PapirNyugtazasJavaslat[] = [];
+  for (const jarmu of SAJAT_JARMUVEK) {
+    if (!jarmu.ecofleetObjectId) continue;
+    const poz = poziciok.find((p) => p.objectId === jarmu.ecofleetObjectId);
+    if (!poz) continue;
+    const telephely = talalSajatTelephelyet(poz.latitude, poz.longitude, telephelyek);
+    if (!telephely) continue;
+    const fuvarok = papirraVarok.filter((f) => driverMatchesRow(jarmu, f));
+    if (fuvarok.length === 0) continue;
+    javaslatok.push({ sofor: jarmu.sofor, szin: jarmu.szin, telephely, fuvarok });
+  }
+  return javaslatok;
+}
+
 export async function getIdovonalak(nap?: string): Promise<JarmuIdovonalEredmeny[]> {
   const { kezdet, veg, napISO, maiNap } = budapestNapHatarok(nap);
   const [berFuvarok, sajatFuvarok] = await Promise.all([

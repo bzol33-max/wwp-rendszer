@@ -151,6 +151,12 @@ export type FuvarRow = {
   /** Mikor lett a "Postázva" jelölő bepipálva — ebből számít az 5 perces visszavonási ablak. */
   postazva_at: string | null;
   /**
+   * Mikor érkeztek be a fuvar eredeti papírjai (CMR, fuvarlevél) a telephelyre.
+   * Amíg null, a fuvar a Számla/Posta "Papírra vár" csoportjában áll és nem
+   * számlázható — papír nélkül nem állítunk ki számlát.
+   */
+  papirok_beerkeztek_at: string | null;
+  /**
    * Kézi "Teljesítve" jelölő (Bér fuvarok — folyamatban fül): igaz, ha a
    * fuvar a rögzített (tervezett) lerakás dátum előtt lett kézzel lezárva,
    * és emiatt már a Számla/Posta fülön szerepel a dátum-alapú automatikus
