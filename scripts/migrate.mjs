@@ -204,6 +204,7 @@ async function main() {
   // modul csak utólag került be), a seedUserOnce pedig csak létrehozáskor ír
   // jogosultságot, meglévő felhasználónál nem nyúl hozzá.
   await grantElolegekSajatOnce(pool);
+  await ujraimportalDuvenbeckSorokatOnce(pool);
 
   await pool.end();
 }
@@ -244,6 +245,61 @@ async function grantElolegekSajatOnce(pool) {
   );
   await pool.query(`insert into alkalmazott_javitasok (kod) values ($1)`, [JAVITAS_KOD]);
   console.log("[migrate] BodoganGabor és VadonGabor megkapták a saját előlegek jogot.");
+}
+
+// Egyszeri javítás (2026-09-15): a Duvenbeck-megbízások újraimportálásra
+// jelölése.
+//
+// A Duvenbeck egy fuvarhoz két dokumentumot küld (Fuvar Megbízás + Rakomány-
+// lista), amikből a régi, nyelvi modelles import külön-külön megbízás-sort
+// csinált — egymásnak ellentmondó adatokkal, és a mappába kétszer feltöltött
+// fájlból még eggyel. Az új, determinisztikus import (lásd
+// lib/fuvarozas/duvenbeck.ts) ezeket egy sorba fűzi, de a MÁR beimportált
+// sorokhoz nem nyúl: a szinkron a dokumentum_url alapján feldolgozottnak
+// látja a fájlokat, és soha nem olvassa be őket újra.
+//
+// Ez a lépés ezért "töröltre" állítja az ÉRINTETLEN sorokat, és leveszi
+// róluk a dokumentum-hivatkozást, hogy a következő szinkron újra beolvassa és
+// helyesen párosítsa őket. Az adat nem vész el: a sor megmarad, és a
+// megjegyzésbe bekerül az eredeti dokumentum linkje is.
+//
+// "Érintetlen" = amin még semmilyen emberi döntés vagy pénzügyi lépés nem
+// történt: nincs jóváhagyva (ellenorzott = false), nincs számlaszáma, nincs
+// beérkezett papírja, nincs postázva, nincs teljesítve, és egyetlen megállóját
+// sem nyugtázta a sofőr. Bármelyik teljesül -> a sort békén hagyjuk, és a
+// felhasználó dönt róla a felületen.
+async function ujraimportalDuvenbeckSorokatOnce(pool) {
+  const JAVITAS_KOD = "duvenbeck-parositas-ujraimport-2026-09-15";
+  const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (mar.length > 0) return;
+
+  const { rows } = await pool.query(
+    `update fuvar_megbizasok f
+     set statusz = 'torolt',
+         megjegyzes = coalesce(f.megjegyzes || ' | ', '') ||
+           'Duvenbeck-párosítás miatt újraimportálásra jelölve, eredeti dokumentum: ' ||
+           coalesce(f.dokumentum_url, '-'),
+         dokumentum_url = null,
+         drive_file_id = null
+     where f.forras = 'pdf_import'
+       and f.statusz <> 'torolt'
+       and f.reise_id is null
+       and f.ellenorzott = false
+       and (f.megrendelo ilike '%duvenbeck%' or f.postazasi_cim ilike '%duvenbeck%')
+       and coalesce(f.szamla_szam, '') = ''
+       and f.papirok_beerkeztek_at is null
+       and f.postazva = false
+       and f.teljesitve = false
+       and not exists (
+         select 1 from fuvar_megallo_allapot ma
+         where ma.fuvar_id = f.id and ma.kesz = true
+       )
+     returning f.id`
+  );
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1)`, [JAVITAS_KOD]);
+  console.log(
+    `[migrate] ${rows.length} érintetlen Duvenbeck-sor újraimportálásra jelölve (a következő Drive-szinkron párosítva hozza vissza őket).`
+  );
 }
 
 // Dolgozók modul — egyszeri törzsadat-feltöltés (2026-09-07): a tényleges
