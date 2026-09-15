@@ -24,6 +24,7 @@ import {
 } from "./idovonal";
 import { SAJAT_JARMUVEK, resolveJarmu, type JarmuSzin, type SajatJarmu } from "./vehicles";
 import { bontsMegallokra, varosNev } from "./varos";
+import { rogzitGpsErinteseket } from "./megallo-naplo";
 import {
   getFuvarokIdoszakban,
   getMaiSajatFuvarok,
@@ -555,7 +556,12 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus, kali
     veg = new Date(erkezes.getTime() + LERAKODAS_PUFFER_PERC * 60000);
   }
 
+  // A megallokSzovegei sorrendje (felrakó(k), majd lerakó(k)) adja az
+  // index-et — pontosan ugyanaz a sorrend, amit a sofőr kézi jelölése is
+  // használ (lib/fuvarozas/sofor.ts), ezért a két nyilvántartás ugyanarra a
+  // fuvar_megallo_allapot sorra írható.
   const megallok: TervezettMegallo[] = megallokSzovegei.map((m, i) => ({
+    index: i,
     tipus: m.tipus,
     cim: varosNev(m.szoveg),
     lat: megallokKoordinatak[i]?.lat ?? null,
@@ -566,6 +572,7 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus, kali
     elhagyva: false,
     eppenItt: false,
     tenylegesIdo: null,
+    tenylegesTavozas: null,
   }));
 
   return {
@@ -868,6 +875,17 @@ export async function getIdovonalak(nap?: string): Promise<IdovonalNap> {
 
         // A tervezett fel-/lerakó pontok "érintve"/"elhagyva" jelölése a valós GPS-nyomvonal alapján.
         const jeloltFuvarok = tervezettFuvarok.map((f) => ({ ...f, megallok: jelolMegallokElhagyottkent(f.megallok, szakaszok) }));
+
+        // Az észlelt érintéseket eltároljuk, mert az Ecofleet trip-előzménye
+        // nem marad meg örökre, a számlázás viszont napokkal a lerakás után
+        // történik (lásd megallo-naplo.ts). Csak megfigyelés-naplózás: ha
+        // hibázik, az idővonal megjelenítését nem akaszthatja meg.
+        const erintesek = jeloltFuvarok.flatMap((f) =>
+          f.megallok
+            .filter((m) => m.tenylegesIdo !== null)
+            .map((m) => ({ fuvarId: f.id, index: m.index, erkezes: m.tenylegesIdo!, tavozas: m.tenylegesTavozas }))
+        );
+        await rogzitGpsErinteseket(erintesek).catch((err) => console.error("[megallo-naplo] felírás sikertelen:", err));
 
         // A hátralévő pontok becsült idejét élő pozícióból láncba fűzve
         // frissítjük, hogy a jármű tényleges mai haladását tükrözzék, ne

@@ -230,6 +230,15 @@ export type TervezettFuvarSzakasz = {
 
 /** Egy tervezett fuvar egyetlen fel- vagy lerakó állomása, az idővonalon egy kis ponttal jelölve. */
 export type TervezettMegallo = {
+  /**
+   * A megálló sorszáma a fuvar teljes állomás-sorrendjében (0 = az első
+   * felrakó, utána a lerakók) — UGYANAZ az indexelés, amit a sofőr kézi
+   * jelölése is használ (fuvar_megallo_allapot.megallo_index, lásd
+   * lib/fuvarozas/sofor.ts). Mindkét oldal a bontsMegallokra(felrako) +
+   * bontsMegallokra(lerako) sorrendből származik, ezért a két nyilvántartás
+   * (kézi megerősítés és GPS-érintés) ugyanarra a sorra írható.
+   */
+  index: number;
   tipus: "felrako" | "lerako";
   /** Rövid, csak városnév alapú címke (lásd varosNev a varos.ts-ben). */
   cim: string;
@@ -249,6 +258,8 @@ export type TervezettMegallo = {
   eppenItt: boolean;
   /** Ha a jármű járt itt, a tényleges (GPS szerinti) MEGÉRKEZÉS ideje — ide kerül a pont az idővonalon. */
   tenylegesIdo: Date | null;
+  /** Ha a jármű már tovább is ment, a tényleges (GPS szerinti) TOVÁBBINDULÁS ideje. Amíg itt áll, null. */
+  tenylegesTavozas: Date | null;
 };
 
 export type EloPozicio = {
@@ -429,6 +440,12 @@ export function jelolMegallokElhagyottkent(
       (p) => p.at > erintes.kezdet.getTime() && haversineKm(lat, lon, p.lat, p.lon) >= TOVABBHALADAS_TAVOLSAG_KM
     );
 
-    return { ...m, elhagyva: tovabbment, eppenItt: !tovabbment, tenylegesIdo: erintes.kezdet };
+    return {
+      ...m,
+      elhagyva: tovabbment,
+      eppenItt: !tovabbment,
+      tenylegesIdo: erintes.kezdet,
+      tenylegesTavozas: tovabbment ? erintes.veg : null,
+    };
   });
 }

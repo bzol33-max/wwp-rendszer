@@ -1889,12 +1889,51 @@ function PapirNyugtazoSav({ onNyugtazva }: { onNyugtazva: () => void }) {
 }
 
 /** A Számla/Posta fül három szakasza — a fuvar a papír és a számla megléte szerint kerül az egyikbe. */
+/**
+ * Ennyi nap után szólunk, ha a papír (CMR, fuvarlevél) még nem érkezett be a
+ * lerakás óta. Budaházi Zoltán adta meg: a papír több napot is csúszhat, mert
+ * attól függ, merre jár a sofőr és mikor tér be a telephelyre — 3 nap után
+ * viszont már utána kell járni.
+ */
+const PAPIR_TURELMI_IDO_NAP = 3;
+
+/**
+ * Hány napja történt a fuvar TÉNYLEGES lerakása. Elsődlegesen a megfigyelt
+ * érintésből (sofőr kézi jelölése vagy GPS, lásd lerakas_tenyleges_at), és
+ * csak ha az nincs, a tervezett lerakás dátumából — a tervezett nap ugyanis
+ * eltolódhat, a türelmi időt pedig a valóban megtörtént lerakástól kell mérni.
+ */
+function napokLerakasOta(row: FuvarRow): number | null {
+  const alap = row.lerakas_tenyleges_at ?? row.lerakas_datum_iso ?? row.datum_iso;
+  if (!alap) return null;
+  const mikor = new Date(alap);
+  if (Number.isNaN(mikor.getTime())) return null;
+  return Math.floor((Date.now() - mikor.getTime()) / 86400000);
+}
+
+/** Figyelmeztetés, ha a papír a türelmi időn túl sem érkezett be. */
+function PapirKesesJelzo({ row }: { row: FuvarRow }) {
+  const napok = napokLerakasOta(row);
+  if (napok === null || napok <= PAPIR_TURELMI_IDO_NAP) return null;
+  return (
+    <span
+      title={`A lerakás óta ${napok} nap telt el, a papír még nincs meg. ${PAPIR_TURELMI_IDO_NAP} nap után érdemes utánajárni.`}
+      className="flex items-center gap-0.5 whitespace-nowrap text-[10px] font-medium text-destructive"
+    >
+      <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
+      {napok} napja
+    </span>
+  );
+}
+
 const SZAMLA_POSTA_CSOPORTOK = [
   {
     kulcs: "papirra-var",
     cim: "Papírra vár",
-    leiras: "A CMR és a fuvarlevél még nem érkezett be a telephelyre — számla csak ezek birtokában állítható ki.",
+    leiras: `A CMR és a fuvarlevél még nem érkezett be a telephelyre — számla csak ezek birtokában állítható ki. ${PAPIR_TURELMI_IDO_NAP} napnál régebbi lerakásnál külön jelzés kerül a sorra.`,
     ide: (r: FuvarRow) => !r.papirok_beerkeztek_at,
+    /** A csoportfejlécben külön kiírjuk, hány sor lépte túl a türelmi időt. */
+    keses: (r: FuvarRow) => (napokLerakasOta(r) ?? 0) > PAPIR_TURELMI_IDO_NAP,
   },
   {
     kulcs: "szamlazhato",
@@ -2032,6 +2071,17 @@ function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
                           <div className="flex flex-wrap items-baseline gap-x-2">
                             <span className="text-sm font-semibold">{csoport.cim}</span>
                             <span className="tabular-nums text-xs text-muted-foreground">{csoportSorok.length}</span>
+                            {"keses" in csoport &&
+                              (() => {
+                                const kesok = csoportSorok.filter(csoport.keses).length;
+                                if (kesok === 0) return null;
+                                return (
+                                  <span className="flex items-center gap-1 rounded bg-destructive/10 px-1.5 py-0.5 text-xs font-medium text-destructive">
+                                    <AlertTriangle className="h-3 w-3 shrink-0" />
+                                    {kesok} sürgős
+                                  </span>
+                                );
+                              })()}
                             <span className="text-xs text-muted-foreground">· {csoport.leiras}</span>
                           </div>
                         </TableCell>
@@ -2128,14 +2178,17 @@ function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
                         <Check className="mx-auto h-3.5 w-3.5" />
                       </button>
                     ) : (
-                      <button
-                        type="button"
-                        title="A CMR és a fuvarlevél beérkezett a telephelyre"
-                        onClick={() => handlePapirBeerkezett(row.id, true)}
-                        className="rounded border px-1.5 py-0.5 text-[11px] text-muted-foreground hover:border-success hover:text-success"
-                      >
-                        megjött
-                      </button>
+                      <div className="flex flex-col items-center gap-0.5">
+                        <button
+                          type="button"
+                          title="A CMR és a fuvarlevél beérkezett a telephelyre"
+                          onClick={() => handlePapirBeerkezett(row.id, true)}
+                          className="rounded border px-1.5 py-0.5 text-[11px] text-muted-foreground hover:border-success hover:text-success"
+                        >
+                          megjött
+                        </button>
+                        <PapirKesesJelzo row={row} />
+                      </div>
                     )}
                   </TableCell>
                   <TableCell className="align-top text-center">

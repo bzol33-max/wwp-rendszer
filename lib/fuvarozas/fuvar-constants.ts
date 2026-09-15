@@ -157,6 +157,16 @@ export type FuvarRow = {
    */
   papirok_beerkeztek_at: string | null;
   /**
+   * A fuvar TÉNYLEGES befejezése: a legkésőbbi állomás-érintés — a sofőr kézi
+   * jelölése, vagy ha az nincs, a GPS-ből megfigyelt megérkezés (lásd
+   * fuvar_megallo_allapot és lib/fuvarozas/megallo-naplo.ts). Null, ha egyik
+   * forrásból sincs adat; ilyenkor a tervezett lerakás dátuma a tartalék.
+   *
+   * A papír- és számlázási határidőket ettől kell számolni, nem a TERVEZETT
+   * lerakás dátumától.
+   */
+  lerakas_tenyleges_at: string | null;
+  /**
    * Kézi "Teljesítve" jelölő (Bér fuvarok — folyamatban fül): igaz, ha a
    * fuvar a rögzített (tervezett) lerakás dátum előtt lett kézzel lezárva,
    * és emiatt már a Számla/Posta fülön szerepel a dátum-alapú automatikus

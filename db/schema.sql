@@ -659,3 +659,21 @@ create table if not exists fuvar_megallo_allapot (
   kesz_by       text,
   unique (fuvar_id, megallo_index)
 );
+
+-- GPS-alapú, MEGŐRZÖTT érintés-napló ugyanezen a soron (2026-09-15). A
+-- kesz/kesz_at/kesz_by a sofőr explicit megerősítése marad — ez a két oszlop
+-- ettől független, gépi megfigyelés: mikor ért oda ténylegesen a kamion, és
+-- mikor indult tovább (lásd jelolMegallokElhagyottkent a
+-- lib/fuvarozas/idovonal.ts-ben).
+--
+-- Miért kell eltárolni, ha a GPS-idővonalból amúgy is kiszámolható? Mert az
+-- Ecofleet trip-előzménye nem marad meg örökre, a számlázás viszont napokkal
+-- (a papír beérkezésétől függően akár hetekkel) a lerakás után történik. A
+-- "mióta várunk a papírra" kérdésre tehát kell egy tartós, a GPS-lekérdezéstől
+-- független tényleges lerakás-időpont.
+--
+-- A felírás monoton: az érkezés csak korábbi, a távozás csak későbbi irányba
+-- mozdulhat (least/greatest), így egy-egy pontatlan GPS-minta nem írja felül
+-- a már rögzített, helyes időpontot.
+alter table fuvar_megallo_allapot add column if not exists gps_erkezes timestamptz;
+alter table fuvar_megallo_allapot add column if not exists gps_tavozas timestamptz;
