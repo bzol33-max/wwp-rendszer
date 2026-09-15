@@ -73,6 +73,29 @@ export function normalizaltCegKulcs(nev: string): string {
   return alap.replace(/\s+(kft|zrt|bt|nyrt|kkt)$/, "").trim();
 }
 
+/**
+ * A SAJÁT cégünk neve, bármilyen írásmóddal ("Well-Worn Pallet Kft.",
+ * "Well Worn Pallett Kft"). A normalizaltCegKulcs már levágta a cégformát és
+ * a kötőjelet, itt csak az egy/két "t" közti ingadozás marad.
+ *
+ * Miért kell ez: a fuvarmegbízás-sablonok a megbízó és a megbízott adatait
+ * egymás mellé teszik ("Megbízó adatai:   Megbízott adatai:"), a PDF-ből
+ * kiolvasva pedig a két címke egy sorba kerül, a két cégnév utána. A nyelvi
+ * modell ilyenkor rendszeresen a rosszat választja, és MINKET ír megrendelőnek.
+ *
+ * Drive-ból érkező megbízáson ez sosem lehet helyes: azt épp nekünk adták ki,
+ * tehát mi vagyunk a megbízott. A rossz megrendelő a legdrágább hiba, amit a
+ * rendszer véthet — rossz félnek szólna a számla —, ezért inkább üresen
+ * hagyjuk a mezőt, mint hogy tévedésből minket írjunk oda.
+ */
+const SAJAT_CEG_MINTA = /^well\s*worn\s*pallett?$/;
+
+/** Igaz, ha a cégnév a MI cégünk (bármilyen írásmóddal). */
+export function sajatCegunkE(nev: string | null | undefined): boolean {
+  if (!nev?.trim()) return false;
+  return SAJAT_CEG_MINTA.test(normalizaltCegKulcs(nev));
+}
+
 /** A nyers cégnevet a CEG_ALIAS_CSOPORTOK alapján kanonikus névre cseréli, ha van egyezés — egyébként változatlanul visszaadja. */
 export function ceglNevKanonikusan(nyersNev: string): string {
   const norm = normalizaltCegKulcs(nyersNev);

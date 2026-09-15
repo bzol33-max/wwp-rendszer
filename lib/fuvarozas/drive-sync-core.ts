@@ -33,7 +33,7 @@ import {
   setFuvarFizetesiHatarido,
   setFuvarPostazasiCim,
 } from "@/lib/fuvarozas/megbizasok";
-import type { FuvardijPenznem } from "@/lib/fuvarozas/fuvar-constants";
+import { sajatCegunkE, type FuvardijPenznem } from "@/lib/fuvarozas/fuvar-constants";
 import { findJarmuByPlate, jarmuLabel } from "@/lib/fuvarozas/vehicles";
 import {
   mentDuvenbeckDokumentumot,
@@ -179,7 +179,7 @@ const KIVONATOLASI_UTASITAS = `Egy fuvarmegbízás-dokumentum (PDF/DOCX/Google D
 
 {
   "isFuvarmegbizas": boolean, // false, ha a szöveg NYILVÁNVALÓAN nem fuvarmegbízás (pl. számla, összesítő táblázat)
-  "megrendelo": string|null, // a fuvart kiadó partner cégneve
+  "megrendelo": string|null, // a fuvart kiadó partner (MEGBÍZÓ) cégneve — FIGYELEM: a sablonok a megbízó és a megbízott adatait egymás mellé teszik ("Megbízó adatai: / Megbízott adatai:"), és a kiolvasott szövegben a két címke egy sorba csúszik. A "Well Worn Pallett Kft" / "Well-Worn Pallet Kft." MINDIG a megbízott (a fuvarozó, akinek a megbízást kiadták) — SOHA nem ő a megrendelő. Ha ezt a nevet látod, a MÁSIK cég a megrendelő.
   "felrako": string|null, // felrakás helye (város vagy teljes cím)
   "felrakasDatum": string|null, // ISO dátum ÉÉÉÉ-HH-NN — a felrakás dátuma
   "lerako": string|null, // lerakás helye
@@ -330,12 +330,16 @@ async function ujFajlokFeldolgozasa(
 
       const kivont = await kivonatolFuvarAdatot(szoveg);
       if (!kivont || !kivont.isFuvarmegbizas || !kivont.lerako || !kivont.felrakasDatum) continue;
+      // Ha a modell MINKET írt megrendelőnek, a mezőt inkább üresen hagyjuk —
+      // lásd sajatCegunkE. A hiányzó megrendelő javítható, a rossz megrendelő
+      // rossz félnek kiállított számlát jelentene.
+      const megrendelo = sajatCegunkE(kivont.megrendelo) ? undefined : kivont.megrendelo || undefined;
       await addFuvar({
         tipus: "sajat",
         datum: kivont.felrakasDatum,
         lerako: kivont.lerako,
         felrako: kivont.felrako || undefined,
-        megrendelo: kivont.megrendelo || undefined,
+        megrendelo,
         aru: kivont.aru || undefined,
         mennyiseg: kivont.mennyiseg || undefined,
         jarmu: resolveJarmuMezo(kivont.rendszamVagySofor),
