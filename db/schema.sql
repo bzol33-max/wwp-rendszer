@@ -303,6 +303,23 @@ alter table fuvar_megbizasok add column if not exists postazva_at timestamptz;
 alter table fuvar_megbizasok add column if not exists teljesitve boolean not null default false;
 alter table fuvar_megbizasok add column if not exists teljesitve_at timestamptz;
 
+-- Számla/Posta fül: mikor érkeztek be a fuvarhoz tartozó eredeti papírok
+-- (CMR, fuvarlevél) a telephelyre. Számlát csak ezek birtokában állítunk ki,
+-- ezért ez KEMÉNY feltétel: amíg üres, a fuvar a "Papírra vár" csoportban áll,
+-- és nem számlázható. A lerakás után napokkal is beérkezhet — attól függ,
+-- merre jár a sofőr és mikor tér be. A GPS abban segít, hogy jelzi, amikor egy
+-- kocsi hazaért, de a nyugtázás mindig kézi: a kamion behajthat papír nélkül is.
+alter table fuvar_megbizasok add column if not exists papirok_beerkeztek_at timestamptz;
+
+-- Visszamenőleges feltöltés: aminek már van számlaszáma, annál a papír
+-- szükségképpen beérkezett, hiszen enélkül nem állítottunk volna ki számlát.
+-- Enélkül az oszlop bevezetésekor minden eddigi fuvar a "Papírra vár"
+-- csoportba esne, a már kiszámlázottak is. Csak az üresen maradt mezőket
+-- tölti, ezért újrafuttatható, és a kézi visszavonást sem írja felül.
+update fuvar_megbizasok
+set papirok_beerkeztek_at = coalesce(teljesitve_at, postazva_at, created_at)
+where papirok_beerkeztek_at is null and coalesce(szamla_szam, '') <> '';
+
 -- A fuvardíj pénzneme (2026-09-09) — a legtöbb megbízás HUF-ban van, de van
 -- (pl. Duvenbeck) EUR-os is. A rendszer NEM vált át HUF-ra, ezért az
 -- "Eredmény" (fuvardíj - költség) jellegű Ft-alapú számítások csak

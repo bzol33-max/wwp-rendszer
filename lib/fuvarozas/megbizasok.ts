@@ -37,7 +37,8 @@ const FUVAR_ROW_COLUMNS = `
   to_char(lerakas_datum, 'YYYY-MM-DD') as lerakas_datum_iso,
   fizetesi_hatarido_nap,
   pozicioszam, pozicioszam_nincs, postazasi_cim, postazva, szamla_szam,
-  postazva_at::text, teljesitve, teljesitve_at::text
+  postazva_at::text, teljesitve, teljesitve_at::text,
+  papirok_beerkeztek_at::text
 `;
 
 export async function getFuvarok(tipus: FuvarTipus): Promise<FuvarRow[]> {
@@ -381,6 +382,25 @@ export async function setFuvarPostazva(id: string, postazva: boolean) {
 }
 
 /**
+ * A fuvar eredeti papírjainak (CMR, fuvarlevél) beérkezése a telephelyre.
+ * Ez a Számla/Posta fülön a "Papírra vár" és a "Számlázható" csoport közti
+ * határ — papír nélkül nem állítunk ki számlát.
+ *
+ * Több fuvart egyszerre fogad, mert a sofőr egy fordulóból jellemzően több
+ * megbízás papírját hozza be egyszerre (lásd PapirNyugtazoSav).
+ */
+export async function setFuvarokPapirokBeerkeztek(ids: string[], beerkezett: boolean) {
+  await requireEditPermission("fuvarozas");
+  if (ids.length === 0) return;
+  await query(
+    `update fuvar_megbizasok
+     set papirok_beerkeztek_at = case when $2 then now() else null end
+     where id = any($1::bigint[])`,
+    [ids, beerkezett]
+  );
+}
+
+/**
  * A "Bér fuvarok — folyamatban" fül kézi "Teljesítve" gombja: a fuvart a
  * rögzített (tervezett) lerakás dátumtól függetlenül azonnal átteszi a
  * Számla/Posta fülre — a valós dátumot NEM módosítja, csak ezt a külön
@@ -428,6 +448,36 @@ export async function getSzamlaPostaFuvarok(): Promise<FuvarRow[]> {
        and not ${EFFEKTIVE_ARCHIVALT_SQL}
      order by ellenorzott asc, fuvar_megbizasok.erkezett_datum desc nulls last, datum desc, id desc
      limit 200`
+  );
+}
+
+/** Egy papírra váró fuvar minimális adatai a nyugtázó sávhoz. */
+export type PapirraVaroFuvar = {
+  id: string;
+  megrendelo: string | null;
+  felrako: string | null;
+  lerako: string;
+  jarmu: string | null;
+  sofor: string | null;
+  datum: string;
+};
+
+/**
+ * A Számla/Posta fülön álló, papírra még váró fuvarok — a telephelyi
+ * nyugtázó sávhoz (lásd getPapirNyugtazasJavaslat az actions.ts-ben), ahol a
+ * hazaért kocsi fuvarjait egy listából lehet kipipálni.
+ */
+export async function getPapirraVaroFuvarok(): Promise<PapirraVaroFuvar[]> {
+  return query<PapirraVaroFuvar>(
+    `select id::text, megrendelo, felrako, lerako, jarmu, sofor,
+       to_char(coalesce(lerakas_datum, datum), 'YYYY-MM-DD') as datum
+     from fuvar_megbizasok
+     where tipus = 'sajat' and statusz <> 'torolt'
+       and (teljesitve or coalesce(lerakas_datum, datum) < current_date)
+       and papirok_beerkeztek_at is null
+       and not ${EFFEKTIVE_ARCHIVALT_SQL}
+     order by coalesce(lerakas_datum, datum) asc, id asc
+     limit 100`
   );
 }
 

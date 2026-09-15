@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -49,12 +49,18 @@ import {
   setFuvarFuvardij,
   setFuvarPostazasiCim,
   setFuvarPostazva,
+  setFuvarokPapirokBeerkeztek,
   setFuvarSzamlaSzam,
   setFuvarTeljesitve,
   szinkronizalSzamlaSzamokat,
   updateFuvarStatus,
 } from "@/lib/fuvarozas/megbizasok";
-import { calculateTollForAddresses, getGazolajAr } from "@/lib/fuvarozas/actions";
+import {
+  calculateTollForAddresses,
+  getGazolajAr,
+  getPapirNyugtazasJavaslat,
+  type PapirNyugtazasJavaslat,
+} from "@/lib/fuvarozas/actions";
 import { frissitsDriveBol } from "@/lib/fuvarozas/drive-sync";
 import {
   ceglNevKanonikusan,
@@ -1792,6 +1798,118 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
  * egy "Postázva" jelölő (pipálható, ha a fuvar dokumentációja ténylegesen
  * postára lett adva).
  */
+/**
+ * A Számla/Posta fül tetején megjelenő sáv: ha egy kocsi éppen saját
+ * telephelyen áll ÉS van nála papírra váró fuvar, itt lehet listából
+ * kipipálni, melyikhez érkezett meg a CMR és a fuvarlevél.
+ *
+ * Azért listás és nem fuvaronkénti, mert a sofőr egy fordulóból több megbízás
+ * papírját hozza be egyszerre. És azért kézi, mert a kamion behajthat a
+ * telephelyre anélkül is, hogy a papír vele jönne — a GPS csak szól, nem dönt.
+ */
+function PapirNyugtazoSav({ onNyugtazva }: { onNyugtazva: () => void }) {
+  const [javaslatok, setJavaslatok] = useState<PapirNyugtazasJavaslat[]>([]);
+  const [kivalasztott, setKivalasztott] = useState<Set<string>>(new Set());
+  const [mentes, setMentes] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      setJavaslatok(await getPapirNyugtazasJavaslat());
+    } catch {
+      setJavaslatok([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+    const idozito = setInterval(load, 5 * 60 * 1000);
+    return () => clearInterval(idozito);
+  }, [load]);
+
+  if (javaslatok.length === 0) return null;
+
+  function toggle(id: string) {
+    setKivalasztott((elozo) => {
+      const uj = new Set(elozo);
+      if (uj.has(id)) uj.delete(id);
+      else uj.add(id);
+      return uj;
+    });
+  }
+
+  async function handleNyugtaz() {
+    const ids = [...kivalasztott];
+    if (ids.length === 0) return;
+    setMentes(true);
+    try {
+      await setFuvarokPapirokBeerkeztek(ids, true);
+      toast.success(
+        ids.length === 1 ? "A fuvar papírja beérkezettnek jelölve." : `${ids.length} fuvar papírja beérkezettnek jelölve.`
+      );
+      setKivalasztott(new Set());
+      await load();
+      onNyugtazva();
+    } catch {
+      toast.error("Nem sikerült rögzíteni a papírok beérkezését.");
+    } finally {
+      setMentes(false);
+    }
+  }
+
+  return (
+    <Card className="border-primary/40 bg-primary/5">
+      <CardContent className="flex flex-col gap-4 py-4">
+        {javaslatok.map((j) => (
+          <div key={j.sofor} className="flex flex-col gap-2">
+            <p className="text-sm font-medium">
+              {j.sofor} beért ide: {j.telephely}. Megjött a papír ezekhez?
+            </p>
+            <div className="flex flex-col gap-1.5">
+              {j.fuvarok.map((f) => (
+                <label key={f.id} className="flex cursor-pointer flex-wrap items-center gap-2 text-sm">
+                  <Checkbox checked={kivalasztott.has(f.id)} onCheckedChange={() => toggle(f.id)} />
+                  <span className="tabular-nums text-muted-foreground">{f.datum}</span>
+                  <span className="font-medium">{f.megrendelo ?? "—"}</span>
+                  <span className="text-muted-foreground">
+                    {f.felrako ? `${varosNev(f.felrako)} → ${varosNev(f.lerako)}` : varosNev(f.lerako)}
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
+        ))}
+        <div>
+          <Button size="sm" disabled={kivalasztott.size === 0 || mentes} onClick={handleNyugtaz}>
+            {mentes ? "Mentés…" : `Papír megjött (${kivalasztott.size})`}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** A Számla/Posta fül három szakasza — a fuvar a papír és a számla megléte szerint kerül az egyikbe. */
+const SZAMLA_POSTA_CSOPORTOK = [
+  {
+    kulcs: "papirra-var",
+    cim: "Papírra vár",
+    leiras: "A CMR és a fuvarlevél még nem érkezett be a telephelyre — számla csak ezek birtokában állítható ki.",
+    ide: (r: FuvarRow) => !r.papirok_beerkeztek_at,
+  },
+  {
+    kulcs: "szamlazhato",
+    cim: "Számlázható",
+    leiras: "A papír megvan, a számla még nincs kiállítva.",
+    ide: (r: FuvarRow) => !!r.papirok_beerkeztek_at && !r.szamla_szam,
+  },
+  {
+    kulcs: "postazando",
+    cim: "Postázandó",
+    leiras: "A számla kiállt. Postázás után 5 perccel a fuvar az Archívba kerül.",
+    ide: (r: FuvarRow) => !!r.papirok_beerkeztek_at && !!r.szamla_szam,
+  },
+] as const;
+
 function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
   const [rows, setRows] = useState<FuvarRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1834,6 +1952,12 @@ function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
     toast.success("Fuvar törölve.");
   }
 
+  async function handlePapirBeerkezett(id: string, ertek: boolean) {
+    await setFuvarokPapirokBeerkeztek([id], ertek);
+    await load();
+    toast.success(ertek ? "Papír beérkezettnek jelölve." : "A papír-beérkezés visszavonva.");
+  }
+
   async function handlePostazva(id: string, ertek: boolean) {
     await setFuvarPostazva(id, ertek);
     await load();
@@ -1855,7 +1979,9 @@ function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
   }
 
   return (
-    <Card>
+    <div className="flex flex-col gap-4">
+      <PapirNyugtazoSav onNyugtazva={load} />
+      <Card>
       <CardHeader>
         <CardTitle className="text-sm">Bér fuvarok — Számla/Posta</CardTitle>
       </CardHeader>
@@ -1875,6 +2001,12 @@ function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
                 <TableHead>Postázási cím</TableHead>
                 <TableHead
                   className="text-center"
+                  title="Beérkeztek-e a fuvar eredeti papírjai (CMR, fuvarlevél) a telephelyre. Számlát csak ezek birtokában állítunk ki."
+                >
+                  Papír
+                </TableHead>
+                <TableHead
+                  className="text-center"
                   title="A fuvar dokumentációja (számla + megbízás) postára lett adva a megrendelőnek."
                 >
                   Postázva
@@ -1885,12 +2017,33 @@ function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
             <TableBody>
               {!loading && rows.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center text-muted-foreground">
-                    Még nincs rögzített bér fuvar.
+                  <TableCell colSpan={12} className="text-center text-muted-foreground">
+                    Nincs számlázásra vagy postázásra váró bér fuvar.
                   </TableCell>
                 </TableRow>
               )}
-              {rows.map((row) => (
+              {rows.length > 0 &&
+                SZAMLA_POSTA_CSOPORTOK.map((csoport) => {
+                  const csoportSorok = rows.filter(csoport.ide);
+                  return (
+                    <Fragment key={csoport.kulcs}>
+                      <TableRow className="hover:bg-transparent">
+                        <TableCell colSpan={12} className="bg-muted/50 py-2">
+                          <div className="flex flex-wrap items-baseline gap-x-2">
+                            <span className="text-sm font-semibold">{csoport.cim}</span>
+                            <span className="tabular-nums text-xs text-muted-foreground">{csoportSorok.length}</span>
+                            <span className="text-xs text-muted-foreground">· {csoport.leiras}</span>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                      {csoportSorok.length === 0 && (
+                        <TableRow className="hover:bg-transparent">
+                          <TableCell colSpan={12} className="py-2 text-center text-xs text-muted-foreground">
+                            Nincs ilyen fuvar.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      {csoportSorok.map((row) => (
                 <TableRow
                   key={row.id}
                   className={
@@ -1965,6 +2118,27 @@ function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
                     />
                   </TableCell>
                   <TableCell className="align-top text-center">
+                    {row.papirok_beerkeztek_at ? (
+                      <button
+                        type="button"
+                        title="A papír beérkezett — kattintás a visszavonáshoz"
+                        onClick={() => handlePapirBeerkezett(row.id, false)}
+                        className="text-success hover:opacity-60"
+                      >
+                        <Check className="mx-auto h-3.5 w-3.5" />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        title="A CMR és a fuvarlevél beérkezett a telephelyre"
+                        onClick={() => handlePapirBeerkezett(row.id, true)}
+                        className="rounded border px-1.5 py-0.5 text-[11px] text-muted-foreground hover:border-success hover:text-success"
+                      >
+                        megjött
+                      </button>
+                    )}
+                  </TableCell>
+                  <TableCell className="align-top text-center">
                     <PostazvaCella id={row.id} postazva={row.postazva} onToggle={handlePostazva} />
                   </TableCell>
                   <TableCell className="align-top">
@@ -1978,13 +2152,17 @@ function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
                     </button>
                   </TableCell>
                 </TableRow>
-              ))}
+                      ))}
+                    </Fragment>
+                  );
+                })}
             </TableBody>
           </Table>
         </div>
       </CardContent>
       <FuvarDetailModal row={reszletek} onClose={() => setReszletek(null)} />
-    </Card>
+      </Card>
+    </div>
   );
 }
 
