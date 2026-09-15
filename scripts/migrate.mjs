@@ -204,7 +204,7 @@ async function main() {
   // modul csak utólag került be), a seedUserOnce pedig csak létrehozáskor ír
   // jogosultságot, meglévő felhasználónál nem nyúl hozzá.
   await grantElolegekSajatOnce(pool);
-  await ujraimportalDuvenbeckSorokatOnce(pool);
+  await ujraimportalDuvenbeckSorokatOnce(pool, DUVENBECK_UJRAIMPORT_KOROK);
 
   await pool.end();
 }
@@ -268,8 +268,20 @@ async function grantElolegekSajatOnce(pool) {
 // beérkezett papírja, nincs postázva, nincs teljesítve, és egyetlen megállóját
 // sem nyugtázta a sofőr. Bármelyik teljesül -> a sort békén hagyjuk, és a
 // felhasználó dönt róla a felületen.
-async function ujraimportalDuvenbeckSorokatOnce(pool) {
-  const JAVITAS_KOD = "duvenbeck-parositas-ujraimport-2026-09-15";
+// A takarítás köreinek kódjai. Új kör akkor kell, ha az ÉRTELMEZŐ javult: az
+// előző kör jelölése ilyenkor már be van írva, tehát a régi kód nem futna újra,
+// a hibásan (még a nyelvi modellel) beolvasott sorok pedig bent maradnának.
+//
+// 1. kör (2026-09-15): a párosítás bevezetése.
+// 2. kör (2026-09-15): az értelmező a valódi pdf-parse sortördelésre javítva —
+//    az első kör után a szinkron még a régi úton hozta vissza a sorokat.
+const DUVENBECK_UJRAIMPORT_KOROK = [
+  "duvenbeck-parositas-ujraimport-2026-09-15",
+  "duvenbeck-parositas-ujraimport-2-2026-09-15",
+];
+
+async function ujraimportalDuvenbeckSorokatOnce(pool, kodok) {
+  const JAVITAS_KOD = kodok[kodok.length - 1];
   const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
   if (mar.length > 0) return;
 

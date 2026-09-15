@@ -110,23 +110,40 @@ function rendszamJeloltek(szoveg: string): string[] {
 }
 
 /**
- * Egy megálló címe a RAKOMÁNYLISTÁBÓL. Ott a teljes cím egyetlen sor, a végén
- * országkóddal, irányítószámmal és várossal:
+ * A megállók címe HÁROM külön soron áll — ez a `pdf-parse` tényleges
+ * kimenete, nem az, amit egy dúsabb PDF-olvasó ad. (Az első változat egysoros
+ * címre épült, ezért élesben egyetlen megállót sem ismert fel, és a rendszer
+ * némán visszaesett a nyelvi modellre.)
  *
- *   "BMW HU Plant Debrecen BMW Koerút 1 HU 4002 Debrecen"
+ * Rakománylista — a hármas egyben, országkóddal:
  *
- * A lusta (.*?) és a sorvégi horgony együtt biztosítja, hogy az UTOLSÓ
- * "<országkód> <irsz> <város>" hármast találjuk meg — különben a cégnévben
- * szereplő "BMW HU Plant..." "HU"-ja szakítaná ketté a sort.
+ *   Yanfeng International Automotive     <- cégnév
+ *   Juhar utca 17                        <- utca
+ *   HU 8500 Papa                         <- országkód + irányítószám + város
+ *
+ * Megbízás — az utca/irányítószám/országkód hármas megállónként, de a cégnevek
+ * ELŐTTE, egy tömbben (és hosszú név két sorra törik, ezért nem indexelhető
+ * megbízhatóan):
+ *
+ *   Campona utca . 1
+ *   1225 Budapest
+ *   HU
  */
-const RAKOMANYLISTA_CIMSOR = /^(.*?\S)\s+([A-Z]{2})\s+(\d{4})\s+(\S.*)$/;
+const RAKOMANYLISTA_VAROS = /^([A-Z]{2})\s+(\d{4})\s+(\S.*)$/;
+const MEGBIZAS_VAROS = /^(\d{4})\s+(\S.*)$/;
+const ORSZAGKOD_SOR = /^[A-Z]{2}$/;
 
-/** A megállók szerepe a rakománylistán — a címsoroktól külön, hasábosan jelennek meg. */
-const SZEREP_SOR = /^(BERAKODAS|KIRAKODAS)\s*\/\s*(LOADING|UNLOADING)\b/i;
+/** A megállók szerepe — a rakománylistán egy sorban, a megbízáson a fordítástól külön. */
+const SZEREP_RAKOMANYLISTA = /^(BERAKODAS|KIRAKODAS)\s*\/\s*(LOADING|UNLOADING)\s*$/i;
+const SZEREP_MEGBIZAS = /^(Berakodas|Kirakodas)\s*\/\s*$/i;
 
-/** "PV: 15.09.2026 06:00 PB: 15.09.2026 22:00" — a rakománylistán egy sorban. */
-const ABLAK_PAR =
-  /PV:\s*(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}:\d{2})\s*PB:\s*(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}:\d{2})/g;
+/**
+ * Az időablak két vége KÜLÖN soron van, és minden megállóé egymás után, a
+ * megállók sorrendjében. A dátum-feltétel zárja ki a lap alján lévő
+ * jelmagyarázatot ("PV: Felrako/ kirako datum (tol) / ...").
+ */
+const PV_SOR = /^PV:\s*(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}:\d{2})/;
+const PB_SOR = /^PB:\s*(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}:\d{2})/;
 
 function szeletek(szoveg: string): string[] {
   return szoveg
@@ -135,90 +152,80 @@ function szeletek(szoveg: string): string[] {
     .filter(Boolean);
 }
 
-/**
- * A rakománylista megállói. A hasábos elrendezés miatt előbb jön MINDEN
- * megálló szerepe (BERAKODAS, KIRAKODAS), utána MINDEN címe, utána MINDEN
- * időablaka — egymáshoz a sorrendjük rendeli őket, nem a közelségük.
- */
-function rakomanylistaMegallok(szoveg: string): DuvenbeckMegallo[] {
-  const sorok = szeletek(szoveg);
+function szerepekSorrendben(sorok: string[], minta: RegExp): ("felrako" | "lerako")[] {
+  return sorok
+    .map((sor) => sor.match(minta))
+    .filter((m): m is RegExpMatchArray => !!m)
+    .map((m) => (m[1].toUpperCase().startsWith("BERAKODAS") ? "felrako" : "lerako"));
+}
 
-  const szerepek: ("felrako" | "lerako")[] = [];
-  const cimek: string[] = [];
-  for (const sor of sorok) {
-    const szerep = sor.match(SZEREP_SOR);
-    if (szerep) {
-      szerepek.push(szerep[1].toUpperCase() === "BERAKODAS" ? "felrako" : "lerako");
-      continue;
-    }
-    const cim = sor.match(RAKOMANYLISTA_CIMSOR);
-    if (cim) cimek.push(`${cim[1]}, ${cim[3]} ${cim[4]}`);
-  }
+/** A PV/PB sorok párba állítva, előfordulási sorrendben (megállónként egy pár). */
+function ablakokSorrendben(sorok: string[]): { tol: DuvenbeckMegallo["ablakTol"]; ig: DuvenbeckMegallo["ablakIg"] }[] {
+  const ido = (m: RegExpMatchArray) => ({ datum: isoDatum(m[1], m[2], m[3]), ido: m[4] });
+  const pv = sorok.map((s) => s.match(PV_SOR)).filter((m): m is RegExpMatchArray => !!m).map(ido);
+  const pb = sorok.map((s) => s.match(PB_SOR)).filter((m): m is RegExpMatchArray => !!m).map(ido);
+  return pv.map((tol, i) => ({ tol, ig: pb[i] ?? null }));
+}
 
-  const ablakok = [...szoveg.matchAll(ABLAK_PAR)].map((m) => ({
-    ablakTol: { datum: isoDatum(m[1], m[2], m[3]), ido: m[4] },
-    ablakIg: { datum: isoDatum(m[5], m[6], m[7]), ido: m[8] },
-  }));
-
+function osszeallit(
+  szerepek: ("felrako" | "lerako")[],
+  cimek: string[],
+  ablakok: { tol: DuvenbeckMegallo["ablakTol"]; ig: DuvenbeckMegallo["ablakIg"] }[]
+): DuvenbeckMegallo[] {
   return szerepek.map((szerep, i) => ({
     szerep,
     cim: cimek[i] ?? "",
-    ablakTol: ablakok[i]?.ablakTol ?? null,
-    ablakIg: ablakok[i]?.ablakIg ?? null,
+    ablakTol: ablakok[i]?.tol ?? null,
+    ablakIg: ablakok[i]?.ig ?? null,
   }));
+}
+
+/** A rakománylista megállói: minden "HU 8500 Papa" alakú sor elé a két előző sor a cégnév és az utca. */
+function rakomanylistaMegallok(szoveg: string): DuvenbeckMegallo[] {
+  const sorok = szeletek(szoveg);
+  const cimek: string[] = [];
+  sorok.forEach((sor, i) => {
+    const m = sor.match(RAKOMANYLISTA_VAROS);
+    if (!m || i < 2) return;
+    cimek.push([sorok[i - 2], sorok[i - 1], `${m[2]} ${m[3]}`].filter(Boolean).join(", "));
+  });
+  return osszeallit(szerepekSorrendben(sorok, SZEREP_RAKOMANYLISTA), cimek, ablakokSorrendben(sorok));
 }
 
 /**
  * A megbízás megállói — tartalék arra az esetre, ha a rakománylista mégsem
- * érkezne meg a párjával. Itt a cím hasábosan szét van esve, ezért csak a
- * biztosan felismerhető darabokat vesszük ki: a blokk első két szelete a
- * cégnév és az utca, az irányítószám + város pedig a blokkon belül bárhol
- * állhat. Ami a hasábkeveredés miatt közé csúszik (súly, LM, dátum, a cégnév
- * második fele), azt eldobjuk — jobb rövidebb, de helyes címet adni.
+ * érkezne meg a párjával. A megállót az "irányítószám Város" + a rá következő
+ * "HU" sor párosa azonosítja; enélkül a saját szakolyi (4234) és a Duvenbeck
+ * csehbányai (8445) irányítószáma is megállónak látszana, mert azok után nem
+ * áll országkód-sor.
+ *
+ * A cégneveket csak akkor vesszük hozzá, ha pontosan annyi névsor van, ahány
+ * megálló: hosszú cégnév két sorra törik ("Yanfeng International" /
+ * "Automotive"), és akkor a nevek nem rendelhetők megállókhoz. Ilyenkor
+ * inkább utca + város, mint rossz cégnév a rossz megállón.
  */
 function megbizasMegallok(szoveg: string): DuvenbeckMegallo[] {
-  // Az ütemterv a "Berakodas/" első előfordulásától a következő oldal
-  // fejlécéig tart. E nélkül a határolás nélkül a saját szakolyi (4234) és a
-  // Duvenbeck csehbányai (8445) irányítószáma is megállónak látszana.
-  const kezdet = szoveg.search(/\bBerakodas\s*\//i);
-  if (kezdet === -1) return [];
-  const utana = szoveg.slice(kezdet);
-  const vege = utana.search(/Fuvar Megbizas:\s*ID/i);
-  const utemterv = vege === -1 ? utana : utana.slice(0, vege);
+  const sorok = szeletek(szoveg);
 
-  const sorok = szeletek(utemterv);
-  const blokkok: { szerep: "felrako" | "lerako"; sorok: string[] }[] = [];
-  for (const sor of sorok) {
-    const nyito = sor.match(/^(Berakodas|Kirakodas)\s*\//i);
-    if (nyito) {
-      blokkok.push({
-        szerep: nyito[1].toLowerCase() === "berakodas" ? "felrako" : "lerako",
-        sorok: [],
-      });
-      // A nyitó szelet maradéka is tartalmazhat adatot ("Berakodas/ FIEGE ...").
-      const maradek = sor.replace(/^(Berakodas|Kirakodas)\s*\/\s*/i, "").trim();
-      if (maradek) blokkok[blokkok.length - 1].sorok.push(maradek);
-      continue;
-    }
-    if (blokkok.length > 0) blokkok[blokkok.length - 1].sorok.push(sor);
-  }
+  const varosIndexek = sorok
+    .map((sor, i) => (MEGBIZAS_VAROS.test(sor) && ORSZAGKOD_SOR.test(sorok[i + 1] ?? "") ? i : -1))
+    .filter((i) => i > 0);
 
-  return blokkok.map(({ szerep, sorok: blokk }) => {
-    const varos = blokk.map((s) => s.match(/^(\d{4})\s+([^\d,]{2,40})$/)).find(Boolean);
-    // A cégnév és az utca a blokk első két, adatnak nem látszó szelete.
-    const nevEsUtca = blokk
-      .filter((s) => !/^\d{4}\s/.test(s) && !/^(PV|PB):/i.test(s) && !/\d+(,\d+)?LM/i.test(s) && !/^\d+KG/i.test(s))
-      .slice(0, 2);
-    const darabok = [...nevEsUtca, varos ? `${varos[1]} ${varos[2].trim()}` : null].filter(Boolean);
-    const ablakTol = blokk.map((s) => s.match(/PV:\s*(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}:\d{2})/)).find(Boolean);
-    const ablakIg = blokk.map((s) => s.match(/PB:\s*(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}:\d{2})/)).find(Boolean);
-    return {
-      szerep,
-      cim: darabok.join(", "),
-      ablakTol: ablakTol ? { datum: isoDatum(ablakTol[1], ablakTol[2], ablakTol[3]), ido: ablakTol[4] } : null,
-      ablakIg: ablakIg ? { datum: isoDatum(ablakIg[1], ablakIg[2], ablakIg[3]), ido: ablakIg[4] } : null,
-    };
+  const utolsoSzerepIndex = sorok.reduce((acc, sor, i) => (SZEREP_MEGBIZAS.test(sor) ? i : acc), -1);
+  const nevjeloltek =
+    utolsoSzerepIndex >= 0 && varosIndexek.length > 0
+      ? sorok
+          .slice(utolsoSzerepIndex + 1, varosIndexek[0] - 1)
+          .filter((sor) => !/^(loading|unloading)$/i.test(sor))
+      : [];
+  const nevek = nevjeloltek.length === varosIndexek.length ? nevjeloltek : [];
+
+  const cimek = varosIndexek.map((vi, k) => {
+    const m = sorok[vi].match(MEGBIZAS_VAROS);
+    return [nevek[k], sorok[vi - 1], m ? `${m[1]} ${m[2]}` : null].filter(Boolean).join(", ");
   });
+
+  return osszeallit(szerepekSorrendben(sorok, SZEREP_MEGBIZAS), cimek, ablakokSorrendben(sorok));
 }
 
 /**
