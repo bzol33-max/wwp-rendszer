@@ -24,6 +24,23 @@ import type {
 
 const TIME_FMT = "mon. DD";
 
+/**
+ * A fuvar TÉNYLEGES befejezése — a legkésőbbi állomás-érintés a
+ * fuvar_megallo_allapot naplóból: a sofőr kézi jelölése (kesz_at), vagy ha az
+ * nincs, a GPS-ből megfigyelt megérkezés (gps_erkezes). A max() az utolsó
+ * állomást adja, ami a végső lerakás.
+ *
+ * Miért nem a lerakas_datum? Mert az a TERVEZETT nap, és a papír-, illetve
+ * számlázási határidőket a valóban megtörtént lerakástól kell számolni. Null
+ * marad, ha egyik forrásból sincs adat — a hívó ilyenkor essen vissza a
+ * tervezett dátumra.
+ */
+const LERAKAS_TENYLEGES_SQL = `(
+  select max(coalesce(ma.kesz_at, ma.gps_erkezes))::text
+  from fuvar_megallo_allapot ma
+  where ma.fuvar_id = fuvar_megbizasok.id
+)`;
+
 const FUVAR_ROW_COLUMNS = `
   id::text, tipus,
   to_char(datum, '${TIME_FMT}') as date,
@@ -38,7 +55,8 @@ const FUVAR_ROW_COLUMNS = `
   fizetesi_hatarido_nap,
   pozicioszam, pozicioszam_nincs, postazasi_cim, postazva, szamla_szam,
   postazva_at::text, teljesitve, teljesitve_at::text,
-  papirok_beerkeztek_at::text
+  papirok_beerkeztek_at::text,
+  ${LERAKAS_TENYLEGES_SQL} as lerakas_tenyleges_at
 `;
 
 export async function getFuvarok(tipus: FuvarTipus): Promise<FuvarRow[]> {

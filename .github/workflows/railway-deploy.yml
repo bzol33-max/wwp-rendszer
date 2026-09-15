@@ -1,0 +1,66 @@
+# Automatikus éles deploy a main branch-re pusholt commitokból.
+#
+# MIÉRT VAN EZ, ha a Railway magától is tudna deployolni?
+# Mert 2026-09-14 és 09-15 között a Railway beépített GitHub-integrációja
+# némán leállt: a service forrásán nem maradt beállítva a trigger-branch, és
+# utána a Railway API sem engedte visszakapcsolni az auto-deployt
+# ("NO_PROJECT_MEMBER_ACCESS"), miközben a GitHub oldalán minden jogosultság
+# rendben volt. Minden merge után kézzel kellett buildet indítani.
+#
+# Ez a workflow a Railway CLI-n keresztül deployol, egy projekt-tokennel —
+# nem használja a Railway GitHub App-ját, ezért nem tud ugyanígy elromlani.
+#
+# BEÁLLÍTÁS (egyszer kell):
+#   1. Railway -> wwp-rendszer projekt -> Settings -> Tokens -> new token,
+#      environment: production.
+#   2. GitHub -> a repó Settings -> Secrets and variables -> Actions ->
+#      New repository secret, neve: RAILWAY_TOKEN, értéke a kapott token.
+#
+# FIGYELEM: a Railway "Wait for CI" kapcsolóját NE kapcsold be ehhez a
+# repóhoz. Az azt jelentené, hogy a Railway megvárja ezt a workflow-t,
+# miközben a deployt épp ez a workflow indítja — a kettő egymásra várna.
+#
+# Ha a Railway saját auto-deployja később helyreáll, ez a workflow
+# feleslegessé válik (ugyanazt a commitot kétszer buildelné). Olyankor
+# elég törölni ezt a fájlt.
+
+name: Deploy to Railway
+
+on:
+  push:
+    branches: [main]
+  # Kézi indítás a GitHub felületéről (Actions -> Deploy to Railway -> Run workflow),
+  # ha egy deployt újra kell futtatni.
+  workflow_dispatch:
+
+# Egyszerre csak egy deploy fusson; ha gyors egymásutánban két merge történik,
+# a régebbi, még el nem indult futás elmarad — az újabb commit úgyis tartalmazza.
+concurrency:
+  group: railway-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    # A build percekig tarthat; a Railway ingyenes/hobby buildje lassabb is lehet.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Railway CLI telepítése
+        run: npm install -g @railway/cli@4
+
+      - name: Deploy
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          if [ -z "$RAILWAY_TOKEN" ]; then
+            echo "::error::Hiányzik a RAILWAY_TOKEN repository secret. Lásd a fájl tetején a beállítási lépéseket."
+            exit 1
+          fi
+          # --ci: a build logja kiíródik, és a lépés a build végén ér véget,
+          # így a workflow elbukik, ha a build elbukik.
+          railway up --ci \
+            --service web \
+            --project 0b5a55e1-7853-476b-9cbb-e0e71ac257b9 \
+            --environment production
