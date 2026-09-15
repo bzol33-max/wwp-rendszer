@@ -734,3 +734,43 @@ create table if not exists fuvar_dokumentumok (
   created_at     timestamptz not null default now()
 );
 create index if not exists idx_fuvar_dokumentumok_fuvar on fuvar_dokumentumok (fuvar_id);
+
+-- ---------------------------------------------------------------------------
+-- Drive-import napló (2026-09-15)
+--
+-- Egy sor MINDEN Drive-fájlra, amit a szinkron valaha látott — függetlenül
+-- attól, hogy készült-e belőle fuvar. Eddig ez hiányzott, és emiatt volt a
+-- rendszer vak: ha a feldolgozás félreolvasott vagy elbukott egy iratot, az
+-- sehol nem látszott, csak a fuvarlistában bukkant fel egy rossz sor —
+-- ugyanolyan magabiztosan, mint a helyesek.
+--
+-- A `nyers_szoveg` a LEGFONTOSABB oszlop: pontosan az a szöveg, amit a
+-- pdf-parse élesben visszaadott. Egy korábbi nekifutás azért dőlt romba,
+-- mert az értelmező mintái a Google Drive saját szöveg-megjelenítéséhez
+-- készültek, élesben viszont más sortöréssel érkezik a szöveg — a tesztek
+-- zöldek voltak, a feldolgozó mégis minden iratra nemet mondott. Ha a
+-- rendszer eltárolja, amit TÉNYLEG lát, ez nem fordulhat elő újra.
+-- ---------------------------------------------------------------------------
+create table if not exists fuvar_import_naplo (
+  drive_file_id   text primary key,
+  fajlnev         text,
+  dokumentum_url  text,
+  -- Melyik ismert partner sablonja (lib/fuvarozas/import/partnerek.ts), vagy null.
+  partner_kod     text,
+  -- Melyik úton olvastuk ki: 'duvenbeck' (determinisztikus) | 'llm' | null.
+  olvaso          text,
+  -- 'biztos' | 'ellenorizendo' | 'elutasitva' | 'nem_megbizas' | 'hiba'
+  verdikt         text,
+  -- Ember számára olvasható kifogások (lib/fuvarozas/import/ellenorzes.ts).
+  kifogasok       jsonb not null default '[]'::jsonb,
+  -- A létrejött fuvar, ha lett ilyen. Törölt fuvarnál null marad.
+  fuvar_id        bigint references fuvar_megbizasok(id) on delete set null,
+  -- Amit a pdf-parse élesben visszaadott. Ez a földi igazság.
+  nyers_szoveg    text,
+  created_at      timestamptz not null default now(),
+  frissitve_at    timestamptz not null default now()
+);
+create index if not exists idx_fuvar_import_naplo_verdikt
+  on fuvar_import_naplo (verdikt, frissitve_at desc);
+create index if not exists idx_fuvar_import_naplo_partner
+  on fuvar_import_naplo (partner_kod);

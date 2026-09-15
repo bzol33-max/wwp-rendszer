@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "node scripts/migrate.mjs && next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "teszt": "tsx scripts/teszt-import.mts && tsx scripts/teszt-duvenbeck.mts && tsx scripts/teszt-megrendelo.mts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
