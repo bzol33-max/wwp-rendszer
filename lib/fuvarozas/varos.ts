@@ -3,27 +3,68 @@ const ISMERT_IRSZ_KULCSSZO: Record<string, string> = {
   BILK: "1239",
 };
 
-/** Utcatípus-szavak — ezek jelenléte kizárja, hogy egy cím-darab városnév legyen. */
-const UTCA_SZAVAK = /\b(utca|út|tér|krt\.?|körút|sor|dűlő|park|ipartelep|telep|fasor|köz|rakpart)\b/i;
-const CEGFORMA_SZAVAK = /\b(kft\.?|zrt\.?|bt\.?|nyrt\.?|kkt\.?)\b/i;
+/**
+ * Utcatípus-szavak — ezek jelenléte kizárja, hogy egy cím-darab városnév
+ * legyen. A rövidített alakok (u., krt., stny.) is kellenek: nélkülük egy
+ * "Budapest Hoffher Albert u.42." típusú cím nem ismerhető fel utcaként,
+ * ezért a városnév-kinyerés feladja, és a teljes nyers cím jelenik meg a
+ * listákon város helyett.
+ */
+const UTCA_SZAVAK =
+  /(\b(utca|út|útja|tér|tere|körút|sor|sétány|dűlő|park|ipartelep|telep|lakótelep|fasor|köz|rakpart|major|puszta|hrsz)\b|\b(u|krt|stny|sgt|ltp)\.)/i;
+const CEGFORMA_SZAVAK = /\b(kft\.?|zrt\.?|bt\.?|nyrt\.?|kkt\.?|gmbh|s\.r\.o\.?|a\.s\.?|sp\.\s?z\s?o\.o\.?)\b/i;
 
 /**
- * Több-megállós felrakó/lerakó mezőket elválasztó jelek — szóközzel
- * körülvéve (vagy pontosvessző/sortörés), hogy házszám-tartományokat (pl.
- * "12-14") ne szakítsunk szét. A Drive-automatika " + "-szal fűzi össze a
- * teljes címeket egy több-megállós megbízásnál, a kézi javítások (lásd
- * db/fuvar-corrections.json) " – " (nagykötőjel) jellel, már csak
- * városnevekkel.
+ * Kétbetűs országkód (HU, DE, SK, AT…) — soha nem városnév. Enélkül egy
+ * "Duvenbeck Kft. – HU – 2360 Gyál" alakú mezőből a "HU" darab városnévként
+ * jelent meg a fuvarlistákon.
  */
-const MEGALLO_ELVALASZTO = /\s*\+\s*|\s+[–—]\s+|;\s*|\n+/;
+const ORSZAGKOD = /^[A-Z]{2}$/;
+
+/**
+ * Egyértelmű állomás-elválasztók: a Drive-automatika " + "-szal fűzi össze a
+ * teljes címeket egy több-megállós megbízásnál. Szóközzel körülvéve, hogy
+ * házszám-tartományokat (pl. "12-14") ne szakítsunk szét.
+ */
+const ELSODLEGES_ELVALASZTO = /\s*\+\s*|;\s*|\n+/;
+
+/**
+ * A gondolatjel CSAK feltételes elválasztó. A kézi javítások (lásd
+ * db/fuvar-corrections.json) így sorolnak fel csupasz városneveket
+ * ("Polgár – Debrecen"), viszont gondolatjel valódi címekben is előfordul
+ * (cégnév után, országkód körül). Feltétel nélkül elválasztónak véve egyetlen
+ * cím több hamis megállóvá esett szét — egy cégnévvé, egy országkóddá és a
+ * valódi címmé —, és mindhárom külön sorként jelent meg a GPS idővonalon.
+ */
+const GONDOLATJEL = /\s+[–—]\s+/;
+
+/**
+ * Igaz, ha a szöveg csupasz városnév (nincs benne vessző, szám, utcatípus-szó,
+ * cégforma, és nem országkód) — csak ilyeneket választunk szét gondolatjel
+ * mentén.
+ */
+function csupaszVarosnev(s: string): boolean {
+  const t = s.trim();
+  if (t.length < 3 || t.length > 40) return false;
+  if (t.includes(",")) return false;
+  if (/\d/.test(t)) return false;
+  if (ORSZAGKOD.test(t)) return false;
+  return !UTCA_SZAVAK.test(t) && !CEGFORMA_SZAVAK.test(t);
+}
 
 /** Egy felrakó/lerakó mező felbontása egyedi állomásokra, a teljes (geokódolható) szöveggel állomásonként. Egymegállós mezőnél az egyetlen elemű tömböt adja vissza. */
 export function bontsMegallokra(cim: string | null | undefined): string[] {
   if (!cim) return [];
   return cim
-    .split(MEGALLO_ELVALASZTO)
+    .split(ELSODLEGES_ELVALASZTO)
     .map((s) => s.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .flatMap((resz) => {
+      const darabok = resz.split(GONDOLATJEL).map((s) => s.trim()).filter(Boolean);
+      // Gondolatjel mentén csak akkor bontunk, ha MINDEN darab csupasz
+      // városnév — egyébként a gondolatjel a címen belüli írásjel, nem elválasztó.
+      return darabok.length > 1 && darabok.every(csupaszVarosnev) ? darabok : [resz];
+    });
 }
 
 /**
@@ -61,22 +102,78 @@ export function talalVaros(parts: string[]): { zip: string; city: string; idx: n
 
   const jeloltek = parts.length >= 3 ? parts.slice(1) : parts;
   for (const p of jeloltek) {
+    // Az országkód (HU, DE) és a túl rövid töredék soha nem városnév — ezek
+    // korábban átcsúsztak a szűrőn, és "Le: HU" alakban jelentek meg.
+    if (p.trim().length < 3 || ORSZAGKOD.test(p.trim())) continue;
     if (!/\d/.test(p) && !UTCA_SZAVAK.test(p) && !CEGFORMA_SZAVAK.test(p)) {
       return { zip: "", city: p, idx: parts.indexOf(p) };
+    }
+  }
+
+  // Vessző nélkül egybeírt "Város Utcanév házszám" alak (pl. "Budapest
+  // Hoffher Albert u.42."). A városnév az utcatípus-szó ELŐTTI első szó — de
+  // csak akkor, ha legalább két szó áll előtte. Ez különbözteti meg a valódi
+  // várost egy puszta utcanévtől: a "Campona utca . 1"-ben egyetlen szó áll
+  // az "utca" előtt, az az utca neve, nem város, és ilyenkor helyesebb
+  // felismerhetetlennek mondani, mint kitalálni egy nem létező várost.
+  for (let i = 0; i < parts.length; i++) {
+    const utca = parts[i].match(UTCA_SZAVAK);
+    if (!utca || utca.index === undefined) continue;
+    const elotte = parts[i].slice(0, utca.index).trim().split(/\s+/).filter(Boolean);
+    if (elotte.length >= 2 && !/\d/.test(elotte[0])) {
+      return { zip: "", city: elotte[0], idx: i };
     }
   }
 
   return null;
 }
 
-/** Egyetlen állomás (nem több-megállós!) szövegéből a városnév kinyerése, vesszős tagolással. */
-function varosNevEgyMegallobol(value: string): string {
-  const parts = value
+/**
+ * Mennyire pontosan azonosítható egy megálló címe:
+ *
+ * - `pontos` — van irányítószám vagy utcanév a városnév mellett, tehát a
+ *   geokódolás konkrét helyet ad.
+ * - `csak_varos` — csak a város neve ismert. A geokódolás ilyenkor a város
+ *   KÖZEPÉRE mutat, ami egy nagyvárosban több kilométerre lehet a tényleges
+ *   rakodóhelytől.
+ * - `ismeretlen` — a szövegből még várost sem sikerült kiolvasni.
+ *
+ * Ez nem kozmetika: a GPS-alapú "ott járt" felismerés egy sugáron belüli
+ * találatot keres, és egy városközépre mutató koordináta körül bármelyik
+ * városi megállás találatnak látszik. A pontosság ismeretében a rendszer meg
+ * tudja különböztetni a biztos felismerést a valószínűsítettől, ahelyett hogy
+ * mindkettőt késznek állítaná.
+ */
+export type CimPontossag = "pontos" | "csak_varos" | "ismeretlen";
+
+export function cimPontossaga(value: string | null | undefined): CimPontossag {
+  if (!value?.trim()) return "ismeretlen";
+  const talalat = talalVaros(cimDarabok(value));
+  if (!talalat) return "ismeretlen";
+  if (talalat.zip) return "pontos";
+  return UTCA_SZAVAK.test(value) ? "pontos" : "csak_varos";
+}
+
+/**
+ * Vezető országkód-előtag levágása ("HU – Budapest, …" → "Budapest, …",
+ * "HU-2360 Gyál" → "2360 Gyál"). Enélkül az egész szöveg városnévként
+ * jelent meg, mert a szűrők egyike sem fogta meg.
+ */
+function vagdLeOrszagkodot(s: string): string {
+  return s.replace(/^\s*[A-Za-z]{2}\s*[–—-]\s*/, "").trim();
+}
+
+/** Egy állomás szövegének vesszővel tagolt darabjai, országkód-előtag nélkül. */
+function cimDarabok(value: string): string[] {
+  return vagdLeOrszagkodot(value)
     .split(",")
     .map((p) => p.trim())
     .filter(Boolean);
+}
 
-  return talalVaros(parts)?.city || value;
+/** Egyetlen állomás (nem több-megállós!) szövegéből a városnév kinyerése, vesszős tagolással. */
+function varosNevEgyMegallobol(value: string): string {
+  return talalVaros(cimDarabok(value))?.city || value;
 }
 
 /**

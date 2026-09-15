@@ -15,7 +15,7 @@ import { fetchGazolajAr, GazolajArError } from "./uzemanyagar";
 import {
   epitsIdovonal,
   haversineKm,
-  jelolMegallokElhagyottkent,
+  jelolMegallokat,
   kiegesziteloAllapottal,
   parseIdopontSzoveg,
   type EloPozicio,
@@ -23,7 +23,7 @@ import {
   type TervezettMegallo,
 } from "./idovonal";
 import { SAJAT_JARMUVEK, resolveJarmu, type JarmuSzin, type SajatJarmu } from "./vehicles";
-import { bontsMegallokra, varosNev } from "./varos";
+import { bontsMegallokra, cimPontossaga, varosNev } from "./varos";
 import { rogzitGpsErinteseket } from "./megallo-naplo";
 import {
   getFuvarokIdoszakban,
@@ -130,6 +130,10 @@ export type MegalloBejegyzes = {
   elhagyva: boolean;
   /** A jármű a GPS szerint MOST is itt áll (megérkezett, de még nem indult tovább). */
   eppenItt: boolean;
+  /** A megálló teljes címe — két azonos városú megálló csak ebből különböztethető meg. */
+  nyersCim: string;
+  /** A felismerés csak valószínűsítés (a cím csak városnév szintjén ismert) — lásd TervezettMegallo.bizonytalanFelismeres. */
+  bizonytalanFelismeres: boolean;
 };
 
 /**
@@ -150,6 +154,14 @@ export type ElakadtFuvar = {
   ok: "nincs_kocsi" | "ismeretlen_kocsi";
   /** A megbízáson szereplő nyers Kocsi/Sofőr szöveg — hogy látszódjon, mit nem sikerült feloldani. */
   jarmuSzoveg: string | null;
+  /**
+   * Ha a beírt szöveg egyetlen saját járműhöz áll feltűnően közel (jellemzően
+   * elgépelés, pl. felcserélt betűk: "NZM492" a "NMZ-492" helyett), annak a
+   * sofőrje. Szándékosan csak JAVASLAT: a hozzárendelést sosem végezzük el
+   * magunktól, mert egy téves találat a fuvart rossz kocsi idővonalára tenné,
+   * és az rosszabb hiba, mint ha a sor itt várakozik.
+   */
+  javasoltSofor: string | null;
 };
 
 /** A GPS lap egy napjának teljes adata: járművenkénti idővonalak + a hozzá nem rendelt fuvarok. */
@@ -168,8 +180,14 @@ export type JarmuIdovonalEredmeny = {
     utolsoAdat: Date;
     oraallasKm: number | null;
   } | null;
-  /** Élő GPS-pozícióból becsült érkezés a legközelebbi, még el nem hagyott fel-/lerakó ponthoz — csak a mai napra. */
-  eloEta: { cel: string; erkezes: Date } | null;
+  /**
+   * Élő GPS-pozícióból becsült érkezés a legközelebbi, még el nem hagyott
+   * fel-/lerakó ponthoz — csak a mai napra. `bizonytalan`, ha a becslés a
+   * múltba esik: ilyenkor nem sikerült élő útvonalat számolni (rossz vagy
+   * hiányzó cím), és az érték csak a megbízás statikus menetrendje. Ezt a
+   * felület NEM mutatja konkrét időként, mert az félrevezető lenne.
+   */
+  eloEta: { cel: string; erkezes: Date; bizonytalan: boolean } | null;
   hiba: string | null;
   /** A megjelenített napra eső fel-/lerakó pontok, időrendben (a fuvar-szintű adatok is elérhetők belőlük: megrendelo/pozicioszam/fuvarTipus). */
   maiMegallok: MegalloBejegyzes[];
@@ -260,6 +278,39 @@ function soforEgyezik(sofor: string | null, jarmu: SajatJarmu): boolean {
   if (!sofor?.trim()) return false;
   if (resolveJarmu(sofor) === jarmu) return true;
   return normalizeNev(sofor).split(" ").includes(normalizeNev(jarmu.sofor));
+}
+
+/** Két szöveg Levenshtein-távolsága — az elgépelt rendszámok felismeréséhez. */
+function szerkesztesiTavolsag(a: string, b: string): number {
+  const sor = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let elozo = sor[0];
+    sor[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const temp = sor[j];
+      sor[j] = Math.min(sor[j] + 1, sor[j - 1] + 1, elozo + (a[i - 1] === b[j - 1] ? 0 : 1));
+      elozo = temp;
+    }
+  }
+  return sor[b.length];
+}
+
+/** Legfeljebb ennyi karakternyi eltérést tekintünk elgépelésnek egy rendszámban. */
+const RENDSZAM_ELTERES_HATAR = 2;
+
+/**
+ * Egy fel nem ismert Kocsi/Sofőr szöveghez a legvalószínűbb saját jármű
+ * sofőrje — de csak akkor, ha EGYETLEN jármű van elég közel. Ha több is
+ * szóba jönne, nem tippelünk: a kétértelmű javaslat rosszabb a semminél.
+ */
+function javasoltJarmuSoforje(szoveg: string | null): string | null {
+  const norm = (szoveg ?? "").replace(/[^a-z0-9]/gi, "").toUpperCase();
+  if (norm.length < 4) return null;
+
+  const kozeliek = SAJAT_JARMUVEK.filter((j) =>
+    j.rendszamok.some((r) => szerkesztesiTavolsag(norm, r.replace(/[^A-Z0-9]/gi, "").toUpperCase()) <= RENDSZAM_ELTERES_HATAR)
+  );
+  return kozeliek.length === 1 ? kozeliek[0].sofor : null;
 }
 
 /** Ennél közelebb (km) egy saját telephelyhez/parkolóhoz a pozíciót "ott vagyunk"-nak tekintjük. */
@@ -564,6 +615,8 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus, kali
     index: i,
     tipus: m.tipus,
     cim: varosNev(m.szoveg),
+    nyersCim: m.szoveg,
+    pontossag: cimPontossaga(m.szoveg),
     lat: megallokKoordinatak[i]?.lat ?? null,
     lon: megallokKoordinatak[i]?.lon ?? null,
     // Kezdeti, statikus becslés — ha van élő pozíció, actions.ts a mai
@@ -573,6 +626,7 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus, kali
     eppenItt: false,
     tenylegesIdo: null,
     tenylegesTavozas: null,
+    bizonytalanFelismeres: false,
   }));
 
   return {
@@ -644,7 +698,11 @@ async function lancoltEloBecsles(
   let idoPont = new Date(most.getTime() + hatralevoPufferPerc * 60000);
 
   for (const { fi, mi, m } of sorrend) {
-    if (m.lat == null || m.lon == null) break;
+    // Egy geokódolhatatlan megállót ÁTLÉPÜNK, nem szakítjuk meg vele a
+    // láncot: korábban az első rossz cím után minden hátralévő pont a
+    // statikus becslésén maradt, és a felületen egy órákkal korábbi időpont
+    // jelent meg "becsült érkezés"-ként.
+    if (m.lat == null || m.lon == null) continue;
     try {
       const route = await calculateToll({
         points: [
@@ -662,7 +720,7 @@ async function lancoltEloBecsles(
       pozicio = { lat: m.lat, lon: m.lon };
       idoPont = new Date(erkezes.getTime() + puffer * 60000);
     } catch {
-      break;
+      continue;
     }
   }
 
@@ -689,6 +747,8 @@ function laposMegallok(tervezettFuvarok: TervezettFuvarSzakasz[]): MegalloBejegy
           idopont: m.tenylegesIdo ?? m.idopont,
           elhagyva: m.elhagyva,
           eppenItt: m.eppenItt,
+          nyersCim: m.nyersCim,
+          bizonytalanFelismeres: m.bizonytalanFelismeres,
         })
       )
     )
@@ -810,6 +870,7 @@ export async function getIdovonalak(nap?: string): Promise<IdovonalNap> {
         hova: row.lerako ? varosNev(row.lerako) : null,
         ok: jarmuSzoveg ? ("ismeretlen_kocsi" as const) : ("nincs_kocsi" as const),
         jarmuSzoveg,
+        javasoltSofor: javasoltJarmuSoforje(jarmuSzoveg),
       };
     });
 
@@ -874,7 +935,11 @@ export async function getIdovonalak(nap?: string): Promise<IdovonalNap> {
         }
 
         // A tervezett fel-/lerakó pontok "érintve"/"elhagyva" jelölése a valós GPS-nyomvonal alapján.
-        const jeloltFuvarok = tervezettFuvarok.map((f) => ({ ...f, megallok: jelolMegallokElhagyottkent(f.megallok, szakaszok) }));
+        // A párosítás a jármű EGÉSZ napjára egyszerre fut, hogy ugyanaz a
+        // valós megállás ne igazolhassa több, egymástól független megbízás
+        // megállóját is.
+        const jeloltMegallok = jelolMegallokat(tervezettFuvarok.map((f) => f.megallok), szakaszok);
+        const jeloltFuvarok = tervezettFuvarok.map((f, i) => ({ ...f, megallok: jeloltMegallok[i] }));
 
         // Az észlelt érintéseket eltároljuk, mert az Ecofleet trip-előzménye
         // nem marad meg örökre, a számlázás viszont napokkal a lerakás után
@@ -898,7 +963,7 @@ export async function getIdovonalak(nap?: string): Promise<IdovonalNap> {
         // Élő ETA: a legközelebbi, még el nem hagyott fel-/lerakó pont
         // frissen láncolt becsült ideje — ez adja a jármű-csempén a
         // kamion-ikon melletti becsült időt.
-        let eloEta: { cel: string; erkezes: Date } | null = null;
+        let eloEta: { cel: string; erkezes: Date; bizonytalan: boolean } | null = null;
         if (livePos) {
           // A fuvarok sorrendje nem feltétlenül időrendi (több megbízás
           // futhat egy napon), ezért a "következő" pontot idő szerint
@@ -908,7 +973,13 @@ export async function getIdovonalak(nap?: string): Promise<IdovonalNap> {
             .filter((m) => !m.elhagyva && !m.eppenItt)
             .sort((a, b) => a.idopont.getTime() - b.idopont.getTime())[0];
           if (kovetkezoMegallo) {
-            eloEta = { cel: kovetkezoMegallo.cim, erkezes: kovetkezoMegallo.idopont };
+            eloEta = {
+              cel: kovetkezoMegallo.cim,
+              erkezes: kovetkezoMegallo.idopont,
+              // Egy MÁR ELMÚLT időpont nem lehet érkezés-becslés — ez azt
+              // jelenti, hogy a lánc nem ért el idáig, és a statikus érték maradt.
+              bizonytalan: kovetkezoMegallo.idopont.getTime() <= veg.getTime(),
+            };
           }
         }
 
