@@ -4,6 +4,7 @@
 // szerver induláskor.
 
 import { futtatSzamlaSzinkron } from "./poll";
+import { futtatRendszerkent } from "@/lib/auth/system-context";
 
 const INTERVALL_MS = 15 * 60 * 1000;
 const KEZDET_ORA = 6;
@@ -25,7 +26,7 @@ async function tick() {
   const ora = budapestOra();
   if (ora < KEZDET_ORA || ora >= VEG_ORA) return;
   try {
-    const eredmeny = await futtatSzamlaSzinkron();
+    const eredmeny = await futtatRendszerkent("szamla-szinkron", futtatSzamlaSzinkron);
     if (
       eredmeny.ujMegtalalt ||
       eredmeny.pendingMegoldva ||

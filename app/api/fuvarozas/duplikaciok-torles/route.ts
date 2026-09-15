@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { apiEditGuard } from "@/lib/auth/api-guard";
 
 /**
  * A /api/fuvarozas/duplikaciok végpont által feltárt duplikátum-sorok
@@ -11,6 +12,9 @@ import { query } from "@/lib/db";
  * Elvárt body: { ids: string[] }
  */
 export async function POST(req: Request) {
+  const tiltas = await apiEditGuard("fuvarozas");
+  if (tiltas) return tiltas;
+
   let body: { ids?: string[] };
   try {
     body = await req.json();

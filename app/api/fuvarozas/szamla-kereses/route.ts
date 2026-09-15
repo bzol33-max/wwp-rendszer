@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { apiViewGuard } from "@/lib/auth/api-guard";
 
 /**
  * Diagnosztikai kereső a Számlák modul (szamla tábla) felé: szabad
@@ -12,6 +13,9 @@ import { query } from "@/lib/db";
  * Használat: GET /api/fuvarozas/szamla-kereses?q=Duvenbeck
  */
 export async function GET(req: Request) {
+  const tiltas = await apiViewGuard("szamlak");
+  if (tiltas) return tiltas;
+
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q")?.trim();
   if (!q) {

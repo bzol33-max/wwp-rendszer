@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { apiViewGuard } from "@/lib/auth/api-guard";
 
 /**
  * A Drive-fuvarmegbízás-figyelő automatika utólagos pótló körének ezzel
@@ -11,6 +12,9 @@ import { query } from "@/lib/db";
  * van dokumentum — enélkül nincs miből pótolni.
  */
 export async function GET() {
+  const tiltas = await apiViewGuard("fuvarozas");
+  if (tiltas) return tiltas;
+
   const sorok = await query<{
     id: string;
     dokumentum_url: string;

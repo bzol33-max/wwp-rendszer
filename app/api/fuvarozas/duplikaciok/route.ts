@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { apiViewGuard } from "@/lib/auth/api-guard";
 
 /**
  * Egyszeri diagnosztikai/karbantartó végpont: megkeresi azokat a "sajat"
@@ -19,6 +20,9 @@ import { query } from "@/lib/db";
  *    pozicioszámot, így az 1. szabály nem vette észre).
  */
 export async function GET() {
+  const tiltas = await apiViewGuard("fuvarozas");
+  if (tiltas) return tiltas;
+
   const pozicioszamosCsoportok = await query<{
     kulcs: string;
     darab: number;
