@@ -205,6 +205,7 @@ async function main() {
   // jogosultságot, meglévő felhasználónál nem nyúl hozzá.
   await grantElolegekSajatOnce(pool);
   await ujraimportalDuvenbeckSorokatOnce(pool, DUVENBECK_UJRAIMPORT_KOROK);
+  await feloldTorortDuvenbeckDokumentumokatOnce(pool);
 
   await pool.end();
 }
@@ -275,6 +276,51 @@ async function grantElolegekSajatOnce(pool) {
 // 1. kör (2026-09-15): a párosítás bevezetése.
 // 2. kör (2026-09-15): az értelmező a valódi pdf-parse sortördelésre javítva —
 //    az első kör után a szinkron még a régi úton hozta vissza a sorokat.
+// Egyszeri javítás (2026-09-15): a KÉZZEL törölt Duvenbeck-sorok
+// dokumentum-hivatkozásának feloldása.
+//
+// A felületi törlés (deleteFuvar) csak "torolt" státuszba teszi a sort, a
+// dokumentum_url és a drive_file_id viszont rajta marad. A Drive-szinkron
+// pedig ezekből állítja össze, hogy melyik fájlt dolgozta már fel — státuszra
+// nem szűr. Emiatt egy kézzel törölt importot SOHA nem olvasna be újra.
+//
+// Ez alapesetben helyes: ha valaki kitöröl egy hibás importot, nem akarja,
+// hogy óránként visszajöjjön. Most viszont pont az ellenkezője kell: a
+// felhasználó azért törölte a régi úton (nyelvi modellel) beolvasott
+// Duvenbeck-sorokat, hogy a javított értelmező újra beolvassa őket.
+//
+// A szűrés ezért szűk: csak törölt, Drive-ból jött Duvenbeck-sor, amit a
+// determinisztikus értelmező még nem dolgozott fel (reise_id is null), és
+// amihez nem tartozik kiállított számla — a számlázott sor hivatkozását nem
+// szabad elvágni, mert azzal a számla és a fuvar kapcsolata veszne el.
+async function feloldTorortDuvenbeckDokumentumokatOnce(pool) {
+  const JAVITAS_KOD = "duvenbeck-torolt-dokumentum-felold-2026-09-15";
+  const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (mar.length > 0) return;
+
+  const { rows } = await pool.query(
+    `update fuvar_megbizasok f
+     set megjegyzes = coalesce(f.megjegyzes || ' | ', '') ||
+           'Kézi törlés után újraimportálásra felszabadítva, eredeti dokumentum: ' ||
+           coalesce(f.dokumentum_url, '-'),
+         dokumentum_url = null,
+         drive_file_id = null
+     where f.statusz = 'torolt'
+       and f.forras = 'pdf_import'
+       and f.reise_id is null
+       and f.dokumentum_url is not null
+       and coalesce(f.szamla_szam, '') = ''
+       and (f.megrendelo ilike '%duvenbeck%' or f.postazasi_cim ilike '%duvenbeck%')
+     returning f.id`
+  );
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1) on conflict (kod) do nothing`, [
+    JAVITAS_KOD,
+  ]);
+  console.log(
+    `[migrate] ${rows.length} kézzel törölt Duvenbeck-sor dokumentuma felszabadítva újraimportálásra.`
+  );
+}
+
 const DUVENBECK_UJRAIMPORT_KOROK = [
   "duvenbeck-parositas-ujraimport-2026-09-15",
   "duvenbeck-parositas-ujraimport-2-2026-09-15",
