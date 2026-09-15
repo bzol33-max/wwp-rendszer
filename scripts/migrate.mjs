@@ -296,7 +296,13 @@ async function ujraimportalDuvenbeckSorokatOnce(pool) {
        )
      returning f.id`
   );
-  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1)`, [JAVITAS_KOD]);
+  // ON CONFLICT: a jelölés ellenőrzése és beírása között eltelik idő, és egy
+  // merge után PÁRHUZAMOSAN két konténer indul (a Railway GitHub-kapcsolata és
+  // a GitHub Actions is deployol). Enélkül a versenyt vesztő konténer
+  // duplikált-kulcs hibával elszállna, és vele a "migrate && next start" is.
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1) on conflict (kod) do nothing`, [
+    JAVITAS_KOD,
+  ]);
   console.log(
     `[migrate] ${rows.length} érintetlen Duvenbeck-sor újraimportálásra jelölve (a következő Drive-szinkron párosítva hozza vissza őket).`
   );
