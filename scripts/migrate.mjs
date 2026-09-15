@@ -206,6 +206,7 @@ async function main() {
   await grantElolegekSajatOnce(pool);
   await ujraimportalDuvenbeckSorokatOnce(pool, DUVENBECK_UJRAIMPORT_KOROK);
   await feloldTorortDuvenbeckDokumentumokatOnce(pool);
+  await torolDokumentumNelkuliDuplikatumokatOnce(pool);
 
   await pool.end();
 }
@@ -319,6 +320,39 @@ async function feloldTorortDuvenbeckDokumentumokatOnce(pool) {
   console.log(
     `[migrate] ${rows.length} kézzel törölt Duvenbeck-sor dokumentuma felszabadítva újraimportálásra.`
   );
+}
+
+// Egyszeri javítás (2026-09-15): dokumentum nélküli duplikátum-sorok törlése.
+//
+// Egy korábbi hiba: ha a Drive-dokumentumot egy MÁR KISZÁMLÁZOTT sor fogta, a
+// rendszer nem vette el tőle a hivatkozást (helyesen — azzal a számla és a
+// fuvar kapcsolata veszne el), de az új sort ettől még létrehozta. Így a fuvar
+// kétszer szerepelt: egyszer archívban, kiszámlázva, egyszer a "Papírra vár"
+// listán — vagyis újra kiszámlázható állapotban.
+//
+// A determinisztikus úton felvett sor (reise_id is not null) mindig megkapja a
+// dokumentuma hivatkozását. Ha egy ilyen soron NINCS dokumentum, az kizárólag
+// ebből a hibából származhat. A számlaszámos sort itt sem bántjuk.
+async function torolDokumentumNelkuliDuplikatumokatOnce(pool) {
+  const JAVITAS_KOD = "duvenbeck-dokumentum-nelkuli-duplikatum-2026-09-15";
+  const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (mar.length > 0) return;
+
+  const { rows } = await pool.query(
+    `update fuvar_megbizasok
+     set statusz = 'torolt',
+         megjegyzes = coalesce(megjegyzes || ' | ', '') ||
+           'Duplikátum: a fuvar dokumentumát egy már kiszámlázott sor tartja, ez a sor tévedésből jött létre.'
+     where reise_id is not null
+       and dokumentum_url is null
+       and statusz <> 'torolt'
+       and coalesce(szamla_szam, '') = ''
+     returning id`
+  );
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1) on conflict (kod) do nothing`, [
+    JAVITAS_KOD,
+  ]);
+  console.log(`[migrate] ${rows.length} dokumentum nélküli duplikátum-sor törölve.`);
 }
 
 const DUVENBECK_UJRAIMPORT_KOROK = [

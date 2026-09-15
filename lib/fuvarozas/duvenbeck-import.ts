@@ -24,7 +24,11 @@ import { budapestFalioraToInstant } from "@/lib/fuvarozas/idozona";
 const MEGRENDELO = "Duvenbeck Logisztikai Kft.";
 
 export type DuvenbeckMentes = {
-  statusz: "uj" | "osszefuzve";
+  /**
+   * "valtozatlan": a dokumentumot egy MÁR KISZÁMLÁZOTT régi sor fogja, ezért
+   * nem nyúltunk hozzá és újat sem hoztunk létre — ember döntsön róla.
+   */
+  statusz: "uj" | "osszefuzve" | "valtozatlan";
   fuvarId: string;
   reiseId: string | null;
   /** Hány régi úton beolvasott sort váltott le ez a dokumentum. */
@@ -119,8 +123,8 @@ export async function mentDuvenbeckDokumentumot(
   // számla és a fuvar kapcsolata veszne el — az ilyet a hívó jelzi ki.
   // Számlaszámos régi sort NEM váltunk le: azzal a kiállított számla és a fuvar
   // kapcsolata veszne el. Ezeket csak jelezzük, hogy ember döntsön róluk.
-  const szamlazottRegi = await query<{ szamla_szam: string }>(
-    `select szamla_szam from fuvar_megbizasok
+  const szamlazottRegi = await query<{ id: string; szamla_szam: string }>(
+    `select id::text, szamla_szam from fuvar_megbizasok
      where (drive_file_id = $1 or dokumentum_url = $2)
        and reise_id is null
        and statusz <> 'torolt'
@@ -143,13 +147,26 @@ export async function mentDuvenbeckDokumentumot(
     [file.id, file.url, kulcs]
   );
 
-  // Ha a fájlt egy LE NEM VÁLTHATÓ (már kiszámlázott) sor fogja, a dokumentum
-  // hivatkozását nem vehetjük át: a dokumentum_url-en egyedi index van, és a
-  // beszúrás/frissítés duplikált kulcs hibával megölné az EGÉSZ szinkron-kört.
-  // A fájl és a fuvar kapcsolata ilyenkor is megmarad a fuvar_dokumentumok
-  // táblában, csak a listák "megnyitom a megbízást" linkje hiányzik addig,
-  // amíg a számlás sort ember el nem rendezi.
-  const dokumentumSzabad = szamlazottRegi.length === 0;
+  // Ha a dokumentumot egy MÁR KISZÁMLÁZOTT sor fogja, itt megállunk.
+  //
+  // Korábban ilyenkor is létrejött az új sor — csak dokumentum nélkül —, és a
+  // fuvar KÉTSZER szerepelt: egyszer archívban, kiszámlázva, egyszer a
+  // "Papírra vár" listán. Egy már kiszámlázott fuvar újbóli felvétele a
+  // legrosszabb kimenet: kétszeri számlázáshoz vezethet.
+  //
+  // A dokumentumot a kiszámlázott sorhoz kötjük — az A fuvar, amiről szól —,
+  // így a szinkron nem olvassa újra minden órában, a felület pedig
+  // figyelmeztetést kap, hogy ember nézze át.
+  if (szamlazottRegi.length > 0) {
+    await rogzitDokumentumot(szamlazottRegi[0].id, file, dok);
+    return {
+      statusz: "valtozatlan",
+      fuvarId: szamlazottRegi[0].id,
+      reiseId: dok.reiseId,
+      levaltottSorok: levaltott.length,
+      szamlazottRegiSorok: szamlazottRegi.map((r) => r.szamla_szam),
+    };
+  }
 
   const rakomanylista = dok.tipus === "rakomanylista";
   const megbizas = dok.tipus === "megbizas";
@@ -226,7 +243,7 @@ export async function mentDuvenbeckDokumentumot(
         uj.sofor,
         uj.fuvardij,
         uj.penznem ?? "EUR",
-        dokumentumSzabad ? file.url : null,
+        file.url,
         file.id,
         "pdf_import",
         false,
@@ -298,7 +315,7 @@ export async function mentDuvenbeckDokumentumot(
         valassz(uj.postazasiCim, meglevo.postazasi_cim, arFelulirhato),
         // A megbízás a "fő" dokumentum (azon van az ár és a feltételek) —
         // a listákból erre mutasson a link, ha van.
-        dokumentumSzabad && (megbizas || !meglevo.dokumentum_url) ? file.url : null,
+        megbizas || !meglevo.dokumentum_url ? file.url : null,
         uj.felrakasAblakTol,
         uj.felrakasAblakIg,
         uj.lerakasAblakTol,
@@ -311,15 +328,7 @@ export async function mentDuvenbeckDokumentumot(
 
   if (!fuvarId) return null;
 
-  // A forrásfájl nyilvántartása — enélkül a párjába olvadt dokumentumot a
-  // szinkron óránként újra feldolgozná, és ugyanez fogja meg a mappába
-  // kétszer feltöltött, azonos tartalmú fájlokat is.
-  await query(
-    `insert into fuvar_dokumentumok (fuvar_id, drive_file_id, dokumentum_url, tipus, verzio, fajlnev)
-     values ($1, $2, $3, $4, $5, $6)
-     on conflict (drive_file_id) do update set fuvar_id = excluded.fuvar_id`,
-    [fuvarId, file.id, file.url, dok.tipus, dok.verzio, file.name]
-  );
+  await rogzitDokumentumot(fuvarId, file, dok);
 
   return {
     statusz,
@@ -328,6 +337,24 @@ export async function mentDuvenbeckDokumentumot(
     levaltottSorok: levaltott.length,
     szamlazottRegiSorok: szamlazottRegi.map((r) => r.szamla_szam),
   };
+}
+
+/**
+ * A forrásfájl nyilvántartása — enélkül a párjába olvadt dokumentumot a
+ * szinkron óránként újra feldolgozná, és ugyanez fogja meg a mappába kétszer
+ * feltöltött, azonos tartalmú fájlokat is.
+ */
+async function rogzitDokumentumot(
+  fuvarId: string,
+  file: { id: string; name: string; url: string },
+  dok: DuvenbeckDok
+): Promise<void> {
+  await query(
+    `insert into fuvar_dokumentumok (fuvar_id, drive_file_id, dokumentum_url, tipus, verzio, fajlnev)
+     values ($1, $2, $3, $4, $5, $6)
+     on conflict (drive_file_id) do update set fuvar_id = excluded.fuvar_id`,
+    [fuvarId, file.id, file.url, dok.tipus, dok.verzio, file.name]
+  );
 }
 
 /**

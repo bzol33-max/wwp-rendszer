@@ -314,11 +314,11 @@ async function ujFajlokFeldolgozasa(
       });
       if (duvenbeck) {
         if (duvenbeck.statusz === "uj") ujFuvarok++;
-        else osszefuzottDokumentumok++;
+        else if (duvenbeck.statusz === "osszefuzve") osszefuzottDokumentumok++;
         levaltottRegiSorok += duvenbeck.levaltottSorok;
         for (const szamla of duvenbeck.szamlazottRegiSorok) {
           figyelmeztetesek.push(
-            `${file.name}: a régi sor már ki van számlázva (${szamla}), ezért nem váltottuk le — nézd át kézzel.`
+            `${file.name}: ehhez a fuvarhoz már van kiállított számla (${szamla}), ezért nem vettük fel újra — nézd át kézzel.`
           );
         }
         continue;
