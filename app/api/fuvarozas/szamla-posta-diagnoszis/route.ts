@@ -1,9 +1,22 @@
+import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+
+type FuvarRow = {
+  id: string;
+  tipus: string;
+  datum: string;
+  lerakas_datum: string | null;
+  megrendelo: string | null;
+  teljesitve: boolean;
+  postazva: boolean;
+  postazva_at: string | null;
+  statusz: string;
+};
 
 export async function GET() {
   try {
     // 1. Összes Bér fuvar (sajat típus, nem törölt)
-    const allBerFuvarok = await query(
+    const allBerFuvarok = await query<FuvarRow>(
       `select id, tipus, datum, lerakas_datum, megrendelo, teljesitve, postazva, postazva_at, statusz
        from fuvar_megbizasok
        where tipus = 'sajat' and statusz <> 'torolt'
@@ -12,7 +25,7 @@ export async function GET() {
     );
 
     // 2. Megbízások, amelyek jelent kellene hogy legyenek a Számla/Posta fülön
-    const szamlaPostaKellene = await query(
+    const szamlaPostaKellene = await query<FuvarRow>(
       `select id, tipus, datum, lerakas_datum, megrendelo, teljesitve, postazva, postazva_at, statusz
        from fuvar_megbizasok
        where tipus = 'sajat' and statusz <> 'torolt'
@@ -22,7 +35,7 @@ export async function GET() {
     );
 
     // 3. Megbízások, amelyek már archívban vannak (postázva + 5 perc eltelt)
-    const archivban = await query(
+    const archivban = await query<FuvarRow>(
       `select id, tipus, datum, megrendelo, postazva, postazva_at,
               now() - postazva_at as "eltelt_ido"
        from fuvar_megbizasok
@@ -33,7 +46,7 @@ export async function GET() {
     );
 
     // 4. Megbízások akik a Számla/Posta-n VANNAK (nem archívban)
-    const szamlaPostaBennVan = await query(
+    const szamlaPostaBennVan = await query<FuvarRow>(
       `select id, tipus, datum, lerakas_datum, megrendelo, teljesitve, postazva, postazva_at, statusz
        from fuvar_megbizasok
        where tipus = 'sajat' and statusz <> 'torolt'
@@ -44,7 +57,7 @@ export async function GET() {
     );
 
     // 5. Ma vagy után készülő Bér fuvarok (még "Folyamatban")
-    const folyamatban = await query(
+    const folyamatban = await query<FuvarRow>(
       `select id, tipus, datum, lerakas_datum, megrendelo, teljesitve
        from fuvar_megbizasok
        where tipus = 'sajat' and statusz <> 'torolt'
@@ -54,39 +67,34 @@ export async function GET() {
        limit 100`
     );
 
-    return new Response(
-      JSON.stringify(
-        {
-          summary: {
-            osszesBerFuvarok: allBerFuvarok.length,
-            szamlaPostaBennVan: szamlaPostaBennVan.length,
-            archivban: archivban.length,
-            folyamatban: folyamatban.length,
-            szamlaPostaKelleneVolna: szamlaPostaKellene.length,
-          },
-          szamlaPostaBennVan,
-          szamlaPostaKelleneLenne: szamlaPostaKellene.filter(
-            (f: any) =>
-              !(
-                f.postazva &&
-                new Date(f.postazva_at).getTime() <= Date.now() - 5 * 60 * 1000
-              )
-          ),
-          archivban,
-          folyamatban,
-          allBerFuvarok,
-        },
-        null,
-        2
-      ),
+    // Szűrés: szamlaPostaKellene-ből azok, amelyek még nem archívba helyezve
+    const szamlaPostaKelleneLenne = szamlaPostaKellene.filter((f: FuvarRow) => {
+      if (!f.postazva || !f.postazva_at) return true;
+      const postazvaTime = new Date(f.postazva_at).getTime();
+      return postazvaTime > Date.now() - 5 * 60 * 1000;
+    });
+
+    return NextResponse.json(
       {
-        headers: { "Content-Type": "application/json" },
-      }
+        summary: {
+          osszesBerFuvarok: allBerFuvarok.length,
+          szamlaPostaBennVan: szamlaPostaBennVan.length,
+          archivban: archivban.length,
+          folyamatban: folyamatban.length,
+          szamlaPostaKelleneVolna: szamlaPostaKellene.length,
+        },
+        szamlaPostaBennVan,
+        szamlaPostaKelleneLenne,
+        archivban,
+        folyamatban,
+        allBerFuvarok,
+      },
+      { headers: { "Content-Type": "application/json" } }
     );
   } catch (err) {
-    return new Response(
-      JSON.stringify({ error: String(err) }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+    return NextResponse.json(
+      { error: String(err) },
+      { status: 500 }
     );
   }
 }
