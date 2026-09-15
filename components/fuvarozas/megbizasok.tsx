@@ -1621,12 +1621,22 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
       const eredmeny = await frissitsDriveBol();
       if (eredmeny.hibak.length > 0) {
         toast.error(`Hiba történt: ${eredmeny.hibak[0]}`);
-      } else if (eredmeny.ujFuvarok === 0 && eredmeny.potoltSorok === 0) {
+      } else if (
+        eredmeny.ujFuvarok === 0 &&
+        eredmeny.potoltSorok === 0 &&
+        eredmeny.osszefuzottDokumentumok === 0
+      ) {
         toast.success("Nincs új fuvarmegbízás a Drive-ban.");
       } else {
-        toast.success(
-          `${eredmeny.ujFuvarok} új fuvar felvéve, ${eredmeny.potoltSorok} sor pótolva.`
-        );
+        // Az "összefűzve" azért külön szám, mert nem hiba és nem is új fuvar:
+        // egy már felvett megbízáshoz érkezett meg a párja (pl. a Duvenbeck
+        // rakománylistája). Enélkül úgy tűnne, hogy a frissítés nem csinált semmit.
+        const reszek = [`${eredmeny.ujFuvarok} új fuvar felvéve`];
+        if (eredmeny.osszefuzottDokumentumok > 0) {
+          reszek.push(`${eredmeny.osszefuzottDokumentumok} dokumentum meglévő fuvarhoz fűzve`);
+        }
+        reszek.push(`${eredmeny.potoltSorok} sor pótolva`);
+        toast.success(`${reszek.join(", ")}.`);
       }
       await load();
     } catch (err) {

@@ -13,6 +13,13 @@ export type SajatJarmu = {
   label: string;
   /** GPS/rendszám-egyeztetéshez használt rendszámok — üres tömb, ha még nincs rendszáma a járműnek. */
   rendszamok: string[];
+  /**
+   * Rendszám-írásváltozatok, amiket egy-egy MEGBÍZÓ következetesen rosszul
+   * ír a saját törzsadatában. Csak felismerésre szolgálnak — a jármű
+   * megjelenített `label`-je mindig a VALÓDI rendszám marad, nehogy a partner
+   * hibája bekerüljön a mi papírjainkba.
+   */
+  irasvaltozatok?: string[];
   szin: JarmuSzin;
   /** Ecofleet Vehicles/get szerinti objectId (getTrips/idővonal hívásokhoz) — null, ha a jármű nincs Ecofleet-be kötve. */
   ecofleetObjectId: string | null;
@@ -20,7 +27,12 @@ export type SajatJarmu = {
 
 export const SAJAT_JARMUVEK: SajatJarmu[] = [
   { sofor: "Gergő", label: "AOPU-427/AOTY-474", rendszamok: ["AOPU-427", "AOTY-474"], szin: "blue", ecofleetObjectId: "1144376" },
-  { sofor: "Micó", label: "NMZ-492/XZV-926", rendszamok: ["NMZ-492", "XZV-926"], szin: "yellow", ecofleetObjectId: "369485" },
+  // A Duvenbeck törzsadatában Micó rendszáma felcserélt betűkkel szerepel
+  // ("NZM492" az "NMZ-492" helyett), minden megbízásukon és rakománylistájukon
+  // egyformán. A hibát jeleztük nekik; amíg nem javítják, enélkül minden
+  // Duvenbeck-fuvaruk "ismeretlen kocsi" maradna. Ha javítják, ez a sor
+  // ártalmatlanul itt maradhat.
+  { sofor: "Micó", label: "NMZ-492/XZV-926", rendszamok: ["NMZ-492", "XZV-926"], irasvaltozatok: ["NZM-492"], szin: "yellow", ecofleetObjectId: "369485" },
   { sofor: "Jani", label: "DAF XG (Gyártás alatt)", rendszamok: [], szin: "green", ecofleetObjectId: null },
 ];
 
@@ -46,11 +58,19 @@ function normalizePlate(p: string): string {
   return p.replace(/[^A-Z0-9]/gi, "").toUpperCase();
 }
 
-/** Rendszám (bármilyen írásmóddal: kötőjellel, anélkül) alapján visszaadja a hozzá tartozó saját járművet, ha van. */
+/**
+ * Rendszám (bármilyen írásmóddal: kötőjellel, anélkül) alapján visszaadja a
+ * hozzá tartozó saját járművet, ha van. A valódi rendszámok után a partnerek
+ * ismert elírásait (`irasvaltozatok`) is megnézi — lásd ott.
+ */
 export function findJarmuByPlate(plate: string): SajatJarmu | null {
   const norm = normalizePlate(plate);
   if (!norm) return null;
-  return SAJAT_JARMUVEK.find((j) => j.rendszamok.some((r) => normalizePlate(r) === norm)) ?? null;
+  return (
+    SAJAT_JARMUVEK.find((j) => j.rendszamok.some((r) => normalizePlate(r) === norm)) ??
+    SAJAT_JARMUVEK.find((j) => (j.irasvaltozatok ?? []).some((r) => normalizePlate(r) === norm)) ??
+    null
+  );
 }
 
 /** Egy elmentett "Sofőr — címke" szöveg alapján visszaadja a hozzá tartozó saját járművet, ha van. */
