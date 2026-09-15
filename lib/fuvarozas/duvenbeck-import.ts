@@ -27,6 +27,10 @@ export type DuvenbeckMentes = {
   statusz: "uj" | "osszefuzve";
   fuvarId: string;
   reiseId: string | null;
+  /** Hány régi úton beolvasott sort váltott le ez a dokumentum. */
+  levaltottSorok: number;
+  /** Régi sor, amit NEM váltottunk le, mert már van rá kiállított számla — emberi döntés kell hozzá. */
+  szamlazottRegiSorok: string[];
 };
 
 type MeglevoSor = {
@@ -101,6 +105,52 @@ export async function mentDuvenbeckDokumentumot(
   await requireEditPermission("fuvarozas");
 
   const kulcs = azonossagKulcs(dok);
+
+  // Ugyanezt a dokumentumot a RÉGI (nyelvi modelles) úton beolvasott sorok
+  // leváltása. Ez a lépés a dokumentum alapján azonosít, nem a belőle kiolvasott
+  // mezők alapján — pont azért, mert a régi soroknál éppen azok hibásak: a
+  // rakománylistából "FIEGE Szállítmányozási" lett megrendelő a Duvenbeck
+  // helyett, a hivatkozási szám pedig egy találomra választott referenciaszám.
+  // Egy megrendelő-névre szűrő takarítás ezeket sosem találná meg, ők viszont
+  // fogva tartják a Drive-fájlt, így a helyes adat soha nem tudna beolvadni.
+  //
+  // A reise_id is null feltétel zárja ki a saját, már helyesen feldolgozott
+  // sorunkat; a számlaszámos sort pedig nem bántjuk, mert azzal a kiállított
+  // számla és a fuvar kapcsolata veszne el — az ilyet a hívó jelzi ki.
+  // Számlaszámos régi sort NEM váltunk le: azzal a kiállított számla és a fuvar
+  // kapcsolata veszne el. Ezeket csak jelezzük, hogy ember döntsön róluk.
+  const szamlazottRegi = await query<{ szamla_szam: string }>(
+    `select szamla_szam from fuvar_megbizasok
+     where (drive_file_id = $1 or dokumentum_url = $2)
+       and reise_id is null
+       and statusz <> 'torolt'
+       and coalesce(szamla_szam, '') <> ''`,
+    [file.id, file.url]
+  );
+
+  const levaltott = await query<{ id: string }>(
+    `update fuvar_megbizasok
+     set statusz = 'torolt',
+         megjegyzes = coalesce(megjegyzes || ' | ', '') ||
+           'A dokumentum determinisztikus újrafeldolgozása leváltotta (Út ID ' || $3 || ').',
+         dokumentum_url = null,
+         drive_file_id = null
+     where (drive_file_id = $1 or dokumentum_url = $2)
+       and reise_id is null
+       and statusz <> 'torolt'
+       and coalesce(szamla_szam, '') = ''
+     returning id::text`,
+    [file.id, file.url, kulcs]
+  );
+
+  // Ha a fájlt egy LE NEM VÁLTHATÓ (már kiszámlázott) sor fogja, a dokumentum
+  // hivatkozását nem vehetjük át: a dokumentum_url-en egyedi index van, és a
+  // beszúrás/frissítés duplikált kulcs hibával megölné az EGÉSZ szinkron-kört.
+  // A fájl és a fuvar kapcsolata ilyenkor is megmarad a fuvar_dokumentumok
+  // táblában, csak a listák "megnyitom a megbízást" linkje hiányzik addig,
+  // amíg a számlás sort ember el nem rendezi.
+  const dokumentumSzabad = szamlazottRegi.length === 0;
+
   const rakomanylista = dok.tipus === "rakomanylista";
   const megbizas = dok.tipus === "megbizas";
 
@@ -176,7 +226,7 @@ export async function mentDuvenbeckDokumentumot(
         uj.sofor,
         uj.fuvardij,
         uj.penznem ?? "EUR",
-        file.url,
+        dokumentumSzabad ? file.url : null,
         file.id,
         "pdf_import",
         false,
@@ -248,7 +298,7 @@ export async function mentDuvenbeckDokumentumot(
         valassz(uj.postazasiCim, meglevo.postazasi_cim, arFelulirhato),
         // A megbízás a "fő" dokumentum (azon van az ár és a feltételek) —
         // a listákból erre mutasson a link, ha van.
-        megbizas || !meglevo.dokumentum_url ? file.url : null,
+        dokumentumSzabad && (megbizas || !meglevo.dokumentum_url) ? file.url : null,
         uj.felrakasAblakTol,
         uj.felrakasAblakIg,
         uj.lerakasAblakTol,
@@ -271,7 +321,25 @@ export async function mentDuvenbeckDokumentumot(
     [fuvarId, file.id, file.url, dok.tipus, dok.verzio, file.name]
   );
 
-  return { statusz, fuvarId, reiseId: dok.reiseId };
+  return {
+    statusz,
+    fuvarId,
+    reiseId: dok.reiseId,
+    levaltottSorok: levaltott.length,
+    szamlazottRegiSorok: szamlazottRegi.map((r) => r.szamla_szam),
+  };
+}
+
+/**
+ * Azok a Drive fájl-ID-k, amiket a DETERMINISZTIKUS úton már feldolgoztunk.
+ * Csak ezeket szabad véglegesen kihagyni: a régi, nyelvi modelles úton
+ * beolvasott Duvenbeck-iratot újra kell olvasni, hogy leválthassa a hibás sorát.
+ */
+export async function ujUtonFeldolgozottFileIdk(): Promise<Set<string>> {
+  const sorok = await query<{ drive_file_id: string }>(
+    `select drive_file_id from fuvar_dokumentumok`
+  );
+  return new Set(sorok.map((s) => s.drive_file_id));
 }
 
 /** Azok a Drive fájl-ID-k, amiket már bármelyik fuvarhoz hozzákötöttünk. */

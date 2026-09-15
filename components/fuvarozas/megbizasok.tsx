@@ -1624,7 +1624,8 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
       } else if (
         eredmeny.ujFuvarok === 0 &&
         eredmeny.potoltSorok === 0 &&
-        eredmeny.osszefuzottDokumentumok === 0
+        eredmeny.osszefuzottDokumentumok === 0 &&
+        eredmeny.levaltottRegiSorok === 0
       ) {
         toast.success("Nincs új fuvarmegbízás a Drive-ban.");
       } else {
@@ -1635,8 +1636,17 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
         if (eredmeny.osszefuzottDokumentumok > 0) {
           reszek.push(`${eredmeny.osszefuzottDokumentumok} dokumentum meglévő fuvarhoz fűzve`);
         }
+        if (eredmeny.levaltottRegiSorok > 0) {
+          reszek.push(`${eredmeny.levaltottRegiSorok} régi sor leváltva`);
+        }
         reszek.push(`${eredmeny.potoltSorok} sor pótolva`);
         toast.success(`${reszek.join(", ")}.`);
+      }
+      // A figyelmeztetés nem hiba: a rendszer nem tudta elvégezni a cserét,
+      // mert a régi soron már számla van. Ezt embernek kell eldöntenie, ezért
+      // hosszabb ideig látszik, és nem nyomja el a fenti sikerüzenetet.
+      for (const uzenet of eredmeny.figyelmeztetesek.slice(0, 3)) {
+        toast.warning(uzenet, { duration: 15000 });
       }
       await load();
     } catch (err) {
