@@ -271,10 +271,16 @@ async function kanonikusMegrendeloNev(nyersNev: string | null | undefined): Prom
   return nev;
 }
 
-export async function addFuvar(input: AddFuvarInput) {
+/**
+ * Új fuvar felvitele. A létrejött sor azonosítóját adja vissza, vagy `null`-t,
+ * ha a `dokumentum_url` egyediségi megkötése miatt nem keletkezett új sor
+ * (tehát ezt a dokumentumot már felvittük). A Drive-import ebből tudja, hogy
+ * VALÓBAN új fuvar lett-e — korábban a duplikátumot is új sornak számolta.
+ */
+export async function addFuvar(input: AddFuvarInput): Promise<string | null> {
   await requireEditPermission("fuvarozas");
   const megrendelo = await kanonikusMegrendeloNev(input.megrendelo);
-  await query(
+  const sorok = await query<{ id: string }>(
     `insert into fuvar_megbizasok
        (tipus, datum, idopont, felrako, lerako, megrendelo, aru, mennyiseg, suly,
         jarmu, sofor, alvallalkozo, fuvardij, fuvardij_penznem, koltseg, megjegyzes,
@@ -282,7 +288,8 @@ export async function addFuvar(input: AddFuvarInput) {
         erkezett_datum, lerakas_datum, fizetesi_hatarido_nap,
         pozicioszam, pozicioszam_nincs, postazasi_cim)
      values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
-     on conflict (dokumentum_url) where dokumentum_url is not null do nothing`,
+     on conflict (dokumentum_url) where dokumentum_url is not null do nothing
+     returning id::text`,
     [
       input.tipus,
       input.datum,
@@ -313,6 +320,7 @@ export async function addFuvar(input: AddFuvarInput) {
       input.postazasiCim || null,
     ]
   );
+  return sorok[0]?.id ?? null;
 }
 
 export async function updateFuvarStatus(id: string, statusz: FuvarStatusz) {

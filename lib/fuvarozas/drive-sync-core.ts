@@ -40,6 +40,10 @@ import {
   ismertDriveFileIdk,
   ujUtonFeldolgozottFileIdk,
 } from "@/lib/fuvarozas/duvenbeck-import";
+import { normalizaltSzoveg, torzsSzoveg } from "@/lib/fuvarozas/import/normalizalas";
+import { felismerPartner } from "@/lib/fuvarozas/import/partnerek";
+import { ellenorizKivontFuvart, type KivontFuvar } from "@/lib/fuvarozas/import/ellenorzes";
+import { rogzitNaplot, nyersSzoveggelNaplozottFileIdk } from "@/lib/fuvarozas/import/naplo";
 
 const DRIVE_FOLDER_ID = "1JNUvwN30It3_rooGkeTGTpkO4K9bix2n";
 
@@ -62,6 +66,8 @@ export type DriveSyncEredmeny = {
   osszefuzottDokumentumok: number;
   /** Régi, nyelvi modellel beolvasott sorok, amiket a determinisztikus feldolgozás leváltott. */
   levaltottRegiSorok: number;
+  /** Iratok, amikből SZÁNDÉKOSAN nem lett sor, mert hiányos volt — lásd fuvar_import_naplo. */
+  elutasitottIratok: number;
   /** Emberi döntést igénylő esetek (pl. már kiszámlázott régi sor) — nem hiba. */
   figyelmeztetesek: string[];
   hibak: string[];
@@ -156,59 +162,69 @@ function fileIdFromViewUrl(url: string): string | null {
   return m ? m[1] : null;
 }
 
-/** Az LLM-től várt, kinyert megbízás-adatok — lásd a KIVONATOLASI_UTASITAS-t. */
-type KivontFuvar = {
-  isFuvarmegbizas: boolean;
-  megrendelo: string | null;
-  felrako: string | null;
-  felrakasDatum: string | null;
-  lerako: string | null;
-  lerakasDatum: string | null;
-  aru: string | null;
-  mennyiseg: string | null;
-  rendszamVagySofor: string | null;
-  fuvardij: number | null;
-  fuvardijPenznem: "Ft" | "EUR" | null;
-  fizetesiHataridoNap: number | null;
-  postazasiCim: string | null;
-  pozicioszam: string | null;
-  megjegyzes: string | null;
-};
+/**
+ * Amit a nyelvi modelltől várunk: a közös `KivontFuvar` alak (lásd
+ * lib/fuvarozas/import/ellenorzes.ts) + a "ez egyáltalán fuvarmegbízás?"
+ * eldöntése. A közös alakot a determinisztikus olvasók is ezt adják vissza,
+ * így az ellenőrzés mindkét úton ugyanaz.
+ */
+type LlmValasz = KivontFuvar & { isFuvarmegbizas: boolean };
 
-const KIVONATOLASI_UTASITAS = `Egy fuvarmegbízás-dokumentum (PDF/DOCX/Google Docs) szövege következik. Olvasd ki belőle ALAPOSAN az alábbi mezőket, és VÁLASZOLJ KIZÁRÓLAG egyetlen, érvényes JSON objektummal (ne írj mást, ne használj markdown code fence-t):
+const KIVONATOLASI_UTASITAS = `Egy fuvarmegbízás-dokumentum szövege következik. A szöveget már megtisztítottuk: a nyomtatási ismétléseket összevontuk, és a szerződéses kisbetűs részt levágtuk. Olvasd ki belőle ALAPOSAN az alábbi mezőket, és VÁLASZOLJ KIZÁRÓLAG egyetlen, érvényes JSON objektummal (ne írj mást, ne használj markdown code fence-t):
 
 {
   "isFuvarmegbizas": boolean, // false, ha a szöveg NYILVÁNVALÓAN nem fuvarmegbízás (pl. számla, összesítő táblázat)
-  "megrendelo": string|null, // a fuvart kiadó partner (MEGBÍZÓ) cégneve — FIGYELEM: a sablonok a megbízó és a megbízott adatait egymás mellé teszik ("Megbízó adatai: / Megbízott adatai:"), és a kiolvasott szövegben a két címke egy sorba csúszik. A "Well Worn Pallett Kft" / "Well-Worn Pallet Kft." MINDIG a megbízott (a fuvarozó, akinek a megbízást kiadták) — SOHA nem ő a megrendelő. Ha ezt a nevet látod, a MÁSIK cég a megrendelő.
+  "megrendelo": string|null, // a fuvart kiadó partner (MEGBÍZÓ) cégneve
   "felrako": string|null, // felrakás helye (város vagy teljes cím)
   "felrakasDatum": string|null, // ISO dátum ÉÉÉÉ-HH-NN — a felrakás dátuma
-  "lerako": string|null, // lerakás helye
+  "lerako": string|null, // lerakás helye; ha több lerakó van, az UTOLSÓ
   "lerakasDatum": string|null, // ISO dátum ÉÉÉÉ-HH-NN, CSAK ha eltér a felrakás dátumától, egyébként null
   "aru": string|null, // áru megnevezése
   "mennyiseg": string|null, // mennyiség/súly szövegesen
-  "rendszamVagySofor": string|null, // a dokumentumban szereplő jármű rendszáma VAGY sofőr neve, szó szerint, ha van
-  "fuvardij": number|null, // a fuvardíj/ár/nettó díj/szállítási díj SZÁMÉRTÉKE (ne írj ezres elválasztót), akkor is keresd, ha nem "fuvardíj" címszó alatt szerepel
-  "fuvardijPenznem": "Ft"|"EUR"|null, // a fuvardíj pénzneme
-  "fizetesiHataridoNap": number|null, // fizetési határidő NAPOKBAN kifejezve (pl. "30 nap" -> 30), ne konkrét dátumot
-  "postazasiCim": string|null, // ahová a fizikai dokumentumokat postázni kell — elsőbbség: kifejezett postázási cím > számlázási cím > megrendelő székhelye
-  "pozicioszam": string|null, // a megbízó hivatkozási/pozíció száma, ha van
+  "rendszamVagySofor": string|null, // a dokumentumban szereplő jármű rendszáma VAGY sofőr neve, szó szerint
+  "fuvardij": number|null, // a fuvardíj SZÁMÉRTÉKE, ezres elválasztó nélkül
+  "fuvardijPenznem": "Ft"|"EUR"|null,
+  "fizetesiHataridoNap": number|null, // fizetési határidő NAPOKBAN (pl. "60 napos átutalás" -> 60), ne dátum
+  "postazasiCim": string|null, // ahová az EREDETI papírokat postázni kell — elsőbbség: kifejezett postázási cím > számlázási cím > székhely
+  "pozicioszam": string|null, // a megbízó hivatkozási/pozíció száma
   "megjegyzes": string|null // bármi egyéb fontos infó egy rövid mondatban, vagy null
 }
 
-Csak akkor hagyj mezőt üresen (null), ha tényleg nem található a szövegben — ne találj ki adatot. Ha a dokumentum nyilvánvalóan nem fuvarmegbízás, "isFuvarmegbizas": false, a többi mező lehet null.`;
+HÁROM DOLOG, AMIT EZEK A SABLONOK RENDRE ELRONTANAK — figyelj rájuk:
 
-function parseJsonValasz(nyers: string): KivontFuvar | null {
+1. A CÍMKE GYAKRAN AZ ÉRTÉK UTÁN ÁLL, mert a PDF hasábokban tördel. Például
+   "90 000,00 HUF (+ 27 % ÁFA)  Fuvardíj (nettó):" — itt a fuvardíj 90000.
+   Ugyanígy: "R16 / 2546 / 3003  Poz.számunk:" -> pozicioszam = "R16 / 2546 / 3003".
+   Mindig nézd meg a címke MINDKÉT oldalát.
+
+2. A MEGBÍZÓ ÉS A MEGBÍZOTT ADATAI EGYMÁS MELLETT vannak
+   ("Megbízó adatai: Megbízott adatai:"), és a kiolvasott szövegben egy sorba
+   csúsznak. A "Well Worn Pallett Kft" / "WELL-WORN PALLET KFT" MINDIG a
+   megbízott (mi vagyunk a fuvarozó) — SOHA nem ő a megrendelő. Ha ezt a
+   nevet látod, a MÁSIK cég a megrendelő. A felrakó és a lerakó cég sem
+   megrendelő: ők a rakodás helyszínei.
+
+3. A FUVARDÍJ NEM KÖTBÉR. A dokumentumokban sok más pénzösszeg is szerepel:
+   kötbér, meghiúsulási kötbér, állásdíj (pl. 210 EUR/nap), késedelmi díj
+   (pl. 10.000 Ft/óra), raklap ára (pl. 7.000 Ft/db), kártérítési felső
+   határ (pl. 50 000 EUR). EGYIK SEM fuvardíj. A fuvardíj a megbízás
+   ellenértéke, jellemzően "Fuvardíj", "Fuvardíj (nettó)", "Fuvar *" vagy
+   "Fuvardíj EU-s" megjelöléssel.
+
+Csak akkor hagyj mezőt üresen (null), ha tényleg nem található a szövegben — ne találj ki adatot. Ha egy mezőben bizonytalan vagy, a null a JÓ válasz: a hiányzó mezőt ember pótolja, a kitalált adat viszont rossz számlát eredményez.`;
+
+function parseJsonValasz(nyers: string): LlmValasz | null {
   const eleje = nyers.indexOf("{");
   const vege = nyers.lastIndexOf("}");
   if (eleje === -1 || vege === -1 || vege < eleje) return null;
   try {
-    return JSON.parse(nyers.slice(eleje, vege + 1)) as KivontFuvar;
+    return JSON.parse(nyers.slice(eleje, vege + 1)) as LlmValasz;
   } catch {
     return null;
   }
 }
 
-async function kivonatolFuvarAdatot(szoveg: string): Promise<KivontFuvar | null> {
+async function kivonatolFuvarAdatot(szoveg: string): Promise<LlmValasz | null> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     throw new Error("Hiányzik az OPENROUTER_API_KEY környezeti változó.");
@@ -271,7 +287,20 @@ async function ismertDokumentumUrlak(): Promise<Set<string>> {
   return new Set(sorok.map((s) => s.dokumentum_url));
 }
 
-/** Új fuvarmegbízás-fájlok felvitele — az /api/fuvarozas/drive-import által eddig végzett lépés, Claude helyett közvetlenül. */
+/**
+ * Új fuvarmegbízás-fájlok felvitele.
+ *
+ * A feldolgozás útja minden fájlra ugyanaz, és MINDEN lépés nyomot hagy a
+ * fuvar_import_naplo táblában:
+ *
+ *   1. szöveg kinyerése (pdf-parse / mammoth / Docs-export)
+ *   2. NORMALIZÁLÁS — a vastagítás-utánzó négyszeres ismétlések összevonása
+ *   3. PARTNER-FELISMERÉS ujjlenyomatból -> innentől a megrendelő TÉNY, nem tipp
+ *   4. a szerződéses kisbetűs rész levágása (csali kötbér-összegek nélkül)
+ *   5. kiolvasás: Duvenbecknél determinisztikus értelmező, egyébként nyelvi modell
+ *   6. ELLENŐRZÉS -> verdikt; az elutasított iratból NEM lesz sor
+ *   7. naplózás — akkor is, ha nem lett sor
+ */
 async function ujFajlokFeldolgozasa(
   drive: ReturnType<typeof driveClient>,
   hibak: string[]
@@ -280,18 +309,22 @@ async function ujFajlokFeldolgozasa(
   vizsgaltFajlok: number;
   osszefuzottDokumentumok: number;
   levaltottRegiSorok: number;
+  elutasitottIratok: number;
   figyelmeztetesek: string[];
 }> {
-  const [fajlok, ismertUrlak, ismertFileIdk, ujUtonKeszek] = await Promise.all([
+  const [fajlok, ismertUrlak, ismertFileIdk, ujUtonKeszek, naplozottak] = await Promise.all([
     listazDriveFajlok(drive),
     ismertDokumentumUrlak(),
     ismertDriveFileIdk(),
     ujUtonFeldolgozottFileIdk(),
+    nyersSzoveggelNaplozottFileIdk(),
   ]);
   let ujFuvarok = 0;
   let osszefuzottDokumentumok = 0;
   let levaltottRegiSorok = 0;
+  let elutasitottIratok = 0;
   const figyelmeztetesek: string[] = [];
+
   for (const file of fajlok) {
     const url = driveViewUrl(file.id);
     // A fájl-ID a megbízhatóbb jel: egy meglévő fuvarhoz CSATOLT dokumentum
@@ -299,15 +332,38 @@ async function ujFajlokFeldolgozasa(
     // ettől még fel van dolgozva — a fuvar_dokumentumok tábla tudja.
     const regiUtonIsmert = ismertUrlak.has(url) || ismertFileIdk.has(file.id);
     const duvenbeckUjrafeldolgozando = DUVENBECK_FAJLNEV.test(file.name) && !ujUtonKeszek.has(file.id);
-    if (regiUtonIsmert && !duvenbeckUjrafeldolgozando) continue;
-    try {
-      const szoveg = await fajlSzovege(drive, file);
-      if (!szoveg.trim()) continue;
+    // A napló nyers szövegét fájlonként EGYSZER töltjük fel; utána a már
+    // ismert fájlokat újra átugorjuk, tehát ez nem óránkénti letöltés.
+    const naploraVar = !naplozottak.has(file.id);
+    if (regiUtonIsmert && !duvenbeckUjrafeldolgozando && !naploraVar) continue;
 
-      // A Duvenbeck gépi sablonját determinisztikusan olvassuk ki — lásd
-      // lib/fuvarozas/duvenbeck.ts. Ha felismerte, nyelvi modellre nincs
-      // szükség (és nem is szabad: a hasábos PDF-et rendre félreolvasta).
-      const duvenbeck = await mentDuvenbeckDokumentumot(szoveg, {
+    try {
+      const nyersSzoveg = await fajlSzovege(drive, file);
+      const normalizalt = normalizaltSzoveg(nyersSzoveg);
+      const partner = felismerPartner(normalizalt);
+      const naploAlap = {
+        driveFileId: file.id,
+        fajlnev: file.name,
+        dokumentumUrl: url,
+        partnerKod: partner?.kod ?? null,
+        nyersSzoveg,
+      };
+
+      if (!normalizalt.trim()) {
+        // Beszkennelt, szövegréteg nélküli PDF. Eddig ez csendben kimaradt;
+        // mostantól látszik, hogy van egy irat, amit a gép nem tud elolvasni.
+        await rogzitNaplot({
+          ...naploAlap,
+          olvaso: null,
+          verdikt: "hiba",
+          kifogasok: ["A fájlból nem jött ki szöveg — valószínűleg beszkennelt kép, kézi rögzítés kell."],
+          fuvarId: null,
+        });
+        continue;
+      }
+
+      // --- Duvenbeck: determinisztikus út, nyelvi modell nélkül ---
+      const duvenbeck = await mentDuvenbeckDokumentumot(nyersSzoveg, {
         id: file.id,
         name: file.name,
         url,
@@ -316,30 +372,77 @@ async function ujFajlokFeldolgozasa(
         if (duvenbeck.statusz === "uj") ujFuvarok++;
         else if (duvenbeck.statusz === "osszefuzve") osszefuzottDokumentumok++;
         levaltottRegiSorok += duvenbeck.levaltottSorok;
-        for (const szamla of duvenbeck.szamlazottRegiSorok) {
-          figyelmeztetesek.push(
-            `${file.name}: ehhez a fuvarhoz már van kiállított számla (${szamla}), ezért nem vettük fel újra — nézd át kézzel.`
-          );
-        }
+        const kifogasok = duvenbeck.szamlazottRegiSorok.map(
+          (szamla) => `Ehhez a fuvarhoz már van kiállított számla (${szamla}) — nem vettük fel újra, nézd át kézzel.`
+        );
+        for (const kifogas of kifogasok) figyelmeztetesek.push(`${file.name}: ${kifogas}`);
+        await rogzitNaplot({
+          ...naploAlap,
+          partnerKod: partner?.kod ?? "duvenbeck",
+          olvaso: "duvenbeck",
+          verdikt: kifogasok.length > 0 ? "ellenorizendo" : "biztos",
+          kifogasok,
+          fuvarId: duvenbeck.fuvarId,
+        });
         continue;
       }
 
-      // Egy már ismert, de nem Duvenbeck-iratot nem adunk oda újra a nyelvi
-      // modellnek: az csak duplikált sort csinálna belőle.
-      if (regiUtonIsmert) continue;
+      // --- Már ismert, nem Duvenbeck irat: csak a naplót töltjük fel ---
+      // Újra NEM adjuk oda a nyelvi modellnek: abból csak duplikált sor lenne.
+      if (regiUtonIsmert) {
+        await rogzitNaplot({
+          ...naploAlap,
+          olvaso: null,
+          verdikt: "regi_import",
+          kifogasok: [
+            "Ez az irat még a napló bevezetése előtt került be, ezért a rendszer nem tudja, mit olvasott ki belőle. A hozzá tartozó sort érdemes egyszer átnézni.",
+          ],
+          fuvarId: null,
+        });
+        continue;
+      }
 
-      const kivont = await kivonatolFuvarAdatot(szoveg);
-      if (!kivont || !kivont.isFuvarmegbizas || !kivont.lerako || !kivont.felrakasDatum) continue;
-      // Ha a modell MINKET írt megrendelőnek, a mezőt inkább üresen hagyjuk —
-      // lásd sajatCegunkE. A hiányzó megrendelő javítható, a rossz megrendelő
-      // rossz félnek kiállított számlát jelentene.
-      const megrendelo = sajatCegunkE(kivont.megrendelo) ? undefined : kivont.megrendelo || undefined;
-      await addFuvar({
+      // --- Nyelvi modell a MEGTISZTÍTOTT törzsszövegen ---
+      const torzs = torzsSzoveg(normalizalt, partner?.torzsVege ?? []);
+      const llm = await kivonatolFuvarAdatot(torzs);
+      if (!llm || !llm.isFuvarmegbizas) {
+        await rogzitNaplot({
+          ...naploAlap,
+          olvaso: "llm",
+          verdikt: "nem_megbizas",
+          kifogasok: llm ? [] : ["A nyelvi modell nem adott értelmezhető választ."],
+          fuvarId: null,
+        });
+        continue;
+      }
+
+      const kivont: KivontFuvar = {
+        ...llm,
+        // Ha az irat ismert partner sablonja, a megrendelő NEM TIPP: a
+        // partner hivatalos nevét írjuk be. Ez zárja ki véglegesen, hogy a
+        // hasábos fejlécből minket (vagy egy felrakó céget) olvasson
+        // megrendelőnek — lásd lib/fuvarozas/import/partnerek.ts.
+        megrendelo: partner ? partner.nev : llm.megrendelo,
+        postazasiCim: llm.postazasiCim || partner?.postazasiCim || null,
+        fizetesiHataridoNap: llm.fizetesiHataridoNap ?? partner?.fizetesiHataridoNap ?? null,
+      };
+
+      const { verdikt, kifogasok } = ellenorizKivontFuvart(kivont, !!partner);
+      if (verdikt === "elutasitva") {
+        // Inkább ne legyen sor, mint rossz sor: egy hiányos irat csendben
+        // felvitt fuvarja eddig számlázásig eljutott.
+        elutasitottIratok++;
+        await rogzitNaplot({ ...naploAlap, olvaso: "llm", verdikt, kifogasok, fuvarId: null });
+        figyelmeztetesek.push(`${file.name}: nem vittük fel — ${kifogasok.join(" ")}`);
+        continue;
+      }
+
+      const fuvarId = await addFuvar({
         tipus: "sajat",
-        datum: kivont.felrakasDatum,
-        lerako: kivont.lerako,
+        datum: kivont.felrakasDatum!,
+        lerako: kivont.lerako!,
         felrako: kivont.felrako || undefined,
-        megrendelo,
+        megrendelo: kivont.megrendelo || undefined,
         aru: kivont.aru || undefined,
         mennyiseg: kivont.mennyiseg || undefined,
         jarmu: resolveJarmuMezo(kivont.rendszamVagySofor),
@@ -356,12 +459,42 @@ async function ujFajlokFeldolgozasa(
         forras: "pdf_import",
         ellenorzott: false,
       });
-      ujFuvarok++;
+      if (fuvarId) ujFuvarok++;
+      await rogzitNaplot({
+        ...naploAlap,
+        olvaso: "llm",
+        verdikt,
+        kifogasok: fuvarId
+          ? kifogasok
+          : [...kifogasok, "Ezt a dokumentumot már felvittük korábban — nem keletkezett új sor."],
+        fuvarId,
+      });
     } catch (err) {
-      hibak.push(`${file.name}: ${err instanceof Error ? err.message : "ismeretlen hiba"}`);
+      const uzenet = err instanceof Error ? err.message : "ismeretlen hiba";
+      hibak.push(`${file.name}: ${uzenet}`);
+      await rogzitNaplot({
+        driveFileId: file.id,
+        fajlnev: file.name,
+        dokumentumUrl: url,
+        partnerKod: null,
+        olvaso: null,
+        verdikt: "hiba",
+        kifogasok: [uzenet],
+        fuvarId: null,
+        nyersSzoveg: null,
+      }).catch(() => {
+        /* a napló írása soha ne döntse el a szinkront */
+      });
     }
   }
-  return { ujFuvarok, vizsgaltFajlok: fajlok.length, osszefuzottDokumentumok, levaltottRegiSorok, figyelmeztetesek };
+  return {
+    ujFuvarok,
+    vizsgaltFajlok: fajlok.length,
+    osszefuzottDokumentumok,
+    levaltottRegiSorok,
+    elutasitottIratok,
+    figyelmeztetesek,
+  };
 }
 
 /** A korábban felvitt, de hiányos sorok pótlása — az /api/fuvarozas/drive-hianyok + drive-frissites páros eddig végzett lépése. */
@@ -444,6 +577,7 @@ export async function vegrehajtDriveSync(): Promise<DriveSyncEredmeny> {
     vizsgaltFajlok: uj.vizsgaltFajlok,
     osszefuzottDokumentumok: uj.osszefuzottDokumentumok,
     levaltottRegiSorok: uj.levaltottRegiSorok,
+    elutasitottIratok: uj.elutasitottIratok,
     figyelmeztetesek: uj.figyelmeztetesek,
     potoltSorok,
     hibak,

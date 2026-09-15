@@ -1625,7 +1625,8 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
         eredmeny.ujFuvarok === 0 &&
         eredmeny.potoltSorok === 0 &&
         eredmeny.osszefuzottDokumentumok === 0 &&
-        eredmeny.levaltottRegiSorok === 0
+        eredmeny.levaltottRegiSorok === 0 &&
+        eredmeny.elutasitottIratok === 0
       ) {
         toast.success("Nincs új fuvarmegbízás a Drive-ban.");
       } else {
@@ -1638,6 +1639,12 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
         }
         if (eredmeny.levaltottRegiSorok > 0) {
           reszek.push(`${eredmeny.levaltottRegiSorok} régi sor leváltva`);
+        }
+        // Az elutasított irat nem hiba: a rendszer inkább nem vitte fel,
+        // mint hogy hiányos sort csináljon belőle. Enélkül a "0 új fuvar"
+        // úgy látszana, mintha nem történt volna semmi.
+        if (eredmeny.elutasitottIratok > 0) {
+          reszek.push(`${eredmeny.elutasitottIratok} irat kihagyva (hiányos)`);
         }
         reszek.push(`${eredmeny.potoltSorok} sor pótolva`);
         toast.success(`${reszek.join(", ")}.`);
