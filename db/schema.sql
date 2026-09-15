@@ -677,3 +677,60 @@ create table if not exists fuvar_megallo_allapot (
 -- a már rögzített, helyes időpontot.
 alter table fuvar_megallo_allapot add column if not exists gps_erkezes timestamptz;
 alter table fuvar_megallo_allapot add column if not exists gps_tavozas timestamptz;
+
+-- ---------------------------------------------------------------------------
+-- Fuvar-azonosság a Drive-importhoz (2026-09-15)
+-- ---------------------------------------------------------------------------
+--
+-- Eddig egy fuvart a DOKUMENTUMA azonosított (dokumentum_url), ami azt
+-- feltételezi, hogy egy fuvarhoz egy fájl tartozik. A Duvenbecknél ez nem
+-- igaz: egy fuvarhoz egyszerre érkezik egy Fuvar Megbízás (TA…) és egy
+-- Rakománylista (FRALI…), és a kettő nem duplikátum — az árat csak a
+-- megbízás, a géppel olvasható címet csak a rakománylista tartalmazza. Ezért
+-- a "TA1980534 + FRALI1994504" párból két külön megbízás-sor keletkezett,
+-- egymásnak ellentmondó adatokkal (az egyik ár nélkül, a másik város nélkül).
+--
+-- A reise_id (a dokumentumokban "Ut ID" / "Reise ID" / "Trip ID") mindkét
+-- iraton szerepel, és pontosan egy fuvart azonosít. Ez egyben a SZÁMLÁZÁSI
+-- kulcs is: a megbízás szövege előírja, hogy a számlákat Reise ID-nként
+-- megosztva kell kiállítani — tehát ez a szám kerül a mi számlánkra, és ezen
+-- fog a beérkező számla párosítása is állni.
+alter table fuvar_megbizasok add column if not exists reise_id text;
+
+-- Részleges egyediség: a reise_id azonosítja a fuvart, de a régi sorokon
+-- (és a nem-Duvenbeck megbízásokon) NULL, amiből tetszőlegesen sok lehet.
+create unique index if not exists idx_fuvar_megbizasok_reise_id
+  on fuvar_megbizasok (reise_id) where reise_id is not null;
+
+-- A megbízás időablakai (PV: -tól, PB: -ig). A megbízások eddig csak dátumot
+-- tároltak, pedig a Duvenbeck-iratokon óra:perc pontosságú ablak van
+-- ("PV: 15.09.2026 07:00 / PB: 15.09.2026 15:00"). Ez a VALÓDI határidő —
+-- ebből lesz értelmes érkezés-előrejelzés, nem találgatásból.
+alter table fuvar_megbizasok add column if not exists felrakas_ablak_tol timestamptz;
+alter table fuvar_megbizasok add column if not exists felrakas_ablak_ig timestamptz;
+alter table fuvar_megbizasok add column if not exists lerakas_ablak_tol timestamptz;
+alter table fuvar_megbizasok add column if not exists lerakas_ablak_ig timestamptz;
+
+-- Egy fuvarhoz tartozó ÖSSZES forrásdokumentum. Két dolgot old meg:
+--
+-- 1. A drive-sync eddig a fuvar_megbizasok.dokumentum_url-ből tudta, hogy egy
+--    fájlt már feldolgozott. Ha viszont egy fájl egy MEGLÉVŐ sorba olvad be
+--    (a pár másik tagjaként), akkor az ő URL-je sehol nem szerepelne, és a
+--    szinkron óránként újra és újra feldolgozná.
+-- 2. Ugyanaz a dokumentum többször is felkerülhet a Drive-mappába külön
+--    fájlként (a FRALI1994504_V1.pdf például kétszer van fenn, két Drive
+--    ID-vel) — így mindkettő ugyanahhoz a fuvarhoz kötve, egy soron marad.
+create table if not exists fuvar_dokumentumok (
+  id             bigserial primary key,
+  fuvar_id       bigint not null references fuvar_megbizasok(id) on delete cascade,
+  drive_file_id  text not null unique,
+  dokumentum_url text,
+  -- 'megbizas' | 'rakomanylista' | 'egyeb' — melyik mezőiben bízunk.
+  tipus          text,
+  -- A dokumentum verziószáma (a fájlnév "_V1" utótagja, ill. az azonosító
+  -- "/1" része). Egy javított megbízás magasabb verzióval érkezik újra.
+  verzio         integer,
+  fajlnev        text,
+  created_at     timestamptz not null default now()
+);
+create index if not exists idx_fuvar_dokumentumok_fuvar on fuvar_dokumentumok (fuvar_id);

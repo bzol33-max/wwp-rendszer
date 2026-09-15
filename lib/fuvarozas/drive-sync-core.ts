@@ -8,6 +8,13 @@
 //
 //   Google Drive (service account) --text--> OpenRouter (Gemini) --JSON--> addFuvar()
 //
+// KIVÉTEL: a Duvenbeck gépi sablonját NEM nyelvi modell olvassa, hanem a
+// lib/fuvarozas/duvenbeck.ts determinisztikus értelmezője. Két oka van: a
+// hasábos PDF-elrendezést a modell rendre félreolvasta (város nélküli cím,
+// megrendelőként a saját cégünk, találomra választott hivatkozási szám), és
+// egy fuvarhoz két dokumentum érkezik (megbízás + rakománylista), amiket
+// EGY sorba kell összefűzni — lásd lib/fuvarozas/duvenbeck-import.ts.
+//
 // Két belépési pont hívja ezt a modult:
 // - app/api/fuvarozas/drive-sync/route.ts — a Railway cron szolgáltatás
 //   óránként ezt hívja HTTP POST-tal.
@@ -28,6 +35,10 @@ import {
 } from "@/lib/fuvarozas/megbizasok";
 import type { FuvardijPenznem } from "@/lib/fuvarozas/fuvar-constants";
 import { findJarmuByPlate, jarmuLabel } from "@/lib/fuvarozas/vehicles";
+import {
+  mentDuvenbeckDokumentumot,
+  ismertDriveFileIdk,
+} from "@/lib/fuvarozas/duvenbeck-import";
 
 const DRIVE_FOLDER_ID = "1JNUvwN30It3_rooGkeTGTpkO4K9bix2n";
 const MAX_POTLAS_SORONKENT = 5;
@@ -36,6 +47,8 @@ export type DriveSyncEredmeny = {
   ujFuvarok: number;
   potoltSorok: number;
   vizsgaltFajlok: number;
+  /** Meglévő fuvarhoz csatolt dokumentumok (pl. egy megbízás rakománylistája) — lásd lib/fuvarozas/duvenbeck-import.ts. */
+  osszefuzottDokumentumok: number;
   hibak: string[];
 };
 
@@ -247,15 +260,38 @@ async function ismertDokumentumUrlak(): Promise<Set<string>> {
 async function ujFajlokFeldolgozasa(
   drive: ReturnType<typeof driveClient>,
   hibak: string[]
-): Promise<{ ujFuvarok: number; vizsgaltFajlok: number }> {
-  const [fajlok, ismertUrlak] = await Promise.all([listazDriveFajlok(drive), ismertDokumentumUrlak()]);
+): Promise<{ ujFuvarok: number; vizsgaltFajlok: number; osszefuzottDokumentumok: number }> {
+  const [fajlok, ismertUrlak, ismertFileIdk] = await Promise.all([
+    listazDriveFajlok(drive),
+    ismertDokumentumUrlak(),
+    ismertDriveFileIdk(),
+  ]);
   let ujFuvarok = 0;
+  let osszefuzottDokumentumok = 0;
   for (const file of fajlok) {
     const url = driveViewUrl(file.id);
-    if (ismertUrlak.has(url)) continue;
+    // A fájl-ID a megbízhatóbb jel: egy meglévő fuvarhoz CSATOLT dokumentum
+    // (pl. a megbízás rakománylistája) nem a fuvar dokumentum_url-je, de
+    // ettől még fel van dolgozva — a fuvar_dokumentumok tábla tudja.
+    if (ismertUrlak.has(url) || ismertFileIdk.has(file.id)) continue;
     try {
       const szoveg = await fajlSzovege(drive, file);
       if (!szoveg.trim()) continue;
+
+      // A Duvenbeck gépi sablonját determinisztikusan olvassuk ki — lásd
+      // lib/fuvarozas/duvenbeck.ts. Ha felismerte, nyelvi modellre nincs
+      // szükség (és nem is szabad: a hasábos PDF-et rendre félreolvasta).
+      const duvenbeck = await mentDuvenbeckDokumentumot(szoveg, {
+        id: file.id,
+        name: file.name,
+        url,
+      });
+      if (duvenbeck) {
+        if (duvenbeck.statusz === "uj") ujFuvarok++;
+        else osszefuzottDokumentumok++;
+        continue;
+      }
+
       const kivont = await kivonatolFuvarAdatot(szoveg);
       if (!kivont || !kivont.isFuvarmegbizas || !kivont.lerako || !kivont.felrakasDatum) continue;
       await addFuvar({
@@ -285,7 +321,7 @@ async function ujFajlokFeldolgozasa(
       hibak.push(`${file.name}: ${err instanceof Error ? err.message : "ismeretlen hiba"}`);
     }
   }
-  return { ujFuvarok, vizsgaltFajlok: fajlok.length };
+  return { ujFuvarok, vizsgaltFajlok: fajlok.length, osszefuzottDokumentumok };
 }
 
 /** A korábban felvitt, de hiányos sorok pótlása — az /api/fuvarozas/drive-hianyok + drive-frissites páros eddig végzett lépése. */
@@ -304,6 +340,10 @@ async function hianyokPotlasa(drive: ReturnType<typeof driveClient>, hibak: stri
      from fuvar_megbizasok
      where tipus = 'sajat' and statusz <> 'torolt'
        and dokumentum_url is not null
+       -- A reise_id-s (Duvenbeck) sorokat determinisztikusan olvastuk ki, a
+       -- nyelvi modell nem tud hozzátenni. Kihagyásuk nélkül minden órában
+       -- elvinnék az itteni 5 helyet a valóban hiányos sorok elől.
+       and reise_id is null
        and (fuvardij is null or fizetesi_hatarido_nap is null
             or postazasi_cim is null or trim(postazasi_cim) = '')
      order by id desc
@@ -362,6 +402,7 @@ export async function vegrehajtDriveSync(): Promise<DriveSyncEredmeny> {
   return {
     ujFuvarok: uj.ujFuvarok,
     vizsgaltFajlok: uj.vizsgaltFajlok,
+    osszefuzottDokumentumok: uj.osszefuzottDokumentumok,
     potoltSorok,
     hibak,
   };
