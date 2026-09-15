@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { apiViewGuard } from "@/lib/auth/api-guard";
 
 /**
  * A Drive-fuvarmegbízás-figyelő automatika (ütemezett Claude-feladat) ezzel
@@ -17,6 +18,9 @@ import { query } from "@/lib/db";
  * egy adott dokumentumot véglegesen (a törlés után is) "ismertnek" tartson.
  */
 export async function GET() {
+  const tiltas = await apiViewGuard("fuvarozas");
+  if (tiltas) return tiltas;
+
   const sorok = await query<{ dokumentum_url: string }>(
     `select dokumentum_url
      from fuvar_megbizasok

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
+import { apiViewGuard } from "@/lib/auth/api-guard";
 
 /**
  * Általános diagnosztikai kereső végpont: szabad szöveggel (megrendelő vagy
@@ -11,6 +12,9 @@ import { query } from "@/lib/db";
  * Használat: GET /api/fuvarozas/kereses?q=Duvenbeck
  */
 export async function GET(req: Request) {
+  const tiltas = await apiViewGuard("fuvarozas");
+  if (tiltas) return tiltas;
+
   const { searchParams } = new URL(req.url);
   const q = searchParams.get("q")?.trim();
   if (!q) {

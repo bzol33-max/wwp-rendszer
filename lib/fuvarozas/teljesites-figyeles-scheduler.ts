@@ -5,6 +5,7 @@
 // induláskor.
 
 import { futtatTeljesitesFigyeles } from "./teljesites-figyeles";
+import { futtatRendszerkent } from "@/lib/auth/system-context";
 
 const INTERVALL_MS = 15 * 60 * 1000;
 
@@ -12,7 +13,7 @@ let inditva = false;
 
 async function tick() {
   try {
-    const eredmeny = await futtatTeljesitesFigyeles();
+    const eredmeny = await futtatRendszerkent("teljesites-figyeles", futtatTeljesitesFigyeles);
     if (eredmeny.automatikusanTeljesitve || eredmeny.hibak.length) {
       console.log(
         `[teljesites-figyeles] vizsgált: ${eredmeny.vizsgalt}, automatikusan teljesítve: ${eredmeny.automatikusanTeljesitve}, hibák: ${
