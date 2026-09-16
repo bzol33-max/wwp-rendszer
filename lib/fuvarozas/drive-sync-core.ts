@@ -43,7 +43,13 @@ import {
 import { normalizaltSzoveg, torzsSzoveg } from "@/lib/fuvarozas/import/normalizalas";
 import { felismerPartner } from "@/lib/fuvarozas/import/partnerek";
 import { ellenorizKivontFuvart, type KivontFuvar } from "@/lib/fuvarozas/import/ellenorzes";
-import { rogzitNaplot, nyersSzoveggelNaplozottFileIdk } from "@/lib/fuvarozas/import/naplo";
+import {
+  rogzitNaplot,
+  nyersSzoveggelNaplozottFileIdk,
+  azonosSzoveguIsmertIrat,
+  csatolIratotFuvarhoz,
+  hianyzoDuvenbeckParja,
+} from "@/lib/fuvarozas/import/naplo";
 
 const DRIVE_FOLDER_ID = "1JNUvwN30It3_rooGkeTGTpkO4K9bix2n";
 
@@ -324,6 +330,9 @@ async function ujFajlokFeldolgozasa(
   let levaltottRegiSorok = 0;
   let elutasitottIratok = 0;
   const figyelmeztetesek: string[] = [];
+  // A körben feldolgozott Duvenbeck-iratok — a kör végén nézzük meg, teljes-e
+  // a páruk (lásd hianyzoDuvenbeckParja), nem az érkezésükkor.
+  const duvenbeckIratok: { fajlnev: string; fuvarId: string; naplo: Parameters<typeof rogzitNaplot>[0] }[] = [];
 
   for (const file of fajlok) {
     const url = driveViewUrl(file.id);
@@ -376,14 +385,16 @@ async function ujFajlokFeldolgozasa(
           (szamla) => `Ehhez a fuvarhoz már van kiállított számla (${szamla}) — nem vettük fel újra, nézd át kézzel.`
         );
         for (const kifogas of kifogasok) figyelmeztetesek.push(`${file.name}: ${kifogas}`);
-        await rogzitNaplot({
+        const duvenbeckNaplo = {
           ...naploAlap,
           partnerKod: partner?.kod ?? "duvenbeck",
-          olvaso: "duvenbeck",
-          verdikt: kifogasok.length > 0 ? "ellenorizendo" : "biztos",
+          olvaso: "duvenbeck" as const,
+          verdikt: kifogasok.length > 0 ? ("ellenorizendo" as const) : ("biztos" as const),
           kifogasok,
           fuvarId: duvenbeck.fuvarId,
-        });
+        };
+        await rogzitNaplot(duvenbeckNaplo);
+        duvenbeckIratok.push({ fajlnev: file.name, fuvarId: duvenbeck.fuvarId, naplo: duvenbeckNaplo });
         continue;
       }
 
@@ -398,6 +409,27 @@ async function ujFajlokFeldolgozasa(
             "Ez az irat még a napló bevezetése előtt került be, ezért a rendszer nem tudja, mit olvasott ki belőle. A hozzá tartozó sort érdemes egyszer átnézni.",
           ],
           fuvarId: null,
+        });
+        continue;
+      }
+
+      // --- Ugyanaz az irat még egyszer, más Drive-azonosítóval ---
+      // A mappába kétszer feltöltött fájl (élesben: 26-3289.pdf, 26-3553.pdf
+      // kétszer) eddig két sort adott, mert a nem-Duvenbeck iratnak nincs
+      // azonossági kulcsa. A nyers szöveg viszont szó szerint azonos: a
+      // második példányt a meglévő fuvarhoz csatoljuk, új sor nem lesz.
+      const masodpeldany = await azonosSzoveguIsmertIrat(file.id, nyersSzoveg);
+      if (masodpeldany) {
+        await csatolIratotFuvarhoz(masodpeldany.fuvarId, { id: file.id, name: file.name, url });
+        osszefuzottDokumentumok++;
+        await rogzitNaplot({
+          ...naploAlap,
+          olvaso: null,
+          verdikt: "duplikatum",
+          kifogasok: [
+            `Ugyanez az irat már be van olvasva (${masodpeldany.fajlnev ?? masodpeldany.driveFileId}) — a meglévő fuvarhoz csatoltuk, új sor nem keletkezett.`,
+          ],
+          fuvarId: masodpeldany.fuvarId,
         });
         continue;
       }
@@ -487,6 +519,36 @@ async function ujFajlokFeldolgozasa(
       });
     }
   }
+
+  // --- Duvenbeck: teljes-e a pár? ---
+  // A kör végén, mert a megbízás és a rakománylista ugyanabban a körben jön:
+  // az elsőnél még hiányozna a második. Ha a kör után is csak az egyik irat
+  // van meg, a napló és a figyelmeztetés jelzi — a cím (rakománylista
+  // nélkül) vagy az ár (megbízás nélkül) addig a gyengébb forrásból való.
+  const mostVizsgalt = new Set<string>();
+  for (const irat of duvenbeckIratok) {
+    if (mostVizsgalt.has(irat.fuvarId)) continue;
+    mostVizsgalt.add(irat.fuvarId);
+    try {
+      const hianyzik = await hianyzoDuvenbeckParja(irat.fuvarId);
+      if (!hianyzik) continue;
+      const uzenet =
+        hianyzik === "rakomanylista"
+          ? "A Duvenbeck párban küldi az iratokat: a rakománylista (FRALI…) még nem érkezett meg, a cím a megbízás hasábos szövegéből való — cégnév nélkül."
+          : "A Duvenbeck párban küldi az iratokat: a megbízás (TA…) még nem érkezett meg, ezért nincs ár és számlázási cím.";
+      figyelmeztetesek.push(`${irat.fajlnev}: ${uzenet}`);
+      await rogzitNaplot({
+        ...irat.naplo,
+        verdikt: "ellenorizendo",
+        kifogasok: [...irat.naplo.kifogasok, uzenet],
+        // A nyers szöveget az első írás már eltárolta; itt megmarad.
+        nyersSzoveg: null,
+      });
+    } catch (err) {
+      hibak.push(`${irat.fajlnev}: a pár ellenőrzése nem sikerült — ${err instanceof Error ? err.message : "ismeretlen hiba"}`);
+    }
+  }
+
   return {
     ujFuvarok,
     vizsgaltFajlok: fajlok.length,

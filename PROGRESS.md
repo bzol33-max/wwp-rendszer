@@ -40,3 +40,18 @@
   megrendelőt (`javitsaSajatCegMegrendelotSzamlabol`, minden indulásnál,
   idempotens); a többinél a napló írja ki a dokumentum/postázási cím
   adatait a kézi pótláshoz (`db/fuvar-corrections.json`).
+
+## 2026-09-16 (3. kör) — Duvenbeck párban érkező iratok, duplikált feltöltés
+
+- Átvilágítás (deploy-napló + Drive): a 4 friss Duvenbeck-pár (TA+FRALI)
+  egy sorba olvadt az Út ID alapján (#126, #128, #129, #130); a kétszer
+  feltöltött FRALI1994504 ugyanahhoz a sorhoz kötődött. Két megbízásnál
+  (TA1966667, TA1978819) nincs rakománylista a mappában.
+- `drive-sync-core.ts`: a kör végén jelzi (napló + figyelmeztetés), ha egy
+  Duvenbeck-sorhoz csak az egyik irat van meg. Új: a kétszer feltöltött,
+  azonos szövegű NEM-Duvenbeck iratot a meglévő fuvarhoz csatolja
+  (`azonosSzoveguIsmertIrat` + `csatolIratotFuvarhoz`, verdikt
+  `duplikatum`), új sor helyett — élesben ebből lettek a #22/#77-féle párok.
+- `migrate.mjs` duplikátum-kereső: két külön Út ID-jű sor nem duplikátum
+  (#126/#130 tévesen volt jelölve); a sorok állapota (számla, postázva,
+  ellenőrzött) is látszik a naplóban.

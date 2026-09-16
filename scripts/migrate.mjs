@@ -414,18 +414,29 @@ async function naplozFuvarHelyEllenorzest(pool) {
     // Lehetséges duplikátumok a bér fuvarok közt (csak napló): azonos
     // pozíciószám, vagy azonos nap + felrakó + lerakó. Egy kétszer felvett
     // megbízás kétszer számlázható — ezért érdemes ránézni.
+    // Két sor NEM duplikátum, ha mindkettőnek van Út ID-je és az eltér: a
+    // Duvenbeck ugyanarra az útvonalra, ugyanarra a napra több megbízást is
+    // adhat (pl. 2026-09-15 Pápa → Debrecen, H80F1 és H80F2 lerakó-kód).
     const { rows: dupok } = await pool.query(
-      `select kulcs, string_agg('#' || id, ', ' order by id) as idk
+      `select kulcs,
+         string_agg('#' || id || ' (' || statusz
+           || case when ellenorzott then ', ellenőrzött' else '' end
+           || case when coalesce(szamla_szam, '') <> '' then ', számla ' || szamla_szam else ', nincs számla' end
+           || case when postazva then ', postázva' else '' end
+           || case when reise_id is not null then ', Út ID ' || reise_id else '' end
+           || ')', '; ' order by id) as sorok
        from (
-         select id, 'poz. ' || pozicioszam as kulcs
+         select id, statusz, ellenorzott, szamla_szam, postazva, reise_id, 'poz. ' || pozicioszam as kulcs
          from fuvar_megbizasok
          where statusz <> 'torolt' and tipus = 'sajat' and coalesce(pozicioszam, '') <> ''
          union all
-         select id, to_char(datum, 'YYYY-MM-DD') || ' ' || coalesce(felrako, '?') || ' → ' || lerako
+         select id, statusz, ellenorzott, szamla_szam, postazva, reise_id,
+           to_char(datum, 'YYYY-MM-DD') || ' ' || coalesce(felrako, '?') || ' → ' || lerako
          from fuvar_megbizasok
          where statusz <> 'torolt' and tipus = 'sajat'
        ) k
-       group by kulcs having count(*) > 1
+       group by kulcs
+       having count(*) > 1 and count(*) - count(distinct reise_id) > 0
        order by kulcs limit 40`
     );
     // Duvenbeck-átvilágítás (csak napló): a párban érkező iratok (TA =
@@ -450,7 +461,7 @@ async function naplozFuvarHelyEllenorzest(pool) {
     }
     console.log(
       `[migrate] lehetséges duplikátum bér fuvarok: ${dupok.length}` +
-        (dupok.length ? " — " + dupok.map((d) => `${d.kulcs.slice(0, 70)} (${d.idk})`).join("; ") : ".")
+        (dupok.length ? " — " + dupok.map((d) => `${d.kulcs.slice(0, 70)}: ${d.sorok}`).join(" | ") : ".")
     );
   } catch (e) {
     // Csak napló — az indulást nem akaszthatja meg.
