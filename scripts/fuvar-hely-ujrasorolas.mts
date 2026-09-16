@@ -104,15 +104,17 @@ async function ellenorzes(): Promise<number> {
   const { ma, sorok } = await beolvas();
   const most = new Date();
   const eltero = sorok.filter((s) => getFuvarHelye(s, ma, most) !== s.hely_sql);
-  const [{ a, b }] = await query<{ a: string; b: string }>(
+  const [{ a, b, c }] = await query<{ a: string; b: string; c: string }>(
     `select count(*) filter (where ${POSTAZVA_AT_HIANYZIK_SQL}) as a,
-            count(*) filter (where ${SZAMLAS_DE_FOLYAMATBAN_SQL}) as b
+            count(*) filter (where ${SZAMLAS_DE_FOLYAMATBAN_SQL}) as b,
+            count(*) filter (where tipus = 'sajat' and postazva and coalesce(szamla_szam, '') = '') as c
      from fuvar_megbizasok where statusz <> 'torolt'`
   );
-  console.log("\n== ELLENŐRZÉS (cél: mindhárom 0) ==");
+  console.log("\n== ELLENŐRZÉS (cél: az első három 0) ==");
   console.log(`  SQL-szabály és TS-tükör eltér:              ${eltero.length}`);
   console.log(`  postázva, de postazva_at hiányzik (A):      ${a}`);
   console.log(`  van számlaszám, mégis folyamatban (B):      ${b}`);
+  console.log(`  (tájékoztató) postázva számlaszám nélkül:   ${c}  — 2026-09-16 óta Számla/Postán, számlázandó`);
   for (const s of eltero.slice(0, 20)) {
     console.log(`    ELTÉRÉS ${sorLeiras(s)}  SQL=${s.hely_sql} TS=${getFuvarHelye(s, ma, most)}`);
   }

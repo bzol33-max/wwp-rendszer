@@ -20,3 +20,16 @@
   UTC) A=0, B=0 sort érintett. Az ellenőrző számokat a `migrate.mjs`
   `naplozFuvarHelyEllenorzest` lépése MINDEN indulásnál a deploy-naplóba
   írja (cél: A=0, B=0) — redeploy-jal bármikor újra lekérhető.
+
+## 2026-09-16 (2. kör) — bér fuvar csak számlaszámmal archív; adatminőség-napló
+
+- Budaházi Zoltán döntése: postázottnak jelölt, de számlázatlan bér fuvar
+  NEM archív, hanem Számla/Posta (számlázandó). `fuvar-hely.ts`: az
+  "effektíve archivált" feltétel a számlaszámot is megköveteli.
+- `migrate.mjs` egyszeri lépés: a `db/archiv-backlog-cleanup.sql` által
+  mesterségesen postázottnak jelölt, számlázatlan sorok jelölője visszavonva
+  (a script saját visszavonási feltételével; kézi pipához nem nyúl).
+- `migrate.mjs` napló minden indulásnál: A/B/C/D számlálók, saját cég
+  megrendelőként (bér fuvar, azonosítókkal — NEM javítja, ember pótolja a
+  dokumentumból), megrendelő nélküli aktív sorok, az aktív fülek
+  megrendelő-nevei előfordulással (adatminőség átnézéséhez).
