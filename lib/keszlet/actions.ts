@@ -2,7 +2,13 @@
 
 import { randomUUID } from "node:crypto";
 import { query } from "@/lib/db";
-import { requireEditPermission } from "@/lib/auth/require-permission";
+import type { ModuleKey } from "@/lib/auth/permissions";
+import {
+  requireAnyEditPermission,
+  requireAnyViewPermission,
+  requireEditPermission,
+  requireViewPermission,
+} from "@/lib/auth/require-permission";
 
 const TIME_FMT = "mon. DD HH24:MI";
 
@@ -32,7 +38,30 @@ export type MovementRow = {
   created_by: string | null;
 };
 
-export async function getActiveTypes(site: string) {
+// Az önkiszolgáló "keszlet_sajat" jog (a dolgozói mobil nézet Készlet
+// csempéje) csak erre a két telephelyre érvényes — ld. KESZLET_SITES a
+// components/erkezes/erkezes-sajat-view.tsx-ben. A teljes "keszlet" modul
+// birtokosát ez nem korlátozza. A telephelyet a kliens küldi, ezért itt is
+// ellenőrizni kell, nem elég a felületen elrejteni.
+const SAJAT_KESZLET_SITES = ["Szakoly", "Balkány"];
+
+function ellenorizdSajatKeszletHatokor(jog: ModuleKey, ...sites: (string | undefined)[]) {
+  if (jog !== "keszlet_sajat") return;
+  for (const site of sites) {
+    if (site && !SAJAT_KESZLET_SITES.includes(site)) {
+      throw new Error(
+        `A saját készlet jogosultság nem érvényes erre a telephelyre: ${site}`
+      );
+    }
+  }
+}
+
+// Ezek a lekérdezések csak ezen a modulon belülről hívódnak (getSiteSnapshot,
+// getNyiregyhazaFoSnapshot). Szándékosan NEM exportáltak: egy "use server"
+// fájl minden exportja távolról hívható szerver-akció, exportálva tehát
+// jogosultság-ellenőrzés nélküli olvasási felületet adnának. A hívó
+// exportált akciók végzik az ellenőrzést.
+async function getActiveTypes(site: string) {
   const rows = await query<{ name: string }>(
     `select t.name
      from site_active_types sat
@@ -45,7 +74,7 @@ export async function getActiveTypes(site: string) {
   return rows.map((r) => r.name);
 }
 
-export async function getStock(site: string): Promise<Record<string, number>> {
+async function getStock(site: string): Promise<Record<string, number>> {
   // A "Csere" tranzakciótípus, nem önálló készlet — sosem jelenik meg készletkártyaként.
   const active = (await getActiveTypes(site)).filter((t) => t !== "Csere");
   const rows = await query<{ name: string; qty: string }>(
@@ -69,7 +98,7 @@ export async function getStock(site: string): Promise<Record<string, number>> {
   return totals;
 }
 
-export async function getMovements(site: string, limit = 20): Promise<MovementRow[]> {
+async function getMovements(site: string, limit = 20): Promise<MovementRow[]> {
   const rows = await query<MovementRow>(
     `select m.id::text, to_char(m.created_at at time zone 'Europe/Budapest', '${TIME_FMT}') as date, t.name as type,
        m.direction, m.partner, m.qty, ts.name as target_site, m.created_by
@@ -84,7 +113,10 @@ export async function getMovements(site: string, limit = 20): Promise<MovementRo
   return rows;
 }
 
-export async function addMovement(input: {
+// Belső segéd (nem exportált, ld. fent): minden hívója exportált akció,
+// ami már elvégezte a jogosultság- és hatókör-ellenőrzést. Saját őrt
+// szándékosan nem tartalmaz — az itt a keszlet_sajat ágat vágná el.
+async function addMovement(input: {
   site: string;
   type: string;
   direction: Direction;
@@ -95,7 +127,6 @@ export async function addMovement(input: {
   createdBy?: string;
   movementGroup?: string;
 }) {
-  await requireEditPermission("keszlet");
   await query(
     `insert into keszlet_movements (site_id, type_id, direction, qty, partner, target_site_id, purchase_id, created_by, movement_group)
      values (
@@ -148,7 +179,12 @@ export async function recordMovements(input: {
   partner?: string;
   createdBy?: string;
 }) {
-  await requireEditPermission("keszlet");
+  const jog = await requireAnyEditPermission(["keszlet", "keszlet_sajat"]);
+  ellenorizdSajatKeszletHatokor(
+    jog,
+    input.site,
+    ...input.items.map((i) => i.targetSite)
+  );
   if (input.items.length === 0) return;
 
   const movementGroup = randomUUID();
@@ -297,6 +333,7 @@ export type OsszkeszletRow = {
 };
 
 export async function getOsszkeszlet(): Promise<OsszkeszletRow[]> {
+  await requireViewPermission("keszlet");
   // Ugyanaz a be/ki/mozgatás-számítás, mint a getStock-ban, csak az összes
   // telephelyre egyszerre, típus+telephely bontásban — a "Csere" itt sem
   // önálló készlettétel, ld. getStock megjegyzését.
@@ -341,6 +378,7 @@ export type OsszkeszletHaviRow = {
 // nem valódi készletváltozás, csak áthelyezés) és a felvásárláshoz kötött
 // tételek (purchase_id not null — a Havi fülön már darabonként látszanak).
 export async function getOsszkeszletHavibontas(monthsBack = 4): Promise<OsszkeszletHaviRow[]> {
+  await requireViewPermission("keszlet");
   // Minden aktív típusra és minden hónapra ad vissza egy sort (0-val
   // feltöltve, ha nem volt mozgás), így a UI-nak nem kell hiányzó
   // típus/hónap kombinációkat pótolnia.
@@ -388,6 +426,8 @@ export async function getOsszkeszletHavibontas(monthsBack = 4): Promise<Osszkesz
 }
 
 export async function getSiteSnapshot(site: string) {
+  const jog = await requireAnyViewPermission(["keszlet", "keszlet_sajat"]);
+  ellenorizdSajatKeszletHatokor(jog, site);
   const [stock, movements, types] = await Promise.all([
     getStock(site),
     getMovements(site),
@@ -419,6 +459,7 @@ export type PriceRow = { name: string; default_price: number | null };
 // Gyors rögzítéshez (Havi fül és a /felvasarlas mobil nézet) azok a típusok
 // jelennek meg, amik Nyíregyházán aktívak ÉS van beárazva.
 export async function getNyiregyhazaPurchasePrices(): Promise<PriceRow[]> {
+  await requireAnyViewPermission(["keszlet", "felvasarlas_mobil"]);
   return query<PriceRow>(
     `select t.name, t.default_price
      from pallet_types t
@@ -430,6 +471,7 @@ export async function getNyiregyhazaPurchasePrices(): Promise<PriceRow[]> {
 }
 
 export async function getHaviSnapshot() {
+  await requireViewPermission("keszlet");
   const purchases = await query<PurchaseRow>(
     `select p.id::text, to_char(p.created_at at time zone 'Europe/Budapest', '${TIME_FMT}') as date,
        to_char(p.created_at at time zone 'Europe/Budapest', 'YYYY-MM-DD') as day_key, t.name as type,
@@ -501,7 +543,7 @@ export async function addPurchase(input: {
   date?: string;
   createdBy?: string;
 }) {
-  await requireEditPermission("keszlet");
+  await requireAnyEditPermission(["keszlet", "felvasarlas_mobil"]);
   const seller = input.seller ?? "";
   const total = input.qty * input.unitPrice;
   const method: PaymentMethod = input.method ?? "keszpenz";
@@ -694,6 +736,7 @@ export type KasszaMovementRow = {
 };
 
 export async function getKasszaMovements(): Promise<KasszaMovementRow[]> {
+  await requireViewPermission("keszlet");
   // Minden felvásárláshoz kapcsolódó kiadás (felvásárlás, csere, kifizetésre
   // váró tétel kiegyenlítése — category = 'felvasarlas') nagyon elszaporodik —
   // ezeket havonta egy összesítő sorba vonjuk össze, mindig a lista tetején,
@@ -746,6 +789,7 @@ export type EventRow = {
 };
 
 export async function getNyiregyhazaFoSnapshot() {
+  await requireViewPermission("keszlet");
   // A "Legutóbbi mozgások" itt csak a be/ki szállításokat és a telephelyek közti
   // mozgatást mutatja (kind = 'mozgas') — a Csere/Szétválogatás tételenkénti
   // története a saját fülén (Havi, ill. a Vegyes EUR sor) tekinthető meg.
@@ -808,7 +852,8 @@ export async function recordInventoryCount(input: {
   comment?: string;
   createdBy?: string;
 }) {
-  await requireEditPermission("keszlet");
+  const jog = await requireAnyEditPermission(["keszlet", "keszlet_sajat"]);
+  ellenorizdSajatKeszletHatokor(jog, input.site);
   await query(
     `insert into inventory_counts (site_id, type_id, expected_qty, counted_qty, accepted, comment, created_by)
      values ((select id from sites where name = $1), (select id from pallet_types where name = $2), $3, $4, $5, $6, $7)`,
@@ -839,6 +884,7 @@ export type TypeAdminRow = {
 };
 
 export async function getAllTypesAdmin(): Promise<TypeAdminRow[]> {
+  await requireViewPermission("beallitasok");
   return query<TypeAdminRow>(
     `select t.id, t.name, t.default_price,
        coalesce(array_agg(s.name) filter (where s.name is not null), '{}') as sites

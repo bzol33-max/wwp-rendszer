@@ -2,7 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { query } from "@/lib/db";
-import { requireEditPermission } from "@/lib/auth/require-permission";
+import {
+  requireEditPermission,
+  requireSajatVagyModulJog,
+  requireViewPermission,
+} from "@/lib/auth/require-permission";
 import {
   HU_MONTHS,
   wageMode,
@@ -72,7 +76,10 @@ async function resolveInitialPointer(): Promise<Pointer> {
   return { year: now.getFullYear(), month: now.getMonth() + 1 };
 }
 
-export async function getPointer(): Promise<Pointer> {
+// Belső segéd: szándékosan nem exportált, mert egy "use server" fájl minden
+// exportja távolról hívható szerver-akció lenne. Minden hívója exportált
+// akció, ami előtte elvégzi a jogosultság-ellenőrzést.
+async function getPointer(): Promise<Pointer> {
   const rows = await query<Pointer>(`select year, month from alkalmazottak_allapot where id = 1`);
   if (rows.length > 0) return rows[0];
   const resolved = await resolveInitialPointer();
@@ -124,6 +131,7 @@ async function ensureMonthRows(year: number, month: number) {
 // --- Fő nézet ---
 
 export async function getAlkalmazottakSnapshot(): Promise<Snapshot> {
+  await requireViewPermission("dolgozok");
   const pointer = await getPointer();
   await ensureMonthRows(pointer.year, pointer.month);
   const [employees, weekly, napiHavi, advances] = await Promise.all([
@@ -300,6 +308,12 @@ export type EmployeeAlapadatok = {
 
 /** A dolgozói mobil nézet (Profil > Alapadatok) saját, szűkített lekérdezése. */
 export async function getEmployeeAlapadatok(employeeId: string): Promise<EmployeeAlapadatok | null> {
+  await requireSajatVagyModulJog({
+    employeeId,
+    sajatModule: "erkezes",
+    modul: "dolgozok",
+    kind: "view",
+  });
   const rows = await query<Employee>(
     `select id::text, name, position, weekly_wage, daily_wage, monthly_wage,
        fixed_deduction, show_letiltas, show_uzemanyag, active
@@ -364,6 +378,12 @@ export type EmployeeElolegekOsszesito = {
 // A dolgozói mobil nézet (Profil > Előlegek) saját, szűkített lekérdezése —
 // csak a bejelentkezett dolgozó saját tételeit adja vissza.
 export async function getEmployeeElolegek(employeeId: string): Promise<EmployeeElolegekOsszesito> {
+  await requireSajatVagyModulJog({
+    employeeId,
+    sajatModule: "elolegek_sajat",
+    modul: "dolgozok",
+    kind: "view",
+  });
   const rows = await query<{
     id: string;
     advance_date: string;
@@ -395,7 +415,12 @@ export async function getEmployeeElolegek(employeeId: string): Promise<EmployeeE
 // akkor ír, ha még nincs elfogadva (utólag nem módosítható), és csak a saját
 // (employeeId) tételét fogadhatja el.
 export async function acceptAdvance(id: string, employeeId: string, acceptedByName: string) {
-  await requireEditPermission("dolgozok");
+  await requireSajatVagyModulJog({
+    employeeId,
+    sajatModule: "elolegek_sajat",
+    modul: "dolgozok",
+    kind: "edit",
+  });
   await query(
     `update alkalmazott_elolegek
      set accepted_at = now(), accepted_by = $3
@@ -409,6 +434,7 @@ export async function acceptAdvance(id: string, employeeId: string, acceptedByNa
 // --- Archívum ---
 
 export async function getArchiveList(): Promise<ArchiveMonth[]> {
+  await requireViewPermission("dolgozok");
   const pointer = await getPointer();
   const rows = await query<{ year: number; month: number }>(
     `select year, month from alkalmazott_heti_ber
@@ -425,6 +451,7 @@ export async function getArchiveList(): Promise<ArchiveMonth[]> {
 }
 
 export async function getArchivedMonth(year: number, month: number): Promise<ArchivedSnapshot> {
+  await requireViewPermission("dolgozok");
   const [employees, weekly, napiHavi] = await Promise.all([
     query<Employee>(
       `select id::text, name, position, weekly_wage, daily_wage, monthly_wage,
