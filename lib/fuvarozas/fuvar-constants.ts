@@ -121,6 +121,33 @@ export type MaiFuvarSor = {
   jarmu: string | null;
   sofor: string | null;
   pozicioszam: string | null;
+  /** ISO időbélyeg (UTC, "…Z"), ha a megbízás megadta a felrakási ablak kezdetét. */
+  felrakas_ablak_tol: string | null;
+  /** ISO időbélyeg (UTC, "…Z"), ha a megbízás megadta a lerakási ablak kezdetét. */
+  lerakas_ablak_tol: string | null;
+  /** A fuvar Teljesítve jelölője (kézi gomb vagy automatikus GPS-lezárás). */
+  teljesitve: boolean;
+};
+
+/**
+ * A GPS-érintés-felismerés bemenete (lásd lib/fuvarozas/erintes-felismeres.ts
+ * és teljesites-figyeles.ts): a közelmúlt és a mai nap saját fuvarjai
+ * járművel — a már lezártak is, mert a párosításban ők "foglalják" a
+ * hozzájuk tartozó valós megállást (különben ugyanaz az egy érkezés a
+ * következő körben egy másik, azonos lerakójú fuvart is lezárna).
+ */
+export type FuvarErintesSor = {
+  id: string;
+  jarmu: string;
+  felrako: string | null;
+  lerako: string;
+  datum: string;
+  lerakas_datum: string | null;
+  felrakas_ablak_tol: string | null;
+  lerakas_ablak_tol: string | null;
+  teljesitve: boolean;
+  /** A sor helye a Megbízások fülek szerint (lásd lib/fuvarozas/fuvar-hely.ts) — automatikusan csak a "ber_folyamatban" sorokat zárjuk le. */
+  hely: string;
 };
 
 export type FuvarRow = {
@@ -236,33 +263,6 @@ export type AddFuvarInput = {
  * szövegre formázott) dátumokkal, hogy Date objektumot lehessen belőlük
  * építeni az Ecofleet trip-lekérdezéshez.
  */
-export type TeljesitesJelolt = {
-  id: string;
-  /** "Sofőr — rendszám" formátumú szöveg (lásd lib/fuvarozas/vehicles.ts) — sosem üres, a lekérdezés ezt szűri. */
-  jarmu: string;
-  felrako: string | null;
-  lerako: string;
-  /** ISO dátum (YYYY-MM-DD) — a felrakás napja. */
-  datum: string;
-  /** ISO dátum (YYYY-MM-DD), ha a lerakás más napra esik. */
-  lerakas_datum: string | null;
-  /**
-   * A lerakási időablak kezdete ISO időbélyegként (UTC, "…Z"), ha a megbízás
-   * megadta (Duvenbeck: "PV: … Unloading"). A GPS-figyelés innentől keresi a
-   * lerakóhoz érkezést — korábbi ottjárás nem számít érkezésnek.
-   */
-  lerakas_ablak_tol: string | null;
-};
-
-/** A közelmúltban Teljesítve-re jelölt saját fuvar (GPS-figyelés: "elhasznált" érkezés). */
-export type FrissTeljesites = {
-  id: string;
-  jarmu: string;
-  lerako: string;
-  /** ISO időbélyeg (UTC, "…Z"). */
-  teljesitve_at: string;
-};
-
 export type ApproveFuvarInput = {
   id: string;
   tipus: FuvarTipus;

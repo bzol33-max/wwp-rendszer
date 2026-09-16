@@ -271,6 +271,19 @@ export type TervezettMegallo = {
    * a közelben történt megállás nem feltétlenül EZ a rakodás volt.
    */
   bizonytalanFelismeres: boolean;
+  /**
+   * Ettől a pillanattól számít érkezésnek, ha a jármű a cím közelében állt:
+   * a megbízás időablakának kezdete (Duvenbeck: PV/PB), különben a felrakás
+   * (felrakónál) vagy a lerakás (lerakónál) napjának kezdete. Az ablak ELŐTT
+   * véget ért állás nem ehhez a megállóhoz tartozik — az oda-vissza ingázó
+   * kocsinál a második fuvar felrakója az első fuvar lerakója, és enélkül a
+   * lerakás egy nappal a tényleges lerakás előtt "késznek" látszott.
+   */
+  ablakKezdet: Date | null;
+  /** Honnan tudjuk, hogy a megálló kész: GPS-felismerés, vagy kézi jelölés (sofőr a mobilon, vagy iroda a GPS lapon / a fuvar Teljesítve gombja). */
+  keszForras: "gps" | "kezi" | null;
+  /** Kézi jelölésnél a jelölő neve (fuvar_megallo_allapot.kesz_by), ha ismert. */
+  keszBy: string | null;
 };
 
 export type EloPozicio = {
@@ -413,6 +426,15 @@ const TOVABBHALADAS_TAVOLSAG_KM = 3;
 const ERINTES_MIN_IDOTARTAM_SEC = 10 * 60;
 
 /**
+ * Ha az állás ennél közelebb (km) van a címhez, a rövid időtartam sem zárja
+ * ki (a kapu előtt egy percre megállni is érintés). Ennél távolabb viszont
+ * a 10 perces minimum kell — korábban a helyalapú "rakodás" kategória
+ * bármilyen rövid állást átengedett a 2 km-es körön belül, így egy piros
+ * lámpa vagy körforgalom a cím 1,9 km-es körzetében érkezésnek számított.
+ */
+const KOZVETLEN_KOZELSEG_KM = 0.3;
+
+/**
  * Megjelöli a jármű EGÉSZ NAPJÁRA, mely tervezett fel-/lerakó pontokat
  * érintette már, és melyeket hagyta el. Három lépés:
  *
@@ -450,9 +472,12 @@ export function jelolMegallokat(
     // Felismerhetetlen címnél nincs mihez hasonlítani — ilyet nem jelölünk késznek.
     if (m.lat == null || m.lon == null || m.pontossag === "ismeretlen") return;
     allasok.forEach((a, ai) => {
-      if (a.idotartamSec < ERINTES_MIN_IDOTARTAM_SEC && a.kategoria !== "rakodas") return;
+      // Az időablak előtt véget ért állás nem ehhez a megállóhoz tartozik (lásd TervezettMegallo.ablakKezdet).
+      if (m.ablakKezdet && a.veg.getTime() < m.ablakKezdet.getTime()) return;
       const tav = haversineKm(m.lat as number, m.lon as number, a.lat, a.lon);
-      if (tav < CIM_TAVOLSAG_KM) parok.push({ fi, mi, ai, tav });
+      if (tav >= CIM_TAVOLSAG_KM) return;
+      if (a.idotartamSec < ERINTES_MIN_IDOTARTAM_SEC && tav >= KOZVETLEN_KOZELSEG_KM) return;
+      parok.push({ fi, mi, ai, tav });
     });
   });
 
@@ -487,6 +512,7 @@ export function jelolMegallokat(
         ...m,
         elhagyva: tovabbment,
         eppenItt: !tovabbment,
+        keszForras: tovabbment ? "gps" : m.keszForras,
         tenylegesIdo: erintes.kezdet,
         tenylegesTavozas: tovabbment ? erintes.veg : null,
         // Csak városnév szintjén ismert címnél a koordináta a városközépre
@@ -495,4 +521,31 @@ export function jelolMegallokat(
       };
     })
   );
+}
+
+/**
+ * A kézi jelölések ráfűzése a GPS-alapú jelölésre: ha a fuvar Teljesítve
+ * (kézi gomb vagy automatikus lezárás), minden megállója kész; ha egy
+ * megállót a sofőr (mobil) vagy az iroda (GPS lap) kézzel készre jelölt, az
+ * a megálló kész. A kézi jelölés a GPS-nél erősebb bizonyíték, ezért az
+ * "éppen itt" állapotot is felülírja. A GPS szerinti tényleges érkezés/
+ * távozás időpontja megmarad, ha volt.
+ */
+export function ratesziKeziJeloleseket(
+  megallok: TervezettMegallo[],
+  fuvarTeljesitve: boolean,
+  keziAllapotok: Map<number, { kesz: boolean; keszBy: string | null }>
+): TervezettMegallo[] {
+  return megallok.map((m) => {
+    const kezi = keziAllapotok.get(m.index);
+    const keziKesz = fuvarTeljesitve || !!kezi?.kesz;
+    if (!keziKesz || m.elhagyva) return m;
+    return { ...m, elhagyva: true, eppenItt: false, keszForras: "kezi", keszBy: kezi?.keszBy ?? m.keszBy };
+  });
+}
+
+/** Igaz, ha a fuvar a GPS szerint kész: minden lerakója geokódolható, és a jármű mindegyiket érintette és el is hagyta. */
+export function fuvarKeszGpsSzerint(megallok: TervezettMegallo[]): boolean {
+  const lerakok = megallok.filter((m) => m.tipus === "lerako");
+  return lerakok.length > 0 && lerakok.every((m) => m.lat != null && m.lon != null && m.elhagyva && m.keszForras === "gps");
 }

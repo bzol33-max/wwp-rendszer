@@ -101,3 +101,27 @@
   lerakó fuvarok érkezése is elhasznált (`getFrissenTeljesitettSajatFuvarok`).
   `migrate.mjs` egyszeri lépés: a #130 jelölése visszavonva, a javított
   figyelés dönt újra.
+
+## 2026-09-16 (7. kör) — GPS fül: hibajavítások (fejlesztés előtt)
+
+- **Közös felismerő út** (`lib/fuvarozas/erintes-felismeres.ts`): a 15 perces
+  Teljesítve-figyelő (`teljesites-figyeles.ts`) mostantól ugyanazt a
+  `jelolMegallokat` logikát futtatja, mint a GPS lap — állomásokra bontott,
+  geokódolt, időablakos megállók; egy fuvar akkor kész, ha MINDEN lerakóját
+  elhagyta. A már lezárt fuvarok is részt vesznek a párosításban (foglalják
+  a saját megállásukat), így egy érkezés körökön át sem zár le két fuvart.
+- **Érintés-napló nézőtől függetlenül**: a gps_erkezes/gps_tavozas a
+  figyelőből íródik, nem csak a GPS lap megnyitásakor.
+- **Szabályok** (`idovonal.ts`): az időablak előtt véget ért állás nem
+  érintés (ingázó kocsi); a 10 perces minimum a 2 km-es körön belül is
+  érvényes, kivéve 300 m-en belül (piros lámpa nem érkezés); mozgás csak a
+  sebességből (járó motor nem vezetés).
+- **Kézi kész-állapot egyesítve**: a sofőr mobilos jelölése, a GPS lap
+  pipája és a fuvar Teljesítve is készre teszi a pontot (forrás jelölve).
+  A pipa megállónként működik (`setMegalloKesz`), a fuvar az utolsó
+  lerakónál zárul.
+- **Felület**: elavult statikus becslés helyett „nincs friss becslés";
+  30 percnél régebbi élő jelnél sárga „utolsó jel X perce".
+- **Gyorsítótár** (`idovonal-cache.ts`): getIdovonalak 60 s (ma) / 10 perc
+  (múlt nap), kézi jelölés törli.
+- Teszt: `scripts/teszt-erintes.mts` (20 eset), bekötve az `npm run teszt`-be.

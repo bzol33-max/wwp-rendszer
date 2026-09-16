@@ -13,7 +13,7 @@ import {
   type KovetkezoNap,
   type MegalloBejegyzes,
 } from "@/lib/fuvarozas/actions";
-import { setFuvarTeljesitve } from "@/lib/fuvarozas/megbizasok";
+import { setMegalloKesz } from "@/lib/fuvarozas/megbizasok";
 import { SAJAT_JARMUVEK, JARMU_SZIN_DOT_CLASS, type JarmuSzin } from "@/lib/fuvarozas/vehicles";
 import type { FuvarTipus } from "@/lib/fuvarozas/fuvar-constants";
 import { budapestNapISO } from "@/lib/fuvarozas/idozona";
@@ -53,6 +53,16 @@ const FUVAR_TIPUS_BADGE: Record<FuvarTipus, string> = {
 
 function formatIdo(d: Date): string {
   return d.toLocaleTimeString("hu-HU", { hour: "2-digit", minute: "2-digit" });
+}
+
+/** Ennél régebbi élő GPS-adatnál figyelmeztetünk: a pozíció nem "most", a készülék kieshetett. */
+const REGI_JEL_PERC = 30;
+
+function formatEltelt(d: Date): string {
+  const perc = Math.round((Date.now() - d.getTime()) / 60000);
+  if (perc < 60) return `${perc} perce`;
+  const ora = Math.floor(perc / 60);
+  return `${ora} óra ${perc - ora * 60} perce`;
 }
 
 /** Rövid dátum + idő (pl. "szept. 15., 08:00") — olyan pontokhoz, amik nem a mai vagy a holnapi napra esnek, hogy a felhasználó lássa, melyik napról van szó. */
@@ -107,7 +117,15 @@ function JarmuInfoDoboz({
           <span className="flex flex-wrap gap-x-2 text-muted-foreground">
             <span>{pos.sebesseg} km/h</span>
             <span>·</span>
-            <span>{formatIdo(pos.utolsoAdat)}</span>
+            {/* Régi adatnál a puszta óra:perc frissnek látszana — kiírjuk, mióta nincs jel. */}
+            {Date.now() - pos.utolsoAdat.getTime() > REGI_JEL_PERC * 60000 ? (
+              <span className="flex items-center gap-1 font-medium text-amber-700 dark:text-amber-400" title="Az Ecofleet utolsó adata ennyi ideje érkezett — a pozíció nem feltétlenül a mostani.">
+                <AlertTriangle className="h-3 w-3" />
+                utolsó jel {formatEltelt(pos.utolsoAdat)} ({formatIdo(pos.utolsoAdat)})
+              </span>
+            ) : (
+              <span>{formatIdo(pos.utolsoAdat)}</span>
+            )}
             {pos.oraallasKm !== null && (
               <>
                 <span>·</span>
@@ -192,15 +210,25 @@ function MegalloSor({
   async function handleKesz() {
     setFolyamatban(true);
     try {
-      await setFuvarTeljesitve(b.fuvarId, true);
-      toast.success("Fuvar készre jelölve — a Bér fuvarok listán a Számla/Posta fülre került.");
+      const { fuvarLezarva } = await setMegalloKesz(b.fuvarId, b.megalloIndex);
+      toast.success(
+        fuvarLezarva
+          ? "Megálló készre jelölve — ez volt az utolsó lerakó, a fuvar Teljesítve lett."
+          : "Megálló készre jelölve. A fuvar az utolsó lerakó után zárul le."
+      );
       onKeszJelolve();
     } catch {
-      toast.error("Nem sikerült készre jelölni a fuvart.");
+      toast.error("Nem sikerült készre jelölni a megállót.");
     } finally {
       setFolyamatban(false);
     }
   }
+
+  const keszCim = b.elhagyva
+    ? b.keszForras === "kezi"
+      ? `Készre jelölve kézzel${b.keszBy ? ` (${b.keszBy})` : ""}`
+      : "Kész — a GPS szerint a jármű itt járt és továbbment"
+    : "Kattintás: a megálló megjelölése készre";
 
   return (
     <div
@@ -226,27 +254,36 @@ function MegalloSor({
               <span className="shrink-0 rounded bg-primary/20 px-1 py-0.5 text-[9px] font-medium text-primary">Folyamatban</span>
             )
           )}
-          {/* Már érintett pontnál a GPS szerinti tényleges megérkezés idejét mutatjuk, nem a becslést. */}
-          <span
-            className="shrink-0 text-muted-foreground"
-            title={
-              b.elhagyva || b.eppenItt
-                ? b.bizonytalanFelismeres
-                  ? "A GPS szerint a jármű a város közelében állt meg — a megbízáson csak a város szerepel, ezért ez nem biztos, hogy EZ a rakodás volt."
-                  : "Tényleges érkezés (GPS)"
-                : "Becsült érkezés"
-            }
-          >
-            {b.elhagyva || b.eppenItt ? (b.bizonytalanFelismeres ? "?" : "") : "~"}
-            {mutassNapot ? formatIdoNappal(b.idopont) : formatIdo(b.idopont)}
-          </span>
+          {/* Már érintett pontnál a GPS szerinti tényleges megérkezés idejét mutatjuk, nem a becslést.
+              Elavult (már elmúlt) statikus becslésnél nem írunk ki órát — az félrevezető lenne. */}
+          {b.becslesElavult ? (
+            <span className="shrink-0 italic text-muted-foreground" title="A megbízás tervezett időpontja elmúlt, és nem sikerült élő becslést számolni (nem geokódolható cím vagy hálózati hiba) — ellenőrizd a megbízáson a címet.">
+              nincs friss becslés
+            </span>
+          ) : (
+            <span
+              className="shrink-0 text-muted-foreground"
+              title={
+                b.elhagyva || b.eppenItt
+                  ? b.keszForras === "kezi" && !b.eppenItt
+                    ? "Kézi jelölés — a mutatott idő a tervezett/GPS szerinti időpont"
+                    : b.bizonytalanFelismeres
+                      ? "A GPS szerint a jármű a város közelében állt meg — a megbízáson csak a város szerepel, ezért ez nem biztos, hogy EZ a rakodás volt."
+                      : "Tényleges érkezés (GPS)"
+                  : "Becsült érkezés"
+              }
+            >
+              {b.elhagyva || b.eppenItt ? (b.bizonytalanFelismeres ? "?" : "") : "~"}
+              {mutassNapot ? formatIdoNappal(b.idopont) : formatIdo(b.idopont)}
+            </span>
+          )}
         </span>
         {b.tipus === "lerako" && (
           <button
             type="button"
             disabled={folyamatban || b.elhagyva}
             onClick={handleKesz}
-            title={b.elhagyva ? "Készre jelölve" : "Kattintás: megjelölés készre"}
+            title={keszCim}
             className={`flex h-4 w-4 shrink-0 items-center justify-center rounded-full border ${
               b.elhagyva
                 ? "border-success bg-success text-success-foreground"
