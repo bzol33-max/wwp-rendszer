@@ -53,7 +53,7 @@ import {
   setFuvarSzamlaSzam,
   setFuvarTeljesitve,
   szinkronizalSzamlaSzamokat,
-  updateFuvarStatus,
+  visszaallitFuvarArchivbol,
 } from "@/lib/fuvarozas/megbizasok";
 import {
   calculateTollForAddresses,
@@ -2573,14 +2573,20 @@ function ArchivLista() {
   }
 
   async function handleVisszaallitas(id: string, tipus: FuvarTipus) {
-    if (tipus === "ber") {
-      // A saját fuvaroknak nincs postázási munkafolyamatuk — a "Visszaállítás"
-      // itt a lezárt/számlázott státuszt vonja vissza "Úton"-ra.
-      await updateFuvarStatus(id, "uton");
-    } else {
-      await setFuvarPostazva(id, false);
-    }
+    // Típustól függetlenül azt nullázza, ami a sort ténylegesen az Archívban
+    // tartja (postázás, saját fuvarnál a "Kész" jelölés is) — a statusz nem
+    // számít a besorolásban, ezért a korábbi, csak-statusz-író változat a
+    // saját fuvaroknál nem-op volt. Lásd visszaallitFuvarArchivbol.
+    const ujHely = await visszaallitFuvarArchivbol(id);
     await load();
+    if (ujHely === "archiv") {
+      toast.error(
+        tipus === "ber"
+          ? "A fuvar archív maradt: a lerakás dátuma már elmúlt (vagy van számlaszáma). Módosítsd a dátumot a Saját fuvarok szerkesztőjében."
+          : "A fuvar archív maradt — nézd meg a postázás és a számlaszám mezőit."
+      );
+      return;
+    }
     toast.success(
       tipus === "ber" ? "Visszaállítva — a Saját fuvarok fülön folytatódik." : "Visszaállítva a Számla/Posta listába."
     );
