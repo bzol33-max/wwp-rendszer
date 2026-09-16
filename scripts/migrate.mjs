@@ -213,6 +213,7 @@ async function main() {
   await javitsaMaradekSajatCegMegrendelotOnce(pool);
   await toroljeDuplikatumSorokatOnce(pool);
   await vonjaVisszaKoraiTeljesitestOnce(pool);
+  await vonjaVisszaKettosGpsTeljesitestOnce(pool);
   await naplozFuvarHelyEllenorzest(pool);
 
   await pool.end();
@@ -408,15 +409,53 @@ async function vonjaVisszaKoraiTeljesitestOnce(pool) {
        and lerakas_ablak_tol is not null
        and teljesitve_at < lerakas_ablak_tol
        and coalesce(szamla_szam, '') = '' and not postazva
-     returning id, to_char(teljesitve_at at time zone 'Europe/Budapest', 'MM-DD HH24:MI') as mikor,
-       to_char(lerakas_ablak_tol at time zone 'Europe/Budapest', 'MM-DD HH24:MI') as ablak`
+     returning id, to_char(lerakas_ablak_tol at time zone 'Europe/Budapest', 'MM-DD HH24:MI') as ablak`
   );
   await pool.query(`insert into alkalmazott_javitasok (kod) values ($1) on conflict (kod) do nothing`, [
     JAVITAS_KOD,
   ]);
   console.log(
     `[migrate] korai GPS-teljesítés visszavonva: ${rows.length} sor` +
-      (rows.length ? " — " + rows.map((r) => `#${r.id} (jelölve ${r.mikor}, ablak ${r.ablak}-tól)`).join("; ") : ".")
+      (rows.length ? " — " + rows.map((r) => `#${r.id} (ablak ${r.ablak}-tól)`).join("; ") : ".")
+  );
+}
+
+// Egyszeri javítás (2026-09-16, 2. kör): ugyanaz a kocsi egy napon két azonos
+// lerakójú fuvart vitt (#126 és #130, Pápa → Debrecen, NMZ-492), és a
+// GPS-figyelés az ELSŐ érkezéskor mindkettőt lezárta — ugyanabban a percben
+// (09-16 07:35). Egy kocsi egyszerre csak az egyiket rakhatta le. A javított
+// figyelés (teljesites-figyeles.ts) az érkezéseket számolja; ez a lépés a
+// kettős jelölést vonja vissza, hogy a javított figyelés újra eldöntse,
+// melyik van kész. Feltétel: ugyanaz a jármű, ugyanaz a lerakó, ugyanaz a
+// Teljesítve-időpont, számlázatlan, nem postázott — csak ilyen párokon.
+async function vonjaVisszaKettosGpsTeljesitestOnce(pool) {
+  const JAVITAS_KOD = "kettos-gps-teljesites-visszavonas-2026-09-16";
+  const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (mar.length > 0) return;
+
+  const { rows } = await pool.query(
+    `update fuvar_megbizasok f
+     set teljesitve = false, teljesitve_at = null,
+         megjegyzes = coalesce(f.megjegyzes || ' | ', '') ||
+           'A GPS-figyelés ugyanabban a percben (' || to_char(f.teljesitve_at at time zone 'Europe/Budapest', 'MM-DD HH24:MI') ||
+           ') két azonos lerakójú fuvart zárt le ugyanannál a kocsinál — visszavonva 2026-09-16-án, a javított figyelés dönt újra.'
+     where f.tipus = 'sajat' and f.statusz <> 'torolt'
+       and f.teljesitve and f.teljesitve_at is not null
+       and coalesce(f.szamla_szam, '') = '' and not f.postazva
+       and exists (
+         select 1 from fuvar_megbizasok g
+         where g.id <> f.id and g.tipus = 'sajat' and g.statusz <> 'torolt'
+           and g.jarmu = f.jarmu and g.lerako = f.lerako
+           and g.teljesitve_at = f.teljesitve_at
+       )
+     returning f.id`
+  );
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1) on conflict (kod) do nothing`, [
+    JAVITAS_KOD,
+  ]);
+  console.log(
+    `[migrate] kettős GPS-teljesítés visszavonva: ${rows.length} sor` +
+      (rows.length ? " — " + rows.map((r) => `#${r.id}`).join(", ") : ".")
   );
 }
 

@@ -87,6 +87,9 @@ export async function futtatTeljesitesFigyeles(): Promise<TeljesitesFigyelesEred
     eloPoziciok = [];
   }
 
+  // Kocsi + lerakó → ebben a körben már "elhasznált" érkezések száma (lásd lent).
+  const felhasznaltErkezesek = new Map<string, number>();
+
   for (const jelolt of jeloltek) {
     const jarmu = resolveJarmu(jelolt.jarmu);
     if (!jarmu || !jarmu.ecofleetObjectId) continue; // nincs GPS-kötés ehhez a járműhöz
@@ -115,12 +118,24 @@ export async function futtatTeljesitesFigyeles(): Promise<TeljesitesFigyelesEred
 
       const tripek = await getVehicleTrips(jarmu.ecofleetObjectId, kezdet, veg);
 
-      const odaert = tripek.some(
-        (t) =>
-          haversineKm(t.startLatitude, t.startLongitude, lerakoCim.lat, lerakoCim.lon) <= ERKEZES_SUGAR_KM ||
-          haversineKm(t.endLatitude, t.endLongitude, lerakoCim.lat, lerakoCim.lon) <= ERKEZES_SUGAR_KM
-      );
-      if (!odaert) continue; // még nem járt a lerakó közelében — korai lenne teljesítettnek venni
+      // HÁNYSZOR érkezett a jármű a lerakóhoz? Nem "járt-e ott", hanem
+      // számolunk: ugyanaz a kocsi egy napon KÉT azonos lerakójú fuvart is
+      // vihet (élesben: két Pápa → Debrecen Duvenbeck-megbízás, NMZ-492), és
+      // a puszta "odaért" mindkettőt az ELSŐ érkezéskor lezárta. Egy érkezés =
+      // egy út, ami a 2 km-es körön KÍVÜLRŐL indul és BELÜL ér véget (a
+      // telephelyen belüli mozgás nem érkezés). Ha az ablak kezdetekor a kocsi
+      // már bent állt (az első út belülről indul), az is egy érkezés. Ugyan-
+      // annak a kocsinak ugyanahhoz a lerakóhoz csak annyi fuvart zárunk le,
+      // ahány érkezés volt — a listát id szerint járjuk, tehát a korábban
+      // rögzített fuvar kapja az első érkezést.
+      const bentVan = (lat: number, lon: number) => haversineKm(lat, lon, lerakoCim.lat, lerakoCim.lon) <= ERKEZES_SUGAR_KM;
+      let erkezesek = tripek.filter(
+        (t) => bentVan(t.endLatitude, t.endLongitude) && !bentVan(t.startLatitude, t.startLongitude)
+      ).length;
+      if (tripek.length > 0 && bentVan(tripek[0].startLatitude, tripek[0].startLongitude)) erkezesek++;
+      const erkezesKulcs = `${jarmu.ecofleetObjectId}|${lerakoCim.lat.toFixed(3)},${lerakoCim.lon.toFixed(3)}`;
+      const felhasznalt = felhasznaltErkezesek.get(erkezesKulcs) ?? 0;
+      if (erkezesek - felhasznalt <= 0) continue; // (még) nincs erre a fuvarra jutó érkezés — korai lenne teljesítettnek venni
 
       const eloPoz = eloPoziciok.find((p) => p.objectId === jarmu.ecofleetObjectId);
       const utolsoTrip = tripek[tripek.length - 1];
@@ -135,6 +150,7 @@ export async function futtatTeljesitesFigyeles(): Promise<TeljesitesFigyelesEred
       if (tavolsag >= TAVOZAS_KM) {
         await setFuvarTeljesitve(jelolt.id, true);
         eredmeny.automatikusanTeljesitve++;
+        felhasznaltErkezesek.set(erkezesKulcs, felhasznalt + 1);
       }
     } catch (err) {
       eredmeny.hibak.push(
