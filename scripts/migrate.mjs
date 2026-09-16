@@ -553,13 +553,28 @@ async function naplozFuvarHelyEllenorzest(pool) {
       `select drive_file_id, fajlnev, partner_kod, olvaso, verdikt, kifogasok, fuvar_id,
          to_char(created_at at time zone 'Europe/Budapest', 'MM-DD HH24:MI') as mikor
        from fuvar_import_naplo
-       where created_at >= now() - interval '7 days'
+       where created_at >= now() - interval '7 days' and coalesce(verdikt, '') <> 'regi_import'
        order by created_at desc limit 40`
     );
     for (const i of iratok) {
       const kifogasok = Array.isArray(i.kifogasok) ? i.kifogasok.join(" / ") : "";
       console.log(
         `[migrate]   import ${i.mikor} ${i.fajlnev ?? i.drive_file_id} | ${i.partner_kod ?? "-"} | ${i.olvaso ?? "-"} | ${i.verdikt ?? "-"} | sor: ${i.fuvar_id ? "#" + i.fuvar_id : "-"}${kifogasok ? " | " + kifogasok.slice(0, 200) : ""}`
+      );
+    }
+    // Az utolsó 7 napban LÉTREJÖTT sorok, a töröltek is (csak napló): egy
+    // eltűnt fuvar itt látszik a megjegyzésével — ki/mi törölte és miért.
+    const { rows: ujSorok } = await pool.query(
+      `select id, statusz, tipus, to_char(datum, 'YYYY-MM-DD') as nap, left(megrendelo, 22) as megrendelo,
+         pozicioszam, ellenorzott, forras, drive_file_id, left(megjegyzes, 160) as megjegyzes,
+         to_char(created_at at time zone 'Europe/Budapest', 'MM-DD HH24:MI') as mikor
+       from fuvar_megbizasok
+       where created_at >= now() - interval '7 days'
+       order by created_at desc limit 40`
+    );
+    for (const s of ujSorok) {
+      console.log(
+        `[migrate]   új sor ${s.mikor} #${s.id} [${s.statusz}${s.ellenorzott ? ", ellenőrzött" : ""}, ${s.tipus}] ${s.nap} ${s.megrendelo ?? "-"} | poz: ${s.pozicioszam ?? "-"} | ${s.forras ?? "-"} | drive: ${s.drive_file_id ?? "-"}${s.megjegyzes ? " | " + s.megjegyzes : ""}`
       );
     }
     // Friss bér fuvarok (csak napló): a folyamatban-lista üressége/tartalma
