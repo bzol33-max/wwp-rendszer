@@ -1,62 +1,37 @@
 // GPS-alapú automatikus "Teljesítve" figyelés a "Bér fuvarok — folyamatban"
-// listához: ha az Ecofleet szerint a fuvarhoz rendelt jármű ténylegesen
-// odaért a lerakó címhez, majd onnan legalább TAVOZAS_KM távolságra
-// eltávolodott, a fuvart automatikusan "teljesítve"-nek jelöljük — ugyanaz a
-// jelölő, amit a Bér fuvarok listán a kézi "Kész" gomb is beállít (lásd
-// setFuvarTeljesitve), így a valós lerakás dátumot ez sem hamisítja meg.
+// listához, és a tényleges érkezés/távozás tartós naplózása.
 //
-// FONTOS: a puszta "10 km-nél messzebb van a lerakó címtől" önmagában nem
-// elég — egy olyan jármű is 10+ km-re lenne, ami sosem is járt arra (más
-// fuvart teljesít). Ezért két lépésben ellenőrzünk: 1) VALAHA (a fuvar
-// felrakási napja óta) odaért-e a jármű a lerakó cím ERKEZES_SUGAR_KM-es
-// körzetébe (Ecofleet trip-előzmény, trip végpontok), és csak ha igen,
-// 2) a jelenlegi (élő, vagy ha az nem elérhető, a legutóbbi trip szerinti)
-// pozíciója már TAVOZAS_KM-nél messzebb van-e onnan.
+// UGYANAZT a felismerést futtatja, amit a GPS lap mutat (lib/fuvarozas/
+// erintes-felismeres.ts + idovonal.ts jelolMegallokat): állomásokra bontott,
+// geokódolt, időablakos megállók; az Ecofleet trip-előzményből épített
+// állás-szakaszok; kölcsönös párosítás (egy valós megállás egyetlen
+// megállót igazol, a nap összes fuvarjára együtt); "elhagyva", ha a jármű az
+// érintés után legalább 3 km-re továbbment. Egy fuvar akkor kész, ha MINDEN
+// lerakóját elhagyta — ugyanaz a jelölő, amit a kézi "Kész" gomb is állít.
+//
+// Két hibát zár ez a közös út:
+// 1. A GPS-érintések naplója (fuvar_megallo_allapot.gps_erkezes/gps_tavozas)
+//    korábban csak akkor íródott, ha valaki megnyitotta a GPS lapot — most
+//    a 15 perces kör írja, nézőtől függetlenül.
+// 2. A figyelő és a lap más-más logikával döntött (a figyelő a lerakó mezőt
+//    egyben geokódolta, több-lerakós fuvarnál rossz címmel), így ugyanarra a
+//    fuvarra ellentmondó állapotot mutattak.
+//
+// A MÁR LEZÁRT fuvarok is részt vesznek a párosításban (getSajatFuvarokErinteshez):
+// ők "foglalják" a saját valós megállásukat, különben ugyanaz az egy érkezés
+// a következő körben egy másik, azonos lerakójú fuvart is lezárna (élesben:
+// két Pápa → Debrecen Duvenbeck-megbízás, NMZ-492).
 
-import { getFleetLastPositions, getVehicleTrips, EcofleetError, type EcofleetPosition } from "./ecofleet";
-import { geocodeAddress, TollCalcError, type GeocodedAddress } from "./utdijkalkulacio";
-import { resolveJarmu } from "./vehicles";
-import { getTeljesitesJeloltek, getFrissenTeljesitettSajatFuvarok, setFuvarTeljesitve } from "./megbizasok";
-import { budapestFalioraToInstant } from "./idozona";
+import { getFleetLastPositions, getVehicleTrips, parseEcofleetTimestamp, EcofleetError, type EcofleetPosition } from "./ecofleet";
+import { SAJAT_JARMUVEK, resolveJarmu } from "./vehicles";
+import { getSajatFuvarokErinteshez, setFuvarTeljesitve } from "./megbizasok";
+import { epitsIdovonal, fuvarKeszGpsSzerint, jelolMegallokat, kiegesziteloAllapottal } from "./idovonal";
+import { epitsErintesMegallokat, mozogE } from "./erintes-felismeres";
+import { rogzitGpsErinteseket } from "./megallo-naplo";
+import { budapestFalioraToInstant, budapestNapISO } from "./idozona";
 
-/** Ha a jármű valaha ennyi km-en belülre került a lerakó címhez, "odaértnek" számít. */
-const ERKEZES_SUGAR_KM = 2;
-/** Ha az odaérés UTÁN a jármű ennyi km-re (vagy messzebb) távolodik a lerakó címtől, "teljesítettnek" számít. */
-const TAVOZAS_KM = 10;
-
-/** Föld sugara km-ben — a haversine távolságszámításhoz. */
-const FOLD_SUGAR_KM = 6371;
-
-/** Két koordináta légvonalbeli távolsága km-ben (haversine-képlet) — geofence-szerű közelség-ellenőrzéshez elég pontos. */
-function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
-  return FOLD_SUGAR_KM * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-// A lerakó címek geokódolása a kalkulátor külső API-ját hívja — mivel a
-// fuvarok listája körönként újra lekérdeződik, de a címek maguk nem
-// változnak, a folyamat élettartamáig érvényes gyorsítótár elég (nincs
-// szükség adatbázisba írásra, csak a felesleges ismételt hívások elkerülésére).
-const geokodCache = new Map<string, GeocodedAddress | null>();
-
-async function geokodolCachelve(cim: string): Promise<GeocodedAddress | null> {
-  if (geokodCache.has(cim)) return geokodCache.get(cim) ?? null;
-  try {
-    const talalat = await geocodeAddress(cim);
-    geokodCache.set(cim, talalat);
-    return talalat;
-  } catch (err) {
-    if (!(err instanceof TollCalcError)) {
-      console.error("[teljesites-figyeles] geokódolási hiba:", err);
-    }
-    geokodCache.set(cim, null);
-    return null;
-  }
-}
+/** Ennyi nappal visszamenőleg vesszük figyelembe a lerakandó fuvarokat és a trip-előzményt. */
+const VISSZATEKINTES_NAP = 3;
 
 export type TeljesitesFigyelesEredmeny = {
   vizsgalt: number;
@@ -64,18 +39,22 @@ export type TeljesitesFigyelesEredmeny = {
   hibak: string[];
 };
 
+function napIsoEltolva(napISO: string, delta: number): string {
+  const [ev, ho, nap] = napISO.split("-").map(Number);
+  const d = new Date(Date.UTC(ev, ho - 1, nap + delta, 12));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
+
 /**
- * Egy teljes ellenőrzési kör: minden folyamatban lévő, jármű-hozzárendeléssel
- * rendelkező saját fuvarra megnézi, hogy a GPS szerint már ténylegesen
- * kész-e (odaért a lerakóhoz, majd eltávolodott onnan) — ha igen, a
- * meglévő "Teljesítve" jelölővel automatikusan lezárja (lásd a fájl tetején
- * a modul-megjegyzést a hamis-pozitív elleni védelemről).
+ * Egy teljes ellenőrzési kör, járművenként: felismerés, érintés-napló,
+ * és a GPS szerint kész, még folyamatban lévő fuvarok lezárása.
  */
 export async function futtatTeljesitesFigyeles(): Promise<TeljesitesFigyelesEredmeny> {
   const eredmeny: TeljesitesFigyelesEredmeny = { vizsgalt: 0, automatikusanTeljesitve: 0, hibak: [] };
+  const most = new Date();
 
-  const jeloltek = await getTeljesitesJeloltek();
-  if (jeloltek.length === 0) return eredmeny;
+  const sorok = await getSajatFuvarokErinteshez(napIsoEltolva(budapestNapISO(most), -VISSZATEKINTES_NAP));
+  if (sorok.length === 0) return eredmeny;
 
   let eloPoziciok: EcofleetPosition[];
   try {
@@ -87,89 +66,62 @@ export async function futtatTeljesitesFigyeles(): Promise<TeljesitesFigyelesEred
     eloPoziciok = [];
   }
 
-  // Kocsi + lerakó → ebben a körben már "elhasznált" érkezések száma (lásd lent).
-  const felhasznaltErkezesek = new Map<string, number>();
+  for (const jarmu of SAJAT_JARMUVEK) {
+    if (!jarmu.ecofleetObjectId) continue; // nincs GPS-kötés ehhez a járműhöz
+    const sajat = sorok.filter((s) => resolveJarmu(s.jarmu) === jarmu);
+    if (sajat.length === 0) continue;
+    const nyitottak = sajat.filter((s) => s.hely === "ber_folyamatban" && !s.teljesitve);
+    eredmeny.vizsgalt += nyitottak.length;
+    if (nyitottak.length === 0) continue; // csak naplózni nem érdemes külső hívásokat indítani
 
-  // A KORÁBBI körökben lezárt fuvarok érkezése is elhasznált: élesben a
-  // 13:05-ös kör lezárta a #126-ot (egy érkezés), majd a 13:20-as kör — a
-  // #126 már nem lévén jelölt — ugyanazt az egy érkezést a #130-nak adta.
-  // Ezért a közelmúltban Teljesítve-re jelölt (GPS vagy kézi "Kész") saját
-  // fuvarokat is beszámítjuk, ha ugyanaz a kocsi, ugyanaz a lerakó, és a
-  // lezárás a vizsgált fuvar érkezési ablakán belülre esik.
-  const frissenLezartak = await getFrissenTeljesitettSajatFuvarok();
-
-  for (const jelolt of jeloltek) {
-    const jarmu = resolveJarmu(jelolt.jarmu);
-    if (!jarmu || !jarmu.ecofleetObjectId) continue; // nincs GPS-kötés ehhez a járműhöz
-
-    eredmeny.vizsgalt++;
     try {
-      const lerakoCim = await geokodolCachelve(jelolt.lerako);
-      if (!lerakoCim) continue; // nem geokódolható cím — ezt a fuvart kihagyjuk, a kézi gomb marad a megoldás
+      const fuvarok = await Promise.all(sajat.map(async (sor) => ({ sor, megallok: await epitsErintesMegallokat(sor) })));
+      const tervezettCimek = fuvarok.flatMap((f) =>
+        f.megallok.filter((m) => m.lat != null && m.lon != null).map((m) => ({ lat: m.lat as number, lon: m.lon as number }))
+      );
 
-      // MIKORTÓL számít érkezésnek, ha a jármű a lerakó közelében járt?
-      // Korábban a FELRAKÁS napjától — ez hamis pozitívot adott az oda-vissza
-      // ingázó kocsinál: ugyanaz a jármű egy napon Pápa → Debrecen ÉS
-      // Debrecen → Pápa megbízást is visz, és a második fuvar FELRAKÓJA az
-      // első fuvar LERAKÓJA. A felrakáshoz odaérve az első fuvar "odaértnek"
-      // számított, majd elindulva "teljesítettnek" — a lerakás előtt egy
-      // nappal. Ezért az érkezést csak a lerakási időablak kezdetétől
-      // (ha a megbízás megadta), különben a lerakás (ha nincs külön, a
-      // felrakás) napjának kezdetétől keressük.
-      const lerakasNap = jelolt.lerakas_datum ?? jelolt.datum;
-      const [ev, ho, nap] = lerakasNap.split("-").map(Number);
-      const kezdet = jelolt.lerakas_ablak_tol
-        ? new Date(jelolt.lerakas_ablak_tol)
-        : budapestFalioraToInstant(ev, ho, nap, 0, 0, 0);
-      const veg = new Date();
-      if (kezdet > veg) continue; // a lerakási ablak még el sem kezdődött
+      // Trip-előzmény a legkorábbi érintett felrakás napjától (de legfeljebb
+      // VISSZATEKINTES_NAP napra vissza) a jelen pillanatig.
+      const legkorabbiNap = sajat.map((s) => s.datum).sort()[0];
+      const [ev, ho, nap] = legkorabbiNap.split("-").map(Number);
+      const also = new Date(most.getTime() - VISSZATEKINTES_NAP * 86400000);
+      const kezdet = new Date(Math.max(budapestFalioraToInstant(ev, ho, nap, 0, 0, 0).getTime(), also.getTime()));
+      const trips = await getVehicleTrips(jarmu.ecofleetObjectId, kezdet, most);
+      let szakaszok = epitsIdovonal(trips, tervezettCimek);
 
-      const tripek = await getVehicleTrips(jarmu.ecofleetObjectId, kezdet, veg);
-
-      // HÁNYSZOR érkezett a jármű a lerakóhoz? Nem "járt-e ott", hanem
-      // számolunk: ugyanaz a kocsi egy napon KÉT azonos lerakójú fuvart is
-      // vihet (élesben: két Pápa → Debrecen Duvenbeck-megbízás, NMZ-492), és
-      // a puszta "odaért" mindkettőt az ELSŐ érkezéskor lezárta. Egy érkezés =
-      // egy út, ami a 2 km-es körön KÍVÜLRŐL indul és BELÜL ér véget (a
-      // telephelyen belüli mozgás nem érkezés). Ha az ablak kezdetekor a kocsi
-      // már bent állt (az első út belülről indul), az is egy érkezés. Ugyan-
-      // annak a kocsinak ugyanahhoz a lerakóhoz csak annyi fuvart zárunk le,
-      // ahány érkezés volt — a listát id szerint járjuk, tehát a korábban
-      // rögzített fuvar kapja az első érkezést.
-      const bentVan = (lat: number, lon: number) => haversineKm(lat, lon, lerakoCim.lat, lerakoCim.lon) <= ERKEZES_SUGAR_KM;
-      let erkezesek = tripek.filter(
-        (t) => bentVan(t.endLatitude, t.endLongitude) && !bentVan(t.startLatitude, t.startLongitude)
-      ).length;
-      if (tripek.length > 0 && bentVan(tripek[0].startLatitude, tripek[0].startLongitude)) erkezesek++;
-      const erkezesKulcs = `${jarmu.ecofleetObjectId}|${lerakoCim.lat.toFixed(3)},${lerakoCim.lon.toFixed(3)}`;
-      let korabbanLezart = 0;
-      for (const f of frissenLezartak) {
-        if (new Date(f.teljesitve_at) < kezdet) continue;
-        if (resolveJarmu(f.jarmu)?.ecofleetObjectId !== jarmu.ecofleetObjectId) continue;
-        const fCim = f.lerako === jelolt.lerako ? lerakoCim : await geokodolCachelve(f.lerako);
-        if (fCim && `${jarmu.ecofleetObjectId}|${fCim.lat.toFixed(3)},${fCim.lon.toFixed(3)}` === erkezesKulcs) korabbanLezart++;
+      const elo = eloPoziciok.find((p) => p.objectId === jarmu.ecofleetObjectId);
+      const eloIdo = elo ? parseEcofleetTimestamp(elo.timestamp) : null;
+      if (elo && eloIdo) {
+        szakaszok = kiegesziteloAllapottal(
+          szakaszok,
+          { lat: elo.latitude, lon: elo.longitude, cim: null, mozog: mozogE(elo), idobelyeg: eloIdo },
+          most,
+          tervezettCimek
+        );
       }
-      const felhasznalt = (felhasznaltErkezesek.get(erkezesKulcs) ?? 0) + korabbanLezart;
-      if (erkezesek - felhasznalt <= 0) continue; // (még) nincs erre a fuvarra jutó érkezés — korai lenne teljesítettnek venni
 
-      const eloPoz = eloPoziciok.find((p) => p.objectId === jarmu.ecofleetObjectId);
-      const utolsoTrip = tripek[tripek.length - 1];
-      const jelenlegiPoz = eloPoz
-        ? { lat: eloPoz.latitude, lon: eloPoz.longitude }
-        : utolsoTrip
-          ? { lat: utolsoTrip.endLatitude, lon: utolsoTrip.endLongitude }
-          : null;
-      if (!jelenlegiPoz) continue; // sem élő pozíció, sem trip — nincs mihez viszonyítani
+      const jelolt = jelolMegallokat(
+        fuvarok.map((f) => f.megallok),
+        szakaszok
+      );
 
-      const tavolsag = haversineKm(jelenlegiPoz.lat, jelenlegiPoz.lon, lerakoCim.lat, lerakoCim.lon);
-      if (tavolsag >= TAVOZAS_KM) {
-        await setFuvarTeljesitve(jelolt.id, true);
+      const erintesek = fuvarok.flatMap((f, i) =>
+        jelolt[i]
+          .filter((m) => m.tenylegesIdo !== null)
+          .map((m) => ({ fuvarId: f.sor.id, index: m.index, erkezes: m.tenylegesIdo!, tavozas: m.tenylegesTavozas }))
+      );
+      await rogzitGpsErinteseket(erintesek).catch((err) => console.error("[megallo-naplo] felírás sikertelen:", err));
+
+      for (let i = 0; i < fuvarok.length; i++) {
+        const { sor } = fuvarok[i];
+        if (sor.hely !== "ber_folyamatban" || sor.teljesitve) continue;
+        if (!fuvarKeszGpsSzerint(jelolt[i])) continue;
+        await setFuvarTeljesitve(sor.id, true);
         eredmeny.automatikusanTeljesitve++;
-        felhasznaltErkezesek.set(erkezesKulcs, felhasznalt + 1);
       }
     } catch (err) {
       eredmeny.hibak.push(
-        `Fuvar #${jelolt.id}: ${err instanceof EcofleetError ? err.message : err instanceof Error ? err.message : "ismeretlen hiba"}`
+        `${jarmu.sofor}: ${err instanceof EcofleetError ? err.message : err instanceof Error ? err.message : "ismeretlen hiba"}`
       );
     }
   }

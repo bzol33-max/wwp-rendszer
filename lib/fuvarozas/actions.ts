@@ -18,6 +18,7 @@ import {
   jelolMegallokat,
   kiegesziteloAllapottal,
   parseIdopontSzoveg,
+  ratesziKeziJeloleseket,
   type EloPozicio,
   type TervezettFuvarSzakasz,
   type TervezettMegallo,
@@ -25,9 +26,12 @@ import {
 import { SAJAT_JARMUVEK, resolveJarmu, type JarmuSzin, type SajatJarmu } from "./vehicles";
 import { bontsMegallokra, cimPontossaga, varosNev } from "./varos";
 import { rogzitGpsErinteseket } from "./megallo-naplo";
+import { megalloAblakKezdet, mozogE } from "./erintes-felismeres";
+import { cachelve } from "./idovonal-cache";
 import {
   getFuvarokIdoszakban,
   getMaiSajatFuvarok,
+  getMegalloAllapotok,
   getMaiValodiSajatFuvarok,
   getPapirraVaroFuvarok,
   type PapirraVaroFuvar,
@@ -134,6 +138,18 @@ export type MegalloBejegyzes = {
   nyersCim: string;
   /** A felismerés csak valószínűsítés (a cím csak városnév szintjén ismert) — lásd TervezettMegallo.bizonytalanFelismeres. */
   bizonytalanFelismeres: boolean;
+  /** A megálló sorszáma a fuvar állomás-sorrendjében — a kézi "kész" jelölés ide ír (fuvar_megallo_allapot.megallo_index). */
+  megalloIndex: number;
+  /** Honnan tudjuk, hogy kész: GPS-felismerés vagy kézi jelölés (sofőr mobil, GPS lap pipa, fuvar Teljesítve). */
+  keszForras: "gps" | "kezi" | null;
+  /** Kézi jelölésnél a jelölő neve, ha ismert. */
+  keszBy: string | null;
+  /**
+   * Igaz, ha az `idopont` csak a megbízás statikus menetrendje, és már a
+   * múltba esik — nem sikerült élő becslést számolni (nem geokódolható
+   * cím, hálózati hiba). A felület ilyenkor nem mutat konkrét órát.
+   */
+  becslesElavult: boolean;
 };
 
 /**
@@ -627,6 +643,9 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus, kali
     tenylegesIdo: null,
     tenylegesTavozas: null,
     bizonytalanFelismeres: false,
+    ablakKezdet: megalloAblakKezdet(row, m.tipus),
+    keszForras: null,
+    keszBy: null,
   }));
 
   return {
@@ -749,10 +768,21 @@ function laposMegallok(tervezettFuvarok: TervezettFuvarSzakasz[]): MegalloBejegy
           eppenItt: m.eppenItt,
           nyersCim: m.nyersCim,
           bizonytalanFelismeres: m.bizonytalanFelismeres,
+          megalloIndex: m.index,
+          keszForras: m.keszForras,
+          keszBy: m.keszBy,
+          becslesElavult: false,
         })
       )
     )
     .sort((a, b) => a.idopont.getTime() - b.idopont.getTime());
+}
+
+/** A mai napon: a még el nem ért pontok közül az, amelyiknek a becsült ideje már elmúlt, elavult statikus becslés (lásd MegalloBejegyzes.becslesElavult). */
+function jeloldElavultBecsleseket(bejegyzesek: MegalloBejegyzes[], most: Date): MegalloBejegyzes[] {
+  return bejegyzesek.map((b) =>
+    !b.elhagyva && !b.eppenItt && b.idopont.getTime() <= most.getTime() ? { ...b, becslesElavult: true } : b
+  );
 }
 
 /** A megjelenített napra eső és a rákövetkező naptári napra átcsúszott pontok szétválasztása. */
@@ -832,7 +862,16 @@ export async function getPapirNyugtazasJavaslat(): Promise<PapirNyugtazasJavasla
   return javaslatok;
 }
 
+/** Az idővonal-eredmény érvényessége a gyorsítótárban: a mai nap élő, a lezárt napok csak a kézi jelölésekkel változnak. */
+const IDOVONAL_CACHE_MA_MS = 60 * 1000;
+const IDOVONAL_CACHE_MULT_MS = 10 * 60 * 1000;
+
 export async function getIdovonalak(nap?: string): Promise<IdovonalNap> {
+  const { napISO, maiNap } = budapestNapHatarok(nap);
+  return cachelve(`idovonal:${napISO}`, maiNap ? IDOVONAL_CACHE_MA_MS : IDOVONAL_CACHE_MULT_MS, () => szamitsIdovonalakat(napISO));
+}
+
+async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
   const { kezdet, veg, napISO, maiNap } = budapestNapHatarok(nap);
   const [berFuvarok, sajatFuvarok] = await Promise.all([
     getMaiSajatFuvarok(napISO).catch(() => [] as MaiFuvarSor[]),
@@ -874,6 +913,19 @@ export async function getIdovonalak(nap?: string): Promise<IdovonalNap> {
       };
     });
 
+  // A kézi jelölések (sofőr mobil, GPS lap pipa) egy lekérdezéssel, minden mai fuvarra.
+  const keziAllapotok = await getMegalloAllapotok(maiFuvarok.map(({ row }) => row.id)).catch(() => []);
+  const keziAllapotTerkep = new Map<string, Map<number, { kesz: boolean; keszBy: string | null }>>();
+  for (const a of keziAllapotok) {
+    if (!keziAllapotTerkep.has(a.fuvar_id)) keziAllapotTerkep.set(a.fuvar_id, new Map());
+    keziAllapotTerkep.get(a.fuvar_id)!.set(a.megallo_index, { kesz: a.kesz, keszBy: a.kesz_by });
+  }
+  const keziJelolesekkel = (fuvarok: TervezettFuvarSzakasz[], sorok: { row: MaiFuvarSor }[]) =>
+    fuvarok.map((f, i) => ({
+      ...f,
+      megallok: ratesziKeziJeloleseket(f.megallok, sorok[i].row.teljesitve, keziAllapotTerkep.get(f.id) ?? new Map()),
+    }));
+
   const jarmuvek = await Promise.all(
     SAJAT_JARMUVEK.map(async (jarmu): Promise<JarmuIdovonalEredmeny> => {
       const sajatSorok = maiFuvarok.filter(({ row }) => driverMatchesRow(jarmu, row));
@@ -888,7 +940,7 @@ export async function getIdovonalak(nap?: string): Promise<IdovonalNap> {
           eloPozicio: null,
           eloEta: null,
           hiba: null,
-          ...szetvalasztNapSzerint(laposMegallok(tervezettFuvarok), napISO),
+          ...szetvalasztNapSzerint(laposMegallok(keziJelolesekkel(tervezettFuvarok, sajatSorok)), napISO),
         };
       }
       try {
@@ -921,7 +973,7 @@ export async function getIdovonalak(nap?: string): Promise<IdovonalNap> {
               lat: livePos.latitude,
               lon: livePos.longitude,
               cim,
-              mozog: livePos.engineOn || livePos.speed > 0,
+              mozog: mozogE(livePos),
               idobelyeg: parsedTs,
             };
             szakaszok = kiegesziteloAllapottal(szakaszok, elo, veg, tervezettCimek);
@@ -939,7 +991,11 @@ export async function getIdovonalak(nap?: string): Promise<IdovonalNap> {
         // valós megállás ne igazolhassa több, egymástól független megbízás
         // megállóját is.
         const jeloltMegallok = jelolMegallokat(tervezettFuvarok.map((f) => f.megallok), szakaszok);
-        const jeloltFuvarok = tervezettFuvarok.map((f, i) => ({ ...f, megallok: jeloltMegallok[i] }));
+        // A kézi jelölések (sofőr, GPS lap pipa, fuvar Teljesítve) erősebbek a GPS-nél — ezek után kerülnek rá.
+        const jeloltFuvarok = keziJelolesekkel(
+          tervezettFuvarok.map((f, i) => ({ ...f, megallok: jeloltMegallok[i] })),
+          sajatSorok
+        );
 
         // Az észlelt érintéseket eltároljuk, mert az Ecofleet trip-előzménye
         // nem marad meg örökre, a számlázás viszont napokkal a lerakás után
@@ -958,7 +1014,7 @@ export async function getIdovonalak(nap?: string): Promise<IdovonalNap> {
         const lancoltFuvarok = livePos
           ? await lancoltEloBecsles(jeloltFuvarok, { lat: livePos.latitude, lon: livePos.longitude }, veg, kalibracio)
           : jeloltFuvarok;
-        const bejegyzesek = laposMegallok(lancoltFuvarok);
+        const bejegyzesek = maiNap ? jeloldElavultBecsleseket(laposMegallok(lancoltFuvarok), veg) : laposMegallok(lancoltFuvarok);
 
         // Élő ETA: a legközelebbi, még el nem hagyott fel-/lerakó pont
         // frissen láncolt becsült ideje — ez adja a jármű-csempén a
@@ -999,7 +1055,7 @@ export async function getIdovonalak(nap?: string): Promise<IdovonalNap> {
           eloPozicio: null,
           eloEta: null,
           hiba: message,
-          ...szetvalasztNapSzerint(laposMegallok(tervezettFuvarok), napISO),
+          ...szetvalasztNapSzerint(laposMegallok(keziJelolesekkel(tervezettFuvarok, sajatSorok)), napISO),
         };
       }
     })

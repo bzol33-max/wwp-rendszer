@@ -14,6 +14,7 @@ import { query } from "@/lib/db";
 import { getFuvarok } from "@/lib/fuvarozas/megbizasok";
 import { resolveJarmu, SAJAT_JARMUVEK, type SajatJarmu } from "@/lib/fuvarozas/vehicles";
 import { bontsMegallokra, varosNev } from "@/lib/fuvarozas/varos";
+import { toroljIdovonalCachet } from "@/lib/fuvarozas/idovonal-cache";
 import type { FuvarRow } from "@/lib/fuvarozas/fuvar-constants";
 
 function jarmuMatch(jarmu: SajatJarmu, row: FuvarRow): boolean {
@@ -147,5 +148,7 @@ export async function markMegalloKesz(fuvarId: string, megalloIndex: number, sof
      on conflict (fuvar_id, megallo_index) do update set kesz = true, kesz_at = now(), kesz_by = $3`,
     [fuvarId, megalloIndex, soforNev]
   );
+  // A GPS lap is ezt a jelölést mutatja (kézi kész) — a gyorsítótárazott idővonal frissüljön.
+  toroljIdovonalCachet();
   revalidatePath("/erkezes");
 }

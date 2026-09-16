@@ -4,6 +4,9 @@ import { query } from "@/lib/db";
 import { requireEditPermission } from "@/lib/auth/require-permission";
 import { ceglNevKanonikusan, normalizaltCegKulcs, sajatCegunkE } from "@/lib/fuvarozas/fuvar-constants";
 import { FUVAR_HELY_SQL, type FuvarHely } from "@/lib/fuvarozas/fuvar-hely";
+import { toroljIdovonalCachet } from "@/lib/fuvarozas/idovonal-cache";
+import { bontsMegallokra } from "@/lib/fuvarozas/varos";
+import { requireSession } from "@/lib/auth/dal";
 import type {
   FuvarTipus,
   FuvarStatusz,
@@ -11,8 +14,7 @@ import type {
   MaiFuvarSor,
   AddFuvarInput,
   ApproveFuvarInput,
-  TeljesitesJelolt,
-  FrissTeljesites,
+  FuvarErintesSor,
   FuvardijPenznem,
   KimutatasJarmuSor,
   UtkozesJelolt,
@@ -120,42 +122,29 @@ export async function getFolyamatbanValodiSajatFuvarok(): Promise<FuvarRow[]> {
 }
 
 /**
- * A GPS-alapú automatikus "Teljesítve" figyeléshez (lásd
- * lib/fuvarozas/teljesites-figyeles.ts): a jelenleg folyamatban lévő saját
- * fuvarok, amiknek van hozzárendelt jármű — nyers dátumokkal, hogy Date
- * objektumot lehessen belőlük építeni az Ecofleet trip-lekérdezéshez.
- * Ugyanaz a "folyamatban" feltétel, mint getFolyamatbanSajatFuvarok-nál.
+ * A GPS-érintés-felismerés bemenete (lásd teljesites-figyeles.ts): a
+ * `kezdetNapISO` óta lerakandó (vagy már lerakott), járművel rendelkező
+ * saját fuvarok — a MÁR LEZÁRTAK is (ők foglalják a párosításban a saját
+ * megállásukat), de csak a mai napig felrakottak (a holnapi fuvarhoz még
+ * nincs mit felismerni).
  */
-export async function getTeljesitesJeloltek(): Promise<TeljesitesJelolt[]> {
-  return query<TeljesitesJelolt>(
+export async function getSajatFuvarokErinteshez(kezdetNapISO: string): Promise<FuvarErintesSor[]> {
+  return query<FuvarErintesSor>(
     `select id::text, jarmu, felrako, lerako,
        to_char(datum, 'YYYY-MM-DD') as datum,
        to_char(lerakas_datum, 'YYYY-MM-DD') as lerakas_datum,
-       to_char(lerakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as lerakas_ablak_tol
+       to_char(felrakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as felrakas_ablak_tol,
+       to_char(lerakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as lerakas_ablak_tol,
+       teljesitve,
+       ${FUVAR_HELY_SQL} as hely
      from fuvar_megbizasok
-     where statusz <> 'torolt' and ${FUVAR_HELY_SQL} = 'ber_folyamatban'
+     where tipus = 'sajat' and statusz <> 'torolt'
        and jarmu is not null and jarmu <> ''
+       and coalesce(lerakas_datum, datum) >= $1::date
+       and datum <= (now() at time zone 'Europe/Budapest')::date
      order by id asc
-     limit 200`
-  );
-}
-
-/**
- * A GPS-figyelés másik bemenete: az elmúlt napokban Teljesítve-re jelölt
- * saját fuvarok (akár GPS, akár a kézi "Kész" gomb zárta le). Ugyanannak a
- * kocsinak ugyanahhoz a lerakóhoz csak annyi fuvart szabad lezárni, ahány
- * érkezése volt — a korábbi körökben már lezárt fuvarok érkezését ezért
- * "elhasználtnak" kell tekinteni (lásd futtatTeljesitesFigyeles).
- */
-export async function getFrissenTeljesitettSajatFuvarok(): Promise<FrissTeljesites[]> {
-  return query<FrissTeljesites>(
-    `select id::text, jarmu, lerako,
-       to_char(teljesitve_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as teljesitve_at
-     from fuvar_megbizasok
-     where statusz <> 'torolt' and tipus = 'sajat'
-       and teljesitve and teljesitve_at >= now() - interval '7 days'
-       and jarmu is not null and jarmu <> ''
-     order by id asc`
+     limit 200`,
+    [kezdetNapISO]
   );
 }
 
@@ -178,7 +167,10 @@ export async function getMaiSajatFuvarok(nap?: string): Promise<MaiFuvarSor[]> {
        id::text, megrendelo, felrako, lerako, idopont,
        to_char(datum, 'YYYY-MM-DD') as datum,
        to_char(lerakas_datum, 'YYYY-MM-DD') as lerakas_datum,
-       jarmu, sofor, pozicioszam
+       jarmu, sofor, pozicioszam,
+       to_char(felrakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as felrakas_ablak_tol,
+       to_char(lerakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as lerakas_ablak_tol,
+       teljesitve
      from fuvar_megbizasok
      where tipus = 'sajat' and statusz <> 'torolt'
        and datum <= coalesce($1::date, current_date)
@@ -203,7 +195,10 @@ export async function getMaiValodiSajatFuvarok(nap?: string): Promise<MaiFuvarSo
        id::text, megrendelo, felrako, lerako, idopont,
        to_char(datum, 'YYYY-MM-DD') as datum,
        to_char(lerakas_datum, 'YYYY-MM-DD') as lerakas_datum,
-       jarmu, sofor, pozicioszam
+       jarmu, sofor, pozicioszam,
+       to_char(felrakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as felrakas_ablak_tol,
+       to_char(lerakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as lerakas_ablak_tol,
+       teljesitve
      from fuvar_megbizasok
      where tipus = 'ber' and statusz <> 'torolt'
        and datum <= coalesce($1::date, current_date)
@@ -227,7 +222,10 @@ export async function getFuvarokIdoszakban(kezdetNapISO: string, vegNapISO: stri
        id::text, tipus, megrendelo, felrako, lerako, idopont,
        to_char(datum, 'YYYY-MM-DD') as datum,
        to_char(lerakas_datum, 'YYYY-MM-DD') as lerakas_datum,
-       jarmu, sofor, pozicioszam
+       jarmu, sofor, pozicioszam,
+       to_char(felrakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as felrakas_ablak_tol,
+       to_char(lerakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as lerakas_ablak_tol,
+       teljesitve
      from fuvar_megbizasok
      where tipus in ('sajat', 'ber') and statusz <> 'torolt'
        and datum between $1::date and $2::date
@@ -446,6 +444,51 @@ export async function setFuvarokPapirokBeerkeztek(ids: string[], beerkezett: boo
   );
 }
 
+/** Egy fuvar-lista megállóinak kézi állapota (sofőr mobil / GPS lap jelölése) a fuvar_megallo_allapot táblából. */
+export async function getMegalloAllapotok(
+  fuvarIds: string[]
+): Promise<{ fuvar_id: string; megallo_index: number; kesz: boolean; kesz_by: string | null }[]> {
+  if (fuvarIds.length === 0) return [];
+  return query(
+    `select fuvar_id::text as fuvar_id, megallo_index, kesz, kesz_by
+     from fuvar_megallo_allapot
+     where fuvar_id = any($1::bigint[]) and kesz`,
+    [fuvarIds]
+  );
+}
+
+/**
+ * A GPS lap pipája egy lerakó soron: a MEGÁLLÓT jelöli készre (ugyanabba a
+ * sorba, ahová a sofőr mobilos megerősítése ír), és ha ez a fuvar UTOLSÓ
+ * lerakója, a fuvart is Teljesítve-re állítja. Korábban a pipa bármelyik
+ * lerakónál az egész fuvart lezárta, és a lezárás a listán nem is látszott
+ * (a zöld jelölés kizárólag a GPS-felismerésből jött).
+ */
+export async function setMegalloKesz(fuvarId: string, megalloIndex: number): Promise<{ fuvarLezarva: boolean }> {
+  await requireEditPermission("fuvarozas");
+  const session = await requireSession();
+  const sorok = await query<{ felrako: string | null; lerako: string; teljesitve: boolean }>(
+    `select felrako, lerako, teljesitve from fuvar_megbizasok where id = $1 and statusz <> 'torolt'`,
+    [fuvarId]
+  );
+  const sor = sorok[0];
+  if (!sor) throw new Error("A fuvar nem található.");
+  await query(
+    `insert into fuvar_megallo_allapot (fuvar_id, megallo_index, kesz, kesz_at, kesz_by)
+     values ($1, $2, true, now(), $3)
+     on conflict (fuvar_id, megallo_index) do update set kesz = true, kesz_at = now(), kesz_by = $3`,
+    [fuvarId, megalloIndex, session.name]
+  );
+  const utolsoIndex = bontsMegallokra(sor.felrako).length + bontsMegallokra(sor.lerako).length - 1;
+  let fuvarLezarva = false;
+  if (megalloIndex === utolsoIndex && !sor.teljesitve) {
+    await query(`update fuvar_megbizasok set teljesitve = true, teljesitve_at = now() where id = $1`, [fuvarId]);
+    fuvarLezarva = true;
+  }
+  toroljIdovonalCachet();
+  return { fuvarLezarva };
+}
+
 /**
  * A "Bér fuvarok — folyamatban" fül kézi "Teljesítve" gombja: a fuvart a
  * rögzített (tervezett) lerakás dátumtól függetlenül azonnal átteszi a
@@ -458,6 +501,7 @@ export async function setFuvarTeljesitve(id: string, teljesitve: boolean) {
     `update fuvar_megbizasok set teljesitve = $2, teljesitve_at = case when $2 then now() else null end where id = $1`,
     [id, teljesitve]
   );
+  toroljIdovonalCachet();
 }
 
 /**
