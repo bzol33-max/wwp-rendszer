@@ -208,8 +208,55 @@ async function main() {
   await feloldTorortDuvenbeckDokumentumokatOnce(pool);
   await torolDokumentumNelkuliDuplikatumokatOnce(pool);
   await rendezFuvarHelyeketOnce(pool);
+  await naplozFuvarHelyEllenorzest(pool);
 
   await pool.end();
+}
+
+// MINDEN indulásnál (nem egyszeri): a fuvar-besorolás ellenőrző számai a
+// deploy-naplóba. Ugyanaz, amit a scripts/fuvar-hely-ujrasorolas.mts --check
+// ír ki — az élesben kézzel nem futtatható (nincs kiadható adatbázis-
+// elérés), ezért itt fut, és egy redeploy-jal bármikor újra lekérhető.
+// A) és B) a rendezFuvarHelyeketOnce két adathibája; a cél mindkettőnél 0.
+// A fülenkénti darabszám csak tájékoztató. A CASE a lib/fuvarozas/
+// fuvar-hely.ts FUVAR_HELY_SQL másolata — a MÉRVADÓ az ottani; ha az
+// változik, ezt is kövesd (a SQL/TS egyezést a --check script méri).
+async function naplozFuvarHelyEllenorzest(pool) {
+  try {
+    const { rows } = await pool.query(
+      `select
+         count(*) filter (where postazva and postazva_at is null) as a,
+         count(*) filter (where tipus = 'sajat' and coalesce(szamla_szam, '') <> ''
+                            and not teljesitve and coalesce(lerakas_datum, datum) >= current_date) as b,
+         count(*) filter (where hely = 'ber_folyamatban') as ber_folyamatban,
+         count(*) filter (where hely = 'sajat_folyamatban') as sajat_folyamatban,
+         count(*) filter (where hely = 'szamla_posta') as szamla_posta,
+         count(*) filter (where hely = 'archiv') as archiv
+       from (
+         select *,
+           (case
+              when (postazva and coalesce(postazva_at, '-infinity'::timestamptz) <= now() - interval '5 minutes')
+                or (tipus = 'ber' and (teljesitve or coalesce(lerakas_datum, datum) < current_date or coalesce(szamla_szam, '') <> ''))
+                then 'archiv'
+              when (teljesitve or coalesce(lerakas_datum, datum) < current_date or coalesce(szamla_szam, '') <> '')
+                then 'szamla_posta'
+              when tipus = 'ber' then 'sajat_folyamatban'
+              else 'ber_folyamatban'
+            end) as hely
+         from fuvar_megbizasok
+         where statusz <> 'torolt'
+       ) f`
+    );
+    const r = rows[0];
+    console.log(
+      `[migrate] fuvar-hely ellenőrzés (cél: A=0, B=0): A) postázva postazva_at nélkül = ${r.a}, ` +
+        `B) számlás, mégis folyamatban = ${r.b} — fülek: Bér folyamatban ${r.ber_folyamatban}, ` +
+        `Saját folyamatban ${r.sajat_folyamatban}, Számla/Posta ${r.szamla_posta}, Archív ${r.archiv}.`
+    );
+  } catch (e) {
+    // Csak napló — az indulást nem akaszthatja meg.
+    console.warn(`[migrate] fuvar-hely ellenőrzés nem futott le: ${e?.message ?? e}`);
+  }
 }
 
 // Egyszeri javítás (2026-09-16): a meglévő fuvarok a Megbízások fülei közt a
