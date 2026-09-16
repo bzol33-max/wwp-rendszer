@@ -3,6 +3,7 @@
 import { query } from "@/lib/db";
 import { requireEditPermission } from "@/lib/auth/require-permission";
 import { ceglNevKanonikusan, normalizaltCegKulcs } from "@/lib/fuvarozas/fuvar-constants";
+import { FUVAR_HELY_SQL, type FuvarHely } from "@/lib/fuvarozas/fuvar-hely";
 import type {
   FuvarTipus,
   FuvarStatusz,
@@ -92,9 +93,7 @@ export async function getFolyamatbanSajatFuvarok(): Promise<FuvarRow[]> {
   return query<FuvarRow>(
     `select ${FUVAR_ROW_COLUMNS}
      from fuvar_megbizasok
-     where tipus = 'sajat' and statusz <> 'torolt'
-       and not teljesitve
-       and coalesce(lerakas_datum, datum) >= current_date
+     where statusz <> 'torolt' and ${FUVAR_HELY_SQL} = 'ber_folyamatban'
      order by ellenorzott asc, coalesce(lerakas_datum, datum) asc, id asc
      limit 200`
   );
@@ -113,9 +112,7 @@ export async function getFolyamatbanValodiSajatFuvarok(): Promise<FuvarRow[]> {
   return query<FuvarRow>(
     `select ${FUVAR_ROW_COLUMNS}
      from fuvar_megbizasok
-     where tipus = 'ber' and statusz <> 'torolt'
-       and not teljesitve
-       and coalesce(lerakas_datum, datum) >= current_date
+     where statusz <> 'torolt' and ${FUVAR_HELY_SQL} = 'sajat_folyamatban'
      order by coalesce(lerakas_datum, datum) asc, id asc
      limit 200`
   );
@@ -134,9 +131,7 @@ export async function getTeljesitesJeloltek(): Promise<TeljesitesJelolt[]> {
        to_char(datum, 'YYYY-MM-DD') as datum,
        to_char(lerakas_datum, 'YYYY-MM-DD') as lerakas_datum
      from fuvar_megbizasok
-     where tipus = 'sajat' and statusz <> 'torolt'
-       and not teljesitve
-       and coalesce(lerakas_datum, datum) >= current_date
+     where statusz <> 'torolt' and ${FUVAR_HELY_SQL} = 'ber_folyamatban'
        and jarmu is not null and jarmu <> ''
      order by id asc
      limit 200`
@@ -440,21 +435,38 @@ export async function setFuvarTeljesitve(id: string, teljesitve: boolean) {
   );
 }
 
-/** Az 5 perces visszavonási ablak, amíg egy "Postázva" jelölésű fuvar még nem archiválódik automatikusan. */
-const ARCHIVALAS_ABLAK_SQL = `interval '5 minutes'`;
-
 /**
- * "Effektíve archivált" bér fuvar — a Számla/Posta és az Archív fül közös
- * választóvonala, ezért egy helyen definiálva: ha a két hívási hely eltérne,
- * egy sor vagy mindkét fülön megjelenne, vagy egyiken sem.
- *
- * A hiányzó postazva_at-ot "régen archivált"-nak vesszük. Enélkül a NULL
- * továbbterjedne a <= összehasonlításon (`true and NULL` = NULL), és a sor
- * MINDKÉT fül where-feltételén elbukna — vagyis sehol nem látszana. Ilyen sor
- * a setFuvarPostazva-n keresztül nem keletkezik (az együtt írja a két mezőt),
- * de importból vagy kézi DB-javításból igen.
+ * Az Archív fül "Visszaállítás" gombja: azt nullázza, ami a sort TÉNYLEGESEN
+ * az Archívban tartja (lásd FUVAR_HELY_SQL), nem a statusz-t — a statusz a
+ * besorolásban nem játszik, ezért a korábbi, csak-statusz-író változat a
+ * saját fuvaroknál (tipus='ber') nem mozdította el a sort.
+ *   - tipus='sajat' (Bér fuvarok): a postázás visszavonása → Számla/Posta.
+ *   - tipus='ber' (Saját fuvarok): a "Kész" jelölés (és egy esetleges
+ *     postázás) visszavonása → Saját fuvarok (folyamatban).
+ * Visszaadja a sor ÚJ helyét, hogy a UI őszintén jelezhesse, ha a sor mégis
+ * archív maradt — ez akkor fordul elő, ha a lerakás/felrakás dátuma már
+ * elmúlt, vagy van számlaszáma: ezeket csak szerkesztéssel lehet módosítani,
+ * a gomb nem hamisítja meg őket.
  */
-const EFFEKTIVE_ARCHIVALT_SQL = `(postazva and coalesce(postazva_at, '-infinity'::timestamptz) <= now() - ${ARCHIVALAS_ABLAK_SQL})`;
+export async function visszaallitFuvarArchivbol(id: string): Promise<FuvarHely | null> {
+  await requireEditPermission("fuvarozas");
+  const rows = await query<{ hely: FuvarHely }>(
+    `update fuvar_megbizasok
+     set postazva = false,
+         postazva_at = null,
+         teljesitve = case when tipus = 'ber' then false else teljesitve end,
+         teljesitve_at = case when tipus = 'ber' then null else teljesitve_at end
+     where id = $1
+     returning ${FUVAR_HELY_SQL} as hely`,
+    [id]
+  );
+  return rows[0]?.hely ?? null;
+}
+
+// Az "effektíve archivált" (postázva + 5 perc) és a "munka kész" feltétel,
+// valamint a fülek közti besorolás EGY helyen él: lib/fuvarozas/fuvar-hely.ts
+// (FUVAR_HELY_SQL). Az alábbi lekérdezések csak azt szűrik, hogy a sor helye
+// melyik fül — a szabályt ott módosítsd, ne itt.
 
 /**
  * A Számla/Posta lista: a Bér fuvarok, DE csak azok, amiknek a munkája már
@@ -469,9 +481,7 @@ export async function getSzamlaPostaFuvarok(): Promise<FuvarRow[]> {
   return query<FuvarRow>(
     `select ${FUVAR_ROW_COLUMNS}
      from fuvar_megbizasok
-     where tipus = 'sajat' and statusz <> 'torolt'
-       and (teljesitve or coalesce(lerakas_datum, datum) < current_date)
-       and not ${EFFEKTIVE_ARCHIVALT_SQL}
+     where statusz <> 'torolt' and ${FUVAR_HELY_SQL} = 'szamla_posta'
      order by ellenorzott asc, fuvar_megbizasok.erkezett_datum desc nulls last, datum desc, id desc
      limit 200`
   );
@@ -498,10 +508,8 @@ export async function getPapirraVaroFuvarok(): Promise<PapirraVaroFuvar[]> {
     `select id::text, megrendelo, felrako, lerako, jarmu, sofor,
        to_char(coalesce(lerakas_datum, datum), 'YYYY-MM-DD') as datum
      from fuvar_megbizasok
-     where tipus = 'sajat' and statusz <> 'torolt'
-       and (teljesitve or coalesce(lerakas_datum, datum) < current_date)
+     where statusz <> 'torolt' and ${FUVAR_HELY_SQL} = 'szamla_posta'
        and papirok_beerkeztek_at is null
-       and not ${EFFEKTIVE_ARCHIVALT_SQL}
      order by coalesce(lerakas_datum, datum) asc, id asc
      limit 100`
   );
@@ -522,11 +530,7 @@ export async function getArchivFuvarok(): Promise<FuvarRow[]> {
   return query<FuvarRow>(
     `select ${FUVAR_ROW_COLUMNS}
      from fuvar_megbizasok
-     where statusz <> 'torolt'
-       and (
-         (tipus = 'sajat' and ${EFFEKTIVE_ARCHIVALT_SQL})
-         or (tipus = 'ber' and (teljesitve or coalesce(lerakas_datum, datum) < current_date))
-       )
+     where statusz <> 'torolt' and ${FUVAR_HELY_SQL} = 'archiv'
      order by postazva_at desc nulls last, datum desc
      limit 200`
   );
