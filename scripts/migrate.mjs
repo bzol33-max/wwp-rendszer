@@ -216,6 +216,7 @@ async function main() {
   await vonjaVisszaKettosGpsTeljesitestOnce(pool);
   await szabaditsaFelTorortRbtMegbizastOnce(pool);
   await toroljeMasodpeldanyokatOnce(pool);
+  await toroljeMasodpeldanyokat2Once(pool);
   await naplozFuvarHelyEllenorzest(pool);
 
   await pool.end();
@@ -521,6 +522,26 @@ async function toroljeMasodpeldanyokatOnce(pool) {
     { marad: 42, torlendo: 100, feltetel: `coalesce(m.szamla_szam, '') <> '' and coalesce(t.szamla_szam, '') = '' and t.datum = m.datum` },
     { marad: 76, torlendo: 102, feltetel: `coalesce(m.szamla_szam, '') <> '' and coalesce(t.szamla_szam, '') = '' and t.datum = m.datum` },
   ];
+  await toroljeParokat(pool, JAVITAS_KOD, parok, "másodpéldány sorok töröltnek jelölve");
+}
+
+// 2. kör (2026-09-16): az első kör a Hajdúspedíció-párokat kihagyta, mert
+// időközben a #100 és #102 is számlát kapott — ugyanazt, mint a párja
+// (#42/#100: WLLWR-2026-285, #76/#102: WLLWR-2026-284). Nem kétszeri
+// számlázás, ugyanaz a számla mindkét példányon, mint a HAPP-párnál. A
+// feltétel ezért itt az azonos számlaszám.
+async function toroljeMasodpeldanyokat2Once(pool) {
+  const JAVITAS_KOD = "masodpeldany-sorok-torlese-2-2026-09-16";
+  const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (mar.length > 0) return;
+  const parok = [
+    { marad: 42, torlendo: 100, feltetel: `coalesce(t.szamla_szam, '') <> '' and t.szamla_szam = m.szamla_szam and t.datum = m.datum` },
+    { marad: 76, torlendo: 102, feltetel: `coalesce(t.szamla_szam, '') <> '' and t.szamla_szam = m.szamla_szam and t.datum = m.datum` },
+  ];
+  await toroljeParokat(pool, JAVITAS_KOD, parok, "másodpéldány sorok töröltnek jelölve (2. kör)");
+}
+
+async function toroljeParokat(pool, JAVITAS_KOD, parok, cimke) {
   const torolt = [];
   const kihagyott = [];
   for (const p of parok) {
@@ -546,7 +567,7 @@ async function toroljeMasodpeldanyokatOnce(pool) {
     JAVITAS_KOD,
   ]);
   console.log(
-    `[migrate] másodpéldány sorok töröltnek jelölve: ${torolt.length}${torolt.length ? " — " + torolt.join("; ") : ""}` +
+    `[migrate] ${cimke}: ${torolt.length}${torolt.length ? " — " + torolt.join("; ") : ""}` +
       (kihagyott.length ? ` | KIHAGYVA (a feltétel nem áll): ${kihagyott.join(", ")}` : "")
   );
 }
