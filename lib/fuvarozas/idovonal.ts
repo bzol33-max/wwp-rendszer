@@ -434,6 +434,9 @@ const ERINTES_MIN_IDOTARTAM_SEC = 10 * 60;
  */
 const KOZVETLEN_KOZELSEG_KM = 0.3;
 
+/** A párosításnál ekkora (km) sávokban hasonlítjuk a távolságot — ezen belül nem a méterek, hanem a fuvarok sorrendje dönt (lásd jelolMegallokat). */
+const TAV_SAV_KM = 0.5;
+
 /**
  * Megjelöli a jármű EGÉSZ NAPJÁRA, mely tervezett fel-/lerakó pontokat
  * érintette már, és melyeket hagyta el. Három lépés:
@@ -489,7 +492,17 @@ export function jelolMegallokat(
   // volt), két lerakót vagy két felrakót nem. Így két, egymáshoz közeli
   // cím közül az kapja a találatot, amelyikhez a kamion ténylegesen
   // közelebb állt.
-  parok.sort((x, y) => x.tav - y.tav);
+  // A távolság csak TAV_SAV_KM-es sávokban számít: ugyanannak a telephelynek
+  // két írásmódja pár tíz méterrel eltérő koordinátára geokódolódik, és a
+  // méterekkel "közelebbi" pont nem a valós különbség. Egy sávon belül a
+  // fuvarok sorrendje (a korábban rögzített/tervezett fuvar), azon belül a
+  // megálló, majd a megállás sorrendje dönt. Élesben enélkül a #130
+  // debreceni lerakója vitte el a hajnali BMW-megállást a #126 elől, és a
+  // kocsi Pápán állva "lezárta" a debreceni lerakást.
+  parok.sort(
+    (x, y) =>
+      Math.round(x.tav / TAV_SAV_KM) - Math.round(y.tav / TAV_SAV_KM) || x.fi - y.fi || x.mi - y.mi || x.ai - y.ai
+  );
   const foglaltMegallo = new Set<string>();
   const foglaltAllas = new Set<string>();
   const parositas = new Map<string, (typeof allasok)[number]>();

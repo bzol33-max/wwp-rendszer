@@ -125,6 +125,29 @@ function vezetes(honnan: { lat: number; lon: number }, hova: { lat: number; lon:
   eq("két érkezés: #130 kész", fuvarKeszGpsSzerint(c130), true);
 }
 
+// 2b) Ugyanaz a BMW-cím két írásmóddal pár tíz méterrel eltérő koordinátára
+//     geokódolódik: az egyetlen megállást a KORÁBBI fuvar (#126) kapja, nem
+//     a méterekkel közelebbi (#130). Élesben a #130 emiatt zárult le tévesen,
+//     miközben a kocsi Pápán állt.
+{
+  const BMW_A = { lat: DEBRECEN.lat + 0.0004, lon: DEBRECEN.lon }; // ~45 m-re a megállástól
+  const BMW_B = { lat: DEBRECEN.lat + 0.0001, lon: DEBRECEN.lon }; // ~10 m-re a megállástól
+  const f126 = [megallo(0, "felrako", PAPA, t(0, 0, 15)), megallo(1, "lerako", BMW_A, t(0, 0, 16))];
+  const f130 = [megallo(0, "felrako", PAPA, t(0, 0, 15)), megallo(1, "lerako", BMW_B, t(0, 0, 16))];
+  const egyMegallas: IdovonalSzakasz[] = [
+    { tipus: "indulas", idopont: t(6, 0, 15), cim: null, lat: PAPA.lat, lon: PAPA.lon },
+    allas(PAPA, t(7, 0, 15), 60), // a #126 felrakása 09-15-én
+    vezetes(PAPA, DEBRECEN, t(20, 0, 15), t(4, 53, 16)),
+    allas(DEBRECEN, t(4, 53, 16), 142),
+    vezetes(DEBRECEN, PAPA, t(7, 15, 16), t(13, 9, 16)),
+    allas(PAPA, t(13, 9, 16), 300),
+  ];
+  const [a126, a130] = jelolMegallokat([f126, f130], egyMegallas);
+  eq("eltérő geokód: a korábbi #126 kapja a megállást", fuvarKeszGpsSzerint(a126), true);
+  eq("eltérő geokód: a #130 NEM kész (a kocsi Pápán áll)", fuvarKeszGpsSzerint(a130), false);
+  eq("eltérő geokód: a #130 felrakója Pápán 'itt áll'", a130[0].eppenItt, true);
+}
+
 // 3) Rövid megállás a cím közelében (1,5 km, 3 perc — piros lámpa) nem érintés; 200 m-re 3 perc viszont igen.
 {
   const KOZEL_1_5_KM = { lat: DEBRECEN.lat + 0.0135, lon: DEBRECEN.lon };
