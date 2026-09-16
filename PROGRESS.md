@@ -60,3 +60,15 @@
   töröltnek jelölve a `migrate.mjs` egyszeri lépésében, biztonsági
   feltétellel (azonos pozíciószám + számlaszám a megmaradó párral).
   #26/#27 két valódi fuvar (külön számlák), nem duplikátum.
+
+## 2026-09-16 (4. kör) — üres Bér fuvarok lista: GPS-teljesítés hamis pozitívjai
+
+- Ok: a GPS-figyelés a felrakás napjától kereste a lerakóhoz érkezést, ezért
+  az oda-vissza ingázó NMZ-492 fuvarjait a lerakás előtt lezárta (#128); és
+  két azonos lerakójú fuvart (#126, #130) az első érkezéskor egyszerre.
+- `teljesites-figyeles.ts`: érkezés csak a lerakási ablak kezdetétől
+  (`lerakas_ablak_tol`, különben a lerakás napja); az érkezéseket számolja
+  (kívülről a 2 km-es körbe érkező utak), kocsi+lerakó párra legfeljebb
+  annyi fuvart zár le, ahány érkezés volt.
+- `migrate.mjs` egyszeri lépések: ablak előtti (#128) és kettős (#126,
+  #130) jelölés visszavonva; a javított figyelés dönt újra.
