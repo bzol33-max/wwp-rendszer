@@ -15,6 +15,8 @@ export type ImportVerdikt =
   | "nem_megbizas"
   /** A napló bevezetése előtt beimportált irat — nem tudjuk, mit olvasott ki belőle a gép. */
   | "regi_import"
+  /** Ugyanaz az irat még egyszer, más Drive-azonosítóval (kétszer feltöltve) — a meglévő fuvarhoz csatoltuk, új sor nem lett. */
+  | "duplikatum"
   | "hiba";
 
 export type NaploBejegyzes = {
@@ -60,6 +62,74 @@ export async function rogzitNaplot(b: NaploBejegyzes): Promise<void> {
       b.nyersSzoveg,
     ]
   );
+}
+
+/**
+ * Ugyanaz az irat még egyszer, MÁS Drive-azonosítóval: a mappába kétszer
+ * feltöltött fájl (élesben pl. 26-3289.pdf, 26-3553.pdf, FRALI1994504_V1.pdf
+ * kétszer). A Duvenbeck-iratokat az Út ID egy sorba fogja, de a többi
+ * partner iratának nincs ilyen kulcsa — ott a második példányból a nyelvi
+ * modell útján ÚJ sor lett, és a fuvar kétszer szerepelt (kétszer volt
+ * számlázható). A pdf-parse nyers szövege fájlonként el van tárolva
+ * (nyers_szoveg), és két azonos PDF-ből szó szerint ugyanaz jön ki — ez a
+ * kulcs. Csak élő fuvarhoz kötött, korábbi iratot ad vissza.
+ */
+export async function azonosSzoveguIsmertIrat(
+  driveFileId: string,
+  nyersSzoveg: string
+): Promise<{ driveFileId: string; fajlnev: string | null; fuvarId: string } | null> {
+  if (!nyersSzoveg.trim()) return null;
+  const [sor] = await query<{ drive_file_id: string; fajlnev: string | null; fuvar_id: string }>(
+    `select n.drive_file_id, n.fajlnev, n.fuvar_id::text
+     from fuvar_import_naplo n
+     join fuvar_megbizasok f on f.id = n.fuvar_id and f.statusz <> 'torolt'
+     where n.drive_file_id <> $1
+       and n.nyers_szoveg is not null
+       and md5(n.nyers_szoveg) = md5($2)
+       and n.nyers_szoveg = $2
+     order by n.created_at asc
+     limit 1`,
+    [driveFileId, nyersSzoveg]
+  );
+  return sor ? { driveFileId: sor.drive_file_id, fajlnev: sor.fajlnev, fuvarId: sor.fuvar_id } : null;
+}
+
+/**
+ * Egy irat hozzákötése egy meglévő fuvarhoz (fuvar_dokumentumok) — ettől a
+ * fájl "ismert" lesz (ismertDriveFileIdk), a szinkron nem olvassa újra.
+ */
+export async function csatolIratotFuvarhoz(
+  fuvarId: string,
+  file: { id: string; name: string; url: string },
+  tipus: "megbizas" | "rakomanylista" | "egyeb" = "egyeb"
+): Promise<void> {
+  await query(
+    `insert into fuvar_dokumentumok (fuvar_id, drive_file_id, dokumentum_url, tipus, fajlnev)
+     values ($1, $2, $3, $4, $5)
+     on conflict (drive_file_id) do update set fuvar_id = excluded.fuvar_id`,
+    [fuvarId, file.id, file.url, tipus, file.name]
+  );
+}
+
+/**
+ * A Duvenbeck egy fuvarhoz KÉT iratot küld (megbízás + rakománylista, lásd
+ * lib/fuvarozas/duvenbeck.ts). Ha egy sorhoz csak az egyik van meg, a másik
+ * hiányzik — a cím vagy az ár addig a gyengébb forrásból származik. Ezt a
+ * szinkron a futás VÉGÉN kérdezi le (nem az első irat érkezésekor, mert a pár
+ * két tagja ugyanabban a körben jön, és akkor minden pár "hiányosnak"
+ * látszana egy pillanatig).
+ */
+export async function hianyzoDuvenbeckParja(fuvarId: string): Promise<"megbizas" | "rakomanylista" | null> {
+  const [sor] = await query<{ van_megbizas: boolean; van_rakomanylista: boolean }>(
+    `select bool_or(tipus = 'megbizas') as van_megbizas,
+            bool_or(tipus = 'rakomanylista') as van_rakomanylista
+     from fuvar_dokumentumok where fuvar_id = $1`,
+    [fuvarId]
+  );
+  if (!sor) return null;
+  if (!sor.van_megbizas && sor.van_rakomanylista) return "megbizas";
+  if (sor.van_megbizas && !sor.van_rakomanylista) return "rakomanylista";
+  return null;
 }
 
 /**
