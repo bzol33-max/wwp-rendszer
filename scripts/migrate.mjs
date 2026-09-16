@@ -474,9 +474,11 @@ async function vonjaVisszaKettosGpsTeljesitestOnce(pool) {
 // visszaút (#128, Debrecen → Pápa) nincs kész, tehát második érkezés nem
 // volt. A #130 jelölését visszavonjuk, a javított figyelés (a korábban
 // lezárt fuvarok érkezését is elhasználtnak számolja) dönt újra. Csak a
-// számlátlan, nem postázott, a 13:15–13:25 (UTC) közt jelölt #130-ra hat.
+// számlátlan, nem postázott, a 13:15–13:25 (budapesti idő, 11:15–11:25 UTC)
+// közt jelölt #130-ra hat. (Az első kód UTC-nek vette a napló budapesti
+// időpontját, ezért 0 sort talált — ez a 2. kód a helyes ablakkal.)
 async function vonjaVisszaKorokKoztiKettosGpsTeljesitestOnce(pool) {
-  const JAVITAS_KOD = "korok-kozti-kettos-gps-teljesites-visszavonas-130-2026-09-16";
+  const JAVITAS_KOD = "korok-kozti-kettos-gps-teljesites-visszavonas-130-2-2026-09-16";
   const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
   if (mar.length > 0) return;
 
@@ -488,7 +490,7 @@ async function vonjaVisszaKorokKoztiKettosGpsTeljesitestOnce(pool) {
            to_char(f.teljesitve_at at time zone 'Europe/Budapest', 'MM-DD HH24:MI') ||
            ') — visszavonva 2026-09-16-án, a javított figyelés dönt újra.'
      where f.id = 130 and f.tipus = 'sajat' and f.statusz <> 'torolt'
-       and f.teljesitve and f.teljesitve_at between '2026-09-16T13:15:00Z' and '2026-09-16T13:25:00Z'
+       and f.teljesitve and f.teljesitve_at between '2026-09-16T11:15:00Z' and '2026-09-16T11:25:00Z'
        and coalesce(f.szamla_szam, '') = '' and not f.postazva
      returning f.id`
   );
