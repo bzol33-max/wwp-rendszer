@@ -610,8 +610,10 @@ async function naplozFuvarHelyEllenorzest(pool) {
        select i.drive_file_id,
          coalesce((select n.fajlnev from fuvar_import_naplo n where n.drive_file_id = i.drive_file_id),
                   (select d.fajlnev from fuvar_dokumentumok d where d.drive_file_id = i.drive_file_id limit 1)) as fajlnev,
-         (select string_agg('#' || f.id, ',') from fuvar_megbizasok f where f.drive_file_id = i.drive_file_id and f.statusz <> 'torolt') as elo,
-         (select string_agg('#' || f.id, ',') from fuvar_megbizasok f where f.drive_file_id = i.drive_file_id and f.statusz = 'torolt') as torolt,
+         (select string_agg('#' || f.id, ',') from fuvar_megbizasok f
+            where (f.drive_file_id = i.drive_file_id or f.dokumentum_url like '%' || i.drive_file_id || '%') and f.statusz <> 'torolt') as elo,
+         (select string_agg('#' || f.id, ',') from fuvar_megbizasok f
+            where (f.drive_file_id = i.drive_file_id or f.dokumentum_url like '%' || i.drive_file_id || '%') and f.statusz = 'torolt') as torolt,
          (select string_agg('#' || d.fuvar_id, ',') from fuvar_dokumentumok d join fuvar_megbizasok f on f.id = d.fuvar_id and f.statusz <> 'torolt' where d.drive_file_id = i.drive_file_id) as csatolva,
          (select n.verdikt from fuvar_import_naplo n where n.drive_file_id = i.drive_file_id) as verdikt,
          (select n.fuvar_id from fuvar_import_naplo n where n.drive_file_id = i.drive_file_id) as naplo_sor
