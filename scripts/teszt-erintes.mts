@@ -148,6 +148,36 @@ function vezetes(honnan: { lat: number; lon: number }, hova: { lat: number; lon:
   eq("eltérő geokód: a #130 felrakója Pápán 'itt áll'", a130[0].eppenItt, true);
 }
 
+// 2c) Egy telephelyen két állás (éjszakai várakozás a portánál, majd 1,6 km-rel
+//     arrébb a rámpánál/parkolóban), köztük 3 km-nél messzebb nem járt a kocsi:
+//     ez EGY látogatás. Élesben a második állást a #130 kapta, és "kész" lett,
+//     miközben a kocsi Pápán állt.
+{
+  const BMW_KAPU = { lat: DEBRECEN.lat, lon: DEBRECEN.lon };
+  const BMW_RAMPA = { lat: DEBRECEN.lat + 0.0144, lon: DEBRECEN.lon }; // ~1,6 km
+  const f126 = [megallo(0, "felrako", PAPA, t(0, 0, 15)), megallo(1, "lerako", DEBRECEN, t(0, 0, 16))];
+  const f128 = [megallo(0, "felrako", DEBRECEN, t(0, 0, 15)), megallo(1, "lerako", PAPA, t(6, 0, 16))];
+  const f130 = [megallo(0, "felrako", PAPA, t(0, 0, 15)), megallo(1, "lerako", DEBRECEN, t(0, 0, 16))];
+  const ketAllasEgyLatogatas: IdovonalSzakasz[] = [
+    { tipus: "indulas", idopont: t(6, 0, 15), cim: null, lat: PAPA.lat, lon: PAPA.lon },
+    allas(PAPA, t(7, 0, 15), 60),
+    vezetes(PAPA, BMW_KAPU, t(8, 0, 15), t(15, 59, 15)),
+    allas(BMW_KAPU, t(15, 59, 15), 754), // 09-16 04:33-ig a portánál
+    { tipus: "vezetes", kezdet: t(4, 33, 16), veg: t(4, 53, 16), tavKm: 1.6, idotartamSec: 1200, atlagSebesseg: 5, honnan: null, hova: null, hovaLat: BMW_RAMPA.lat, hovaLon: BMW_RAMPA.lon },
+    allas(BMW_RAMPA, t(4, 53, 16), 142), // 07:15-ig a rámpánál
+    vezetes(BMW_RAMPA, PAPA, t(7, 15, 16), t(13, 9, 16)),
+    allas(PAPA, t(13, 9, 16), 300),
+  ];
+  const [a126, a128, a130] = jelolMegallokat([f126, f128, f130], ketAllasEgyLatogatas);
+  eq("egy látogatás két állásból: #126 kész", fuvarKeszGpsSzerint(a126), true);
+  eq("egy látogatás két állásból: #126 érkezés a portánál 15:59", a126[1].tenylegesIdo?.toISOString(), t(15, 59, 15).toISOString());
+  eq("egy látogatás két állásból: #126 távozás 07:15", a126[1].tenylegesTavozas?.toISOString(), t(7, 15, 16).toISOString());
+  eq("egy látogatás két állásból: #128 felrakó ugyanaz a látogatás", a128[0].tenylegesTavozas?.toISOString(), t(7, 15, 16).toISOString());
+  eq("egy látogatás két állásból: #130 NEM kész", fuvarKeszGpsSzerint(a130), false);
+  eq("egy látogatás két állásból: #130 lerakóján nincs érintés", a130[1].tenylegesIdo, null);
+  eq("egy látogatás két állásból: #128 lerakó Pápán itt áll", a128[1].eppenItt, true);
+}
+
 // 3) Rövid megállás a cím közelében (1,5 km, 3 perc — piros lámpa) nem érintés; 200 m-re 3 perc viszont igen.
 {
   const KOZEL_1_5_KM = { lat: DEBRECEN.lat + 0.0135, lon: DEBRECEN.lon };
