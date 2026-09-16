@@ -141,3 +141,19 @@
   igazolhat, két azonos szerepűt nem (Budaházi Zoltán döntése: blokkok +
   tegnapi felrakó látszik).
 - Teszt: +2 eset (22).
+
+## 2026-09-16 (9. kör) — GPS-felismerés élesítés utáni javítások
+
+- Diagnosztika: a figyelő körönként naplózza a nyitott fuvarok megállóit
+  (geokódolás, érkezés/távozás vagy „nincs érintés" + ablak) — Railway-
+  naplóból ellenőrizhető.
+- Két téves #130-lezárás oka és javítása: (1) a #126/#130 azonos BMW-címe
+  pár tíz méterrel eltérő koordinátára geokódolódott, a méterekkel közelebbi
+  nyert → a párosítás fél km-es sávon belül a fuvar sorrendje szerint dönt;
+  (2) a BMW-n belül két állás (porta, majd 1,6 km-rel arrébb a rámpa) két
+  látogatásnak számított → egy címnél az egymást követő állások egy
+  látogatás, amíg a kocsi nem távolodott 3 km-nél messzebb. Mindkét
+  visszavonás egyszeri, feltételes migrate-lépés. Teszt: 32 eset.
+- Ellenőrzött végállapot 19:11-kor: #128 Fel Debrecen 15:59→07:15, Le Pápa
+  „itt áll"; #130 Fel Pápa „itt áll", Le Debrecen nincs érintés — mindkettő
+  nyitott, egyezik a valósággal.
