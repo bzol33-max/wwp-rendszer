@@ -683,7 +683,7 @@ async function naplozFuvarHelyEllenorzest(pool) {
     // döntés (melyik marad) megalapozott legyen.
     const { rows: tobbSoros } = await pool.query(
       `with kulcs as (
-         select f.id, coalesce(f.drive_file_id, substring(f.dokumentum_url from 'file/d/([^/]+)')) as fajl
+         select f.id, coalesce(f.drive_file_id, substring(f.dokumentum_url from '(?:file/d/|id=)([^/&?#]+)')) as fajl
          from fuvar_megbizasok f where f.statusz <> 'torolt' and f.tipus = 'sajat'
        ), tobb as (
          select fajl from kulcs where fajl is not null group by fajl having count(*) > 1
@@ -756,6 +756,13 @@ async function naplozFuvarHelyEllenorzest(pool) {
            to_char(datum, 'YYYY-MM-DD') || ' ' || coalesce(felrako, '?') || ' → ' || lerako
          from fuvar_megbizasok
          where statusz <> 'torolt' and tipus = 'sajat'
+         union all
+         -- azonos nap + megrendelő: a docx+pdf párban felvett megbízást a
+         -- címszöveg eltérése miatt az útvonal-kulcs nem fogja meg
+         select id, statusz, ellenorzott, szamla_szam, postazva, reise_id,
+           to_char(datum, 'YYYY-MM-DD') || ' megrendelő: ' || lower(regexp_replace(megrendelo, '[^[:alnum:]]', '', 'g'))
+         from fuvar_megbizasok
+         where statusz <> 'torolt' and tipus = 'sajat' and coalesce(megrendelo, '') <> ''
        ) k
        group by kulcs
        having count(*) > 1 and count(*) - count(distinct reise_id) > 0
