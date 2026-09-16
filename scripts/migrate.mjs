@@ -204,11 +204,93 @@ async function main() {
   // modul csak utólag került be), a seedUserOnce pedig csak létrehozáskor ír
   // jogosultságot, meglévő felhasználónál nem nyúl hozzá.
   await grantElolegekSajatOnce(pool);
+  // Séma-átállás: a régi, önálló mobil-kulcsokat (keszlet_sajat,
+  // felvasarlas_mobil, elolegek_sajat, erkezes) hatókörrel szűkített
+  // modul-jogokká alakítja. A fenti seed/grant lépések UTÁN fut, mert azok
+  // még a régi kulcsokat írják — így a frissen létrehozott felhasználók is
+  // rögtön az új alakot kapják. Idempotens: ha nincs régi kulcs, nem csinál
+  // semmit, tehát egy visszaállított másolatban is helyesen viselkedik.
+  await migraljHatokorrePermissions(pool);
   await ujraimportalDuvenbeckSorokatOnce(pool, DUVENBECK_UJRAIMPORT_KOROK);
   await feloldTorortDuvenbeckDokumentumokatOnce(pool);
   await torolDokumentumNelkuliDuplikatumokatOnce(pool);
 
   await pool.end();
+}
+
+// A régi mobil-kulcsok leképezése hatókörre. A kulcs maga volt a hatókör
+// hordozója — ezért a leképezés FORRÁSA a régi kulcs, és a két lépés (a
+// hatókör bevezetése és a leképezés) nem választható szét.
+//
+//   keszlet_sajat      → keszlet  + { sites: ["Szakoly", "Balkány"] }
+//   felvasarlas_mobil  → keszlet  + { sites: ["Nyíregyháza"] }
+//   elolegek_sajat     → dolgozok + "sajat"
+//   erkezes            → jelenlet + "sajat"
+//
+// A "mobil", "posta", "attekintes" és "fuvarozas_sajat" kulcsok egyelőre
+// maradnak: a moduljaikkal együtt szűnnek meg, később.
+const HATOKOR_LEKEPEZES = {
+  keszlet_sajat: { modul: "keszlet", scope: { sites: ["Szakoly", "Balkány"] } },
+  felvasarlas_mobil: { modul: "keszlet", scope: { sites: ["Nyíregyháza"] } },
+  elolegek_sajat: { modul: "dolgozok", scope: "sajat" },
+  erkezes: { modul: "jelenlet", scope: "sajat" },
+};
+
+function egyesitHatokor(meglevo, uj, username, modul) {
+  if (meglevo === undefined) return uj;
+  if (meglevo === "sajat" && uj === "sajat") return "sajat";
+  if (typeof meglevo === "object" && typeof uj === "object") {
+    return { sites: [...new Set([...meglevo.sites, ...uj.sites])] };
+  }
+  // Kétféle hatókör ütközése (saját vs. telephely) nem fejezhető ki egyetlen
+  // mezővel. Ez a mai adatokon nem fordulhat elő; ha mégis, inkább hangosan
+  // elszállunk, mint hogy csendben tágabb jogot adjunk.
+  throw new Error(
+    `[migrate] összeegyeztethetetlen hatókör: ${username} / ${modul} — ${JSON.stringify(meglevo)} vs ${JSON.stringify(uj)}`
+  );
+}
+
+async function migraljHatokorrePermissions(pool) {
+  const { rows } = await pool.query(
+    `select id, username, permissions from users where permissions is not null`
+  );
+  let erintett = 0;
+  for (const user of rows) {
+    const p = { ...(user.permissions ?? {}) };
+    let valtozott = false;
+
+    for (const [regiKulcs, { modul, scope }] of Object.entries(HATOKOR_LEKEPEZES)) {
+      if (!(regiKulcs in p)) continue;
+      const regi = p[regiKulcs];
+      delete p[regiKulcs];
+      valtozott = true;
+
+      // Akinek a régi kulcson sem volt joga, az nem kap újat.
+      if (!regi || (!regi.view && !regi.edit)) continue;
+
+      const meglevo = p[modul];
+      // Aki a teljes modult amúgy is megkapta, annak ne szűkítsünk.
+      if (meglevo && meglevo.view && meglevo.edit && meglevo.scope === undefined) continue;
+
+      p[modul] = {
+        view: Boolean(regi.view) || Boolean(meglevo?.view),
+        edit: Boolean(regi.edit) || Boolean(meglevo?.edit),
+        scope: egyesitHatokor(meglevo?.scope, scope, user.username, modul),
+      };
+    }
+
+    if (!valtozott) continue;
+    await pool.query(`update users set permissions = $2::jsonb where id = $1`, [
+      user.id,
+      JSON.stringify(p),
+    ]);
+    erintett++;
+  }
+  console.log(
+    erintett > 0
+      ? `[migrate] jogosultság-hatókör: ${erintett} felhasználó átállítva az új alakra.`
+      : "[migrate] jogosultság-hatókör: nincs átállítandó felhasználó."
+  );
 }
 
 // Egyszeri javítás (2026-09-08): a BodoganGabor felhasználó a fenti

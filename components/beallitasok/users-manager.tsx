@@ -36,7 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { MODULES, type Permissions } from "@/lib/auth/permissions";
+import { MODULES, type ModulePermission, type Permissions } from "@/lib/auth/permissions";
 import {
   createUser,
   deleteUser,
@@ -52,6 +52,15 @@ function emptyPermissions(): Permissions {
   const p: Permissions = {};
   for (const m of MODULES) p[m.key] = { view: true, edit: true };
   return p;
+}
+
+// A hatókör ma még nem szerkeszthető a felületről (a migráció állítja be) —
+// de láthatónak kell lennie, különben az admin úgy látja, hogy valaki a
+// teljes modult kapta meg, holott csak egy telephelyét vagy a saját sorait.
+function hatokorCimke(p: ModulePermission): string | null {
+  if (p.scope === undefined) return null;
+  if (p.scope === "sajat") return "csak a saját adatai";
+  return p.scope.sites.join(", ");
 }
 
 function PermissionGrid({
@@ -73,7 +82,14 @@ function PermissionGrid({
           const p = permissions[mod.key] ?? { view: true, edit: true };
           return (
             <div key={mod.key} className="contents">
-              <span className="py-1">{mod.label}</span>
+              <span className="flex flex-col py-1">
+                <span>{mod.label}</span>
+                {hatokorCimke(p) ? (
+                  <span className="text-[11px] leading-snug text-muted-foreground">
+                    Hatókör: {hatokorCimke(p)}
+                  </span>
+                ) : null}
+              </span>
               <Checkbox
                 disabled={disabled}
                 checked={p.view}
@@ -81,7 +97,7 @@ function PermissionGrid({
                   const view = v === true;
                   onChange({
                     ...permissions,
-                    [mod.key]: { view, edit: view && p.edit },
+                    [mod.key]: { ...p, view, edit: view && p.edit },
                   });
                 }}
               />
@@ -91,7 +107,7 @@ function PermissionGrid({
                 onCheckedChange={(v) =>
                   onChange({
                     ...permissions,
-                    [mod.key]: { view: p.view, edit: v === true },
+                    [mod.key]: { ...p, view: p.view, edit: v === true },
                   })
                 }
               />

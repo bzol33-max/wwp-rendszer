@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
 import { query } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth/dal";
-import { MODULES, type Permissions } from "@/lib/auth/permissions";
+import { MODULES, type ModuleScope, type Permissions } from "@/lib/auth/permissions";
 
 // Minden ebben a fájlban lévő akció admin-jogosultsághoz kötött
 // (requireAdmin — átirányít, ha a hívó nem admin). Ez a Felhasználók
@@ -31,6 +31,22 @@ export async function listUsers(): Promise<UserRow[]> {
   );
 }
 
+// A hatókör (ModuleScope) a jog része, nem külön beállítás — ezért a mentés
+// során is át kell engedni. Amíg a felület nem tudja szerkeszteni, a kliens a
+// betöltött értéket küldi vissza változatlanul; ha ezt itt eldobnánk, az első
+// admin mentés letörölné a hatókört minden felhasználóról.
+function normalizeScope(input: unknown): ModuleScope | undefined {
+  if (input === "sajat") return "sajat";
+  if (input && typeof input === "object") {
+    const raw = (input as { sites?: unknown }).sites;
+    if (Array.isArray(raw)) {
+      const sites = raw.filter((x): x is string => typeof x === "string" && x.length > 0);
+      if (sites.length > 0) return { sites };
+    }
+  }
+  return undefined;
+}
+
 function normalizePermissions(input: unknown): Permissions {
   const result: Permissions = {};
   if (!input || typeof input !== "object") return result;
@@ -39,7 +55,8 @@ function normalizePermissions(input: unknown): Permissions {
     if (entry && typeof entry === "object") {
       const view = Boolean((entry as { view?: unknown }).view);
       const edit = Boolean((entry as { edit?: unknown }).edit);
-      result[mod.key] = { view, edit: view && edit };
+      const scope = normalizeScope((entry as { scope?: unknown }).scope);
+      result[mod.key] = scope ? { view, edit: view && edit, scope } : { view, edit: view && edit };
     }
   }
   return result;

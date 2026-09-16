@@ -3,9 +3,9 @@
 import { revalidatePath } from "next/cache";
 import { query } from "@/lib/db";
 import {
-  requireEditPermission,
-  requireSajatVagyModulJog,
-  requireViewPermission,
+  requireSajatVagyTeljesJog,
+  requireTeljesEditPermission,
+  requireTeljesViewPermission,
 } from "@/lib/auth/require-permission";
 import {
   HU_MONTHS,
@@ -131,7 +131,7 @@ async function ensureMonthRows(year: number, month: number) {
 // --- Fő nézet ---
 
 export async function getAlkalmazottakSnapshot(): Promise<Snapshot> {
-  await requireViewPermission("dolgozok");
+  await requireTeljesViewPermission("dolgozok");
   const pointer = await getPointer();
   await ensureMonthRows(pointer.year, pointer.month);
   const [employees, weekly, napiHavi, advances] = await Promise.all([
@@ -168,7 +168,7 @@ function validateWageMode(input: EmployeeInput) {
 }
 
 export async function createEmployee(input: EmployeeInput) {
-  await requireEditPermission("dolgozok");
+  await requireTeljesEditPermission("dolgozok");
   validateWageMode(input);
   await query(
     `insert into alkalmazottak
@@ -191,7 +191,7 @@ export async function createEmployee(input: EmployeeInput) {
 }
 
 export async function updateEmployee(id: string, input: EmployeeInput) {
-  await requireEditPermission("dolgozok");
+  await requireTeljesEditPermission("dolgozok");
   validateWageMode(input);
   await query(
     `update alkalmazottak
@@ -216,7 +216,7 @@ export async function updateEmployee(id: string, input: EmployeeInput) {
 }
 
 export async function deactivateEmployee(id: string) {
-  await requireEditPermission("dolgozok");
+  await requireTeljesEditPermission("dolgozok");
   await query(`update alkalmazottak set active = false where id = $1`, [id]);
   revalidatePath("/dolgozok");
 }
@@ -224,7 +224,7 @@ export async function deactivateEmployee(id: string) {
 // --- Heti bér ---
 
 export async function setHetiPaid(id: string, paid: boolean, paidBy?: string) {
-  await requireEditPermission("dolgozok");
+  await requireTeljesEditPermission("dolgozok");
   await query(
     `update alkalmazott_heti_ber
      set paid = $2, paid_at = case when $2 then now() else null end,
@@ -257,7 +257,7 @@ export async function saveNapiBer(
   employeeId: string,
   input: { daysCount: number; utalas: number; eloleg: number }
 ) {
-  await requireEditPermission("dolgozok");
+  await requireTeljesEditPermission("dolgozok");
   const pointer = await getPointer();
   await query(
     `update alkalmazott_napi_havi_ber
@@ -273,7 +273,7 @@ export async function saveHaviBer(
   employeeId: string,
   input: { letiltas: number; uzemanyag: number; utalas: number; eloleg: number }
 ) {
-  await requireEditPermission("dolgozok");
+  await requireTeljesEditPermission("dolgozok");
   const pointer = await getPointer();
   await query(
     `update alkalmazott_napi_havi_ber
@@ -286,7 +286,7 @@ export async function saveHaviBer(
 }
 
 export async function setNapiHaviPaid(id: string, paid: boolean, paidBy?: string) {
-  await requireEditPermission("dolgozok");
+  await requireTeljesEditPermission("dolgozok");
   await query(
     `update alkalmazott_napi_havi_ber
      set paid = $2, paid_at = case when $2 then now() else null end,
@@ -308,12 +308,7 @@ export type EmployeeAlapadatok = {
 
 /** A dolgozói mobil nézet (Profil > Alapadatok) saját, szűkített lekérdezése. */
 export async function getEmployeeAlapadatok(employeeId: string): Promise<EmployeeAlapadatok | null> {
-  await requireSajatVagyModulJog({
-    employeeId,
-    sajatModule: "erkezes",
-    modul: "dolgozok",
-    kind: "view",
-  });
+  await requireSajatVagyTeljesJog({ employeeId, modul: "dolgozok", kind: "view" });
   const rows = await query<Employee>(
     `select id::text, name, position, weekly_wage, daily_wage, monthly_wage,
        fixed_deduction, show_letiltas, show_uzemanyag, active
@@ -336,7 +331,7 @@ export async function addAdvance(input: {
   note?: string;
   createdBy?: string;
 }) {
-  await requireEditPermission("dolgozok");
+  await requireTeljesEditPermission("dolgozok");
   if (!input.amount) throw new Error("Az összeg megadása kötelező.");
   await query(
     `insert into alkalmazott_elolegek (employee_id, advance_date, amount, note, created_by)
@@ -347,7 +342,7 @@ export async function addAdvance(input: {
 }
 
 export async function deleteAdvance(id: string) {
-  await requireEditPermission("dolgozok");
+  await requireTeljesEditPermission("dolgozok");
   const rows = await query<{ auto_key: string | null }>(
     `select auto_key from alkalmazott_elolegek where id = $1`,
     [id]
@@ -378,12 +373,7 @@ export type EmployeeElolegekOsszesito = {
 // A dolgozói mobil nézet (Profil > Előlegek) saját, szűkített lekérdezése —
 // csak a bejelentkezett dolgozó saját tételeit adja vissza.
 export async function getEmployeeElolegek(employeeId: string): Promise<EmployeeElolegekOsszesito> {
-  await requireSajatVagyModulJog({
-    employeeId,
-    sajatModule: "elolegek_sajat",
-    modul: "dolgozok",
-    kind: "view",
-  });
+  await requireSajatVagyTeljesJog({ employeeId, modul: "dolgozok", kind: "view" });
   const rows = await query<{
     id: string;
     advance_date: string;
@@ -415,12 +405,7 @@ export async function getEmployeeElolegek(employeeId: string): Promise<EmployeeE
 // akkor ír, ha még nincs elfogadva (utólag nem módosítható), és csak a saját
 // (employeeId) tételét fogadhatja el.
 export async function acceptAdvance(id: string, employeeId: string, acceptedByName: string) {
-  await requireSajatVagyModulJog({
-    employeeId,
-    sajatModule: "elolegek_sajat",
-    modul: "dolgozok",
-    kind: "edit",
-  });
+  await requireSajatVagyTeljesJog({ employeeId, modul: "dolgozok", kind: "edit" });
   await query(
     `update alkalmazott_elolegek
      set accepted_at = now(), accepted_by = $3
@@ -434,7 +419,7 @@ export async function acceptAdvance(id: string, employeeId: string, acceptedByNa
 // --- Archívum ---
 
 export async function getArchiveList(): Promise<ArchiveMonth[]> {
-  await requireViewPermission("dolgozok");
+  await requireTeljesViewPermission("dolgozok");
   const pointer = await getPointer();
   const rows = await query<{ year: number; month: number }>(
     `select year, month from alkalmazott_heti_ber
@@ -451,7 +436,7 @@ export async function getArchiveList(): Promise<ArchiveMonth[]> {
 }
 
 export async function getArchivedMonth(year: number, month: number): Promise<ArchivedSnapshot> {
-  await requireViewPermission("dolgozok");
+  await requireTeljesViewPermission("dolgozok");
   const [employees, weekly, napiHavi] = await Promise.all([
     query<Employee>(
       `select id::text, name, position, weekly_wage, daily_wage, monthly_wage,
