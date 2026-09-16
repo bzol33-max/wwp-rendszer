@@ -214,6 +214,7 @@ async function main() {
   await toroljeDuplikatumSorokatOnce(pool);
   await vonjaVisszaKoraiTeljesitestOnce(pool);
   await vonjaVisszaKettosGpsTeljesitestOnce(pool);
+  await szabaditsaFelTorortRbtMegbizastOnce(pool);
   await naplozFuvarHelyEllenorzest(pool);
 
   await pool.end();
@@ -460,6 +461,40 @@ async function vonjaVisszaKettosGpsTeljesitestOnce(pool) {
   console.log(
     `[migrate] kettős GPS-teljesítés visszavonva: ${rows.length} sor` +
       (rows.length ? " — " + rows.map((r) => `#${r.id}`).join(", ") : ".")
+  );
+}
+
+// Egyszeri javítás (2026-09-16): a "Megbízás (poz 3003).pdf" (RBT Europe,
+// 2026.09.17. Téglás → Gyöngyös) sora (#121) a 09-15-i importban a saját
+// cégünket kapta megrendelőnek, és törölve lett. A törölt sor viszont
+// továbbra is fogja a Drive-fájlt (drive_file_id / dokumentum_url), ezért a
+// szinkron "ismertnek" veszi, és soha nem importálja újra — a holnapi fuvar
+// így egyik fülön sincs. Ugyanaz a minta, mint a Duvenbecknél
+// (feloldTorortDuvenbeckDokumentumokatOnce): a hivatkozás felszabadítása
+// után a következő szinkron-kör a javított importtal (RBT Europe
+// partnersablon adja a megrendelőt) újra felveszi. Csak a törölt, számlátlan
+// sorra hat.
+async function szabaditsaFelTorortRbtMegbizastOnce(pool) {
+  const JAVITAS_KOD = "rbt-poz-3003-ujraimport-2026-09-16";
+  const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (mar.length > 0) return;
+
+  const { rows } = await pool.query(
+    `update fuvar_megbizasok
+     set megjegyzes = coalesce(megjegyzes || ' | ', '') ||
+           'Kézi törlés után újraimportálásra felszabadítva 2026-09-16-án, eredeti dokumentum: ' || coalesce(dokumentum_url, '-'),
+         dokumentum_url = null,
+         drive_file_id = null
+     where drive_file_id = '1hcPwYW3xi-45lHiTiq0vOT1iHEEGO2gZ'
+       and statusz = 'torolt'
+       and coalesce(szamla_szam, '') = ''
+     returning id`
+  );
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1) on conflict (kod) do nothing`, [
+    JAVITAS_KOD,
+  ]);
+  console.log(
+    `[migrate] RBT poz 3003 dokumentuma újraimportálásra felszabadítva: ${rows.length} sor${rows.length ? " (#" + rows.map((r) => r.id).join(", #") + ")" : ""}.`
   );
 }
 
