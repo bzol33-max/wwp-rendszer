@@ -546,6 +546,22 @@ async function naplozFuvarHelyEllenorzest(pool) {
        group by 1 order by 2 desc, 1 limit 60`
     );
     console.log(`[migrate] aktív fülek megrendelői: ${nevek.map((n) => `${n.nev} (${n.db})`).join("; ")}`);
+    // Import-napló (csak napló): az utolsó 7 nap iratai — mit csinált velük a
+    // Drive-szinkron (verdikt, kifogások, létrejött sor). "Ezzel a fájllal mi
+    // van?" kérdésre innen látszik a válasz.
+    const { rows: iratok } = await pool.query(
+      `select drive_file_id, fajlnev, partner_kod, olvaso, verdikt, kifogasok, fuvar_id,
+         to_char(created_at at time zone 'Europe/Budapest', 'MM-DD HH24:MI') as mikor
+       from fuvar_import_naplo
+       where created_at >= now() - interval '7 days'
+       order by created_at desc limit 40`
+    );
+    for (const i of iratok) {
+      const kifogasok = Array.isArray(i.kifogasok) ? i.kifogasok.join(" / ") : "";
+      console.log(
+        `[migrate]   import ${i.mikor} ${i.fajlnev ?? i.drive_file_id} | ${i.partner_kod ?? "-"} | ${i.olvaso ?? "-"} | ${i.verdikt ?? "-"} | sor: ${i.fuvar_id ? "#" + i.fuvar_id : "-"}${kifogasok ? " | " + kifogasok.slice(0, 200) : ""}`
+      );
+    }
     // Friss bér fuvarok (csak napló): a folyamatban-lista üressége/tartalma
     // ebből ellenőrizhető — mikor jelölődött Teljesítve-re (GPS-figyelés
     // vagy kézi), és mi volt a tervezett lerakási időablak.
