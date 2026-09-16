@@ -55,3 +55,8 @@
 - `migrate.mjs` duplikátum-kereső: két külön Út ID-jű sor nem duplikátum
   (#126/#130 tévesen volt jelölve); a sorok állapota (számla, postázva,
   ellenőrzött) is látszik a naplóban.
+- Duplikátumok (Budaházi Zoltán jóváhagyásával, 2026-09-16): a 11 archív
+  pár újabb példánya (#77, #98, #99, #101, #103, #105–#110) és a #125
+  töröltnek jelölve a `migrate.mjs` egyszeri lépésében, biztonsági
+  feltétellel (azonos pozíciószám + számlaszám a megmaradó párral).
+  #26/#27 két valódi fuvar (külön számlák), nem duplikátum.

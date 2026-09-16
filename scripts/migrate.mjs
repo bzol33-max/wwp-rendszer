@@ -211,6 +211,7 @@ async function main() {
   await vonjaVisszaSzamlatlanArchivalastOnce(pool);
   await javitsaSajatCegMegrendelotSzamlabol(pool);
   await javitsaMaradekSajatCegMegrendelotOnce(pool);
+  await toroljeDuplikatumSorokatOnce(pool);
   await naplozFuvarHelyEllenorzest(pool);
 
   await pool.end();
@@ -326,6 +327,58 @@ async function javitsaMaradekSajatCegMegrendelotOnce(pool) {
     JAVITAS_KOD,
   ]);
   console.log(`[migrate] saját cég megrendelőként → dokumentumból: ${erintett.length ? erintett.join("; ") : "0 sor"}.`);
+}
+
+// Egyszeri javítás (2026-09-16, Budaházi Zoltán jóváhagyásával): a
+// duplikátum-kereső (naplozFuvarHelyEllenorzest) által kimutatott párok
+// újabb példányának törlése. 11 pár ugyanazt a pozíciószámot ÉS ugyanazt a
+// számlaszámot viseli (mindkettő postázva, archív) — ugyanaz a fuvar
+// kétszer, a 2026-09-15-i újraimportból; a régebbi, kézzel felvitt sor
+// marad. A #125 az ÁB Speed 26/3663 megbízás második példánya (#120 a
+// párja), a dokumentuma már nincs a Drive-on.
+// BIZTONSÁGI FELTÉTEL: csak akkor töröl, ha a sor MÉG MINDIG ugyanazt a
+// pozíciószámot és számlaszámot viseli, mint a megmaradó párja, és a pár él
+// — ha bármelyik időközben változott, a sor érintetlen marad, és a napló
+// jelzi. A törlés státusz-váltás megjegyzéssel, visszaállítható.
+async function toroljeDuplikatumSorokatOnce(pool) {
+  const JAVITAS_KOD = "duplikatum-sorok-torlese-2026-09-16";
+  const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (mar.length > 0) return;
+
+  // [megmaradó, törlendő]
+  const parok = [
+    [1, 101], [2, 98], [3, 99], [4, 103], [9, 109], [10, 105],
+    [11, 107], [12, 108], [13, 106], [14, 110], [22, 77], [120, 125],
+  ];
+  const torolt = [];
+  const kihagyott = [];
+  for (const [marad, torlendo] of parok) {
+    const { rows } = await pool.query(
+      `update fuvar_megbizasok t
+       set statusz = 'torolt',
+           megjegyzes = coalesce(t.megjegyzes || ' | ', '') ||
+             'Duplikátum: a #' || m.id || ' sor második példánya (azonos pozíciószám' ||
+             case when coalesce(t.szamla_szam, '') <> '' then ' és számlaszám ' || t.szamla_szam else '' end ||
+             '), 2026-09-16-án töröltnek jelölve.'
+       from fuvar_megbizasok m
+       where t.id = $2 and m.id = $1
+         and t.statusz <> 'torolt' and m.statusz <> 'torolt'
+         and t.tipus = 'sajat' and m.tipus = 'sajat'
+         and coalesce(t.pozicioszam, '') <> '' and t.pozicioszam = m.pozicioszam
+         and coalesce(t.szamla_szam, '') = coalesce(m.szamla_szam, '')
+       returning t.id`,
+      [marad, torlendo]
+    );
+    if (rows.length) torolt.push(`#${torlendo} (párja #${marad})`);
+    else kihagyott.push(`#${torlendo}/#${marad}`);
+  }
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1) on conflict (kod) do nothing`, [
+    JAVITAS_KOD,
+  ]);
+  console.log(
+    `[migrate] duplikátum sorok töröltnek jelölve: ${torolt.length}${torolt.length ? " — " + torolt.join("; ") : ""}` +
+      (kihagyott.length ? ` | KIHAGYVA (a feltétel már nem áll): ${kihagyott.join(", ")}` : "")
+  );
 }
 
 // MINDEN indulásnál (nem egyszeri): a fuvar-besorolás ellenőrző számai a
