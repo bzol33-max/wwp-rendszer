@@ -96,9 +96,22 @@ export async function futtatTeljesitesFigyeles(): Promise<TeljesitesFigyelesEred
       const lerakoCim = await geokodolCachelve(jelolt.lerako);
       if (!lerakoCim) continue; // nem geokódolható cím — ezt a fuvart kihagyjuk, a kézi gomb marad a megoldás
 
-      const [ev, ho, nap] = jelolt.datum.split("-").map(Number);
-      const kezdet = budapestFalioraToInstant(ev, ho, nap, 0, 0, 0);
+      // MIKORTÓL számít érkezésnek, ha a jármű a lerakó közelében járt?
+      // Korábban a FELRAKÁS napjától — ez hamis pozitívot adott az oda-vissza
+      // ingázó kocsinál: ugyanaz a jármű egy napon Pápa → Debrecen ÉS
+      // Debrecen → Pápa megbízást is visz, és a második fuvar FELRAKÓJA az
+      // első fuvar LERAKÓJA. A felrakáshoz odaérve az első fuvar "odaértnek"
+      // számított, majd elindulva "teljesítettnek" — a lerakás előtt egy
+      // nappal. Ezért az érkezést csak a lerakási időablak kezdetétől
+      // (ha a megbízás megadta), különben a lerakás (ha nincs külön, a
+      // felrakás) napjának kezdetétől keressük.
+      const lerakasNap = jelolt.lerakas_datum ?? jelolt.datum;
+      const [ev, ho, nap] = lerakasNap.split("-").map(Number);
+      const kezdet = jelolt.lerakas_ablak_tol
+        ? new Date(jelolt.lerakas_ablak_tol)
+        : budapestFalioraToInstant(ev, ho, nap, 0, 0, 0);
       const veg = new Date();
+      if (kezdet > veg) continue; // a lerakási ablak még el sem kezdődött
 
       const tripek = await getVehicleTrips(jarmu.ecofleetObjectId, kezdet, veg);
 

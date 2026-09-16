@@ -246,6 +246,12 @@ export type TeljesitesJelolt = {
   datum: string;
   /** ISO dátum (YYYY-MM-DD), ha a lerakás más napra esik. */
   lerakas_datum: string | null;
+  /**
+   * A lerakási időablak kezdete ISO időbélyegként (UTC, "…Z"), ha a megbízás
+   * megadta (Duvenbeck: "PV: … Unloading"). A GPS-figyelés innentől keresi a
+   * lerakóhoz érkezést — korábbi ottjárás nem számít érkezésnek.
+   */
+  lerakas_ablak_tol: string | null;
 };
 
 export type ApproveFuvarInput = {
