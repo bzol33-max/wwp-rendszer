@@ -2,7 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { query } from "@/lib/db";
-import { requireEditPermission } from "@/lib/auth/require-permission";
+import { requireSession } from "@/lib/auth/dal";
+import {
+  requireAnyEditPermission,
+  requireAnyViewPermission,
+  requireEditPermission,
+  requireSajatVagyModulJog,
+  requireViewPermission,
+} from "@/lib/auth/require-permission";
 import type {
   Feladat,
   FeladatComment,
@@ -26,6 +33,7 @@ const BUDAPEST_NOW_DATE = `(now() at time zone 'Europe/Budapest')::date`;
 const BUDAPEST_NOW_TIME = `(now() at time zone 'Europe/Budapest')::time`;
 
 export async function getJelenletEmployees(): Promise<JelenletEmployee[]> {
+  await requireViewPermission("jelenlet");
   return query<JelenletEmployee>(
     `select id::text, name from alkalmazottak
      where jelenlet_aktiv = true and active = true
@@ -36,7 +44,8 @@ export async function getJelenletEmployees(): Promise<JelenletEmployee[]> {
 // A mai nap ÖSSZES szakasza, minden dolgozónál (egy dolgozónak több sora is
 // lehet, ha többször érkezett/távozott aznap).
 export async function getTodayJelenletek(): Promise<JelenletSession[]> {
-  return query<JelenletSession>(
+  const jog = await requireAnyViewPermission(["jelenlet", "erkezes"]);
+  const rows = await query<JelenletSession>(
     `select id::text, employee_id::text, to_char(work_date, 'YYYY-MM-DD') as work_date,
        to_char(arrival_time, 'HH24:MI') as arrival_time,
        to_char(departure_time, 'HH24:MI') as departure_time,
@@ -45,12 +54,20 @@ export async function getTodayJelenletek(): Promise<JelenletSession[]> {
      where work_date = ${BUDAPEST_NOW_DATE}
      order by arrival_time nulls last, id`
   );
+  // Az önkiszolgáló "erkezes" jog csak a saját sorokra szól — eddig a teljes
+  // napi lista ment ki, és a kliens szűrte. Most a szerver szűr.
+  if (jog === "erkezes") {
+    const session = await requireSession();
+    return rows.filter((r) => r.employee_id === session.employeeId);
+  }
+  return rows;
 }
 
 export async function getJelenletHistory(
   employeeId: string,
   days = 14
 ): Promise<JelenletSession[]> {
+  await requireViewPermission("jelenlet");
   return query<JelenletSession>(
     `select id::text, employee_id::text, to_char(work_date, 'YYYY-MM-DD') as work_date,
        to_char(arrival_time, 'HH24:MI') as arrival_time,
@@ -68,6 +85,7 @@ export async function getMonthJelenletek(
   year: number,
   month: number
 ): Promise<JelenletSession[]> {
+  await requireViewPermission("jelenlet");
   return query<JelenletSession>(
     `select id::text, employee_id::text, to_char(work_date, 'YYYY-MM-DD') as work_date,
        to_char(arrival_time, 'HH24:MI') as arrival_time,
@@ -128,7 +146,12 @@ export async function deleteJelenletSession(id: string) {
 // majd később visszajön (pl. kamiont pakolni).
 
 export async function recordArrivalNow(employeeId: string, note?: string) {
-  await requireEditPermission("jelenlet");
+  await requireSajatVagyModulJog({
+    employeeId,
+    sajatModule: "erkezes",
+    modul: "jelenlet",
+    kind: "edit",
+  });
   await query(
     `insert into jelenletek (employee_id, work_date, arrival_time, note)
      values ($1, ${BUDAPEST_NOW_DATE}, ${BUDAPEST_NOW_TIME}, $2)`,
@@ -139,7 +162,12 @@ export async function recordArrivalNow(employeeId: string, note?: string) {
 }
 
 export async function recordDepartureNow(employeeId: string, note?: string) {
-  await requireEditPermission("jelenlet");
+  await requireSajatVagyModulJog({
+    employeeId,
+    sajatModule: "erkezes",
+    modul: "jelenlet",
+    kind: "edit",
+  });
   const updated = await query<{ id: string }>(
     `update jelenletek
      set departure_time = ${BUDAPEST_NOW_TIME}, note = coalesce($2, note)
@@ -174,7 +202,12 @@ export async function recordAbszenciaNow(
   dayType: "szabadsag" | "beteg",
   note?: string
 ) {
-  await requireEditPermission("jelenlet");
+  await requireSajatVagyModulJog({
+    employeeId,
+    sajatModule: "erkezes",
+    modul: "jelenlet",
+    kind: "edit",
+  });
   const updated = await query<{ id: string }>(
     `update jelenletek
      set note = coalesce($3, note)
@@ -200,10 +233,12 @@ export async function recordAbszenciaNow(
 // --- Feladatok (üzenőfal) ---
 
 export async function getSites(): Promise<Site[]> {
+  await requireViewPermission("jelenlet");
   return query<Site>(`select id, name from sites order by id`);
 }
 
 export async function listFeladatok(): Promise<Feladat[]> {
+  await requireAnyViewPermission(["jelenlet", "erkezes"]);
   return query<Feladat>(
     `select f.id::text, to_char(f.task_date, 'YYYY-MM-DD') as task_date, f.site_id,
        s.name as site_name, f.description, f.urgency, f.repeat_freq, f.done,
@@ -216,6 +251,7 @@ export async function listFeladatok(): Promise<Feladat[]> {
 }
 
 export async function getArchivedFeladatok(): Promise<Feladat[]> {
+  await requireViewPermission("jelenlet");
   return query<Feladat>(
     `select f.id::text, to_char(f.task_date, 'YYYY-MM-DD') as task_date, f.site_id,
        s.name as site_name, f.description, f.urgency, f.repeat_freq, f.done,
@@ -259,7 +295,8 @@ export async function createFeladat(input: {
 }
 
 export async function toggleFeladatDone(id: string, done: boolean) {
-  await requireEditPermission("jelenlet");
+  // A dolgozói mobil feladat-csempéről is jelölhető késznek (showDoneToggle).
+  await requireAnyEditPermission(["jelenlet", "erkezes"]);
   await query(
     `update feladatok
      set done = $2, elvegzes_datum = case when $2 then ${BUDAPEST_NOW_DATE} else null end
@@ -279,6 +316,7 @@ export async function deleteFeladat(id: string) {
 }
 
 export async function getFeladatComments(feladatId: string): Promise<FeladatComment[]> {
+  await requireAnyViewPermission(["jelenlet", "erkezes"]);
   return query<FeladatComment>(
     `select id::text, feladat_id::text, author, comment,
        to_char(created_at at time zone 'Europe/Budapest', 'YYYY-MM-DD HH24:MI') as created_at
