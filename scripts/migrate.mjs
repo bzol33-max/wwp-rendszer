@@ -597,6 +597,31 @@ async function naplozFuvarHelyEllenorzest(pool) {
         `[migrate]   import ${i.mikor} ${i.fajlnev ?? i.drive_file_id} | ${i.partner_kod ?? "-"} | ${i.olvaso ?? "-"} | ${i.verdikt ?? "-"} | sor: ${i.fuvar_id ? "#" + i.fuvar_id : "-"}${kifogasok ? " | " + kifogasok.slice(0, 200) : ""}`
       );
     }
+    // Drive-fájl → sor megfeleltetés (csak napló): minden Drive-azonosító,
+    // amit az adatbázis ismer (fuvar sor, csatolt irat, import-napló), az
+    // élő és a törölt sorokkal és az import-verdikttel. A Drive-mappa
+    // listájával összevetve látszik, melyik irat maradt feldolgozatlanul.
+    const { rows: driveFajlok } = await pool.query(
+      `with idk as (
+         select drive_file_id from fuvar_megbizasok where drive_file_id is not null
+         union select drive_file_id from fuvar_dokumentumok
+         union select drive_file_id from fuvar_import_naplo
+       )
+       select i.drive_file_id,
+         coalesce((select n.fajlnev from fuvar_import_naplo n where n.drive_file_id = i.drive_file_id),
+                  (select d.fajlnev from fuvar_dokumentumok d where d.drive_file_id = i.drive_file_id limit 1)) as fajlnev,
+         (select string_agg('#' || f.id, ',') from fuvar_megbizasok f where f.drive_file_id = i.drive_file_id and f.statusz <> 'torolt') as elo,
+         (select string_agg('#' || f.id, ',') from fuvar_megbizasok f where f.drive_file_id = i.drive_file_id and f.statusz = 'torolt') as torolt,
+         (select string_agg('#' || d.fuvar_id, ',') from fuvar_dokumentumok d join fuvar_megbizasok f on f.id = d.fuvar_id and f.statusz <> 'torolt' where d.drive_file_id = i.drive_file_id) as csatolva,
+         (select n.verdikt from fuvar_import_naplo n where n.drive_file_id = i.drive_file_id) as verdikt,
+         (select n.fuvar_id from fuvar_import_naplo n where n.drive_file_id = i.drive_file_id) as naplo_sor
+       from idk i order by fajlnev nulls last`
+    );
+    for (const d of driveFajlok) {
+      console.log(
+        `[migrate]   drive ${d.drive_file_id} | ${d.fajlnev ?? "?"} | élő: ${d.elo ?? "-"} | csatolva: ${d.csatolva ?? "-"} | törölt: ${d.torolt ?? "-"} | napló: ${d.verdikt ?? "-"}${d.naplo_sor ? " #" + d.naplo_sor : ""}`
+      );
+    }
     // Az utolsó 7 napban LÉTREJÖTT sorok, a töröltek is (csak napló): egy
     // eltűnt fuvar itt látszik a megjegyzésével — ki/mi törölte és miért.
     const { rows: ujSorok } = await pool.query(
