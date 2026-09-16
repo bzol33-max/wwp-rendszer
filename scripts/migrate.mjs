@@ -207,8 +207,55 @@ async function main() {
   await ujraimportalDuvenbeckSorokatOnce(pool, DUVENBECK_UJRAIMPORT_KOROK);
   await feloldTorortDuvenbeckDokumentumokatOnce(pool);
   await torolDokumentumNelkuliDuplikatumokatOnce(pool);
+  await rendezFuvarHelyeketOnce(pool);
 
   await pool.end();
+}
+
+// Egyszeri javítás (2026-09-16): a meglévő fuvarok a Megbízások fülei közt a
+// KÖZÖS besorolási szabály (lib/fuvarozas/fuvar-hely.ts) szerint. A szabály
+// maga lekérdezés-időben érvényesül, ide csak az a két adathiány tartozik,
+// amit a szabály nem tud magától kikövetkeztetni — ugyanaz, amit a
+// scripts/fuvar-hely-ujrasorolas.mts --apply csinál (az élesben kézzel nem
+// futtatható, ezért fut itt, a deploy indulásakor):
+//   A) postazva = true, de postazva_at üres → a fuvar saját napja (mint a
+//      db/archiv-backlog-cleanup.sql-nél), hogy az Archív időrendje ne
+//      boruljon fel, és semmilyen szigorúbb szabály ne tartsa örökre a
+//      Számla/Postán;
+//   B) bér fuvar (tipus='sajat'), van számlaszáma, de nincs Teljesítve-nek
+//      jelölve és a lerakás dátuma még nem múlt el → teljesitve = true, mert
+//      számla csak kész munkáról készül; a régi besorolás ezeket a
+//      "folyamatban" listán tartotta.
+// Dátumot, számlaszámot, postázást NEM ír. A `returning` miatt a deploy-
+// naplóban látszik, pontosan mely sorokat érintette.
+async function rendezFuvarHelyeketOnce(pool) {
+  const JAVITAS_KOD = "fuvar-hely-ujrasorolas-2026-09-16";
+  const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (mar.length > 0) return;
+
+  const { rows: a } = await pool.query(
+    `update fuvar_megbizasok
+     set postazva_at = coalesce(lerakas_datum, datum)::timestamptz
+     where statusz <> 'torolt' and postazva and postazva_at is null
+     returning id, to_char(coalesce(lerakas_datum, datum), 'YYYY-MM-DD') as nap, megrendelo, szamla_szam`
+  );
+  const { rows: b } = await pool.query(
+    `update fuvar_megbizasok
+     set teljesitve = true,
+         teljesitve_at = coalesce(papirok_beerkeztek_at, postazva_at, now())
+     where statusz <> 'torolt'
+       and tipus = 'sajat'
+       and coalesce(szamla_szam, '') <> ''
+       and not teljesitve
+       and coalesce(lerakas_datum, datum) >= current_date
+     returning id, to_char(coalesce(lerakas_datum, datum), 'YYYY-MM-DD') as nap, megrendelo, szamla_szam`
+  );
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1) on conflict (kod) do nothing`, [
+    JAVITAS_KOD,
+  ]);
+  const sor = (r) => `#${r.id} ${r.nap} ${r.megrendelo ?? "-"} (számla: ${r.szamla_szam ?? "-"})`;
+  console.log(`[migrate] fuvar-hely: ${a.length} sor postazva_at pótolva${a.length ? ": " + a.map(sor).join("; ") : "."}`);
+  console.log(`[migrate] fuvar-hely: ${b.length} számlás sor Teljesítve-re jelölve${b.length ? ": " + b.map(sor).join("; ") : "."}`);
 }
 
 // Egyszeri javítás (2026-09-08): a BodoganGabor felhasználó a fenti

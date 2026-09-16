@@ -5,6 +5,10 @@
 // teszi az adatot. A db/archiv-backlog-cleanup.sql mintájára: először
 // szárazon, aztán írva.
 //
+// ÉLESBEN a javítást (A + B, lent) a scripts/migrate.mjs rendezFuvarHelyeketOnce
+// lépése végezte el a 2026-09-16-i deploy indulásakor — ez a script azóta
+// elsősorban az ELLENŐRZÉSRE (--check) és egy esetleges ismétlésre való.
+//
 // Futtatás (DATABASE_URL a környezetből, pl. Railway "railway run"):
 //   npx tsx scripts/fuvar-hely-ujrasorolas.mts            — száraz futás: csak listáz
 //   npx tsx scripts/fuvar-hely-ujrasorolas.mts --apply    — a listázott javításokat beírja

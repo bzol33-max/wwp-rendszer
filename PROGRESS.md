@@ -14,5 +14,7 @@
   hibaüzenettel mondja meg, miért.
 - `scripts/fuvar-hely-ujrasorolas.mts`: egyszeri újrafeldolgozó (száraz
   futás alapból, `--apply` ír, `--check` csak ellenőriz; cél: 0 eltérés).
-  ÉLESBEN MÉG NEM FUTOTT — Railway-en futtatandó: `railway run npx tsx
-  scripts/fuvar-hely-ujrasorolas.mts`, átnézés után `--apply`.
+  Az élesítést a `scripts/migrate.mjs` `rendezFuvarHelyeketOnce` lépése
+  végzi a deploy indulásakor (kód: `fuvar-hely-ujrasorolas-2026-09-16`), a
+  deploy-naplóban sorolva az érintett sorokat. Utólagos ellenőrzés:
+  `railway run npx tsx scripts/fuvar-hely-ujrasorolas.mts --check`.
