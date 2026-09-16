@@ -624,6 +624,29 @@ async function naplozFuvarHelyEllenorzest(pool) {
         `[migrate]   drive ${d.drive_file_id} | ${d.fajlnev ?? "?"} | élő: ${d.elo ?? "-"} | csatolva: ${d.csatolva ?? "-"} | törölt: ${d.torolt ?? "-"} | napló: ${d.verdikt ?? "-"}${d.naplo_sor ? " #" + d.naplo_sor : ""}`
       );
     }
+    // Egy dokumentum → több élő sor (csak napló): ugyanahhoz a Drive-fájlhoz
+    // (azonosító vagy URL szerint, ill. ugyanazon megbízás docx+pdf párja)
+    // két élő sor = ugyanaz a fuvar kétszer. A sorok állapotával, hogy a
+    // döntés (melyik marad) megalapozott legyen.
+    const { rows: tobbSoros } = await pool.query(
+      `with kulcs as (
+         select f.id, coalesce(f.drive_file_id, substring(f.dokumentum_url from 'file/d/([^/]+)')) as fajl
+         from fuvar_megbizasok f where f.statusz <> 'torolt' and f.tipus = 'sajat'
+       ), tobb as (
+         select fajl from kulcs where fajl is not null group by fajl having count(*) > 1
+       )
+       select k.fajl, f.id, to_char(f.datum, 'YYYY-MM-DD') as nap, left(f.megrendelo, 22) as megrendelo,
+         f.pozicioszam, f.szamla_szam, f.postazva, f.teljesitve, f.ellenorzott,
+         left(f.felrako, 20) as felrako, left(f.lerako, 20) as lerako, f.fuvardij,
+         to_char(f.created_at at time zone 'Europe/Budapest', 'MM-DD HH24:MI') as mikor
+       from tobb t join kulcs k on k.fajl = t.fajl join fuvar_megbizasok f on f.id = k.id
+       order by t.fajl, f.id`
+    );
+    for (const s of tobbSoros) {
+      console.log(
+        `[migrate]   több sor egy irathoz ${s.fajl} → #${s.id} (${s.mikor}) ${s.nap} ${s.megrendelo ?? "-"} | ${s.felrako ?? "?"} → ${s.lerako} | poz: ${s.pozicioszam ?? "-"} | díj: ${s.fuvardij ?? "-"} | számla: ${s.szamla_szam ?? "-"}${s.postazva ? " | postázva" : ""}${s.teljesitve ? " | teljesítve" : ""}${s.ellenorzott ? " | ellenőrzött" : ""}`
+      );
+    }
     // Az utolsó 7 napban LÉTREJÖTT sorok, a töröltek is (csak napló): egy
     // eltűnt fuvar itt látszik a megjegyzésével — ki/mi törölte és miért.
     const { rows: ujSorok } = await pool.query(
