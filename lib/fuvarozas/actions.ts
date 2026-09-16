@@ -119,7 +119,7 @@ export async function getFleetPositions(): Promise<FleetPositionResult> {
   }
 }
 
-/** Egy tervezett fuvar egyetlen fel-/lerakó pontja, a napi megbízás-listán egy sorral — a megjelenített napra vagy a rákövetkezőre eső időponttal (lásd JarmuIdovonalEredmeny.holnapiMegallok). */
+/** Egy tervezett fuvar egyetlen fel-/lerakó pontja, a napi megbízás-listán egy sorral (lásd FuvarBlokk). */
 export type MegalloBejegyzes = {
   fuvarId: string;
   /** FIGYELEM: fordított UI-címkézés, lásd TervezettFuvarSzakasz.fuvarTipus. */
@@ -150,6 +150,31 @@ export type MegalloBejegyzes = {
    * cím, hálózati hiba). A felület ilyenkor nem mutat konkrét órát.
    */
   becslesElavult: boolean;
+  /**
+   * Hány nappal esik az `idopont` naptári napja a megjelenített naptól
+   * (0 = aznap, -1 = előző nap, +1 = következő nap). Egy többnapos fuvar
+   * tegnapi felrakója vagy holnapi lerakója a saját fuvarja blokkjában
+   * marad, ezzel a jelöléssel — nem esik ki, és nem kerül külön dobozba.
+   */
+  napElteres: number;
+};
+
+/**
+ * Egy fuvar a kocsi napi listáján: a felrakó(k) és a lerakó(k) ÚTVONAL-
+ * SORRENDBEN, egy blokkban. Korábban a nap összes pontja egyetlen, tisztán
+ * idő szerint rendezett listába lapult — a fuvarok egymásba fésülődtek, a
+ * "Fel" és "Le" sorok közti összefüggés elveszett, és két azonos időbélyegű
+ * pontnál (ugyanott lerakás, majd felrakás) a sorrend esetleges volt.
+ */
+export type FuvarBlokk = {
+  fuvarId: string;
+  /** FIGYELEM: fordított UI-címkézés, lásd TervezettFuvarSzakasz.fuvarTipus. */
+  fuvarTipus: FuvarTipus;
+  megrendelo: string | null;
+  pozicioszam: string | null;
+  megallok: MegalloBejegyzes[];
+  /** A blokk rendezési ideje: az első pont tényleges (GPS) vagy becsült ideje. */
+  kezdetIdo: Date;
 };
 
 /**
@@ -205,10 +230,8 @@ export type JarmuIdovonalEredmeny = {
    */
   eloEta: { cel: string; erkezes: Date; bizonytalan: boolean } | null;
   hiba: string | null;
-  /** A megjelenített napra eső fel-/lerakó pontok, időrendben (a fuvar-szintű adatok is elérhetők belőlük: megrendelo/pozicioszam/fuvarTipus). */
-  maiMegallok: MegalloBejegyzes[];
-  /** Azok a fel-/lerakó pontok, amik a becsült/tényleges időpontjuk szerint a következő naptári napra csúsztak át (pl. hosszú út miatt éjfél után érne oda). */
-  holnapiMegallok: MegalloBejegyzes[];
+  /** A nap fuvarjai blokkonként, a blokkok az első pontjuk ideje szerint sorolva, a pontok blokkon belül útvonal-sorrendben (lásd FuvarBlokk). */
+  fuvarok: FuvarBlokk[];
 };
 
 /**
@@ -746,67 +769,60 @@ async function lancoltEloBecsles(
   return eredmeny;
 }
 
+/** Két "YYYY-MM-DD" naptári nap különbsége napokban (b - a). */
+function napKulonbseg(a: string, b: string): number {
+  const [ae, ah, an] = a.split("-").map(Number);
+  const [be, bh, bn] = b.split("-").map(Number);
+  return Math.round((Date.UTC(be, bh - 1, bn) - Date.UTC(ae, ah - 1, an)) / 86400000);
+}
+
 /**
- * Egy sofőrhöz tartozó tervezett fuvarok fel-/lerakó pontjait sima,
- * időrendbe rendezett listává lapítja (a fuvar-szintű adatok — megrendelő,
- * pozíciószám, fuvarTipus — minden ponton elérhetők) — ez kerül a
- * jármű-csempe megbízás-listájára a régi, fuvaronkénti sávok helyett.
+ * A tervezett fuvarokból a kocsi napi listájának blokkjai (lásd FuvarBlokk):
+ * blokkon belül a pontok útvonal-sorrendben (felrakó(k), majd lerakó(k)),
+ * a blokkok az első pontjuk tényleges vagy becsült ideje szerint, azonos
+ * időnél a rögzítés (id) sorrendjében. A megjelenített naptól eltérő napra
+ * eső pontok is a blokkban maradnak, `napElteres` jelöléssel.
+ *
+ * `most`: a mai napon a még el nem ért, de már elmúlt becsült idejű pontok
+ * "elavult becslés" jelöléséhez (MegalloBejegyzes.becslesElavult); múltbeli
+ * napnál null.
  */
-function laposMegallok(tervezettFuvarok: TervezettFuvarSzakasz[]): MegalloBejegyzes[] {
+function fuvarBlokkok(tervezettFuvarok: TervezettFuvarSzakasz[], napISO: string, most: Date | null): FuvarBlokk[] {
   return tervezettFuvarok
-    .flatMap((f) =>
-      f.megallok.map(
-        (m): MegalloBejegyzes => ({
-          fuvarId: f.id,
-          fuvarTipus: f.fuvarTipus,
-          megrendelo: f.megrendelo,
-          pozicioszam: f.pozicioszam,
-          tipus: m.tipus,
-          cim: m.cim,
-          idopont: m.tenylegesIdo ?? m.idopont,
-          elhagyva: m.elhagyva,
-          eppenItt: m.eppenItt,
-          nyersCim: m.nyersCim,
-          bizonytalanFelismeres: m.bizonytalanFelismeres,
-          megalloIndex: m.index,
-          keszForras: m.keszForras,
-          keszBy: m.keszBy,
-          becslesElavult: false,
-        })
-      )
-    )
-    .sort((a, b) => a.idopont.getTime() - b.idopont.getTime());
-}
-
-/** A mai napon: a még el nem ért pontok közül az, amelyiknek a becsült ideje már elmúlt, elavult statikus becslés (lásd MegalloBejegyzes.becslesElavult). */
-function jeloldElavultBecsleseket(bejegyzesek: MegalloBejegyzes[], most: Date): MegalloBejegyzes[] {
-  return bejegyzesek.map((b) =>
-    !b.elhagyva && !b.eppenItt && b.idopont.getTime() <= most.getTime() ? { ...b, becslesElavult: true } : b
-  );
-}
-
-/** A megjelenített napra eső és a rákövetkező naptári napra átcsúszott pontok szétválasztása. */
-/**
- * A megjelenített napra eső, a rákövetkező napokra átcsúszott, ÉS (a
- * getMaiSajatFuvarok/getMaiValodiSajatFuvarok tartomány-illesztése miatt)
- * egy KORÁBBI napról áthúzódó pont is előfordulhat itt — egy többnapos
- * fuvar már lezajlott felrakója, miközben a lerakó napja még hátravan.
- * Az ilyen, a megjelenített napnál KORÁBBI pontot egyszerűen kihagyjuk:
- * már megtörtént, a "Későbbi napra átcsúszva" doboz (ami kifejezetten a
- * JÖVŐBELI napra eső pontoknak szól) félrevezető helye lenne neki.
- */
-function szetvalasztNapSzerint(bejegyzesek: MegalloBejegyzes[], napISO: string): { maiMegallok: MegalloBejegyzes[]; holnapiMegallok: MegalloBejegyzes[] } {
-  const maiMegallok: MegalloBejegyzes[] = [];
-  const holnapiMegallok: MegalloBejegyzes[] = [];
-  for (const b of bejegyzesek) {
-    const napja = budapestNapISO(b.idopont);
-    if (napja === napISO) {
-      maiMegallok.push(b);
-    } else if (napja > napISO) {
-      holnapiMegallok.push(b);
-    }
-  }
-  return { maiMegallok, holnapiMegallok };
+    .map((f): FuvarBlokk => {
+      const megallok = [...f.megallok]
+        .sort((a, b) => a.index - b.index)
+        .map((m): MegalloBejegyzes => {
+          const idopont = m.tenylegesIdo ?? m.idopont;
+          return {
+            fuvarId: f.id,
+            fuvarTipus: f.fuvarTipus,
+            megrendelo: f.megrendelo,
+            pozicioszam: f.pozicioszam,
+            tipus: m.tipus,
+            cim: m.cim,
+            idopont,
+            elhagyva: m.elhagyva,
+            eppenItt: m.eppenItt,
+            nyersCim: m.nyersCim,
+            bizonytalanFelismeres: m.bizonytalanFelismeres,
+            megalloIndex: m.index,
+            keszForras: m.keszForras,
+            keszBy: m.keszBy,
+            becslesElavult: most !== null && !m.elhagyva && !m.eppenItt && idopont.getTime() <= most.getTime(),
+            napElteres: napKulonbseg(napISO, budapestNapISO(idopont)),
+          };
+        });
+      return {
+        fuvarId: f.id,
+        fuvarTipus: f.fuvarTipus,
+        megrendelo: f.megrendelo,
+        pozicioszam: f.pozicioszam,
+        megallok,
+        kezdetIdo: megallok[0]?.idopont ?? f.kezdet,
+      };
+    })
+    .sort((a, b) => a.kezdetIdo.getTime() - b.kezdetIdo.getTime() || Number(a.fuvarId) - Number(b.fuvarId));
 }
 
 /**
@@ -940,7 +956,7 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
           eloPozicio: null,
           eloEta: null,
           hiba: null,
-          ...szetvalasztNapSzerint(laposMegallok(keziJelolesekkel(tervezettFuvarok, sajatSorok)), napISO),
+          fuvarok: fuvarBlokkok(keziJelolesekkel(tervezettFuvarok, sajatSorok), napISO, null),
         };
       }
       try {
@@ -1014,20 +1030,16 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
         const lancoltFuvarok = livePos
           ? await lancoltEloBecsles(jeloltFuvarok, { lat: livePos.latitude, lon: livePos.longitude }, veg, kalibracio)
           : jeloltFuvarok;
-        const bejegyzesek = maiNap ? jeloldElavultBecsleseket(laposMegallok(lancoltFuvarok), veg) : laposMegallok(lancoltFuvarok);
+        const fuvarok = fuvarBlokkok(lancoltFuvarok, napISO, maiNap ? veg : null);
 
-        // Élő ETA: a legközelebbi, még el nem hagyott fel-/lerakó pont
-        // frissen láncolt becsült ideje — ez adja a jármű-csempén a
-        // kamion-ikon melletti becsült időt.
+        // Élő ETA: a következő, még el nem ért fel-/lerakó pont frissen
+        // láncolt becsült ideje — ez adja a jármű-csempén a kamion-ikon
+        // melletti becsült időt. A "következő" a blokkok sorrendjében az
+        // első ilyen pont (a felület is oda teszi a kamion-ikont). Az
+        // `eppenItt` pont sem cél: oda már megérkezett.
         let eloEta: { cel: string; erkezes: Date; bizonytalan: boolean } | null = null;
         if (livePos) {
-          // A fuvarok sorrendje nem feltétlenül időrendi (több megbízás
-          // futhat egy napon), ezért a "következő" pontot idő szerint
-          // választjuk ki. Az `eppenItt` pont sem cél: oda már megérkezett.
-          const kovetkezoMegallo = lancoltFuvarok
-            .flatMap((f) => f.megallok)
-            .filter((m) => !m.elhagyva && !m.eppenItt)
-            .sort((a, b) => a.idopont.getTime() - b.idopont.getTime())[0];
+          const kovetkezoMegallo = fuvarok.flatMap((f) => f.megallok).find((m) => !m.elhagyva && !m.eppenItt);
           if (kovetkezoMegallo) {
             eloEta = {
               cel: kovetkezoMegallo.cim,
@@ -1045,7 +1057,7 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
           eloPozicio: eloPozicioEredmeny,
           eloEta,
           hiba: null,
-          ...szetvalasztNapSzerint(bejegyzesek, napISO),
+          fuvarok,
         };
       } catch (err) {
         const message = err instanceof EcofleetError ? err.message : "Nem sikerült lekérni az idővonalat.";
@@ -1055,7 +1067,7 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
           eloPozicio: null,
           eloEta: null,
           hiba: message,
-          ...szetvalasztNapSzerint(laposMegallok(keziJelolesekkel(tervezettFuvarok, sajatSorok)), napISO),
+          fuvarok: fuvarBlokkok(keziJelolesekkel(tervezettFuvarok, sajatSorok), napISO, null),
         };
       }
     })

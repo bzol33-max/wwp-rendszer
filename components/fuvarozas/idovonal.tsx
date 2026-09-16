@@ -9,6 +9,7 @@ import {
   getIdovonalak,
   getKovetkezoNapokElonezet,
   type ElakadtFuvar,
+  type FuvarBlokk,
   type JarmuIdovonalEredmeny,
   type KovetkezoNap,
   type MegalloBejegyzes,
@@ -58,15 +59,23 @@ function formatIdo(d: Date): string {
 /** Ennél régebbi élő GPS-adatnál figyelmeztetünk: a pozíció nem "most", a készülék kieshetett. */
 const REGI_JEL_PERC = 30;
 
-function formatEltelt(d: Date): string {
-  const perc = Math.round((Date.now() - d.getTime()) / 60000);
+function formatEltelt(d: Date, most: number): string {
+  const perc = Math.round((most - d.getTime()) / 60000);
   if (perc < 60) return `${perc} perce`;
   const ora = Math.floor(perc / 60);
   return `${ora} óra ${perc - ora * 60} perce`;
 }
 
-/** Rövid dátum + idő (pl. "szept. 15., 08:00") — olyan pontokhoz, amik nem a mai vagy a holnapi napra esnek, hogy a felhasználó lássa, melyik napról van szó. */
-function formatIdoNappal(d: Date): string {
+/**
+ * Idő a nap jelölésével, ha a pont nem a megjelenített napra esik: "tegnap
+ * 07:10", "holnap 08:00", távolabb "szept. 14., 08:00". A többnapos fuvar
+ * tegnapi felrakója / holnapi lerakója így a saját blokkjában marad, és
+ * látszik, melyik napról van szó.
+ */
+function formatIdoNapJelolessel(d: Date, napElteres: number): string {
+  if (napElteres === 0) return formatIdo(d);
+  if (napElteres === -1) return `tegnap ${formatIdo(d)}`;
+  if (napElteres === 1) return `holnap ${formatIdo(d)}`;
   return `${d.toLocaleDateString("hu-HU", { month: "short", day: "numeric" })}, ${formatIdo(d)}`;
 }
 
@@ -93,10 +102,13 @@ function JarmuInfoDoboz({
   jarmu,
   eredmeny,
   maiNap,
+  most,
 }: {
   jarmu: (typeof SAJAT_JARMUVEK)[number];
   eredmeny: JarmuIdovonalEredmeny | undefined;
   maiNap: boolean;
+  /** Az adatok betöltésének pillanata (ms) — ehhez mérjük, mennyire régi az élő jel (a renderben nem hívunk Date.now()-t). */
+  most: number;
 }) {
   const pos = eredmeny?.eloPozicio;
   return (
@@ -118,10 +130,10 @@ function JarmuInfoDoboz({
             <span>{pos.sebesseg} km/h</span>
             <span>·</span>
             {/* Régi adatnál a puszta óra:perc frissnek látszana — kiírjuk, mióta nincs jel. */}
-            {Date.now() - pos.utolsoAdat.getTime() > REGI_JEL_PERC * 60000 ? (
+            {most - pos.utolsoAdat.getTime() > REGI_JEL_PERC * 60000 ? (
               <span className="flex items-center gap-1 font-medium text-amber-700 dark:text-amber-400" title="Az Ecofleet utolsó adata ennyi ideje érkezett — a pozíció nem feltétlenül a mostani.">
                 <AlertTriangle className="h-3 w-3" />
-                utolsó jel {formatEltelt(pos.utolsoAdat)} ({formatIdo(pos.utolsoAdat)})
+                utolsó jel {formatEltelt(pos.utolsoAdat, most)} ({formatIdo(pos.utolsoAdat)})
               </span>
             ) : (
               <span>{formatIdo(pos.utolsoAdat)}</span>
@@ -192,15 +204,12 @@ function KamionSor({
 function MegalloSor({
   b,
   aktiv,
-  mutassNapot,
   mutasdTeljesCimet,
   onKeszJelolve,
 }: {
   b: MegalloBejegyzes;
   /** Igaz, ha ez a fuvar van éppen folyamatban (a kamion-ikon a hozzá tartozó ponthoz áll legközelebb). */
   aktiv: boolean;
-  /** Igaz, ha a pont dátuma nem magától értetődő (nem a mai nap nézete) — ilyenkor a nap is megjelenik az idő mellett. */
-  mutassNapot?: boolean;
   /** Igaz, ha ezen a listán több megálló is ugyanabban a városban van — ilyenkor a puszta városnév nem különbözteti meg őket, ezért a teljes cím is kiírjuk. */
   mutasdTeljesCimet?: boolean;
   onKeszJelolve: () => void;
@@ -234,15 +243,12 @@ function MegalloSor({
     <div
       className={`flex flex-col gap-0.5 rounded px-1.5 py-1 text-[11px] ${
         b.elhagyva ? "bg-success/10" : b.eppenItt ? "bg-primary/15" : aktiv ? "bg-primary/10" : ""
-      }`}
+      } ${b.napElteres < 0 ? "opacity-70" : ""}`}
     >
       <div className="flex items-center justify-between gap-2">
         <span className="flex min-w-0 items-center gap-1.5">
           <span className="w-9 shrink-0 text-muted-foreground">{b.tipus === "felrako" ? "Fel:" : "Le:"}</span>
           <span className="truncate font-medium">{b.cim}</span>
-          <span className={`shrink-0 rounded px-1 py-0.5 text-[9px] font-medium ${FUVAR_TIPUS_BADGE[b.fuvarTipus]}`}>
-            {FUVAR_TIPUS_CIMKE[b.fuvarTipus]}
-          </span>
           {b.eppenItt ? (
             <span className="flex shrink-0 items-center gap-1 rounded bg-primary/25 px-1 py-0.5 text-[9px] font-medium text-primary">
               <Truck className="h-2.5 w-2.5" />
@@ -274,7 +280,7 @@ function MegalloSor({
               }
             >
               {b.elhagyva || b.eppenItt ? (b.bizonytalanFelismeres ? "?" : "") : "~"}
-              {mutassNapot ? formatIdoNappal(b.idopont) : formatIdo(b.idopont)}
+              {formatIdoNapJelolessel(b.idopont, b.napElteres)}
             </span>
           )}
         </span>
@@ -294,10 +300,6 @@ function MegalloSor({
           </button>
         )}
       </div>
-      <span className="pl-11 text-muted-foreground">
-        {b.megrendelo ?? "Megbízó ismeretlen"}
-        {b.pozicioszam ? ` · ${b.pozicioszam}` : ""}
-      </span>
       {/* Ha két megálló ugyanabba a városba esik, a puszta városnév alapján
           duplikátumnak látszanának — a teljes cím különbözteti meg őket. */}
       {mutasdTeljesCimet && b.nyersCim && b.nyersCim !== b.cim && (
@@ -309,64 +311,76 @@ function MegalloSor({
   );
 }
 
+function FuvarBlokkFejlec({ f, aktiv }: { f: FuvarBlokk; aktiv: boolean }) {
+  return (
+    <div className="flex items-center gap-1.5 px-1.5 pt-1 text-[11px]">
+      <span className={`shrink-0 rounded px-1 py-0.5 text-[9px] font-medium ${FUVAR_TIPUS_BADGE[f.fuvarTipus]}`}>
+        {FUVAR_TIPUS_CIMKE[f.fuvarTipus]}
+      </span>
+      <span className="truncate font-medium">{f.megrendelo ?? "Megbízó ismeretlen"}</span>
+      {f.pozicioszam && <span className="shrink-0 text-muted-foreground">· {f.pozicioszam}</span>}
+      {aktiv && <span className="shrink-0 rounded bg-primary/20 px-1 py-0.5 text-[9px] font-medium text-primary">Folyamatban</span>}
+    </div>
+  );
+}
+
 function JarmuCsempe({
   jarmu,
   eredmeny,
   maiNap,
+  most,
   kovetkezoNapok,
   onKeszJelolve,
 }: {
   jarmu: (typeof SAJAT_JARMUVEK)[number];
   eredmeny: JarmuIdovonalEredmeny | undefined;
   maiNap: boolean;
+  most: number;
   kovetkezoNapok: KovetkezoNap[];
   onKeszJelolve: () => void;
 }) {
-  const maiMegallok = eredmeny?.maiMegallok ?? [];
-  const holnapiMegallok = eredmeny?.holnapiMegallok ?? [];
+  const fuvarok = eredmeny?.fuvarok ?? [];
   const eloEta = eredmeny?.eloEta;
-  // A kamion-ikon (becsült érkezéssel) az első olyan pont elé kerül, ahol a
-  // jármű MÉG NEM járt — ha éppen egy megállónál áll, az a pont már mögötte van.
-  const kovetkezoIdx = maiMegallok.findIndex((b) => !b.elhagyva && !b.eppenItt);
+  // A fuvarok blokkonként, útvonal-sorrendben (Fel, majd Le) — a kamion-ikon
+  // (becsült érkezéssel) a blokkok sorrendjében az első olyan pont elé
+  // kerül, ahol a jármű MÉG NEM járt; ha éppen egy megállónál áll, az a
+  // pont már mögötte van.
+  const osszesPont = fuvarok.flatMap((f) => f.megallok);
+  const kovetkezo = osszesPont.find((b) => !b.elhagyva && !b.eppenItt) ?? null;
   // "Folyamatban": ahol a kamion most áll, egyébként amelyik fuvarhoz a következő pont tartozik.
-  const aktivFuvarId =
-    maiMegallok.find((b) => b.eppenItt)?.fuvarId ?? (kovetkezoIdx >= 0 ? maiMegallok[kovetkezoIdx].fuvarId : null);
+  const aktivFuvarId = osszesPont.find((b) => b.eppenItt)?.fuvarId ?? kovetkezo?.fuvarId ?? null;
 
   // Azok a városok, amik a listán többször is szerepelnek — ott a puszta
   // városnév alapján két külön rakodóhely duplikált sornak látszana, ezért
   // náluk a teljes címet is kiírjuk.
-  const tobbszorosVarosok = new Set(
-    maiMegallok.map((b) => b.cim).filter((cim, i, t) => t.indexOf(cim) !== i)
-  );
+  const tobbszorosVarosok = new Set(osszesPont.map((b) => b.cim).filter((cim, i, t) => t.indexOf(cim) !== i));
+
+  const kamionIde = (b: MegalloBejegyzes) =>
+    maiNap && eloEta && kovetkezo && b.fuvarId === kovetkezo.fuvarId && b.megalloIndex === kovetkezo.megalloIndex;
 
   return (
     <div className="flex flex-col gap-3">
-      <JarmuInfoDoboz jarmu={jarmu} eredmeny={eredmeny} maiNap={maiNap} />
+      <JarmuInfoDoboz jarmu={jarmu} eredmeny={eredmeny} maiNap={maiNap} most={most} />
 
-      {maiMegallok.length === 0 ? (
+      {fuvarok.length === 0 ? (
         <p className="text-[11px] text-muted-foreground">Nincs megbízás ezen a napon.</p>
       ) : (
-        <div className="flex flex-col gap-0.5">
-          {maiNap && kovetkezoIdx === 0 && eloEta && <KamionSor jarmu={jarmu} eta={eloEta} />}
-          {maiMegallok.map((b, i) => (
-            <div key={`${b.fuvarId}-${b.tipus}-${i}`}>
-              <MegalloSor
-                b={b}
-                aktiv={maiNap && b.fuvarId === aktivFuvarId}
-                mutasdTeljesCimet={tobbszorosVarosok.has(b.cim)}
-                onKeszJelolve={onKeszJelolve}
-              />
-              {maiNap && i === kovetkezoIdx - 1 && eloEta && <KamionSor jarmu={jarmu} eta={eloEta} />}
+        <div className="flex flex-col gap-1.5">
+          {fuvarok.map((f) => (
+            <div key={f.fuvarId} className={`flex flex-col gap-0.5 rounded-lg border ${f.fuvarId === aktivFuvarId && maiNap ? "border-primary/40" : "border-border/60"}`}>
+              <FuvarBlokkFejlec f={f} aktiv={maiNap && f.fuvarId === aktivFuvarId} />
+              {f.megallok.map((b) => (
+                <div key={`${b.fuvarId}-${b.megalloIndex}`}>
+                  {kamionIde(b) && <KamionSor jarmu={jarmu} eta={eloEta!} />}
+                  <MegalloSor
+                    b={b}
+                    aktiv={maiNap && b.fuvarId === aktivFuvarId}
+                    mutasdTeljesCimet={tobbszorosVarosok.has(b.cim)}
+                    onKeszJelolve={onKeszJelolve}
+                  />
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      )}
-
-      {holnapiMegallok.length > 0 && (
-        <div className="flex flex-col gap-0.5 rounded-lg border border-dashed p-2">
-          <span className="text-[10px] font-medium text-muted-foreground">Későbbi napra átcsúszva</span>
-          {holnapiMegallok.map((b, i) => (
-            <MegalloSor key={`${b.fuvarId}-${b.tipus}-${i}`} b={b} aktiv={false} mutassNapot onKeszJelolve={onKeszJelolve} />
           ))}
         </div>
       )}
@@ -430,12 +444,14 @@ export function GpsStatus() {
   const [elakadtak, setElakadtak] = useState<ElakadtFuvar[]>([]);
   const [kovetkezoNapok, setKovetkezoNapok] = useState<Record<string, KovetkezoNap[]>>({});
   const [loading, setLoading] = useState(true);
+  const [betoltve, setBetoltve] = useState(0);
   const maiNap = napISO === maiNapISO;
 
   const load = useCallback(async (nap: string) => {
     const res = await getIdovonalak(nap);
     setAdatok(res.jarmuvek);
     setElakadtak(res.elakadtak);
+    setBetoltve(Date.now());
   }, []);
 
   useEffect(() => {
@@ -482,6 +498,7 @@ export function GpsStatus() {
                 jarmu={jarmu}
                 eredmeny={adatok.find((a) => a.sofor === jarmu.sofor)}
                 maiNap={maiNap}
+                most={betoltve}
                 kovetkezoNapok={kovetkezoNapok[jarmu.sofor] ?? []}
                 onKeszJelolve={() => load(napISO)}
               />

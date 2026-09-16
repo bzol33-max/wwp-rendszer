@@ -125,3 +125,19 @@
 - **Gyorsítótár** (`idovonal-cache.ts`): getIdovonalak 60 s (ma) / 10 perc
   (múlt nap), kézi jelölés törli.
 - Teszt: `scripts/teszt-erintes.mts` (20 eset), bekötve az `npm run teszt`-be.
+
+## 2026-09-16 (8. kör) — GPS fül: fuvaronkénti blokkok, időrend
+
+- Ok: a nap pontjai egyetlen, idő szerint rendezett listába lapultak, a
+  tegnapi felrakók kiestek, egy megállás csak egy pontot igazolt (a BMW-nél
+  a #126 lerakása és a #128 felrakása egy megállás volt) — Micónál
+  „Fel, Le, Le, Le" sorrend lett.
+- `actions.ts` `fuvarBlokkok`: fuvaronként egy blokk, pontok útvonal-
+  sorrendben, blokkok az első pont ideje szerint; `napElteres` a más napra
+  eső pontokon (tegnap/holnap jelöléssel, halványan). A `holnapiMegallok`
+  külön doboz megszűnt. Az élő ETA célja a blokkok sorrendjében az első
+  el nem ért pont.
+- `idovonal.ts` párosítás: egy valós megállás egy lerakót ÉS egy felrakót
+  igazolhat, két azonos szerepűt nem (Budaházi Zoltán döntése: blokkok +
+  tegnapi felrakó látszik).
+- Teszt: +2 eset (22).

@@ -85,6 +85,8 @@ function vezetes(honnan: { lat: number; lon: number }, hova: { lat: number; lon:
   const [j126, j128] = jelolMegallokat([f126, f128], szakaszok);
   eq("ingázó: #126 felrakó Pápa kész", j126[0].elhagyva, true);
   eq("ingázó: #126 lerakó Debrecen kész", j126[1].elhagyva, true);
+  eq("ingázó: #128 felrakó Debrecen kész — ugyanaz a megállás, mint a #126 lerakása", j128[0].elhagyva, true);
+  eq("ingázó: #128 felrakó ideje a debreceni érkezés", j128[0].tenylegesIdo?.toISOString(), t(12, 0, 15).toISOString());
   eq("ingázó: #128 lerakó Pápa NEM kész az ablak előtti állástól", j128[1].elhagyva, false);
   eq("ingázó: #128 lerakó nem 'éppen itt'", j128[1].eppenItt, false);
   eq("ingázó: #126 GPS szerint kész", fuvarKeszGpsSzerint(j126), true);
