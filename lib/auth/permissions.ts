@@ -21,48 +21,101 @@ export type ModuleKey =
   | "fuvarozas_sajat"
   | "elolegek_sajat";
 
-export const MODULES: { key: ModuleKey; label: string }[] = [
-  { key: "info", label: "Info (kezdőlap)" },
-  { key: "fuvarozas", label: "Fuvarozás" },
-  { key: "keszlet", label: "Készlet" },
-  { key: "szamlak", label: "Számlák" },
-  { key: "dolgozok", label: "Dolgozók" },
-  { key: "jelenlet", label: "Jelenléti/üzenőfal" },
-  { key: "jarmuvek", label: "Járművek" },
-  { key: "beallitasok", label: "Beállítások (típusok és árak)" },
-  { key: "mobil", label: "Mobil összefoglaló (önálló, korlátozott nézet)" },
-  { key: "posta", label: "Posta (bér fuvarok postázása — önálló, korlátozott nézet)" },
-  { key: "erkezes", label: "Saját érkezés (dolgozói mobil nézet)" },
+// A jogosultság-admin felület (Beállítások → Felhasználók) két csoportban
+// jeleníti meg a modulokat: a teljes értékű asztali modulok, illetve az
+// önálló, korlátozott mobil nézetek. A mobil nézeteknél a `hint` mondja
+// meg, melyik URL-t / felületet kapcsolja be az adott jog.
+export type ModuleGroup = "asztali" | "mobil";
+
+export const MODULE_GROUPS: { key: ModuleGroup; label: string; description?: string }[] = [
   {
-    key: "keszlet_sajat",
-    label: "Saját készlet (Szakoly/Balkány — dolgozói mobil nézet, az /erkezes Készlet csempéje)",
-  },
-  { key: "attekintes", label: "Áttekintés (vezetői csempés nézet — önálló, korlátozott nézet)" },
-  {
-    key: "felvasarlas_mobil",
-    label: "Felvásárlás mobil rögzítés (önálló, korlátozott nézet — /felvasarlas)",
+    key: "asztali",
+    label: "Asztali modulok",
+    description: "A bal oldali menüből elérhető, teljes értékű modulok.",
   },
   {
-    key: "fuvarozas_sajat",
-    label: "Saját fuvarok (sofőr — dolgozói mobil nézet, az /erkezes Fuvarok csempéje)",
-  },
-  {
-    key: "elolegek_sajat",
-    label: "Saját előlegek megtekintése/elfogadása (dolgozói mobil nézet, az /erkezes Profil csempéje)",
+    key: "mobil",
+    label: "Mobil nézetek (önálló, korlátozott felületek)",
+    description:
+      "Külön URL-en élő, szűkített felületek. Alapértelmezetten tiltottak — csak akkor kapcsolódnak be, ha itt kipipálod.",
   },
 ];
 
-/** Modulok, amik utólag, opt-in jelleggel lettek bevezetve — ld. resolvePermission. */
-const OPT_IN_MODULES: ModuleKey[] = [
-  "mobil",
-  "posta",
-  "erkezes",
-  "keszlet_sajat",
-  "attekintes",
-  "felvasarlas_mobil",
-  "fuvarozas_sajat",
-  "elolegek_sajat",
+export type ModuleInfo = {
+  key: ModuleKey;
+  label: string;
+  group: ModuleGroup;
+  /** Rövid magyarázat: melyik URL-t / felületet kapcsolja be ez a jog. */
+  hint?: string;
+};
+
+export const MODULES: ModuleInfo[] = [
+  { key: "info", label: "Info (kezdőlap)", group: "asztali" },
+  { key: "fuvarozas", label: "Fuvarozás", group: "asztali" },
+  { key: "keszlet", label: "Készlet", group: "asztali" },
+  { key: "szamlak", label: "Számlák", group: "asztali" },
+  { key: "dolgozok", label: "Dolgozók", group: "asztali" },
+  { key: "jelenlet", label: "Jelenléti/üzenőfal", group: "asztali" },
+  { key: "jarmuvek", label: "Járművek", group: "asztali" },
+  { key: "beallitasok", label: "Beállítások (típusok és árak)", group: "asztali" },
+  {
+    key: "mobil",
+    label: "Mobil összefoglaló",
+    group: "mobil",
+    hint: "/mobil — összefoglaló csempés nézet",
+  },
+  {
+    key: "posta",
+    label: "Posta",
+    group: "mobil",
+    hint: "/posta — bér fuvarok postázása",
+  },
+  {
+    key: "erkezes",
+    label: "Saját érkezés",
+    group: "mobil",
+    hint: "/erkezes — dolgozói napi érkezés/távozás és feladatok",
+  },
+  {
+    key: "keszlet_sajat",
+    label: "Saját készlet",
+    group: "mobil",
+    hint: "/erkezes → Készlet csempe (Szakoly/Balkány)",
+  },
+  {
+    key: "attekintes",
+    label: "Áttekintés",
+    group: "mobil",
+    hint: "/attekintes — vezetői csempés nézet",
+  },
+  {
+    key: "felvasarlas_mobil",
+    label: "Felvásárlás mobil rögzítés",
+    group: "mobil",
+    hint: "/felvasarlas — felvásárlás rögzítése telefonról",
+  },
+  {
+    key: "fuvarozas_sajat",
+    label: "Saját fuvarok",
+    group: "mobil",
+    hint: "/erkezes → Fuvarok csempe (sofőr saját fuvarjai)",
+  },
+  {
+    key: "elolegek_sajat",
+    label: "Saját előlegek",
+    group: "mobil",
+    hint: "/erkezes → Profil csempe (előlegek megtekintése/elfogadása)",
+  },
 ];
+
+/**
+ * Modulok, amik utólag, opt-in jelleggel lettek bevezetve — ld. resolvePermission.
+ * Pontosan a "mobil" csoport tagjai, ezért a listát onnan származtatjuk, hogy a
+ * kettő ne tudjon szétcsúszni egymástól.
+ */
+const OPT_IN_MODULES: ModuleKey[] = MODULES.filter((m) => m.group === "mobil").map(
+  (m) => m.key
+);
 
 export type ModulePermission = { view: boolean; edit: boolean };
 export type Permissions = Partial<Record<ModuleKey, ModulePermission>>;
