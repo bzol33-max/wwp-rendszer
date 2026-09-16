@@ -28,7 +28,8 @@ import { getSajatFuvarokErinteshez, setFuvarTeljesitve } from "./megbizasok";
 import { epitsIdovonal, fuvarKeszGpsSzerint, jelolMegallokat, kiegesziteloAllapottal } from "./idovonal";
 import { epitsErintesMegallokat, mozogE } from "./erintes-felismeres";
 import { rogzitGpsErinteseket } from "./megallo-naplo";
-import { budapestFalioraToInstant, budapestNapISO } from "./idozona";
+import { budapestFalioraToInstant, budapestNapISO, formatBudapestFaliora } from "./idozona";
+import type { TervezettMegallo } from "./idovonal";
 
 /** Ennyi nappal visszamenőleg vesszük figyelembe a lerakandó fuvarokat és a trip-előzményt. */
 const VISSZATEKINTES_NAP = 3;
@@ -38,6 +39,19 @@ export type TeljesitesFigyelesEredmeny = {
   automatikusanTeljesitve: number;
   hibak: string[];
 };
+
+/** Egy megálló állapota egy sorban a naplóhoz: szerep, város, geokódolás, érkezés/távozás vagy "nincs érintés". */
+function megalloNaplo(m: TervezettMegallo): string {
+  const szerep = m.tipus === "felrako" ? "Fel" : "Le";
+  const geo = m.lat == null ? "geo ✗" : m.pontossag === "pontos" ? "geo ✓" : `geo ~${m.pontossag}`;
+  const ido = (d: Date | null) => (d ? formatBudapestFaliora(d).slice(5, 16) : "-");
+  const allapot = m.elhagyva
+    ? `érk ${ido(m.tenylegesIdo)} táv ${ido(m.tenylegesTavozas)}`
+    : m.eppenItt
+      ? `érk ${ido(m.tenylegesIdo)}, itt áll`
+      : `nincs érintés (ablak ${ido(m.ablakKezdet)}-tól)`;
+  return `${szerep} ${m.cim || m.nyersCim.slice(0, 30)} [${geo}] ${allapot}`;
+}
 
 function napIsoEltolva(napISO: string, delta: number): string {
   const [ev, ho, nap] = napISO.split("-").map(Number);
@@ -115,7 +129,13 @@ export async function futtatTeljesitesFigyeles(): Promise<TeljesitesFigyelesEred
       for (let i = 0; i < fuvarok.length; i++) {
         const { sor } = fuvarok[i];
         if (sor.hely !== "ber_folyamatban" || sor.teljesitve) continue;
-        if (!fuvarKeszGpsSzerint(jelolt[i])) continue;
+        const kesz = fuvarKeszGpsSzerint(jelolt[i]);
+        // Körönkénti diagnosztika a nyitott fuvarokra — a Railway-naplóból
+        // látszik, melyik megálló miért (nem) számít érintettnek.
+        console.log(
+          `[teljesites-figyeles] ${jarmu.sofor} #${sor.id}${kesz ? " → TELJESÍTVE" : ""}: ${jelolt[i].map(megalloNaplo).join(" | ")}`
+        );
+        if (!kesz) continue;
         await setFuvarTeljesitve(sor.id, true);
         eredmeny.automatikusanTeljesitve++;
       }
