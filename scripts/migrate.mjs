@@ -216,6 +216,7 @@ async function main() {
   await vonjaVisszaKettosGpsTeljesitestOnce(pool);
   await vonjaVisszaKorokKoztiKettosGpsTeljesitestOnce(pool);
   await vonjaVisszaGeokodSavosKettosLezarastOnce(pool);
+  await vonjaVisszaKetAllasosKettosLezarastOnce(pool);
   await szabaditsaFelTorortRbtMegbizastOnce(pool);
   await toroljeMasodpeldanyokatOnce(pool);
   await toroljeMasodpeldanyokat2Once(pool);
@@ -534,6 +535,40 @@ async function vonjaVisszaGeokodSavosKettosLezarastOnce(pool) {
   ]);
   console.log(
     `[migrate] geokód-sávos kettős lezárás visszavonva: ${rows.length} sor` +
+      (rows.length ? " — " + rows.map((r) => `#${r.id}`).join(", ") : ".")
+  );
+}
+
+// Egyszeri javítás (2026-09-16, 5. eset): a debreceni BMW-nél a kocsi két
+// állást produkált (15:59→04:33 a portánál, majd 1,6 km-rel arrébb
+// 04:53→07:15), közben nem hagyta el a telepet — a felismerés ezt két
+// látogatásnak vette, és a másodikat a #130-nak adta (19:04), miközben a
+// kocsi Pápán állt. A felismerés javítva (egy címnél az egymást követő
+// állások egy látogatás, amíg a kocsi nem távolodott 3 km-nél messzebb);
+// a #130 jelölését visszavonjuk. Csak a számlátlan, nem postázott,
+// 17:00–17:10 (UTC) közt jelölt #130-ra hat.
+async function vonjaVisszaKetAllasosKettosLezarastOnce(pool) {
+  const JAVITAS_KOD = "ket-allasos-kettos-lezaras-visszavonas-130-2026-09-16";
+  const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (mar.length > 0) return;
+
+  const { rows } = await pool.query(
+    `update fuvar_megbizasok f
+     set teljesitve = false, teljesitve_at = null,
+         megjegyzes = coalesce(f.megjegyzes || ' | ', '') ||
+           'A GPS-felismerés a BMW-n belüli második állást külön érkezésnek vette és ennek a fuvarnak adta (' ||
+           to_char(f.teljesitve_at at time zone 'Europe/Budapest', 'MM-DD HH24:MI') ||
+           ', a kocsi ekkor Pápán állt) — visszavonva 2026-09-16-án, a javított felismerés dönt újra.'
+     where f.id = 130 and f.tipus = 'sajat' and f.statusz <> 'torolt'
+       and f.teljesitve and f.teljesitve_at between '2026-09-16T17:00:00Z' and '2026-09-16T17:10:00Z'
+       and coalesce(f.szamla_szam, '') = '' and not f.postazva
+     returning f.id`
+  );
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1) on conflict (kod) do nothing`, [
+    JAVITAS_KOD,
+  ]);
+  console.log(
+    `[migrate] két-állásos kettős lezárás visszavonva: ${rows.length} sor` +
       (rows.length ? " — " + rows.map((r) => `#${r.id}`).join(", ") : ".")
   );
 }

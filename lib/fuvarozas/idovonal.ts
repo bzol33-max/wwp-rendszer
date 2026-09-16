@@ -456,6 +456,60 @@ const TAV_SAV_KM = 0.5;
  * Mindkét esetben `tenylegesIdo` az érintés KEZDETE, vagyis a tényleges
  * megérkezés ideje — ezt mutatja az idővonal a becsült időpont helyett.
  */
+/**
+ * Egy tervezett megálló egy LÁTOGATÁSA: egy vagy több, egymást követő
+ * állás-szakasz a cím CIM_TAVOLSAG_KM-es körzetében, amik közt a jármű nem
+ * távolodott TOVABBHALADAS_TAVOLSAG_KM-nél messzebb. Egy nagy telephelyen
+ * (élesben a debreceni BMW-gyár) a kamion a portától a rámpáig, majd a
+ * parkolóba másfél-két km-t is gurul, amiből az Ecofleet KÜLÖN trip-eket és
+ * külön állásokat csinál — ez egyetlen ottlét, nem két érkezés. Két
+ * külön állást két látogatásnak véve a második állás egy MÁSIK, azonos
+ * lerakójú fuvart is "igazolt" (élesben: #130 a #126 mellett), miközben a
+ * kocsi már máshol állt.
+ */
+type Latogatas = {
+  /** A látogatást alkotó állás-szakaszok indexei az `allasok` listában, időrendben. */
+  aik: number[];
+  kezdet: Date;
+  veg: Date;
+  idotartamSec: number;
+  /** A legkisebb távolság (km) a címtől a látogatás állásai közül. */
+  tav: number;
+};
+
+function latogatasok(
+  m: TervezettMegallo,
+  allasok: Extract<IdovonalSzakasz, { tipus: "allas" }>[],
+  pontok: { lat: number; lon: number; at: number }[]
+): Latogatas[] {
+  const eredmeny: Latogatas[] = [];
+  let aktualis: Latogatas | null = null;
+  allasok.forEach((a, ai) => {
+    const tav = haversineKm(m.lat as number, m.lon as number, a.lat, a.lon);
+    if (tav >= CIM_TAVOLSAG_KM) return;
+    if (aktualis) {
+      const elozoVeg = aktualis.veg.getTime();
+      const elment = pontok.some(
+        (p) =>
+          p.at > elozoVeg &&
+          p.at < a.kezdet.getTime() &&
+          haversineKm(m.lat as number, m.lon as number, p.lat, p.lon) >= TOVABBHALADAS_TAVOLSAG_KM
+      );
+      if (!elment) {
+        aktualis.aik.push(ai);
+        aktualis.veg = a.veg;
+        aktualis.idotartamSec += a.idotartamSec;
+        aktualis.tav = Math.min(aktualis.tav, tav);
+        return;
+      }
+      eredmeny.push(aktualis);
+    }
+    aktualis = { aik: [ai], kezdet: a.kezdet, veg: a.veg, idotartamSec: a.idotartamSec, tav };
+  });
+  if (aktualis) eredmeny.push(aktualis);
+  return eredmeny;
+}
+
 export function jelolMegallokat(
   fuvarokMegalloi: TervezettMegallo[][],
   szakaszok: IdovonalSzakasz[]
@@ -470,49 +524,49 @@ export function jelolMegallokat(
   // ugyanabban a másodpercben lett kész.
   const lapos = fuvarokMegalloi.flatMap((megallok, fi) => megallok.map((m, mi) => ({ fi, mi, m })));
 
-  const parok: { fi: number; mi: number; ai: number; tav: number }[] = [];
+  const parok: { fi: number; mi: number; latogatas: Latogatas; tav: number }[] = [];
   lapos.forEach(({ fi, mi, m }) => {
     // Felismerhetetlen címnél nincs mihez hasonlítani — ilyet nem jelölünk késznek.
     if (m.lat == null || m.lon == null || m.pontossag === "ismeretlen") return;
-    allasok.forEach((a, ai) => {
-      // Az időablak előtt véget ért állás nem ehhez a megállóhoz tartozik (lásd TervezettMegallo.ablakKezdet).
-      if (m.ablakKezdet && a.veg.getTime() < m.ablakKezdet.getTime()) return;
-      const tav = haversineKm(m.lat as number, m.lon as number, a.lat, a.lon);
-      if (tav >= CIM_TAVOLSAG_KM) return;
-      if (a.idotartamSec < ERINTES_MIN_IDOTARTAM_SEC && tav >= KOZVETLEN_KOZELSEG_KM) return;
-      parok.push({ fi, mi, ai, tav });
-    });
+    for (const l of latogatasok(m, allasok, pontok)) {
+      // Az időablak előtt véget ért látogatás nem ehhez a megállóhoz tartozik (lásd TervezettMegallo.ablakKezdet).
+      if (m.ablakKezdet && l.veg.getTime() < m.ablakKezdet.getTime()) continue;
+      if (l.idotartamSec < ERINTES_MIN_IDOTARTAM_SEC && l.tav >= KOZVETLEN_KOZELSEG_KM) continue;
+      parok.push({ fi, mi, latogatas: l, tav: l.tav });
+    }
   });
 
-  // Párosítás a legközelebbi párral kezdve, KÖLCSÖNÖSEN egyszer: egy
-  // tervezett megállót egyetlen valós megállás igazol, és egy valós megállás
-  // szerepenként egyetlen megállót — egy LERAKÓT és egy FELRAKÓT igen (a
-  // kamion ugyanott lerak, majd a következő fuvarhoz felrak: élesben a
-  // debreceni BMW-nél a #126 lerakása és a #128 felrakása egy megállás
-  // volt), két lerakót vagy két felrakót nem. Így két, egymáshoz közeli
-  // cím közül az kapja a találatot, amelyikhez a kamion ténylegesen
-  // közelebb állt.
+  // Párosítás KÖLCSÖNÖSEN egyszer: egy tervezett megállót egyetlen látogatás
+  // igazol, és egy látogatás (annak bármely állása) szerepenként egyetlen
+  // megállót — egy LERAKÓT és egy FELRAKÓT igen (a kamion ugyanott lerak,
+  // majd a következő fuvarhoz felrak: élesben a debreceni BMW-nél a #126
+  // lerakása és a #128 felrakása egy ottlét volt), két lerakót vagy két
+  // felrakót nem.
+  //
   // A távolság csak TAV_SAV_KM-es sávokban számít: ugyanannak a telephelynek
   // két írásmódja pár tíz méterrel eltérő koordinátára geokódolódik, és a
   // méterekkel "közelebbi" pont nem a valós különbség. Egy sávon belül a
   // fuvarok sorrendje (a korábban rögzített/tervezett fuvar), azon belül a
-  // megálló, majd a megállás sorrendje dönt. Élesben enélkül a #130
+  // megálló, majd a látogatás sorrendje dönt. Élesben enélkül a #130
   // debreceni lerakója vitte el a hajnali BMW-megállást a #126 elől, és a
   // kocsi Pápán állva "lezárta" a debreceni lerakást.
   parok.sort(
     (x, y) =>
-      Math.round(x.tav / TAV_SAV_KM) - Math.round(y.tav / TAV_SAV_KM) || x.fi - y.fi || x.mi - y.mi || x.ai - y.ai
+      Math.round(x.tav / TAV_SAV_KM) - Math.round(y.tav / TAV_SAV_KM) ||
+      x.fi - y.fi ||
+      x.mi - y.mi ||
+      x.latogatas.aik[0] - y.latogatas.aik[0]
   );
   const foglaltMegallo = new Set<string>();
   const foglaltAllas = new Set<string>();
-  const parositas = new Map<string, (typeof allasok)[number]>();
+  const parositas = new Map<string, Latogatas>();
   for (const p of parok) {
     const kulcs = `${p.fi}:${p.mi}`;
-    const allasKulcs = `${p.ai}:${fuvarokMegalloi[p.fi][p.mi].tipus}`;
-    if (foglaltMegallo.has(kulcs) || foglaltAllas.has(allasKulcs)) continue;
+    const szerep = fuvarokMegalloi[p.fi][p.mi].tipus;
+    if (foglaltMegallo.has(kulcs) || p.latogatas.aik.some((ai) => foglaltAllas.has(`${ai}:${szerep}`))) continue;
     foglaltMegallo.add(kulcs);
-    foglaltAllas.add(allasKulcs);
-    parositas.set(kulcs, allasok[p.ai]);
+    for (const ai of p.latogatas.aik) foglaltAllas.add(`${ai}:${szerep}`);
+    parositas.set(kulcs, p.latogatas);
   }
 
   return fuvarokMegalloi.map((megallok, fi) =>
@@ -522,7 +576,7 @@ export function jelolMegallokat(
 
       const tovabbment = pontok.some(
         (p) =>
-          p.at > erintes.kezdet.getTime() &&
+          p.at > erintes.veg.getTime() &&
           haversineKm(m.lat as number, m.lon as number, p.lat, p.lon) >= TOVABBHALADAS_TAVOLSAG_KM
       );
 
