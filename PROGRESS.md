@@ -72,3 +72,17 @@
   annyi fuvart zár le, ahány érkezés volt.
 - `migrate.mjs` egyszeri lépések: ablak előtti (#128) és kettős (#126,
   #130) jelölés visszavonva; a javított figyelés dönt újra.
+
+## 2026-09-16 (5. kör) — Drive-mappa ↔ adatbázis teljes összevetés
+
+- Mind az 56 Drive-fájlhoz van élő sor vagy csatolás (napló: „drive …"
+  sorok, azonosító ÉS URL szerint). Feldolgozatlan irat nincs.
+- A poz 3003 (RBT, #121) törölt sora fogta a fájlt → felszabadítva,
+  a Frissítés gomb újraimportálta (#133).
+- Három irathoz két élő sor: #5/#112 (HAPP, azonos számla), #42/#100 és
+  #76/#102 (Hajdúspedíció, a #100/#102 számlázatlan másodpéldány). Budaházi
+  Zoltán jóváhagyásával a másodpéldányok töröltnek jelölve (egyszeri lépés,
+  biztonsági feltétellel).
+- Tanulság a kódban: a törölt sor is fogja a Drive-fájlt (ismertDriveFileIdk,
+  ismertDokumentumUrlak), ezért kézi törlés után az irat sosem importálódik
+  újra — ezt a Duvenbeck-mintájú felszabadítás oldja meg esetenként.
