@@ -481,19 +481,24 @@ export function jelolMegallokat(
     });
   });
 
-  // Párosítás a legközelebbi párral kezdve, KÖLCSÖNÖSEN egyszer: egy valós
-  // megállás egyetlen tervezett megállót igazol, és egy tervezett megállót
-  // egyetlen valós megállás igazol. Így két, egymáshoz közeli cím közül az
-  // kapja a találatot, amelyikhez a kamion ténylegesen közelebb állt.
+  // Párosítás a legközelebbi párral kezdve, KÖLCSÖNÖSEN egyszer: egy
+  // tervezett megállót egyetlen valós megállás igazol, és egy valós megállás
+  // szerepenként egyetlen megállót — egy LERAKÓT és egy FELRAKÓT igen (a
+  // kamion ugyanott lerak, majd a következő fuvarhoz felrak: élesben a
+  // debreceni BMW-nél a #126 lerakása és a #128 felrakása egy megállás
+  // volt), két lerakót vagy két felrakót nem. Így két, egymáshoz közeli
+  // cím közül az kapja a találatot, amelyikhez a kamion ténylegesen
+  // közelebb állt.
   parok.sort((x, y) => x.tav - y.tav);
   const foglaltMegallo = new Set<string>();
-  const foglaltAllas = new Set<number>();
+  const foglaltAllas = new Set<string>();
   const parositas = new Map<string, (typeof allasok)[number]>();
   for (const p of parok) {
     const kulcs = `${p.fi}:${p.mi}`;
-    if (foglaltMegallo.has(kulcs) || foglaltAllas.has(p.ai)) continue;
+    const allasKulcs = `${p.ai}:${fuvarokMegalloi[p.fi][p.mi].tipus}`;
+    if (foglaltMegallo.has(kulcs) || foglaltAllas.has(allasKulcs)) continue;
     foglaltMegallo.add(kulcs);
-    foglaltAllas.add(p.ai);
+    foglaltAllas.add(allasKulcs);
     parositas.set(kulcs, allasok[p.ai]);
   }
 
