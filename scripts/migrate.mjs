@@ -214,6 +214,7 @@ async function main() {
   await toroljeDuplikatumSorokatOnce(pool);
   await vonjaVisszaKoraiTeljesitestOnce(pool);
   await vonjaVisszaKettosGpsTeljesitestOnce(pool);
+  await vonjaVisszaKorokKoztiKettosGpsTeljesitestOnce(pool);
   await szabaditsaFelTorortRbtMegbizastOnce(pool);
   await toroljeMasodpeldanyokatOnce(pool);
   await toroljeMasodpeldanyokat2Once(pool);
@@ -462,6 +463,40 @@ async function vonjaVisszaKettosGpsTeljesitestOnce(pool) {
   ]);
   console.log(
     `[migrate] kettős GPS-teljesítés visszavonva: ${rows.length} sor` +
+      (rows.length ? " — " + rows.map((r) => `#${r.id}`).join(", ") : ".")
+  );
+}
+
+// Egyszeri javítás (2026-09-16, 3. eset): a kettős lezárás KÜLÖN körökben
+// is előjött — a 13:05-ös kör a #126-ot zárta le (egy érkezés a BMW
+// Debrecen lerakóhoz, NMZ-492), a 13:20-as kör pedig ugyanazt az érkezést a
+// #130-nak adta, mert a körönkénti számláló a #126-ot már nem látta. A
+// visszaút (#128, Debrecen → Pápa) nincs kész, tehát második érkezés nem
+// volt. A #130 jelölését visszavonjuk, a javított figyelés (a korábban
+// lezárt fuvarok érkezését is elhasználtnak számolja) dönt újra. Csak a
+// számlátlan, nem postázott, a 13:15–13:25 (UTC) közt jelölt #130-ra hat.
+async function vonjaVisszaKorokKoztiKettosGpsTeljesitestOnce(pool) {
+  const JAVITAS_KOD = "korok-kozti-kettos-gps-teljesites-visszavonas-130-2026-09-16";
+  const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (mar.length > 0) return;
+
+  const { rows } = await pool.query(
+    `update fuvar_megbizasok f
+     set teljesitve = false, teljesitve_at = null,
+         megjegyzes = coalesce(f.megjegyzes || ' | ', '') ||
+           'A GPS-figyelés a #126 lezárása után 15 perccel ugyanazt az érkezést ennek a fuvarnak is beszámította (' ||
+           to_char(f.teljesitve_at at time zone 'Europe/Budapest', 'MM-DD HH24:MI') ||
+           ') — visszavonva 2026-09-16-án, a javított figyelés dönt újra.'
+     where f.id = 130 and f.tipus = 'sajat' and f.statusz <> 'torolt'
+       and f.teljesitve and f.teljesitve_at between '2026-09-16T13:15:00Z' and '2026-09-16T13:25:00Z'
+       and coalesce(f.szamla_szam, '') = '' and not f.postazva
+     returning f.id`
+  );
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1) on conflict (kod) do nothing`, [
+    JAVITAS_KOD,
+  ]);
+  console.log(
+    `[migrate] körök közti kettős GPS-teljesítés visszavonva: ${rows.length} sor` +
       (rows.length ? " — " + rows.map((r) => `#${r.id}`).join(", ") : ".")
   );
 }

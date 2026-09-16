@@ -16,7 +16,7 @@
 import { getFleetLastPositions, getVehicleTrips, EcofleetError, type EcofleetPosition } from "./ecofleet";
 import { geocodeAddress, TollCalcError, type GeocodedAddress } from "./utdijkalkulacio";
 import { resolveJarmu } from "./vehicles";
-import { getTeljesitesJeloltek, setFuvarTeljesitve } from "./megbizasok";
+import { getTeljesitesJeloltek, getFrissenTeljesitettSajatFuvarok, setFuvarTeljesitve } from "./megbizasok";
 import { budapestFalioraToInstant } from "./idozona";
 
 /** Ha a jármű valaha ennyi km-en belülre került a lerakó címhez, "odaértnek" számít. */
@@ -90,6 +90,14 @@ export async function futtatTeljesitesFigyeles(): Promise<TeljesitesFigyelesEred
   // Kocsi + lerakó → ebben a körben már "elhasznált" érkezések száma (lásd lent).
   const felhasznaltErkezesek = new Map<string, number>();
 
+  // A KORÁBBI körökben lezárt fuvarok érkezése is elhasznált: élesben a
+  // 13:05-ös kör lezárta a #126-ot (egy érkezés), majd a 13:20-as kör — a
+  // #126 már nem lévén jelölt — ugyanazt az egy érkezést a #130-nak adta.
+  // Ezért a közelmúltban Teljesítve-re jelölt (GPS vagy kézi "Kész") saját
+  // fuvarokat is beszámítjuk, ha ugyanaz a kocsi, ugyanaz a lerakó, és a
+  // lezárás a vizsgált fuvar érkezési ablakán belülre esik.
+  const frissenLezartak = await getFrissenTeljesitettSajatFuvarok();
+
   for (const jelolt of jeloltek) {
     const jarmu = resolveJarmu(jelolt.jarmu);
     if (!jarmu || !jarmu.ecofleetObjectId) continue; // nincs GPS-kötés ehhez a járműhöz
@@ -134,7 +142,14 @@ export async function futtatTeljesitesFigyeles(): Promise<TeljesitesFigyelesEred
       ).length;
       if (tripek.length > 0 && bentVan(tripek[0].startLatitude, tripek[0].startLongitude)) erkezesek++;
       const erkezesKulcs = `${jarmu.ecofleetObjectId}|${lerakoCim.lat.toFixed(3)},${lerakoCim.lon.toFixed(3)}`;
-      const felhasznalt = felhasznaltErkezesek.get(erkezesKulcs) ?? 0;
+      let korabbanLezart = 0;
+      for (const f of frissenLezartak) {
+        if (new Date(f.teljesitve_at) < kezdet) continue;
+        if (resolveJarmu(f.jarmu)?.ecofleetObjectId !== jarmu.ecofleetObjectId) continue;
+        const fCim = f.lerako === jelolt.lerako ? lerakoCim : await geokodolCachelve(f.lerako);
+        if (fCim && `${jarmu.ecofleetObjectId}|${fCim.lat.toFixed(3)},${fCim.lon.toFixed(3)}` === erkezesKulcs) korabbanLezart++;
+      }
+      const felhasznalt = (felhasznaltErkezesek.get(erkezesKulcs) ?? 0) + korabbanLezart;
       if (erkezesek - felhasznalt <= 0) continue; // (még) nincs erre a fuvarra jutó érkezés — korai lenne teljesítettnek venni
 
       const eloPoz = eloPoziciok.find((p) => p.objectId === jarmu.ecofleetObjectId);
