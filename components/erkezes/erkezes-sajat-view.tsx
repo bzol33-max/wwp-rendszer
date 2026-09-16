@@ -18,6 +18,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { logout } from "@/lib/auth/actions";
+import { hatokorTelephelyei } from "@/lib/auth/permissions";
 import { MOBIL_THEME } from "@/lib/mobil-theme";
 import { PullToRefresh } from "@/components/mobil/pull-to-refresh";
 import { EditPermissionProvider } from "@/components/auth/edit-permission-context";
@@ -45,8 +46,10 @@ import { getSoforAktualisTura, markMegalloKesz, type SoforTura } from "@/lib/fuv
 type Screen = "home" | "jelenlet" | "feladatok" | "keszlet" | "profil" | "fuvarok";
 type ModulePermission = { view: boolean; edit: boolean };
 
-const KESZLET_SITES = ["Szakoly", "Balkány"] as const;
-type KeszletSite = (typeof KESZLET_SITES)[number];
+// A választható telephelyek a jogosultság hatóköréből jönnek (ModuleScope),
+// nem beégetett listából — teljes hatókörnél mindhárom telephely.
+const OSSZES_KESZLET_SITE = ["Szakoly", "Balkány", "Nyíregyháza"];
+type KeszletSite = string;
 
 // Közös keret minden képernyőhöz: Menta-antracit színséma + lehúzásra
 // frissítés (ld. AGENTS.md "Mobil felület — kötelező konvenciók").
@@ -590,13 +593,15 @@ function FuvarokScreen({
 function KeszletScreen({
   employeeName,
   canEdit,
+  sites,
   onBack,
 }: {
   employeeName: string;
   canEdit: boolean;
+  sites: string[];
   onBack: () => void;
 }) {
-  const [site, setSite] = useState<KeszletSite>("Szakoly");
+  const [site, setSite] = useState<KeszletSite>(sites[0] ?? "Szakoly");
   const [loading, setLoading] = useState(true);
   const [types, setTypes] = useState<string[]>([]);
   const [stock, setStock] = useState<Record<string, number>>({});
@@ -618,7 +623,7 @@ function KeszletScreen({
       <Header employeeName={employeeName} onBack={onBack} />
 
       <div className="grid grid-cols-2 gap-2">
-        {KESZLET_SITES.map((s) => (
+        {sites.map((s) => (
           <button
             key={s}
             type="button"
@@ -711,6 +716,7 @@ export function ErkezesSajatView({
       <KeszletScreen
         employeeName={employeeName}
         canEdit={keszletPermission.edit}
+        sites={hatokorTelephelyei(keszletPermission) ?? OSSZES_KESZLET_SITE}
         onBack={() => setScreen("home")}
       />
     );

@@ -2,12 +2,16 @@ import { AlertCircle } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireSession } from "@/lib/auth/dal";
+import { sajatHatokor } from "@/lib/auth/permissions";
 import { ErkezesSajatView } from "@/components/erkezes/erkezes-sajat-view";
 
 export default async function ErkezesPage() {
   const session = await requireSession();
 
-  if (!session.can("erkezes").view || !session.employeeId) {
+  // A dolgozói mobil nézet a Jelenléti modul "sajat" hatókörű jogához
+  // tartozik (korábban külön "erkezes" kulcs volt — ld. a hatókör-átállást).
+  const jelenlet = session.can("jelenlet");
+  if (!jelenlet.view || !sajatHatokor(jelenlet) || !session.employeeId) {
     return (
       <div className="flex flex-col gap-4">
         <PageHeader
@@ -39,9 +43,9 @@ export default async function ErkezesPage() {
       employeeId={session.employeeId}
       employeeName={session.name}
       role={session.role}
-      keszletPermission={session.can("keszlet_sajat")}
+      keszletPermission={session.can("keszlet")}
       fuvarozasPermission={session.can("fuvarozas_sajat")}
-      elolegekPermission={session.can("elolegek_sajat")}
+      elolegekPermission={session.can("dolgozok")}
     />
   );
 }

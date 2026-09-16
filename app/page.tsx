@@ -8,7 +8,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SITES } from "@/lib/nav";
 import { MODULES } from "@/lib/modules";
 import { requireSession } from "@/lib/auth/dal";
-import type { ModuleKey } from "@/lib/auth/permissions";
+import {
+  hatokorEngedTelephelyet,
+  sajatHatokor,
+  teljesHatokor,
+  type ModuleKey,
+} from "@/lib/auth/permissions";
 
 export default async function Home() {
   const session = await requireSession();
@@ -24,9 +29,13 @@ export default async function Home() {
     redirect("/attekintes");
   }
 
-  const visibleModules = MODULES.filter(
-    (mod) => session.can(mod.key as ModuleKey).view
-  );
+  // Csak a TELJES hatókörű jogok számítanak a modul-rácsba: egy hatókörrel
+  // szűkített jog (pl. a saját jelenlét vagy egyetlen telephely készlete) az
+  // önálló, korlátozott felületen át él, nem az asztali modulon keresztül.
+  const visibleModules = MODULES.filter((mod) => {
+    const p = session.can(mod.key as ModuleKey);
+    return p.view && teljesHatokor(p);
+  });
 
   // Aki egyelőre csak egy önálló, korlátozott nézethez (mobil összefoglaló,
   // posta vagy saját érkezés) kap jogot (egyik teljes modulhoz sincs
@@ -35,8 +44,12 @@ export default async function Home() {
   if (visibleModules.length === 0) {
     if (session.can("mobil").view) redirect("/mobil");
     if (session.can("posta").view) redirect("/posta");
-    if (session.can("erkezes").view) redirect("/erkezes");
-    if (session.can("felvasarlas_mobil").view) redirect("/felvasarlas");
+    const jelenlet = session.can("jelenlet");
+    if (jelenlet.view && sajatHatokor(jelenlet)) redirect("/erkezes");
+    const keszlet = session.can("keszlet");
+    if (keszlet.edit && hatokorEngedTelephelyet(keszlet, "Nyíregyháza")) {
+      redirect("/felvasarlas");
+    }
     // Ha egyik nézet sem elérhető, kijelentkeztess (nincs hozzáférés)
     redirect("/login");
   }

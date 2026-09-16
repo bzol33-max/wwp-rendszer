@@ -14,12 +14,8 @@ export type ModuleKey =
   | "beallitasok"
   | "mobil"
   | "posta"
-  | "erkezes"
-  | "keszlet_sajat"
   | "attekintes"
-  | "felvasarlas_mobil"
-  | "fuvarozas_sajat"
-  | "elolegek_sajat";
+  | "fuvarozas_sajat";
 
 export const MODULES: { key: ModuleKey; label: string }[] = [
   { key: "info", label: "Info (kezdőlap)" },
@@ -32,23 +28,10 @@ export const MODULES: { key: ModuleKey; label: string }[] = [
   { key: "beallitasok", label: "Beállítások (típusok és árak)" },
   { key: "mobil", label: "Mobil összefoglaló (önálló, korlátozott nézet)" },
   { key: "posta", label: "Posta (bér fuvarok postázása — önálló, korlátozott nézet)" },
-  { key: "erkezes", label: "Saját érkezés (dolgozói mobil nézet)" },
-  {
-    key: "keszlet_sajat",
-    label: "Saját készlet (Szakoly/Balkány — dolgozói mobil nézet, az /erkezes Készlet csempéje)",
-  },
   { key: "attekintes", label: "Áttekintés (vezetői csempés nézet — önálló, korlátozott nézet)" },
-  {
-    key: "felvasarlas_mobil",
-    label: "Felvásárlás mobil rögzítés (önálló, korlátozott nézet — /felvasarlas)",
-  },
   {
     key: "fuvarozas_sajat",
     label: "Saját fuvarok (sofőr — dolgozói mobil nézet, az /erkezes Fuvarok csempéje)",
-  },
-  {
-    key: "elolegek_sajat",
-    label: "Saját előlegek megtekintése/elfogadása (dolgozói mobil nézet, az /erkezes Profil csempéje)",
   },
 ];
 
@@ -56,15 +39,53 @@ export const MODULES: { key: ModuleKey; label: string }[] = [
 const OPT_IN_MODULES: ModuleKey[] = [
   "mobil",
   "posta",
-  "erkezes",
-  "keszlet_sajat",
   "attekintes",
-  "felvasarlas_mobil",
   "fuvarozas_sajat",
-  "elolegek_sajat",
 ];
 
-export type ModulePermission = { view: boolean; edit: boolean };
+// Hatókör: a jog MEKKORA részére a modulnak érvényes. A hiányzó scope a
+// teljes hatókört jelenti — így minden korábbi, csak {view, edit} alakú
+// bejegyzés érvényes marad, nem kellett egyszerre mindent átírni.
+//
+//   "sajat"              — csak a bejelentkezett felhasználóhoz tartozó
+//                          alkalmazott sorai (pl. a saját jelenléte)
+//   { sites: [...] }     — csak a felsorolt telephelyek
+//
+// Az eszköz (mobil / asztali) NEM hatókör: ugyanaz a jog jelenik meg
+// máshogy elrendezve. Korábban ez össze volt keverve — a "keszlet_sajat",
+// "felvasarlas_mobil", "elolegek_sajat" és "erkezes" kulcsok valójában
+// hatókörrel szűkített modul-jogok voltak, külön kulcsnak álcázva.
+export type ModuleScope = "sajat" | { sites: string[] };
+
+export type ModulePermission = {
+  view: boolean;
+  edit: boolean;
+  /** Hiányzó scope = teljes hatókör. */
+  scope?: ModuleScope;
+};
+
+/** Teljes hatókörű-e a jog (nincs szűkítés). */
+export function teljesHatokor(p: ModulePermission): boolean {
+  return p.scope === undefined;
+}
+
+/** Csak a saját alkalmazott-sorokra érvényes-e. */
+export function sajatHatokor(p: ModulePermission): boolean {
+  return p.scope === "sajat";
+}
+
+/** Engedi-e a hatókör ezt a telephelyet. */
+export function hatokorEngedTelephelyet(p: ModulePermission, site: string): boolean {
+  if (p.scope === undefined) return true;
+  if (p.scope === "sajat") return false;
+  return p.scope.sites.includes(site);
+}
+
+/** A hatókör által engedett telephelyek, vagy null, ha nincs szűkítés. */
+export function hatokorTelephelyei(p: ModulePermission): string[] | null {
+  if (p.scope === undefined || p.scope === "sajat") return null;
+  return p.scope.sites;
+}
 export type Permissions = Partial<Record<ModuleKey, ModulePermission>>;
 
 // Hiányzó modulbejegyzés = alapértelmezetten teljes hozzáférés. Az admin
@@ -88,9 +109,9 @@ export function resolvePermission(
   if (role === "admin") return { view: true, edit: true };
   const p = permissions?.[module];
   if (OPT_IN_MODULES.includes(module)) {
-    return { view: p?.view ?? false, edit: p?.edit ?? false };
+    return { view: p?.view ?? false, edit: p?.edit ?? false, scope: p?.scope };
   }
-  return { view: p?.view ?? true, edit: p?.edit ?? true };
+  return { view: p?.view ?? true, edit: p?.edit ?? true, scope: p?.scope };
 }
 
 export function isAdmin(role: string | undefined | null): boolean {

@@ -2,12 +2,11 @@
 
 import { randomUUID } from "node:crypto";
 import { query } from "@/lib/db";
-import type { ModuleKey } from "@/lib/auth/permissions";
 import {
-  requireAnyEditPermission,
-  requireAnyViewPermission,
-  requireEditPermission,
-  requireViewPermission,
+  requireTelephelyEditPermission,
+  requireTelephelyViewPermission,
+  requireTeljesEditPermission,
+  requireTeljesViewPermission,
 } from "@/lib/auth/require-permission";
 
 const TIME_FMT = "mon. DD HH24:MI";
@@ -37,24 +36,6 @@ export type MovementRow = {
   target_site: string | null;
   created_by: string | null;
 };
-
-// Az önkiszolgáló "keszlet_sajat" jog (a dolgozói mobil nézet Készlet
-// csempéje) csak erre a két telephelyre érvényes — ld. KESZLET_SITES a
-// components/erkezes/erkezes-sajat-view.tsx-ben. A teljes "keszlet" modul
-// birtokosát ez nem korlátozza. A telephelyet a kliens küldi, ezért itt is
-// ellenőrizni kell, nem elég a felületen elrejteni.
-const SAJAT_KESZLET_SITES = ["Szakoly", "Balkány"];
-
-function ellenorizdSajatKeszletHatokor(jog: ModuleKey, ...sites: (string | undefined)[]) {
-  if (jog !== "keszlet_sajat") return;
-  for (const site of sites) {
-    if (site && !SAJAT_KESZLET_SITES.includes(site)) {
-      throw new Error(
-        `A saját készlet jogosultság nem érvényes erre a telephelyre: ${site}`
-      );
-    }
-  }
-}
 
 // Ezek a lekérdezések csak ezen a modulon belülről hívódnak (getSiteSnapshot,
 // getNyiregyhazaFoSnapshot). Szándékosan NEM exportáltak: egy "use server"
@@ -179,9 +160,8 @@ export async function recordMovements(input: {
   partner?: string;
   createdBy?: string;
 }) {
-  const jog = await requireAnyEditPermission(["keszlet", "keszlet_sajat"]);
-  ellenorizdSajatKeszletHatokor(
-    jog,
+  await requireTelephelyEditPermission(
+    "keszlet",
     input.site,
     ...input.items.map((i) => i.targetSite)
   );
@@ -269,7 +249,7 @@ export async function recordMovements(input: {
 // egyensúly-bontó hibát okozná újra, amit a jóváírás bevezetése (lásd
 // recordMovements) megszüntetett.
 export async function deleteMovement(id: string) {
-  await requireEditPermission("keszlet");
+  await requireTeljesEditPermission("keszlet");
   const rows = await query<{
     purchase_id: string | null;
     direction: Direction;
@@ -302,7 +282,7 @@ export async function deleteMovement(id: string) {
 // (recordMovements egy mentésben több típust is felvehet — ezeket a közös
 // movement_group köti össze, lásd db/schema.sql).
 export async function deleteMovementEvent(id: string) {
-  await requireEditPermission("keszlet");
+  await requireTeljesEditPermission("keszlet");
   const rows = await query<{ movement_group: string | null }>(
     `select movement_group::text from keszlet_events where id = $1 and kind = 'mozgas'`,
     [id]
@@ -333,7 +313,7 @@ export type OsszkeszletRow = {
 };
 
 export async function getOsszkeszlet(): Promise<OsszkeszletRow[]> {
-  await requireViewPermission("keszlet");
+  await requireTeljesViewPermission("keszlet");
   // Ugyanaz a be/ki/mozgatás-számítás, mint a getStock-ban, csak az összes
   // telephelyre egyszerre, típus+telephely bontásban — a "Csere" itt sem
   // önálló készlettétel, ld. getStock megjegyzését.
@@ -378,7 +358,7 @@ export type OsszkeszletHaviRow = {
 // nem valódi készletváltozás, csak áthelyezés) és a felvásárláshoz kötött
 // tételek (purchase_id not null — a Havi fülön már darabonként látszanak).
 export async function getOsszkeszletHavibontas(monthsBack = 4): Promise<OsszkeszletHaviRow[]> {
-  await requireViewPermission("keszlet");
+  await requireTeljesViewPermission("keszlet");
   // Minden aktív típusra és minden hónapra ad vissza egy sort (0-val
   // feltöltve, ha nem volt mozgás), így a UI-nak nem kell hiányzó
   // típus/hónap kombinációkat pótolnia.
@@ -426,8 +406,7 @@ export async function getOsszkeszletHavibontas(monthsBack = 4): Promise<Osszkesz
 }
 
 export async function getSiteSnapshot(site: string) {
-  const jog = await requireAnyViewPermission(["keszlet", "keszlet_sajat"]);
-  ellenorizdSajatKeszletHatokor(jog, site);
+  await requireTelephelyViewPermission("keszlet", site);
   const [stock, movements, types] = await Promise.all([
     getStock(site),
     getMovements(site),
@@ -459,7 +438,7 @@ export type PriceRow = { name: string; default_price: number | null };
 // Gyors rögzítéshez (Havi fül és a /felvasarlas mobil nézet) azok a típusok
 // jelennek meg, amik Nyíregyházán aktívak ÉS van beárazva.
 export async function getNyiregyhazaPurchasePrices(): Promise<PriceRow[]> {
-  await requireAnyViewPermission(["keszlet", "felvasarlas_mobil"]);
+  await requireTelephelyViewPermission("keszlet", "Nyíregyháza");
   return query<PriceRow>(
     `select t.name, t.default_price
      from pallet_types t
@@ -471,7 +450,7 @@ export async function getNyiregyhazaPurchasePrices(): Promise<PriceRow[]> {
 }
 
 export async function getHaviSnapshot() {
-  await requireViewPermission("keszlet");
+  await requireTeljesViewPermission("keszlet");
   const purchases = await query<PurchaseRow>(
     `select p.id::text, to_char(p.created_at at time zone 'Europe/Budapest', '${TIME_FMT}') as date,
        to_char(p.created_at at time zone 'Europe/Budapest', 'YYYY-MM-DD') as day_key, t.name as type,
@@ -543,7 +522,7 @@ export async function addPurchase(input: {
   date?: string;
   createdBy?: string;
 }) {
-  await requireAnyEditPermission(["keszlet", "felvasarlas_mobil"]);
+  await requireTelephelyEditPermission("keszlet", "Nyíregyháza");
   const seller = input.seller ?? "";
   const total = input.qty * input.unitPrice;
   const method: PaymentMethod = input.method ?? "keszpenz";
@@ -605,7 +584,7 @@ export async function addPurchase(input: {
 }
 
 export async function deletePurchase(id: string) {
-  await requireEditPermission("keszlet");
+  await requireTeljesEditPermission("keszlet");
   // Visszavonja a felvásárlás összes hatását: mozgás(ok), kassza-tétel, esemény, majd maga a tétel.
   const purchaseRows = await query<{
     total: number;
@@ -645,7 +624,7 @@ export async function addPendingPurchase(input: {
   date: string;
   createdBy?: string;
 }) {
-  await requireEditPermission("keszlet");
+  await requireTeljesEditPermission("keszlet");
   const priceRows = await query<{ default_price: number | null }>(
     `select default_price from pallet_types where name = $1`,
     [input.type]
@@ -666,7 +645,7 @@ export async function updatePendingPurchase(
   id: string,
   input: { type: string; qty: number; date: string; createdBy?: string }
 ) {
-  await requireEditPermission("keszlet");
+  await requireTeljesEditPermission("keszlet");
   const priceRows = await query<{ default_price: number | null }>(
     `select default_price from pallet_types where name = $1`,
     [input.type]
@@ -696,7 +675,7 @@ export async function updatePendingPurchase(
 }
 
 export async function payPendingSeller(seller: string, createdBy?: string) {
-  await requireEditPermission("keszlet");
+  await requireTeljesEditPermission("keszlet");
   const rows = await query<{ id: string; total: number }>(
     `select id::text, total from nyiregyhaza_purchases where seller = $1 and pending = true`,
     [seller]
@@ -719,7 +698,7 @@ export async function payPendingSeller(seller: string, createdBy?: string) {
 }
 
 export async function addKasszaMovement(description: string, amount: number, createdBy?: string) {
-  await requireEditPermission("keszlet");
+  await requireTeljesEditPermission("keszlet");
   await query(`insert into kassza_movements (description, amount, created_by) values ($1, $2, $3)`, [
     description,
     amount,
@@ -736,7 +715,7 @@ export type KasszaMovementRow = {
 };
 
 export async function getKasszaMovements(): Promise<KasszaMovementRow[]> {
-  await requireViewPermission("keszlet");
+  await requireTeljesViewPermission("keszlet");
   // Minden felvásárláshoz kapcsolódó kiadás (felvásárlás, csere, kifizetésre
   // váró tétel kiegyenlítése — category = 'felvasarlas') nagyon elszaporodik —
   // ezeket havonta egy összesítő sorba vonjuk össze, mindig a lista tetején,
@@ -789,7 +768,7 @@ export type EventRow = {
 };
 
 export async function getNyiregyhazaFoSnapshot() {
-  await requireViewPermission("keszlet");
+  await requireTeljesViewPermission("keszlet");
   // A "Legutóbbi mozgások" itt csak a be/ki szállításokat és a telephelyek közti
   // mozgatást mutatja (kind = 'mozgas') — a Csere/Szétválogatás tételenkénti
   // története a saját fülén (Havi, ill. a Vegyes EUR sor) tekinthető meg.
@@ -814,7 +793,7 @@ export async function recordSzetvalogatas(input: {
   torott?: number;
   createdBy?: string;
 }) {
-  await requireEditPermission("keszlet");
+  await requireTeljesEditPermission("keszlet");
   const torott = input.torott ?? 0;
   const total = input.vilagos + input.szurke + torott;
   if (total > 0) {
@@ -852,8 +831,7 @@ export async function recordInventoryCount(input: {
   comment?: string;
   createdBy?: string;
 }) {
-  const jog = await requireAnyEditPermission(["keszlet", "keszlet_sajat"]);
-  ellenorizdSajatKeszletHatokor(jog, input.site);
+  await requireTelephelyEditPermission("keszlet", input.site);
   await query(
     `insert into inventory_counts (site_id, type_id, expected_qty, counted_qty, accepted, comment, created_by)
      values ((select id from sites where name = $1), (select id from pallet_types where name = $2), $3, $4, $5, $6, $7)`,
@@ -884,7 +862,7 @@ export type TypeAdminRow = {
 };
 
 export async function getAllTypesAdmin(): Promise<TypeAdminRow[]> {
-  await requireViewPermission("beallitasok");
+  await requireTeljesViewPermission("beallitasok");
   return query<TypeAdminRow>(
     `select t.id, t.name, t.default_price,
        coalesce(array_agg(s.name) filter (where s.name is not null), '{}') as sites
@@ -897,12 +875,12 @@ export async function getAllTypesAdmin(): Promise<TypeAdminRow[]> {
 }
 
 export async function updateTypePrice(typeId: number, price: number | null) {
-  await requireEditPermission("keszlet");
+  await requireTeljesEditPermission("keszlet");
   await query(`update pallet_types set default_price = $1 where id = $2`, [price, typeId]);
 }
 
 export async function setTypeSiteActive(typeId: number, site: string, active: boolean) {
-  await requireEditPermission("keszlet");
+  await requireTeljesEditPermission("keszlet");
   if (active) {
     await query(
       `insert into site_active_types (site_id, type_id)
