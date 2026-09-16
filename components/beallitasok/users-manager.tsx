@@ -36,7 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { MODULES, MODULE_GROUPS, type Permissions } from "@/lib/auth/permissions";
+import { MODULES, type Permissions } from "@/lib/auth/permissions";
 import {
   createUser,
   deleteUser,
@@ -64,64 +64,41 @@ function PermissionGrid({
   disabled?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-4 rounded-md border p-3">
-      {MODULE_GROUPS.map((group) => {
-        const modules = MODULES.filter((m) => m.group === group.key);
-        if (modules.length === 0) return null;
-        return (
-          <div key={group.key} className="flex flex-col gap-2">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-xs font-medium">{group.label}</span>
-              {group.description ? (
-                <span className="text-[11px] leading-snug text-muted-foreground">
-                  {group.description}
-                </span>
-              ) : null}
+    <div className="flex flex-col gap-2 rounded-md border p-3">
+      <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-4 gap-y-1.5 text-xs">
+        <span className="text-muted-foreground">Modul</span>
+        <span className="text-muted-foreground">Látja</span>
+        <span className="text-muted-foreground">Szerkesztheti</span>
+        {MODULES.map((mod) => {
+          const p = permissions[mod.key] ?? { view: true, edit: true };
+          return (
+            <div key={mod.key} className="contents">
+              <span className="py-1">{mod.label}</span>
+              <Checkbox
+                disabled={disabled}
+                checked={p.view}
+                onCheckedChange={(v) => {
+                  const view = v === true;
+                  onChange({
+                    ...permissions,
+                    [mod.key]: { view, edit: view && p.edit },
+                  });
+                }}
+              />
+              <Checkbox
+                disabled={disabled || !p.view}
+                checked={p.edit}
+                onCheckedChange={(v) =>
+                  onChange({
+                    ...permissions,
+                    [mod.key]: { view: p.view, edit: v === true },
+                  })
+                }
+              />
             </div>
-            <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-4 gap-y-1.5 text-xs">
-              <span className="text-muted-foreground">Modul</span>
-              <span className="text-muted-foreground">Látja</span>
-              <span className="text-muted-foreground">Szerkesztheti</span>
-              {modules.map((mod) => {
-                const p = permissions[mod.key] ?? { view: true, edit: true };
-                return (
-                  <div key={mod.key} className="contents">
-                    <span className="flex flex-col py-1">
-                      <span>{mod.label}</span>
-                      {mod.hint ? (
-                        <span className="text-[11px] leading-snug text-muted-foreground">
-                          {mod.hint}
-                        </span>
-                      ) : null}
-                    </span>
-                    <Checkbox
-                      disabled={disabled}
-                      checked={p.view}
-                      onCheckedChange={(v) => {
-                        const view = v === true;
-                        onChange({
-                          ...permissions,
-                          [mod.key]: { view, edit: view && p.edit },
-                        });
-                      }}
-                    />
-                    <Checkbox
-                      disabled={disabled || !p.view}
-                      checked={p.edit}
-                      onCheckedChange={(v) =>
-                        onChange({
-                          ...permissions,
-                          [mod.key]: { view: p.view, edit: v === true },
-                        })
-                      }
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
     </div>
   );
 }
