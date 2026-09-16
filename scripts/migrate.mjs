@@ -215,6 +215,7 @@ async function main() {
   await vonjaVisszaKoraiTeljesitestOnce(pool);
   await vonjaVisszaKettosGpsTeljesitestOnce(pool);
   await szabaditsaFelTorortRbtMegbizastOnce(pool);
+  await toroljeMasodpeldanyokatOnce(pool);
   await naplozFuvarHelyEllenorzest(pool);
 
   await pool.end();
@@ -495,6 +496,58 @@ async function szabaditsaFelTorortRbtMegbizastOnce(pool) {
   ]);
   console.log(
     `[migrate] RBT poz 3003 dokumentuma újraimportálásra felszabadítva: ${rows.length} sor${rows.length ? " (#" + rows.map((r) => r.id).join(", #") + ")" : ""}.`
+  );
+}
+
+// Egyszeri javítás (2026-09-16, Budaházi Zoltán jóváhagyásával): a Drive-mappa
+// és az adatbázis összevetése három iratnál KÉT élő sort mutatott:
+//   - Fuvarmegbízás_0000129953.pdf (HAPP): #5 (kézi, 09-04) és #112 (import,
+//     09-13) — ugyanaz a számla (WLLWR-2026-281) mindkettőn;
+//   - 09.03. Pázmándfalu–Nagyhegyes docx (Hajdúspedíció): #42 és #100;
+//   - 09.02. Nyírjákó–Ikrény, docx (#76) és pdf (#102) változat (Hajdúspedíció).
+// A #100 és #102 az a két számlázatlan sor, amit a reggeli javítás a
+// Számla/Postára tett vissza — valójában a kiszámlázott #42/#76 másodpéldányai.
+// A számlázott/régebbi példány marad. BIZTONSÁGI FELTÉTEL: a HAPP-párnál
+// azonos számlaszám; a Hajdúspedíció-pároknál a megmaradó sornak VAN
+// számlája, a törlendőnek nincs, és a felrakás napja azonos — ha nem áll,
+// a sor érintetlen marad, a napló jelzi.
+async function toroljeMasodpeldanyokatOnce(pool) {
+  const JAVITAS_KOD = "masodpeldany-sorok-torlese-2026-09-16";
+  const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (mar.length > 0) return;
+
+  const parok = [
+    { marad: 5, torlendo: 112, feltetel: `coalesce(t.szamla_szam, '') <> '' and t.szamla_szam = m.szamla_szam` },
+    { marad: 42, torlendo: 100, feltetel: `coalesce(m.szamla_szam, '') <> '' and coalesce(t.szamla_szam, '') = '' and t.datum = m.datum` },
+    { marad: 76, torlendo: 102, feltetel: `coalesce(m.szamla_szam, '') <> '' and coalesce(t.szamla_szam, '') = '' and t.datum = m.datum` },
+  ];
+  const torolt = [];
+  const kihagyott = [];
+  for (const p of parok) {
+    const { rows } = await pool.query(
+      `update fuvar_megbizasok t
+       set statusz = 'torolt',
+           megjegyzes = coalesce(t.megjegyzes || ' | ', '') ||
+             'Másodpéldány: ugyanaz a megbízás, mint a #' || m.id || ' sor' ||
+             case when coalesce(m.szamla_szam, '') <> '' then ' (számla: ' || m.szamla_szam || ')' else '' end ||
+             ', 2026-09-16-án töröltnek jelölve.'
+       from fuvar_megbizasok m
+       where t.id = $2 and m.id = $1
+         and t.statusz <> 'torolt' and m.statusz <> 'torolt'
+         and t.tipus = 'sajat' and m.tipus = 'sajat'
+         and ${p.feltetel}
+       returning t.id`,
+      [p.marad, p.torlendo]
+    );
+    if (rows.length) torolt.push(`#${p.torlendo} (párja #${p.marad})`);
+    else kihagyott.push(`#${p.torlendo}/#${p.marad}`);
+  }
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1) on conflict (kod) do nothing`, [
+    JAVITAS_KOD,
+  ]);
+  console.log(
+    `[migrate] másodpéldány sorok töröltnek jelölve: ${torolt.length}${torolt.length ? " — " + torolt.join("; ") : ""}` +
+      (kihagyott.length ? ` | KIHAGYVA (a feltétel nem áll): ${kihagyott.join(", ")}` : "")
   );
 }
 
