@@ -20,11 +20,19 @@
  * A SZABÁLY (a fülnevek a UI szerint — figyelem: tipus='sajat' a "Bér
  * fuvarok" fül, tipus='ber' a "Saját fuvarok" fül, lásd a megjegyzést
  * getMaiSajatFuvarok-nál a megbizasok.ts-ben):
- *   1. archiv          — postázva, és az 5 perces visszavonási ablak lejárt
- *                        (a hiányzó postazva_at "régen postázott"-nak számít);
- *                        VAGY tipus='ber' és a munka kész (nincs postázási
- *                        munkafolyamata, ezért a "kész" nála az archiválás).
- *   2. szamla_posta    — tipus='sajat', a munka kész, de még nincs postázva.
+ *   1. archiv          — VAN számlaszáma ÉS postázva, és az 5 perces
+ *                        visszavonási ablak lejárt (a hiányzó postazva_at
+ *                        "régen postázott"-nak számít); VAGY tipus='ber' és a
+ *                        munka kész (nincs postázási munkafolyamata, ezért a
+ *                        "kész" nála az archiválás).
+ *                        A számlaszám azért feltétel (2026-09-16, Budaházi
+ *                        Zoltán kérése): számla nélkül nincs mit postázni —
+ *                        egy postázottnak jelölt, de számlázatlan bér fuvar
+ *                        még számlázandó munka, nem lezárt ügy. Korábban a
+ *                        db/archiv-backlog-cleanup.sql a postázás-jelölővel
+ *                        tett át számlázatlan sorokat az Archívba; azokat a
+ *                        scripts/migrate.mjs (2026-09-16) visszavonta.
+ *   2. szamla_posta    — tipus='sajat', a munka kész, de nincs számlázva+postázva.
  *   3. ber_folyamatban — tipus='sajat', a munka még nem kész.
  *   4. sajat_folyamatban — tipus='ber', a munka még nem kész.
  *
@@ -57,18 +65,21 @@ export const FUVAR_HELY_CIMKE: Record<FuvarHely, string> = {
 /** Az 5 perces visszavonási ablak, amíg egy "Postázva" jelölésű fuvar még nem archiválódik automatikusan. */
 export const ARCHIVALAS_ABLAK_PERC = 5;
 
+/** Van számlaszáma (a NULL és az üres szöveg egyformán "nincs"). */
+export const FUVAR_SZAMLAS_SQL = `(coalesce(szamla_szam, '') <> '')`;
+
 /**
- * "Effektíve archivált": postázva, és az ablak lejárt. A hiányzó postazva_at-
- * ot "régen archivált"-nak vesszük. Enélkül a NULL továbbterjedne a <=
+ * "Effektíve archivált": számlázva, postázva, és az ablak lejárt. A hiányzó
+ * postazva_at-ot "régen archivált"-nak vesszük. Enélkül a NULL továbbterjedne a <=
  * összehasonlításon (`true and NULL` = NULL), és a sor minden fül where-
  * feltételén elbukna — vagyis sehol nem látszana. Ilyen sor a
  * setFuvarPostazva-n keresztül nem keletkezik (az együtt írja a két mezőt),
  * de importból vagy kézi DB-javításból igen.
  */
-export const FUVAR_EFFEKTIVE_ARCHIVALT_SQL = `(postazva and coalesce(postazva_at, '-infinity'::timestamptz) <= now() - interval '${ARCHIVALAS_ABLAK_PERC} minutes')`;
+export const FUVAR_EFFEKTIVE_ARCHIVALT_SQL = `(${FUVAR_SZAMLAS_SQL} and postazva and coalesce(postazva_at, '-infinity'::timestamptz) <= now() - interval '${ARCHIVALAS_ABLAK_PERC} minutes')`;
 
 /** "A munka kész" — lásd a fájl fejlécét. */
-export const FUVAR_MUNKA_KESZ_SQL = `(teljesitve or coalesce(lerakas_datum, datum) < current_date or coalesce(szamla_szam, '') <> '')`;
+export const FUVAR_MUNKA_KESZ_SQL = `(teljesitve or coalesce(lerakas_datum, datum) < current_date or ${FUVAR_SZAMLAS_SQL})`;
 
 /** A fuvar helye a Megbízások fülei közt — CASE-kifejezés, a fuvar_megbizasok tábla oszlopaira hivatkozik. */
 export const FUVAR_HELY_SQL = `(case
@@ -116,12 +127,12 @@ function idopontMs(ertek: string | Date): number {
  */
 export function getFuvarHelye(fuvar: FuvarHelyBemenet, ma: string, most: Date = new Date()): FuvarHely {
   const ablakMs = ARCHIVALAS_ABLAK_PERC * 60 * 1000;
+  const szamlas = (fuvar.szamla_szam ?? "") !== "";
   const postazvaAtMs = fuvar.postazva_at === null ? Number.NEGATIVE_INFINITY : idopontMs(fuvar.postazva_at);
-  const effektiveArchivalt = fuvar.postazva && postazvaAtMs <= most.getTime() - ablakMs;
+  const effektiveArchivalt = szamlas && fuvar.postazva && postazvaAtMs <= most.getTime() - ablakMs;
 
   const lerakasNap = fuvar.lerakas_datum_iso ?? fuvar.datum_iso;
-  const munkaKesz =
-    fuvar.teljesitve || lerakasNap < ma || (fuvar.szamla_szam ?? "") !== "";
+  const munkaKesz = fuvar.teljesitve || lerakasNap < ma || szamlas;
 
   if (effektiveArchivalt || (fuvar.tipus === "ber" && munkaKesz)) return "archiv";
   if (munkaKesz) return "szamla_posta";

@@ -208,9 +208,45 @@ async function main() {
   await feloldTorortDuvenbeckDokumentumokatOnce(pool);
   await torolDokumentumNelkuliDuplikatumokatOnce(pool);
   await rendezFuvarHelyeketOnce(pool);
+  await vonjaVisszaSzamlatlanArchivalastOnce(pool);
   await naplozFuvarHelyEllenorzest(pool);
 
   await pool.end();
+}
+
+// Egyszeri javítás (2026-09-16, 2. kör): a db/archiv-backlog-cleanup.sql
+// korábban a POSTÁZÁS-jelölővel tett át az Archívba számlázatlan bér
+// fuvarokat, hogy ne torlódjanak a Számla/Postán. Budaházi Zoltán döntése
+// szerint viszont számla nélkül nincs lezárt ügy: ezek számlázandó munkák,
+// a Számla/Postán a helyük. A besorolási szabály (lib/fuvarozas/fuvar-hely.ts)
+// ezért a számlaszámot is megköveteli az archiváláshoz — ez a lépés pedig a
+// mesterséges jelölőt vonja vissza, hogy a sor ne "Postázva" pipával álljon
+// ott. Pontosan a cleanup-script saját "VISSZAVONÁS" feltételét használja:
+// nála a postazva_at a fuvar napjának éjfele (a kézi pipánál a kattintás
+// ideje) — így a kézi jelölésekhez nem nyúl, azok postázva-pipával, de
+// számlázandóként látszanak, és a felhasználó dönt róluk.
+async function vonjaVisszaSzamlatlanArchivalastOnce(pool) {
+  const JAVITAS_KOD = "szamlatlan-archivalas-visszavonas-2026-09-16";
+  const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (mar.length > 0) return;
+
+  const { rows } = await pool.query(
+    `update fuvar_megbizasok
+     set postazva = false, postazva_at = null
+     where statusz <> 'torolt'
+       and tipus = 'sajat'
+       and postazva
+       and coalesce(szamla_szam, '') = ''
+       and postazva_at = coalesce(lerakas_datum, datum)::timestamptz
+     returning id, to_char(coalesce(lerakas_datum, datum), 'YYYY-MM-DD') as nap, megrendelo`
+  );
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1) on conflict (kod) do nothing`, [
+    JAVITAS_KOD,
+  ]);
+  console.log(
+    `[migrate] számlázatlan, script-archivált bér fuvar visszatéve a Számla/Postára: ${rows.length} sor` +
+      (rows.length ? ": " + rows.map((r) => `#${r.id} ${r.nap} ${r.megrendelo ?? "-"}`).join("; ") : ".")
+  );
 }
 
 // MINDEN indulásnál (nem egyszeri): a fuvar-besorolás ellenőrző számai a
@@ -228,14 +264,22 @@ async function naplozFuvarHelyEllenorzest(pool) {
          count(*) filter (where postazva and postazva_at is null) as a,
          count(*) filter (where tipus = 'sajat' and coalesce(szamla_szam, '') <> ''
                             and not teljesitve and coalesce(lerakas_datum, datum) >= current_date) as b,
+         count(*) filter (where tipus = 'sajat' and postazva and coalesce(szamla_szam, '') = '') as c,
+         count(*) filter (where tipus = 'sajat' and postazva and coalesce(szamla_szam, '') <> '' and hely <> 'archiv') as d,
+         count(*) filter (where tipus = 'sajat' and sajat_ceg_e) as sajat_ceg,
+         string_agg(id::text, ', ' order by id) filter (where tipus = 'sajat' and sajat_ceg_e) as sajat_ceg_idk,
+         count(*) filter (where hely <> 'archiv' and coalesce(megrendelo, '') = '') as megrendelo_nelkul,
          count(*) filter (where hely = 'ber_folyamatban') as ber_folyamatban,
          count(*) filter (where hely = 'sajat_folyamatban') as sajat_folyamatban,
          count(*) filter (where hely = 'szamla_posta') as szamla_posta,
          count(*) filter (where hely = 'archiv') as archiv
        from (
          select *,
+           -- a sajatCegunkE (lib/fuvarozas/fuvar-constants.ts) tükre SQL-ben
+           (megrendelo is not null
+             and regexp_replace(lower(megrendelo), '[-.,]', ' ', 'g') ~ '^\\s*well\\s*worn\\s*pallett?\\s*(kft|zrt|bt)?\\s*$') as sajat_ceg_e,
            (case
-              when (postazva and coalesce(postazva_at, '-infinity'::timestamptz) <= now() - interval '5 minutes')
+              when (coalesce(szamla_szam, '') <> '' and postazva and coalesce(postazva_at, '-infinity'::timestamptz) <= now() - interval '5 minutes')
                 or (tipus = 'ber' and (teljesitve or coalesce(lerakas_datum, datum) < current_date or coalesce(szamla_szam, '') <> ''))
                 then 'archiv'
               when (teljesitve or coalesce(lerakas_datum, datum) < current_date or coalesce(szamla_szam, '') <> '')
@@ -249,10 +293,30 @@ async function naplozFuvarHelyEllenorzest(pool) {
     );
     const r = rows[0];
     console.log(
-      `[migrate] fuvar-hely ellenőrzés (cél: A=0, B=0): A) postázva postazva_at nélkül = ${r.a}, ` +
-        `B) számlás, mégis folyamatban = ${r.b} — fülek: Bér folyamatban ${r.ber_folyamatban}, ` +
+      `[migrate] fuvar-hely ellenőrzés (cél: A=0, B=0, D=0): A) postázva postazva_at nélkül = ${r.a}, ` +
+        `B) számlás, mégis folyamatban = ${r.b}, C) postázva számlaszám nélkül (Számla/Postán, számlázandó) = ${r.c}, ` +
+        `D) számlás+postázott, mégsem archív (5 perces ablak) = ${r.d} — fülek: Bér folyamatban ${r.ber_folyamatban}, ` +
         `Saját folyamatban ${r.sajat_folyamatban}, Számla/Posta ${r.szamla_posta}, Archív ${r.archiv}.`
     );
+    // Adatminőség (csak napló, NEM javít): bér fuvar, aminek a megrendelője a
+    // saját cégünk — a hasábos fejléc félreolvasása (lásd sajatCegunkE); a
+    // helyes megrendelőt a dokumentumból ember pótolja. Plusz az aktív fülek
+    // megrendelő-nevei előfordulással, elírás/üres név átnézéséhez — az éles
+    // adatbázis kívülről nem kérdezhető le, ezért itt látszik.
+    console.log(
+      `[migrate] fuvar-adatminőség: saját cég megrendelőként (bér fuvar) = ${r.sajat_ceg}` +
+        (r.sajat_ceg_idk ? ` (#${r.sajat_ceg_idk.replaceAll(", ", ", #")})` : "") +
+        `, megrendelő nélkül az aktív füleken = ${r.megrendelo_nelkul}.`
+    );
+    const { rows: nevek } = await pool.query(
+      `select coalesce(nullif(megrendelo, ''), '(üres)') as nev, count(*)::int as db
+       from fuvar_megbizasok
+       where statusz <> 'torolt'
+         and not (coalesce(szamla_szam, '') <> '' and postazva and coalesce(postazva_at, '-infinity'::timestamptz) <= now() - interval '5 minutes')
+         and not (tipus = 'ber' and (teljesitve or coalesce(lerakas_datum, datum) < current_date or coalesce(szamla_szam, '') <> ''))
+       group by 1 order by 2 desc, 1 limit 60`
+    );
+    console.log(`[migrate] aktív fülek megrendelői: ${nevek.map((n) => `${n.nev} (${n.db})`).join("; ")}`);
   } catch (e) {
     // Csak napló — az indulást nem akaszthatja meg.
     console.warn(`[migrate] fuvar-hely ellenőrzés nem futott le: ${e?.message ?? e}`);

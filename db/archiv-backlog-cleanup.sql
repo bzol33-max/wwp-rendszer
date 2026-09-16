@@ -1,3 +1,9 @@
+-- FIGYELEM (2026-09-16): EZT A SCRIPTET NE FUTTASD TÖBBÉ. A besorolás azóta a
+-- számlaszámot is megköveteli az archiváláshoz (lib/fuvarozas/fuvar-hely.ts):
+-- számlázatlan bér fuvar a Számla/Postán marad, számlázandóként. A 3. lépés
+-- korábbi hatását a scripts/migrate.mjs "szamlatlan-archivalas-visszavonas-
+-- 2026-09-16" lépése visszavonta. Csak történeti dokumentumként maradt itt.
+
 -- EGYSZERI kézi karbantartás — a scripts/migrate.mjs NEM futtatja.
 -- Kézzel, a Railway Postgres konzoljába illesztve futtatandó.
 --
