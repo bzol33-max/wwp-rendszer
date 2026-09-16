@@ -16,5 +16,7 @@
   futás alapból, `--apply` ír, `--check` csak ellenőriz; cél: 0 eltérés).
   Az élesítést a `scripts/migrate.mjs` `rendezFuvarHelyeketOnce` lépése
   végzi a deploy indulásakor (kód: `fuvar-hely-ujrasorolas-2026-09-16`), a
-  deploy-naplóban sorolva az érintett sorokat. Utólagos ellenőrzés:
-  `railway run npx tsx scripts/fuvar-hely-ujrasorolas.mts --check`.
+  deploy-naplóban sorolva az érintett sorokat. Élesben (2026-09-16 09:37
+  UTC) A=0, B=0 sort érintett. Az ellenőrző számokat a `migrate.mjs`
+  `naplozFuvarHelyEllenorzest` lépése MINDEN indulásnál a deploy-naplóba
+  írja (cél: A=0, B=0) — redeploy-jal bármikor újra lekérhető.
