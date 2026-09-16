@@ -428,6 +428,26 @@ async function naplozFuvarHelyEllenorzest(pool) {
        group by kulcs having count(*) > 1
        order by kulcs limit 40`
     );
+    // Duvenbeck-átvilágítás (csak napló): a párban érkező iratok (TA =
+    // megbízás, FRALI = rakománylista) egy sorba olvadtak-e. Soronként az
+    // Út ID (reise_id), a hozzákötött iratok típusa/verziója/fájlneve.
+    const { rows: duv } = await pool.query(
+      `select f.id, f.statusz, to_char(f.datum, 'YYYY-MM-DD') as nap, f.reise_id, f.pozicioszam,
+         f.szamla_szam, f.ellenorzott, f.drive_file_id, f.forras,
+         left(f.felrako, 40) as felrako, left(f.lerako, 40) as lerako,
+         (select string_agg(coalesce(d.tipus, '?') || ' v' || coalesce(d.verzio::text, '?') || ' ' || coalesce(d.fajlnev, d.drive_file_id), ' + ' order by d.id)
+            from fuvar_dokumentumok d where d.fuvar_id = f.id) as iratok
+       from fuvar_megbizasok f
+       where f.tipus = 'sajat'
+         and (f.megrendelo ilike '%duvenbeck%' or f.reise_id is not null or f.postazasi_cim ilike '%duvenbeck%'
+              or exists (select 1 from fuvar_dokumentumok d where d.fuvar_id = f.id))
+       order by f.id desc limit 40`
+    );
+    for (const s of duv) {
+      console.log(
+        `[migrate]   duvenbeck #${s.id} [${s.statusz}${s.ellenorzott ? ", ellenőrzött" : ""}] ${s.nap} ${s.felrako ?? "?"} → ${s.lerako} | Út ID: ${s.reise_id ?? "-"} | poz: ${s.pozicioszam ?? "-"} | számla: ${s.szamla_szam ?? "-"} | forrás: ${s.forras ?? "-"} | drive: ${s.drive_file_id ?? "-"} | iratok: ${s.iratok ?? "-"}`
+      );
+    }
     console.log(
       `[migrate] lehetséges duplikátum bér fuvarok: ${dupok.length}` +
         (dupok.length ? " — " + dupok.map((d) => `${d.kulcs.slice(0, 70)} (${d.idk})`).join("; ") : ".")
