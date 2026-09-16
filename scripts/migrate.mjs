@@ -210,6 +210,7 @@ async function main() {
   await rendezFuvarHelyeketOnce(pool);
   await vonjaVisszaSzamlatlanArchivalastOnce(pool);
   await javitsaSajatCegMegrendelotSzamlabol(pool);
+  await javitsaMaradekSajatCegMegrendelotOnce(pool);
   await naplozFuvarHelyEllenorzest(pool);
 
   await pool.end();
@@ -283,6 +284,48 @@ async function javitsaSajatCegMegrendelotSzamlabol(pool) {
     `[migrate] saját cég megrendelőként → számla vevője: ${rows.length} sor` +
       (rows.length ? ": " + rows.map((r) => `#${r.id} → ${r.vevo_nev}`).join("; ") : ".")
   );
+}
+
+// Egyszeri javítás (2026-09-16): a számlával nem javítható, saját-céges
+// megrendelőjű bér fuvarok — a Drive-dokumentumból kiolvasva (a 10:06-os
+// deploy naplója sorolta őket). A drive_file_id a kulcs, nem az id, hogy
+// egy esetleges újraimport se tévessze el. Csak azt a sort írja, amin MÉG a
+// saját cégünk áll, tehát egy időközbeni kézi javítást nem ír felül.
+//   - 1HuH-… (#102, 2026.09.02. Nyírjákó → Ikrény): a megbízó a
+//     Hajdúspedíció Kft. (Heves) — a dokumentum fejléce és aláírója.
+//   - 1M1Udt… (#120, 2026.09.14–15. Sopron → Budapest, poz. 26/3663): a
+//     megbízó az ÁB Speed Szállítmányozási Kft. (Gór).
+//   - 13S4o7… (#125): ugyanaz a pozíciószám (26/3663), útvonal és nap, mint
+//     #120 (a dokumentuma már nincs meg a Drive-on) → ugyanaz a megbízó.
+//     Valószínűleg duplikátum — ezt NEM dönti el a script, a napló
+//     duplikátum-listája mutatja, a felhasználó dönt a törlésről.
+async function javitsaMaradekSajatCegMegrendelotOnce(pool) {
+  const JAVITAS_KOD = "sajat-ceg-megrendelo-dokumentumbol-2026-09-16";
+  const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (mar.length > 0) return;
+
+  const javitasok = [
+    { driveFileId: "1HuH-3TAbOJYVIQJN9k00Xl3YXUZLQj-y", megrendelo: "Hajdúspedíció Kft." },
+    { driveFileId: "1M1Udt4vtGhomEb_ObQ60c8bxo5wG-eY0", megrendelo: "ÁB Speed Szállítmányozási Kft." },
+    { driveFileId: "13S4o7-5WqkKRIjhzNQRFDy5mYRlJ7Zmb", megrendelo: "ÁB Speed Szállítmányozási Kft." },
+  ];
+  const erintett = [];
+  for (const j of javitasok) {
+    const { rows } = await pool.query(
+      `update fuvar_megbizasok
+       set megrendelo = $2,
+           megjegyzes = coalesce(megjegyzes || ' | ', '') ||
+             'Megrendelő javítva a Drive-dokumentum alapján (korábban a saját cégünk állt itt: ' || megrendelo || ').'
+       where drive_file_id = $1 and statusz <> 'torolt' and ${SAJAT_CEG_SQL("megrendelo")}
+       returning id`,
+      [j.driveFileId, j.megrendelo]
+    );
+    for (const r of rows) erintett.push(`#${r.id} → ${j.megrendelo}`);
+  }
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1) on conflict (kod) do nothing`, [
+    JAVITAS_KOD,
+  ]);
+  console.log(`[migrate] saját cég megrendelőként → dokumentumból: ${erintett.length ? erintett.join("; ") : "0 sor"}.`);
 }
 
 // MINDEN indulásnál (nem egyszeri): a fuvar-besorolás ellenőrző számai a
@@ -368,6 +411,27 @@ async function naplozFuvarHelyEllenorzest(pool) {
        group by 1 order by 2 desc, 1 limit 60`
     );
     console.log(`[migrate] aktív fülek megrendelői: ${nevek.map((n) => `${n.nev} (${n.db})`).join("; ")}`);
+    // Lehetséges duplikátumok a bér fuvarok közt (csak napló): azonos
+    // pozíciószám, vagy azonos nap + felrakó + lerakó. Egy kétszer felvett
+    // megbízás kétszer számlázható — ezért érdemes ránézni.
+    const { rows: dupok } = await pool.query(
+      `select kulcs, string_agg('#' || id, ', ' order by id) as idk
+       from (
+         select id, 'poz. ' || pozicioszam as kulcs
+         from fuvar_megbizasok
+         where statusz <> 'torolt' and tipus = 'sajat' and coalesce(pozicioszam, '') <> ''
+         union all
+         select id, to_char(datum, 'YYYY-MM-DD') || ' ' || coalesce(felrako, '?') || ' → ' || lerako
+         from fuvar_megbizasok
+         where statusz <> 'torolt' and tipus = 'sajat'
+       ) k
+       group by kulcs having count(*) > 1
+       order by kulcs limit 40`
+    );
+    console.log(
+      `[migrate] lehetséges duplikátum bér fuvarok: ${dupok.length}` +
+        (dupok.length ? " — " + dupok.map((d) => `${d.kulcs.slice(0, 70)} (${d.idk})`).join("; ") : ".")
+    );
   } catch (e) {
     // Csak napló — az indulást nem akaszthatja meg.
     console.warn(`[migrate] fuvar-hely ellenőrzés nem futott le: ${e?.message ?? e}`);
