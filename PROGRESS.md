@@ -33,3 +33,10 @@
   megrendelőként (bér fuvar, azonosítókkal — NEM javítja, ember pótolja a
   dokumentumból), megrendelő nélküli aktív sorok, az aktív fülek
   megrendelő-nevei előfordulással (adatminőség átnézéséhez).
+- Éles (09:59 UTC): 2 számlázatlan sor vissza a Számla/Postára (#100, #102);
+  12 bér fuvaron a saját cég a megrendelő (#98, #101, #102, #103, #105,
+  #106, #107, #108, #109, #112, #120, #125). Következő lépés: a számlázott
+  soroknál a számla vevője (`szamla.vevo_nev`) automatikusan javítja a
+  megrendelőt (`javitsaSajatCegMegrendelotSzamlabol`, minden indulásnál,
+  idempotens); a többinél a napló írja ki a dokumentum/postázási cím
+  adatait a kézi pótláshoz (`db/fuvar-corrections.json`).

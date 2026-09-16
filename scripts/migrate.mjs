@@ -209,6 +209,7 @@ async function main() {
   await torolDokumentumNelkuliDuplikatumokatOnce(pool);
   await rendezFuvarHelyeketOnce(pool);
   await vonjaVisszaSzamlatlanArchivalastOnce(pool);
+  await javitsaSajatCegMegrendelotSzamlabol(pool);
   await naplozFuvarHelyEllenorzest(pool);
 
   await pool.end();
@@ -249,6 +250,41 @@ async function vonjaVisszaSzamlatlanArchivalastOnce(pool) {
   );
 }
 
+// A sajatCegunkE (lib/fuvarozas/fuvar-constants.ts) tükre SQL-ben: a megrendelő
+// mező a SAJÁT cégünk-e (kis-/nagybetű, kötőjel, pont, "pallet"/"pallett",
+// cégforma-toldalék ingadozással). Egy oszlopnévre alkalmazva adja a feltételt.
+const SAJAT_CEG_SQL = (oszlop) =>
+  `(${oszlop} is not null and regexp_replace(lower(${oszlop}), '[-.,]', ' ', 'g') ~ '^\\s*well\\s*worn\\s*pallett?\\s*(kft|zrt|bt)?\\s*$')`;
+
+// MINDEN indulásnál (idempotens): bér fuvar (tipus='sajat'), aminek a
+// megrendelője a SAJÁT cégünk — a Drive-import a "Megbízó adatai: Megbízott
+// adatai:" hasábos fejlécet olvasta félre (az ÚJ importot a sajatCegunkE már
+// védi). Ahol a fuvarhoz már tartozik kiállított számla, ott a helyes
+// megrendelő egyértelmű: a számla vevője (szamla.vevo_nev) — ezt írjuk be, a
+// megjegyzésbe pedig, hogy mi állt ott. Számla nélküli sornál nincs biztos
+// forrás, azt csak naplózzuk (naplozFuvarHelyEllenorzest), a dokumentumból
+// ember pótolja. Nem egyszeri, mert a számlaszám-szinkron később is tölthet
+// számlaszámot egy ilyen sorra — akkor a következő indulás javítja.
+async function javitsaSajatCegMegrendelotSzamlabol(pool) {
+  const { rows } = await pool.query(
+    `update fuvar_megbizasok f
+     set megrendelo = s.vevo_nev,
+         megjegyzes = coalesce(f.megjegyzes || ' | ', '') ||
+           'Megrendelő javítva a ' || s.szamlaszam || ' számla vevője alapján (korábban a saját cégünk állt itt: ' || f.megrendelo || ').'
+     from szamla s
+     where s.szamlaszam = f.szamla_szam
+       and f.statusz <> 'torolt'
+       and f.tipus = 'sajat'
+       and ${SAJAT_CEG_SQL("f.megrendelo")}
+       and not ${SAJAT_CEG_SQL("s.vevo_nev")}
+     returning f.id, s.vevo_nev`
+  );
+  console.log(
+    `[migrate] saját cég megrendelőként → számla vevője: ${rows.length} sor` +
+      (rows.length ? ": " + rows.map((r) => `#${r.id} → ${r.vevo_nev}`).join("; ") : ".")
+  );
+}
+
 // MINDEN indulásnál (nem egyszeri): a fuvar-besorolás ellenőrző számai a
 // deploy-naplóba. Ugyanaz, amit a scripts/fuvar-hely-ujrasorolas.mts --check
 // ír ki — az élesben kézzel nem futtatható (nincs kiadható adatbázis-
@@ -275,9 +311,7 @@ async function naplozFuvarHelyEllenorzest(pool) {
          count(*) filter (where hely = 'archiv') as archiv
        from (
          select *,
-           -- a sajatCegunkE (lib/fuvarozas/fuvar-constants.ts) tükre SQL-ben
-           (megrendelo is not null
-             and regexp_replace(lower(megrendelo), '[-.,]', ' ', 'g') ~ '^\\s*well\\s*worn\\s*pallett?\\s*(kft|zrt|bt)?\\s*$') as sajat_ceg_e,
+           ${SAJAT_CEG_SQL("megrendelo")} as sajat_ceg_e,
            (case
               when (coalesce(szamla_szam, '') <> '' and postazva and coalesce(postazva_at, '-infinity'::timestamptz) <= now() - interval '5 minutes')
                 or (tipus = 'ber' and (teljesitve or coalesce(lerakas_datum, datum) < current_date or coalesce(szamla_szam, '') <> ''))
@@ -308,6 +342,23 @@ async function naplozFuvarHelyEllenorzest(pool) {
         (r.sajat_ceg_idk ? ` (#${r.sajat_ceg_idk.replaceAll(", ", ", #")})` : "") +
         `, megrendelő nélkül az aktív füleken = ${r.megrendelo_nelkul}.`
     );
+    // A megmaradt (számlával nem javítható) saját-céges sorok azonosító
+    // adatai — ebből lehet a dokumentumból/postázási címből pótolni a valódi
+    // megrendelőt (db/fuvar-corrections.json, drive_file_id alapján).
+    const { rows: sajatCeges } = await pool.query(
+      `select id, to_char(coalesce(lerakas_datum, datum), 'YYYY-MM-DD') as nap, felrako, lerako,
+         pozicioszam, postazasi_cim, szamla_szam, drive_file_id, dokumentum_url
+       from fuvar_megbizasok
+       where statusz <> 'torolt' and tipus = 'sajat' and ${SAJAT_CEG_SQL("megrendelo")}
+       order by id`
+    );
+    for (const s of sajatCeges) {
+      console.log(
+        `[migrate]   saját-céges sor #${s.id} ${s.nap} ${s.felrako ?? "?"} → ${s.lerako} | poz: ${s.pozicioszam ?? "-"} | ` +
+          `számla: ${s.szamla_szam ?? "-"} | postázási cím: ${(s.postazasi_cim ?? "-").replace(/\s+/g, " ").slice(0, 80)} | ` +
+          `drive: ${s.drive_file_id ?? "-"} | ${s.dokumentum_url ?? "-"}`
+      );
+    }
     const { rows: nevek } = await pool.query(
       `select coalesce(nullif(megrendelo, ''), '(üres)') as nev, count(*)::int as db
        from fuvar_megbizasok
