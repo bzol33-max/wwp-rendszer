@@ -86,3 +86,18 @@
 - Tanulság a kódban: a törölt sor is fogja a Drive-fájlt (ismertDriveFileIdk,
   ismertDokumentumUrlak), ezért kézi törlés után az irat sosem importálódik
   újra — ezt a Duvenbeck-mintájú felszabadítás oldja meg esetenként.
+
+## 2026-09-16 (6. kör) — szabály-ellenőrzés: minden szabály folyamatosan érvényes
+
+- Friss indítási napló (13:20 UTC): A=B=C=D=0, saját cég megrendelőként 0,
+  megrendelő nélküli aktív sor 0; fülek: Bér folyamatban 2, Saját
+  folyamatban 0, Számla/Posta 4, Archív 85.
+- Rés 1 (kód): a kézi felvitel/jóváhagyás (`addFuvar`, `approveFuvar`) nem
+  szűrte a saját cégnevet megrendelőként — `kanonikusMegrendeloNev` most
+  üresre veszi (`sajatCegunkE`), nem csak a következő indítás javítja.
+- Rés 2 (GPS): a kettős lezárás KÜLÖN körökben is előjött (#126 13:05,
+  #130 13:20 — a körönkénti számláló a már lezárt #126-ot nem látta).
+  `teljesites-figyeles.ts`: a közelmúltban lezárt (GPS/kézi) azonos kocsi +
+  lerakó fuvarok érkezése is elhasznált (`getFrissenTeljesitettSajatFuvarok`).
+  `migrate.mjs` egyszeri lépés: a #130 jelölése visszavonva, a javított
+  figyelés dönt újra.

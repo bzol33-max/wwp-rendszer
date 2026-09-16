@@ -2,7 +2,7 @@
 
 import { query } from "@/lib/db";
 import { requireEditPermission } from "@/lib/auth/require-permission";
-import { ceglNevKanonikusan, normalizaltCegKulcs } from "@/lib/fuvarozas/fuvar-constants";
+import { ceglNevKanonikusan, normalizaltCegKulcs, sajatCegunkE } from "@/lib/fuvarozas/fuvar-constants";
 import { FUVAR_HELY_SQL, type FuvarHely } from "@/lib/fuvarozas/fuvar-hely";
 import type {
   FuvarTipus,
@@ -12,6 +12,7 @@ import type {
   AddFuvarInput,
   ApproveFuvarInput,
   TeljesitesJelolt,
+  FrissTeljesites,
   FuvardijPenznem,
   KimutatasJarmuSor,
   UtkozesJelolt,
@@ -140,6 +141,25 @@ export async function getTeljesitesJeloltek(): Promise<TeljesitesJelolt[]> {
 }
 
 /**
+ * A GPS-figyelés másik bemenete: az elmúlt napokban Teljesítve-re jelölt
+ * saját fuvarok (akár GPS, akár a kézi "Kész" gomb zárta le). Ugyanannak a
+ * kocsinak ugyanahhoz a lerakóhoz csak annyi fuvart szabad lezárni, ahány
+ * érkezése volt — a korábbi körökben már lezárt fuvarok érkezését ezért
+ * "elhasználtnak" kell tekinteni (lásd futtatTeljesitesFigyeles).
+ */
+export async function getFrissenTeljesitettSajatFuvarok(): Promise<FrissTeljesites[]> {
+  return query<FrissTeljesites>(
+    `select id::text, jarmu, lerako,
+       to_char(teljesitve_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as teljesitve_at
+     from fuvar_megbizasok
+     where statusz <> 'torolt' and tipus = 'sajat'
+       and teljesitve and teljesitve_at >= now() - interval '7 days'
+       and jarmu is not null and jarmu <> ''
+     order by id asc`
+  );
+}
+
+/**
  * Egy adott nap (alapértelmezetten a mai) saját fuvarjai — akár aznap
  * kell felrakni, akár aznap kell lerakni, AKÁR a kettő közé eső napon (egy
  * többnapos fuvar felrakás és lerakás közti napjain, pl. amíg a jármű a
@@ -252,6 +272,10 @@ export async function getElokeszitettFuvarok(): Promise<FuvarRow[]> {
 async function kanonikusMegrendeloNev(nyersNev: string | null | undefined): Promise<string | null> {
   const nev = nyersNev?.trim().replace(/\s+/g, " ");
   if (!nev) return null;
+  // Szabály: a saját cégünk sosem megrendelő (mi vagyunk a megbízott). Az
+  // import már szűri, de a kézi felvitel/jóváhagyás is ezen a ponton megy át,
+  // így a mezőt itt is üresen hagyjuk, nem csak a következő indításkor javítjuk.
+  if (sajatCegunkE(nev)) return null;
   const kulcs = normalizaltCegKulcs(ceglNevKanonikusan(nev));
   const meglevok = await query<{ megrendelo: string }>(
     `select megrendelo from fuvar_megbizasok

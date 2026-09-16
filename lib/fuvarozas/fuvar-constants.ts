@@ -254,6 +254,15 @@ export type TeljesitesJelolt = {
   lerakas_ablak_tol: string | null;
 };
 
+/** A közelmúltban Teljesítve-re jelölt saját fuvar (GPS-figyelés: "elhasznált" érkezés). */
+export type FrissTeljesites = {
+  id: string;
+  jarmu: string;
+  lerako: string;
+  /** ISO időbélyeg (UTC, "…Z"). */
+  teljesitve_at: string;
+};
+
 export type ApproveFuvarInput = {
   id: string;
   tipus: FuvarTipus;
