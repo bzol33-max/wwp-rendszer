@@ -429,7 +429,10 @@ async function vonjaVisszaKoraiTeljesitestOnce(pool) {
 // melyik van kész. Feltétel: ugyanaz a jármű, ugyanaz a lerakó, ugyanaz a
 // Teljesítve-időpont, számlázatlan, nem postázott — csak ilyen párokon.
 async function vonjaVisszaKettosGpsTeljesitestOnce(pool) {
-  const JAVITAS_KOD = "kettos-gps-teljesites-visszavonas-2026-09-16";
+  // 2. kód: az első változat pontos időpont-egyezést kért, de a két
+  // setFuvarTeljesitve hívás külön now()-t kapott (másodperc-eltérés), ezért
+  // élesben 0 sort talált. Itt 2 percen belüli jelölés számít egyidejűnek.
+  const JAVITAS_KOD = "kettos-gps-teljesites-visszavonas-2-2026-09-16";
   const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
   if (mar.length > 0) return;
 
@@ -446,7 +449,8 @@ async function vonjaVisszaKettosGpsTeljesitestOnce(pool) {
          select 1 from fuvar_megbizasok g
          where g.id <> f.id and g.tipus = 'sajat' and g.statusz <> 'torolt'
            and g.jarmu = f.jarmu and g.lerako = f.lerako
-           and g.teljesitve_at = f.teljesitve_at
+           and g.teljesitve_at is not null
+           and abs(extract(epoch from (g.teljesitve_at - f.teljesitve_at))) < 120
        )
      returning f.id`
   );
