@@ -129,7 +129,8 @@ export async function getTeljesitesJeloltek(): Promise<TeljesitesJelolt[]> {
   return query<TeljesitesJelolt>(
     `select id::text, jarmu, felrako, lerako,
        to_char(datum, 'YYYY-MM-DD') as datum,
-       to_char(lerakas_datum, 'YYYY-MM-DD') as lerakas_datum
+       to_char(lerakas_datum, 'YYYY-MM-DD') as lerakas_datum,
+       to_char(lerakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as lerakas_ablak_tol
      from fuvar_megbizasok
      where statusz <> 'torolt' and ${FUVAR_HELY_SQL} = 'ber_folyamatban'
        and jarmu is not null and jarmu <> ''

@@ -212,6 +212,7 @@ async function main() {
   await javitsaSajatCegMegrendelotSzamlabol(pool);
   await javitsaMaradekSajatCegMegrendelotOnce(pool);
   await toroljeDuplikatumSorokatOnce(pool);
+  await vonjaVisszaKoraiTeljesitestOnce(pool);
   await naplozFuvarHelyEllenorzest(pool);
 
   await pool.end();
@@ -381,6 +382,44 @@ async function toroljeDuplikatumSorokatOnce(pool) {
   );
 }
 
+// Egyszeri javítás (2026-09-16): a GPS-figyelés (lib/fuvarozas/
+// teljesites-figyeles.ts) a felrakás napjától kereste a lerakóhoz érkezést,
+// ezért az oda-vissza ingázó kocsi fuvarjait a lerakás ELŐTT jelölte
+// Teljesítve-re — a Bér fuvarok folyamatban-lista emiatt ürült ki. A
+// javított figyelés a lerakási ablak kezdetétől számol; ez a lépés a
+// bizonyíthatóan korai jelöléseket vonja vissza: ahol a Teljesítve
+// időpontja MEGELŐZI a megbízásban megadott lerakási ablak kezdetét. Csak
+// számlázatlan, nem postázott sorokon; a sor a besorolás szerint vissza-
+// kerül a folyamatban-listára (vagy elmúlt lerakásnál a Számla/Postára,
+// ahol a javított GPS-figyelés újra megnézi).
+async function vonjaVisszaKoraiTeljesitestOnce(pool) {
+  const JAVITAS_KOD = "korai-gps-teljesites-visszavonas-2026-09-16";
+  const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (mar.length > 0) return;
+
+  const { rows } = await pool.query(
+    `update fuvar_megbizasok
+     set teljesitve = false, teljesitve_at = null,
+         megjegyzes = coalesce(megjegyzes || ' | ', '') ||
+           'A GPS-figyelés a lerakási ablak kezdete előtt jelölte Teljesítve-re (' ||
+           to_char(teljesitve_at at time zone 'Europe/Budapest', 'MM-DD HH24:MI') || '), visszavonva 2026-09-16-án.'
+     where tipus = 'sajat' and statusz <> 'torolt'
+       and teljesitve and teljesitve_at is not null
+       and lerakas_ablak_tol is not null
+       and teljesitve_at < lerakas_ablak_tol
+       and coalesce(szamla_szam, '') = '' and not postazva
+     returning id, to_char(teljesitve_at at time zone 'Europe/Budapest', 'MM-DD HH24:MI') as mikor,
+       to_char(lerakas_ablak_tol at time zone 'Europe/Budapest', 'MM-DD HH24:MI') as ablak`
+  );
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1) on conflict (kod) do nothing`, [
+    JAVITAS_KOD,
+  ]);
+  console.log(
+    `[migrate] korai GPS-teljesítés visszavonva: ${rows.length} sor` +
+      (rows.length ? " — " + rows.map((r) => `#${r.id} (jelölve ${r.mikor}, ablak ${r.ablak}-tól)`).join("; ") : ".")
+  );
+}
+
 // MINDEN indulásnál (nem egyszeri): a fuvar-besorolás ellenőrző számai a
 // deploy-naplóba. Ugyanaz, amit a scripts/fuvar-hely-ujrasorolas.mts --check
 // ír ki — az élesben kézzel nem futtatható (nincs kiadható adatbázis-
@@ -464,6 +503,24 @@ async function naplozFuvarHelyEllenorzest(pool) {
        group by 1 order by 2 desc, 1 limit 60`
     );
     console.log(`[migrate] aktív fülek megrendelői: ${nevek.map((n) => `${n.nev} (${n.db})`).join("; ")}`);
+    // Friss bér fuvarok (csak napló): a folyamatban-lista üressége/tartalma
+    // ebből ellenőrizhető — mikor jelölődött Teljesítve-re (GPS-figyelés
+    // vagy kézi), és mi volt a tervezett lerakási időablak.
+    const { rows: friss } = await pool.query(
+      `select id, statusz, to_char(datum, 'YYYY-MM-DD') as nap, to_char(lerakas_datum, 'YYYY-MM-DD') as lerakas,
+         to_char(lerakas_ablak_tol at time zone 'Europe/Budapest', 'MM-DD HH24:MI') as ablak_tol,
+         to_char(lerakas_ablak_ig at time zone 'Europe/Budapest', 'MM-DD HH24:MI') as ablak_ig,
+         teljesitve, to_char(teljesitve_at at time zone 'Europe/Budapest', 'MM-DD HH24:MI') as teljesitve_kor,
+         szamla_szam, jarmu, left(megrendelo, 20) as megrendelo, left(felrako, 25) as felrako, left(lerako, 25) as lerako
+       from fuvar_megbizasok
+       where tipus = 'sajat' and statusz <> 'torolt' and coalesce(lerakas_datum, datum) >= current_date - 4
+       order by datum, id`
+    );
+    for (const s of friss) {
+      console.log(
+        `[migrate]   friss #${s.id} ${s.nap}${s.lerakas ? "→" + s.lerakas : ""} ${s.megrendelo ?? "-"} | ${s.felrako ?? "?"} → ${s.lerako} | ${s.jarmu ?? "-"} | ablak: ${s.ablak_tol ?? "-"}–${s.ablak_ig ?? "-"} | teljesítve: ${s.teljesitve ? s.teljesitve_kor ?? "igen" : "nem"} | számla: ${s.szamla_szam ?? "-"}`
+      );
+    }
     // Lehetséges duplikátumok a bér fuvarok közt (csak napló): azonos
     // pozíciószám, vagy azonos nap + felrakó + lerakó. Egy kétszer felvett
     // megbízás kétszer számlázható — ezért érdemes ránézni.
