@@ -94,87 +94,66 @@ export async function getSzamlaLista(szuro: SzamlaListaSzuro): Promise<SzamlaRow
   );
 }
 
-export type SzamlaEgyebCegSor = {
-  vevo_nev: string;
+export type SzamlaFejlecSor = {
   penznem: string;
   nyitott_osszeg: number;
-  lejart_osszeg: number;
   nyitott_darab: number;
+  lejart_osszeg: number;
   lejart_darab: number;
+  /** A ma és ma+7 nap között esedékes, nyitott számlák. */
+  het_osszeg: number;
+  het_darab: number;
 };
 
-/**
- * A "Raklap — Egyéb" alkategória (minden olyan vevő, aki nem Fabrika/Keter)
- * cégenkénti bontása — enélkül egyetlen, sokféle vevőt összemosó számban
- * veszne el az információ, hogy melyik partnernél van kintlévőség.
- */
-export async function getSzamlaEgyebCegenkent(): Promise<SzamlaEgyebCegSor[]> {
-  return query<SzamlaEgyebCegSor>(
+/** A Számlák oldal felső 3 csempéjéhez (Nyitott / Lejárt / 7 napon belül esedékes), pénznemenként. */
+export async function getSzamlaFejlec(): Promise<SzamlaFejlecSor[]> {
+  return query<SzamlaFejlecSor>(
     `select
-       vevo_nev, penznem,
-       coalesce(sum(${BRUTTO_SQL}) filter (where not fizetve), 0) as nyitott_osszeg,
-       coalesce(sum(${BRUTTO_SQL}) filter (where not fizetve and fizetesi_hatarido < ${MA_SQL}), 0) as lejart_osszeg,
-       count(*) filter (where not fizetve) as nyitott_darab,
-       count(*) filter (where not fizetve and fizetesi_hatarido < ${MA_SQL}) as lejart_darab
+       penznem,
+       coalesce(sum(${BRUTTO_SQL}), 0)::float8 as nyitott_osszeg,
+       count(*)::int as nyitott_darab,
+       coalesce(sum(${BRUTTO_SQL}) filter (where fizetesi_hatarido < ${MA_SQL}), 0)::float8 as lejart_osszeg,
+       count(*) filter (where fizetesi_hatarido < ${MA_SQL})::int as lejart_darab,
+       coalesce(sum(${BRUTTO_SQL}) filter (where fizetesi_hatarido between ${MA_SQL} and ${MA_SQL} + 7), 0)::float8 as het_osszeg,
+       count(*) filter (where fizetesi_hatarido between ${MA_SQL} and ${MA_SQL} + 7)::int as het_darab
      from szamla
-     where kategoria = 'raklap'
-       and alkategoria = 'egyeb'
-       and not sztorno
-       and not sztornozva
-     group by vevo_nev, penznem
-     having count(*) filter (where not fizetve) > 0
-     order by nyitott_osszeg desc`
+     where not fizetve and not sztorno and not sztornozva
+     group by penznem
+     order by case when penznem in ('Ft', 'HUF') then 0 else 1 end, penznem`
   );
 }
 
-export type SzamlaLejaratLista = {
-  /** A legközelebbi (még nem lejárt) esedékességű, nyitott számlák, max. 10 db. */
-  kovetkezo: SzamlaRow[];
-  /** Az összes lejárt esedékességű, nyitott számla, a legrégebben lejárt elöl. */
+export type SzamlaTeendok = {
+  /** Az összes lejárt, nyitott számla (minden kategória), a legrégebben lejárt elöl. */
   lejart: SzamlaRow[];
-  lejartOsszesen: number;
+  /** A legközelebbi 10 (még nem lejárt) esedékesség, minden kategóriából. */
+  kovetkezo: SzamlaRow[];
 };
 
 /**
- * Kategóriánkénti (Fuvar/Raklap) gyors lejárat-áttekintés a Kezdőlap-szerű
- * csempékhez: a legközelebbi 10 esedékesség, plusz az összes lejárt tétel —
- * a sztornó-párok itt is ki vannak zárva.
+ * A "Teendők" lista: a korábbi 4 külön tábla (Fuvar/Raklap × Következő/Lejárt)
+ * helyett egyetlen, kategória-címkés lista — a sztornó-párok itt is ki vannak zárva.
  */
-export async function getSzamlaLejaratLista(kategoria: SzamlaKategoria): Promise<SzamlaLejaratLista> {
-  const kovetkezo = await query<SzamlaRow>(
-    `select ${SZAMLA_COLUMNS}
-     from szamla
-     where kategoria = $1
-       and not fizetve
-       and not sztorno
-       and not sztornozva
-       and (fizetesi_hatarido is null or fizetesi_hatarido >= ${MA_SQL})
-     order by fizetesi_hatarido asc nulls last, kiallitas_datum desc
-     limit 10`,
-    [kategoria]
-  );
-  const lejart = await query<SzamlaRow>(
-    `select ${SZAMLA_COLUMNS}
-     from szamla
-     where kategoria = $1
-       and not fizetve
-       and not sztorno
-       and not sztornozva
-       and fizetesi_hatarido < ${MA_SQL}
-     order by fizetesi_hatarido asc
-     limit 50`,
-    [kategoria]
-  );
-  const lejartOsszesen = (
-    await query<{ n: number }>(
-      `select count(*)::int as n
+export async function getSzamlaTeendok(): Promise<SzamlaTeendok> {
+  const [lejart, kovetkezo] = await Promise.all([
+    query<SzamlaRow>(
+      `select ${SZAMLA_COLUMNS}
        from szamla
-       where kategoria = $1 and not fizetve and not sztorno and not sztornozva and fizetesi_hatarido < ${MA_SQL}`,
-      [kategoria]
-    )
-  )[0]?.n ?? 0;
-
-  return { kovetkezo, lejart, lejartOsszesen };
+       where not fizetve and not sztorno and not sztornozva
+         and fizetesi_hatarido < ${MA_SQL}
+       order by fizetesi_hatarido asc
+       limit 200`
+    ),
+    query<SzamlaRow>(
+      `select ${SZAMLA_COLUMNS}
+       from szamla
+       where not fizetve and not sztorno and not sztornozva
+         and (fizetesi_hatarido is null or fizetesi_hatarido >= ${MA_SQL})
+       order by fizetesi_hatarido asc nulls last, kiallitas_datum desc
+       limit 10`
+    ),
+  ]);
+  return { lejart, kovetkezo };
 }
 
 /**
@@ -207,6 +186,7 @@ export async function getSzamlaOsszesito(): Promise<SzamlaOsszesitoSor[]> {
      from szamla
      where not sztorno and not sztornozva
      group by kategoria, alkategoria, penznem
+     having count(*) filter (where not fizetve) > 0
      order by kategoria, alkategoria nulls first, penznem`
   );
 }
@@ -249,24 +229,16 @@ export async function getSzamlaHaviBevetel(): Promise<SzamlaHaviBevetelSor[]> {
   return [...map.values()];
 }
 
-/** A fejléc-diagram alatti 6 statisztika-csempéhez — csak HUF adatok. */
+/** A diagram alatti statisztika-sorhoz és a Nyitott csempe "legnagyobb vevő" sorához — csak HUF adatok. */
 export async function getSzamlaKiemeltStatisztika(): Promise<SzamlaKiemeltStatisztika> {
-  const [lejart, legnagyobbVevo] = await Promise.all([
-    query<{ osszeg: number; darab: number }>(
-      `select coalesce(sum(${BRUTTO_SQL}), 0)::float8 as osszeg, count(*)::int as darab
-       from szamla
-       where not fizetve and not sztorno and not sztornozva
-         and ${HUF_SQL} and fizetesi_hatarido < ${MA_SQL}`
-    ),
-    query<{ vevo_nev: string; osszeg: number }>(
-      `select vevo_nev, sum(${BRUTTO_SQL})::float8 as osszeg
-       from szamla
-       where not fizetve and not sztorno and not sztornozva and ${HUF_SQL}
-       group by vevo_nev
-       order by osszeg desc
-       limit 1`
-    ),
-  ]);
+  const legnagyobbVevo = await query<{ vevo_nev: string; osszeg: number }>(
+    `select vevo_nev, sum(${BRUTTO_SQL})::float8 as osszeg
+     from szamla
+     where not fizetve and not sztorno and not sztornozva and ${HUF_SQL}
+     group by vevo_nev
+     order by osszeg desc
+     limit 1`
+  );
 
   const havi = await getSzamlaHaviBevetel();
   const evesYtdHuf = havi.reduce((sum, h) => sum + h.osszes, 0);
@@ -295,8 +267,6 @@ export async function getSzamlaKiemeltStatisztika(): Promise<SzamlaKiemeltStatis
   }
 
   return {
-    lejartOsszegHuf: lejart[0]?.osszeg ?? 0,
-    lejartDarabHuf: lejart[0]?.darab ?? 0,
     evesYtdHuf,
     haviAtlagHuf,
     csucsHonap,

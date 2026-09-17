@@ -27,7 +27,7 @@ const INNER_BOTTOM = 130;
 const SZIN_FUVAR = "#3b82f6";
 const SZIN_RAKLAP = "#f97316";
 
-/** A fejléc jobb oldali diagramja: havi bevétel (Fuvar/Raklap halmozott oszlop, csak HUF, csak az eltelt hónapokra) + 6 statisztika-csempe U-alakban. */
+/** Havi bevétel diagram (Fuvar/Raklap halmozott oszlop, csak HUF, csak az eltelt hónapokra), alatta egy statisztika-sor. */
 export function SzamlaBevetelDiagram({
   havi,
   statisztika,
@@ -144,43 +144,29 @@ export function SzamlaBevetelDiagram({
         </div>
       </div>
 
-      <div className="mt-3 grid grid-cols-2 items-end gap-1.5 sm:grid-cols-4">
-        <div className="rounded-md border border-destructive/30 bg-destructive/10 p-2 text-center sm:col-start-1 sm:row-start-1">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Lejárt összesen</div>
-          <div className="text-base font-bold text-destructive">{formatOsszeg(statisztika.lejartOsszegHuf)}</div>
-          <div className="text-[10px] text-muted-foreground">{statisztika.lejartDarabHuf} számla</div>
-        </div>
-        <div className="rounded-md border bg-muted/30 p-2 text-center sm:col-start-4 sm:row-start-1">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Legnagyobb nyitott vevő</div>
-          <div className="truncate text-base font-bold" title={statisztika.legnagyobbNyitottVevo ?? "—"}>
-            {statisztika.legnagyobbNyitottVevo ?? "—"}
-          </div>
-          <div className="text-[10px] text-muted-foreground">{formatOsszeg(statisztika.legnagyobbNyitottVevoOsszegHuf)}</div>
-        </div>
-
-        <div className="rounded-md border bg-muted/30 p-2 text-center sm:col-start-1 sm:row-start-2">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-            Éves YTD (Jan–{HONAP_ROVID[jelenlegiHonap - 1]})
-          </div>
-          <div className="text-base font-bold">{formatOsszeg(statisztika.evesYtdHuf)}</div>
-        </div>
-        <div className="rounded-md border bg-muted/30 p-2 text-center sm:col-start-2 sm:row-start-2">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground" title="A folyó, még félkész hónap nélkül">Havi átlag</div>
-          <div className="text-base font-bold">{formatOsszeg(statisztika.haviAtlagHuf)}</div>
-        </div>
-        <div className="rounded-md border border-warning/30 bg-warning/10 p-2 text-center sm:col-start-3 sm:row-start-2">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Csúcshónap</div>
-          <div className="text-base font-bold">
-            {statisztika.csucsHonap ? HONAP_ROVID[statisztika.csucsHonap - 1] : "—"}
-          </div>
-          <div className="text-[10px] text-muted-foreground">{formatOsszeg(statisztika.csucsHonapOsszegHuf)}</div>
-        </div>
-        <div className="rounded-md border bg-muted/30 p-2 text-center sm:col-start-4 sm:row-start-2">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Növekedés (lezárt hó)</div>
-          <div className={`text-base font-bold ${novekedes !== null && novekedes >= 0 ? "text-success" : novekedes !== null ? "text-destructive" : ""}`}>
+      <div className="mt-3 flex flex-wrap justify-center gap-x-4 gap-y-1 border-t pt-2 text-xs text-muted-foreground">
+        <span>
+          Éves (Jan–{HONAP_ROVID[jelenlegiHonap - 1]}): <span className="font-semibold text-foreground">{formatOsszeg(statisztika.evesYtdHuf)}</span>
+        </span>
+        <span title="A folyó, még félkész hónap nélkül">
+          Havi átlag: <span className="font-semibold text-foreground">{formatOsszeg(statisztika.haviAtlagHuf)}</span>
+        </span>
+        <span>
+          Csúcs:{" "}
+          <span className="font-semibold text-foreground">
+            {statisztika.csucsHonap
+              ? `${HONAP_ROVID[statisztika.csucsHonap - 1]} (${formatOsszeg(statisztika.csucsHonapOsszegHuf)})`
+              : "—"}
+          </span>
+        </span>
+        <span title="Az utolsó lezárt hónap az azt megelőzőhöz képest">
+          Növekedés:{" "}
+          <span
+            className={`font-semibold ${novekedes !== null && novekedes >= 0 ? "text-success" : novekedes !== null ? "text-destructive" : "text-foreground"}`}
+          >
             {novekedes !== null ? `${novekedes >= 0 ? "+" : ""}${novekedes.toFixed(0)}%` : "—"}
-          </div>
-        </div>
+          </span>
+        </span>
       </div>
     </div>
   );

@@ -56,10 +56,8 @@ export type SzamlaHaviBevetelSor = {
   osszes: number;
 };
 
-/** A fejléc-diagram alatti 6 statisztika-csempéhez — csak HUF, a folyó évre. */
+/** A diagram alatti statisztika-sorhoz — csak HUF, a folyó évre. */
 export type SzamlaKiemeltStatisztika = {
-  lejartOsszegHuf: number;
-  lejartDarabHuf: number;
   evesYtdHuf: number;
   /** A lezárt (a folyó hónap nélküli) hónapok átlaga. */
   haviAtlagHuf: number;
