@@ -406,6 +406,24 @@ alter table szamla add column if not exists sztornozo_szamla_id bigint reference
 -- lib/szamlak/sztorno.ts minden szinkron körben újraszámolja.
 alter table szamla add column if not exists helyesbites_osszeg numeric not null default 0;
 
+-- Kontókivonat-feltöltésből lekönyvelt banki utalások (2026-09-17): egy
+-- újrafeltöltött vagy átfedő kivonat ugyanazt az utalást ne könyvelhesse újra
+-- (egy visszatérő, azonos összegű vevőnél egy MÁSIK nyitott számlát jelölne
+-- fizetettnek). A kulcs: saját bankszámla | értéknap | összeg | partner-
+-- számlaszám | közlemény | régi exportnál a "+IZV …" banki azonosító — lásd
+-- lib/szamlak/kontokivonat-parositas.ts.
+create table if not exists kontokivonat_konyvelt (
+  kulcs        text primary key,
+  datum        date not null,
+  osszeg       numeric not null,
+  penznem      text not null,
+  partner_nev  text,
+  kozlemeny    text,
+  szamla_idk   bigint[] not null,
+  konyvelte    text,
+  created_at   timestamptz not null default now()
+);
+
 -- Egy meg nem talált számlaszám nem jelenti azt, hogy soha nem is lesz — a
 -- Számlázz.hu-ban egy sorszám lefoglalása megelőzheti a tényleges kiállítást.
 -- Ezért minden "nem található" választ (hibakód 7) ide teszünk, és minden
