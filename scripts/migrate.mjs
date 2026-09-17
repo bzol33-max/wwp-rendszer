@@ -655,12 +655,35 @@ async function naplozEcofleetFogyasztast() {
       }
       console.log(`[migrate] ecofleet ${j.nev}: ${nodes.length} út 14 napra | mezők: ${mezok.join(", ")}`);
       console.log(`[migrate] ecofleet ${j.nev} összegek: ${Object.entries(osszeg).map(([k, v]) => `${k}=${Math.round(v * 100) / 100}`).join(", ")}`);
-      for (const [nap, v] of Object.entries(napok).sort()) {
-        console.log(`[migrate] ecofleet ${j.nev} ${nap}: ${v.utak} út, ${Math.round(v.tav)} km, üzemanyag-mezők összege ${Math.round(v.uzemanyag * 100) / 100}`);
-      }
+      console.log(
+        `[migrate] ecofleet ${j.nev} napok: ` +
+          Object.entries(napok)
+            .sort()
+            .map(([nap, v]) => `${nap.slice(5)} ${Math.round(v.tav)} km`)
+            .join("; ")
+      );
     }
   } catch (err) {
     console.log(`[migrate] ecofleet fogyasztás-napló hiba: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // Az API-dokumentáció átvizsgálása: milyen végpontok vannak, és melyik
+  // említ üzemanyagot/tankolást/fogyasztást. A trip-válaszban nincs ilyen
+  // mező; ha van külön végpont, azt fogjuk hívni.
+  try {
+    const res = await fetch("https://app.ecofleet.com/seeme/services/apidoc/seeme");
+    const html = await res.text();
+    const szoveg = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
+    const vegpontok = [...new Set(html.match(/\b[A-Z][A-Za-z]+\/[a-zA-Z]+\b/g) ?? [])].filter((v) => /^(Vehicles|Reports|Fuel|Drivers|Objects|Events|Trips|Alarms|Zones|Tachograph|Api)\b/.test(v));
+    console.log(`[migrate] ecofleet apidoc: HTTP ${res.status}, ${html.length} karakter, végpontok: ${vegpontok.slice(0, 80).join(", ")}`);
+    const talalatok = [];
+    const re = /.{0,120}(fuel|tank|consum|üzemanyag|fogyaszt).{0,160}/gi;
+    let m;
+    while ((m = re.exec(szoveg)) && talalatok.length < 25) talalatok.push(m[0]);
+    for (const t of talalatok) console.log(`[migrate] ecofleet apidoc üzemanyag: …${t}…`);
+    if (talalatok.length === 0) console.log("[migrate] ecofleet apidoc: nincs üzemanyag-említés a dokumentációban.");
+  } catch (err) {
+    console.log(`[migrate] ecofleet apidoc hiba: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
