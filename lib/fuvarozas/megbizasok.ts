@@ -40,7 +40,7 @@ const TIME_FMT = "mon. DD";
  * tervezett dátumra.
  */
 const LERAKAS_TENYLEGES_SQL = `(
-  select max(coalesce(ma.kesz_at, ma.gps_erkezes))::text
+  select max(coalesce(ma.kesz_at, ma.gps_erkezes, ma.kezi_erkezes))::text
   from fuvar_megallo_allapot ma
   where ma.fuvar_id = fuvar_megbizasok.id
 )`;

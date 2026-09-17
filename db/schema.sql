@@ -774,3 +774,34 @@ create index if not exists idx_fuvar_import_naplo_verdikt
   on fuvar_import_naplo (verdikt, frissitve_at desc);
 create index if not exists idx_fuvar_import_naplo_partner
   on fuvar_import_naplo (partner_kod);
+
+-- ---------------------------------------------------------------------------
+-- Sofőr mobil, 2. fázis (2026-09-17): visszacsatolás a GPS-felismerésnek
+-- ---------------------------------------------------------------------------
+--
+-- A sofőr "Megérkeztem" koppintása. A kesz/kesz_at a "végeztem" (felrakva/
+-- lerakva) pillanata, a gps_erkezes a gépi megfigyelés — ez a harmadik, a
+-- sofőr által megerősített TÉNYLEGES érkezés, ami akkor is megvan, ha a
+-- GPS-felismerés mellényúl (két megálló egy gyáron belül) vagy a cím nem
+-- geokódolható.
+alter table fuvar_megallo_allapot add column if not exists kezi_erkezes timestamptz;
+
+-- Helyszín-szótár: egy megbízás-cím TÉNYLEGES koordinátája, a helyszínről
+-- rögzítve. A GPS-felismerés akkor hiúsul meg, ha a cím geokódolása
+-- bizonytalan (cimPontossaga "ismeretlen" / "csak_varos", pl. az RBT
+-- "[H-4243] TÉGLÁS, Hrsz…" formátuma). Ha a sofőr a megállóban egy gombbal
+-- elküldi a kocsi aktuális pozícióját mint a cím valódi helyét, onnantól
+-- minden ugyanoda tartó fuvar automatikusan felismerhető. A geokódoló
+-- (lib/fuvarozas/erintes-felismeres.ts) a külső hívás ELŐTT nézi meg.
+create table if not exists fuvar_helyszin_koordinata (
+  -- A cím normalizált kulcsa (lib/fuvarozas/varos.ts cimKulcs).
+  cim_kulcs    text primary key,
+  -- A cím eredeti írásmódja, ahogy a megbízáson állt — csak tájékoztatásul.
+  cim_minta    text not null,
+  lat          double precision not null,
+  lon          double precision not null,
+  -- 'sofor': a sofőr mobilról, a kocsi Ecofleet-pozíciójával.
+  forras       text not null default 'sofor',
+  rogzitve_by  text,
+  rogzitve_at  timestamptz not null default now()
+);

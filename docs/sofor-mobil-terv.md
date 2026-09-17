@@ -215,3 +215,22 @@ szól, nem automatikus számlázás.
 - A sofőr ↔ kocsi egyeztetés szó szerinti egyezésre szigorítva, több
   találat esetén inkább üres képernyő, mint rossz kocsi. Az explicit
   összerendelés továbbra is hátralévő munka.
+
+## 11. A 2. fázis állapota (2026-09-17, kész)
+
+- `fuvar_megallo_allapot.kezi_erkezes`: a sofőr „Megérkeztem" koppintása,
+  csak az első számít. A `lerakas_tenyleges_at` utolsó tartalékként ezt is
+  nézi (kézi kész → GPS érkezés → kézi érkezés).
+- `fuvar_helyszin_koordinata` helyszín-szótár, a cím normalizált kulcsával
+  (`varos.ts cimKulcs`). A sofőr a bizonytalan geokódolású megállónál
+  („Bizonytalan cím · itt vagyok") a KOCSI Ecofleet-pozícióját rögzíti a cím
+  valódi helyeként, két feltétellel: a kocsi áll, és a jel 15 percnél
+  frissebb. `sofor.ts rogzitMegalloHelyet`.
+- Egyetlen geokódoló mindhárom helyen: `erintes-felismeres.ts
+  geokodolCachelve` először a szótárat nézi, aztán a külső hívást; a GPS lap
+  menetidő-becslése (`actions.ts becsulFuvarSzakasz`) eddig cache nélkül,
+  külön hívta a geokódolót, most ugyanezt használja. Rögzítés után a
+  geokód- és az idővonal-cache ürül, a következő számítás már az új helyet
+  látja.
+- A felület: „Megérkeztem" gomb a következő megálló kártyáján és ikonként a
+  többi soron, „Érkezés HH:MM" jel, „Hely rögzítve" jel a már ismert címnél.

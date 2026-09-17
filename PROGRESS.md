@@ -214,3 +214,17 @@
 - Biztonsági javítás: a `getSoforAktualisTura` és a `markMegalloKesz` eddig
   ellenőrzés nélkül fogadta el a kliens `employeeId`-jét és a sofőr nevét.
   Mostantól `requireSajatVagyModulJog`, a jelölő neve a munkamenetből.
+
+## 2026-09-17 (13. kör) — Sofőr mobil nézet, 2. fázis: visszacsatolás a GPS-nek
+
+- „Megérkeztem": `fuvar_megallo_allapot.kezi_erkezes`, a sofőr tényleges
+  érkezése a becslés helyett; a `lerakas_tenyleges_at` tartalékként ezt is
+  használja.
+- Helyszín-szótár (`fuvar_helyszin_koordinata`): bizonytalan geokódolású
+  címnél a sofőr a rakodóhelyen állva a kocsi Ecofleet-pozícióját rögzíti a
+  cím valódi helyeként (`rogzitMegalloHelyet`; csak álló kocsival, 15 percnél
+  frissebb jellel). A geokódoló (`geokodolCachelve`) a külső hívás előtt a
+  szótárat nézi — így az RBT „[H-4243] TÉGLÁS, Hrsz…" típusú címek
+  felismerése egy koppintással végleg megoldható.
+- A GPS lap menetidő-becslése is a közös, gyorsítótárazott geokódolót
+  használja (eddig cache nélkül, külön hívta).

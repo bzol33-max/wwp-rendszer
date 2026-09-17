@@ -25,7 +25,7 @@ import {
 } from "./idovonal";
 import { SAJAT_JARMUVEK, resolveJarmu, type JarmuSzin, type SajatJarmu } from "./vehicles";
 import { bontsMegallokra, cimPontossaga, varosNev } from "./varos";
-import { megalloAblakKezdet, mozogE } from "./erintes-felismeres";
+import { geokodolCachelve, megalloAblakKezdet, mozogE } from "./erintes-felismeres";
 import { cachelve } from "./idovonal-cache";
 import {
   getFuvarokIdoszakban,
@@ -603,7 +603,10 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus, kali
 
   if (megallokSzovegei.length >= 2) {
     try {
-      const geokodolt = await Promise.all(megallokSzovegei.map((m) => geocodeAddress(m.szoveg).catch(() => null)));
+      // Ugyanaz a geokódoló, mint a felismerésé és a figyelőé: a sofőr által a
+      // helyszínről rögzített koordináta (helyszín-szótár) itt is felülírja a
+      // bizonytalan geokódolást, és a gyorsítótár is közös.
+      const geokodolt = await Promise.all(megallokSzovegei.map((m) => geokodolCachelve(m.szoveg)));
       megallokKoordinatak = geokodolt;
       const ervenyesPontok = geokodolt.filter((g): g is GeocodedAddress => g !== null);
       if (ervenyesPontok.length >= 2) {
