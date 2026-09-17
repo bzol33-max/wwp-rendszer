@@ -259,9 +259,11 @@ async function main() {
 // állapotát, és ha a hivatkozás hiányzik, de a név alapján egyértelmű az
 // alkalmazott, pótolja. Meglévő hivatkozáshoz nem nyúl.
 async function ellenorizSoforFiokokat(pool) {
+  // employeeNames: a pontos nevek, amik előfordulhatnak a törzsadatban;
+  // vezeteknev: tartalék, ha egyetlen ilyen vezetéknevű alkalmazott van.
   const soforok = [
-    { username: "VadonGergo", employeeName: "Vadon Gergő", kulcs: "Gergő" },
-    { username: "TakacsMiklos", employeeName: "Takács Micó", kulcs: "Micó" },
+    { username: "VadonGergo", employeeNames: ["Vadon Gergő"], vezeteknev: "Vadon" },
+    { username: "TakacsMiklos", employeeNames: ["Takács Micó", "Takács Miklós"], vezeteknev: "Takács" },
   ];
   for (const s of soforok) {
     const { rows } = await pool.query(
@@ -277,10 +279,12 @@ async function ellenorizSoforFiokokat(pool) {
     }
     if (!u.employee_id) {
       const { rows: jeloltek } = await pool.query(
-        `select id, name from alkalmazottak where name = $1 or name ilike $2 order by (name = $1) desc`,
-        [s.employeeName, `%${s.kulcs}%`]
+        `select id, name from alkalmazottak
+          where name = any($1::text[]) or name ilike $2
+          order by (name = any($1::text[])) desc, id`,
+        [s.employeeNames, `${s.vezeteknev}%`]
       );
-      if (jeloltek.length === 1 || (jeloltek.length > 1 && jeloltek[0].name === s.employeeName)) {
+      if (jeloltek.length === 1 || (jeloltek.length > 1 && s.employeeNames.includes(jeloltek[0].name))) {
         await pool.query(`update users set employee_id = $2 where id = $1 and employee_id is null`, [u.id, jeloltek[0].id]);
         console.log(`[migrate] sofőr fiók ${s.username}: alkalmazott-hozzárendelés pótolva → "${jeloltek[0].name}".`);
         continue;

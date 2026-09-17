@@ -23,16 +23,25 @@ export type SajatJarmu = {
   szin: JarmuSzin;
   /** Ecofleet Vehicles/get szerinti objectId (getTrips/idővonal hívásokhoz) — null, ha a jármű nincs Ecofleet-be kötve. */
   ecofleetObjectId: string | null;
+  /**
+   * A sofőr TELJES neve(i) a Dolgozók törzsadatban (alkalmazottak.name) —
+   * a dolgozói mobil nézet ezzel köti a bejelentkezett alkalmazottat a
+   * kocsihoz (lib/fuvarozas/sofor.ts findJarmuByEmployeeName). Több alak is
+   * megadható, ha a becenév és a hivatalos név eltér ("Takács Micó" /
+   * "Takács Miklós"). Ha egyik sem egyezik, tartalék a keresztnév szó
+   * szerinti egyezése a `sofor` mezővel.
+   */
+  alkalmazottNevek?: string[];
 };
 
 export const SAJAT_JARMUVEK: SajatJarmu[] = [
-  { sofor: "Gergő", label: "AOPU-427/AOTY-474", rendszamok: ["AOPU-427", "AOTY-474"], szin: "blue", ecofleetObjectId: "1144376" },
+  { sofor: "Gergő", label: "AOPU-427/AOTY-474", rendszamok: ["AOPU-427", "AOTY-474"], szin: "blue", ecofleetObjectId: "1144376", alkalmazottNevek: ["Vadon Gergő"] },
   // A Duvenbeck törzsadatában Micó rendszáma felcserélt betűkkel szerepel
   // ("NZM492" az "NMZ-492" helyett), minden megbízásukon és rakománylistájukon
   // egyformán. A hibát jeleztük nekik; amíg nem javítják, enélkül minden
   // Duvenbeck-fuvaruk "ismeretlen kocsi" maradna. Ha javítják, ez a sor
   // ártalmatlanul itt maradhat.
-  { sofor: "Micó", label: "NMZ-492/XZV-926", rendszamok: ["NMZ-492", "XZV-926"], irasvaltozatok: ["NZM-492"], szin: "yellow", ecofleetObjectId: "369485" },
+  { sofor: "Micó", label: "NMZ-492/XZV-926", rendszamok: ["NMZ-492", "XZV-926"], irasvaltozatok: ["NZM-492"], szin: "yellow", ecofleetObjectId: "369485", alkalmazottNevek: ["Takács Micó", "Takács Miklós"] },
   { sofor: "Jani", label: "DAF XG (Gyártás alatt)", rendszamok: [], szin: "green", ecofleetObjectId: null },
 ];
 
