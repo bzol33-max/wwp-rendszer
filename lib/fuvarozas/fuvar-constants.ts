@@ -224,6 +224,8 @@ export type FuvarRow = {
   fuvarlevel_foto_db: number;
   /** Az első fuvarlevél-fotó dokumentum-azonosítója — a /api/fuvarozas/dokumentum/{id} nyitja meg. */
   fuvarlevel_foto_id: string | null;
+  /** A sofőr által jelölt rakodóhelyi várakozás összesen, percben (folyamatban lévőnél mostanáig). */
+  varakozas_perc: number;
   /**
    * Kézi "Teljesítve" jelölő (Bér fuvarok — folyamatban fül): igaz, ha a
    * fuvar a rögzített (tervezett) lerakás dátum előtt lett kézzel lezárva,

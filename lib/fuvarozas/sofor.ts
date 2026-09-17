@@ -236,6 +236,9 @@ export type SoforMegalloSor = {
   helyBizonytalan: boolean;
   /** Igaz, ha ehhez a címhez már van helyszínről rögzített koordináta. */
   helyRogzitve: boolean;
+  /** A sofőr Várakozom / Várakozás vége koppintásai. */
+  varakozasKezdete: Date | null;
+  varakozasVege: Date | null;
 };
 
 export type SoforDokumentum = {
@@ -399,6 +402,8 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
         helyRogzitve: rogzitettHelyek.has(cimKulcs(m.nyersCim)),
         helyBizonytalan:
           !rogzitettHelyek.has(cimKulcs(m.nyersCim)) && (m.bizonytalanFelismeres || cimPontossaga(m.nyersCim) !== "pontos"),
+        varakozasKezdete: m.varakozasKezdete,
+        varakozasVege: m.varakozasVege,
       })),
     };
   });
@@ -600,6 +605,40 @@ export async function rogzitPozicioszamot(fuvarId: string, szam: string): Promis
   );
   if (eredmeny.length === 0) throw new Error("Ehhez a fuvarhoz már van pozíciószám.");
   console.log(`[sofor] pozíciószám rögzítve: fuvar #${fuvarId} → ${tiszta} (${session.name})`);
+  toroljIdovonalCachet();
+  revalidatePath("/erkezes");
+  revalidatePath("/fuvarozas");
+}
+
+/**
+ * Várakozás jelölése egy megállón: "kezd" a Várakozom koppintás (csak ha
+ * még nincs kezdet), "befejez" a Várakozás vége (csak ha van kezdet és még
+ * nincs vég). A GPS-ből az állás látszik, de az oka nem — a Duvenbecknél a
+ * rakodóhelyi várakozás pótdíjas. Ez jelzés a diszpécsernek (GPS lap,
+ * megbízás részletei), nem automatikus számlázás.
+ */
+export async function jelolVarakozast(fuvarId: string, megalloIndex: number, muvelet: "kezd" | "befejez"): Promise<void> {
+  await requireAnyEditPermission(["fuvarozas", "fuvarozas_sajat"]);
+  const soforNev = (await requireSession()).name;
+  if (muvelet === "kezd") {
+    await query(
+      `insert into fuvar_megallo_allapot (fuvar_id, megallo_index, kesz, varakozas_kezdete, kesz_by)
+       values ($1, $2, false, now(), $3)
+       on conflict (fuvar_id, megallo_index)
+       do update set varakozas_kezdete = coalesce(fuvar_megallo_allapot.varakozas_kezdete, now())`,
+      [fuvarId, megalloIndex, soforNev]
+    );
+  } else {
+    const eredmeny = await query<{ id: string }>(
+      `update fuvar_megallo_allapot
+          set varakozas_vege = now()
+        where fuvar_id = $1 and megallo_index = $2 and varakozas_kezdete is not null and varakozas_vege is null
+        returning id::text`,
+      [fuvarId, megalloIndex]
+    );
+    if (eredmeny.length === 0) throw new Error("Nincs folyamatban lévő várakozás ezen a megállón.");
+  }
+  console.log(`[sofor] várakozás ${muvelet === "kezd" ? "kezdete" : "vége"}: fuvar #${fuvarId}/${megalloIndex} (${soforNev})`);
   toroljIdovonalCachet();
   revalidatePath("/erkezes");
   revalidatePath("/fuvarozas");

@@ -62,7 +62,9 @@ const FUVAR_ROW_COLUMNS = `
   papirok_beerkeztek_at::text,
   ${LERAKAS_TENYLEGES_SQL} as lerakas_tenyleges_at,
   (select count(*) from fuvar_dokumentumok d where d.fuvar_id = fuvar_megbizasok.id and d.tipus = 'fuvarlevel')::int as fuvarlevel_foto_db,
-  (select min(d.id) from fuvar_dokumentumok d where d.fuvar_id = fuvar_megbizasok.id and d.tipus = 'fuvarlevel')::text as fuvarlevel_foto_id
+  (select min(d.id) from fuvar_dokumentumok d where d.fuvar_id = fuvar_megbizasok.id and d.tipus = 'fuvarlevel')::text as fuvarlevel_foto_id,
+  (select coalesce(sum(extract(epoch from (coalesce(ma.varakozas_vege, now()) - ma.varakozas_kezdete)) / 60), 0)::int
+     from fuvar_megallo_allapot ma where ma.fuvar_id = fuvar_megbizasok.id and ma.varakozas_kezdete is not null) as varakozas_perc
 `;
 
 export async function getFuvarok(tipus: FuvarTipus): Promise<FuvarRow[]> {
@@ -475,14 +477,22 @@ export async function setFuvarokPapirokBeerkeztek(ids: string[], beerkezett: boo
 }
 
 /** Egy fuvar-lista megállóinak kézi állapota (sofőr mobil / GPS lap jelölése) a fuvar_megallo_allapot táblából. */
-export async function getMegalloAllapotok(
-  fuvarIds: string[]
-): Promise<{ fuvar_id: string; megallo_index: number; kesz: boolean; kesz_by: string | null }[]> {
+export async function getMegalloAllapotok(fuvarIds: string[]): Promise<
+  {
+    fuvar_id: string;
+    megallo_index: number;
+    kesz: boolean;
+    kesz_by: string | null;
+    varakozas_kezdete: Date | null;
+    varakozas_vege: Date | null;
+  }[]
+> {
   if (fuvarIds.length === 0) return [];
+  // Nem csak a kész sorok: a várakozás-jelölés kész megálló nélkül is létezik.
   return query(
-    `select fuvar_id::text as fuvar_id, megallo_index, kesz, kesz_by
+    `select fuvar_id::text as fuvar_id, megallo_index, kesz, kesz_by, varakozas_kezdete, varakozas_vege
      from fuvar_megallo_allapot
-     where fuvar_id = any($1::bigint[]) and kesz`,
+     where fuvar_id = any($1::bigint[]) and (kesz or varakozas_kezdete is not null)`,
     [fuvarIds]
   );
 }

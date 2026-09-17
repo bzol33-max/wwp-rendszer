@@ -319,6 +319,20 @@ function MegalloSor({
               <span className="shrink-0 rounded bg-primary/20 px-1 py-0.5 text-[9px] font-medium text-primary">Folyamatban</span>
             )
           )}
+          {b.varakozasKezdete && (
+            <span
+              className="shrink-0 rounded bg-amber-100 px-1 py-0.5 text-[9px] font-medium text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+              title={
+                b.varakozasVege
+                  ? `A sofőr várakozást jelölt: ${formatIdo(b.varakozasKezdete)}–${formatIdo(b.varakozasVege)}`
+                  : `A sofőr várakozást jelölt ${formatIdo(b.varakozasKezdete)} óta — még tart`
+              }
+            >
+              {b.varakozasVege
+                ? `várakozás ${Math.round((new Date(b.varakozasVege).getTime() - new Date(b.varakozasKezdete).getTime()) / 60000)} perc`
+                : `várakozik ${formatIdo(b.varakozasKezdete)} óta`}
+            </span>
+          )}
           {/* Már érintett pontnál a GPS szerinti tényleges megérkezés idejét mutatjuk, nem a becslést.
               Elavult (már elmúlt) statikus becslésnél nem írunk ki órát — az félrevezető lenne. */}
           {b.becslesElavult ? (

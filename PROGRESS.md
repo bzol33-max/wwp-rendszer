@@ -254,3 +254,16 @@
   egyezése csak tartalék. Ezzel a terv „explicit összerendelés" pontja kész.
 - Napló 11:49: mindkét fiók aktív, alkalmazott hozzárendelve, `erkezes` és
   `fuvarozas_sajat` látja/írhat.
+
+## 2026-09-17 (16. kör) — Sofőr mobil nézet, 4. fázis: várakozás jelölése
+
+- „Várakozom" / „Várakozás vége" a sofőr megállóján
+  (`fuvar_megallo_allapot.varakozas_kezdete/vege`). A GPS lapon a megálló
+  sorában sárga jelzés (folyamatban: „várakozik HH:MM óta", lezárva:
+  „várakozás N perc"), a megbízás részletein „Várakozás: N perc" összesítés
+  (`varakozas_perc`). A Duvenbecknél a rakodóhelyi várakozás pótdíjas; ez
+  jelzés a diszpécsernek, nem automatikus számlázás.
+- A `getMegalloAllapotok` mostantól a nem kész, de várakozás-jelölt sorokat
+  is visszaadja; a `ratesziKeziJeloleseket` a várakozást a kész állapottól
+  függetlenül ráteszi a megállóra.
+- Ezzel a sofőr mobil terv mind a négy fázisa élesben van.

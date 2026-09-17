@@ -156,6 +156,9 @@ export type MegalloBejegyzes = {
    * marad, ezzel a jelöléssel — nem esik ki, és nem kerül külön dobozba.
    */
   napElteres: number;
+  /** A sofőr által jelölt rakodóhelyi várakozás kezdete/vége (null, ha nem jelölt). */
+  varakozasKezdete: Date | null;
+  varakozasVege: Date | null;
 };
 
 /**
@@ -820,6 +823,8 @@ function fuvarBlokkok(
             keszBy: m.keszBy,
             becslesElavult: most !== null && !m.elhagyva && !m.eppenItt && idopont.getTime() <= most.getTime(),
             napElteres: napKulonbseg(napISO, budapestNapISO(idopont)),
+            varakozasKezdete: m.varakozasKezdete ?? null,
+            varakozasVege: m.varakozasVege ?? null,
           };
         });
       return {
@@ -952,10 +957,18 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
 
   // A kézi jelölések (sofőr mobil, GPS lap pipa) egy lekérdezéssel, minden mai fuvarra.
   const keziAllapotok = await getMegalloAllapotok(maiFuvarok.map(({ row }) => row.id)).catch(() => []);
-  const keziAllapotTerkep = new Map<string, Map<number, { kesz: boolean; keszBy: string | null }>>();
+  const keziAllapotTerkep = new Map<
+    string,
+    Map<number, { kesz: boolean; keszBy: string | null; varakozasKezdete: Date | null; varakozasVege: Date | null }>
+  >();
   for (const a of keziAllapotok) {
     if (!keziAllapotTerkep.has(a.fuvar_id)) keziAllapotTerkep.set(a.fuvar_id, new Map());
-    keziAllapotTerkep.get(a.fuvar_id)!.set(a.megallo_index, { kesz: a.kesz, keszBy: a.kesz_by });
+    keziAllapotTerkep.get(a.fuvar_id)!.set(a.megallo_index, {
+      kesz: a.kesz,
+      keszBy: a.kesz_by,
+      varakozasKezdete: a.varakozas_kezdete,
+      varakozasVege: a.varakozas_vege,
+    });
   }
   const keziJelolesekkel = (fuvarok: TervezettFuvarSzakasz[], sorok: { row: MaiFuvarSor }[]) =>
     fuvarok.map((f, i) => ({
