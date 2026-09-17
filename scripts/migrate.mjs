@@ -222,8 +222,57 @@ async function main() {
   await toroljeMasodpeldanyokatOnce(pool);
   await toroljeMasodpeldanyokat2Once(pool);
   await naplozFuvarHelyEllenorzest(pool);
+  await ellenorizSoforFiokokat(pool);
 
   await pool.end();
+}
+
+// Sofőr fiókok ellenőrzése (2026-09-17, minden indításkor): a dolgozói mobil
+// /erkezes nézet a users.employee_id-ből tudja, melyik alkalmazott (és így
+// melyik kocsi) a bejelentkezett sofőr. A seedUserOnce a létrehozáskor NÉV
+// szerint kereste az alkalmazottat — ha akkor még nem volt ilyen nevű sor,
+// vagy más írásmóddal szerepelt, a hivatkozás NULL maradt, és a sofőr
+// "Nincs jogosultságod" üzenetet kap. Ez a lépés kiírja a sofőr fiókok
+// állapotát, és ha a hivatkozás hiányzik, de a név alapján egyértelmű az
+// alkalmazott, pótolja. Meglévő hivatkozáshoz nem nyúl.
+async function ellenorizSoforFiokokat(pool) {
+  const soforok = [
+    { username: "VadonGergo", employeeName: "Vadon Gergő", kulcs: "Gergő" },
+    { username: "TakacsMiklos", employeeName: "Takács Micó", kulcs: "Micó" },
+  ];
+  for (const s of soforok) {
+    const { rows } = await pool.query(
+      `select u.id, u.active, u.role, u.employee_id, a.name as employee_name, u.permissions
+         from users u left join alkalmazottak a on a.id = u.employee_id
+        where u.username = $1`,
+      [s.username]
+    );
+    const u = rows[0];
+    if (!u) {
+      console.warn(`[migrate] sofőr fiók HIÁNYZIK: ${s.username} — a seed nem futott le (SEED_* jelszó env?).`);
+      continue;
+    }
+    if (!u.employee_id) {
+      const { rows: jeloltek } = await pool.query(
+        `select id, name from alkalmazottak where name = $1 or name ilike $2 order by (name = $1) desc`,
+        [s.employeeName, `%${s.kulcs}%`]
+      );
+      if (jeloltek.length === 1 || (jeloltek.length > 1 && jeloltek[0].name === s.employeeName)) {
+        await pool.query(`update users set employee_id = $2 where id = $1 and employee_id is null`, [u.id, jeloltek[0].id]);
+        console.log(`[migrate] sofőr fiók ${s.username}: alkalmazott-hozzárendelés pótolva → "${jeloltek[0].name}".`);
+        continue;
+      }
+      console.warn(
+        `[migrate] sofőr fiók ${s.username}: NINCS alkalmazott hozzárendelve, és név alapján nem egyértelmű (${jeloltek.map((j) => j.name).join(", ") || "nincs találat"}).`
+      );
+      continue;
+    }
+    const perm = u.permissions ?? {};
+    const ok = ["erkezes", "fuvarozas_sajat"].map((k) => `${k}: ${perm[k]?.view ? "látja" : "NEM látja"}/${perm[k]?.edit ? "írhat" : "nem írhat"}`);
+    console.log(
+      `[migrate] sofőr fiók ${s.username}: ${u.active ? "aktív" : "INAKTÍV"}, szerep ${u.role}, alkalmazott "${u.employee_name}" | ${ok.join(" | ")}`
+    );
+  }
 }
 
 // Egyszeri javítás (2026-09-16, 2. kör): a db/archiv-backlog-cleanup.sql
