@@ -861,6 +861,26 @@ async function naplozFuvarHelyEllenorzest(pool) {
         `[migrate]   friss #${s.id} ${s.nap}${s.lerakas ? "→" + s.lerakas : ""} ${s.megrendelo ?? "-"} | ${s.felrako ?? "?"} → ${s.lerako} | ${s.jarmu ?? "-"} | ablak: ${s.ablak_tol ?? "-"}–${s.ablak_ig ?? "-"} | teljesítve: ${s.teljesitve ? s.teljesitve_kor ?? "igen" : "nem"} | számla: ${s.szamla_szam ?? "-"}`
       );
     }
+    // Megálló-szintű állapotok az elmúlt napok fuvarjaira (csak napló): a
+    // kézi jelölés (sofőr mobil / GPS lap pipa: kesz, kesz_by, kesz_at) és a
+    // GPS-érintés (gps_erkezes/gps_tavozas) egymás mellett — ebből látszik,
+    // ki mit pipált ki, és egyezik-e a GPS-szel.
+    const { rows: megallok } = await pool.query(
+      `select a.fuvar_id, a.megallo_index, a.kesz, a.kesz_by,
+         to_char(a.kesz_at at time zone 'Europe/Budapest', 'MM-DD HH24:MI') as kesz_kor,
+         to_char(a.gps_erkezes at time zone 'Europe/Budapest', 'MM-DD HH24:MI') as gps_erk,
+         to_char(a.gps_tavozas at time zone 'Europe/Budapest', 'MM-DD HH24:MI') as gps_tav,
+         f.tipus, f.teljesitve, left(f.megrendelo, 20) as megrendelo
+       from fuvar_megallo_allapot a
+       join fuvar_megbizasok f on f.id = a.fuvar_id
+       where f.statusz <> 'torolt' and coalesce(f.lerakas_datum, f.datum) >= (now() at time zone 'Europe/Budapest')::date - 4
+       order by a.fuvar_id, a.megallo_index`
+    );
+    for (const m of megallok) {
+      console.log(
+        `[migrate]   megálló #${m.fuvar_id}/${m.megallo_index} [${m.tipus}${m.teljesitve ? ", fuvar Teljesítve" : ""}] ${m.megrendelo ?? "-"} | kézi: ${m.kesz ? `kész (${m.kesz_by ?? "?"}, ${m.kesz_kor ?? "?"})` : "-"} | GPS: érk ${m.gps_erk ?? "-"} táv ${m.gps_tav ?? "-"}`
+      );
+    }
     // Lehetséges duplikátumok a bér fuvarok közt (csak napló): azonos
     // pozíciószám, vagy azonos nap + felrakó + lerakó. Egy kétszer felvett
     // megbízás kétszer számlázható — ezért érdemes ránézni.
