@@ -3,67 +3,85 @@
 // FIGYELEM: "use server" fájl — csak async függvényeket exportálhat, lásd
 // lib/fuvarozas/megbizasok.ts mintáját. Típusok: kontokivonat-constants.ts.
 //
-// A bank "HISTORY_xxxx.xlsx" kontókivonatának feltöltése: a beolvasást és a
-// bevételek ⇄ számlák párosítását a kontokivonat-parositas.ts végzi (lásd
-// ott a párosítási elveket). A feltöltés önmagában NEM ír az adatbázisba — a
-// review-képernyőn elfogadott tételeket a fogadjaElParositasokat() könyveli,
-// és a lekönyvelt banki utalást a kontokivonat_konyvelt táblába is felírja,
-// hogy egy újrafeltöltött (vagy átfedő) kivonat ne könyvelje újra.
+// Kontókivonat-feltöltés: UniCredit "HISTORY_xxxx.xlsx" és CIB havi PDF
+// kivonat, akár egyszerre több fájl (pl. az éves anyag). Két lépés:
+//  1. olvasKivonatFajlt() — fájlonként beolvassa a bevételi tételeket,
+//  2. parositKivonatTranzakciokat() — az összes fájl tételeit EGYÜTT párosítja
+//     (lásd kontokivonat-parositas.ts), így egy számla egy utaláshoz kerül.
+// A feltöltés önmagában NEM ír az adatbázisba — a review-képernyőn elfogadott
+// tételeket a fogadjaElParositasokat() könyveli: a nyitott számlákat
+// fizetettre állítja, a már fizetetteknél a fizetés dátumát az utalás
+// értéknapjára pontosítja, és a banki utalást felírja a kontokivonat_konyvelt
+// táblába (egy újrafeltöltött kivonat így nem könyvel duplán).
 
 import { query } from "@/lib/db";
 import { requireEditPermission } from "@/lib/auth/require-permission";
 import { requireSession } from "@/lib/auth/dal";
 import { olvasKivonatot, parositKivonatot, type ParositasSzamla } from "./kontokivonat-parositas";
-import type { KivonatEredmeny, KivonatKonyvelesTetel } from "./kontokivonat-constants";
+import type {
+  KivonatBeolvasottFajl,
+  KivonatKonyvelesTetel,
+  KivonatParositas,
+  KivonatTranzakcio,
+} from "./kontokivonat-constants";
 
-/**
- * A böngészőből base64-ként érkező .xlsx feldolgozása: a bevételi tételek
- * párosítási javaslattal térnek vissza, a kiadás/kártya sorok csak összesítve.
- */
-export async function dolgozzFelKivonatot(base64: string, fajlNev: string): Promise<KivonatEredmeny> {
+/** Egy (a böngészőből base64-ként érkező) kivonatfájl beolvasása — nem ír az adatbázisba. */
+export async function olvasKivonatFajlt(base64: string, fajlNev: string): Promise<KivonatBeolvasottFajl> {
   await requireEditPermission("szamlak");
-  const beolvasas = await olvasKivonatot(Buffer.from(base64, "base64"));
+  const beolvasas = await olvasKivonatot(new Uint8Array(Buffer.from(base64, "base64")));
+  const datumok = beolvasas.tranzakciok.map((t) => t.datum).sort();
+  return {
+    fajlNev,
+    forras: beolvasas.forras,
+    tranzakcioSzam: beolvasas.osszesAdatSor,
+    bevetelSzam: beolvasas.tranzakciok.length,
+    datumtol: datumok[0] ?? null,
+    datumig: datumok[datumok.length - 1] ?? null,
+    kihagyottKiadas: beolvasas.kihagyottKiadas,
+    kihagyottKartya: beolvasas.kihagyottKartya,
+    kihagyottSajat: beolvasas.kihagyottSajat,
+    tranzakciok: beolvasas.tranzakciok,
+  };
+}
+
+/** Az (akár több fájlból összegyűjtött) bevételi tételek párosítása a számlákkal — nem ír az adatbázisba. */
+export async function parositKivonatTranzakciokat(tranzakciok: KivonatTranzakcio[]): Promise<KivonatParositas[]> {
+  await requireEditPermission("szamlak");
+  const egyedi = [...new Map(tranzakciok.map((t) => [t.kulcs, t])).values()];
 
   const szamlak = await query<ParositasSzamla>(
-    `select id::text, szamlaszam, vevo_nev as "vevoNev",
-            (brutto + helyesbites_osszeg)::float8 as brutto, penznem,
-            to_char(kiallitas_datum, 'YYYY-MM-DD') as "kiallitasDatum",
-            to_char(fizetesi_hatarido, 'YYYY-MM-DD') as "fizetesiHatarido",
-            fizetve
-     from szamla
-     where not sztorno and not sztornozva`
+    `select s.id::text, s.szamlaszam, s.vevo_nev as "vevoNev",
+            (s.brutto + s.helyesbites_osszeg)::float8 as brutto, s.penznem,
+            to_char(s.kiallitas_datum, 'YYYY-MM-DD') as "kiallitasDatum",
+            to_char(s.fizetesi_hatarido, 'YYYY-MM-DD') as "fizetesiHatarido",
+            s.fizetve,
+            to_char(s.fizetve_datum at time zone 'Europe/Budapest', 'YYYY-MM-DD') as "fizetveDatum",
+            exists (select 1 from kontokivonat_konyvelt k where s.id = any(k.szamla_idk)) as "bankIgazolt"
+     from szamla s
+     where not s.sztorno and not s.sztornozva`
   );
 
-  const kulcsok = beolvasas.tranzakciok.map((t) => t.kulcs);
+  const kulcsok = egyedi.map((t) => t.kulcs);
   const konyvelt = kulcsok.length
     ? await query<{ kulcs: string }>(`select kulcs from kontokivonat_konyvelt where kulcs = any($1::text[])`, [kulcsok])
     : [];
 
-  const parositasok = parositKivonatot(beolvasas.tranzakciok, szamlak, new Set(konyvelt.map((k) => k.kulcs)));
-  const datumok = beolvasas.tranzakciok.map((t) => t.datum).sort();
-
-  return {
-    fajlNev,
-    tranzakcioSzam: beolvasas.osszesAdatSor,
-    datumtol: datumok[0] ?? null,
-    datumig: datumok[datumok.length - 1] ?? null,
-    parositasok,
-    kihagyottKiadas: beolvasas.kihagyottKiadas,
-    kihagyottKartya: beolvasas.kihagyottKartya,
-  };
+  return parositKivonatot(egyedi, szamlak, new Set(konyvelt.map((k) => k.kulcs)));
 }
 
 /**
- * A review-képernyőn elfogadott tételek könyvelése: a banki utalás felírása
- * (egyszer — egy már felírt kulcsot kihagy), és a hozzárendelt számlák
- * "Fizetve" jelölése az utalás értéknapjával.
+ * Az elfogadott tételek könyvelése: a banki utalás felírása (egyszer — egy már
+ * felírt kulcsot kihagy); a hozzárendelt nyitott számlák "Fizetve" jelölése, a
+ * már fizetetteknél a fizetés dátumának pontosítása — mindkettő az utalás
+ * értéknapjával. Egy másik utalással már igazolt számla dátumát nem írja felül.
  */
 export async function fogadjaElParositasokat(
   tetelek: KivonatKonyvelesTetel[]
-): Promise<{ sikeres: number; marKonyvelt: number }> {
+): Promise<{ sikeres: number; datumFrissitve: number; marKonyvelt: number }> {
   await requireEditPermission("szamlak");
   const session = await requireSession();
   let sikeres = 0;
+  let datumFrissitve = 0;
   let marKonyvelt = 0;
 
   for (const { tranzakcio: t, szamlaIdk } of tetelek) {
@@ -79,7 +97,8 @@ export async function fogadjaElParositasokat(
       marKonyvelt++;
       continue;
     }
-    const jelolve = await query<{ id: string }>(
+
+    const ujFizetve = await query<{ id: string }>(
       `update szamla
        set fizetve = true,
            fizetve_datum = ($2::date)::timestamp at time zone 'Europe/Budapest'
@@ -87,8 +106,23 @@ export async function fogadjaElParositasokat(
        returning id::text as id`,
       [szamlaIdk, t.datum]
     );
-    sikeres += jelolve.length;
+    sikeres += ujFizetve.length;
+
+    const frissitett = await query<{ id: string }>(
+      `update szamla s
+       set fizetve_datum = ($2::date)::timestamp at time zone 'Europe/Budapest'
+       where s.id = any($1::bigint[])
+         and s.fizetve
+         and not (s.id = any($3::bigint[]))
+         and not exists (
+           select 1 from kontokivonat_konyvelt k
+           where s.id = any(k.szamla_idk) and k.kulcs <> $4
+         )
+       returning s.id::text as id`,
+      [szamlaIdk, t.datum, ujFizetve.map((r) => r.id), t.kulcs]
+    );
+    datumFrissitve += frissitett.length;
   }
 
-  return { sikeres, marKonyvelt };
+  return { sikeres, datumFrissitve, marKonyvelt };
 }

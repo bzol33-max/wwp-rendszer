@@ -11,11 +11,19 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { dolgozzFelKivonatot, fogadjaElParositasokat } from "@/lib/szamlak/kontokivonat";
-import type { KivonatEredmeny, KivonatParositas } from "@/lib/szamlak/kontokivonat-constants";
+import {
+  fogadjaElParositasokat,
+  olvasKivonatFajlt,
+  parositKivonatTranzakciokat,
+} from "@/lib/szamlak/kontokivonat";
+import type { KivonatFajl, KivonatParositas, KivonatTranzakcio } from "@/lib/szamlak/kontokivonat-constants";
 
 function formatOsszeg(n: number, penznem: string) {
   return `${Number(n).toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${penznem}`;
+}
+
+function rovidDatum(iso: string | null): string {
+  return iso ? iso.slice(5, 10).replace("-", ".") : "—";
 }
 
 function fileToBase64(file: File): Promise<string> {
@@ -30,7 +38,15 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-/** Egy banki utalás kártyája: a javasolt számlákkal (review esetén bejelölhetően) és a könyvelés gombbal. */
+function eredmenyUzenet(res: { sikeres: number; datumFrissitve: number; marKonyvelt: number }): string {
+  const reszek = [];
+  if (res.sikeres) reszek.push(`${res.sikeres} számla fizetve-nek jelölve`);
+  if (res.datumFrissitve) reszek.push(`${res.datumFrissitve} számla fizetési dátuma pontosítva`);
+  if (res.marKonyvelt) reszek.push(`${res.marKonyvelt} utalás már le volt könyvelve`);
+  return reszek.length ? `${reszek.join(", ")}.` : "Nem történt változás.";
+}
+
+/** Egy banki utalás kártyája: a javasolt számlákkal (review / dátum esetén bejelölhetően) és a könyvelés gombbal. */
 function ParositasKartya({
   parositas,
   onKonyvelve,
@@ -42,7 +58,9 @@ function ParositasKartya({
   const [kivalasztott, setKivalasztott] = useState<Set<string>>(() => new Set(parositas.kivalasztottIdk));
   const { tranzakcio, allapot } = parositas;
   const auto = allapot === "auto";
-  const konyvelheto = allapot === "auto" || allapot === "review";
+  const datum = allapot === "datum";
+  const bejelolheto = allapot === "review" || (datum && parositas.mod !== "memo");
+  const konyvelheto = allapot === "auto" || allapot === "review" || datum;
 
   const kivalasztottOsszeg = parositas.szamlak
     .filter((sz) => kivalasztott.has(sz.id))
@@ -54,8 +72,7 @@ function ParositasKartya({
     setFolyamatban(true);
     try {
       const res = await fogadjaElParositasokat([{ tranzakcio, szamlaIdk: [...kivalasztott] }]);
-      if (res.marKonyvelt > 0) toast.info("Ez az utalás már le volt könyvelve.");
-      else toast.success(`${res.sikeres} számla fizetve-nek jelölve.`);
+      toast.success(eredmenyUzenet(res));
       onKonyvelve();
     } catch {
       toast.error("Nem sikerült könyvelni.");
@@ -74,7 +91,13 @@ function ParositasKartya({
   }
 
   const szegely =
-    allapot === "auto" ? "border-l-success" : allapot === "review" ? "border-l-warning" : "border-l-border";
+    allapot === "auto"
+      ? "border-l-success"
+      : allapot === "review"
+        ? "border-l-warning"
+        : datum
+          ? "border-l-primary"
+          : "border-l-border";
 
   return (
     <div
@@ -82,7 +105,7 @@ function ParositasKartya({
     >
       <div className="min-w-0">
         <div className="truncate font-medium" title={tranzakcio.partnerNev}>
-          {tranzakcio.partnerNev}
+          {tranzakcio.partnerNev || "—"}
         </div>
         <div className="text-xs text-muted-foreground">{tranzakcio.datum}</div>
         {tranzakcio.memo && (
@@ -98,10 +121,10 @@ function ParositasKartya({
                 key={sz.id}
                 className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] ${
                   kivalasztott.has(sz.id) ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground"
-                } ${allapot === "review" ? "cursor-pointer" : ""}`}
+                } ${bejelolheto ? "cursor-pointer" : ""}`}
                 title={sz.fizetesiHatarido ? `Határidő: ${sz.fizetesiHatarido}` : undefined}
               >
-                {allapot === "review" && (
+                {bejelolheto && (
                   <input
                     type="checkbox"
                     className="h-3 w-3"
@@ -110,11 +133,16 @@ function ParositasKartya({
                   />
                 )}
                 {sz.szamlaszam} ({formatOsszeg(sz.brutto, tranzakcio.penznem)})
+                {datum && sz.fizetveDatum && (
+                  <span className="text-muted-foreground">
+                    · fizetve {rovidDatum(sz.fizetveDatum)} → {rovidDatum(tranzakcio.datum)}
+                  </span>
+                )}
               </label>
             ))}
           </div>
         )}
-        {allapot === "review" && kivalasztott.size > 0 && !osszegEgyezik && (
+        {bejelolheto && kivalasztott.size > 0 && !osszegEgyezik && (
           <div className="mt-1 text-[11px] text-warning">
             A bejelöltek összege {formatOsszeg(kivalasztottOsszeg / 100, tranzakcio.penznem)} — nem egyezik az utalással.
           </div>
@@ -131,7 +159,7 @@ function ParositasKartya({
             disabled={folyamatban || kivalasztott.size === 0}
             onClick={konyvel}
           >
-            {auto ? "Elfogad" : `Könyvel (${kivalasztott.size})`}
+            {auto ? "Elfogad" : datum ? "Dátum frissítése" : `Könyvel (${kivalasztott.size})`}
           </Button>
         )}
       </div>
@@ -145,21 +173,56 @@ function Szakasz({
   lista,
   onKonyvelve,
   osszecsukott,
+  leiras,
+  tomeges,
 }: {
   cim: string;
   badgeClass: string;
   lista: KivonatParositas[];
-  onKonyvelve: (kulcs: string) => void;
+  onKonyvelve: (kulcsok: string[]) => void;
   osszecsukott?: boolean;
+  leiras?: string;
+  tomeges?: { cimke: string; tetelek: KivonatParositas[] };
 }) {
+  const [folyamatban, setFolyamatban] = useState(false);
   if (lista.length === 0) return null;
+
+  async function mindet() {
+    if (!tomeges || tomeges.tetelek.length === 0) return;
+    setFolyamatban(true);
+    try {
+      const res = await fogadjaElParositasokat(
+        tomeges.tetelek.map((p) => ({ tranzakcio: p.tranzakcio, szamlaIdk: p.kivalasztottIdk }))
+      );
+      toast.success(eredmenyUzenet(res));
+      onKonyvelve(tomeges.tetelek.map((p) => p.tranzakcio.kulcs));
+    } catch {
+      toast.error("Nem sikerült könyvelni.");
+    } finally {
+      setFolyamatban(false);
+    }
+  }
+
   const tartalom = lista.map((p) => (
-    <ParositasKartya key={p.tranzakcio.kulcs} parositas={p} onKonyvelve={() => onKonyvelve(p.tranzakcio.kulcs)} />
+    <ParositasKartya key={p.tranzakcio.kulcs} parositas={p} onKonyvelve={() => onKonyvelve([p.tranzakcio.kulcs])} />
   ));
   const fejlec = (
-    <span className="flex items-center gap-2 text-sm font-semibold">
+    <span className="flex flex-wrap items-center gap-2 text-sm font-semibold">
       {cim}
       <Badge className={badgeClass}>{lista.length}</Badge>
+      {tomeges && tomeges.tetelek.length > 0 && (
+        <Button
+          size="sm"
+          className="ml-auto h-7"
+          disabled={folyamatban}
+          onClick={(e) => {
+            e.preventDefault();
+            mindet();
+          }}
+        >
+          {tomeges.cimke} ({tomeges.tetelek.length})
+        </Button>
+      )}
     </span>
   );
   if (osszecsukott) {
@@ -173,38 +236,58 @@ function Szakasz({
   return (
     <div className="flex flex-col gap-2">
       {fejlec}
+      {leiras && <p className="text-xs text-muted-foreground">{leiras}</p>}
       {tartalom}
     </div>
   );
 }
 
+const FORRAS_CIM: Record<KivonatFajl["forras"], string> = {
+  "unicredit-xlsx": "UniCredit",
+  "cib-pdf": "CIB",
+};
+
 export function KontokivonatDialog({ onChanged }: { onChanged: () => void }) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
-  const [feltoltve, setFeltoltve] = useState(false);
-  const [eredmeny, setEredmeny] = useState<KivonatEredmeny | null>(null);
+  const [allapotSzoveg, setAllapotSzoveg] = useState<string | null>(null);
+  const [fajlok, setFajlok] = useState<KivonatFajl[]>([]);
+  const [parositasok, setParositasok] = useState<KivonatParositas[] | null>(null);
   // Az ebben a párbeszédben lekönyvelt utalások (egyedi kulcs alapján) eltűnnek
   // a teendők közül — egy újrafeltöltéskor a szerver "Már könyvelve"-ként adja vissza őket.
   const [konyveltek, setKonyveltek] = useState<Set<string>>(new Set());
 
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+  async function handleFiles(e: React.ChangeEvent<HTMLInputElement>) {
+    const lista = [...(e.target.files ?? [])];
     e.target.value = "";
-    if (!file) return;
+    if (lista.length === 0) return;
 
     setOpen(true);
-    setFeltoltve(true);
-    setEredmeny(null);
+    setFajlok([]);
+    setParositasok(null);
     setKonyveltek(new Set());
     try {
-      const base64 = await fileToBase64(file);
-      const res = await dolgozzFelKivonatot(base64, file.name);
-      setEredmeny(res);
+      const beolvasottak: KivonatFajl[] = [];
+      const tranzakciok: KivonatTranzakcio[] = [];
+      for (const [i, file] of lista.entries()) {
+        setAllapotSzoveg(`Beolvasás: ${file.name} (${i + 1}/${lista.length})…`);
+        try {
+          const res = await olvasKivonatFajlt(await fileToBase64(file), file.name);
+          const { tranzakciok: t, ...osszesito } = res;
+          beolvasottak.push(osszesito);
+          tranzakciok.push(...t);
+        } catch {
+          toast.error(`Nem sikerült beolvasni: ${file.name}`);
+        }
+      }
+      setFajlok(beolvasottak);
+      setAllapotSzoveg("Párosítás a számlákkal…");
+      setParositasok(await parositKivonatTranzakciokat(tranzakciok));
     } catch {
       toast.error("Nem sikerült feldolgozni a kontókivonatot — ellenőrizd a fájlformátumot.");
       setOpen(false);
     } finally {
-      setFeltoltve(false);
+      setAllapotSzoveg(null);
     }
   }
 
@@ -213,30 +296,24 @@ export function KontokivonatDialog({ onChanged }: { onChanged: () => void }) {
     onChanged();
   }
 
-  async function mindElfogadasa(autoParositasok: KivonatParositas[]) {
-    const tetelek = autoParositasok.map((p) => ({ tranzakcio: p.tranzakcio, szamlaIdk: p.kivalasztottIdk }));
-    if (tetelek.length === 0) return;
-    try {
-      const res = await fogadjaElParositasokat(tetelek);
-      toast.success(
-        `${res.sikeres} számla fizetve-nek jelölve.${res.marKonyvelt ? ` ${res.marKonyvelt} utalás már le volt könyvelve.` : ""}`
-      );
-      markKonyvelve(autoParositasok.map((p) => p.tranzakcio.kulcs));
-    } catch {
-      toast.error("Nem sikerült könyvelni.");
-    }
-  }
-
-  const osszes = eredmeny?.parositasok ?? [];
+  const osszes = parositasok ?? [];
   const hatralevo = osszes.filter((p) => !konyveltek.has(p.tranzakcio.kulcs));
   const autoLista = hatralevo.filter((p) => p.allapot === "auto");
+  const datumLista = hatralevo.filter((p) => p.allapot === "datum");
   const reviewLista = hatralevo.filter((p) => p.allapot === "review");
   const marKonyveltLista = osszes.filter((p) => p.allapot === "konyvelt");
   const egyebLista = osszes.filter((p) => p.allapot === "egyeb");
 
   return (
     <>
-      <input ref={fileInputRef} type="file" accept=".xlsx" className="hidden" onChange={handleFile} />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".xlsx,.pdf"
+        multiple
+        className="hidden"
+        onChange={handleFiles}
+      />
       <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
         <UploadIcon className="h-3.5 w-3.5" /> Kontókivonat feltöltés
       </Button>
@@ -247,22 +324,28 @@ export function KontokivonatDialog({ onChanged }: { onChanged: () => void }) {
             <DialogTitle>Kontókivonat párosítás</DialogTitle>
           </DialogHeader>
 
-          {feltoltve && <div className="py-8 text-center text-sm text-muted-foreground">Feldolgozás…</div>}
+          {allapotSzoveg && <div className="py-8 text-center text-sm text-muted-foreground">{allapotSzoveg}</div>}
 
-          {!feltoltve && eredmeny && (
+          {!allapotSzoveg && parositasok && (
             <div className="flex flex-col gap-5">
               <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
-                <div className="font-medium text-foreground">{eredmeny.fajlNev}</div>
-                <div>
-                  {eredmeny.tranzakcioSzam} tranzakció
-                  {eredmeny.datumtol && eredmeny.datumig ? ` · ${eredmeny.datumtol} – ${eredmeny.datumig}` : ""}
-                  {" · "}
-                  {osszes.length} bevétel, {eredmeny.kihagyottKiadas} kiadás és {eredmeny.kihagyottKartya} kártyás tétel kihagyva
+                <div className="mb-1 font-medium text-foreground">
+                  {fajlok.length} fájl · {osszes.length} bevételi tétel
                 </div>
+                {fajlok.map((f) => (
+                  <div key={f.fajlNev} className="flex flex-wrap gap-x-2">
+                    <span className="font-medium text-foreground">{f.fajlNev}</span>
+                    <span>
+                      {FORRAS_CIM[f.forras]} · {f.datumtol && f.datumig ? `${f.datumtol} – ${f.datumig}` : "nincs bevétel"} ·{" "}
+                      {f.bevetelSzam} bevétel ({f.kihagyottKiadas} kiadás, {f.kihagyottKartya} kártyás, {f.kihagyottSajat} saját
+                      átvezetés kihagyva)
+                    </span>
+                  </div>
+                ))}
               </div>
 
               <div className="flex flex-col gap-2">
-                <div className="flex items-center gap-2 text-sm font-semibold">
+                <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
                   Automatikusan párosítva
                   <Badge className="bg-success/15 text-success hover:bg-success/15">{autoLista.length}</Badge>
                 </div>
@@ -279,23 +362,34 @@ export function KontokivonatDialog({ onChanged }: { onChanged: () => void }) {
               </div>
 
               <Szakasz
+                cim="Fizetés dátumának pontosítása"
+                badgeClass="bg-primary/15 text-primary hover:bg-primary/15"
+                lista={datumLista}
+                onKonyvelve={markKonyvelve}
+                leiras="Ezek a számlák már fizetettként szerepelnek, de banki utalással még nem voltak igazolva. A fizetés dátuma az utalás értéknapja lesz. A közlemény alapján biztos tételek egyszerre frissíthetők; a többinél ellenőrizd a bejelölt számlát."
+                tomeges={{
+                  cimke: "Közleményes tételek frissítése",
+                  tetelek: datumLista.filter((p) => p.mod === "memo"),
+                }}
+              />
+              <Szakasz
                 cim="Kézi ellenőrzés szükséges"
                 badgeClass="bg-warning/15 text-warning hover:bg-warning/15"
                 lista={reviewLista}
-                onKonyvelve={(k) => markKonyvelve([k])}
+                onKonyvelve={markKonyvelve}
               />
               <Szakasz
                 cim="Már könyvelve"
                 badgeClass="bg-muted text-muted-foreground hover:bg-muted"
                 lista={marKonyveltLista}
-                onKonyvelve={(k) => markKonyvelve([k])}
+                onKonyvelve={markKonyvelve}
                 osszecsukott
               />
               <Szakasz
-                cim="Nem vevői befizetés / nincs nyitott számla"
+                cim="Nem vevői befizetés / nincs hozzá számla"
                 badgeClass="bg-muted text-muted-foreground hover:bg-muted"
                 lista={egyebLista}
-                onKonyvelve={(k) => markKonyvelve([k])}
+                onKonyvelve={markKonyvelve}
                 osszecsukott
               />
 
@@ -304,7 +398,21 @@ export function KontokivonatDialog({ onChanged }: { onChanged: () => void }) {
                   <div className="text-xs text-muted-foreground">
                     {autoLista.length} automatikus párosítás kész elfogadásra
                   </div>
-                  <Button onClick={() => mindElfogadasa(autoLista)}>Mind elfogadása ({autoLista.length})</Button>
+                  <Button
+                    onClick={async () => {
+                      try {
+                        const res = await fogadjaElParositasokat(
+                          autoLista.map((p) => ({ tranzakcio: p.tranzakcio, szamlaIdk: p.kivalasztottIdk }))
+                        );
+                        toast.success(eredmenyUzenet(res));
+                        markKonyvelve(autoLista.map((p) => p.tranzakcio.kulcs));
+                      } catch {
+                        toast.error("Nem sikerült könyvelni.");
+                      }
+                    }}
+                  >
+                    Mind elfogadása ({autoLista.length})
+                  </Button>
                 </div>
               )}
             </div>

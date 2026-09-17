@@ -23,6 +23,7 @@
 
 import ExcelJS from "exceljs";
 import type {
+  KivonatForras,
   KivonatParositas,
   KivonatSzamlaJelolt,
   KivonatTranzakcio,
@@ -38,14 +39,26 @@ export type ParositasSzamla = {
   kiallitasDatum: string;
   fizetesiHatarido: string | null;
   fizetve: boolean;
+  /** "YYYY-MM-DD", ha fizetett. */
+  fizetveDatum: string | null;
+  /** Van-e már hozzá lekönyvelt banki utalás (kontokivonat_konyvelt) — ha nincs, a fizetés dátuma pontosítható. */
+  bankIgazolt: boolean;
 };
 
 export type KivonatBeolvasas = {
+  forras: KivonatForras;
   tranzakciok: KivonatTranzakcio[];
   osszesAdatSor: number;
   kihagyottKiadas: number;
   kihagyottKartya: number;
+  /** Saját számlák közti átvezetés (a fizető maga a cég) — nem vevői befizetés. */
+  kihagyottSajat: number;
 };
+
+/** A cég saját neve a partner mezőben = saját számlák közti átvezetés. */
+function sajatAtvezetes(partnerNev: string): boolean {
+  return /WELL[\s-]*WORN/i.test(partnerNev);
+}
 
 // ---------------------------------------------------------------------------
 // Beolvasás
@@ -72,13 +85,28 @@ function partnerNevTisztit(nyers: string): string {
   return utolso.split(/\s{2,}/)[0]?.trim() ?? "";
 }
 
-export async function olvasKivonatot(buffer: ArrayBuffer | Uint8Array): Promise<KivonatBeolvasas> {
+/** UniCredit "HISTORY_xxxx.xlsx" vagy CIB havi bankszámlakivonat (PDF) — a fájl tartalma alapján. */
+export async function olvasKivonatot(buffer: Uint8Array): Promise<KivonatBeolvasas> {
+  const pdf = buffer.length > 4 && buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46; // "%PDF"
+  if (pdf) {
+    const { PDFParse } = await import("pdf-parse");
+    const parser = new PDFParse({ data: buffer });
+    try {
+      return cibKivonatSzovegbol((await parser.getText()).text);
+    } finally {
+      await parser.destroy();
+    }
+  }
+  return olvasUnicreditXlsx(buffer);
+}
+
+async function olvasUnicreditXlsx(buffer: Uint8Array): Promise<KivonatBeolvasas> {
   const workbook = new ExcelJS.Workbook();
   // Az exceljs saját (régebbi stílusú) Buffer deklarációja nem egyezik a
   // @types/node generikus Buffer típusával — futásidőben ugyanaz az objektum.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await workbook.xlsx.load(buffer as any);
-  const eredmeny: KivonatBeolvasas = { tranzakciok: [], osszesAdatSor: 0, kihagyottKiadas: 0, kihagyottKartya: 0 };
+  const eredmeny: KivonatBeolvasas = { forras: "unicredit-xlsx", tranzakciok: [], osszesAdatSor: 0, kihagyottKiadas: 0, kihagyottKartya: 0, kihagyottSajat: 0 };
   const worksheet = workbook.worksheets[0];
   if (!worksheet) return eredmeny;
 
@@ -99,6 +127,11 @@ export async function olvasKivonatot(buffer: ArrayBuffer | Uint8Array): Promise<
     const tipus = szoveg(cella(row, 4));
     if (partnerNyers.startsWith("+CMS") || tipus === "Kártyatranzakció") {
       eredmeny.kihagyottKartya += 1;
+      return;
+    }
+
+    if (sajatAtvezetes(partnerNevTisztit(partnerNyers) || partnerNyers)) {
+      eredmeny.kihagyottSajat += 1;
       return;
     }
 
@@ -127,6 +160,74 @@ export async function olvasKivonatot(buffer: ArrayBuffer | Uint8Array): Promise<
     });
   });
 
+  return eredmeny;
+}
+
+/**
+ * CIB havi bankszámlakivonat (PDF-ből kinyert szöveg). Egy tétel sorai: a
+ * tranzakció típusa és azonosítója ("Bejövő azonnali GIRO jóváírás;
+ * AZBII30093254849"), a partner számlaszáma, a partner neve, "Közlemény: …",
+ * majd két dátumsor (könyvelési nap, értéknap) és egy "összeg egyenleg" sor.
+ * Az oldalfejlécek/láblécek (bank adatai, "BANKSZÁMLA KIVONAT" … oszlopfejléc)
+ * a tételek közé is beékelődhetnek — ezeket kihagyjuk.
+ */
+export function cibKivonatSzovegbol(szovegTeljes: string): KivonatBeolvasas {
+  const eredmeny: KivonatBeolvasas = { forras: "cib-pdf", tranzakciok: [], osszesAdatSor: 0, kihagyottKiadas: 0, kihagyottKartya: 0, kihagyottSajat: 0 };
+  const sajatSzamla = szovegTeljes.match(/\b(\d{8}-\d{8}-\d{8})\b/)?.[1] ?? "CIB";
+  const penznem = szovegTeljes.match(/\n(HUF|EUR)\nPénzforgalmi/)?.[1] ?? "HUF";
+  const datumSor = /^\d{4}\.\d{2}\.\d{2}\.$/;
+  const osszegSor = /^(-?[\d.]+,\d{2})\s+-?[\d.]+,\d{2}$/;
+  const szam = (s: string) => Number(s.replace(/\./g, "").replace(",", "."));
+
+  let fejlecben = false;
+  let blokk: string[] = [];
+  const sorok = szovegTeljes.split("\n").map((s) => s.replace(/\t/g, " ").trim());
+  for (let i = 0; i < sorok.length; i++) {
+    const sor = sorok[i];
+    if (/^STMC$|BANKSZÁMLA KIVONAT|Cégjegyzékszám|^CIB Bank Zrt/.test(sor)) fejlecben = true;
+    if (fejlecben) {
+      if (sor === "EGYENLEG") fejlecben = false;
+      continue;
+    }
+    const m = sor.match(osszegSor);
+    if (!(m && blokk.length >= 2 && datumSor.test(blokk[blokk.length - 1]) && datumSor.test(blokk[blokk.length - 2]))) {
+      if (sor) blokk.push(sor);
+      continue;
+    }
+
+    const datum = blokk[blokk.length - 1].slice(0, 10).replace(/\./g, "-");
+    const leiras = blokk.slice(0, -2);
+    blokk = [];
+    eredmeny.osszesAdatSor += 1;
+    const osszeg = szam(m[1]);
+    const [tipusResz, azonosito = ""] = (leiras[0] ?? "").split(";").map((x) => x.trim());
+    if (osszeg <= 0) {
+      if (/BANKKÁRTYA/i.test(tipusResz)) eredmeny.kihagyottKartya += 1;
+      else eredmeny.kihagyottKiadas += 1;
+      continue;
+    }
+
+    const szamlaIdx = leiras.findIndex((l, idx) => idx > 0 && /^(HU\d{2}[\d ]+|\d{8}-\d{8}(-\d{8})?)$/.test(l));
+    const partnerSzamla = szamlaIdx >= 0 ? leiras[szamlaIdx].replace(/\s/g, "") : "";
+    const partnerNev = szamlaIdx >= 0 ? (leiras[szamlaIdx + 1] ?? "") : (leiras[1] ?? "");
+    if (sajatAtvezetes(partnerNev) || /^Saját sz\. közti|FED\. ÁTVEZETÉS/i.test(tipusResz)) {
+      eredmeny.kihagyottSajat += 1;
+      continue;
+    }
+    const memoSor = leiras.find((l) => /^-?Közlemény:/.test(l));
+    const memo = memoSor ? memoSor.replace(/^-?Közlemény:\s*/, "").trim() : "";
+
+    eredmeny.tranzakciok.push({
+      kulcs: ["CIB", sajatSzamla, datum, osszeg.toFixed(2), azonosito || leiras.join(" ").slice(0, 60)].join("|"),
+      datum,
+      partnerNev: partnerNev.startsWith("Közlemény") ? "" : partnerNev,
+      partnerSzamla,
+      penznem,
+      osszeg,
+      memo: memo && !/^[-\s]*$/.test(memo) ? memo : null,
+      tipus: tipusResz,
+    });
+  }
   return eredmeny;
 }
 
@@ -181,7 +282,13 @@ function esedekesseg(a: ParositasSzamla, b: ParositasSzamla): number {
 }
 
 function jelolt(sz: ParositasSzamla): KivonatSzamlaJelolt {
-  return { id: sz.id, szamlaszam: sz.szamlaszam, brutto: sz.brutto, fizetesiHatarido: sz.fizetesiHatarido };
+  return {
+    id: sz.id,
+    szamlaszam: sz.szamlaszam,
+    brutto: sz.brutto,
+    fizetesiHatarido: sz.fizetesiHatarido,
+    fizetveDatum: sz.fizetve ? sz.fizetveDatum : null,
+  };
 }
 
 function formatFt(cent: number, penznem: string): string {
@@ -341,7 +448,31 @@ export function parositKivonatot(
     if (hivatkozott.length > 0) {
       const nyitottHiv = hivatkozott.filter((sz) => !sz.fizetve && !foglalt.has(sz.id));
       const fizetettHiv = hivatkozott.filter((sz) => sz.fizetve);
+      const igazolatlanHiv = fizetettHiv.filter((sz) => !sz.bankIgazolt && !foglalt.has(sz.id));
       const lista = hivatkozott.map((sz) => sz.szamlaszam).join(", ");
+
+      if (nyitottHiv.length === 0 && igazolatlanHiv.length > 0) {
+        // Már fizetettként szereplő, de banki utalással még nem igazolt számlák
+        // (pl. régi tömeges import) — a fizetés dátuma pontosítható.
+        if (osszegCent(igazolatlanHiv) === cel) {
+          kesz({
+            allapot: "datum", mod: "memo", szamlak: igazolatlanHiv.map(jelolt), kivalasztottIdk: igazolatlanHiv.map((sz) => sz.id),
+            megjegyzes: `Közlemény alapján — már fizetettként szerepel, a fizetés dátuma ${tranz.datum} lesz.`,
+          });
+          continue;
+        }
+        const igazolatlanVevo = azonosPenznem
+          .filter((sz) => sz.fizetve && !sz.bankIgazolt && !foglalt.has(sz.id) && sz.kiallitasDatum <= tranz.datum && nevEgyezik(tranz.partnerNev, sz.vevoNev))
+          .sort(esedekesseg);
+        const elotagFiz = legregebbiElotag(igazolatlanVevo, cel, igazolatlanHiv);
+        if (elotagFiz) {
+          kesz({
+            allapot: "datum", mod: "legregebbi", szamlak: elotagFiz.map(jelolt), kivalasztottIdk: elotagFiz.map((sz) => sz.id),
+            megjegyzes: `A közlemény ${lista} számlát említi, az összeg a vevő ${elotagFiz.length} legrégebbi, már fizetettként szereplő számlájával egyezik — ellenőrizd.`,
+          });
+          continue;
+        }
+      }
 
       if (nyitottHiv.length === 0) {
         eredmeny.set(tranz.kulcs, {
@@ -359,6 +490,15 @@ export function parositKivonatot(
           megjegyzes: fizetettHiv.length > 0
             ? `közlemény alapján; ${fizetettHiv.map((sz) => sz.szamlaszam).join(", ")} már fizetve`
             : nyitottHiv.length > 1 ? `közlemény alapján, ${nyitottHiv.length} számla` : "közlemény alapján",
+        });
+        continue;
+      }
+
+      if (igazolatlanHiv.length > 0 && osszegCent(nyitottHiv) + osszegCent(igazolatlanHiv) === cel) {
+        const mind = [...nyitottHiv, ...igazolatlanHiv];
+        kesz({
+          allapot: "auto", mod: "memo", szamlak: mind.map(jelolt), kivalasztottIdk: mind.map((sz) => sz.id),
+          megjegyzes: `közlemény alapján; ${igazolatlanHiv.map((sz) => sz.szamlaszam).join(", ")} már fizetve — a dátuma pontosítva`,
         });
         continue;
       }
@@ -381,6 +521,22 @@ export function parositKivonatot(
     }
 
     if (nyitottVevo.length === 0) {
+      // Nincs nyitott számla: talán egy már fizetettként szereplő, de banki
+      // utalással még nem igazolt számla befizetése (régi, közlemény nélküli utalás).
+      const igazolatlanVevo = azonosPenznem
+        .filter((sz) => sz.fizetve && !sz.bankIgazolt && !foglalt.has(sz.id) && sz.kiallitasDatum <= tranz.datum && nevEgyezik(tranz.partnerNev, sz.vevoNev))
+        .sort(esedekesseg);
+      const egyezoFiz = igazolatlanVevo.filter((sz) => centben(sz.brutto) === cel);
+      const elotagFiz = egyezoFiz.length > 0 ? [egyezoFiz[0]] : legregebbiElotag(igazolatlanVevo, cel);
+      if (elotagFiz) {
+        kesz({
+          allapot: "datum", mod: egyezoFiz.length > 0 ? "osszeg" : "legregebbi", szamlak: elotagFiz.map(jelolt), kivalasztottIdk: elotagFiz.map((sz) => sz.id),
+          megjegyzes: egyezoFiz.length > 0
+            ? `Nincs számlaszám a közleményben — azonos összegű, már fizetettként szereplő számla${egyezoFiz.length > 1 ? ` (${egyezoFiz.length} közül a legrégebbi)` : ""}; ellenőrizd.`
+            : `Nincs számlaszám a közleményben — a vevő ${elotagFiz.length} legrégebbi, már fizetettként szereplő számlájának összege kiadja; ellenőrizd.`,
+        });
+        continue;
+      }
       eredmeny.set(tranz.kulcs, {
         tranzakcio: tranz, allapot: "egyeb", mod: null, szamlak: [], kivalasztottIdk: [],
         megjegyzes: "Nincs ehhez a partnerhez nyitott számla.",
