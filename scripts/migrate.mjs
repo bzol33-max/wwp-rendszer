@@ -204,6 +204,29 @@ async function main() {
   // modul csak utólag került be), a seedUserOnce pedig csak létrehozáskor ír
   // jogosultságot, meglévő felhasználónál nem nyúl hozzá.
   await grantElolegekSajatOnce(pool);
+  // 2026-09-17: a két sofőr fiók a 09-13-i seed után törlődött (a lépés
+  // rögzítve maradt, ezért a seed nem hozta újra létre). A dolgozói mobil
+  // sofőr nézetéhez (lásd docs/sofor-mobil-terv.md) kell a fiók ÉS az
+  // alkalmazott-hozzárendelés — a Felhasználók oldal az utóbbit nem tudja
+  // beállítani, ezért itt, a seeddel. A jelszó a SEED_* env változóból jön.
+  await seedUserOnce(pool, {
+    code: "user-vadongergo-2026-09-17",
+    username: "VadonGergo",
+    password: process.env.SEED_VADONGERGO_PASSWORD,
+    name: "Vadon Gergő",
+    role: "sofor",
+    permissions: soforPermissions,
+    employeeName: "Vadon Gergő",
+  });
+  await seedUserOnce(pool, {
+    code: "user-takacsmiklos-2026-09-17",
+    username: "TakacsMiklos",
+    password: process.env.SEED_TAKACSMIKLOS_PASSWORD,
+    name: "Takács Miklós",
+    role: "sofor",
+    permissions: soforPermissions,
+    employeeName: "Takács Micó",
+  });
   await ujraimportalDuvenbeckSorokatOnce(pool, DUVENBECK_UJRAIMPORT_KOROK);
   await feloldTorortDuvenbeckDokumentumokatOnce(pool);
   await torolDokumentumNelkuliDuplikatumokatOnce(pool);
