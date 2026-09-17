@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import pg from "pg";
 import bcrypt from "bcryptjs";
+import { XMLParser } from "fast-xml-parser";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const dbDir = path.join(__dirname, "..", "db");
@@ -222,6 +223,7 @@ async function main() {
   await toroljeMasodpeldanyokatOnce(pool);
   await toroljeMasodpeldanyokat2Once(pool);
   await naplozFuvarHelyEllenorzest(pool);
+  await naplozEcofleetFogyasztast();
 
   await pool.end();
 }
@@ -599,6 +601,67 @@ async function toroljeEgybemosottGpsErinteseketOnce(pool) {
     `[migrate] egybemosott GPS-érintések törölve: ${rows.length} sor` +
       (rows.length ? " — " + rows.map((r) => `#${r.fuvar_id}/${r.megallo_index}`).join(", ") : ".")
   );
+}
+
+// Diagnosztika (minden indításkor, csak napló): az Ecofleet trip-előzménye
+// az utolsó 14 napra, járművenként összesítve — táv, menetidő, és a válasz
+// üzemanyag-mezői (ha az API ad ilyet). A kérdés: van-e fogyasztás-adat az
+// API-ban, vagy csak a napi e-mailes Excel-jelentésben. A fejlesztői
+// környezetből az API nem érhető el, ezért innen, az éles naplóból olvasható.
+async function naplozEcofleetFogyasztast() {
+  const apiKey = process.env.ECOFLEET_API_KEY;
+  if (!apiKey) {
+    console.log("[migrate] ecofleet: nincs ECOFLEET_API_KEY, fogyasztás-napló kihagyva.");
+    return;
+  }
+  const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@_", isArray: (name) => name === "node" });
+  const faliora = (d) => {
+    const dtf = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Budapest", hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    const p = dtf.formatToParts(d).reduce((acc, x) => (x.type !== "literal" ? ((acc[x.type] = x.value), acc) : acc), {});
+    return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}:${p.second}`;
+  };
+  const jarmuvek = [
+    { nev: "Gergő AOPU-427", objectId: "1144376" },
+    { nev: "Micó NMZ-492", objectId: "369485" },
+  ];
+  const most = new Date();
+  const kezdet = new Date(most.getTime() - 14 * 86400000);
+  try {
+    for (const j of jarmuvek) {
+      const url = new URL(`https://app.ecofleet.com/seeme/Api/Vehicles/getTrips`);
+      url.searchParams.set("key", apiKey);
+      url.searchParams.set("objectId", j.objectId);
+      url.searchParams.set("begTimestamp", faliora(kezdet));
+      url.searchParams.set("endTimestamp", faliora(most));
+      const res = await fetch(url.toString());
+      const xml = await res.text();
+      const parsed = parser.parse(xml);
+      const nodes = parsed?.nodes?.response?.node ?? [];
+      if (nodes.length === 0) {
+        console.log(`[migrate] ecofleet ${j.nev}: 0 út (státusz ${parsed?.nodes?.status ?? "?"}, ${parsed?.nodes?.errormessage ?? "-"})`);
+        continue;
+      }
+      const mezok = Object.keys(nodes[0]);
+      const szamMezok = mezok.filter((k) => !["id", "objectId", "driverId"].includes(k) && nodes.every((n) => n[k] === undefined || n[k] === "" || Number.isFinite(Number(n[k]))));
+      const osszeg = {};
+      for (const k of szamMezok) osszeg[k] = nodes.reduce((sum, n) => sum + (Number(n[k]) || 0), 0);
+      const napok = {};
+      for (const n of nodes) {
+        const nap = String(n.startTimestamp ?? "").slice(0, 10);
+        if (!napok[nap]) napok[nap] = { tav: 0, uzemanyag: 0, utak: 0 };
+        napok[nap].tav += Number(n.distance) || 0;
+        napok[nap].utak++;
+        for (const k of mezok) if (/fuel|uzemanyag|consum/i.test(k)) napok[nap].uzemanyag += Number(n[k]) || 0;
+      }
+      console.log(`[migrate] ecofleet ${j.nev}: ${nodes.length} út 14 napra | mezők: ${mezok.join(", ")}`);
+      console.log(`[migrate] ecofleet ${j.nev} összegek: ${Object.entries(osszeg).map(([k, v]) => `${k}=${Math.round(v * 100) / 100}`).join(", ")}`);
+      for (const [nap, v] of Object.entries(napok).sort()) {
+        console.log(`[migrate] ecofleet ${j.nev} ${nap}: ${v.utak} út, ${Math.round(v.tav)} km, üzemanyag-mezők összege ${Math.round(v.uzemanyag * 100) / 100}`);
+      }
+    }
+  } catch (err) {
+    console.log(`[migrate] ecofleet fogyasztás-napló hiba: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
 
 // Egyszeri javítás (2026-09-16): a "Megbízás (poz 3003).pdf" (RBT Europe,
