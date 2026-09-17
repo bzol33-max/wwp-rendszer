@@ -667,6 +667,32 @@ async function naplozEcofleetFogyasztast() {
     console.log(`[migrate] ecofleet fogyasztás-napló hiba: ${err instanceof Error ? err.message : String(err)}`);
   }
 
+  // Jelentés-API: melyik jelentések érhetők el, az útvonal-jelentés
+  // paraméterei, és egy próba-lekérés 14 napra csv-ben (ebben van a
+  // fogyasztás a napi e-mailes Excel szerint). Plusz Expenses/get: tankolások.
+  try {
+    const hiv = async (path, params = {}) => {
+      const url = new URL(`https://app.ecofleet.com/seeme/Api/${path}`);
+      url.searchParams.set("key", apiKey);
+      for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+      const res = await fetch(url.toString());
+      return { status: res.status, text: await res.text() };
+    };
+    const lista = await hiv("Reports/listReports");
+    console.log(`[migrate] ecofleet listReports: HTTP ${lista.status} — ${lista.text.replace(/\s+/g, " ").slice(0, 3000)}`);
+    const idk = [...lista.text.matchAll(/<id>(\d+)<\/id>[\s\S]{0,300}?<name>([^<]*)<\/name>|<name>([^<]*)<\/name>[\s\S]{0,300}?<id>(\d+)<\/id>/g)].map((m) => ({ id: m[1] ?? m[4], nev: m[2] ?? m[3] }));
+    const jeloltek = idk.filter((r) => /tvonal|route|trip|fuel|zemanyag|fogyaszt/i.test(r.nev ?? ""));
+    console.log(`[migrate] ecofleet jelentés-jelöltek: ${jeloltek.map((r) => `${r.id}=${r.nev}`).join("; ") || "(nincs, lásd a nyers listát)"}`);
+    for (const r of jeloltek.slice(0, 3)) {
+      const conf = await hiv("Reports/getReportConf", { id: r.id });
+      console.log(`[migrate] ecofleet getReportConf ${r.id} (${r.nev}): HTTP ${conf.status} — ${conf.text.replace(/\s+/g, " ").slice(0, 2500)}`);
+    }
+    const kiadasok = await hiv("Expenses/get", { begTimestamp: faliora(kezdet), endTimestamp: faliora(most) });
+    console.log(`[migrate] ecofleet Expenses/get 14 nap: HTTP ${kiadasok.status} — ${kiadasok.text.replace(/\s+/g, " ").slice(0, 1500)}`);
+  } catch (err) {
+    console.log(`[migrate] ecofleet jelentés-API hiba: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
   // Az API-dokumentáció átvizsgálása: milyen végpontok vannak, és melyik
   // említ üzemanyagot/tankolást/fogyasztást. A trip-válaszban nincs ilyen
   // mező; ha van külön végpont, azt fogjuk hívni.
@@ -676,7 +702,7 @@ async function naplozEcofleetFogyasztast() {
     const szoveg = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
     const vegpontok = [...new Set(html.match(/\bApi\/[A-Za-z]+\/[A-Za-z]+\b/g) ?? [])];
     console.log(`[migrate] ecofleet apidoc: HTTP ${res.status}, ${html.length} karakter, ${vegpontok.length} végpont: ${vegpontok.join(", ")}`);
-    for (const kulcs of ["Api/Reports", "Api/Expenses", "Api/Vehicles/getFuel", "Api/Logbook"]) {
+    for (const kulcs of []) {
       let idx = szoveg.indexOf(kulcs);
       let db = 0;
       while (idx >= 0 && db < 3) {
