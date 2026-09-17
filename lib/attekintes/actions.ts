@@ -8,7 +8,9 @@
 // csak tömörebben, mobilra optimalizálva.
 
 import { query } from "@/lib/db";
-import { getFleetPositions } from "@/lib/fuvarozas/actions";
+import { getFleetPositions, getIdovonalak } from "@/lib/fuvarozas/actions";
+import { getFuvarHelye } from "@/lib/fuvarozas/fuvar-hely";
+import { budapestNapISO } from "@/lib/fuvarozas/idozona";
 import { getFuvarok } from "@/lib/fuvarozas/megbizasok";
 import { SAJAT_JARMUVEK, resolveJarmu, findJarmuByPlate, jarmuLabel, type SajatJarmu } from "@/lib/fuvarozas/vehicles";
 import { getSzamlaLista } from "@/lib/szamlak/actions";
@@ -189,7 +191,7 @@ export type JarmuMegbizasSor = {
   // DB tipus='sajat' -> "Bér".
   cimke: "Saját" | "Bér";
   date: string;
-  /** YYYY-MM-DD — a "holnapi" megbízások kiszűréséhez a kártyán. */
+  /** YYYY-MM-DD — a "Ma"/"Holnap" címkéhez a kártyán. */
   datumIso: string;
   idopont: string | null;
   megrendelo: string | null;
@@ -208,68 +210,240 @@ function megbizasMegallok(felrako: string | null, lerako: string): JarmuMegbizas
   ];
 }
 
-export type JarmuMegbizasCsoport = {
-  jarmu: SajatJarmu;
-  label: string;
-  megbizasok: JarmuMegbizasSor[];
+function megbizasSor(row: FuvarRow): JarmuMegbizasSor {
+  return {
+    id: row.id,
+    cimke: row.tipus === "ber" ? "Saját" : "Bér",
+    date: row.date,
+    datumIso: row.datum_iso,
+    idopont: row.idopont,
+    megrendelo: row.megrendelo,
+    pozicioszam: row.pozicioszam,
+    felrako: row.felrako,
+    lerako: row.lerako,
+    megallok: megbizasMegallok(row.felrako, row.lerako),
+    statusz: row.statusz,
+  };
+}
+
+/** Egy mai fuvar egy állomása a kártyán — a GPS lap idővonalával (getIdovonalak) egyező állapottal. */
+export type JarmuMaiMegallo = {
+  index: number;
+  tipus: "felrako" | "lerako";
+  varos: string;
+  /** A megálló teljes címe — a részletnézetben ez látszik. */
+  cim: string;
+  /** Kész: GPS-felismerés vagy kézi (sofőr mobil / GPS lap) jelölés. */
+  kesz: boolean;
+  keszForras: "gps" | "kezi" | null;
+  keszBy: string | null;
+  /** A kocsi a GPS szerint MOST itt áll. */
+  eppenItt: boolean;
+  /**
+   * "HH:MM" budapesti óra: kész megállónál a tényleges érkezés, egyébként a
+   * becsült időpont. Null, ha a becslés csak a statikus menetrend és már a
+   * múltba esik — ilyenkor nincs mit mutatni.
+   */
+  ido: string | null;
+  /** Hány nappal esik a mai naptól (-1 = tegnap volt, +1 = holnap lesz). */
+  napElteres: number;
+  /** A sofőr által jelölt rakodóhelyi várakozás percben (folyamatban lévőnél a mostanáig eltelt idő). */
+  varakozasPerc: number | null;
+  /** Igaz, amíg a sofőr még nem zárta le a várakozást. */
+  varakozik: boolean;
 };
 
-/** A "Fuvar" fülön: saját járművenként a még nem lezárt megbízások, a legközelebbi elöl. */
-export async function getJarmuMegbizasok(): Promise<JarmuMegbizasCsoport[]> {
-  const [berTabRows, sajatTabRows] = await Promise.all([
+export type JarmuMaiFuvar = {
+  id: string;
+  cimke: "Saját" | "Bér";
+  megrendelo: string | null;
+  pozicioszam: string | null;
+  /** A fuvar korábbi napról csúszik át — a kocsi még viszi. */
+  csuszo: boolean;
+  megallok: JarmuMaiMegallo[];
+  /** A sofőr által feltöltött fuvarlevél-fotók száma és a legfrissebb azonosítója (a /api/fuvarozas/dokumentum/… linkhez). */
+  fuvarlevelFotoDb: number;
+  fuvarlevelFotoId: string | null;
+  /** A sofőr nyitott gondjelzései (feladatok tábla) erre a fuvarra. */
+  gondok: string[];
+};
+
+export type JarmuFuvarCsoport = {
+  jarmu: SajatJarmu;
+  label: string;
+  /** A mai nap fuvarjai a GPS lap sorrendjében, állomásonkénti állapottal. */
+  mai: JarmuMaiFuvar[];
+  /** Élő becsült érkezés a következő állomásra — null, ha nincs, vagy a becslés bizonytalan. */
+  eloEta: { cel: string; ido: string } | null;
+  /** A mai nap utáni, még folyamatban lévő megbízások, a legközelebbi elöl. */
+  kovetkezok: JarmuMegbizasSor[];
+  /** Az élő GPS-lekérdezés hibaszövege, ha volt — a megbízások ettől függetlenül látszanak. */
+  hiba: string | null;
+};
+
+export type FuvarFulAdatok = {
+  jarmuvek: JarmuFuvarCsoport[];
+  /** Folyamatban lévő megbízások, amelyekhez egyik saját kocsi sincs hozzárendelve — ezek döntést várnak. */
+  kocsiNelkul: JarmuMegbizasSor[];
+};
+
+const BUDAPEST_ORA = new Intl.DateTimeFormat("hu-HU", {
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+  timeZone: "Europe/Budapest",
+});
+
+function budapestOraSzoveg(d: Date): string {
+  return BUDAPEST_ORA.format(d);
+}
+
+/** Időpont-szöveg rendezéshez: a hiányzó időpont a nap végére kerül. */
+function idopontKulcs(idopont: string | null): string {
+  return idopont?.trim() ? idopont.trim() : "99:99";
+}
+
+function folyamatban(row: FuvarRow, ma: string): boolean {
+  const hely = getFuvarHelye(row, ma);
+  return hely === "ber_folyamatban" || hely === "sajat_folyamatban";
+}
+
+/**
+ * A "Fuvar" fül teljes adata egy körben.
+ *
+ * A MAI kép NEM külön számítás: a GPS lap gyorsítótárazott idővonalából
+ * (getIdovonalak) jön, fuvaronkénti blokkokban, ugyanazzal a kész / épp itt
+ * / várakozik állapottal, amit a diszpécser a GPS lapon és a sofőr a
+ * telefonján lát. A mai nap utáni megbízások és a kocsi nélküliek a
+ * Megbízások modul közös "folyamatban" szabályával (getFuvarHelye) szűrve
+ * kerülnek ide — a lezárt, számlázott vagy Teljesítve-re tett fuvar itt nem
+ * jelenik meg. Korábban a fül a `statusz <> 'lezarva'` feltételt használta,
+ * amit a felület sehol nem állít, ezért a kocsi minden régi fuvarja
+ * "folyamatban lévőként" látszott.
+ */
+export async function getFuvarFulAdatok(): Promise<FuvarFulAdatok> {
+  const ma = budapestNapISO();
+  const [idovonal, berTabRows, sajatTabRows] = await Promise.all([
+    getIdovonalak(ma),
     getFuvarok("sajat"), // DB tipus='sajat' — UI-n "Bér fuvarok" fül
     getFuvarok("ber"), // DB tipus='ber' — UI-n "Saját fuvarok" fül
   ]);
+  const osszes = [...berTabRows, ...sajatTabRows];
+  const rowById = new Map(osszes.map((r) => [r.id, r]));
+  const aktivak = osszes.filter((r) => folyamatban(r, ma));
 
-  const aktivBer = berTabRows.filter((r) => r.statusz !== "lezarva");
-  const aktivSajat = sajatTabRows.filter((r) => r.statusz !== "lezarva");
+  const maiFuvarIds = new Set(idovonal.jarmuvek.flatMap((j) => j.fuvarok.map((f) => f.fuvarId)));
+  const erintettIds = [...new Set([...maiFuvarIds, ...aktivak.map((r) => r.id)])];
+  const gondSorok = erintettIds.length
+    ? await query<{ description: string }>(
+        `select description from feladatok
+          where done = false and description like 'Sofőr jelzés (%'
+          order by id desc limit 50`
+      ).catch(() => [])
+    : [];
+  const gondokByFuvar = new Map<string, string[]>();
+  for (const g of gondSorok) {
+    // A leírás alakja (lib/fuvarozas/sofor.ts jelezGondot): "Sofőr jelzés (Név) —
+    // fuvar #12, Megrendelő, hivatkozás, Lerakó: a sofőr szövege". A kártyán a
+    // fuvar blokkjában jelenik meg, ezért csak a név és a szöveg kell belőle.
+    const m = /^Sofőr jelzés \(([^)]*)\) — fuvar #(\d+)[^:]*: ([\s\S]*)$/.exec(g.description);
+    if (!m) continue;
+    const szoveg = `${m[1]}: ${m[3].trim()}`;
+    gondokByFuvar.set(m[2], [...(gondokByFuvar.get(m[2]) ?? []), szoveg]);
+  }
 
-  return SAJAT_JARMUVEK.map((jarmu) => {
-    const sajat: JarmuMegbizasSor[] = aktivSajat
-      .filter((row) => jarmuMatch(jarmu, row))
-      .map((row) => ({
-        id: row.id,
-        cimke: "Saját" as const,
-        date: row.date,
-        datumIso: row.datum_iso,
-        idopont: row.idopont,
-        megrendelo: row.megrendelo,
-        pozicioszam: row.pozicioszam,
-        felrako: row.felrako,
-        lerako: row.lerako,
-        megallok: megbizasMegallok(row.felrako, row.lerako),
-        statusz: row.statusz,
-      }));
-    const ber: JarmuMegbizasSor[] = aktivBer
-      .filter((row) => jarmuMatch(jarmu, row))
-      .map((row) => ({
-        id: row.id,
-        cimke: "Bér" as const,
-        date: row.date,
-        datumIso: row.datum_iso,
-        idopont: row.idopont,
-        megrendelo: row.megrendelo,
-        pozicioszam: row.pozicioszam,
-        felrako: row.felrako,
-        lerako: row.lerako,
-        megallok: megbizasMegallok(row.felrako, row.lerako),
-        statusz: row.statusz,
-      }));
+  // A kézi (sofőr / GPS lap) készre jelölés és a "Megérkeztem" koppintás
+  // tényleges ideje — az idővonal a kézzel kész megállónál is csak a becsült
+  // időpontot hordozza, a vezetőnek viszont az kell, mikor volt ott a kocsi.
+  const maiIds = [...maiFuvarIds];
+  const keziSorok = maiIds.length
+    ? await query<{ fuvar_id: string; megallo_index: number; kesz_at: Date | null; kezi_erkezes: Date | null }>(
+        `select fuvar_id::text, megallo_index, kesz_at, kezi_erkezes
+           from fuvar_megallo_allapot
+          where fuvar_id = any($1::bigint[]) and (kesz_at is not null or kezi_erkezes is not null)`,
+        [maiIds]
+      ).catch(() => [])
+    : [];
+  const keziIdoByMegallo = new Map(
+    keziSorok.map((k) => [`${k.fuvar_id}/${k.megallo_index}`, k.kezi_erkezes ?? k.kesz_at])
+  );
 
-    // FONTOS: a getFuvarok() mindkét listát (saját, bér) külön-külön,
-    // dátum szerint csökkenőben adja vissza — a sajat/ber összefűzése után
-    // egyetlen .reverse() NEM ad globálisan dátum szerint növekvő sorrendet
-    // (csak a két, egymástól függetlenül csökkenő listát fordítja meg és
-    // fűzi egymás után, a két típus tételei nem keverednek meg egymással).
-    // Ezért itt explicit módon, dátum (datumIso) szerint kell rendezni,
-    // hogy a legkorábbi (legsürgősebb) tétel kerüljön előre — akkor is, ha
-    // az egy másik típusú (saját/bér) megbízás, mint az előtte lévő.
-    const megbizasok = [...sajat, ...ber].sort((a, b) => a.datumIso.localeCompare(b.datumIso));
+  const most = Date.now();
+  const jarmuvek: JarmuFuvarCsoport[] = SAJAT_JARMUVEK.map((jarmu) => {
+    const iv = idovonal.jarmuvek.find((j) => j.sofor === jarmu.sofor);
+    const mai: JarmuMaiFuvar[] = (iv?.fuvarok ?? []).map((b) => {
+      const row = rowById.get(b.fuvarId);
+      return {
+        id: b.fuvarId,
+        cimke: b.fuvarTipus === "ber" ? "Saját" : "Bér",
+        megrendelo: b.megrendelo,
+        pozicioszam: b.pozicioszam,
+        csuszo: b.csuszo,
+        fuvarlevelFotoDb: row?.fuvarlevel_foto_db ?? 0,
+        fuvarlevelFotoId: row?.fuvarlevel_foto_id ?? null,
+        gondok: gondokByFuvar.get(b.fuvarId) ?? [],
+        megallok: b.megallok.map((m) => {
+          const kesz = m.keszForras !== null;
+          const keziIdo = m.keszForras === "kezi" ? keziIdoByMegallo.get(`${b.fuvarId}/${m.megalloIndex}`) ?? null : null;
+          const becsultMs = new Date(m.idopont).getTime();
+          // Még hátralévő megállónál a múltba csúszott becslés (nincs élő GPS,
+          // vagy nem sikerült útvonalat számolni) nem óra, hanem félrevezetés.
+          const becslesHasznalhato = !m.becslesElavult && becsultMs >= most - 5 * 60 * 1000;
+          const varakozasKezdete = m.varakozasKezdete ? new Date(m.varakozasKezdete).getTime() : null;
+          const varakozasVege = m.varakozasVege ? new Date(m.varakozasVege).getTime() : null;
+          return {
+            index: m.megalloIndex,
+            tipus: m.tipus,
+            varos: m.cim,
+            cim: m.nyersCim,
+            kesz,
+            keszForras: m.keszForras,
+            keszBy: m.keszBy,
+            eppenItt: m.eppenItt,
+            ido: kesz
+              ? budapestOraSzoveg(keziIdo ? new Date(keziIdo) : new Date(m.idopont))
+              : m.eppenItt || becslesHasznalhato
+                ? budapestOraSzoveg(new Date(m.idopont))
+                : null,
+            napElteres: m.napElteres,
+            varakozasPerc:
+              varakozasKezdete !== null ? Math.max(0, Math.round(((varakozasVege ?? most) - varakozasKezdete) / 60000)) : null,
+            varakozik: varakozasKezdete !== null && varakozasVege === null,
+          };
+        }),
+      };
+    });
 
+    const kovetkezok = aktivak
+      .filter((r) => jarmuMatch(jarmu, r) && !maiFuvarIds.has(r.id) && r.datum_iso > ma)
+      .sort(
+        (a, b) =>
+          a.datum_iso.localeCompare(b.datum_iso) ||
+          idopontKulcs(a.idopont).localeCompare(idopontKulcs(b.idopont)) ||
+          Number(a.id) - Number(b.id)
+      )
+      .map(megbizasSor);
+
+    const eta = iv?.eloEta;
     return {
       jarmu,
       label: jarmuLabel(jarmu),
-      megbizasok,
+      mai,
+      eloEta: eta && !eta.bizonytalan ? { cel: eta.cel, ido: budapestOraSzoveg(new Date(eta.erkezes)) } : null,
+      kovetkezok,
+      hiba: iv?.hiba ?? null,
     };
   });
+
+  const kocsiNelkul = aktivak
+    .filter((r) => !SAJAT_JARMUVEK.some((j) => jarmuMatch(j, r)) && !maiFuvarIds.has(r.id))
+    .sort(
+      (a, b) =>
+        a.datum_iso.localeCompare(b.datum_iso) ||
+        idopontKulcs(a.idopont).localeCompare(idopontKulcs(b.idopont)) ||
+        Number(a.id) - Number(b.id)
+    )
+    .map(megbizasSor);
+
+  return { jarmuvek, kocsiNelkul };
 }
