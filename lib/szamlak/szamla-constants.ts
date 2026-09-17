@@ -3,8 +3,6 @@
 
 export type SzamlaKategoria = "fuvar" | "raklap";
 
-/** A mobil Számlák mátrix "Fizetve" oszlopa ennyi napra visszamenőleg mutatja a fizetettre jelölt számlákat. */
-export const FIZETVE_NAPOK_MOBIL = 60;
 export type SzamlaAlkategoria = "fabrika" | "keter" | "egyeb";
 
 export const KATEGORIA_LABEL: Record<SzamlaKategoria, string> = {

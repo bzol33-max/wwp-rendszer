@@ -4,7 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Check, ChevronDown, RotateCcw, Search, X } from "lucide-react";
 import { jeloltFizetve, visszavonFizetve } from "@/lib/szamlak/actions";
-import { ALKATEGORIA_LABEL, FIZETVE_NAPOK_MOBIL as FIZETVE_NAPOK, KATEGORIA_LABEL, type SzamlaRow } from "@/lib/szamlak/szamla-constants";
+import { ALKATEGORIA_LABEL, KATEGORIA_LABEL, type SzamlaRow } from "@/lib/szamlak/szamla-constants";
 
 // Az Áttekintés "Számlák" füle (mobil) — "Áttekintő mátrix" elrendezés:
 // felül egy összecsukható táblázat (sorok: mappák, oszlopok: állapotok),
@@ -25,7 +25,7 @@ const ALLAPOT_CIM: Record<Allapot, string> = {
   lejart: "Lejárt",
   het: "7 napon belül",
   nyitott: "Összes nyitott",
-  fizetve: `Kifizetve (${FIZETVE_NAPOK} nap)`,
+  fizetve: "Kifizetve (idén)",
 };
 const MAPPA_CIM: Record<Mappa, string> = {
   mind: "Összesen",

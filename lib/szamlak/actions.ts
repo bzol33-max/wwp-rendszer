@@ -48,8 +48,10 @@ export type SzamlaListaSzuro = {
   csakNyitott?: boolean;
   /** "lejart" = a határidő elmúlt; "het" = ma és ma+7 nap között esedékes. */
   hatarido?: "lejart" | "het";
-  /** Csak az utóbbi ennyi napban fizetettre jelöltek (a csakFizetve mellé, pl. a mobil "Fizetve" oszlophoz). */
-  fizetveNapon?: number;
+  /** Csak az idei (Budapest szerinti január 1. óta) fizetettre jelöltek — a mobil "Fizetve" oszlophoz. */
+  fizetveIdei?: boolean;
+  /** Legfeljebb ennyi sor (alapértelmezés: 500). */
+  limit?: number;
 };
 
 /**
@@ -83,9 +85,8 @@ export async function getSzamlaLista(szuro: SzamlaListaSzuro): Promise<SzamlaRow
   if (szuro.csakFizetve) {
     feltetelek.push("fizetve");
   }
-  if (szuro.fizetveNapon) {
-    parameterek.push(szuro.fizetveNapon);
-    feltetelek.push(`fizetve_datum >= now() - ($${parameterek.length}::int * interval '1 day')`);
+  if (szuro.fizetveIdei) {
+    feltetelek.push(`fizetve_datum >= date_trunc('year', now() at time zone 'Europe/Budapest') at time zone 'Europe/Budapest'`);
   }
   if (szuro.csakNyitott) {
     feltetelek.push("not fizetve");
@@ -107,7 +108,7 @@ export async function getSzamlaLista(szuro: SzamlaListaSzuro): Promise<SzamlaRow
      from szamla
      where ${feltetelek.join(" and ")}
      order by ${rendezes}
-     limit 500`,
+     limit ${Math.min(Math.max(szuro.limit ?? 500, 1), 5000)}`,
     parameterek
   );
 }

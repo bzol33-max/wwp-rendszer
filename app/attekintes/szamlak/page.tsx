@@ -1,9 +1,8 @@
-import { getFrissenFizetettSzamlak, getNyitottSzamlak } from "@/lib/attekintes/actions";
+import { getIdeiFizetettSzamlak, getNyitottSzamlak } from "@/lib/attekintes/actions";
 import { SzamlakMobil } from "@/components/attekintes/szamlak-mobil";
-import { FIZETVE_NAPOK_MOBIL } from "@/lib/szamlak/szamla-constants";
 
 export default async function SzamlakPage() {
-  const [nyitott, fizetett] = await Promise.all([getNyitottSzamlak(), getFrissenFizetettSzamlak(FIZETVE_NAPOK_MOBIL)]);
+  const [nyitott, fizetett] = await Promise.all([getNyitottSzamlak(), getIdeiFizetettSzamlak()]);
 
   return (
     <div className="flex flex-col gap-3 py-4">
