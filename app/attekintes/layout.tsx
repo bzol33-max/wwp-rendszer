@@ -4,8 +4,6 @@ import { logout } from "@/lib/auth/actions";
 import { AttekintesTabBar } from "@/components/attekintes/tab-bar";
 import { getAttekintesTheme } from "@/lib/attekintes/theme";
 import { getAttekintesProfil } from "@/lib/attekintes/tabs";
-import { getHaviFelvasarlasOsszefoglalo } from "@/lib/attekintes/actions";
-import { HaviFelvasarlasButton } from "@/components/attekintes/havi-felvasarlas-modal";
 import { PullToRefresh } from "@/components/mobil/pull-to-refresh";
 
 export default async function AttekintesLayout({ children }: { children: React.ReactNode }) {
@@ -24,8 +22,6 @@ export default async function AttekintesLayout({ children }: { children: React.R
     );
   }
 
-  const haviTipusok = await getHaviFelvasarlasOsszefoglalo();
-
   return (
     <div
       style={theme}
@@ -40,8 +36,6 @@ export default async function AttekintesLayout({ children }: { children: React.R
           </button>
         </form>
       </div>
-
-      <HaviFelvasarlasButton tipusok={haviTipusok} />
 
       <PullToRefresh className="flex-1 overflow-y-auto" indicatorClassName="text-[var(--at-muted)]">
         <div className="px-4 pb-20">{children}</div>

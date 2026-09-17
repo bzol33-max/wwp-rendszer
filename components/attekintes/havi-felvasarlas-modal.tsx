@@ -14,7 +14,7 @@ export function HaviFelvasarlasButton({ tipusok }: { tipusok: FelvasarlasTipusSo
       <button
         type="button"
         onClick={() => setNyitva(true)}
-        className="mx-4 mb-2 flex min-h-9 items-center gap-1.5 self-start rounded-md border border-[var(--at-border)] bg-[var(--at-tile)] px-2.5 py-1.5 text-xs font-medium text-[var(--at-text)]"
+        className="flex min-h-9 shrink-0 items-center gap-1.5 rounded-md border border-[var(--at-border)] bg-[var(--at-tile)] px-2.5 py-1.5 text-xs font-medium text-[var(--at-text)]"
       >
         <CalendarDays className="h-3.5 w-3.5" />
         Havi felvásárlás

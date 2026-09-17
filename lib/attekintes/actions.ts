@@ -57,7 +57,7 @@ export async function getFelvasarlasOsszefoglalo(): Promise<FelvasarlasOsszefogl
   };
 }
 
-/** A fejlécben (a kijelentkezés alatt, minden fülön) megjelenő havi összesítő: a folyó hónap felvásárlása típusonként. */
+/** A Nyíregyháza fülön, a "Mai felvásárlás típusonként" sor szélén nyíló havi összesítő: a folyó hónap felvásárlása típusonként. */
 export async function getHaviFelvasarlasOsszefoglalo(): Promise<FelvasarlasTipusSor[]> {
   const rows = await query<{ type: string; qty: string }>(
     `select t.name as type, sum(p.qty) as qty

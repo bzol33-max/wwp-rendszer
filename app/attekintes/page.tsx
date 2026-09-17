@@ -1,4 +1,10 @@
-import { getFelvasarlasOsszefoglalo, getHaviKasszaOsszesito, getMaiKiadasok } from "@/lib/attekintes/actions";
+import {
+  getFelvasarlasOsszefoglalo,
+  getHaviFelvasarlasOsszefoglalo,
+  getHaviKasszaOsszesito,
+  getMaiKiadasok,
+} from "@/lib/attekintes/actions";
+import { HaviFelvasarlasButton } from "@/components/attekintes/havi-felvasarlas-modal";
 import { KasszaEgyenlegCard } from "@/components/attekintes/kassza-egyenleg-card";
 
 function formatFt(n: number) {
@@ -24,10 +30,11 @@ function formatMaiDatum() {
 }
 
 export default async function NyiregyhazaPage() {
-  const [osszefoglalo, kiadasok, havi] = await Promise.all([
+  const [osszefoglalo, kiadasok, havi, haviTipusok] = await Promise.all([
     getFelvasarlasOsszefoglalo(),
     getMaiKiadasok(),
     getHaviKasszaOsszesito(),
+    getHaviFelvasarlasOsszefoglalo(),
   ]);
   const kiadasOsszeg = kiadasok.reduce((sum, k) => sum + k.amount, 0);
 
@@ -48,7 +55,10 @@ export default async function NyiregyhazaPage() {
       </div>
 
       <div>
-        <h2 className="mb-2 text-sm font-semibold">Mai felvásárlás típusonként</h2>
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold">Mai felvásárlás típusonként</h2>
+          <HaviFelvasarlasButton tipusok={haviTipusok} />
+        </div>
         {osszefoglalo.tipusok.length === 0 ? (
           <p className="text-sm text-[var(--at-muted)]">Ma még nem érkezett felvásárlás.</p>
         ) : (
