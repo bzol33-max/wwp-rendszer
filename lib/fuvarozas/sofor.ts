@@ -41,10 +41,15 @@ function budapestMaIso(): string {
  */
 function findJarmuByEmployeeName(employeeName: string): SajatJarmu | null {
   const norm = employeeName.trim().toLowerCase();
-  // Szó szerinti egyezés, nem puszta tartalmazás: a "Gergő" ne illeszkedjen
-  // egy "Gergőkúti" vezetéknévre. Ha több jármű is illeszkedne (két azonos
-  // keresztnevű sofőr), inkább egyiket sem adjuk vissza — a rossz kocsi
-  // idővonala rosszabb, mint az üres képernyő.
+  // 1. Explicit összerendelés a teljes név alapján (vehicles.ts
+  //    alkalmazottNevek) — ez a mérvadó, mert a becenév ("Micó") és a
+  //    törzsadat hivatalos neve ("Takács Miklós") eltérhet.
+  const explicit = SAJAT_JARMUVEK.find((j) => (j.alkalmazottNevek ?? []).some((n) => n.trim().toLowerCase() === norm));
+  if (explicit) return explicit;
+  // 2. Tartalék: a keresztnév szó szerinti egyezése, nem puszta tartalmazás
+  //    (a "Gergő" ne illeszkedjen egy "Gergőkúti" vezetéknévre). Ha több
+  //    jármű is illeszkedne, inkább egyiket sem adjuk vissza — a rossz kocsi
+  //    idővonala rosszabb, mint az üres képernyő.
   const szavak = new Set(norm.split(/[^\p{L}\p{N}]+/u).filter(Boolean));
   const talalatok = SAJAT_JARMUVEK.filter((j) => szavak.has(j.sofor.toLowerCase()));
   return talalatok.length === 1 ? talalatok[0] : null;
