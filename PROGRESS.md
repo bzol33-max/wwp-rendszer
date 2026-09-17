@@ -174,3 +174,20 @@
 - `FUVAR_MA_SQL`: a Megbízások fülek napváltása budapesti nap szerint
   (eddig UTC current_date → nyáron 02:00-kor fordult). A migrate.mjs
   ellenőrző másolatai és a check-szkript is erre álltak át.
+
+## 2026-09-17 (11. kör) — Fogyasztás a GPS lapon (Ecofleet útvonal-jelentés)
+
+- Az Ecofleet trip-lista nem tartalmaz üzemanyag-adatot; a
+  `Reports/getReport` (id `trips`, csv) igen — ugyanaz, mint a napi
+  e-mailes Excel. A paramétereket (`begTimestamp`, `endTimestamp`,
+  `objectIds[]`) lapos query-ként kell átadni, JSON-ban a szerver
+  figyelmen kívül hagyja őket. `ecofleet.ts getUtvonalJelentes`.
+- `lib/fuvarozas/fogyasztas.ts getFogyasztas(nap)`: járművenként a
+  kiválasztott nap és az azzal záruló 7/14 nap km-e, litere, átlaga és
+  gázolajárral (NAV ár − kedvezmény) számolt költsége, 10 perces cache.
+  A GPS csempén „Fogyasztás" doboz.
+- Gergő nyomkövetője (AOPU-427) nem mér üzemanyagot (minden út 0 l) — a
+  felület ezt „nincs mérés"-ként jelzi, nem 0 literként. Budaházi Zoltán
+  javíttatja az eszközt.
+- A migrate.mjs induláskori Ecofleet-diagnosztikája (fogyasztás, jelentés-
+  API próba, apidoc) kikerült — a funkció a modulban él.

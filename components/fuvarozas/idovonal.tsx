@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Check, ChevronLeft, ChevronRight, Truck } from "lucide-react";
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Fuel, Truck } from "lucide-react";
 import {
   getIdovonalak,
   getKovetkezoNapokElonezet,
@@ -15,6 +15,7 @@ import {
   type MegalloBejegyzes,
 } from "@/lib/fuvarozas/actions";
 import { setMegalloKesz } from "@/lib/fuvarozas/megbizasok";
+import { getFogyasztas, type FogyasztasEredmeny, type FogyasztasOsszeg, type JarmuFogyasztas } from "@/lib/fuvarozas/fogyasztas";
 import { SAJAT_JARMUVEK, JARMU_SZIN_DOT_CLASS, type JarmuSzin } from "@/lib/fuvarozas/vehicles";
 import type { FuvarTipus } from "@/lib/fuvarozas/fuvar-constants";
 import { budapestNapISO } from "@/lib/fuvarozas/idozona";
@@ -148,6 +149,64 @@ function JarmuInfoDoboz({
         </>
       ) : (
         <span className="text-muted-foreground">Nincs élő pozíció.</span>
+      )}
+    </div>
+  );
+}
+
+function formatSzam(n: number, tizedes = 0): string {
+  return n.toLocaleString("hu-HU", { minimumFractionDigits: tizedes, maximumFractionDigits: tizedes });
+}
+
+function FogyasztasSor({ cimke, o, merve, gazolajAr }: { cimke: string; o: FogyasztasOsszeg; merve: boolean; gazolajAr: number }) {
+  const atlag = merve && o.km > 0 ? (o.liter / o.km) * 100 : null;
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-2 text-[11px]">
+      <span className="w-12 shrink-0 text-muted-foreground">{cimke}</span>
+      <span>{formatSzam(o.km)} km</span>
+      {merve && (
+        <>
+          <span className="text-muted-foreground">·</span>
+          <span>{formatSzam(o.liter, 1)} l</span>
+          <span className="text-muted-foreground">·</span>
+          <span title="Átlagfogyasztás az időszakra">{atlag === null ? "–" : `${formatSzam(atlag, 1)} l/100 km`}</span>
+          <span className="text-muted-foreground">·</span>
+          <span title={`${formatSzam(gazolajAr)} Ft/l gázolajárral`}>{formatSzam(o.liter * gazolajAr)} Ft</span>
+        </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Üzemanyag-fogyasztás a kiválasztott napra és az azzal záruló 7/14 napra
+ * (Ecofleet Útvonal jelentés). Ha a nyomkövető nem ad üzemanyag-adatot,
+ * csak a km látszik, és jelezzük, hogy nincs mérés.
+ */
+function FogyasztasDoboz({ f, napISO, maiNap, eredmeny }: { f: JarmuFogyasztas | undefined; napISO: string; maiNap: boolean; eredmeny: FogyasztasEredmeny | null }) {
+  if (!eredmeny) return null;
+  return (
+    <div className="flex flex-col gap-1 rounded-lg border p-2">
+      <span className="flex items-center gap-1 text-[10px] font-medium text-muted-foreground" title={`Ecofleet útvonal-jelentés · ${eredmeny.gazolajCimke}`}>
+        <Fuel className="h-3 w-3" />
+        Fogyasztás
+      </span>
+      {eredmeny.hiba ? (
+        <span className="text-[11px] text-destructive">{eredmeny.hiba}</span>
+      ) : !f ? (
+        <span className="text-[11px] text-muted-foreground">Nincs GPS-kapcsolat.</span>
+      ) : (
+        <>
+          <FogyasztasSor cimke={maiNap ? "Ma" : formatNapRovid(napISO)} o={f.nap} merve={f.merve} gazolajAr={eredmeny.gazolajAr} />
+          <FogyasztasSor cimke="7 nap" o={f.hetNap} merve={f.merve} gazolajAr={eredmeny.gazolajAr} />
+          <FogyasztasSor cimke="14 nap" o={f.tizennegyNap} merve={f.merve} gazolajAr={eredmeny.gazolajAr} />
+          {!f.merve && (
+            <span className="flex items-center gap-1 text-[11px] text-amber-700 dark:text-amber-400" title="A jelentésben minden útnál 0 liter áll — a nyomkövető nem olvassa a jármű üzemanyag-adatát.">
+              <AlertTriangle className="h-3 w-3" />
+              Nincs üzemanyag-mérés a nyomkövetőn.
+            </span>
+          )}
+        </>
       )}
     </div>
   );
@@ -337,14 +396,18 @@ function JarmuCsempe({
   eredmeny,
   maiNap,
   most,
+  napISO,
   kovetkezoNapok,
+  fogyasztas,
   onKeszJelolve,
 }: {
   jarmu: (typeof SAJAT_JARMUVEK)[number];
   eredmeny: JarmuIdovonalEredmeny | undefined;
   maiNap: boolean;
   most: number;
+  napISO: string;
   kovetkezoNapok: KovetkezoNap[];
+  fogyasztas: FogyasztasEredmeny | null;
   onKeszJelolve: () => void;
 }) {
   const fuvarok = eredmeny?.fuvarok ?? [];
@@ -393,6 +456,9 @@ function JarmuCsempe({
         </div>
       )}
 
+      {jarmu.ecofleetObjectId !== null && (
+        <FogyasztasDoboz f={fogyasztas?.jarmuvek.find((x) => x.sofor === jarmu.sofor)} napISO={napISO} maiNap={maiNap} eredmeny={fogyasztas} />
+      )}
       {maiNap && <KovetkezoNapokDoboz napok={kovetkezoNapok} />}
     </div>
   );
@@ -451,11 +517,14 @@ export function GpsStatus() {
   const [adatok, setAdatok] = useState<JarmuIdovonalEredmeny[]>([]);
   const [elakadtak, setElakadtak] = useState<ElakadtFuvar[]>([]);
   const [kovetkezoNapok, setKovetkezoNapok] = useState<Record<string, KovetkezoNap[]>>({});
+  const [fogyasztas, setFogyasztas] = useState<FogyasztasEredmeny | null>(null);
   const [loading, setLoading] = useState(true);
   const [betoltve, setBetoltve] = useState(0);
   const maiNap = napISO === maiNapISO;
 
   const load = useCallback(async (nap: string) => {
+    // A fogyasztás külön, nem blokkolja az idővonalat (saját hibaüzenete van).
+    getFogyasztas(nap).then(setFogyasztas);
     const res = await getIdovonalak(nap);
     setAdatok(res.jarmuvek);
     setElakadtak(res.elakadtak);
@@ -507,7 +576,9 @@ export function GpsStatus() {
                 eredmeny={adatok.find((a) => a.sofor === jarmu.sofor)}
                 maiNap={maiNap}
                 most={betoltve}
+                napISO={napISO}
                 kovetkezoNapok={kovetkezoNapok[jarmu.sofor] ?? []}
+                fogyasztas={fogyasztas}
                 onKeszJelolve={() => load(napISO)}
               />
               ))}
