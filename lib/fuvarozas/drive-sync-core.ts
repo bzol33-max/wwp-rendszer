@@ -125,6 +125,27 @@ async function listazDriveFajlok(drive: ReturnType<typeof driveClient>): Promise
     .filter((f) => !nyilvanvaloanNemMegbizas(f.name));
 }
 
+/**
+ * Egy Drive-fájl nyers tartalma a service accounttal — a sofőr mobil nézete
+ * ezen keresztül nyitja meg a megbízást és a rakománylistát.
+ *
+ * Miért kell proxy: a fuvar_dokumentumok.dokumentum_url a Drive saját
+ * megtekintő-linkje, amit csak olyan Google-fiók nyit meg, amivel a mappa
+ * meg van osztva. A sofőr telefonján ilyen fiók nincs, viszont a
+ * szinkronizáló service account amúgy is olvassa ezt a mappát — tehát a
+ * fájlt a mi szerverünk adja ki, a mi jogosultság-ellenőrzésünk mögött.
+ */
+export async function letoltDriveFajl(fileId: string): Promise<{ buffer: Buffer; mimeType: string; nev: string }> {
+  const drive = driveClient();
+  const meta = await drive.files.get({ fileId, fields: "id, name, mimeType" });
+  const res = await drive.files.get({ fileId, alt: "media" }, { responseType: "arraybuffer" });
+  return {
+    buffer: Buffer.from(res.data as ArrayBuffer),
+    mimeType: meta.data.mimeType ?? "application/octet-stream",
+    nev: meta.data.name ?? fileId,
+  };
+}
+
 /** A fájl szöveges tartalma — PDF-hez pdf-parse, DOCX-hez mammoth, Google Docs-hoz natív export. */
 async function fajlSzovege(drive: ReturnType<typeof driveClient>, file: DriveFile): Promise<string> {
   if (file.mimeType === "application/vnd.google-apps.document") {
