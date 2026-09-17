@@ -287,3 +287,12 @@
   (`/api/fuvarozas/dokumentum/…`, az `attekintes` jog is elég hozzá).
 - „Kocsi nélkül" doboz a kártyák fölött, csak ha van ilyen megbízás. A
   Jani-kártya marad (hamarosan három kocsi lesz).
+
+## 2026-09-17 (18. kör) — Betűtípus: az egész app Times New Romanra esett vissza
+
+- `app/globals.css`-ben a `--font-sans: var(--font-sans);` önmagára
+  hivatkozott, ezért soha nem oldódott fel, és minden oldal (asztali és mobil)
+  a böngésző alapértelmezett serif betűjével jelent meg. Ez a CLAUDE.md-ben
+  is nyitott hibaként szerepelt. Javítás: `var(--font-geist-sans)`, amit az
+  `app/layout.tsx` Geist-betöltése ad. Helyi Playwright-képernyőképen a
+  Fuvar fül Geist Sans-szal jelenik meg. Minden modult érint, ezért külön PR.
