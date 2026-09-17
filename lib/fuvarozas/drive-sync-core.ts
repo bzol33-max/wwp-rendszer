@@ -526,6 +526,11 @@ async function ujFajlokFeldolgozasa(
         fizetesiHataridoNap: llm.fizetesiHataridoNap ?? partner?.fizetesiHataridoNap ?? null,
       };
 
+      // A pénznemet MÁR az ellenőrzés előtt normalizáljuk: az LLM "HUF"-ot is
+      // adhat, és a fuvardíj-sáv táblában (ellenorzes.ts) csak "Ft"/"EUR" van —
+      // a nyers érték "Cannot read properties of undefined (reading 'min')"
+      // hibával buktatta el a fájlt minden szinkronban (02215-2026.pdf, 2026-09-17).
+      kivont.fuvardijPenznem = normalizaltFuvardijPenznem(kivont.fuvardijPenznem) ?? null;
       const { verdikt, kifogasok } = ellenorizKivontFuvart(kivont, !!partner);
       if (verdikt === "elutasitva") {
         // Inkább ne legyen sor, mint rossz sor: egy hiányos irat csendben

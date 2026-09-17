@@ -118,8 +118,13 @@ export function ellenorizKivontFuvart(
     kifogasok.push(`Értelmezhetetlen fuvardíj: ${kivont.fuvardij}.`);
   } else {
     const penznem = kivont.fuvardijPenznem ?? "Ft";
-    const sav = FUVARDIJ_SAV[penznem];
-    if (kivont.fuvardij < sav.min || kivont.fuvardij > sav.max) {
+    // Védekezés: a típus szerint csak "Ft"/"EUR" jöhet, de a kivonatoló
+    // nyers szöveget adhat ("HUF") — ilyenkor a sáv-ellenőrzés kimarad, és
+    // kifogás lesz belőle, nem kivétel.
+    const sav = (FUVARDIJ_SAV as Record<string, { min: number; max: number } | undefined>)[penznem];
+    if (!sav) {
+      kifogasok.push(`Ismeretlen pénznem a fuvardíjnál: "${penznem}".`);
+    } else if (kivont.fuvardij < sav.min || kivont.fuvardij > sav.max) {
       kifogasok.push(
         `A fuvardíj (${kivont.fuvardij} ${penznem}) kívül esik a szokásos ${sav.min}–${sav.max} ${penznem} sávon — lehet, hogy egy kötbér- vagy állásdíj-összeget olvasott ki.`
       );
