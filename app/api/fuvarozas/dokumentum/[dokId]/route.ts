@@ -14,13 +14,14 @@ import { letoltDriveFajl } from "@/lib/fuvarozas/drive-sync-core";
  * ki, a saját jogosultság-ellenőrzésünk mögött.
  *
  * A "fuvarozas_sajat" (sofőri mobil) jog is elég hozzá — a sofőrnek látnia
- * kell a saját fuvarja papírjait a kapuban.
+ * kell a saját fuvarja papírjait a kapuban. Az "attekintes" (vezetői mobil
+ * nézet) jog is: a Fuvar fülön a sofőr fuvarlevél-fotója innen nyílik meg.
  */
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ dokId: string }> }
 ) {
-  const tiltas = await apiAnyViewGuard(["fuvarozas", "fuvarozas_sajat"]);
+  const tiltas = await apiAnyViewGuard(["fuvarozas", "fuvarozas_sajat", "attekintes"]);
   if (tiltas) return tiltas;
 
   const { dokId } = await params;

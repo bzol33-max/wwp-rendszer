@@ -267,3 +267,23 @@
   is visszaadja; a `ratesziKeziJeloleseket` a várakozást a kész állapottól
   függetlenül ráteszi a megállóra.
 - Ezzel a sofőr mobil terv mind a négy fázisa élesben van.
+
+## 2026-09-17 (17. kör) — Áttekintés → Fuvar fül: a sofőr-nézet állapotai a vezetői kártyán
+
+- Átnézés Budaházi Zoltán mobil nézetén (helyi Playwright-képernyőkép,
+  390 px): a kártya a több napos (tegnap felrakott, ma lerakó) fuvart nem
+  mutatta jelenleginek; a részletlista a kocsi minden régi, lezárt fuvarját
+  hozta (a `statusz <> 'lezarva'` szűrőt a felület sehol nem állítja);
+  azonos napon nem volt időpont szerinti sorrend; a kocsi nélküli megbízás
+  sehol nem látszott.
+- Új `getFuvarFulAdatok`: a MAI kép a GPS lap gyorsítótárazott idővonalából
+  (`getIdovonalak`) jön, fuvaronkénti blokkban, állomásonként kész (GPS /
+  kézi, a jelölő nevével és a tényleges idővel), épp itt áll, becsült érkezés,
+  sofőr-jelölt várakozás. A mai nap utáni megbízások és a kocsi nélküliek a
+  Megbízások közös „folyamatban" szabályával (`getFuvarHelye`) szűrve,
+  dátum + időpont szerint rendezve. A lejárt becslés nem mutat múltbeli órát.
+- A kártyán látszik a sofőr gondjelzése (nyitott `feladatok` sor) és a
+  fuvarlevél-fotó; a részletnézetből a fotó megnyitható
+  (`/api/fuvarozas/dokumentum/…`, az `attekintes` jog is elég hozzá).
+- „Kocsi nélkül" doboz a kártyák fölött, csak ha van ilyen megbízás. A
+  Jani-kártya marad (hamarosan három kocsi lesz).
