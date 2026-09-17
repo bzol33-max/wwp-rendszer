@@ -370,9 +370,11 @@ function Osszegek({ lista, szin }: { lista: Osszeg[]; szin?: string }) {
 function FejlecSzamok({
   fejlec,
   statisztika,
+  onMegnyit,
 }: {
   fejlec: SzamlaFejlecSor[];
   statisztika: SzamlaKiemeltStatisztika;
+  onMegnyit: (cim: string, szuro: SzamlaListaSzuro) => void;
 }) {
   const nyitott = osszegLista(fejlec.map((f) => ({ penznem: f.penznem, osszeg: f.nyitott_osszeg })));
   const lejart = osszegLista(fejlec.map((f) => ({ penznem: f.penznem, osszeg: f.lejart_osszeg })));
@@ -382,7 +384,11 @@ function FejlecSzamok({
 
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-      <Card size="sm">
+      <Card
+        size="sm"
+        className="cursor-pointer transition-colors hover:bg-muted/50"
+        onClick={() => onMegnyit(`Nyitott számlák (${darab("nyitott_darab")})`, { csakNyitott: true })}
+      >
         <CardContent className="flex min-w-0 flex-col gap-0.5 py-1">
           <div className="text-xs text-muted-foreground">Nyitott ({darab("nyitott_darab")} számla)</div>
           <Osszegek lista={nyitott} />
@@ -394,13 +400,23 @@ function FejlecSzamok({
           )}
         </CardContent>
       </Card>
-      <Card size="sm" className="border-destructive/40 bg-destructive/5">
+      <Card
+        size="sm"
+        className="cursor-pointer border-destructive/40 bg-destructive/5 transition-colors hover:bg-destructive/10"
+        onClick={() => onMegnyit(`Lejárt számlák (${darab("lejart_darab")})`, { csakNyitott: true, hatarido: "lejart" })}
+      >
         <CardContent className="flex min-w-0 flex-col gap-0.5 py-1">
           <div className="text-xs text-destructive">Lejárt ({darab("lejart_darab")} számla)</div>
           <Osszegek lista={lejart} szin="text-destructive" />
         </CardContent>
       </Card>
-      <Card size="sm" className="border-warning/40 bg-warning/5">
+      <Card
+        size="sm"
+        className="cursor-pointer border-warning/40 bg-warning/5 transition-colors hover:bg-warning/10"
+        onClick={() =>
+          onMegnyit(`7 napon belül esedékes (${darab("het_darab")})`, { csakNyitott: true, hatarido: "het" })
+        }
+      >
         <CardContent className="flex min-w-0 flex-col gap-0.5 py-1">
           <div className="text-xs text-muted-foreground">7 napon belül esedékes ({darab("het_darab")} számla)</div>
           <Osszegek lista={het} />
@@ -686,7 +702,7 @@ export function SzamlakView() {
         }
       />
 
-      <FejlecSzamok fejlec={fejlec} statisztika={statisztika} />
+      <FejlecSzamok fejlec={fejlec} statisztika={statisztika} onMegnyit={(cim, szuro) => megnyitLista(cim, szuro)} />
 
       <KategoriaCsempek
         osszesito={osszesito}

@@ -44,6 +44,10 @@ export type SzamlaListaSzuro = {
   idorendben?: boolean;
   /** true = csak a kifizetett számlák (a "Kifizetve" összecsukott szekcióhoz). */
   csakFizetve?: boolean;
+  /** Csak a nyitott (nem fizetett) számlák — a felső Nyitott/Lejárt/7 napos csempékhez. */
+  csakNyitott?: boolean;
+  /** "lejart" = a határidő elmúlt; "het" = ma és ma+7 nap között esedékes. */
+  hatarido?: "lejart" | "het";
 };
 
 /**
@@ -76,6 +80,14 @@ export async function getSzamlaLista(szuro: SzamlaListaSzuro): Promise<SzamlaRow
   }
   if (szuro.csakFizetve) {
     feltetelek.push("fizetve");
+  }
+  if (szuro.csakNyitott) {
+    feltetelek.push("not fizetve");
+  }
+  if (szuro.hatarido === "lejart") {
+    feltetelek.push(`fizetesi_hatarido < ${MA_SQL}`);
+  } else if (szuro.hatarido === "het") {
+    feltetelek.push(`fizetesi_hatarido between ${MA_SQL} and ${MA_SQL} + 7`);
   }
 
   const rendezes = szuro.idorendben
