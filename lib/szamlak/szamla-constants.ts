@@ -61,11 +61,12 @@ export type SzamlaKiemeltStatisztika = {
   lejartOsszegHuf: number;
   lejartDarabHuf: number;
   evesYtdHuf: number;
+  /** A lezárt (a folyó hónap nélküli) hónapok átlaga. */
   haviAtlagHuf: number;
   /** null, ha még nincs egyetlen teljes hónap sem az évben. */
   csucsHonap: number | null;
   csucsHonapOsszegHuf: number;
-  /** Előző hónaphoz képesti változás %-ban; null, ha nincs elég adat (pl. januárban). */
+  /** Az utolsó lezárt hónap változása az azt megelőzőhöz képest, %-ban; null, ha nincs két lezárt hónap. */
   novekedesSzazalek: number | null;
   legnagyobbNyitottVevo: string | null;
   legnagyobbNyitottVevoOsszegHuf: number;

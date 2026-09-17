@@ -110,6 +110,7 @@ export type PollEredmeny = {
   sztornoDarab?: number;
   szamlaSzamParositva?: number;
   rendelesszamJavitva?: number;
+  kifizetesJelolve?: number;
 };
 
 /**
@@ -152,13 +153,135 @@ async function javitRendelesszamHianyokat(agentKulcs: string): Promise<number> {
   return javitva;
 }
 
-/** Egy teljes lekérdezési kör: 1) a pending sorszámok újrapróbálása, 2) a fő kereső előrehaladása. */
-export async function futtatSzamlaSzinkron(): Promise<PollEredmeny> {
+/**
+ * A fő kereső állásának helyreállítása előtagonként: az állás sosem lehet
+ * nagyobb a ténylegesen megtalált legnagyobb sorszámnál. Egy korábbi hiba
+ * miatt a kereső a "nem található" sorszámokon is továbblépett, így minden
+ * körben 5 sorszámmal a valós front elé szaladt, és a pending lista körönként
+ * nőtt (mind újra lekérdezve minden körben). A front fölötti pending sorokat
+ * töröljük — azokat a fő kereső újként úgyis megpróbálja, amikor odaér.
+ */
+async function helyreallitFrontot(elotag: string, ev: number): Promise<number> {
+  const allapotSor = (
+    await query<{ ev: number; utolso_sorszam: number }>(
+      `select ev, utolso_sorszam from szamlak_poll_allapot where elotag = $1`,
+      [elotag]
+    )
+  )[0];
+  const tarolt = allapotSor?.ev === ev ? allapotSor.utolso_sorszam : 0;
+
+  const minta = `^${elotag}-${ev}-[0-9]+$`;
+  const maxTalalt = (
+    await query<{ n: number }>(
+      `select coalesce(max(case when szamlaszam ~ $1 then split_part(szamlaszam, '-', 3)::int end), 0)::int as n
+       from szamla`,
+      [minta]
+    )
+  )[0]?.n ?? 0;
+
+  const front = Math.min(tarolt, maxTalalt);
+  await query(
+    `delete from szamlak_poll_pending
+     where case when szamlaszam ~ $1 then split_part(szamlaszam, '-', 3)::int > $2 else false end`,
+    [minta, front]
+  );
+  return front;
+}
+
+/** Egy lekérdezési körben legfeljebb ennyi nyitott számlát kérdezünk le újra (lásd frissitNyitottSzamlakat). */
+const MAX_NYITOTT_FRISSITES_KORONKENT = 10;
+
+/**
+ * A már behúzott, még nyitott számlák lassú, körbeforgó újralekérdezése (a
+ * legrégebben frissítettek elöl) — így a Számlázz.hu-ban utólag rögzített
+ * kifizetés (és pl. módosított határidő) is bekerül a raw_xml-be.
+ */
+async function frissitNyitottSzamlakat(agentKulcs: string): Promise<void> {
+  const sorok = await query<{ szamlaszam: string }>(
+    `select szamlaszam from szamla
+     where not fizetve and not sztorno and not sztornozva
+     order by lekerdezve_at asc
+     limit $1`,
+    [MAX_NYITOTT_FRISSITES_KORONKENT]
+  );
+  for (const sor of sorok) {
+    const talalat = await lekerdezSzamla(sor.szamlaszam, agentKulcs);
+    if (talalat) await mentSzamla(talalat);
+  }
+}
+
+/**
+ * A Számlázz.hu-ban rögzített kifizetések (<kifizetesek><kifizetes> —
+ * készpénzes számláknál kiállításkor automatikusan kitöltött) alapján a
+ * TELJESEN kifizetett, még nyitott számlák "Fizetve"-re állítása, a
+ * legutolsó kifizetés dátumával. Csak nyitottat állít fizetettre, visszafelé
+ * soha nem ír (a kézi jelölés mindig megmarad).
+ */
+async function jelolRogzitettKifizeteseket(): Promise<number> {
+  const sorok = await query<{ id: string; brutto: string; raw_xml: string }>(
+    `select id::text, (brutto + helyesbites_osszeg)::text as brutto, raw_xml
+     from szamla
+     where not fizetve and not sztorno and not sztornozva
+       and raw_xml like '%<kifizetes>%'`
+  );
+  let jelolve = 0;
+  for (const sor of sorok) {
+    let osszeg = 0;
+    let utolsoDatum: string | null = null;
+    for (const blokk of sor.raw_xml.matchAll(/<kifizetes>([\s\S]*?)<\/kifizetes>/g)) {
+      const o = Number(blokk[1].match(/<osszeg>([^<]*)<\/osszeg>/)?.[1]?.replace(/\s/g, "").replace(",", "."));
+      if (Number.isFinite(o)) osszeg += o;
+      const d = blokk[1].match(/<datum>(\d{4}-\d{2}-\d{2})<\/datum>/)?.[1];
+      if (d && (!utolsoDatum || d > utolsoDatum)) utolsoDatum = d;
+    }
+    if (osszeg > 0 && osszeg >= Number(sor.brutto) - 0.5) {
+      await query(
+        `update szamla
+         set fizetve = true,
+             fizetve_datum = coalesce(($2::date)::timestamp at time zone 'Europe/Budapest', now())
+         where id = $1 and not fizetve`,
+        [sor.id, utolsoDatum]
+      );
+      jelolve++;
+    }
+  }
+  return jelolve;
+}
+
+const FUTAS_KULCS = Symbol.for("wwp.szamlak.szinkronFolyamatban");
+type FutasTarolo = { [FUTAS_KULCS]?: Promise<PollEredmeny> | null };
+
+/**
+ * Egy teljes lekérdezési kör. Egyszerre csak egy futhat: ha az ütemező
+ * (15 percenként) vagy a "Frissítés most" gomb egy még futó kör közben hívja,
+ * ugyanarra a futásra vár, nem indít egy párhuzamosat. (globalThis-en tárolva,
+ * mert az instrumentation és a server action külön modul-példányt kaphat.)
+ */
+export function futtatSzamlaSzinkron(): Promise<PollEredmeny> {
+  const tarolo = globalThis as FutasTarolo;
+  if (!tarolo[FUTAS_KULCS]) {
+    tarolo[FUTAS_KULCS] = futtatSzamlaSzinkronKor().finally(() => {
+      tarolo[FUTAS_KULCS] = null;
+    });
+  }
+  return tarolo[FUTAS_KULCS];
+}
+
+/** 0) a fő kereső helyreállítása, 1) a pending sorszámok újrapróbálása, 2) a fő kereső előrehaladása, ... */
+async function futtatSzamlaSzinkronKor(): Promise<PollEredmeny> {
   const agentKulcs = process.env.SZAMLAZZHU_API_KEY;
   const eredmeny: PollEredmeny = { ujMegtalalt: 0, pendingMegoldva: 0, hibak: [] };
   if (!agentKulcs) {
     eredmeny.hibak.push("SZAMLAZZHU_API_KEY nincs beállítva — a szinkron kihagyva.");
     return eredmeny;
+  }
+
+  const ev = budapestEv();
+
+  // 0) A fő kereső állása sosem lehet a ténylegesen megtalált front előtt.
+  const frontok = new Map<string, number>();
+  for (const elotag of ELOTAGOK) {
+    frontok.set(elotag, await helyreallitFrontot(elotag, ev));
   }
 
   // 1) Pending sorszámok — ezek a fő kereső állásától FÜGGETLENÜL, minden
@@ -189,35 +312,31 @@ export async function futtatSzamlaSzinkron(): Promise<PollEredmeny> {
   }
 
   // 2) A fő kereső előrehaladása — új, még sosem próbált sorszámok,
-  // ELŐTAGONKÉNT KÜLÖN-KÜLÖN (egymástól független sorszámozás).
-  const ev = budapestEv();
-
+  // ELŐTAGONKÉNT KÜLÖN-KÜLÖN (egymástól független sorszámozás). Az állás
+  // CSAK egy ténylegesen megtalált számláig lép előre: a közbülső "nem
+  // található" sorszámok (lyukak) a pending listába kerülnek, a legutolsó
+  // találat UTÁNI hiányok viszont nem — azokat a következő kör újra, újként
+  // próbálja, így a kereső nem szalad a valós front elé.
   for (const elotag of ELOTAGOK) {
-    const allapotSor = (
-      await query<{ ev: number; utolso_sorszam: number }>(
-        `select ev, utolso_sorszam from szamlak_poll_allapot where elotag = $1`,
-        [elotag]
-      )
-    )[0];
-
-    let utolsoSorszam = allapotSor?.ev === ev ? allapotSor.utolso_sorszam : 0;
-    let egymasutaniHiany = 0;
+    let utolsoSorszam = frontok.get(elotag) ?? 0;
+    let probaSorszam = utolsoSorszam;
+    let hianyzok: string[] = [];
 
     for (let i = 0; i < MAX_UJ_PROBALKOZAS_KORONKENT; i++) {
-      const kovetkezo = utolsoSorszam + 1;
+      const kovetkezo = probaSorszam + 1;
+      probaSorszam = kovetkezo;
       const szamlaszam = `${elotag}-${ev}-${kovetkezo}`;
       try {
         const talalat = await lekerdezSzamla(szamlaszam, agentKulcs);
         if (talalat) {
           await mentSzamla(talalat);
+          for (const hiany of hianyzok) await felveszPendingbe(hiany);
+          hianyzok = [];
           utolsoSorszam = kovetkezo;
           eredmeny.ujMegtalalt++;
-          egymasutaniHiany = 0;
         } else {
-          await felveszPendingbe(szamlaszam);
-          utolsoSorszam = kovetkezo;
-          egymasutaniHiany++;
-          if (egymasutaniHiany >= MAX_EGYMASUTANI_HIANY) break;
+          hianyzok.push(szamlaszam);
+          if (hianyzok.length >= MAX_EGYMASUTANI_HIANY) break;
         }
       } catch (err) {
         eredmeny.hibak.push(
@@ -232,6 +351,15 @@ export async function futtatSzamlaSzinkron(): Promise<PollEredmeny> {
        values ($1, $2, $3, now())
        on conflict (elotag) do update set ev = $2, utolso_sorszam = $3, utolso_futas_at = now()`,
       [elotag, ev, utolsoSorszam]
+    );
+  }
+
+  // 2b) Nyitott számlák lassú újralekérdezése (utólag rögzített kifizetés).
+  try {
+    await frissitNyitottSzamlakat(agentKulcs);
+  } catch (err) {
+    eredmeny.hibak.push(
+      `Nyitott számlák frissítése: ${err instanceof Error ? err.message : "ismeretlen hiba"}`
     );
   }
 
@@ -251,6 +379,17 @@ export async function futtatSzamlaSzinkron(): Promise<PollEredmeny> {
   // import) adat is azonnal helyesen legyen jelölve.
   const sztornoEredmeny = await frissitSztornoJelolest();
   eredmeny.sztornoDarab = sztornoEredmeny.sztornoDarab;
+
+  // 4b) A Számlázz.hu-ban rögzített teljes kifizetésű (pl. készpénzes) számlák
+  // automatikus "Fizetve" jelölése — a sztornó-jelölés UTÁN, hogy a
+  // helyesbített összeggel számoljon.
+  try {
+    eredmeny.kifizetesJelolve = await jelolRogzitettKifizeteseket();
+  } catch (err) {
+    eredmeny.hibak.push(
+      `Kifizetés-jelölés: ${err instanceof Error ? err.message : "ismeretlen hiba"}`
+    );
+  }
 
   // 5) A Fuvarozás — Számla/Posta fülön a bér fuvarok "Számla szám" mezőjének
   // automatikus kitöltése a most már meglévő fuvarszámlák alapján (a

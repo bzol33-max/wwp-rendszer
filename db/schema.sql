@@ -398,6 +398,14 @@ alter table szamla add column if not exists sztorno boolean not null default fal
 alter table szamla add column if not exists sztornozva boolean not null default false;
 alter table szamla add column if not exists sztornozo_szamla_id bigint references szamla(id);
 
+-- Részleges helyesbítés (2026-09-17): egy negatív összegű helyesbítő számla,
+-- ami az eredetinek csak egy részét írja jóvá (pl. WLLWR-2026-41 −618 744 Ft
+-- a WLLWR-2026-39 2 165 604 Ft-jára). Az eredeti sor nem esik ki a listákból,
+-- hanem ennyivel (negatív szám) csökken a kintlévő/kifizetett összege — az
+-- actions.ts mindenhol "brutto + helyesbites_osszeg"-gel számol. A
+-- lib/szamlak/sztorno.ts minden szinkron körben újraszámolja.
+alter table szamla add column if not exists helyesbites_osszeg numeric not null default 0;
+
 -- Egy meg nem talált számlaszám nem jelenti azt, hogy soha nem is lesz — a
 -- Számlázz.hu-ban egy sorszám lefoglalása megelőzheti a tényleges kiállítást.
 -- Ezért minden "nem található" választ (hibakód 7) ide teszünk, és minden

@@ -13,7 +13,8 @@ function formatOsszeg(n: number, penznem: string) {
 
 function napjaLejart(hatarido: string | null): number {
   if (!hatarido) return 0;
-  const ma = new Date().toISOString().slice(0, 10);
+  // Budapesti mai nap — a toISOString() UTC-je éjfél és 2 óra között még a tegnapot adná.
+  const ma = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Budapest" }).format(new Date());
   const napMs = 24 * 60 * 60 * 1000;
   return Math.round((new Date(ma).getTime() - new Date(hatarido).getTime()) / napMs);
 }

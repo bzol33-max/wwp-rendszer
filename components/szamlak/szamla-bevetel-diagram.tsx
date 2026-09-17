@@ -165,7 +165,7 @@ export function SzamlaBevetelDiagram({
           <div className="text-base font-bold">{formatOsszeg(statisztika.evesYtdHuf)}</div>
         </div>
         <div className="rounded-md border bg-muted/30 p-2 text-center sm:col-start-2 sm:row-start-2">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Havi átlag</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground" title="A folyó, még félkész hónap nélkül">Havi átlag</div>
           <div className="text-base font-bold">{formatOsszeg(statisztika.haviAtlagHuf)}</div>
         </div>
         <div className="rounded-md border border-warning/30 bg-warning/10 p-2 text-center sm:col-start-3 sm:row-start-2">
@@ -176,7 +176,7 @@ export function SzamlaBevetelDiagram({
           <div className="text-[10px] text-muted-foreground">{formatOsszeg(statisztika.csucsHonapOsszegHuf)}</div>
         </div>
         <div className="rounded-md border bg-muted/30 p-2 text-center sm:col-start-4 sm:row-start-2">
-          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Növekedés (előző hó)</div>
+          <div className="text-[10px] uppercase tracking-wide text-muted-foreground">Növekedés (lezárt hó)</div>
           <div className={`text-base font-bold ${novekedes !== null && novekedes >= 0 ? "text-success" : novekedes !== null ? "text-destructive" : ""}`}>
             {novekedes !== null ? `${novekedes >= 0 ? "+" : ""}${novekedes.toFixed(0)}%` : "—"}
           </div>

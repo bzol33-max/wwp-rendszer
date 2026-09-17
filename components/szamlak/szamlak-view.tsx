@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckIcon, InfoIcon } from "lucide-react";
+import { useCanEdit } from "@/components/auth/edit-permission-context";
 import { PageHeader } from "@/components/layout/page-header";
 import { KontokivonatDialog } from "@/components/szamlak/kontokivonat-dialog";
 import { SzamlaBevetelDiagram } from "@/components/szamlak/szamla-bevetel-diagram";
@@ -56,6 +57,11 @@ import {
 // nélkül a toLocaleString a stringen simán nem csinál semmit (nincs tagolás).
 function formatOsszeg(n: number, penznem: string) {
   return `${Number(n).toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${penznem}`;
+}
+
+/** A mai nap Budapesten, "YYYY-MM-DD" — a toISOString() UTC-je éjfél és 2 óra között még a tegnapot adná. */
+function budapestMa(): string {
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Budapest" }).format(new Date());
 }
 
 /** Az 5 perces visszavonási ablakon belül van-e még a "Fizetve" jelölés. */
@@ -164,7 +170,8 @@ function SzamlaListaDialog({
     onChanged();
   }
 
-  const ma = new Date().toISOString().slice(0, 10);
+  const canEdit = useCanEdit();
+  const ma = budapestMa();
   // A "Hiv. szám" (rendelésszám) gyakorlatilag sosem töltött — ha egy sorban sincs
   // adat, ne foglaljon helyet a fontosabb oszlopoktól (dátum, összeg), amik
   // hosszú cégnevek (pl. "Egyéb" kategória) mellett amúgy is könnyen kiszorulnak
@@ -231,7 +238,7 @@ function SzamlaListaDialog({
                       )}
                     </TableCell>
                     <TableCell>
-                      {row.fizetve ? (
+                      {!canEdit ? null : row.fizetve ? (
                         visszavonhato(row.fizetve_datum) && (
                           <button
                             type="button"
@@ -367,6 +374,7 @@ function LejaratMiniTabla({
   onFizetve: (id: string) => void;
   onVisszavon: (id: string) => void;
 }) {
+  const canEdit = useCanEdit();
   return (
     <div className="flex flex-col gap-2">
       {cim && <div className={`text-sm font-semibold ${lejartStilus ? "text-destructive" : ""}`}>{cim}</div>}
@@ -414,7 +422,7 @@ function LejaratMiniTabla({
                     {row.fizetve ? (
                       <div className="flex items-center gap-1 text-xs text-success">
                         <CheckIcon className="h-3.5 w-3.5" /> Fizetve
-                        {frissFizetve && (
+                        {frissFizetve && canEdit && (
                           <button
                             type="button"
                             className="text-muted-foreground hover:underline"
@@ -424,7 +432,7 @@ function LejaratMiniTabla({
                           </button>
                         )}
                       </div>
-                    ) : (
+                    ) : !canEdit ? null : (
                       <Button
                         variant="secondary"
                         size="sm"
@@ -576,6 +584,7 @@ export function SzamlakView() {
   const [frissitve, setFrissitve] = useState(false);
   const [listaCim, setListaCim] = useState<string | null>(null);
   const [listaSzuro, setListaSzuro] = useState<SzamlaListaSzuro | null>(null);
+  const canEdit = useCanEdit();
 
   const loadOsszesito = useCallback(async () => {
     const [o, a, e, h, s, k] = await Promise.all([
@@ -638,10 +647,15 @@ export function SzamlakView() {
         actions={
           <>
             <SzinkronInfoGomb szoveg={infoSzoveg} />
-            <KontokivonatDialog onChanged={loadOsszesito} />
-            <Button variant="outline" size="sm" disabled={frissitve} onClick={handleFrissites}>
-              {frissitve ? "Frissítés…" : "Frissítés most"}
-            </Button>
+            {canEdit && (
+              <>
+                {/* A refreshKey az összesítőt ÉS a lejárat-táblákat is újratölti. */}
+                <KontokivonatDialog onChanged={() => setRefreshKey((k) => k + 1)} />
+                <Button variant="outline" size="sm" disabled={frissitve} onClick={handleFrissites}>
+                  {frissitve ? "Frissítés…" : "Frissítés most"}
+                </Button>
+              </>
+            )}
           </>
         }
       />

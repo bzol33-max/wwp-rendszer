@@ -15,6 +15,7 @@
 
 import ExcelJS from "exceljs";
 import { query } from "@/lib/db";
+import { requireEditPermission } from "@/lib/auth/require-permission";
 import type {
   KivonatEredmeny,
   KivonatParositas,
@@ -52,31 +53,50 @@ function nevEgyezik(bankNev: string, dbNev: string): boolean {
   return aElso.length >= 3 && aElso === bElso;
 }
 
+/** Egy szövegrész önálló előfordulása: előtte nem betű/szám/kötőjel, utána nem szám — így pl. "WLLWR-2026-18" nem egyezik a "WLLWR-2026-181"-gyel, és a rövidített "2026-50" sem egy másik előtag "WNYH-2026-50" számával. */
+function onalloanSzerepel(szoveg: string, resz: string): boolean {
+  const escaped = resz.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?<![A-Z0-9-])${escaped}(?!\\d)`).test(szoveg);
+}
+
 /** "teljes" = a teljes számlaszám szerepel a közleményben; "reszleges" = csak az "ÉV-sorszám" utótag (pl. "WLLWR-2026-98" -> "2026-98"). */
 function memoTartalmazzaSzamlaszamot(memo: string, szamlaszam: string): "teljes" | "reszleges" | null {
   const memoNorm = memo.toUpperCase();
   const szNorm = szamlaszam.toUpperCase();
-  if (memoNorm.includes(szNorm)) return "teljes";
+  if (onalloanSzerepel(memoNorm, szNorm)) return "teljes";
   const utotag = szNorm.match(/^[A-Z]+-(\d{4}-\d+)$/);
-  if (utotag && memoNorm.includes(utotag[1])) return "reszleges";
+  if (utotag && onalloanSzerepel(memoNorm, utotag[1])) return "reszleges";
   return null;
+}
+
+/** A bank "HUF"-ot, a Számlázz.hu "Ft"-ot ír ugyanarra — összehasonlításhoz egységesítjük. */
+function penznemKod(penznem: string): string {
+  const p = penznem.trim().toUpperCase();
+  return p === "FT" ? "HUF" : p;
+}
+
+/** Összeg egész fillérre/centre — lebegőpontos összeadásnál (pl. EUR) a === különben elcsúszhat. */
+function centben(osszeg: number): number {
+  return Math.round(osszeg * 100);
 }
 
 /** Kis részhalmaz-összeg kereső (max. 3 tételig) — egy befizetés gyakran több nyitott számlát fedez egyszerre. */
 function talaljOsszegKombinaciot(szamlak: NyitottSzamla[], celOsszeg: number): NyitottSzamla[] | null {
   const n = Math.min(szamlak.length, 12);
+  const cel = centben(celOsszeg);
+  const c = szamlak.map((sz) => centben(sz.brutto));
   for (let i = 0; i < n; i++) {
-    if (szamlak[i].brutto === celOsszeg) return [szamlak[i]];
+    if (c[i] === cel) return [szamlak[i]];
   }
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
-      if (szamlak[i].brutto + szamlak[j].brutto === celOsszeg) return [szamlak[i], szamlak[j]];
+      if (c[i] + c[j] === cel) return [szamlak[i], szamlak[j]];
     }
   }
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
       for (let k = j + 1; k < n; k++) {
-        if (szamlak[i].brutto + szamlak[j].brutto + szamlak[k].brutto === celOsszeg) {
+        if (c[i] + c[j] + c[k] === cel) {
           return [szamlak[i], szamlak[j], szamlak[k]];
         }
       }
@@ -142,6 +162,7 @@ function sorbolTranzakcio(row: ExcelJS.Row): KivonatTranzakcio {
  * kiadás/kártya jellegű sorok csak összesítve. Nem ír az adatbázisba.
  */
 export async function dolgozzFelKivonatot(base64: string, fajlNev: string): Promise<KivonatEredmeny> {
+  await requireEditPermission("szamlak");
   const buffer = Buffer.from(base64, "base64");
   const workbook = new ExcelJS.Workbook();
   // A @types/node újabb generikus Buffer<ArrayBufferLike> típusa nem egyezik
@@ -184,7 +205,7 @@ export async function dolgozzFelKivonatot(base64: string, fajlNev: string): Prom
   });
 
   const nyitottSzamlak = await query<NyitottSzamla>(
-    `select id::text, szamlaszam, vevo_nev, brutto::float8 as brutto, penznem
+    `select id::text, szamlaszam, vevo_nev, (brutto + helyesbites_osszeg)::float8 as brutto, penznem
      from szamla
      where not fizetve and not sztorno and not sztornozva`
   );
@@ -192,7 +213,7 @@ export async function dolgozzFelKivonatot(base64: string, fajlNev: string): Prom
   const parositasok: KivonatParositas[] = [];
 
   for (const tranz of tranzakciok) {
-    const nyitottAdottPenznemben = nyitottSzamlak.filter((sz) => sz.penznem === tranz.penznem);
+    const nyitottAdottPenznemben = nyitottSzamlak.filter((sz) => penznemKod(sz.penznem) === penznemKod(tranz.penznem));
 
     if (tranz.memo) {
       const teljesEgyezesek: KivonatSzamlaJelolt[] = [];
@@ -284,6 +305,7 @@ export async function dolgozzFelKivonatot(base64: string, fajlNev: string): Prom
 
 /** A review-képernyőn elfogadott párosítások könyvelése — bulk "fizetve" jelölés. */
 export async function fogadjaElParositasokat(szamlaIdk: string[]): Promise<{ sikeres: number }> {
+  await requireEditPermission("szamlak");
   if (szamlaIdk.length === 0) return { sikeres: 0 };
   const eredmeny = await query<{ id: string }>(
     `update szamla set fizetve = true, fizetve_datum = now()
