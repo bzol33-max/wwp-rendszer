@@ -191,3 +191,26 @@
   javíttatja az eszközt.
 - A migrate.mjs induláskori Ecofleet-diagnosztikája (fogyasztás, jelentés-
   API próba, apidoc) kikerült — a funkció a modulban él.
+
+## 2026-09-17 (12. kör) — Sofőr mobil nézet, 1. fázis
+
+- Terv: `docs/sofor-mobil-terv.md` (döntések: pénz nem látszik, kocsi nélküli
+  megbízás nem látszik, fotók a Drive-ba, 1. fázissal kezdünk).
+- `getSoforNap(employeeId, napISO?)`: a sofőr TELJES napja fuvaronkénti
+  blokkokban. Nem külön logika — a GPS lap gyorsítótárazott idővonalából
+  (`getIdovonalak`) veszi a blokkokat, hogy a sofőr és a diszpécser ugyanazt
+  a sorrendet és kész-állapotot lássa. Bővítés: időablak (`felrakas/
+  lerakas_ablak_tol/ig`), Reise ID, áru, súly, iratlista.
+- Új mobil nézet (`components/erkezes/sofor-fuvar-nap.tsx`): következő megálló
+  nagy kártyán navigáció-gombbal, fuvaronkénti blokkok (megrendelő, Út ID
+  vágólapra, irány, „Korábbról csúszik"), minden megálló megerősíthető (eddig
+  csak a soron következő), napléptetés, következő napok előnézete.
+- Duvenbeck: az Út ID a blokk fejlécében, a KÉT irat külön gombbal
+  (megbízás / rakománylista, verzióval), időablak lejárt/most/jövő jelöléssel,
+  eltérő rendszám halk figyelmeztetéssel (nem elrejtéssel).
+- `app/api/fuvarozas/dokumentum/[dokId]/route.ts`: a Drive-iratok a saját
+  szerverünkről, a service accounttal — a nyers Drive-link a sofőr
+  telefonján nem nyílik meg. Jog: `fuvarozas` vagy `fuvarozas_sajat`.
+- Biztonsági javítás: a `getSoforAktualisTura` és a `markMegalloKesz` eddig
+  ellenőrzés nélkül fogadta el a kliens `employeeId`-jét és a sofőr nevét.
+  Mostantól `requireSajatVagyModulJog`, a jelölő neve a munkamenetből.

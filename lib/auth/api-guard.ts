@@ -39,3 +39,18 @@ export function apiViewGuard(module: ModuleKey) {
 export function apiEditGuard(module: ModuleKey) {
   return guard(module, "edit");
 }
+
+// Egy végpontot több modulkulcs is feljogosíthat: a teljes modul (pl.
+// "fuvarozas") vagy az önálló, korlátozott mobil nézeté (pl.
+// "fuvarozas_sajat") — lásd requireAnyViewPermission a szerver-akciókhoz.
+export async function apiAnyViewGuard(modules: ModuleKey[]) {
+  const session = await verifySession();
+  if (!session.isAuth) {
+    return NextResponse.json({ hiba: "Bejelentkezés szükséges." }, { status: 401 });
+  }
+  if (modules.some((m) => session.can(m).view)) return null;
+  return NextResponse.json(
+    { hiba: `Nincs jogosultságod ehhez: ${modules.join(" / ")}` },
+    { status: 403 }
+  );
+}

@@ -137,10 +137,9 @@ szól, nem automatikus számlázás.
 
 ## 6. Funkciók, amik a Megbízások oldalt segítik
 
-1. **Elakadt fuvar felvétele.** A GPS oldal „elakadtak" doboza azokat
-   mutatja, amiken nincs kocsi. Ha a sofőr egy gombbal magára veheti („ez
-   az enyém"), a diszpécser munkája elmarad. Naplózva (ki, mikor), csak a
-   mai/holnapi, kocsi nélküli sorokra.
+1. ~~Elakadt fuvar felvétele.~~ **Elvetve** (Budaházi Zoltán, 2026-09-17):
+   a kocsi nélküli megbízások maradnak kizárólag a diszpécser GPS-oldalán,
+   a sofőr ezeket nem is látja.
 2. **Papír-fotó a lerakásnál.** A számlázás ma azon áll, hogy a papír
    fizikailag beérkezik (`papirok_beerkeztek_at`). A fotó nem váltja ki, de
    aznap megmutatja, hogy a papír létezik és mi van rajta — az elveszett
@@ -186,11 +185,33 @@ szól, nem automatikus számlázás.
    rossz cím → valódi koordináta (5.2), ami a felismerést javítja.
 3. **Papír és hibajelzés.** Fuvarlevél-fotó, gondjelzés a feladatokba,
    pozíciószám beírása.
-4. **Diszpécser-tehermentesítés.** Elakadt fuvar felvétele, várakozás
-   jelölése.
+4. **Diszpécser-tehermentesítés.** Várakozás jelölése. (Az elakadt fuvar
+   felvétele elvetve.)
 
-## 9. Nyitott döntések
+## 9. Döntések (Budaházi Zoltán, 2026-09-17)
 
-1. Lássa-e a sofőr a fuvardíjat? (Javaslat: ne.)
-2. Felvehet-e magára kocsi nélküli fuvart? (Javaslat: igen, naplózva.)
-3. Fotók Drive-ba vagy adatbázisba? (Javaslat: Drive, scope-bővítéssel.)
+1. **A sofőr NEM látja a fuvardíjat** és semmilyen összeget.
+2. **Kocsi nélküli megbízást egyáltalán nem lát** — se felvenni, se jelezni
+   nem tudja; ez a diszpécser dolga marad.
+3. **A fotók a Drive-ba kerülnek**, a fuvar mappájába. Ehhez a service
+   account írási jogot igényel (ma `drive.readonly`), ez a 3. fázis feladata.
+4. **Az 1. fázissal kezdünk.**
+
+## 10. Az 1. fázis állapota (2026-09-17, kész)
+
+- `lib/fuvarozas/sofor.ts` `getSoforNap(employeeId, napISO?)` — a GPS lap
+  gyorsítótárazott idővonalából veszi a blokkokat, és időablakkal, Reise
+  ID-vel, súllyal, iratlistával bővíti. Új mellékhatás nincs.
+- `components/erkezes/sofor-fuvar-nap.tsx` — a napi nézet: következő megálló
+  nagy kártyán navigációval, fuvaronkénti blokkok, minden megálló
+  megerősíthető, napléptetés, következő napok előnézete.
+- `app/api/fuvarozas/dokumentum/[dokId]/route.ts` — a Drive-iratok
+  kiszolgálása a service accounttal, `fuvarozas` vagy `fuvarozas_sajat`
+  megtekintési jog mögött.
+- Biztonsági javítás ugyanitt: a `getSoforAktualisTura` és a
+  `markMegalloKesz` eddig a kliens által küldött `employeeId`-t és sofőr-
+  nevet fogadta el ellenőrzés nélkül. Mostantól `requireSajatVagyModulJog`,
+  illetve a jelölő neve a munkamenetből.
+- A sofőr ↔ kocsi egyeztetés szó szerinti egyezésre szigorítva, több
+  találat esetén inkább üres képernyő, mint rossz kocsi. Az explicit
+  összerendelés továbbra is hátralévő munka.
