@@ -217,6 +217,7 @@ async function main() {
   await vonjaVisszaKorokKoztiKettosGpsTeljesitestOnce(pool);
   await vonjaVisszaGeokodSavosKettosLezarastOnce(pool);
   await vonjaVisszaKetAllasosKettosLezarastOnce(pool);
+  await toroljeEgybemosottGpsErinteseketOnce(pool);
   await szabaditsaFelTorortRbtMegbizastOnce(pool);
   await toroljeMasodpeldanyokatOnce(pool);
   await toroljeMasodpeldanyokat2Once(pool);
@@ -570,6 +571,33 @@ async function vonjaVisszaKetAllasosKettosLezarastOnce(pool) {
   console.log(
     `[migrate] két-állásos kettős lezárás visszavonva: ${rows.length} sor` +
       (rows.length ? " — " + rows.map((r) => `#${r.id}`).join(", ") : ".")
+  );
+}
+
+// Egyszeri javítás (2026-09-17): az érintés-napló "monoton" (least/greatest)
+// szabálya két külön pápai látogatást egybemosott: a #128 lerakója és a
+// #130 felrakója a #126 09-15 06:58-as felrakási érkezését kapta a saját
+// 09-16 13:09-es érkezésük helyett, a #130 lerakója pedig a #126 debreceni
+// látogatását. A három sor GPS-mezőit töröljük; a figyelő (3 napos ablak)
+// a következő körben a helyes értékeket írja vissza. A kézi jelölést nem
+// érinti.
+async function toroljeEgybemosottGpsErinteseketOnce(pool) {
+  const JAVITAS_KOD = "egybemosott-gps-erintesek-torlese-2026-09-17";
+  const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (mar.length > 0) return;
+
+  const { rows } = await pool.query(
+    `update fuvar_megallo_allapot
+     set gps_erkezes = null, gps_tavozas = null
+     where (fuvar_id, megallo_index) in ((128, 1), (130, 0), (130, 1))
+     returning fuvar_id, megallo_index`
+  );
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1) on conflict (kod) do nothing`, [
+    JAVITAS_KOD,
+  ]);
+  console.log(
+    `[migrate] egybemosott GPS-érintések törölve: ${rows.length} sor` +
+      (rows.length ? " — " + rows.map((r) => `#${r.fuvar_id}/${r.megallo_index}`).join(", ") : ".")
   );
 }
 

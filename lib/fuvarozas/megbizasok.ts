@@ -151,7 +151,9 @@ export async function getSajatFuvarokErinteshez(kezdetNapISO: string): Promise<F
 
 /**
  * Ennyi napra visszamenőleg mutatja a GPS lap a CSÚSZÓ fuvarokat: járművel
- * rendelkező, még nem Teljesítve fuvar, aminek a lerakási napja már elmúlt.
+ * rendelkező, még nem Teljesítve és még nem számlázott fuvar, aminek a
+ * lerakási napja már elmúlt (a kiszámlázott nyilván megtörtént, csak a
+ * Teljesítve pipa maradt el — az nem csúszik).
  * Élesben a #130 (Pápa → Debrecen, lerakás 09-16) éjfél után eltűnt a GPS
  * lapról, miközben a kocsi felrakva Pápán állt, és csak másnap indult.
  */
@@ -189,7 +191,7 @@ export async function getMaiSajatFuvarok(nap?: string, csuszokIs = false): Promi
        and (
          (datum <= coalesce($1::date, ${FUVAR_MA_SQL})
           and coalesce(lerakas_datum, datum) >= coalesce($1::date, ${FUVAR_MA_SQL}))
-         or ($2::boolean and not teljesitve and jarmu is not null and jarmu <> ''
+         or ($2::boolean and not teljesitve and coalesce(szamla_szam, '') = '' and jarmu is not null and jarmu <> ''
              and coalesce(lerakas_datum, datum)
                between coalesce($1::date, ${FUVAR_MA_SQL}) - ${CSUSZO_FUVAR_NAPOK}
                    and coalesce($1::date, ${FUVAR_MA_SQL}) - 1)
@@ -224,7 +226,7 @@ export async function getMaiValodiSajatFuvarok(nap?: string, csuszokIs = false):
        and (
          (datum <= coalesce($1::date, ${FUVAR_MA_SQL})
           and coalesce(lerakas_datum, datum) >= coalesce($1::date, ${FUVAR_MA_SQL}))
-         or ($2::boolean and not teljesitve and jarmu is not null and jarmu <> ''
+         or ($2::boolean and not teljesitve and coalesce(szamla_szam, '') = '' and jarmu is not null and jarmu <> ''
              and coalesce(lerakas_datum, datum)
                between coalesce($1::date, ${FUVAR_MA_SQL}) - ${CSUSZO_FUVAR_NAPOK}
                    and coalesce($1::date, ${FUVAR_MA_SQL}) - 1)

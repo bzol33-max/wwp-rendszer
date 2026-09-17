@@ -28,10 +28,15 @@ export type GpsErintes = {
 };
 
 /**
- * Az észlelt érintések felírása. Szándékosan MONOTON: az érkezés csak
- * korábbi, a távozás csak későbbi irányba mozdulhat (least/greatest), így egy
- * pontatlan GPS-minta vagy egy szűkebb ablakon futó újraszámolás nem írja
- * felül a már rögzített, helyes időpontot. A sofőr kézi jelölését
+ * Az észlelt érintések felírása — a legutóbbi felismerés FELÜLÍRJA a
+ * korábbit. Az első változat "monoton" volt (least érkezés / greatest
+ * távozás), abból a feltevésből, hogy egy megállónak egy látogatása van;
+ * élesben viszont két külön látogatást mosott egybe (a #128 pápai lerakója
+ * a #126 09-15-i pápai felrakásának érkezését és a saját 09-16-i távozását
+ * kapta), és a hibás korai érkezést utána semmi nem tudta kijavítani.
+ * Mostantól kizárólag a 15 perces figyelő ír ide (3 napos trip-ablakkal,
+ * lásd teljesites-figyeles.ts), a GPS lap csak olvas — így nincs szűkebb
+ * ablakú, rosszabb újraszámolás, ami felülírhatná. A sofőr kézi jelölését
  * (kesz/kesz_at/kesz_by) nem érinti.
  *
  * Megfigyelés-naplózás, nem felhasználói művelet: nincs jogosultság-ellenőrzés,
@@ -43,8 +48,8 @@ export async function rogzitGpsErinteseket(erintesek: GpsErintes[]): Promise<voi
     `insert into fuvar_megallo_allapot (fuvar_id, megallo_index, gps_erkezes, gps_tavozas)
      select * from unnest($1::bigint[], $2::int[], $3::timestamptz[], $4::timestamptz[])
      on conflict (fuvar_id, megallo_index) do update set
-       gps_erkezes = least(fuvar_megallo_allapot.gps_erkezes, excluded.gps_erkezes),
-       gps_tavozas = greatest(fuvar_megallo_allapot.gps_tavozas, excluded.gps_tavozas)`,
+       gps_erkezes = excluded.gps_erkezes,
+       gps_tavozas = excluded.gps_tavozas`,
     [
       erintesek.map((e) => e.fuvarId),
       erintesek.map((e) => e.index),
