@@ -831,3 +831,11 @@ create table if not exists fuvar_helyszin_koordinata (
   rogzitve_by  text,
   rogzitve_at  timestamptz not null default now()
 );
+
+-- Sofőr mobil, 4. fázis (2026-09-17): várakozás jelölése egy megállón. A
+-- GPS-ből az állás látszik, de az OKA nem — a Duvenbecknél a rakodóhelyi
+-- várakozás pótdíjas, tehát pénz. A sofőr Várakozom / Várakozás vége
+-- koppintása adja a kezdetet és a végét; a diszpécser a GPS lapon és a
+-- megbízás részletein látja. Csak jelzés, nem automatikus számlázás.
+alter table fuvar_megallo_allapot add column if not exists varakozas_kezdete timestamptz;
+alter table fuvar_megallo_allapot add column if not exists varakozas_vege timestamptz;

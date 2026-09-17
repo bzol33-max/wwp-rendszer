@@ -601,6 +601,13 @@ function FuvarDetailModal({
                 {row.fizetesi_hatarido_nap != null ? `${row.fizetesi_hatarido_nap} nap` : null}
               </ReszletSor>
               <ReszletSor label="Státusz">{FUVAR_STATUSZ_LABEL[row.statusz]}</ReszletSor>
+              {row.varakozas_perc > 0 && (
+                <ReszletSor label="Várakozás">
+                  <span title="A sofőr által a rakodóhelyen jelölt várakozás összesen — pótdíj alapja lehet">
+                    {row.varakozas_perc} perc
+                  </span>
+                </ReszletSor>
+              )}
               <ReszletSor label="Számla sorszáma">{row.szamla_szam}</ReszletSor>
               <ReszletSor label="Postázási cím">{row.postazasi_cim}</ReszletSor>
               <ReszletSor label="Postázva">{row.postazva ? "Igen" : null}</ReszletSor>

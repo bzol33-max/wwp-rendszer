@@ -12,7 +12,7 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Camera, Check, ChevronLeft, ChevronRight, Clock, Copy, FileText, Hash, LocateFixed, MapPin, MessageSquareWarning, Navigation } from "lucide-react";
+import { AlertTriangle, Camera, Check, ChevronLeft, ChevronRight, Clock, Copy, FileText, Hash, Hourglass, LocateFixed, MapPin, MessageSquareWarning, Navigation } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -21,6 +21,7 @@ import {
   getSoforNap,
   jelezGondot,
   jelolMegerkeztem,
+  jelolVarakozast,
   markMegalloKesz,
   rogzitMegalloHelyet,
   rogzitPozicioszamot,
@@ -140,6 +141,50 @@ function navigacioUrl(cim: string): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(cim)}`;
 }
 
+/**
+ * Várakozás jelölése: "Várakozom" amíg nincs kezdet, "Várakozás vége" amíg
+ * tart, utána a hossza. A Duvenbecknél a rakodóhelyi várakozás pótdíjas, a
+ * diszpécser a GPS lapon és a megbízás részletein látja.
+ */
+function VarakozasGomb({ m, pending, onVarakozas }: { m: SoforMegalloSor; pending: boolean; onVarakozas: (muvelet: "kezd" | "befejez") => void }) {
+  if (m.varakozasKezdete && m.varakozasVege) {
+    const perc = Math.round((new Date(m.varakozasVege).getTime() - new Date(m.varakozasKezdete).getTime()) / 60000);
+    return (
+      <span className="flex items-center gap-1 text-xs text-[var(--mob-muted)]" title={`Várakozás ${formatIdo(m.varakozasKezdete)}–${formatIdo(m.varakozasVege)}`}>
+        <Hourglass className="h-3.5 w-3.5" />
+        Várakozás {perc} perc
+      </span>
+    );
+  }
+  if (m.varakozasKezdete) {
+    return (
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => onVarakozas("befejez")}
+        className="flex items-center gap-1 rounded-md bg-[var(--mob-negative)]/10 px-2 py-1 text-[11px] font-medium text-[var(--mob-negative)]"
+        title={`Várakozás ${formatIdo(m.varakozasKezdete)} óta — koppints, ha véget ért`}
+      >
+        <Hourglass className="h-3.5 w-3.5" />
+        Várakozás vége ({formatIdo(m.varakozasKezdete)} óta)
+      </button>
+    );
+  }
+  if (m.kesz) return null;
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      onClick={() => onVarakozas("kezd")}
+      className="flex items-center gap-1 rounded-md bg-[var(--mob-tile)] px-2 py-1 text-[11px] font-medium text-[var(--mob-muted)]"
+      title="Ha a rakodóhelyen várakoztatnak, koppints — a diszpécser látja, és a pótdíj alapja lehet"
+    >
+      <Hourglass className="h-3.5 w-3.5" />
+      Várakozom
+    </button>
+  );
+}
+
 /** "Érkezés 08:12" a sofőr Megérkeztem koppintásából. */
 function ErkezesJel({ m }: { m: SoforMegalloSor }) {
   if (!m.keziErkezes) return null;
@@ -191,6 +236,7 @@ function KovetkezoKartya({
   onKesz,
   onErkezes,
   onHely,
+  onVarakozas,
 }: {
   m: SoforMegalloSor;
   blokk: SoforFuvarBlokk;
@@ -199,6 +245,7 @@ function KovetkezoKartya({
   onKesz: () => void;
   onErkezes: () => void;
   onHely: () => void;
+  onVarakozas: (muvelet: "kezd" | "befejez") => void;
 }) {
   return (
     <Card className="border-2 border-[var(--mob-accent)] bg-[var(--mob-card)] ring-0">
@@ -213,6 +260,7 @@ function KovetkezoKartya({
           <AblakSor m={m} most={most} />
           <ErkezesJel m={m} />
           <HelyGomb m={m} pending={pending} onHely={onHely} />
+          <VarakozasGomb m={m} pending={pending} onVarakozas={onVarakozas} />
         </div>
         {blokk.megrendelo && <p className="text-sm">{blokk.megrendelo}</p>}
         <div className="flex gap-2 pt-1">
@@ -252,6 +300,7 @@ function MegalloSor({
   onKesz,
   onErkezes,
   onHely,
+  onVarakozas,
 }: {
   m: SoforMegalloSor;
   sorszam: string;
@@ -261,6 +310,7 @@ function MegalloSor({
   onKesz: () => void;
   onErkezes: () => void;
   onHely: () => void;
+  onVarakozas: (muvelet: "kezd" | "befejez") => void;
 }) {
   return (
     <div
@@ -305,6 +355,7 @@ function MegalloSor({
           <AblakSor m={m} most={most} />
           <ErkezesJel m={m} />
           <HelyGomb m={m} pending={pending} onHely={onHely} />
+          <VarakozasGomb m={m} pending={pending} onVarakozas={onVarakozas} />
         </div>
         {!m.kesz && (
           <div className="flex shrink-0 gap-1">
@@ -350,6 +401,7 @@ function FuvarBlokk({
   onFoto,
   onGond,
   onPozicioszam,
+  onVarakozas,
 }: {
   blokk: SoforFuvarBlokk;
   kovetkezo: { fuvarId: string; megalloIndex: number } | null;
@@ -361,6 +413,7 @@ function FuvarBlokk({
   onFoto: (fuvarId: string, fajl: File) => void;
   onGond: (fuvarId: string) => void;
   onPozicioszam: (fuvarId: string) => void;
+  onVarakozas: (fuvarId: string, megalloIndex: number, muvelet: "kezd" | "befejez") => void;
 }) {
   const fotoInput = useRef<HTMLInputElement>(null);
   const honnan = blokk.megallok.find((m) => m.tipus === "felrako")?.varos;
@@ -444,6 +497,7 @@ function FuvarBlokk({
               onKesz={() => onKesz(m.fuvarId, m.megalloIndex)}
               onErkezes={() => onErkezes(m.fuvarId, m.megalloIndex)}
               onHely={() => onHely(m)}
+              onVarakozas={(muvelet) => onVarakozas(m.fuvarId, m.megalloIndex, muvelet)}
             />
           );
         })}
@@ -638,6 +692,18 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
     });
   }
 
+  function varakozas(fuvarId: string, megalloIndex: number, muvelet: "kezd" | "befejez") {
+    startTransition(async () => {
+      try {
+        await jelolVarakozast(fuvarId, megalloIndex, muvelet);
+        await load();
+        toast.success(muvelet === "kezd" ? "Várakozás jelölve." : "Várakozás lezárva.");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Nem sikerült rögzíteni.");
+      }
+    });
+  }
+
   function hely(m: SoforMegalloSor) {
     if (!window.confirm(`A kocsi mostani helyét jegyezzük fel ehhez a címhez?\n\n${m.cim}\n\nCsak akkor koppints Igent, ha a rakodóhelyen állsz.`)) return;
     startTransition(async () => {
@@ -719,6 +785,7 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
                   onKesz={() => kesz(kovetkezoMegallo.fuvarId, kovetkezoMegallo.megalloIndex)}
                   onErkezes={() => erkezes(kovetkezoMegallo.fuvarId, kovetkezoMegallo.megalloIndex)}
                   onHely={() => hely(kovetkezoMegallo)}
+                  onVarakozas={(muvelet) => varakozas(kovetkezoMegallo.fuvarId, kovetkezoMegallo.megalloIndex, muvelet)}
                 />
               )}
               {blokkok.map((b) => (
@@ -734,6 +801,7 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
                   onFoto={foto}
                   onGond={gond}
                   onPozicioszam={pozicioszam}
+                  onVarakozas={varakozas}
                 />
               ))}
             </>

@@ -251,3 +251,13 @@ szól, nem automatikus számlázás.
   csempén látja.
 - **Nincs pozíciószám · beírom**: csak üres mezőt tölt ki, meglévőt nem ír
   felül.
+
+## 13. A 4. fázis állapota (2026-09-17, kész)
+
+- `fuvar_megallo_allapot.varakozas_kezdete` / `varakozas_vege`: a sofőr
+  „Várakozom" / „Várakozás vége" koppintása (`sofor.ts jelolVarakozast`).
+- Diszpécser oldalon: a GPS lap megálló-során sárga „várakozik HH:MM óta" /
+  „várakozás N perc" jelzés; a megbízás részletein „Várakozás: N perc"
+  összesítés (`FuvarRow.varakozas_perc`). Csak jelzés, nem automatikus
+  számlázás — a Duvenbeck pótdíját a diszpécser érvényesíti.
+- Ezzel a terv mind a négy fázisa élesben van.

@@ -271,6 +271,9 @@ export type TervezettMegallo = {
    * a közelben történt megállás nem feltétlenül EZ a rakodás volt.
    */
   bizonytalanFelismeres: boolean;
+  /** A sofőr által jelölt várakozás kezdete/vége ezen a megállón (fuvar_megallo_allapot). */
+  varakozasKezdete?: Date | null;
+  varakozasVege?: Date | null;
   /**
    * Ettől a pillanattól számít érkezésnek, ha a jármű a cím közelében állt:
    * a megbízás időablakának kezdete (Duvenbeck: PV/PB), különben a felrakás
@@ -606,13 +609,17 @@ export function jelolMegallokat(
 export function ratesziKeziJeloleseket(
   megallok: TervezettMegallo[],
   fuvarTeljesitve: boolean,
-  keziAllapotok: Map<number, { kesz: boolean; keszBy: string | null }>
+  keziAllapotok: Map<number, { kesz: boolean; keszBy: string | null; varakozasKezdete?: Date | null; varakozasVege?: Date | null }>
 ): TervezettMegallo[] {
   return megallok.map((m) => {
     const kezi = keziAllapotok.get(m.index);
+    // A várakozás-jelölés a kész állapottól független: akkor is látszik, ha a megálló még nincs kész.
+    const varakozassal = kezi
+      ? { ...m, varakozasKezdete: kezi.varakozasKezdete ?? null, varakozasVege: kezi.varakozasVege ?? null }
+      : m;
     const keziKesz = fuvarTeljesitve || !!kezi?.kesz;
-    if (!keziKesz || m.elhagyva) return m;
-    return { ...m, elhagyva: true, eppenItt: false, keszForras: "kezi", keszBy: kezi?.keszBy ?? m.keszBy };
+    if (!keziKesz || m.elhagyva) return varakozassal;
+    return { ...varakozassal, elhagyva: true, eppenItt: false, keszForras: "kezi", keszBy: kezi?.keszBy ?? m.keszBy };
   });
 }
 
