@@ -127,6 +127,8 @@ export type MaiFuvarSor = {
   lerakas_ablak_tol: string | null;
   /** A fuvar Teljesítve jelölője (kézi gomb vagy automatikus GPS-lezárás). */
   teljesitve: boolean;
+  /** ISO időbélyeg (UTC, "…Z"), mikor lett Teljesítve — a GPS lap a megjelenített nap ELŐTT lezárt fuvart nem mutatja. */
+  teljesitve_at: string | null;
 };
 
 /**
@@ -146,7 +148,9 @@ export type FuvarErintesSor = {
   felrakas_ablak_tol: string | null;
   lerakas_ablak_tol: string | null;
   teljesitve: boolean;
-  /** A sor helye a Megbízások fülek szerint (lásd lib/fuvarozas/fuvar-hely.ts) — automatikusan csak a "ber_folyamatban" sorokat zárjuk le. */
+  /** Van-e már számlaszáma — a kiszámlázott fuvart az automatika nem bántja. */
+  szamlas: boolean;
+  /** A sor helye a Megbízások fülek szerint (lásd lib/fuvarozas/fuvar-hely.ts). */
   hely: string;
 };
 

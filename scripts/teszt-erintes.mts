@@ -15,6 +15,7 @@ import {
   type IdovonalSzakasz,
   type TervezettMegallo,
 } from "@/lib/fuvarozas/idovonal";
+import { cimPontossaga, varosNev } from "@/lib/fuvarozas/varos";
 
 let ok = 0;
 let bad = 0;
@@ -218,6 +219,17 @@ function vezetes(honnan: { lat: number; lon: number }, hova: { lat: number; lon:
   eq("sofőr jelölése nem GPS-kész (automata nem erre alapoz)", fuvarKeszGpsSzerint(sofor), false);
   const teljesitve = ratesziKeziJeloleseket(f, true, new Map());
   eq("fuvar Teljesítve: minden megálló kész", teljesitve.every((m) => m.elhagyva && m.keszForras === "kezi"), true);
+}
+
+// 5) Címfelismerés — az RBT "[H-4243] TÉGLÁS" formátuma (szögletes zárójeles
+//    országkód+irányítószám): város és pontosság, hogy a GPS-felismerés ne
+//    hagyja ki a megállót.
+{
+  eq("RBT cím: város", varosNev("HAJDU HAJDUSÁGI ZRT [H-4243] TÉGLÁS, Hrsz. 0135/9"), "TÉGLÁS");
+  eq("RBT cím: pontosság", cimPontossaga("HAJDU HAJDUSÁGI ZRT [H-4243] TÉGLÁS, Hrsz. 0135/9"), "pontos");
+  eq("RBT cím 2: város", varosNev("BEZZEGH KFT [H-3200] GYÖNGYÖS, Szurdokpart u. 6-8."), "GYÖNGYÖS");
+  eq("Duvenbeck cím továbbra is jó", varosNev("Yanfeng International Automotive, Juhar utca 17, HU 8500 Papa"), "Papa");
+  eq("zárójeles irsz továbbra is jó", varosNev("Nyíregyháza (4400 Móricz Zsigmond u. 24.)"), "Nyíregyháza");
 }
 
 console.log(`\n${ok} rendben, ${bad} hiba`);

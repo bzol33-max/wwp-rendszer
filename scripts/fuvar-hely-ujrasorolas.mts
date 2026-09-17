@@ -43,6 +43,7 @@ import {
   FUVAR_HELY_CIMKE,
   FUVAR_HELY_SQL,
   getFuvarHelye,
+  FUVAR_MA_SQL,
   type FuvarHely,
   type FuvarHelyBemenet,
 } from "@/lib/fuvarozas/fuvar-hely";
@@ -75,7 +76,7 @@ const POSTAZVA_AT_HIANYZIK_SQL = `(postazva and postazva_at is null)`;
 const SZAMLAS_DE_FOLYAMATBAN_SQL = `(tipus = 'sajat' and coalesce(szamla_szam, '') <> '' and not teljesitve and coalesce(lerakas_datum, datum) >= current_date)`;
 
 async function beolvas(): Promise<{ ma: string; sorok: Sor[] }> {
-  const [{ ma }] = await query<{ ma: string }>(`select current_date::text as ma`);
+  const [{ ma }] = await query<{ ma: string }>(`select ${FUVAR_MA_SQL}::text as ma`);
   const sorok = await query<Sor>(
     `select id::text, tipus, megrendelo, lerako,
        to_char(datum, 'YYYY-MM-DD') as datum_iso,

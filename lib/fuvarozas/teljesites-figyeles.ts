@@ -84,7 +84,11 @@ export async function futtatTeljesitesFigyeles(): Promise<TeljesitesFigyelesEred
     if (!jarmu.ecofleetObjectId) continue; // nincs GPS-kötés ehhez a járműhöz
     const sajat = sorok.filter((s) => resolveJarmu(s.jarmu) === jarmu);
     if (sajat.length === 0) continue;
-    const nyitottak = sajat.filter((s) => s.hely === "ber_folyamatban" && !s.teljesitve);
+    // Nyitott: még nem Teljesítve és nincs számlázva — a lerakási nap múlása
+    // (a Megbízások fülön Számla/Posta) nem zárja ki: a csúszó fuvar (a #130
+    // egy nappal a tervezett után ért Debrecenbe) is lezárandó, ha a GPS
+    // szerint kész.
+    const nyitottak = sajat.filter((s) => !s.teljesitve && !s.szamlas);
     eredmeny.vizsgalt += nyitottak.length;
     if (nyitottak.length === 0) continue; // csak naplózni nem érdemes külső hívásokat indítani
 
@@ -128,7 +132,7 @@ export async function futtatTeljesitesFigyeles(): Promise<TeljesitesFigyelesEred
 
       for (let i = 0; i < fuvarok.length; i++) {
         const { sor } = fuvarok[i];
-        if (sor.hely !== "ber_folyamatban" || sor.teljesitve) continue;
+        if (sor.teljesitve || sor.szamlas) continue;
         const kesz = fuvarKeszGpsSzerint(jelolt[i]);
         // Körönkénti diagnosztika a nyitott fuvarokra — a Railway-naplóból
         // látszik, melyik megálló miért (nem) számít érintettnek.

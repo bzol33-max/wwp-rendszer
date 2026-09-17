@@ -175,6 +175,8 @@ export type FuvarBlokk = {
   megallok: MegalloBejegyzes[];
   /** A blokk rendezési ideje: az első pont tényleges (GPS) vagy becsült ideje. */
   kezdetIdo: Date;
+  /** Igaz, ha a fuvar lerakási napja a megjelenített nap előtt volt, és még nincs kész — csúszik, a kocsi még viszi. */
+  csuszo: boolean;
 };
 
 /**
@@ -787,7 +789,12 @@ function napKulonbseg(a: string, b: string): number {
  * "elavult becslés" jelöléséhez (MegalloBejegyzes.becslesElavult); múltbeli
  * napnál null.
  */
-function fuvarBlokkok(tervezettFuvarok: TervezettFuvarSzakasz[], napISO: string, most: Date | null): FuvarBlokk[] {
+function fuvarBlokkok(
+  tervezettFuvarok: TervezettFuvarSzakasz[],
+  napISO: string,
+  most: Date | null,
+  csuszoIds: Set<string> = new Set()
+): FuvarBlokk[] {
   return tervezettFuvarok
     .map((f): FuvarBlokk => {
       const megallok = [...f.megallok]
@@ -820,6 +827,7 @@ function fuvarBlokkok(tervezettFuvarok: TervezettFuvarSzakasz[], napISO: string,
         pozicioszam: f.pozicioszam,
         megallok,
         kezdetIdo: megallok[0]?.idopont ?? f.kezdet,
+        csuszo: csuszoIds.has(f.id),
       };
     })
     .sort((a, b) => a.kezdetIdo.getTime() - b.kezdetIdo.getTime() || Number(a.fuvarId) - Number(b.fuvarId));
@@ -889,16 +897,27 @@ export async function getIdovonalak(nap?: string): Promise<IdovonalNap> {
 
 async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
   const { kezdet, veg, napISO, maiNap } = budapestNapHatarok(nap);
+  // A mai napon a csúszó (korábbi lerakási napú, még nem Teljesítve) fuvarok
+  // is kellenek — a kocsi ezeket viszi, nem tűnhetnek el éjfélkor.
   const [berFuvarok, sajatFuvarok] = await Promise.all([
-    getMaiSajatFuvarok(napISO).catch(() => [] as MaiFuvarSor[]),
-    getMaiValodiSajatFuvarok(napISO).catch(() => [] as MaiFuvarSor[]),
+    getMaiSajatFuvarok(napISO, maiNap).catch(() => [] as MaiFuvarSor[]),
+    getMaiValodiSajatFuvarok(napISO, maiNap).catch(() => [] as MaiFuvarSor[]),
   ]);
+  // A megjelenített nap ELŐTT Teljesítve-re jelölt fuvar nem a nap munkája
+  // (pl. a tegnap kézzel készre tett saját fuvar, aminek a tervezett napja
+  // ma van) — kimarad, különben zölden, "készen" jelenne meg a mai listán.
+  const napElottKesz = (row: MaiFuvarSor) =>
+    row.teljesitve && row.teljesitve_at !== null && new Date(row.teljesitve_at).getTime() < kezdet.getTime();
   // FIGYELEM: a DB tipus='sajat' sorok a "Bér fuvarok" fülön jelennek meg,
   // tipus='ber' pedig a "Saját fuvarok" fülön — lásd megbizasok.ts.
   const maiFuvarok: { row: MaiFuvarSor; tipus: FuvarTipus }[] = [
-    ...berFuvarok.map((row) => ({ row, tipus: "sajat" as const })),
-    ...sajatFuvarok.map((row) => ({ row, tipus: "ber" as const })),
+    ...berFuvarok.filter((row) => !napElottKesz(row)).map((row) => ({ row, tipus: "sajat" as const })),
+    ...sajatFuvarok.filter((row) => !napElottKesz(row)).map((row) => ({ row, tipus: "ber" as const })),
   ];
+  // Csúszó: a lerakási napja a megjelenített nap előtt volt, és még nincs kész.
+  const csuszoIds = new Set(
+    maiFuvarok.filter(({ row }) => !row.teljesitve && (row.lerakas_datum ?? row.datum) < napISO).map(({ row }) => row.id)
+  );
   // Az élő GPS-pozíciót csak a mai napra vonatkozó idővonalhoz kell (egy
   // korábbi nap lezárt idővonalát nem kell/nem szabad "élő" adattal
   // kiegészíteni) — feleslegesen sem hívjuk, ha nem kell.
@@ -956,7 +975,7 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
           eloPozicio: null,
           eloEta: null,
           hiba: null,
-          fuvarok: fuvarBlokkok(keziJelolesekkel(tervezettFuvarok, sajatSorok), napISO, null),
+          fuvarok: fuvarBlokkok(keziJelolesekkel(tervezettFuvarok, sajatSorok), napISO, null, csuszoIds),
         };
       }
       try {
@@ -1030,7 +1049,7 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
         const lancoltFuvarok = livePos
           ? await lancoltEloBecsles(jeloltFuvarok, { lat: livePos.latitude, lon: livePos.longitude }, veg, kalibracio)
           : jeloltFuvarok;
-        const fuvarok = fuvarBlokkok(lancoltFuvarok, napISO, maiNap ? veg : null);
+        const fuvarok = fuvarBlokkok(lancoltFuvarok, napISO, maiNap ? veg : null, csuszoIds);
 
         // Élő ETA: a következő, még el nem ért fel-/lerakó pont frissen
         // láncolt becsült ideje — ez adja a jármű-csempén a kamion-ikon
@@ -1067,7 +1086,7 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
           eloPozicio: null,
           eloEta: null,
           hiba: message,
-          fuvarok: fuvarBlokkok(keziJelolesekkel(tervezettFuvarok, sajatSorok), napISO, null),
+          fuvarok: fuvarBlokkok(keziJelolesekkel(tervezettFuvarok, sajatSorok), napISO, null, csuszoIds),
         };
       }
     })

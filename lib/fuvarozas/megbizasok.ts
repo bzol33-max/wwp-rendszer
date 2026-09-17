@@ -3,7 +3,7 @@
 import { query } from "@/lib/db";
 import { requireEditPermission } from "@/lib/auth/require-permission";
 import { ceglNevKanonikusan, normalizaltCegKulcs, sajatCegunkE } from "@/lib/fuvarozas/fuvar-constants";
-import { FUVAR_HELY_SQL, type FuvarHely } from "@/lib/fuvarozas/fuvar-hely";
+import { FUVAR_HELY_SQL, FUVAR_MA_SQL, type FuvarHely } from "@/lib/fuvarozas/fuvar-hely";
 import { toroljIdovonalCachet } from "@/lib/fuvarozas/idovonal-cache";
 import { bontsMegallokra } from "@/lib/fuvarozas/varos";
 import { requireSession } from "@/lib/auth/dal";
@@ -136,17 +136,26 @@ export async function getSajatFuvarokErinteshez(kezdetNapISO: string): Promise<F
        to_char(felrakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as felrakas_ablak_tol,
        to_char(lerakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as lerakas_ablak_tol,
        teljesitve,
+       (coalesce(szamla_szam, '') <> '') as szamlas,
        ${FUVAR_HELY_SQL} as hely
      from fuvar_megbizasok
      where tipus = 'sajat' and statusz <> 'torolt'
        and jarmu is not null and jarmu <> ''
        and coalesce(lerakas_datum, datum) >= $1::date
-       and datum <= (now() at time zone 'Europe/Budapest')::date
+       and datum <= ${FUVAR_MA_SQL}
      order by id asc
      limit 200`,
     [kezdetNapISO]
   );
 }
+
+/**
+ * Ennyi napra visszamenőleg mutatja a GPS lap a CSÚSZÓ fuvarokat: járművel
+ * rendelkező, még nem Teljesítve fuvar, aminek a lerakási napja már elmúlt.
+ * Élesben a #130 (Pápa → Debrecen, lerakás 09-16) éjfél után eltűnt a GPS
+ * lapról, miközben a kocsi felrakva Pápán állt, és csak másnap indult.
+ */
+const CSUSZO_FUVAR_NAPOK = 3;
 
 /**
  * Egy adott nap (alapértelmezetten a mai) saját fuvarjai — akár aznap
@@ -160,8 +169,11 @@ export async function getSajatFuvarokErinteshez(kezdetNapISO: string): Promise<F
  * szombaton/vasárnap teljesen eltűnt a GPS idővonalról (majd hétfőn
  * "visszatért"), holott a fuvar ezeken a napokon is folyamatban van (csak
  * éppen áll). A tartomány-illesztés ezt a hézagot zárja be.
+ *
+ * `csuszokIs`: a CSUSZO_FUVAR_NAPOK napon belül lerakandó, de még nem
+ * Teljesítve, járművel rendelkező fuvarok is (a GPS lap mai nézetéhez).
  */
-export async function getMaiSajatFuvarok(nap?: string): Promise<MaiFuvarSor[]> {
+export async function getMaiSajatFuvarok(nap?: string, csuszokIs = false): Promise<MaiFuvarSor[]> {
   return query<MaiFuvarSor>(
     `select
        id::text, megrendelo, felrako, lerako, idopont,
@@ -170,14 +182,21 @@ export async function getMaiSajatFuvarok(nap?: string): Promise<MaiFuvarSor[]> {
        jarmu, sofor, pozicioszam,
        to_char(felrakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as felrakas_ablak_tol,
        to_char(lerakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as lerakas_ablak_tol,
-       teljesitve
+       teljesitve,
+       to_char(teljesitve_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as teljesitve_at
      from fuvar_megbizasok
      where tipus = 'sajat' and statusz <> 'torolt'
-       and datum <= coalesce($1::date, current_date)
-       and coalesce(lerakas_datum, datum) >= coalesce($1::date, current_date)
+       and (
+         (datum <= coalesce($1::date, ${FUVAR_MA_SQL})
+          and coalesce(lerakas_datum, datum) >= coalesce($1::date, ${FUVAR_MA_SQL}))
+         or ($2::boolean and not teljesitve and jarmu is not null and jarmu <> ''
+             and coalesce(lerakas_datum, datum)
+               between coalesce($1::date, ${FUVAR_MA_SQL}) - ${CSUSZO_FUVAR_NAPOK}
+                   and coalesce($1::date, ${FUVAR_MA_SQL}) - 1)
+       )
      order by idopont nulls last, id asc
      limit 100`,
-    [nap ?? null]
+    [nap ?? null, csuszokIs]
   );
 }
 
@@ -189,7 +208,7 @@ export async function getMaiSajatFuvarok(nap?: string): Promise<MaiFuvarSor[]> {
  * UI-címkézés: tipus='sajat' → "Bér fuvarok" fül, tipus='ber' → "Saját
  * fuvarok" fül) tisztázásához.
  */
-export async function getMaiValodiSajatFuvarok(nap?: string): Promise<MaiFuvarSor[]> {
+export async function getMaiValodiSajatFuvarok(nap?: string, csuszokIs = false): Promise<MaiFuvarSor[]> {
   return query<MaiFuvarSor>(
     `select
        id::text, megrendelo, felrako, lerako, idopont,
@@ -198,14 +217,21 @@ export async function getMaiValodiSajatFuvarok(nap?: string): Promise<MaiFuvarSo
        jarmu, sofor, pozicioszam,
        to_char(felrakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as felrakas_ablak_tol,
        to_char(lerakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as lerakas_ablak_tol,
-       teljesitve
+       teljesitve,
+       to_char(teljesitve_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as teljesitve_at
      from fuvar_megbizasok
      where tipus = 'ber' and statusz <> 'torolt'
-       and datum <= coalesce($1::date, current_date)
-       and coalesce(lerakas_datum, datum) >= coalesce($1::date, current_date)
+       and (
+         (datum <= coalesce($1::date, ${FUVAR_MA_SQL})
+          and coalesce(lerakas_datum, datum) >= coalesce($1::date, ${FUVAR_MA_SQL}))
+         or ($2::boolean and not teljesitve and jarmu is not null and jarmu <> ''
+             and coalesce(lerakas_datum, datum)
+               between coalesce($1::date, ${FUVAR_MA_SQL}) - ${CSUSZO_FUVAR_NAPOK}
+                   and coalesce($1::date, ${FUVAR_MA_SQL}) - 1)
+       )
      order by idopont nulls last, id asc
      limit 100`,
-    [nap ?? null]
+    [nap ?? null, csuszokIs]
   );
 }
 
@@ -647,7 +673,7 @@ export async function getAktivFuvarokUtkozeshez(): Promise<UtkozesJelolt[]> {
      from fuvar_megbizasok
      where statusz <> 'torolt' and tipus in ('sajat', 'ber')
        and jarmu is not null and jarmu <> ''
-       and coalesce(lerakas_datum, datum) >= current_date
+       and coalesce(lerakas_datum, datum) >= ${FUVAR_MA_SQL}
      order by datum asc
      limit 500`
   );
