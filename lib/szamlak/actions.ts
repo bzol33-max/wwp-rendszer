@@ -136,36 +136,40 @@ export async function getSzamlaFejlec(): Promise<SzamlaFejlecSor[]> {
 }
 
 export type SzamlaTeendok = {
-  /** Az összes lejárt, nyitott számla (minden kategória), a legrégebben lejárt elöl. */
-  lejart: SzamlaRow[];
-  /** A legközelebbi 10 (még nem lejárt) esedékesség, minden kategóriából. */
+  /** A legközelebbi 10 (még nem lejárt) esedékesség az adott kategóriában. */
   kovetkezo: SzamlaRow[];
+  /** Az adott kategória összes lejárt, nyitott számlája, a legrégebben lejárt elöl. */
+  lejart: SzamlaRow[];
 };
 
 /**
- * A "Teendők" lista: a korábbi 4 külön tábla (Fuvar/Raklap × Következő/Lejárt)
- * helyett egyetlen, kategória-címkés lista — a sztornó-párok itt is ki vannak zárva.
+ * Egy kategória (Fuvar / Raklap) "Következő 10 lejárat" és "Lejárt" listája a
+ * kétoszlopos Teendők blokkhoz — a sztornó-párok itt is ki vannak zárva.
  */
-export async function getSzamlaTeendok(): Promise<SzamlaTeendok> {
-  const [lejart, kovetkezo] = await Promise.all([
+export async function getSzamlaTeendok(kategoria: SzamlaKategoria): Promise<SzamlaTeendok> {
+  const [kovetkezo, lejart] = await Promise.all([
     query<SzamlaRow>(
       `select ${SZAMLA_COLUMNS}
        from szamla
-       where not fizetve and not sztorno and not sztornozva
-         and fizetesi_hatarido < ${MA_SQL}
-       order by fizetesi_hatarido asc
-       limit 200`
-    ),
-    query<SzamlaRow>(
-      `select ${SZAMLA_COLUMNS}
-       from szamla
-       where not fizetve and not sztorno and not sztornozva
+       where kategoria = $1
+         and not fizetve and not sztorno and not sztornozva
          and (fizetesi_hatarido is null or fizetesi_hatarido >= ${MA_SQL})
        order by fizetesi_hatarido asc nulls last, kiallitas_datum desc
-       limit 10`
+       limit 10`,
+      [kategoria]
+    ),
+    query<SzamlaRow>(
+      `select ${SZAMLA_COLUMNS}
+       from szamla
+       where kategoria = $1
+         and not fizetve and not sztorno and not sztornozva
+         and fizetesi_hatarido < ${MA_SQL}
+       order by fizetesi_hatarido asc
+       limit 200`,
+      [kategoria]
     ),
   ]);
-  return { lejart, kovetkezo };
+  return { kovetkezo, lejart };
 }
 
 /**

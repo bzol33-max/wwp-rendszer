@@ -71,10 +71,6 @@ function visszavonhato(fizetveDatum: string | null): boolean {
   return Date.now() - new Date(fizetveDatum).getTime() < 5 * 60 * 1000;
 }
 
-function kategoriaCimke(row: Pick<SzamlaRow, "kategoria" | "alkategoria">): string {
-  return row.alkategoria ? ALKATEGORIA_LABEL[row.alkategoria] : KATEGORIA_LABEL[row.kategoria];
-}
-
 type Osszeg = { penznem: string; osszeg: number };
 
 /** Pénznemenkénti összegek egy sorba (a forint elöl), a nullák nélkül — ha minden nulla, "0 Ft". */
@@ -492,12 +488,98 @@ function KategoriaCsempek({
   );
 }
 
-/** Egyetlen "Teendők" lista a korábbi 4 tábla helyett: elöl a lejártak, utána a következő 10 esedékesség. */
+/** Egy mini-táblázat a Teendők egy szakaszához (Következő 10 / Lejárt). */
+function TeendoTabla({
+  cim,
+  sorok,
+  lejartStilus,
+  ures,
+  alkategoriaval,
+  onFizetve,
+  onVisszavon,
+}: {
+  cim: string;
+  sorok: SzamlaRow[];
+  lejartStilus: boolean;
+  ures: string;
+  alkategoriaval: boolean;
+  onFizetve: (id: string) => void;
+  onVisszavon: (id: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1">
+      <div className={`text-xs font-semibold ${lejartStilus ? "text-destructive" : "text-muted-foreground"}`}>{cim}</div>
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Sorszám</TableHead>
+              <TableHead>Vevő</TableHead>
+              <TableHead>Határidő</TableHead>
+              <TableHead className="text-right">Összeg</TableHead>
+              <TableHead className="w-24"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {sorok.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={5} className="text-center text-muted-foreground">
+                  {ures}
+                </TableCell>
+              </TableRow>
+            )}
+            {sorok.map((row) => (
+              <TableRow
+                key={row.id}
+                className={
+                  row.fizetve
+                    ? "bg-success/10 hover:bg-success/15"
+                    : lejartStilus
+                      ? "bg-destructive/10 hover:bg-destructive/15"
+                      : ""
+                }
+              >
+                <TableCell className="whitespace-nowrap text-muted-foreground">{row.szamlaszam}</TableCell>
+                <TableCell className="max-w-[11rem]">
+                  <div className="truncate" title={row.vevo_nev}>
+                    {row.vevo_nev}
+                  </div>
+                  {alkategoriaval && row.alkategoria && (
+                    <div className="text-[10px] text-muted-foreground">{ALKATEGORIA_LABEL[row.alkategoria]}</div>
+                  )}
+                </TableCell>
+                <TableCell
+                  className={`whitespace-nowrap ${!row.fizetve && lejartStilus ? "font-medium text-destructive" : ""}`}
+                >
+                  {row.fizetesi_hatarido ?? "—"}
+                </TableCell>
+                <TableCell className="whitespace-nowrap text-right tabular-nums">
+                  {formatOsszeg(row.brutto, row.penznem)}
+                </TableCell>
+                <TableCell>
+                  <FizetveCella row={row} onFizetve={onFizetve} onVisszavon={onVisszavon} />
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Kétoszlopos Teendők blokk: bal oldalt Fuvar, jobb oldalt Raklap (minden más
+ * kimenő számla) — mindkettőben felül a következő 10 lejárat, alatta az összes lejárt.
+ */
 function TeendokLista({ refreshKey, onChanged }: { refreshKey: number; onChanged: () => void }) {
-  const [adat, setAdat] = useState<SzamlaTeendok | null>(null);
+  const [fuvar, setFuvar] = useState<SzamlaTeendok | null>(null);
+  const [raklap, setRaklap] = useState<SzamlaTeendok | null>(null);
 
   const load = useCallback(async () => {
-    setAdat(await getSzamlaTeendok());
+    const [f, r] = await Promise.all([getSzamlaTeendok("fuvar"), getSzamlaTeendok("raklap")]);
+    setFuvar(f);
+    setRaklap(r);
   }, []);
 
   useEffect(() => {
@@ -505,84 +587,50 @@ function TeendokLista({ refreshKey, onChanged }: { refreshKey: number; onChanged
   }, [load, refreshKey]);
 
   const { fizetve, visszavon } = useFizetveJeloles(
-    (id, f, d) =>
-      setAdat((a) => {
+    (id, f, d) => {
+      const alkalmaz = (a: SzamlaTeendok | null) => {
         if (!a) return a;
-        const alkalmaz = (sorok: SzamlaRow[]) =>
-          sorok.map((r) => (r.id === id ? { ...r, fizetve: f, fizetve_datum: d } : r));
-        return { lejart: alkalmaz(a.lejart), kovetkezo: alkalmaz(a.kovetkezo) };
-      }),
+        const sorok = (lista: SzamlaRow[]) =>
+          lista.map((r) => (r.id === id ? { ...r, fizetve: f, fizetve_datum: d } : r));
+        return { kovetkezo: sorok(a.kovetkezo), lejart: sorok(a.lejart) };
+      };
+      setFuvar(alkalmaz);
+      setRaklap(alkalmaz);
+    },
     load,
     onChanged
   );
 
-  const szakaszok = [
-    { kulcs: "lejart", cim: `Lejárt (${adat?.lejart.length ?? 0})`, sorok: adat?.lejart ?? [], lejart: true },
-    { kulcs: "kovetkezo", cim: "Következő esedékességek", sorok: adat?.kovetkezo ?? [], lejart: false },
-  ].filter((sz) => sz.sorok.length > 0);
+  const oszlopok: { kategoria: SzamlaKategoria; adat: SzamlaTeendok | null }[] = [
+    { kategoria: "fuvar", adat: fuvar },
+    { kategoria: "raklap", adat: raklap },
+  ];
 
   return (
-    <div className="rounded-lg border p-4">
-      <div className="mb-2 text-sm font-semibold">Teendők</div>
-      {adat && szakaszok.length === 0 ? (
-        <div className="text-sm text-muted-foreground">Nincs lejárt vagy közelgő számla.</div>
-      ) : (
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Sorszám</TableHead>
-                <TableHead>Vevő</TableHead>
-                <TableHead>Kategória</TableHead>
-                <TableHead>Fizetési határidő</TableHead>
-                <TableHead className="text-right">Összeg</TableHead>
-                <TableHead className="w-28">Fizetve</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {szakaszok.map((sz) => [
-                <TableRow key={`fej-${sz.kulcs}`} className="hover:bg-transparent">
-                  <TableCell
-                    colSpan={6}
-                    className={`pt-3 text-xs font-semibold ${sz.lejart ? "text-destructive" : "text-muted-foreground"}`}
-                  >
-                    {sz.cim}
-                  </TableCell>
-                </TableRow>,
-                ...sz.sorok.map((row) => (
-                  <TableRow
-                    key={row.id}
-                    className={
-                      row.fizetve
-                        ? "bg-success/10 hover:bg-success/15"
-                        : sz.lejart
-                          ? "bg-destructive/10 hover:bg-destructive/15"
-                          : ""
-                    }
-                  >
-                    <TableCell className="whitespace-nowrap text-muted-foreground">{row.szamlaszam}</TableCell>
-                    <TableCell className="max-w-[12rem] truncate" title={row.vevo_nev}>
-                      {row.vevo_nev}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">{kategoriaCimke(row)}</TableCell>
-                    <TableCell
-                      className={`whitespace-nowrap ${!row.fizetve && sz.lejart ? "font-medium text-destructive" : ""}`}
-                    >
-                      {row.fizetesi_hatarido ?? "—"}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-right tabular-nums">
-                      {formatOsszeg(row.brutto, row.penznem)}
-                    </TableCell>
-                    <TableCell>
-                      <FizetveCella row={row} onFizetve={fizetve} onVisszavon={visszavon} />
-                    </TableCell>
-                  </TableRow>
-                )),
-              ])}
-            </TableBody>
-          </Table>
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      {oszlopok.map(({ kategoria, adat }) => (
+        <div key={kategoria} className="flex min-w-0 flex-col gap-4 rounded-lg border p-4">
+          <div className="text-sm font-semibold">{KATEGORIA_LABEL[kategoria]}</div>
+          <TeendoTabla
+            cim="Következő 10 lejárat"
+            sorok={adat?.kovetkezo ?? []}
+            lejartStilus={false}
+            ures="Nincs közelgő esedékesség."
+            alkategoriaval={kategoria === "raklap"}
+            onFizetve={fizetve}
+            onVisszavon={visszavon}
+          />
+          <TeendoTabla
+            cim={`Lejárt (${adat?.lejart.length ?? 0})`}
+            sorok={adat?.lejart ?? []}
+            lejartStilus
+            ures="Nincs lejárt számla."
+            alkategoriaval={kategoria === "raklap"}
+            onFizetve={fizetve}
+            onVisszavon={visszavon}
+          />
         </div>
-      )}
+      ))}
     </div>
   );
 }
