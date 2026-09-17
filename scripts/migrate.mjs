@@ -674,8 +674,17 @@ async function naplozEcofleetFogyasztast() {
     const res = await fetch("https://app.ecofleet.com/seeme/services/apidoc/seeme");
     const html = await res.text();
     const szoveg = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ");
-    const vegpontok = [...new Set(html.match(/\b[A-Z][A-Za-z]+\/[a-zA-Z]+\b/g) ?? [])].filter((v) => /^(Vehicles|Reports|Fuel|Drivers|Objects|Events|Trips|Alarms|Zones|Tachograph|Api)\b/.test(v));
-    console.log(`[migrate] ecofleet apidoc: HTTP ${res.status}, ${html.length} karakter, végpontok: ${vegpontok.slice(0, 80).join(", ")}`);
+    const vegpontok = [...new Set(html.match(/\bApi\/[A-Za-z]+\/[A-Za-z]+\b/g) ?? [])];
+    console.log(`[migrate] ecofleet apidoc: HTTP ${res.status}, ${html.length} karakter, ${vegpontok.length} végpont: ${vegpontok.join(", ")}`);
+    for (const kulcs of ["Api/Reports", "Api/Expenses", "Api/Vehicles/getFuel", "Api/Logbook"]) {
+      let idx = szoveg.indexOf(kulcs);
+      let db = 0;
+      while (idx >= 0 && db < 3) {
+        console.log(`[migrate] ecofleet apidoc ${kulcs}: …${szoveg.slice(Math.max(0, idx - 80), idx + 700)}…`);
+        idx = szoveg.indexOf(kulcs, idx + 1);
+        db++;
+      }
+    }
     const talalatok = [];
     const re = /.{0,120}(fuel|tank|consum|üzemanyag|fogyaszt).{0,160}/gi;
     let m;
