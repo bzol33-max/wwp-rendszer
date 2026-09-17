@@ -10,17 +10,20 @@
 //
 // Pénz (fuvardíj, költség, számla) szándékosan nem jelenik meg itt.
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Check, ChevronLeft, ChevronRight, Clock, Copy, FileText, LocateFixed, MapPin, Navigation } from "lucide-react";
+import { AlertTriangle, Camera, Check, ChevronLeft, ChevronRight, Clock, Copy, FileText, Hash, LocateFixed, MapPin, MessageSquareWarning, Navigation } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import {
+  feltoltFuvarlevelFoto,
   getSoforNap,
+  jelezGondot,
   jelolMegerkeztem,
   markMegalloKesz,
   rogzitMegalloHelyet,
+  rogzitPozicioszamot,
   type SoforFuvarBlokk,
   type SoforMegalloSor,
   type SoforNap,
@@ -68,8 +71,37 @@ const TIPUS_CIMKE = { felrako: "Felrakó", lerako: "Lerakó" } as const;
 const DOK_CIMKE: Record<string, string> = {
   megbizas: "Megbízás",
   rakomanylista: "Rakománylista",
+  fuvarlevel: "Fuvarlevél fotó",
   egyeb: "Irat",
 };
+
+/** A feltöltött kép leghosszabb oldala pixelben — a telefon 4000 px-es, 5-8 MB-os fotója így ~300-600 KB lesz. */
+const FOTO_MAX_OLDAL_PX = 1600;
+const FOTO_JPEG_MINOSEG = 0.82;
+
+/**
+ * A fotó kicsinyítése a telefonon, feltöltés előtt. Mobilnetről egy 8 MB-os
+ * kép lassú és a szerver-akció korlátjába is beleütközne; egy fuvarlevél
+ * 1600 px-en tökéletesen olvasható. Ha a böngésző nem tudja (nincs canvas),
+ * az eredeti megy.
+ */
+async function kicsinyitFotot(fajl: File): Promise<Blob> {
+  try {
+    const kep = await createImageBitmap(fajl);
+    const arany = Math.min(1, FOTO_MAX_OLDAL_PX / Math.max(kep.width, kep.height));
+    if (arany === 1 && fajl.size < 1_500_000) return fajl;
+    const vaszon = document.createElement("canvas");
+    vaszon.width = Math.round(kep.width * arany);
+    vaszon.height = Math.round(kep.height * arany);
+    const ctx = vaszon.getContext("2d");
+    if (!ctx) return fajl;
+    ctx.drawImage(kep, 0, 0, vaszon.width, vaszon.height);
+    const blob = await new Promise<Blob | null>((ok) => vaszon.toBlob(ok, "image/jpeg", FOTO_JPEG_MINOSEG));
+    return blob ?? fajl;
+  } catch {
+    return fajl;
+  }
+}
 
 /**
  * Az időablak állapota. A Duvenbeck-megbízásokon ez óra:perc pontos, és ez a
@@ -315,6 +347,9 @@ function FuvarBlokk({
   onKesz,
   onErkezes,
   onHely,
+  onFoto,
+  onGond,
+  onPozicioszam,
 }: {
   blokk: SoforFuvarBlokk;
   kovetkezo: { fuvarId: string; megalloIndex: number } | null;
@@ -323,7 +358,11 @@ function FuvarBlokk({
   onKesz: (fuvarId: string, megalloIndex: number) => void;
   onErkezes: (fuvarId: string, megalloIndex: number) => void;
   onHely: (m: SoforMegalloSor) => void;
+  onFoto: (fuvarId: string, fajl: File) => void;
+  onGond: (fuvarId: string) => void;
+  onPozicioszam: (fuvarId: string) => void;
 }) {
+  const fotoInput = useRef<HTMLInputElement>(null);
   const honnan = blokk.megallok.find((m) => m.tipus === "felrako")?.varos;
   const hova = [...blokk.megallok].reverse().find((m) => m.tipus === "lerako")?.varos;
   const hivatkozas = blokk.reiseId ?? blokk.pozicioszam;
@@ -344,6 +383,18 @@ function FuvarBlokk({
           <span className="text-xs text-[var(--mob-muted)]">
             {honnan} – {hova}
           </span>
+        )}
+        {!hivatkozas && (
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => onPozicioszam(blokk.fuvarId)}
+            className="flex w-fit items-center gap-1.5 rounded-md bg-[var(--mob-negative)]/10 px-2 py-1 text-xs font-medium text-[var(--mob-negative)]"
+            title="A megbízásról nem sikerült kiolvasni a pozíciószámot. Ha a kapuban megkapod, írd be — a számlára is ez kerül."
+          >
+            <Hash className="h-3.5 w-3.5" />
+            Nincs pozíciószám · beírom
+          </button>
         )}
         {hivatkozas && (
           <button
@@ -402,8 +453,30 @@ function FuvarBlokk({
           és az időablakokkal, a rakománylista (FRALI…) a kapuban kért tiszta
           címekkel és referenciákkal. Ezért nem egy "Dokumentum" gomb van. */}
       <div className="flex flex-wrap gap-2 border-t border-[var(--mob-border)] px-3 py-2">
+        {/* Fuvarlevél fotó: a lerakásnál lefotózott CMR/fuvarlevél a Drive-ba
+            kerül és a fuvarhoz kötődik — a Számla/Posta oldal aznap látja. */}
+        <input
+          ref={fotoInput}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={(e) => {
+            const fajl = e.target.files?.[0];
+            e.target.value = "";
+            if (fajl) onFoto(blokk.fuvarId, fajl);
+          }}
+        />
+        <Button size="sm" variant="outline" disabled={pending} className="h-9 border-[var(--mob-border)]" onClick={() => fotoInput.current?.click()} title="Fuvarlevél / CMR lefotózása">
+          <Camera className="h-4 w-4" />
+          Fuvarlevél fotó
+        </Button>
+        <Button size="sm" variant="outline" disabled={pending} className="h-9 border-[var(--mob-border)]" onClick={() => onGond(blokk.fuvarId)} title="Gond van a fuvarral — üzenet a diszpécsernek">
+          <MessageSquareWarning className="h-4 w-4" />
+          Gond van
+        </Button>
         {blokk.dokumentumok.length === 0 ? (
-          <span className="text-xs text-[var(--mob-muted)]">Nincs irat a fuvarhoz.</span>
+          <span className="self-center text-xs text-[var(--mob-muted)]">Nincs irat a fuvarhoz.</span>
         ) : (
           blokk.dokumentumok.map((d) => (
             <Button
@@ -523,6 +596,48 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
     });
   }
 
+  function foto(fuvarId: string, fajl: File) {
+    startTransition(async () => {
+      try {
+        const kicsi = await kicsinyitFotot(fajl);
+        const form = new FormData();
+        form.append("foto", kicsi, "fuvarlevel.jpg");
+        await feltoltFuvarlevelFoto(fuvarId, form);
+        await load();
+        toast.success("Fuvarlevél feltöltve.");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Nem sikerült feltölteni a fotót.");
+      }
+    });
+  }
+
+  function gond(fuvarId: string) {
+    const szoveg = window.prompt("Mi a gond? Röviden, a diszpécser ezt kapja meg:");
+    if (!szoveg?.trim()) return;
+    startTransition(async () => {
+      try {
+        await jelezGondot(fuvarId, szoveg);
+        toast.success("Elküldve a diszpécsernek.");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Nem sikerült elküldeni.");
+      }
+    });
+  }
+
+  function pozicioszam(fuvarId: string) {
+    const szam = window.prompt("Pozíciószám / hivatkozási szám, ahogy a kapuban kaptad:");
+    if (!szam?.trim()) return;
+    startTransition(async () => {
+      try {
+        await rogzitPozicioszamot(fuvarId, szam);
+        await load();
+        toast.success("Pozíciószám rögzítve.");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Nem sikerült rögzíteni.");
+      }
+    });
+  }
+
   function hely(m: SoforMegalloSor) {
     if (!window.confirm(`A kocsi mostani helyét jegyezzük fel ehhez a címhez?\n\n${m.cim}\n\nCsak akkor koppints Igent, ha a rakodóhelyen állsz.`)) return;
     startTransition(async () => {
@@ -616,6 +731,9 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
                   onKesz={kesz}
                   onErkezes={erkezes}
                   onHely={hely}
+                  onFoto={foto}
+                  onGond={gond}
+                  onPozicioszam={pozicioszam}
                 />
               ))}
             </>

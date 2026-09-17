@@ -2206,6 +2206,17 @@ function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
                       </button>
                     ) : (
                       <div className="flex flex-col items-center gap-0.5">
+                        {row.fuvarlevel_foto_db > 0 && row.fuvarlevel_foto_id && (
+                          <a
+                            href={`/api/fuvarozas/dokumentum/${row.fuvarlevel_foto_id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            title="A sofőr lefotózta a fuvarlevelet a lerakásnál — a papír létezik, a fizikai beérkezést ez nem váltja ki"
+                            className="text-[11px] text-primary underline-offset-2 hover:underline"
+                          >
+                            fotó ({row.fuvarlevel_foto_db})
+                          </a>
+                        )}
                         <button
                           type="button"
                           title="A CMR és a fuvarlevél beérkezett a telephelyre"

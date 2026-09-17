@@ -228,3 +228,15 @@
   felismerése egy koppintással végleg megoldható.
 - A GPS lap menetidő-becslése is a közös, gyorsítótárazott geokódolót
   használja (eddig cache nélkül, külön hívta).
+
+## 2026-09-17 (14. kör) — Sofőr mobil nézet, 3. fázis: papír és jelzés
+
+- Fuvarlevél-fotó a lerakásnál: telefonon kicsinyítve, a Drive
+  `Fuvarmegbizások/Fuvarlevelek` almappájába, `fuvar_dokumentumok` sorként
+  (`tipus = 'fuvarlevel'`). A Számla/Posta „Papírra vár" oszlopban „fotó (n)"
+  link — a papír létezése aznap látszik, a fizikai beérkezést nem váltja ki.
+  Drive scope `drive.readonly` → `drive`; a service account a mappán
+  Szerkesztő (Budaházi Zoltán, 2026-09-17).
+- „Gond van": a sofőr jelzése a `feladatok` táblába, a meglévő csatornán.
+- „Nincs pozíciószám · beírom": a kapuban kapott szám rögzítése, csak üres
+  mezőbe.
