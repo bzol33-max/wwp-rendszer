@@ -236,3 +236,89 @@ export async function getVehicleTrips(objectId: string, begin: Date, end: Date):
     maxSpeed: toNumberOrNull(n.maxSpeed) ?? 0,
   }));
 }
+
+// ---------------------------------------------------------------------------
+// Útvonal jelentés (Reports/getReport, id: trips) — ugyanaz, amit az Ecofleet
+// naponta e-mailben is küld, de itt tetszőleges időszakra, csv-ben. A
+// trip-lista (Vehicles/getTrips) NEM tartalmaz üzemanyag-adatot, ez a
+// jelentés igen ("Fogyasztott üzemanyag mennyiség", liter). A jelentés
+// paramétereit (getReportConf szerint begTimestamp, endTimestamp, objectIds)
+// lapos query-paraméterként kell átadni — JSON-ban a `parameters` kulcsban
+// átadva a szerver figyelmen kívül hagyja őket, és üres jelentést ad.
+// ---------------------------------------------------------------------------
+
+export type EcofleetUtSor = {
+  /** Rendszám a jelentés szerint, szóköz/kötőjel nélkül, nagybetűvel (pl. "AOPU427"). */
+  rendszamKulcs: string;
+  /** "YYYY-MM-DD HH:MM:SS" budapesti falióra szerint. */
+  indulas: string;
+  erkezes: string;
+  tavKm: number;
+  /** Fogyasztott üzemanyag, liter — 0, ha a nyomkövető nem mér üzemanyagot. */
+  uzemanyagL: number;
+};
+
+/** Rendszám összehasonlító kulcsa: "AO PU-427" / "AOPU-427" -> "AOPU427". */
+export function rendszamKulcs(rendszam: string): string {
+  return rendszam.replace(/[\s-]/g, "").toUpperCase();
+}
+
+function csvMezok(sor: string): string[] {
+  return sor.split(";").map((c) => c.replace(/^"|"$/g, "").trim());
+}
+
+function csvSzam(ertek: string | undefined): number {
+  const n = Number(String(ertek ?? "").replace(",", "."));
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Az Útvonal jelentés sorai a megadott járművekre, a `kezdetNapISO` 00:00-tól
+ * a `vegNapISO` 23:59:59-ig (budapesti naptári napok, "YYYY-MM-DD").
+ */
+export async function getUtvonalJelentes(objectIds: string[], kezdetNapISO: string, vegNapISO: string): Promise<EcofleetUtSor[]> {
+  const apiKey = process.env.ECOFLEET_API_KEY;
+  if (!apiKey) {
+    throw new EcofleetError("Nincs beállítva az ECOFLEET_API_KEY környezeti változó.");
+  }
+  const url = new URL(`${ECOFLEET_BASE}/Reports/getReport`);
+  url.searchParams.set("key", apiKey);
+  url.searchParams.set("id", "trips");
+  url.searchParams.set("format", "csv");
+  url.searchParams.set("begTimestamp", `${kezdetNapISO} 00:00:00`);
+  url.searchParams.set("endTimestamp", `${vegNapISO} 23:59:59`);
+  for (const id of objectIds) url.searchParams.append("objectIds[]", id);
+
+  const res = await fetch(url.toString(), { cache: "no-store" });
+  const szoveg = (await res.text()).replace(/\r/g, "");
+  if (/^\s*<\?xml/.test(szoveg)) {
+    const uzenet = szoveg.match(/<errormessage>([^<]*)<\/errormessage>/)?.[1];
+    throw new EcofleetError(uzenet || `Ecofleet jelentés hiba (HTTP ${res.status}).`);
+  }
+  if (!res.ok) throw new EcofleetError(`Ecofleet jelentés hiba (HTTP ${res.status}).`);
+
+  const sorok = szoveg.split("\n").filter((l) => l.trim());
+  // Első sor a jelentés címe, a fejléc az, amelyikben a "Jármű" oszlop van.
+  const fejIdx = sorok.findIndex((l) => /^"?Járm/i.test(l));
+  if (fejIdx < 0) return [];
+  const fej = csvMezok(sorok[fejIdx]);
+  const oszlop = (minta: RegExp) => fej.findIndex((c) => minta.test(c));
+  const jarmuIdx = oszlop(/^Járm/i);
+  const indulasIdx = oszlop(/^Indulás$/i);
+  const erkezesIdx = oszlop(/^Érkezés$/i);
+  const tavIdx = oszlop(/^Hossz/i);
+  const uzIdx = oszlop(/^Fogyasztott üzemanyag/i);
+  if (jarmuIdx < 0 || indulasIdx < 0 || tavIdx < 0) {
+    throw new EcofleetError("Az Ecofleet útvonal-jelentés oszlopai megváltoztak.");
+  }
+  return sorok.slice(fejIdx + 1).map((l) => {
+    const c = csvMezok(l);
+    return {
+      rendszamKulcs: rendszamKulcs(c[jarmuIdx] ?? ""),
+      indulas: c[indulasIdx] ?? "",
+      erkezes: erkezesIdx >= 0 ? (c[erkezesIdx] ?? "") : "",
+      tavKm: csvSzam(c[tavIdx]),
+      uzemanyagL: uzIdx >= 0 ? csvSzam(c[uzIdx]) : 0,
+    };
+  }).filter((s) => s.rendszamKulcs && s.indulas);
+}
