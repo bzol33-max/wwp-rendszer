@@ -202,3 +202,19 @@ export function varosNev(value: string | null | undefined): string {
     .filter((v, i) => i === 0 || v.trim().toLowerCase() !== varosok[i - 1].trim().toLowerCase())
     .join(" + ");
 }
+
+/**
+ * Egy cím normalizált kulcsa a helyszín-szótárhoz (fuvar_helyszin_koordinata):
+ * kisbetűs, ékezet nélkül, minden nem betű/szám egy szóközre vonva. Így az
+ * "RBT EUROPE Kft. [H-4243] TÉGLÁS, Hrsz. 0123" és ugyanez más
+ * szóközözéssel vagy kis/nagybetűvel ugyanarra a kulcsra esik, két különböző
+ * cím viszont nem.
+ */
+export function cimKulcs(cim: string): string {
+  return cim
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}

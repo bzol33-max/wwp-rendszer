@@ -15,7 +15,8 @@
 // (geokódolás), de nem szerver-akciók.
 
 import { geocodeAddress, TollCalcError, type GeocodedAddress } from "./utdijkalkulacio";
-import { bontsMegallokra, cimPontossaga, varosNev } from "./varos";
+import { bontsMegallokra, cimKulcs, cimPontossaga, varosNev } from "./varos";
+import { query } from "@/lib/db";
 import { budapestFalioraToInstant } from "./idozona";
 import type { EcofleetPosition } from "./ecofleet";
 import type { TervezettMegallo } from "./idovonal";
@@ -50,12 +51,44 @@ export function megalloAblakKezdet(sor: AblakosFuvarSor, tipus: "felrako" | "ler
 }
 
 // A címek geokódolása külső API-t hív — a címek nem változnak, a
-// folyamat élettartamáig érvényes gyorsítótár elég.
+// folyamat élettartamáig érvényes gyorsítótár elég. A helyszín-szótár
+// (fuvar_helyszin_koordinata) a külső hívás ELŐTT jön: ha egy címhez a
+// sofőr a helyszínről rögzítette a kocsi tényleges pozícióját, az a
+// mérvadó, nem a bizonytalan geokódolás.
 const geokodCache = new Map<string, GeocodedAddress | null>();
 
-/** Geokódolás folyamat-szintű gyorsítótárral; nem geokódolható címnél null (nem dob). */
+/** A helyszín-szótár és a geokódolási gyorsítótár eldobása — új helyszín rögzítése után. */
+export function toroljGeokodCachet(): void {
+  geokodCache.clear();
+}
+
+async function helyszinSzotarbol(cim: string): Promise<GeocodedAddress | null> {
+  const kulcs = cimKulcs(cim);
+  if (!kulcs) return null;
+  try {
+    const sorok = await query<{ lat: number; lon: number }>(
+      `select lat, lon from fuvar_helyszin_koordinata where cim_kulcs = $1`,
+      [kulcs]
+    );
+    return sorok[0] ? { label: cim, lat: Number(sorok[0].lat), lon: Number(sorok[0].lon) } : null;
+  } catch (err) {
+    console.error("[erintes-felismeres] helyszín-szótár hiba:", err);
+    return null;
+  }
+}
+
+/**
+ * Egy megálló címének koordinátája: először a helyszín-szótárból, aztán
+ * geokódolással, folyamat-szintű gyorsítótárral. Nem geokódolható címnél
+ * null (nem dob).
+ */
 export async function geokodolCachelve(cim: string): Promise<GeocodedAddress | null> {
   if (geokodCache.has(cim)) return geokodCache.get(cim) ?? null;
+  const rogzitett = await helyszinSzotarbol(cim);
+  if (rogzitett) {
+    geokodCache.set(cim, rogzitett);
+    return rogzitett;
+  }
   try {
     const talalat = await geocodeAddress(cim);
     geokodCache.set(cim, talalat);

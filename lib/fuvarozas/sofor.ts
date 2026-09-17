@@ -16,8 +16,10 @@ import { requireSession } from "@/lib/auth/dal";
 import { getIdovonalak } from "@/lib/fuvarozas/actions";
 import { getFuvarok } from "@/lib/fuvarozas/megbizasok";
 import { resolveJarmu, SAJAT_JARMUVEK, type SajatJarmu } from "@/lib/fuvarozas/vehicles";
-import { bontsMegallokra, varosNev } from "@/lib/fuvarozas/varos";
+import { bontsMegallokra, cimKulcs, cimPontossaga, varosNev } from "@/lib/fuvarozas/varos";
 import { toroljIdovonalCachet } from "@/lib/fuvarozas/idovonal-cache";
+import { getFleetLastPositions, parseEcofleetTimestamp } from "@/lib/fuvarozas/ecofleet";
+import { mozogE, toroljGeokodCachet } from "@/lib/fuvarozas/erintes-felismeres";
 import type { FuvarRow } from "@/lib/fuvarozas/fuvar-constants";
 
 function jarmuMatch(jarmu: SajatJarmu, row: FuvarRow): boolean {
@@ -217,6 +219,17 @@ export type SoforMegalloSor = {
   eppenItt: boolean;
   /** Hány nappal esik a megjelenített naptól (0 = aznap, -1 = tegnap, +1 = holnap). */
   napElteres: number;
+  /** A sofőr "Megérkeztem" koppintásának ideje, ha volt. */
+  keziErkezes: Date | null;
+  /**
+   * Igaz, ha a cím geokódolása bizonytalan (csak városnév szintjén ismert
+   * vagy egyáltalán nem), és a helyszín-szótárban sincs rögzítve — ilyenkor
+   * a GPS-felismerés nem tud ide érkezést jelölni, a sofőr a helyszínről
+   * rögzítheti a valódi koordinátát (rogzitMegalloHelyet).
+   */
+  helyBizonytalan: boolean;
+  /** Igaz, ha ehhez a címhez már van helyszínről rögzített koordináta. */
+  helyRogzitve: boolean;
 };
 
 export type SoforDokumentum = {
@@ -320,6 +333,23 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
       ])
     : [[], []];
 
+  const megallokKulcsai = [...new Set(blokkok.flatMap((b) => b.megallok.map((m) => cimKulcs(m.nyersCim))).filter(Boolean))];
+  const [erkezesSorok, helyszinSorok] = fuvarIds.length
+    ? await Promise.all([
+        query<{ fuvar_id: string; megallo_index: number; kezi_erkezes: Date | null }>(
+          `select fuvar_id::text, megallo_index, kezi_erkezes
+             from fuvar_megallo_allapot
+            where fuvar_id = any($1::bigint[]) and kezi_erkezes is not null`,
+          [fuvarIds]
+        ),
+        megallokKulcsai.length
+          ? query<{ cim_kulcs: string }>(`select cim_kulcs from fuvar_helyszin_koordinata where cim_kulcs = any($1::text[])`, [megallokKulcsai])
+          : Promise.resolve([]),
+      ])
+    : [[], []];
+  const erkezesByMegallo = new Map(erkezesSorok.map((e) => [`${e.fuvar_id}/${e.megallo_index}`, e.kezi_erkezes]));
+  const rogzitettHelyek = new Set(helyszinSorok.map((h) => h.cim_kulcs));
+
   const extraById = new Map(extraSorok.map((e) => [e.id, e]));
   const dokByFuvar = new Map<string, SoforDokumentum[]>();
   for (const d of dokSorok) {
@@ -359,6 +389,10 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
         keszBy: m.keszBy,
         eppenItt: m.eppenItt,
         napElteres: m.napElteres,
+        keziErkezes: erkezesByMegallo.get(`${m.fuvarId}/${m.megalloIndex}`) ?? null,
+        helyRogzitve: rogzitettHelyek.has(cimKulcs(m.nyersCim)),
+        helyBizonytalan:
+          !rogzitettHelyek.has(cimKulcs(m.nyersCim)) && (m.bizonytalanFelismeres || cimPontossaga(m.nyersCim) !== "pontos"),
       })),
     };
   });
@@ -375,4 +409,88 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
       : null,
     hiba: sajat?.hiba ?? null,
   };
+}
+
+/**
+ * A sofőr "Megérkeztem" koppintása — a tényleges érkezés ideje, a
+ * GPS-becsléstől függetlenül. Csak az első koppintás számít (a második nem
+ * írja felül), mert az érkezés egy pillanat, nem állapot.
+ */
+export async function jelolMegerkeztem(fuvarId: string, megalloIndex: number): Promise<void> {
+  await requireAnyEditPermission(["fuvarozas", "fuvarozas_sajat"]);
+  const soforNev = (await requireSession()).name;
+  await query(
+    `insert into fuvar_megallo_allapot (fuvar_id, megallo_index, kesz, kezi_erkezes, kesz_by)
+     values ($1, $2, false, now(), $3)
+     on conflict (fuvar_id, megallo_index)
+     do update set kezi_erkezes = coalesce(fuvar_megallo_allapot.kezi_erkezes, now())`,
+    [fuvarId, megalloIndex, soforNev]
+  );
+  toroljIdovonalCachet();
+  revalidatePath("/erkezes");
+}
+
+/** Ennél régebbi élő pozícióval nem rögzítünk helyszínt — nem tudjuk, hol áll a kocsi. */
+const HELYSZIN_MAX_JEL_KOR_PERC = 15;
+
+/**
+ * A sofőr a megállóban rögzíti, hogy a megbízáson szereplő cím TÉNYLEGESEN
+ * itt van — a kocsi aktuális Ecofleet-pozícióját írjuk a helyszín-szótárba
+ * (fuvar_helyszin_koordinata), a cím normalizált kulcsával. Onnantól
+ * minden ugyanerre a címre szóló fuvart a GPS-felismerés ide vár.
+ *
+ * A kocsi pozícióját használjuk, nem a telefonét: a nyomkövető megbízhatóbb,
+ * és a sofőr a kocsi mellett áll. Két feltétel: a kocsi álljon (mozgás
+ * közben a "hely" értelmetlen), és a jel legyen friss.
+ */
+export async function rogzitMegalloHelyet(
+  fuvarId: string,
+  megalloIndex: number
+): Promise<{ cim: string; lat: number; lon: number }> {
+  await requireAnyEditPermission(["fuvarozas", "fuvarozas_sajat"]);
+  const session = await requireSession();
+
+  const sorok = await query<{ felrako: string | null; lerako: string; jarmu: string | null; sofor: string | null }>(
+    `select felrako, lerako, jarmu, sofor from fuvar_megbizasok where id = $1`,
+    [fuvarId]
+  );
+  const fuvar = sorok[0];
+  if (!fuvar) throw new Error("Nincs ilyen fuvar.");
+  const cimek = [...bontsMegallokra(fuvar.felrako), ...bontsMegallokra(fuvar.lerako)];
+  const cim = cimek[megalloIndex];
+  if (!cim) throw new Error("Nincs ilyen megálló.");
+
+  // Melyik kocsi: a fuvaré. (A sofőr csak a saját kocsijára ütemezett fuvart
+  // látja, de a hely a fuvar kocsijához tartozik, nem a bejelentkezett
+  // személyhez.)
+  const jarmu =
+    (fuvar.jarmu ? resolveJarmu(fuvar.jarmu) : null) ??
+    (fuvar.sofor ? findJarmuByEmployeeName(fuvar.sofor) : null);
+  if (!jarmu?.ecofleetObjectId) throw new Error("A fuvarhoz nem tartozik GPS-es kocsi.");
+
+  const poziciok = await getFleetLastPositions();
+  const pos = poziciok.find((p) => p.objectId === jarmu.ecofleetObjectId);
+  if (!pos) throw new Error("Nincs élő pozíció a kocsihoz.");
+  const jelIdeje = parseEcofleetTimestamp(pos.timestamp);
+  if (!jelIdeje || Date.now() - jelIdeje.getTime() > HELYSZIN_MAX_JEL_KOR_PERC * 60000) {
+    throw new Error("A kocsi GPS-jele régi, várj egy percet és próbáld újra.");
+  }
+  if (mozogE(pos)) throw new Error("A kocsi mozog — állj meg a rakodóhelyen, és akkor rögzítsd.");
+
+  const kulcs = cimKulcs(cim);
+  if (!kulcs) throw new Error("Üres cím.");
+  await query(
+    `insert into fuvar_helyszin_koordinata (cim_kulcs, cim_minta, lat, lon, forras, rogzitve_by)
+     values ($1, $2, $3, $4, 'sofor', $5)
+     on conflict (cim_kulcs)
+     do update set cim_minta = excluded.cim_minta, lat = excluded.lat, lon = excluded.lon,
+                   forras = excluded.forras, rogzitve_by = excluded.rogzitve_by, rogzitve_at = now()`,
+    [kulcs, cim, pos.latitude, pos.longitude, session.name]
+  );
+  // A felismerés és a GPS lap a következő számításnál már az új helyet lássa.
+  toroljGeokodCachet();
+  toroljIdovonalCachet();
+  revalidatePath("/erkezes");
+  console.log(`[sofor] helyszín rögzítve: "${cim}" → ${pos.latitude.toFixed(5)}, ${pos.longitude.toFixed(5)} (${session.name})`);
+  return { cim, lat: pos.latitude, lon: pos.longitude };
 }

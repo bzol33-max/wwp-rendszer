@@ -12,11 +12,19 @@
 
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Check, ChevronLeft, ChevronRight, Clock, Copy, FileText, MapPin, Navigation } from "lucide-react";
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Clock, Copy, FileText, LocateFixed, MapPin, Navigation } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { getSoforNap, markMegalloKesz, type SoforFuvarBlokk, type SoforMegalloSor, type SoforNap } from "@/lib/fuvarozas/sofor";
+import {
+  getSoforNap,
+  jelolMegerkeztem,
+  markMegalloKesz,
+  rogzitMegalloHelyet,
+  type SoforFuvarBlokk,
+  type SoforMegalloSor,
+  type SoforNap,
+} from "@/lib/fuvarozas/sofor";
 import { getKovetkezoNapokElonezet, type KovetkezoNap } from "@/lib/fuvarozas/actions";
 import { budapestNapISO } from "@/lib/fuvarozas/idozona";
 
@@ -100,6 +108,48 @@ function navigacioUrl(cim: string): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(cim)}`;
 }
 
+/** "Érkezés 08:12" a sofőr Megérkeztem koppintásából. */
+function ErkezesJel({ m }: { m: SoforMegalloSor }) {
+  if (!m.keziErkezes) return null;
+  return (
+    <span className="flex items-center gap-1 text-xs text-[var(--mob-muted)]" title="A Megérkeztem koppintás ideje">
+      <MapPin className="h-3.5 w-3.5" />
+      Érkezés {formatIdo(m.keziErkezes)}
+    </span>
+  );
+}
+
+/**
+ * "Rossz a cím? Itt vagyok." — ha a cím geokódolása bizonytalan, a GPS-
+ * felismerés nem tud ide érkezést jelölni. A sofőr a rakodóhelyen állva egy
+ * koppintással a kocsi pozícióját rögzíti a cím valódi helyeként; onnantól
+ * minden ugyanide szóló fuvar magától felismerhető.
+ */
+function HelyGomb({ m, pending, onHely }: { m: SoforMegalloSor; pending: boolean; onHely: () => void }) {
+  if (m.kesz) return null;
+  if (m.helyRogzitve) {
+    return (
+      <span className="flex items-center gap-1 text-[11px] text-[var(--mob-muted)]" title="Ehhez a címhez a helyszínről rögzített koordináta tartozik">
+        <LocateFixed className="h-3.5 w-3.5" />
+        Hely rögzítve
+      </span>
+    );
+  }
+  if (!m.helyBizonytalan) return null;
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      onClick={onHely}
+      className="flex items-center gap-1 rounded-md bg-[var(--mob-negative)]/10 px-2 py-1 text-[11px] font-medium text-[var(--mob-negative)]"
+      title="A rendszer nem találja pontosan ezt a címet a térképen. Ha a rakodóhelyen állsz, koppints: a kocsi mostani helyét jegyezzük fel a címhez."
+    >
+      <LocateFixed className="h-3.5 w-3.5" />
+      Bizonytalan cím · itt vagyok
+    </button>
+  );
+}
+
 /** A soron következő megálló nagy kártyán — vezetés közben ez az egyetlen, amit el kell olvasni. */
 function KovetkezoKartya({
   m,
@@ -107,12 +157,16 @@ function KovetkezoKartya({
   most,
   pending,
   onKesz,
+  onErkezes,
+  onHely,
 }: {
   m: SoforMegalloSor;
   blokk: SoforFuvarBlokk;
   most: number;
   pending: boolean;
   onKesz: () => void;
+  onErkezes: () => void;
+  onHely: () => void;
 }) {
   return (
     <Card className="border-2 border-[var(--mob-accent)] bg-[var(--mob-card)] ring-0">
@@ -123,7 +177,11 @@ function KovetkezoKartya({
         </div>
         <p className="text-xl font-semibold leading-tight">{m.varos}</p>
         <p className="text-sm text-[var(--mob-muted)]">{m.cim}</p>
-        <AblakSor m={m} most={most} />
+        <div className="flex flex-wrap items-center gap-2">
+          <AblakSor m={m} most={most} />
+          <ErkezesJel m={m} />
+          <HelyGomb m={m} pending={pending} onHely={onHely} />
+        </div>
         {blokk.megrendelo && <p className="text-sm">{blokk.megrendelo}</p>}
         <div className="flex gap-2 pt-1">
           <Button
@@ -134,14 +192,20 @@ function KovetkezoKartya({
             <Navigation className="h-4 w-4" />
             Navigáció
           </Button>
-          <Button
-            disabled={pending}
-            onClick={onKesz}
-            className="flex-1 bg-[var(--mob-accent)] text-white hover:bg-[var(--mob-accent)]/90"
-          >
-            {m.tipus === "felrako" ? "FELRAKVA" : "LERAKVA"}
-          </Button>
+          {!m.keziErkezes && (
+            <Button variant="outline" disabled={pending} onClick={onErkezes} className="flex-1 border-[var(--mob-border)]">
+              <MapPin className="h-4 w-4" />
+              Megérkeztem
+            </Button>
+          )}
         </div>
+        <Button
+          disabled={pending}
+          onClick={onKesz}
+          className="w-full bg-[var(--mob-accent)] text-white hover:bg-[var(--mob-accent)]/90"
+        >
+          {m.tipus === "felrako" ? "FELRAKVA" : "LERAKVA"}
+        </Button>
       </CardContent>
     </Card>
   );
@@ -154,6 +218,8 @@ function MegalloSor({
   most,
   pending,
   onKesz,
+  onErkezes,
+  onHely,
 }: {
   m: SoforMegalloSor;
   sorszam: string;
@@ -161,6 +227,8 @@ function MegalloSor({
   most: number;
   pending: boolean;
   onKesz: () => void;
+  onErkezes: () => void;
+  onHely: () => void;
 }) {
   return (
     <div
@@ -201,22 +269,33 @@ function MegalloSor({
         </div>
       </div>
       <div className="flex items-center justify-between gap-2">
-        <AblakSor m={m} most={most} />
+        <div className="flex flex-wrap items-center gap-2">
+          <AblakSor m={m} most={most} />
+          <ErkezesJel m={m} />
+          <HelyGomb m={m} pending={pending} onHely={onHely} />
+        </div>
         {!m.kesz && (
-          <Button
-            size="sm"
-            variant={kovetkezoE ? "default" : "outline"}
-            disabled={pending}
-            onClick={onKesz}
-            className={cn(
-              "h-9 shrink-0",
-              kovetkezoE
-                ? "bg-[var(--mob-accent)] text-white hover:bg-[var(--mob-accent)]/90"
-                : "border-[var(--mob-border)]"
+          <div className="flex shrink-0 gap-1">
+            {!m.keziErkezes && !kovetkezoE && (
+              <Button size="sm" variant="outline" disabled={pending} onClick={onErkezes} className="h-9 border-[var(--mob-border)]" title="Megérkeztem">
+                <MapPin className="h-4 w-4" />
+              </Button>
             )}
-          >
-            {m.tipus === "felrako" ? "Felrakva" : "Lerakva"}
-          </Button>
+            <Button
+              size="sm"
+              variant={kovetkezoE ? "default" : "outline"}
+              disabled={pending}
+              onClick={onKesz}
+              className={cn(
+                "h-9",
+                kovetkezoE
+                  ? "bg-[var(--mob-accent)] text-white hover:bg-[var(--mob-accent)]/90"
+                  : "border-[var(--mob-border)]"
+              )}
+            >
+              {m.tipus === "felrako" ? "Felrakva" : "Lerakva"}
+            </Button>
+          </div>
         )}
       </div>
     </div>
@@ -234,12 +313,16 @@ function FuvarBlokk({
   most,
   pending,
   onKesz,
+  onErkezes,
+  onHely,
 }: {
   blokk: SoforFuvarBlokk;
   kovetkezo: { fuvarId: string; megalloIndex: number } | null;
   most: number;
   pending: boolean;
   onKesz: (fuvarId: string, megalloIndex: number) => void;
+  onErkezes: (fuvarId: string, megalloIndex: number) => void;
+  onHely: (m: SoforMegalloSor) => void;
 }) {
   const honnan = blokk.megallok.find((m) => m.tipus === "felrako")?.varos;
   const hova = [...blokk.megallok].reverse().find((m) => m.tipus === "lerako")?.varos;
@@ -308,6 +391,8 @@ function FuvarBlokk({
               most={most}
               pending={pending}
               onKesz={() => onKesz(m.fuvarId, m.megalloIndex)}
+              onErkezes={() => onErkezes(m.fuvarId, m.megalloIndex)}
+              onHely={() => onHely(m)}
             />
           );
         })}
@@ -426,6 +511,31 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
     });
   }
 
+  function erkezes(fuvarId: string, megalloIndex: number) {
+    startTransition(async () => {
+      try {
+        await jelolMegerkeztem(fuvarId, megalloIndex);
+        await load();
+        toast.success("Érkezés rögzítve.");
+      } catch {
+        toast.error("Nem sikerült rögzíteni.");
+      }
+    });
+  }
+
+  function hely(m: SoforMegalloSor) {
+    if (!window.confirm(`A kocsi mostani helyét jegyezzük fel ehhez a címhez?\n\n${m.cim}\n\nCsak akkor koppints Igent, ha a rakodóhelyen állsz.`)) return;
+    startTransition(async () => {
+      try {
+        await rogzitMegalloHelyet(m.fuvarId, m.megalloIndex);
+        await load();
+        toast.success("Hely rögzítve. Mostantól a rendszer ide várja ezt a címet.");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Nem sikerült rögzíteni a helyet.");
+      }
+    });
+  }
+
   const blokkok = nap?.fuvarok ?? [];
   const kovetkezoHivatkozas = nap?.kovetkezo ?? null;
   const kovetkezoBlokk = kovetkezoHivatkozas
@@ -492,6 +602,8 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
                   most={most}
                   pending={pending}
                   onKesz={() => kesz(kovetkezoMegallo.fuvarId, kovetkezoMegallo.megalloIndex)}
+                  onErkezes={() => erkezes(kovetkezoMegallo.fuvarId, kovetkezoMegallo.megalloIndex)}
+                  onHely={() => hely(kovetkezoMegallo)}
                 />
               )}
               {blokkok.map((b) => (
@@ -502,6 +614,8 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
                   most={most}
                   pending={pending}
                   onKesz={kesz}
+                  onErkezes={erkezes}
+                  onHely={hely}
                 />
               ))}
             </>
