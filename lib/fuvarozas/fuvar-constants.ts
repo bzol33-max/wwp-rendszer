@@ -220,6 +220,10 @@ export type FuvarRow = {
    * lerakás dátumától.
    */
   lerakas_tenyleges_at: string | null;
+  /** A sofőr által a lerakásnál lefotózott fuvarlevelek száma (fuvar_dokumentumok, tipus 'fuvarlevel'). */
+  fuvarlevel_foto_db: number;
+  /** Az első fuvarlevél-fotó dokumentum-azonosítója — a /api/fuvarozas/dokumentum/{id} nyitja meg. */
+  fuvarlevel_foto_id: string | null;
   /**
    * Kézi "Teljesítve" jelölő (Bér fuvarok — folyamatban fül): igaz, ha a
    * fuvar a rögzített (tervezett) lerakás dátum előtt lett kézzel lezárva,

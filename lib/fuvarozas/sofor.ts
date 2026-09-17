@@ -20,6 +20,7 @@ import { bontsMegallokra, cimKulcs, cimPontossaga, varosNev } from "@/lib/fuvaro
 import { toroljIdovonalCachet } from "@/lib/fuvarozas/idovonal-cache";
 import { getFleetLastPositions, parseEcofleetTimestamp } from "@/lib/fuvarozas/ecofleet";
 import { mozogE, toroljGeokodCachet } from "@/lib/fuvarozas/erintes-felismeres";
+import { feltoltFuvarlevelFotot } from "@/lib/fuvarozas/drive-sync-core";
 import type { FuvarRow } from "@/lib/fuvarozas/fuvar-constants";
 
 function jarmuMatch(jarmu: SajatJarmu, row: FuvarRow): boolean {
@@ -493,4 +494,108 @@ export async function rogzitMegalloHelyet(
   revalidatePath("/erkezes");
   console.log(`[sofor] helyszín rögzítve: "${cim}" → ${pos.latitude.toFixed(5)}, ${pos.longitude.toFixed(5)} (${session.name})`);
   return { cim, lat: pos.latitude, lon: pos.longitude };
+}
+
+/** Ennél nagyobb fotót nem fogadunk el — a telefon oldalán amúgy is kicsinyítünk (lásd sofor-fuvar-nap.tsx). */
+const FOTO_MAX_BAJT = 8 * 1024 * 1024;
+
+/**
+ * A sofőr lefotózza a fuvarlevelet/CMR-t a lerakásnál. A kép a Drive
+ * Fuvarmegbizások/Fuvarlevelek mappájába kerül, és "fuvarlevel" típusú
+ * dokumentumként a fuvarhoz kötődik (fuvar_dokumentumok) — így a Számla/
+ * Posta oldal aznap látja, hogy a papír létezik és mi van rajta. A fizikai
+ * beérkezést (papirok_beerkeztek_at) NEM váltja ki: papír nélkül nem
+ * számlázunk, de az elveszett fuvarlevél nem két hét múlva derül ki.
+ */
+export async function feltoltFuvarlevelFoto(fuvarId: string, form: FormData): Promise<{ dokId: string }> {
+  await requireAnyEditPermission(["fuvarozas", "fuvarozas_sajat"]);
+  const session = await requireSession();
+  const fajl = form.get("foto");
+  if (!(fajl instanceof File) || fajl.size === 0) throw new Error("Nincs kép.");
+  if (fajl.size > FOTO_MAX_BAJT) throw new Error("A kép túl nagy.");
+  if (!fajl.type.startsWith("image/")) throw new Error("Csak kép tölthető fel.");
+
+  const sorok = await query<{ datum: string; jarmu: string | null; reise_id: string | null; pozicioszam: string | null }>(
+    `select to_char(datum, 'YYYY-MM-DD') as datum, jarmu, reise_id, pozicioszam from fuvar_megbizasok where id = $1`,
+    [fuvarId]
+  );
+  const fuvar = sorok[0];
+  if (!fuvar) throw new Error("Nincs ilyen fuvar.");
+
+  const hivatkozas = (fuvar.reise_id ?? fuvar.pozicioszam ?? `fuvar${fuvarId}`).replace(/[^A-Za-z0-9_-]+/g, "_");
+  const rendszam = (fuvar.jarmu ?? "").replace(/[^A-Za-z0-9]+/g, "").toUpperCase() || "kocsi";
+  const kiterjesztes = fajl.type === "image/png" ? "png" : "jpg";
+  const nev = `${fuvar.datum}_${rendszam}_${hivatkozas}_${Date.now()}.${kiterjesztes}`;
+  const tartalom = Buffer.from(await fajl.arrayBuffer());
+
+  const feltoltve = await feltoltFuvarlevelFotot(nev, fajl.type, tartalom);
+  const beszurt = await query<{ id: string }>(
+    `insert into fuvar_dokumentumok (fuvar_id, drive_file_id, dokumentum_url, tipus, fajlnev)
+     values ($1, $2, $3, 'fuvarlevel', $4)
+     returning id::text`,
+    [fuvarId, feltoltve.id, feltoltve.url, nev]
+  );
+  console.log(`[sofor] fuvarlevél-fotó feltöltve: fuvar #${fuvarId}, ${nev}, ${Math.round(tartalom.length / 1024)} KB (${session.name})`);
+  revalidatePath("/erkezes");
+  revalidatePath("/fuvarozas");
+  return { dokId: beszurt[0].id };
+}
+
+/**
+ * A sofőr gondot jelez egy fuvarhoz (rossz cím, nem fogadják, hiányzó
+ * papír…). A jelzés a feladatok táblába kerül, amit a diszpécser a
+ * Jelenlét/üzenőfal oldalon és a Feladatok csempén lát — nincs új felület,
+ * a meglévő csatornán érkezik.
+ */
+export async function jelezGondot(fuvarId: string, szoveg: string): Promise<void> {
+  await requireAnyEditPermission(["fuvarozas", "fuvarozas_sajat"]);
+  const session = await requireSession();
+  const tiszta = szoveg.trim();
+  if (!tiszta) throw new Error("Írd le röviden, mi a gond.");
+  const sorok = await query<{ megrendelo: string | null; pozicioszam: string | null; reise_id: string | null; lerako: string }>(
+    `select megrendelo, pozicioszam, reise_id, lerako from fuvar_megbizasok where id = $1`,
+    [fuvarId]
+  );
+  const fuvar = sorok[0];
+  if (!fuvar) throw new Error("Nincs ilyen fuvar.");
+  // A feladat telephelyhez kötött; a sofőr jelzése a központhoz (Szakoly)
+  // szól. Ha nincs ilyen nevű telephely, az első felvitt telephelyre megy.
+  const site = await query<{ id: number }>(
+    `select id from sites order by (name ilike 'szakoly%') desc, id asc limit 1`
+  );
+  if (!site[0]) throw new Error("Nincs telephely a feladathoz.");
+  const hiv = fuvar.reise_id ?? fuvar.pozicioszam;
+  const leiras = `Sofőr jelzés (${session.name}) — fuvar #${fuvarId}${fuvar.megrendelo ? `, ${fuvar.megrendelo}` : ""}${hiv ? `, ${hiv}` : ""}, ${varosNev(fuvar.lerako)}: ${tiszta}`;
+  await query(
+    `insert into feladatok (task_date, site_id, description, urgency, repeat_freq, created_by)
+     values (($1::timestamptz at time zone 'Europe/Budapest')::date, $2, $3, 4, 'egyszeri', $4)`,
+    [new Date().toISOString(), site[0].id, leiras, session.name]
+  );
+  console.log(`[sofor] gondjelzés: ${leiras}`);
+  revalidatePath("/jelenlet");
+  revalidatePath("/erkezes");
+}
+
+/**
+ * A kapuban kapott pozíciószám / hivatkozási szám beírása, ha a
+ * megbízásról nem sikerült kiolvasni. Csak ÜRES mezőt tölt ki — meglévő
+ * számot a sofőr nem ír felül, az a diszpécser dolga.
+ */
+export async function rogzitPozicioszamot(fuvarId: string, szam: string): Promise<void> {
+  await requireAnyEditPermission(["fuvarozas", "fuvarozas_sajat"]);
+  const session = await requireSession();
+  const tiszta = szam.trim();
+  if (!tiszta) throw new Error("Üres a szám.");
+  const eredmeny = await query<{ id: string }>(
+    `update fuvar_megbizasok
+        set pozicioszam = $2, pozicioszam_nincs = false
+      where id = $1 and coalesce(pozicioszam, '') = ''
+      returning id::text`,
+    [fuvarId, tiszta]
+  );
+  if (eredmeny.length === 0) throw new Error("Ehhez a fuvarhoz már van pozíciószám.");
+  console.log(`[sofor] pozíciószám rögzítve: fuvar #${fuvarId} → ${tiszta} (${session.name})`);
+  toroljIdovonalCachet();
+  revalidatePath("/erkezes");
+  revalidatePath("/fuvarozas");
 }

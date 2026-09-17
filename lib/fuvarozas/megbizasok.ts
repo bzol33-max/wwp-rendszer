@@ -60,7 +60,9 @@ const FUVAR_ROW_COLUMNS = `
   pozicioszam, pozicioszam_nincs, postazasi_cim, postazva, szamla_szam,
   postazva_at::text, teljesitve, teljesitve_at::text,
   papirok_beerkeztek_at::text,
-  ${LERAKAS_TENYLEGES_SQL} as lerakas_tenyleges_at
+  ${LERAKAS_TENYLEGES_SQL} as lerakas_tenyleges_at,
+  (select count(*) from fuvar_dokumentumok d where d.fuvar_id = fuvar_megbizasok.id and d.tipus = 'fuvarlevel')::int as fuvarlevel_foto_db,
+  (select min(d.id) from fuvar_dokumentumok d where d.fuvar_id = fuvar_megbizasok.id and d.tipus = 'fuvarlevel')::text as fuvarlevel_foto_id
 `;
 
 export async function getFuvarok(tipus: FuvarTipus): Promise<FuvarRow[]> {

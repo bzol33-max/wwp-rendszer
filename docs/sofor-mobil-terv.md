@@ -234,3 +234,20 @@ szól, nem automatikus számlázás.
   látja.
 - A felület: „Megérkeztem" gomb a következő megálló kártyáján és ikonként a
   többi soron, „Érkezés HH:MM" jel, „Hely rögzítve" jel a már ismert címnél.
+
+## 12. A 3. fázis állapota (2026-09-17, kész)
+
+- Drive: a service account (`szamlazz-bot@…`) a `Fuvarmegbizások` mappán
+  Szerkesztő; a kód scope-ja `drive.readonly` → `drive`.
+- **Fuvarlevél fotó**: a telefonon 1600 px-re kicsinyítve (JPEG), a
+  `Fuvarmegbizások/Fuvarlevelek` almappába kerül (a drive-sync a
+  közvetlen fájlokat olvassa, az almappa nem keveredik a megbízások közé),
+  és `fuvar_dokumentumok` sorként, `tipus = 'fuvarlevel'` kötődik a
+  fuvarhoz. A Számla/Posta „Papírra vár" oszlopban „fotó (n)" link nyitja a
+  dokumentum-proxyn. A fizikai beérkezést nem váltja ki.
+- **Gond van**: szabad szöveg → `feladatok` (Szakoly telephely, sürgősség 4)
+  „Sofőr jelzés (név) — fuvar #, megrendelő, hivatkozás, lerakó: szöveg"
+  formában; a diszpécser a Jelenlét/üzenőfal oldalon és a Feladatok
+  csempén látja.
+- **Nincs pozíciószám · beírom**: csak üres mezőt tölt ki, meglévőt nem ír
+  felül.
