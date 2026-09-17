@@ -240,3 +240,17 @@
 - „Gond van": a sofőr jelzése a `feladatok` táblába, a meglévő csatornán.
 - „Nincs pozíciószám · beírom": a kapuban kapott szám rögzítése, csak üres
   mezőbe.
+
+## 2026-09-17 (15. kör) — Sofőr fiókok: újralétrehozás és explicit kocsi-összerendelés
+
+- A `VadonGergo` és `TakacsMiklos` fiók a 09-13-i seed után törlődött; a seed
+  lépés rögzítve maradt, ezért nem jött létre újra. Új egyszeri seed
+  (`…-2026-09-17`) hozta létre őket a `SEED_*` env jelszavakkal, sofőr
+  jogokkal. Induláskor `ellenorizSoforFiokokat` kiírja mindkét fiók
+  állapotát, és a hiányzó alkalmazott-hozzárendelést név alapján pótolja.
+- Micó a Dolgozók között „Takács Miklós" néven szerepel. A jármű ↔ sofőr
+  egyeztetés mostantól a `vehicles.ts alkalmazottNevek` teljes-név listáján
+  áll (Takács Micó / Takács Miklós, Vadon Gergő); a keresztnév szó szerinti
+  egyezése csak tartalék. Ezzel a terv „explicit összerendelés" pontja kész.
+- Napló 11:49: mindkét fiók aktív, alkalmazott hozzárendelve, `erkezes` és
+  `fuvarozas_sajat` látja/írhat.
