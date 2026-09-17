@@ -1,0 +1,1721 @@
+{
+ "tetelek": [
+  {
+   "kulcs": "10918001-00000133-47680000|2026-01-09|7940548.00|||+IZV 00762184522",
+   "datum": "2026-01-09",
+   "osszeg": 7940548,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": null,
+   "mod": "legregebbi",
+   "szamlaszamok": [
+    "WLLWR-2026-2",
+    "WLLWR-2026-4"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-01-26|3101340.00|||+IZV 00764273896",
+   "datum": "2026-01-26",
+   "osszeg": 3101340,
+   "penznem": "HUF",
+   "partnerNev": "GYŐRI MIKLÓS",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-16"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-01-28|566674.00|||+IZV 00764560942",
+   "datum": "2026-01-28",
+   "osszeg": 566674,
+   "penznem": "HUF",
+   "partnerNev": "SOLINWEST AGRO KFT",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-17"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-02-16|3093720.00|||+IZV 00767543457",
+   "datum": "2026-02-16",
+   "osszeg": 3093720,
+   "penznem": "HUF",
+   "partnerNev": "VASBÁR-KER Vasipari, Kere",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-30"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-02-17|3598672.00|||+IZV 00767780124",
+   "datum": "2026-02-17",
+   "osszeg": 3598672,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-6"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-02-18|266700.00|||+IZV 00767888706",
+   "datum": "2026-02-18",
+   "osszeg": 266700,
+   "penznem": "HUF",
+   "partnerNev": "ÁB SPEED KFT",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-7"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-02-19|6610096.00|||+IZV 00768059707",
+   "datum": "2026-02-19",
+   "osszeg": 6610096,
+   "penznem": "HUF",
+   "partnerNev": "KETER HUNGARY KORLATOLT F",
+   "kozlemeny": null,
+   "mod": "legregebbi",
+   "szamlaszamok": [
+    "WLLWR-2026-9",
+    "WLLWR-2026-10",
+    "WLLWR-2026-12",
+    "WLLWR-2026-13"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-02-20|4073398.00|||+IZV 00768155644",
+   "datum": "2026-02-20",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-14"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-02-27|4073398.00|||+IZV 00769043670",
+   "datum": "2026-02-27",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-19"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-03-05|8579104.00|||+IZV 00770052951",
+   "datum": "2026-03-05",
+   "osszeg": 8579104,
+   "penznem": "HUF",
+   "partnerNev": "KETER HUNGARY KORLATOLT F",
+   "kozlemeny": null,
+   "mod": "legregebbi",
+   "szamlaszamok": [
+    "WLLWR-2026-18",
+    "WLLWR-2026-23",
+    "WLLWR-2026-26"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-03-06|8146796.00|||+IZV 00770341263",
+   "datum": "2026-03-06",
+   "osszeg": 8146796,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": null,
+   "mod": "legregebbi",
+   "szamlaszamok": [
+    "WLLWR-2026-21",
+    "WLLWR-2026-24"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-03-07|1546860.00|||+IZV 00770494081",
+   "datum": "2026-03-07",
+   "osszeg": 1546860,
+   "penznem": "HUF",
+   "partnerNev": "JUPIKER RAKLAP KORLÁTOLT",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-39"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-03-09|3093720.00|||+IZV 00770671287",
+   "datum": "2026-03-09",
+   "osszeg": 3093720,
+   "penznem": "HUF",
+   "partnerNev": "VASBÁR-KER Vasipari, Kere",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-58"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-03-11|6000000.00|||+IZV 00771242423",
+   "datum": "2026-03-11",
+   "osszeg": 6000000,
+   "penznem": "HUF",
+   "partnerNev": "JAMES HITEL KFT.",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WNYH-2026-10"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-03-11|4073398.00|||+IZV 00771241784",
+   "datum": "2026-03-11",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-25"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-03-13|4073398.00|||+IZV 00771669411",
+   "datum": "2026-03-13",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-31"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-03-17|4073398.00|||+IZV 00772090663",
+   "datum": "2026-03-17",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-32"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-03-19|4073398.00|||+IZV 00772391472",
+   "datum": "2026-03-19",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-37"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-03-19|15407767.00|||+IZV 00772383986",
+   "datum": "2026-03-19",
+   "osszeg": 15407767,
+   "penznem": "HUF",
+   "partnerNev": "KETER HUNGARY KORLATOLT F",
+   "kozlemeny": null,
+   "mod": "legregebbi",
+   "szamlaszamok": [
+    "WLLWR-2026-35",
+    "WLLWR-2026-36",
+    "WLLWR-2026-68",
+    "WLLWR-2026-42",
+    "WLLWR-2026-43",
+    "WLLWR-2026-44",
+    "WLLWR-2026-45",
+    "WLLWR-2026-46"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-03-20|3031236.00|||+IZV 00772442721",
+   "datum": "2026-03-20",
+   "osszeg": 3031236,
+   "penznem": "HUF",
+   "partnerNev": "SOLINWEST AGRO KFT",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-67"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-03-24|4073398.00|||+IZV 00772891412",
+   "datum": "2026-03-24",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-47"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-03-24|3403092.00|||+IZV 00772836685",
+   "datum": "2026-03-24",
+   "osszeg": 3403092,
+   "penznem": "HUF",
+   "partnerNev": "SOLINWEST AGRO KFT",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-71"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-03-25|292100.00|||+IZV 00772954010",
+   "datum": "2026-03-25",
+   "osszeg": 292100,
+   "penznem": "HUF",
+   "partnerNev": "ÁB SPEED KFT",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-15"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-03-26|4297680.00|||+IZV 00773149504",
+   "datum": "2026-03-26",
+   "osszeg": 4297680,
+   "penznem": "HUF",
+   "partnerNev": "VASBÁR-KER Vasipari, Kere",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-40"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-03-28|1546860.00|||+IZV 00773392077",
+   "datum": "2026-03-28",
+   "osszeg": 1546860,
+   "penznem": "HUF",
+   "partnerNev": "JUPIKER RAKLAP KORLÁTOLT",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-80"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-03-31|4073398.00|||+IZV 00773725198",
+   "datum": "2026-03-31",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-48"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-04-01|158750.00|||+IZV 00774025794",
+   "datum": "2026-04-01",
+   "osszeg": 158750,
+   "penznem": "HUF",
+   "partnerNev": "ÁB SPEED KFT",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-22"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-04-01|3093720.00|||+IZV 00773907852",
+   "datum": "2026-04-01",
+   "osszeg": 3093720,
+   "penznem": "HUF",
+   "partnerNev": "VASBÁR-KER Vasipari, Kere",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-77"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-04-02|4073398.00|||+IZV 00774286258",
+   "datum": "2026-04-02",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-54"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-04-02|4162362.00|||+IZV 00774253290",
+   "datum": "2026-04-02",
+   "osszeg": 4162362,
+   "penznem": "HUF",
+   "partnerNev": "KETER HUNGARY KORLATOLT F",
+   "kozlemeny": null,
+   "mod": "legregebbi",
+   "szamlaszamok": [
+    "WLLWR-2026-52",
+    "WLLWR-2026-49",
+    "WLLWR-2026-50"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-04-09|222250.00|||+IZV 00775153977",
+   "datum": "2026-04-09",
+   "osszeg": 222250,
+   "penznem": "HUF",
+   "partnerNev": "BALKÁNYI VETŐMAG KFT.\"",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-95"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-04-10|665988.00|||+IZV 00775576218",
+   "datum": "2026-04-10",
+   "osszeg": 665988,
+   "penznem": "HUF",
+   "partnerNev": "SOLINWEST AGRO KFT",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-92"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-04-13|665988.00|||+IZV 00775870273",
+   "datum": "2026-04-13",
+   "osszeg": 665988,
+   "penznem": "HUF",
+   "partnerNev": "SOLINWEST AGRO KFT",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-96"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-04-14|4073398.00|||+IZV 00776148447",
+   "datum": "2026-04-14",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-55"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-04-16|4073398.00|||+IZV 00776474740",
+   "datum": "2026-04-16",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-65"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-04-17|285750.00|||+IZV 00776626553",
+   "datum": "2026-04-17",
+   "osszeg": 285750,
+   "penznem": "HUF",
+   "partnerNev": "ÁB SPEED KFT",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-5"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-04-20|4073398.00|||+IZV 00776885764",
+   "datum": "2026-04-20",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-69"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-04-22|273050.00|||+IZV 00777150993",
+   "datum": "2026-04-22",
+   "osszeg": 273050,
+   "penznem": "HUF",
+   "partnerNev": "ÁB SPEED KFT",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-3"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-04-23|4073398.00|||+IZV 00777349324",
+   "datum": "2026-04-23",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-70"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-04-27|3929380.00|||+IZV 00777760126",
+   "datum": "2026-04-27",
+   "osszeg": 3929380,
+   "penznem": "HUF",
+   "partnerNev": "SOLINWEST AGRO KFT",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-109"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-04-27|4073398.00|||+IZV 00777712767",
+   "datum": "2026-04-27",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-81"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-04-29|7010146.00|||+IZV 00778078402",
+   "datum": "2026-04-29",
+   "osszeg": 7010146,
+   "penznem": "HUF",
+   "partnerNev": "KETER HUNGARY KORLATOLT F",
+   "kozlemeny": null,
+   "mod": "legregebbi",
+   "szamlaszamok": [
+    "WLLWR-2026-56",
+    "WLLWR-2026-59",
+    "WLLWR-2026-60"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-04-30|3812540.00|||+IZV 00778202075",
+   "datum": "2026-04-30",
+   "osszeg": 3812540,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-82"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-04-30|5568696.00|||+IZV 00778072201",
+   "datum": "2026-04-30",
+   "osszeg": 5568696,
+   "penznem": "HUF",
+   "partnerNev": "TRADE&EVENT KERESKEDELMI",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-89"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-05-06|266700.00|||+IZV 00779037094",
+   "datum": "2026-05-06",
+   "osszeg": 266700,
+   "penznem": "HUF",
+   "partnerNev": "ÁB SPEED KFT",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-61"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680017|2026-04-23|8940.80|AT801500004211016797|S-WLLWR-2026-102 .|",
+   "datum": "2026-04-23",
+   "osszeg": 8940.8,
+   "penznem": "EUR",
+   "partnerNev": "LECO GmbH",
+   "kozlemeny": "S-WLLWR-2026-102 .",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-102"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-05-07|4073398.00|||+IZV 00779449120",
+   "datum": "2026-05-07",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-91"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-05-08|3403092.00|||+IZV 00779647737",
+   "datum": "2026-05-08",
+   "osszeg": 3403092,
+   "penznem": "HUF",
+   "partnerNev": "SOLINWEST AGRO KFT",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-122"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-05-11|4073398.00|||+IZV 00780275984",
+   "datum": "2026-05-11",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-97"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-05-11|317500.00|||+IZV 00780177411",
+   "datum": "2026-05-11",
+   "osszeg": 317500,
+   "penznem": "HUF",
+   "partnerNev": "ÁB SPEED KFT",
+   "kozlemeny": null,
+   "mod": "osszeg",
+   "szamlaszamok": [
+    "WLLWR-2026-66"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-05-13|853440.00|11744065-20101354-00000000|WNYH-2026-23|",
+   "datum": "2026-05-13",
+   "osszeg": 853440,
+   "penznem": "HUF",
+   "partnerNev": "FORTA TRANS KFT",
+   "kozlemeny": "WNYH-2026-23",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WNYH-2026-23"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-05-14|5985002.00|16300000-04013504-90006402|WLLWR-2026-64|",
+   "datum": "2026-05-14",
+   "osszeg": 5985002,
+   "penznem": "HUF",
+   "partnerNev": "KETER HUNGARY KORLATOLT FELELOSS",
+   "kozlemeny": "WLLWR-2026-64",
+   "mod": "legregebbi",
+   "szamlaszamok": [
+    "WLLWR-2026-94",
+    "WLLWR-2026-62",
+    "WLLWR-2026-63",
+    "WLLWR-2026-64"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-05-15|4073398.00|10104789-10310800-01003001|WLLWR-2026-98|",
+   "datum": "2026-05-15",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": "WLLWR-2026-98",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-98"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-05-18|4073398.00|10104789-10310800-01003001|WLLWR-2026-101|",
+   "datum": "2026-05-18",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": "WLLWR-2026-101",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-101"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-05-19|431800.00|72100354-11052427-00000000|2026-73 2026-75|",
+   "datum": "2026-05-19",
+   "osszeg": 431800,
+   "penznem": "HUF",
+   "partnerNev": "ÁB SPEED KFT",
+   "kozlemeny": "2026-73 2026-75",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-73",
+    "WLLWR-2026-75"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-05-22|4073398.00|10104789-10310800-01003001|WLLWR-2026-112|",
+   "datum": "2026-05-22",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": "WLLWR-2026-112",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-112"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-05-27|4073398.00|10104789-10310800-01003001|WLLWR-2026-113|",
+   "datum": "2026-05-27",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": "WLLWR-2026-113",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-113"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-05-27|444500.00|72100354-11052427-00000000|2026-87 88|",
+   "datum": "2026-05-27",
+   "osszeg": 444500,
+   "penznem": "HUF",
+   "partnerNev": "ÁB SPEED KFT",
+   "kozlemeny": "2026-87 88",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-87",
+    "WLLWR-2026-88"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-05-28|6127878.00|16300000-04013504-90006402|WLLWR-2026-79|",
+   "datum": "2026-05-28",
+   "osszeg": 6127878,
+   "penznem": "HUF",
+   "partnerNev": "KETER HUNGARY KORLATOLT FELELOSS",
+   "kozlemeny": "WLLWR-2026-79",
+   "mod": "legregebbi",
+   "szamlaszamok": [
+    "WLLWR-2026-79",
+    "WLLWR-2026-83",
+    "WLLWR-2026-84",
+    "WLLWR-2026-85",
+    "WLLWR-2026-86"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-05-28|3185160.00|11734107-20108296-00000000|WLLWR-2026-135|",
+   "datum": "2026-05-28",
+   "osszeg": 3185160,
+   "penznem": "HUF",
+   "partnerNev": "GYŐRI MIKLÓS",
+   "kozlemeny": "WLLWR-2026-135",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-135"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-05-29|665988.00|10102103-76132900-01005006|*004440* WLLWR-2026-134(665 988,-)|",
+   "datum": "2026-05-29",
+   "osszeg": 665988,
+   "penznem": "HUF",
+   "partnerNev": "SOLINWEST AGRO KFT",
+   "kozlemeny": "*004440* WLLWR-2026-134(665 988,-)",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-134"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-06-03|1546860.00|10200342-34472211-00000000|WLLWR-2026-153 Szl.ellenértéke|",
+   "datum": "2026-06-03",
+   "osszeg": 1546860,
+   "penznem": "HUF",
+   "partnerNev": "ÉPFAK Építő- és Faipari",
+   "kozlemeny": "WLLWR-2026-153 Szl.ellenértéke",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-153"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-06-04|4073398.00|10104789-10310800-01003001|WLLWR-2026-118|",
+   "datum": "2026-06-04",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": "WLLWR-2026-118",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-118"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-06-04|285750.00|72100354-11052427-00000000|2026-90 2026-93|",
+   "datum": "2026-06-04",
+   "osszeg": 285750,
+   "penznem": "HUF",
+   "partnerNev": "ÁB SPEED KFT",
+   "kozlemeny": "2026-90 2026-93",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-90",
+    "WLLWR-2026-93"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-06-05|4073398.00|10104789-10310800-01003001|WLLWR-2026-123|",
+   "datum": "2026-06-05",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": "WLLWR-2026-123",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-123"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-06-11|4073398.00|10104789-10310800-01003001|WLLWR-2026-127|",
+   "datum": "2026-06-11",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": "WLLWR-2026-127",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-127"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-06-11|10287.00|10103434-28113600-01005001|WNYH-2026-35|",
+   "datum": "2026-06-11",
+   "osszeg": 10287,
+   "penznem": "HUF",
+   "partnerNev": "PRINTHUB HUNGARY KFT.",
+   "kozlemeny": "WNYH-2026-35",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WNYH-2026-35"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-06-12|539750.00|72100354-11052427-00000000|2026-99 100|",
+   "datum": "2026-06-12",
+   "osszeg": 539750,
+   "penznem": "HUF",
+   "partnerNev": "ÁB SPEED KFT",
+   "kozlemeny": "2026-99 100",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-99",
+    "WLLWR-2026-100"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-06-12|3579242.00|16300000-04013504-90006402|WLLWR-2026-106|",
+   "datum": "2026-06-12",
+   "osszeg": 3579242,
+   "penznem": "HUF",
+   "partnerNev": "KETER HUNGARY KORLATOLT FELELOSS",
+   "kozlemeny": "WLLWR-2026-106",
+   "mod": "legregebbi",
+   "szamlaszamok": [
+    "WLLWR-2026-106",
+    "WLLWR-2026-107",
+    "WLLWR-2026-108"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-06-16|4073398.00|10104789-10310800-01003001|WLLWR-2026-128|",
+   "datum": "2026-06-16",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": "WLLWR-2026-128",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-128"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-06-16|114300.00|72100354-11052427-00000000|2026-103|",
+   "datum": "2026-06-16",
+   "osszeg": 114300,
+   "penznem": "HUF",
+   "partnerNev": "ÁB SPEED KFT",
+   "kozlemeny": "2026-103",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-103"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-06-19|4073398.00|10104789-10310800-01003001|WLLWR-2026-132|",
+   "datum": "2026-06-19",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": "WLLWR-2026-132",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-132"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-06-22|1143000.00|10402166-50485556-55491011|WLLWR-2026-164|",
+   "datum": "2026-06-22",
+   "osszeg": 1143000,
+   "penznem": "HUF",
+   "partnerNev": "Christeyns Higiénia Korlátolt Felelősségű Társaság",
+   "kozlemeny": "WLLWR-2026-164",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-164"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-06-24|4073398.00|10104789-10310800-01003001|WLLWR-2026-136|",
+   "datum": "2026-06-24",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": "WLLWR-2026-136",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-136"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-06-24|139700.00|72100354-11052427-00000000|2026-116|",
+   "datum": "2026-06-24",
+   "osszeg": 139700,
+   "penznem": "HUF",
+   "partnerNev": "ÁB SPEED KFT",
+   "kozlemeny": "2026-116",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-116"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-06-24|3093720.00|10400353-50526776-48511018|Számlaszám: WLLWR-2026-163|",
+   "datum": "2026-06-24",
+   "osszeg": 3093720,
+   "penznem": "HUF",
+   "partnerNev": "VASBÁR-KER Vasipari, Kereskedelmi",
+   "kozlemeny": "Számlaszám: WLLWR-2026-163",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-163"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-06-25|7375652.00|16300000-04013504-90006402|WLLWR-2026-115|",
+   "datum": "2026-06-25",
+   "osszeg": 7375652,
+   "penznem": "HUF",
+   "partnerNev": "KETER HUNGARY KORLATOLT FELELOSS",
+   "kozlemeny": "WLLWR-2026-115",
+   "mod": "legregebbi",
+   "szamlaszamok": [
+    "WLLWR-2026-110",
+    "WLLWR-2026-114",
+    "WLLWR-2026-115"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-06-26|4073398.00|10104789-10310800-01003001|WLLWR-2026-144|",
+   "datum": "2026-06-26",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": "WLLWR-2026-144",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-144"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-06-30|4073398.00|10104789-10310800-01003001|WLLWR-2026-145|",
+   "datum": "2026-06-30",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": "WLLWR-2026-145",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-145"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-07-01|698500.00|72100354-11052427-00000000|2026-117 119|",
+   "datum": "2026-07-01",
+   "osszeg": 698500,
+   "penznem": "HUF",
+   "partnerNev": "ÁB SPEED KFT",
+   "kozlemeny": "2026-117 119",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-117",
+    "WLLWR-2026-119"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-07-02|1981200.00|11780809-20037288-00000000|Paulik Kft. WLLWR-2026-152|",
+   "datum": "2026-07-02",
+   "osszeg": 1981200,
+   "penznem": "HUF",
+   "partnerNev": "OTP FFO",
+   "kozlemeny": "Paulik Kft. WLLWR-2026-152",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-152"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-07-03|4073398.00|10104789-10310800-01003001|WLLWR-2026-154|",
+   "datum": "2026-07-03",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": "WLLWR-2026-154",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-154"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-07-03|3403092.00|10102103-76132900-01005006|*004550* WLLWR-2026-172(3 403 092,-)|",
+   "datum": "2026-07-03",
+   "osszeg": 3403092,
+   "penznem": "HUF",
+   "partnerNev": "SOLINWEST AGRO KFT",
+   "kozlemeny": "*004550* WLLWR-2026-172(3 403 092,-)",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-172"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-07-05|2535428.00|11740009-20081373-00000000|WLLWR-2026-133 számla|",
+   "datum": "2026-07-05",
+   "osszeg": 2535428,
+   "penznem": "HUF",
+   "partnerNev": "\"MEGA-FRUIT\" KFT.",
+   "kozlemeny": "WLLWR-2026-133 számla",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-133"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-07-06|279400.00|72100354-11052427-00000000|2026-125|",
+   "datum": "2026-07-06",
+   "osszeg": 279400,
+   "penznem": "HUF",
+   "partnerNev": "ÁB SPEED KFT",
+   "kozlemeny": "2026-125",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-125"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-07-07|346329.00|10404405-50527165-78501002|WNYH-2026-36, 37, 38|",
+   "datum": "2026-07-07",
+   "osszeg": 346329,
+   "penznem": "HUF",
+   "partnerNev": "Printhub Hungary Korlátolt",
+   "kozlemeny": "WNYH-2026-36, 37, 38",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WNYH-2026-36",
+    "WNYH-2026-37",
+    "WNYH-2026-38"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-07-08|4073398.00|10104789-10310800-01003001|WLLWR-2026-158|",
+   "datum": "2026-07-08",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": "WLLWR-2026-158",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-158"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-07-09|10674604.00|16300000-04013504-90006402|WLLWR-2026-129|",
+   "datum": "2026-07-09",
+   "osszeg": 10674604,
+   "penznem": "HUF",
+   "partnerNev": "KETER HUNGARY KORLATOLT FELELOSS",
+   "kozlemeny": "WLLWR-2026-129",
+   "mod": "legregebbi",
+   "szamlaszamok": [
+    "WLLWR-2026-124",
+    "WLLWR-2026-126",
+    "WLLWR-2026-129"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-07-13|596900.00|72100354-11052427-00000000|2026-130 131 139|",
+   "datum": "2026-07-13",
+   "osszeg": 596900,
+   "penznem": "HUF",
+   "partnerNev": "ÁB SPEED KFT",
+   "kozlemeny": "2026-130 131 139",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-130",
+    "WLLWR-2026-131",
+    "WLLWR-2026-139"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-07-17|4073398.00|10104789-10310800-01003001|WLLWR-2026-159|",
+   "datum": "2026-07-17",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": "WLLWR-2026-159",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-159"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-07-21|4073398.00|10104789-10310800-01003001|WLLWR-2026-165|",
+   "datum": "2026-07-21",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": "WLLWR-2026-165",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-165"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-07-21|400050.00|72100354-11052427-00000000|2026-140 141|",
+   "datum": "2026-07-21",
+   "osszeg": 400050,
+   "penznem": "HUF",
+   "partnerNev": "ÁB SPEED KFT",
+   "kozlemeny": "2026-140 141",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-140",
+    "WLLWR-2026-141"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-07-23|6537517.00|16300000-04013504-90006402|WLLWR-2026-142|",
+   "datum": "2026-07-23",
+   "osszeg": 6537517,
+   "penznem": "HUF",
+   "partnerNev": "KETER HUNGARY KORLATOLT FELELOSS",
+   "kozlemeny": "WLLWR-2026-142",
+   "mod": "legregebbi",
+   "szamlaszamok": [
+    "WLLWR-2026-142",
+    "WLLWR-2026-143",
+    "WLLWR-2026-149",
+    "WLLWR-2026-150"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-07-24|4073398.00|10104789-10310800-01003001|WLLWR-2026-169|",
+   "datum": "2026-07-24",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": "WLLWR-2026-169",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-169"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-07-25|1546860.00|10702064-49778104-51100005|WLLEWR-2026-212szl.ellenértéke|",
+   "datum": "2026-07-25",
+   "osszeg": 1546860,
+   "penznem": "HUF",
+   "partnerNev": "JUPIKER RAKLAP KORLÁTOLT",
+   "kozlemeny": "WLLEWR-2026-212szl.ellenértéke",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-212"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-07-30|4073398.00|10104789-10310800-01003001|WLLWR-2026-168|",
+   "datum": "2026-07-30",
+   "osszeg": 4073398,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": "WLLWR-2026-168",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-168"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-07-31|431800.00|72100354-11052427-00000000|146 147|",
+   "datum": "2026-07-31",
+   "osszeg": 431800,
+   "penznem": "HUF",
+   "partnerNev": "ÁB SPEED KFT",
+   "kozlemeny": "146 147",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-146",
+    "WLLWR-2026-147"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-08-03|4124960.00|10104789-10310800-01003001|WLLWR-2026-176|",
+   "datum": "2026-08-03",
+   "osszeg": 4124960,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": "WLLWR-2026-176",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-176"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-08-04|3660902.00|16300000-04013504-90006402|WLLWR-2026-156|",
+   "datum": "2026-08-04",
+   "osszeg": 3660902,
+   "penznem": "HUF",
+   "partnerNev": "KETER HUNGARY KORLATOLT FELELOSS",
+   "kozlemeny": "WLLWR-2026-156",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-156"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-08-07|4124960.00|10104789-10310800-01003001|WLLWR-2026-177|",
+   "datum": "2026-08-07",
+   "osszeg": 4124960,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": "WLLWR-2026-177",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-177"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-08-07|50800.00|10918001-00000127-68690003|WNYH-2026-42|",
+   "datum": "2026-08-07",
+   "osszeg": 50800,
+   "penznem": "HUF",
+   "partnerNev": "INVEST IN MIND KORLÁTOLT FELELŐSSÉG",
+   "kozlemeny": "WNYH-2026-42",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WNYH-2026-42"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-08-07|273050.00|72100354-11052427-00000000|2026-155|",
+   "datum": "2026-08-07",
+   "osszeg": 273050,
+   "penznem": "HUF",
+   "partnerNev": "ÁB SPEED KFT",
+   "kozlemeny": "2026-155",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-155"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-08-11|158750.00|72100354-11052427-00000000|2026-157|",
+   "datum": "2026-08-11",
+   "osszeg": 158750,
+   "penznem": "HUF",
+   "partnerNev": "ÁB SPEED KFT",
+   "kozlemeny": "2026-157",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-157"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-08-12|4124960.00|10104789-10310800-01003001|WLLWR-2026-184|",
+   "datum": "2026-08-12",
+   "osszeg": 4124960,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": "WLLWR-2026-184",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-184"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-08-14|4124960.00|10104789-10310800-01003001|WLLWR-2026-185|",
+   "datum": "2026-08-14",
+   "osszeg": 4124960,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": "WLLWR-2026-185",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-185"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-08-18|3403092.00|10102103-76132900-01005006|*004671* WLLWR-2026-246(3 403 092,-)|",
+   "datum": "2026-08-18",
+   "osszeg": 3403092,
+   "penznem": "HUF",
+   "partnerNev": "SOLINWEST AGRO KFT",
+   "kozlemeny": "*004671* WLLWR-2026-246(3 403 092,-)",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-246"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-08-18|4124960.00|10104789-10310800-01003001|WLLWR-2026-196|",
+   "datum": "2026-08-18",
+   "osszeg": 4124960,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": "WLLWR-2026-196",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-196"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-08-19|2097151.00|12100011-10179897-00000000|WLLWR-2026-195.számla|",
+   "datum": "2026-08-19",
+   "osszeg": 2097151,
+   "penznem": "HUF",
+   "partnerNev": "Szatmár-Bio Kft.",
+   "kozlemeny": "WLLWR-2026-195.számla",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-195"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-08-19|4124960.00|10104789-10310800-01003001|WLLWR-2026-213|",
+   "datum": "2026-08-19",
+   "osszeg": 4124960,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": "WLLWR-2026-213",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-213"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-08-19|7279640.00|11740009-20081373-00000000|WLLWR-2026-204,211, 214, 215 , 219.|",
+   "datum": "2026-08-19",
+   "osszeg": 7279640,
+   "penznem": "HUF",
+   "partnerNev": "\"MEGA-FRUIT\" KFT.",
+   "kozlemeny": "WLLWR-2026-204,211, 214, 215 , 219.",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-204",
+    "WLLWR-2026-211",
+    "WLLWR-2026-214",
+    "WLLWR-2026-215",
+    "WLLWR-2026-219"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-08-24|165100.00|10103513-30522200-01003000|WLLWR-2026-208|",
+   "datum": "2026-08-24",
+   "osszeg": 165100,
+   "penznem": "HUF",
+   "partnerNev": "FLOTT-TRANS KFT",
+   "kozlemeny": "WLLWR-2026-208",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-208"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-08-24|533400.00|11740009-20081373-00000000|WLLWR-2026-220 számla|",
+   "datum": "2026-08-24",
+   "osszeg": 533400,
+   "penznem": "HUF",
+   "partnerNev": "\"MEGA-FRUIT\" KFT.",
+   "kozlemeny": "WLLWR-2026-220 számla",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-220"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-08-24|3352800.00|16300000-04013504-90006402|WLLWR-2026-162|",
+   "datum": "2026-08-24",
+   "osszeg": 3352800,
+   "penznem": "HUF",
+   "partnerNev": "KETER HUNGARY KORLATOLT FELELOSS",
+   "kozlemeny": "WLLWR-2026-162",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-162"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-08-25|165100.00|10918001-00000036-71290000|WLLWR-2026-209|",
+   "datum": "2026-08-25",
+   "osszeg": 165100,
+   "penznem": "HUF",
+   "partnerNev": "CEMIX HUNGARY ÉPÍTŐIPARI KFT.",
+   "kozlemeny": "WLLWR-2026-209",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-209"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-08-25|152400.00|72100354-11052427-00000000|2026-170|",
+   "datum": "2026-08-25",
+   "osszeg": 152400,
+   "penznem": "HUF",
+   "partnerNev": "ÁB SPEED KFT",
+   "kozlemeny": "2026-170",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-170"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-08-26|4124960.00|10104789-10310800-01003001|WLLWR-2026-221|",
+   "datum": "2026-08-26",
+   "osszeg": 4124960,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": "WLLWR-2026-221",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-221"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-08-26|1546860.00|10702064-49778104-51200002|WLLWR-2026-271szl.ellenértéke|",
+   "datum": "2026-08-26",
+   "osszeg": 1546860,
+   "penznem": "HUF",
+   "partnerNev": "JUPIKER RAKLAP KORLÁTOLT",
+   "kozlemeny": "WLLWR-2026-271szl.ellenértéke",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-271"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-08-27|2057400.00|11780809-20037288-00000000|Paulik Kft. WLLWR-2026-218|",
+   "datum": "2026-08-27",
+   "osszeg": 2057400,
+   "penznem": "HUF",
+   "partnerNev": "OTP FFO",
+   "kozlemeny": "Paulik Kft. WLLWR-2026-218",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-218"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-08-28|4124960.00|10104789-10310800-01003001|WLLWR-2026-224|",
+   "datum": "2026-08-28",
+   "osszeg": 4124960,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": "WLLWR-2026-224",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-224"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-08-28|2626360.00|11744003-24431268-00000000|WLLWR-2026-225|",
+   "datum": "2026-08-28",
+   "osszeg": 2626360,
+   "penznem": "HUF",
+   "partnerNev": "PAPP LÁSZLÓ",
+   "kozlemeny": "WLLWR-2026-225",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-225"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-08-28|546100.00|12011179-01526580-00100000|szla: WLLWR-2026-191,192,206,216, ikt:2117-20|",
+   "datum": "2026-08-28",
+   "osszeg": 546100,
+   "penznem": "HUF",
+   "partnerNev": "RBT EUROPE KORLÁTOLT FELELŐSSÉGŰ TÁ",
+   "kozlemeny": "szla: WLLWR-2026-191,192,206,216, ikt:2117-20",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-191",
+    "WLLWR-2026-192",
+    "WLLWR-2026-206",
+    "WLLWR-2026-216"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-08-31|165100.00|10103513-30522200-01003000|WLLWR-2026-228|",
+   "datum": "2026-08-31",
+   "osszeg": 165100,
+   "penznem": "HUF",
+   "partnerNev": "FLOTT-TRANS KFT",
+   "kozlemeny": "WLLWR-2026-228",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-228"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-08-31|152400.00|72100354-11052427-00000000|2026-178|",
+   "datum": "2026-08-31",
+   "osszeg": 152400,
+   "penznem": "HUF",
+   "partnerNev": "ÁB SPEED KFT",
+   "kozlemeny": "2026-178",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-178"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-09-01|146050.00|10404027-00026582-00000003|Trans-Sped Kft. megbízásából WLL WR-2026-243, WLLWR-2026-242,|",
+   "datum": "2026-09-01",
+   "osszeg": 146050,
+   "penznem": "HUF",
+   "partnerNev": "K&H Bank Zrt. - Faktor főosztály",
+   "kozlemeny": "Trans-Sped Kft. megbízásából WLL WR-2026-243, WLLWR-2026-242,",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-242",
+    "WLLWR-2026-243"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-09-02|4347464.00|11740009-20081373-00000000|WLLWR-2026-237, 240. számla|",
+   "datum": "2026-09-02",
+   "osszeg": 4347464,
+   "penznem": "HUF",
+   "partnerNev": "\"MEGA-FRUIT\" KFT.",
+   "kozlemeny": "WLLWR-2026-237, 240. számla",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-237",
+    "WLLWR-2026-240"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-09-03|311150.00|12050002-01445252-00100008|2026-244|",
+   "datum": "2026-09-03",
+   "osszeg": 311150,
+   "penznem": "HUF",
+   "partnerNev": "KRIKI-SPED KERESKEDELMI ÉS SZOLGÁLT",
+   "kozlemeny": "2026-244",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-244"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-09-04|2057400.00|11780809-20037288-00000000|Paulik Kft. WLLWR-2026-232|",
+   "datum": "2026-09-04",
+   "osszeg": 2057400,
+   "penznem": "HUF",
+   "partnerNev": "OTP FFO",
+   "kozlemeny": "Paulik Kft. WLLWR-2026-232",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-232"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-09-04|63500.00|12011179-01526580-00100000|szla: WLLWR-2026-230, ikt:2209|",
+   "datum": "2026-09-04",
+   "osszeg": 63500,
+   "penznem": "HUF",
+   "partnerNev": "RBT EUROPE KORLÁTOLT FELELŐSSÉGŰ TÁ",
+   "kozlemeny": "szla: WLLWR-2026-230, ikt:2209",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-230"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-09-04|11446764.00|16300000-04013504-90006402|WLLWR-2026-174|",
+   "datum": "2026-09-04",
+   "osszeg": 11446764,
+   "penznem": "HUF",
+   "partnerNev": "KETER HUNGARY KORLATOLT FELELOSS",
+   "kozlemeny": "WLLWR-2026-174",
+   "mod": "legregebbi",
+   "szamlaszamok": [
+    "WLLWR-2026-173",
+    "WLLWR-2026-174",
+    "WLLWR-2026-175",
+    "WLLWR-2026-179"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-09-04|4124960.00|10104789-10310800-01003001|WLLWR-2026-238|",
+   "datum": "2026-09-04",
+   "osszeg": 4124960,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": "WLLWR-2026-238",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-238"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-09-07|4124960.00|10104789-10310800-01003001|WLLWR-2026-239|",
+   "datum": "2026-09-07",
+   "osszeg": 4124960,
+   "penznem": "HUF",
+   "partnerNev": "FABRIKA + 2000 KFT.",
+   "kozlemeny": "WLLWR-2026-239",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-239"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-09-08|457200.00|72100354-11052427-00000000|183 187|",
+   "datum": "2026-09-08",
+   "osszeg": 457200,
+   "penznem": "HUF",
+   "partnerNev": "ÁB SPEED KFT",
+   "kozlemeny": "183 187",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-183",
+    "WLLWR-2026-187"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-09-09|2604008.00|11744003-24432661-00000000|WLLWR-2026-236|",
+   "datum": "2026-09-09",
+   "osszeg": 2604008,
+   "penznem": "HUF",
+   "partnerNev": "PAPP LÁSZLÓ",
+   "kozlemeny": "WLLWR-2026-236",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-236"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680017|2026-08-05|12192.00|AT801500004211016797|WLLWR-2026-205 .|",
+   "datum": "2026-08-05",
+   "osszeg": 12192,
+   "penznem": "EUR",
+   "partnerNev": "LECO GmbH",
+   "kozlemeny": "WLLWR-2026-205 .",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-205"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-09-09|254000.00|12011179-01526580-00100000|szla: WLLWR-2026-233,234, ikt:2231,2240|",
+   "datum": "2026-09-09",
+   "osszeg": 254000,
+   "penznem": "HUF",
+   "partnerNev": "RBT EUROPE KORLÁTOLT FELELŐSSÉGŰ TÁ",
+   "kozlemeny": "szla: WLLWR-2026-233,234, ikt:2231,2240",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-233",
+    "WLLWR-2026-234"
+   ]
+  },
+  {
+   "kulcs": "10918001-00000133-47680000|2026-09-10|952500.00|11600006-00000000-81771987|. WLLWR-2026-160 ,166,171|",
+   "datum": "2026-09-10",
+   "osszeg": 952500,
+   "penznem": "HUF",
+   "partnerNev": "\"HAPP\" KFT.",
+   "kozlemeny": ". WLLWR-2026-160 ,166,171",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-160",
+    "WLLWR-2026-166",
+    "WLLWR-2026-171"
+   ]
+  },
+  {
+   "kulcs": "CIB|10700048-72418242-51100005|2026-06-08|3093720.00|AZBII30093254849",
+   "datum": "2026-06-08",
+   "osszeg": 3093720,
+   "penznem": "HUF",
+   "partnerNev": "VASBÁR-KER Vasipari, Kereskedelmi és Szolgáltató Kft.",
+   "kozlemeny": "Számlaszám: WLLWR-2026-151",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-151"
+   ]
+  },
+  {
+   "kulcs": "CIB|10700048-72418242-51100005|2026-06-16|3185160.00|AZBII30093829423",
+   "datum": "2026-06-16",
+   "osszeg": 3185160,
+   "penznem": "HUF",
+   "partnerNev": "GYŐRI MIKLÓS",
+   "kozlemeny": "WLLWR-2026-161",
+   "mod": "memo",
+   "szamlaszamok": [
+    "WLLWR-2026-161"
+   ]
+  }
+ ]
+}

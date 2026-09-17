@@ -113,6 +113,7 @@ async function main() {
   await applyPostazasiCimUpdates(pool, dbDir);
   await resetSzamlaRosszTotalosszMezok(pool);
   await applySzamlaFizetveImport(pool, dbDir);
+  await applyKontokivonatEvesImportOnce(pool, dbDir);
   await backfillMozgatasBe(pool);
   await seedAlkalmazottakOnce(pool);
   await seedJelenletAktivOnce(pool);
@@ -1677,6 +1678,82 @@ async function applySzamlaFizetveImport(pool, dbDir) {
   }
 
   console.log(`[migrate] számla fizetve-import: ${updated} sor jelölve kifizetettnek.`);
+}
+
+// Egyszeri betöltés (2026-09-17): a 2026-os éves banki anyag (UniCredit
+// HISTORY xlsx-ek + CIB havi PDF kivonatok) párosítása, ahogy a
+// Kontókivonat-feltöltés "Fizetés dátumának pontosítása" szakasza adná — így
+// nem kell kézzel feltölteni. A db/kontokivonat-eves-2026.json-t a
+// lib/szamlak/kontokivonat-parositas.ts generálta az éles adatokon; csak
+// "datum" állapotú tételeket tartalmaz (már fizetett, banki utalással még nem
+// igazolt számlák). Budaházi Zoltán döntése: fizetetlen csak az maradjon,
+// ami most is az — ez a lépés a "fizetve" jelölést SOHA nem változtatja,
+// csak a fizetés dátumát állítja az utalás értéknapjára, és felírja az
+// utalást a kontokivonat_konyvelt táblába (egy későbbi feltöltés így nem
+// könyveli újra). Egy tranzakcióban fut; ha egy tétel számlái nem egyeznek
+// (nincs meg, nem fizetett, sztornó), a tétel kimarad és naplózódik.
+async function applyKontokivonatEvesImportOnce(pool, dbDir) {
+  const JAVITAS_KOD = "kontokivonat-eves-import-2026-09-17";
+  const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (mar.length > 0) return;
+
+  const { tetelek } = JSON.parse(readFileSync(path.join(dbDir, "kontokivonat-eves-2026.json"), "utf8"));
+  const client = await pool.connect();
+  let felirva = 0;
+  let datumFrissitve = 0;
+  const kihagyott = [];
+  try {
+    await client.query("begin");
+    for (const t of tetelek) {
+      const { rows: szamlak } = await client.query(
+        `select id from szamla
+         where szamlaszam = any($1::text[]) and fizetve and not sztorno and not sztornozva`,
+        [t.szamlaszamok]
+      );
+      if (szamlak.length !== t.szamlaszamok.length) {
+        kihagyott.push(`${t.datum} ${t.partnerNev} ${t.szamlaszamok.join(",")} (számla nem fizetett / nincs meg)`);
+        continue;
+      }
+      const idk = szamlak.map((s) => s.id);
+      const { rows: uj } = await client.query(
+        `insert into kontokivonat_konyvelt (kulcs, datum, osszeg, penznem, partner_nev, kozlemeny, szamla_idk, konyvelte)
+         values ($1, $2::date, $3, $4, $5, $6, $7::bigint[], 'eves-import-2026')
+         on conflict (kulcs) do nothing
+         returning kulcs`,
+        [t.kulcs, t.datum, t.osszeg, t.penznem, t.partnerNev, t.kozlemeny, idk]
+      );
+      if (uj.length === 0) {
+        kihagyott.push(`${t.datum} ${t.partnerNev} ${t.szamlaszamok.join(",")} (utalás már könyvelve)`);
+        continue;
+      }
+      felirva++;
+      const { rowCount } = await client.query(
+        `update szamla s
+         set fizetve_datum = ($2::date)::timestamp at time zone 'Europe/Budapest'
+         where s.id = any($1::bigint[])
+           and s.fizetve
+           and not exists (
+             select 1 from kontokivonat_konyvelt k
+             where s.id = any(k.szamla_idk) and k.kulcs <> $3
+           )`,
+        [idk, t.datum, t.kulcs]
+      );
+      datumFrissitve += rowCount ?? 0;
+    }
+    await client.query(`insert into alkalmazott_javitasok (kod) values ($1) on conflict (kod) do nothing`, [
+      JAVITAS_KOD,
+    ]);
+    await client.query("commit");
+  } catch (err) {
+    await client.query("rollback");
+    throw err;
+  } finally {
+    client.release();
+  }
+  console.log(
+    `[migrate] kontókivonat éves import: ${felirva}/${tetelek.length} utalás felírva, ${datumFrissitve} számla fizetési dátuma pontosítva` +
+      (kihagyott.length ? `; kihagyva: ${kihagyott.join("; ")}` : ".")
+  );
 }
 
 main().catch((err) => {
