@@ -25,7 +25,6 @@ import {
 } from "./idovonal";
 import { SAJAT_JARMUVEK, resolveJarmu, type JarmuSzin, type SajatJarmu } from "./vehicles";
 import { bontsMegallokra, cimPontossaga, varosNev } from "./varos";
-import { rogzitGpsErinteseket } from "./megallo-naplo";
 import { megalloAblakKezdet, mozogE } from "./erintes-felismeres";
 import { cachelve } from "./idovonal-cache";
 import {
@@ -1032,16 +1031,11 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
           sajatSorok
         );
 
-        // Az észlelt érintéseket eltároljuk, mert az Ecofleet trip-előzménye
-        // nem marad meg örökre, a számlázás viszont napokkal a lerakás után
-        // történik (lásd megallo-naplo.ts). Csak megfigyelés-naplózás: ha
-        // hibázik, az idővonal megjelenítését nem akaszthatja meg.
-        const erintesek = jeloltFuvarok.flatMap((f) =>
-          f.megallok
-            .filter((m) => m.tenylegesIdo !== null)
-            .map((m) => ({ fuvarId: f.id, index: m.index, erkezes: m.tenylegesIdo!, tavozas: m.tenylegesTavozas }))
-        );
-        await rogzitGpsErinteseket(erintesek).catch((err) => console.error("[megallo-naplo] felírás sikertelen:", err));
+        // Az érintés-naplót (fuvar_megallo_allapot.gps_*) NEM innen írjuk:
+        // ez a nézet egyetlen nap trip-ablakával dolgozik, ami egy éjszakán
+        // átnyúló látogatást csonkán látna, és felülírná a figyelő 3 napos
+        // ablakkal számolt, teljes értékét — a naplót a figyelő vezeti
+        // (teljesites-figyeles.ts), itt csak megjelenítünk.
 
         // A hátralévő pontok becsült idejét élő pozícióból láncba fűzve
         // frissítjük, hogy a jármű tényleges mai haladását tükrözzék, ne
