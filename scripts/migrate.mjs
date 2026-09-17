@@ -678,17 +678,52 @@ async function naplozEcofleetFogyasztast() {
       const res = await fetch(url.toString());
       return { status: res.status, text: await res.text() };
     };
-    const lista = await hiv("Reports/listReports");
-    console.log(`[migrate] ecofleet listReports: HTTP ${lista.status} — ${lista.text.replace(/\s+/g, " ").slice(0, 3000)}`);
-    const idk = [...lista.text.matchAll(/<id>(\d+)<\/id>[\s\S]{0,300}?<name>([^<]*)<\/name>|<name>([^<]*)<\/name>[\s\S]{0,300}?<id>(\d+)<\/id>/g)].map((m) => ({ id: m[1] ?? m[4], nev: m[2] ?? m[3] }));
-    const jeloltek = idk.filter((r) => /tvonal|route|trip|fuel|zemanyag|fogyaszt/i.test(r.nev ?? ""));
-    console.log(`[migrate] ecofleet jelentés-jelöltek: ${jeloltek.map((r) => `${r.id}=${r.nev}`).join("; ") || "(nincs, lásd a nyers listát)"}`);
-    for (const r of jeloltek.slice(0, 3)) {
-      const conf = await hiv("Reports/getReportConf", { id: r.id });
-      console.log(`[migrate] ecofleet getReportConf ${r.id} (${r.nev}): HTTP ${conf.status} — ${conf.text.replace(/\s+/g, " ").slice(0, 2500)}`);
+    // Az "Útvonal jelentés" (id: trips) és az "Útvonal összegzés" (trackSummary)
+    // paraméter-leírása, majd próba-lekérés csv-ben 14 napra. A paraméter-
+    // neveket a leírásból találjuk ki (idő: beg/start/from, end/to; jármű:
+    // object/vehicle) — ha nem talál, a nyers leírásból a következő körben.
+    const jelentesek = ["trips", "trackSummary"];
+    for (const id of jelentesek) {
+      const conf = await hiv("Reports/getReportConf", { id });
+      const confSzoveg = conf.text.replace(/\s+/g, " ");
+      console.log(`[migrate] ecofleet getReportConf ${id}: HTTP ${conf.status} — ${confSzoveg.slice(0, 2500)}`);
+      const tagek = [...new Set([...conf.text.matchAll(/<([A-Za-z_][A-Za-z0-9_]*)[ >]/g)].map((m) => m[1]))];
+      const nevek = [...new Set([...conf.text.matchAll(/<name>([^<]+)<\/name>/g)].map((m) => m[1]))];
+      console.log(`[migrate] ecofleet getReportConf ${id} tagek: ${tagek.join(", ")} | name-ek: ${nevek.join(", ")}`);
+      const jeloltNevek = nevek.length ? nevek : tagek;
+      const parameters = {};
+      for (const n of jeloltNevek) {
+        if (/^(beg|start|from|period_?start|date_?from)/i.test(n)) parameters[n] = faliora(kezdet);
+        else if (/^(end|to|until|period_?end|date_?to)/i.test(n)) parameters[n] = faliora(most);
+        else if (/object|vehicle/i.test(n)) parameters[n] = jarmuvek.map((j) => j.objectId);
+      }
+      console.log(`[migrate] ecofleet getReport ${id} próba-paraméterek: ${JSON.stringify(parameters)}`);
+      const rep = await hiv("Reports/getReport", { id, parameters: JSON.stringify(parameters), format: "csv" });
+      const repSzoveg = rep.text.replace(/\r/g, "");
+      console.log(`[migrate] ecofleet getReport ${id}: HTTP ${rep.status}, ${repSzoveg.length} karakter — ${repSzoveg.slice(0, 2500).replace(/\n/g, " ⏎ ")}`);
+      // Ha csv jött: fejléc alapján üzemanyag- és jármű-oszlop, összegzés járművenként.
+      const sorok = repSzoveg.split("\n").filter((l) => l.trim());
+      if (sorok.length > 1 && !/<\?xml/.test(repSzoveg)) {
+        const elv = (sorok[0].match(/;/g) ?? []).length >= (sorok[0].match(/,/g) ?? []).length ? ";" : ",";
+        const fej = sorok[0].split(elv).map((c) => c.replace(/^"|"$/g, "").trim());
+        const uzIdx = fej.findIndex((c) => /fogyasztott|fuel|üzemanyag/i.test(c));
+        const jarmuIdx = fej.findIndex((c) => /járm|vehicle|rendszám|plate/i.test(c));
+        const tavIdx = fej.findIndex((c) => /hossz|distance|táv/i.test(c));
+        console.log(`[migrate] ecofleet getReport ${id} fejléc: ${fej.join(" | ")} (üzemanyag-oszlop: ${uzIdx}, jármű: ${jarmuIdx}, táv: ${tavIdx})`);
+        const ossz = {};
+        for (const l of sorok.slice(1)) {
+          const c = l.split(elv).map((x) => x.replace(/^"|"$/g, "").trim());
+          const k = jarmuIdx >= 0 ? c[jarmuIdx] : "?";
+          if (!ossz[k]) ossz[k] = { uz: 0, tav: 0, n: 0 };
+          ossz[k].uz += Number(String(c[uzIdx] ?? "").replace(",", ".")) || 0;
+          ossz[k].tav += Number(String(c[tavIdx] ?? "").replace(",", ".")) || 0;
+          ossz[k].n++;
+        }
+        for (const [k, v] of Object.entries(ossz)) {
+          console.log(`[migrate] ecofleet ${id} ${k}: ${v.n} sor, ${Math.round(v.tav)} km, üzemanyag ${Math.round(v.uz * 10) / 10}`);
+        }
+      }
     }
-    const kiadasok = await hiv("Expenses/get", { begTimestamp: faliora(kezdet), endTimestamp: faliora(most) });
-    console.log(`[migrate] ecofleet Expenses/get 14 nap: HTTP ${kiadasok.status} — ${kiadasok.text.replace(/\s+/g, " ").slice(0, 1500)}`);
   } catch (err) {
     console.log(`[migrate] ecofleet jelentés-API hiba: ${err instanceof Error ? err.message : String(err)}`);
   }
