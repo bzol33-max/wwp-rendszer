@@ -1,14 +1,13 @@
-import { getLejartSzamlak } from "@/lib/attekintes/actions";
-import { getSzamlaFejlec } from "@/lib/szamlak/actions";
-import { LejartSzamlaLista } from "@/components/attekintes/lejart-szamla-lista";
+import { getNyitottSzamlak } from "@/lib/attekintes/actions";
+import { SzamlakMobil } from "@/components/attekintes/szamlak-mobil";
 
-export default async function LejartSzamlakPage() {
-  const [rows, fejlec] = await Promise.all([getLejartSzamlak(), getSzamlaFejlec()]);
+export default async function SzamlakPage() {
+  const rows = await getNyitottSzamlak();
 
   return (
-    <div className="flex flex-col gap-4 py-4">
+    <div className="flex flex-col gap-3 py-4">
       <h1 className="text-base font-semibold">Számlák</h1>
-      <LejartSzamlaLista initialRows={rows} fejlec={fejlec} />
+      <SzamlakMobil initialRows={rows} />
     </div>
   );
 }

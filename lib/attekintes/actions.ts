@@ -11,7 +11,7 @@ import { query } from "@/lib/db";
 import { getFleetPositions } from "@/lib/fuvarozas/actions";
 import { getFuvarok } from "@/lib/fuvarozas/megbizasok";
 import { SAJAT_JARMUVEK, resolveJarmu, findJarmuByPlate, jarmuLabel, type SajatJarmu } from "@/lib/fuvarozas/vehicles";
-import { getOsszesLejartSzamla } from "@/lib/szamlak/actions";
+import { getSzamlaLista } from "@/lib/szamlak/actions";
 import type { SzamlaRow } from "@/lib/szamlak/szamla-constants";
 import type { FuvarRow } from "@/lib/fuvarozas/fuvar-constants";
 import { bontsMegallokra, varosNev } from "@/lib/fuvarozas/varos";
@@ -129,9 +129,13 @@ export async function getMaiKiadasok(): Promise<KasszaKiadasTetel[]> {
 // Számlák fül
 // ---------------------------------------------------------------------------
 
-/** A "Számlák" fülön: az összes lejárt számla listája, pipálható. */
-export async function getLejartSzamlak(): Promise<SzamlaRow[]> {
-  return getOsszesLejartSzamla();
+/**
+ * A "Számlák" fülön: az összes nyitott számla, esedékesség szerint — a
+ * Lejárt / Következő 10 / Mappák nézetet a kliens ebből bontja szét, így egy
+ * "Fizetve" jelölés mindhárom helyen és a felső számokban is azonnal látszik.
+ */
+export async function getNyitottSzamlak(): Promise<SzamlaRow[]> {
+  return getSzamlaLista({ csakNyitott: true });
 }
 
 // ---------------------------------------------------------------------------
