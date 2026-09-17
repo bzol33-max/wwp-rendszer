@@ -83,8 +83,12 @@ export function talalVaros(parts: string[]): { zip: string; city: string; idx: n
   // A lookbehind kizárja azt az esetet, amikor az irányítószám egy MÁSIK
   // minta (lásd lentebb) zárójelezett részében van — ott a városnév a
   // zárójel ELŐTT van, nem az irányítószám UTÁN.
+  // Az irányítószám után állhat egy záró szögletes zárójel is: az RBT
+  // megbízásain a formátum "CÉGNÉV [H-4243] TÉGLÁS, Hrsz. …" — enélkül a
+  // "4243]" nem illeszkedett, a városnév helyett a teljes nyers cím jelent
+  // meg, és a GPS-felismerés (pontosság "ismeretlen") kihagyta a megállót.
   for (let i = 0; i < parts.length; i++) {
-    const m = parts[i].match(/(?<!\()(\d{4})\s+([^(]+)/);
+    const m = parts[i].match(/(?<!\()(\d{4})\]?\s+([^(]+)/);
     if (m) return { zip: m[1], city: m[2].trim(), idx: i };
   }
 

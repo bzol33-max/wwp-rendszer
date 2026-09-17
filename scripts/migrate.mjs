@@ -693,7 +693,7 @@ async function naplozFuvarHelyEllenorzest(pool) {
       `select
          count(*) filter (where postazva and postazva_at is null) as a,
          count(*) filter (where tipus = 'sajat' and coalesce(szamla_szam, '') <> ''
-                            and not teljesitve and coalesce(lerakas_datum, datum) >= current_date) as b,
+                            and not teljesitve and coalesce(lerakas_datum, datum) >= (now() at time zone 'Europe/Budapest')::date) as b,
          count(*) filter (where tipus = 'sajat' and postazva and coalesce(szamla_szam, '') = '') as c,
          count(*) filter (where tipus = 'sajat' and postazva and coalesce(szamla_szam, '') <> '' and hely <> 'archiv') as d,
          count(*) filter (where tipus = 'sajat' and sajat_ceg_e) as sajat_ceg,
@@ -708,9 +708,9 @@ async function naplozFuvarHelyEllenorzest(pool) {
            ${SAJAT_CEG_SQL("megrendelo")} as sajat_ceg_e,
            (case
               when (coalesce(szamla_szam, '') <> '' and postazva and coalesce(postazva_at, '-infinity'::timestamptz) <= now() - interval '5 minutes')
-                or (tipus = 'ber' and (teljesitve or coalesce(lerakas_datum, datum) < current_date or coalesce(szamla_szam, '') <> ''))
+                or (tipus = 'ber' and (teljesitve or coalesce(lerakas_datum, datum) < (now() at time zone 'Europe/Budapest')::date or coalesce(szamla_szam, '') <> ''))
                 then 'archiv'
-              when (teljesitve or coalesce(lerakas_datum, datum) < current_date or coalesce(szamla_szam, '') <> '')
+              when (teljesitve or coalesce(lerakas_datum, datum) < (now() at time zone 'Europe/Budapest')::date or coalesce(szamla_szam, '') <> '')
                 then 'szamla_posta'
               when tipus = 'ber' then 'sajat_folyamatban'
               else 'ber_folyamatban'
@@ -758,7 +758,7 @@ async function naplozFuvarHelyEllenorzest(pool) {
        from fuvar_megbizasok
        where statusz <> 'torolt'
          and not (coalesce(szamla_szam, '') <> '' and postazva and coalesce(postazva_at, '-infinity'::timestamptz) <= now() - interval '5 minutes')
-         and not (tipus = 'ber' and (teljesitve or coalesce(lerakas_datum, datum) < current_date or coalesce(szamla_szam, '') <> ''))
+         and not (tipus = 'ber' and (teljesitve or coalesce(lerakas_datum, datum) < (now() at time zone 'Europe/Budapest')::date or coalesce(szamla_szam, '') <> ''))
        group by 1 order by 2 desc, 1 limit 60`
     );
     console.log(`[migrate] aktív fülek megrendelői: ${nevek.map((n) => `${n.nev} (${n.db})`).join("; ")}`);

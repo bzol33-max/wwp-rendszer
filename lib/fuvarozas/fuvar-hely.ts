@@ -78,8 +78,16 @@ export const FUVAR_SZAMLAS_SQL = `(coalesce(szamla_szam, '') <> '')`;
  */
 export const FUVAR_EFFEKTIVE_ARCHIVALT_SQL = `(${FUVAR_SZAMLAS_SQL} and postazva and coalesce(postazva_at, '-infinity'::timestamptz) <= now() - interval '${ARCHIVALAS_ABLAK_PERC} minutes')`;
 
+/**
+ * A "mai nap" az adatbázisban — BUDAPESTI naptári nap, nem a szerver (UTC)
+ * `current_date`-je. A sima current_date miatt a Megbízások fülek napváltása
+ * hajnali 02:00-kor történt (nyáron), nem éjfélkor: a tegnapi lerakású fuvar
+ * 00:00 és 02:00 közt még "folyamatban" volt.
+ */
+export const FUVAR_MA_SQL = `((now() at time zone 'Europe/Budapest')::date)`;
+
 /** "A munka kész" — lásd a fájl fejlécét. */
-export const FUVAR_MUNKA_KESZ_SQL = `(teljesitve or coalesce(lerakas_datum, datum) < current_date or ${FUVAR_SZAMLAS_SQL})`;
+export const FUVAR_MUNKA_KESZ_SQL = `(teljesitve or coalesce(lerakas_datum, datum) < ${FUVAR_MA_SQL} or ${FUVAR_SZAMLAS_SQL})`;
 
 /** A fuvar helye a Megbízások fülei közt — CASE-kifejezés, a fuvar_megbizasok tábla oszlopaira hivatkozik. */
 export const FUVAR_HELY_SQL = `(case
@@ -120,9 +128,9 @@ function idopontMs(ertek: string | Date): number {
 /**
  * A FUVAR_HELY_SQL TS-tükre egy beolvasott sorra.
  *
- * @param ma    A "mai nap" YYYY-MM-DD alakban — a SQL `current_date`-jének
- *              felel meg, ezért az adatbázistól kérd le (`current_date::text`),
- *              hogy az időzóna ne csússzon el a kettő közt.
+ * @param ma    A "mai nap" YYYY-MM-DD alakban — a SQL FUVAR_MA_SQL-jének
+ *              (budapesti nap) felel meg; kérd le az adatbázistól
+ *              (`select ${FUVAR_MA_SQL}::text`) vagy budapestNapISO()-val.
  * @param most  A "most" a postázási ablak számításához (SQL: `now()`).
  */
 export function getFuvarHelye(fuvar: FuvarHelyBemenet, ma: string, most: Date = new Date()): FuvarHely {

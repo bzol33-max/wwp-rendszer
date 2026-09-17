@@ -319,6 +319,14 @@ function FuvarBlokkFejlec({ f, aktiv }: { f: FuvarBlokk; aktiv: boolean }) {
       </span>
       <span className="truncate font-medium">{f.megrendelo ?? "Megbízó ismeretlen"}</span>
       {f.pozicioszam && <span className="shrink-0 text-muted-foreground">· {f.pozicioszam}</span>}
+      {f.csuszo && (
+        <span
+          className="shrink-0 rounded bg-amber-200/70 px-1 py-0.5 text-[9px] font-medium text-amber-900 dark:bg-amber-900/50 dark:text-amber-200"
+          title="A lerakás tervezett napja elmúlt, a fuvar még nincs készre jelölve — a kocsi még viszi."
+        >
+          Csúszik (korábbról)
+        </span>
+      )}
       {aktiv && <span className="shrink-0 rounded bg-primary/20 px-1 py-0.5 text-[9px] font-medium text-primary">Folyamatban</span>}
     </div>
   );

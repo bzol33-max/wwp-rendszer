@@ -157,3 +157,20 @@
 - Ellenőrzött végállapot 19:11-kor: #128 Fel Debrecen 15:59→07:15, Le Pápa
   „itt áll"; #130 Fel Pápa „itt áll", Le Debrecen nincs érintés — mindkettő
   nyitott, egyezik a valósággal.
+
+## 2026-09-17 (10. kör) — GPS lap: csúszó fuvarok, tegnapi kész, RBT cím, napváltás
+
+- Elv (Budaházi Zoltán): a megbízás dátuma irányadó, a fuvar állapotát a
+  GPS dönti. Ezért:
+  - a mai nézet a járművel rendelkező, még nem Teljesítve, 3 napon belül
+    lerakandó fuvarokat is mutatja („Csúszik (korábbról)" jelölés), a
+    figyelő pedig a dátumtól/fültől függetlenül lezárja, ha a GPS szerint
+    kész (nyitott = nem Teljesítve és nincs számla);
+  - a megjelenített nap előtt Teljesítve-re jelölt fuvar nem jelenik meg
+    (tegnap kézzel készre tett saját fuvar mai tervezett nappal).
+- `varos.ts`: az RBT „CÉGNÉV [H-4243] TÉGLÁS, Hrsz. …" formátum városa és
+  irányítószáma felismerve (eddig nyers szöveg, pontosság „ismeretlen", a
+  GPS-felismerés kihagyta).
+- `FUVAR_MA_SQL`: a Megbízások fülek napváltása budapesti nap szerint
+  (eddig UTC current_date → nyáron 02:00-kor fordult). A migrate.mjs
+  ellenőrző másolatai és a check-szkript is erre álltak át.
