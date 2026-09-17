@@ -1,177 +1,179 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
-import { Check, ChevronLeft, ChevronRight, Folder } from "lucide-react";
+import { Check, ChevronDown, RotateCcw, Search, X } from "lucide-react";
 import { jeloltFizetve, visszavonFizetve } from "@/lib/szamlak/actions";
-import type { SzamlaAlkategoria, SzamlaRow } from "@/lib/szamlak/szamla-constants";
+import { ALKATEGORIA_LABEL, FIZETVE_NAPOK_MOBIL as FIZETVE_NAPOK, KATEGORIA_LABEL, type SzamlaRow } from "@/lib/szamlak/szamla-constants";
 
-// Az Áttekintés "Számlák" füle (mobil): felül 3 szám, alatta három fül —
-// Lejárt / Következő 10 / Mappák (Fuvar, Raklap → Fabrika / Keter / Egyéb).
-// Minden a nyitott számlák egyetlen listájából számolódik, így egy "Fizetve"
-// jelölés mindenhol azonnal látszik.
+// Az Áttekintés "Számlák" füle (mobil) — "Áttekintő mátrix" elrendezés:
+// felül egy összecsukható táblázat (sorok: mappák, oszlopok: állapotok),
+// bármelyik számra koppintva az a lista jön; a számláknál nagy, kerek Fizetve
+// gomb; a kereső lent, a hüvelykujj alatt.
 
-// A pg a numeric oszlopokat (brutto) stringként adja — Number() nélkül a
-// toLocaleString nem tagol.
-function formatOsszeg(n: number | string, penznem: string) {
-  return `${Number(n).toLocaleString("hu-HU", { maximumFractionDigits: 2 })} ${penznem}`;
-}
+type Mappa = "mind" | "fuvar" | "fabrika" | "keter" | "egyeb";
+type Allapot = "lejart" | "het" | "nyitott" | "fizetve";
 
-/** Rövid összeg a mappasorokhoz: "12,4 M Ft", "913 e Ft". */
-function kompakt(n: number): string {
-  if (Math.abs(n) >= 1_000_000) return `${(n / 1_000_000).toLocaleString("hu-HU", { maximumFractionDigits: 1 })} M`;
-  if (Math.abs(n) >= 1_000) return `${Math.round(n / 1_000)} e`;
-  return String(Math.round(n));
-}
-
-const VISSZAVONAS_MS = 5000;
-const SZIN_FUVAR = "#3b82f6";
-const SZIN_RAKLAP = "#f97316";
-
-type Ful = "lejart" | "kovetkezo" | "mappak";
-type Mappa = "fuvar" | "raklap" | SzamlaAlkategoria;
-
+const MAPPA_SOROK: Mappa[] = ["fuvar", "fabrika", "keter", "egyeb", "mind"];
+const ALLAPOT_OSZLOPOK: { kulcs: Allapot; cim: string }[] = [
+  { kulcs: "lejart", cim: "Lejárt" },
+  { kulcs: "het", cim: "7 nap" },
+  { kulcs: "nyitott", cim: "Nyitott" },
+  { kulcs: "fizetve", cim: "Fizetve" },
+];
+const ALLAPOT_CIM: Record<Allapot, string> = {
+  lejart: "Lejárt",
+  het: "7 napon belül",
+  nyitott: "Összes nyitott",
+  fizetve: `Kifizetve (${FIZETVE_NAPOK} nap)`,
+};
 const MAPPA_CIM: Record<Mappa, string> = {
+  mind: "Összesen",
   fuvar: "Fuvar",
-  raklap: "Raklap",
   fabrika: "Fabrika",
   keter: "Keter",
   egyeb: "Egyéb",
 };
 
-function mappaSzamlai(rows: SzamlaRow[], mappa: Mappa): SzamlaRow[] {
-  if (mappa === "fuvar") return rows.filter((r) => r.kategoria === "fuvar");
-  if (mappa === "raklap") return rows.filter((r) => r.kategoria === "raklap");
-  return rows.filter((r) => r.kategoria === "raklap" && r.alkategoria === mappa);
+// Állapotszínek: a téma negatív/akcent színe mellé egy borostyán a "7 napon belül"-höz.
+const SZIN_LEJART = "var(--at-negative)";
+const SZIN_HET = "#9a6700";
+const SZIN_FIZETVE = "#1f7a5c";
+const ALLAPOT_SZIN: Record<Allapot, string> = {
+  lejart: SZIN_LEJART,
+  het: SZIN_HET,
+  nyitott: "var(--at-text)",
+  fizetve: SZIN_FIZETVE,
+};
+const MAPPA_SZIN: Record<Mappa, string> = {
+  mind: "var(--at-text)",
+  fuvar: "#2563eb",
+  fabrika: "#ea7a12",
+  keter: "#ea7a12",
+  egyeb: "#ea7a12",
+};
+
+// A pg a numeric oszlopokat (brutto) stringként adja — Number() nélkül a toLocaleString nem tagol.
+function formatOsszeg(n: number | string, penznem: string) {
+  return `${Number(n).toLocaleString("hu-HU", { maximumFractionDigits: 2 })} ${penznem}`;
 }
 
-type Osszegek = { ft: number; eur: number; egyeb: { penznem: string; osszeg: number }[] };
-
-function osszegez(rows: SzamlaRow[]): Osszegek {
+function osszegSzoveg(rows: SzamlaRow[]): string {
   const map = new Map<string, number>();
   for (const r of rows) map.set(r.penznem, (map.get(r.penznem) ?? 0) + Number(r.brutto));
   const ft = (map.get("Ft") ?? 0) + (map.get("HUF") ?? 0);
-  const eur = map.get("EUR") ?? 0;
-  const egyeb = [...map.entries()]
-    .filter(([p]) => !["Ft", "HUF", "EUR"].includes(p))
-    .map(([penznem, osszeg]) => ({ penznem, osszeg }));
-  return { ft, eur, egyeb };
+  map.delete("Ft");
+  map.delete("HUF");
+  return [formatOsszeg(ft, "Ft"), ...[...map.entries()].filter(([, o]) => o !== 0).map(([p, o]) => formatOsszeg(o, p))].join(" + ");
 }
 
-function osszegSzoveg(o: Osszegek, rovid = false): string {
-  const f = (n: number, p: string) => (rovid ? `${kompakt(n)} ${p}` : formatOsszeg(n, p));
-  const reszek = [];
-  if (o.ft || (!o.eur && o.egyeb.length === 0)) reszek.push(f(o.ft, "Ft"));
-  if (o.eur) reszek.push(f(o.eur, "EUR"));
-  for (const e of o.egyeb) reszek.push(f(e.osszeg, e.penznem));
-  return reszek.join(" + ");
+function mappaban(rows: SzamlaRow[], mappa: Mappa): SzamlaRow[] {
+  if (mappa === "mind") return rows;
+  if (mappa === "fuvar") return rows.filter((r) => r.kategoria === "fuvar");
+  return rows.filter((r) => r.kategoria === "raklap" && r.alkategoria === mappa);
 }
 
-function napKulonbseg(ma: string, hatarido: string): number {
-  return Math.round((new Date(ma).getTime() - new Date(hatarido).getTime()) / (24 * 60 * 60 * 1000));
+function napKulonbseg(ma: string, datum: string): number {
+  return Math.round((new Date(ma).getTime() - new Date(datum).getTime()) / (24 * 60 * 60 * 1000));
 }
 
-function FelsoSzam({ cim, rows, szin }: { cim: string; rows: SzamlaRow[]; szin: string }) {
-  const o = osszegez(rows);
-  return (
-    <div className="flex min-w-0 flex-col rounded-lg bg-[var(--at-tile)] p-2">
-      <span className="text-[10px] text-[var(--at-muted)]">{cim}</span>
-      <span className={`truncate text-sm font-bold tabular-nums ${szin}`}>{formatOsszeg(o.ft, "Ft")}</span>
-      {o.eur > 0 && (
-        <span className={`truncate text-[11px] font-semibold tabular-nums ${szin}`}>+ {formatOsszeg(o.eur, "EUR")}</span>
-      )}
-      <span className="text-[10px] text-[var(--at-muted)]">{rows.length} számla</span>
-    </div>
-  );
+function rovidDatum(iso: string): string {
+  return iso.slice(5, 10).replace("-", ".");
 }
 
-function SzamlaKartya({
+function SzamlaSor({
   row,
   ma,
+  het,
+  mostFizetett,
   pending,
   onFizetve,
+  onVisszavon,
 }: {
   row: SzamlaRow;
   ma: string;
+  het: string;
+  mostFizetett: boolean;
   pending: boolean;
   onFizetve: (row: SzamlaRow) => void;
+  onVisszavon: (row: SzamlaRow) => void;
 }) {
   const hatarido = row.fizetesi_hatarido;
-  const kulonbseg = hatarido ? napKulonbseg(ma, hatarido) : null;
-  const allapot =
-    kulonbseg === null ? (
-      <span className="text-[var(--at-muted)]">nincs határidő</span>
-    ) : kulonbseg > 0 ? (
-      <span className="text-[var(--at-negative)]">{kulonbseg} napja lejárt</span>
-    ) : kulonbseg === 0 ? (
-      <span className="text-[var(--at-negative)]">ma esedékes</span>
-    ) : (
-      <span className="text-[var(--at-muted)]">{-kulonbseg} nap múlva</span>
-    );
+  let allapot: { szoveg: string; szin: string };
+  if (mostFizetett) allapot = { szoveg: "most fizetve", szin: SZIN_FIZETVE };
+  else if (row.fizetve) allapot = { szoveg: row.fizetve_datum ? `fizetve ${rovidDatum(row.fizetve_datum)}` : "fizetve", szin: SZIN_FIZETVE };
+  else if (!hatarido) allapot = { szoveg: "nincs határidő", szin: "var(--at-muted)" };
+  else if (hatarido < ma) allapot = { szoveg: `${napKulonbseg(ma, hatarido)} napja lejárt`, szin: SZIN_LEJART };
+  else if (hatarido === ma) allapot = { szoveg: "ma esedékes", szin: SZIN_HET };
+  else if (hatarido <= het) allapot = { szoveg: `${-napKulonbseg(ma, hatarido)} nap múlva`, szin: SZIN_HET };
+  else allapot = { szoveg: `esedékes ${rovidDatum(hatarido)}`, szin: "var(--at-muted)" };
+
+  const kategoria = row.alkategoria ? ALKATEGORIA_LABEL[row.alkategoria] : KATEGORIA_LABEL[row.kategoria];
+  const halvany = row.fizetve || mostFizetett;
 
   return (
-    <div className="rounded-lg bg-[var(--at-tile)] p-2.5 text-sm">
-      <div className="flex items-center justify-between gap-2">
-        <span className="truncate font-semibold" title={row.vevo_nev}>
-          {row.vevo_nev}
-        </span>
-        <span className="shrink-0 font-semibold tabular-nums">{formatOsszeg(row.brutto, row.penznem)}</span>
+    <div
+      className={`flex items-center gap-2 rounded-xl border border-[var(--at-border)] bg-[var(--at-card)] py-2 pl-3 pr-2 ${halvany ? "opacity-60" : ""}`}
+    >
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2 text-sm">
+          <span className="truncate font-semibold" title={row.vevo_nev}>
+            {row.vevo_nev}
+          </span>
+          <span className="shrink-0 font-semibold tabular-nums">{formatOsszeg(row.brutto, row.penznem)}</span>
+        </div>
+        <div className="mt-0.5 flex items-center justify-between gap-2 text-[11px]">
+          <span style={{ color: allapot.szin }}>{allapot.szoveg}</span>
+          <span className="truncate font-mono text-[var(--at-muted)]">
+            {row.szamlaszam} · {kategoria}
+          </span>
+        </div>
       </div>
-      <div className="mt-0.5 flex items-center justify-between gap-2 text-[11px]">
-        <span className="truncate font-mono text-[var(--at-muted)]">
-          {row.szamlaszam}
-          {hatarido ? ` · ${hatarido.slice(5).replace("-", ".")}` : ""}
+      {row.fizetve && !mostFizetett ? (
+        <span
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full"
+          style={{ background: "#e3f2ec", color: SZIN_FIZETVE }}
+          aria-label="Fizetve"
+        >
+          <Check className="h-5 w-5" />
         </span>
-        <span className="shrink-0">{allapot}</span>
-      </div>
-      <button
-        type="button"
-        disabled={pending}
-        onClick={() => onFizetve(row)}
-        className="mt-2 flex w-full min-h-9 items-center justify-center gap-1.5 rounded-md border border-dashed border-[var(--at-border)] py-1.5 text-xs font-medium text-[var(--at-accent)] disabled:opacity-50"
-      >
-        <Check className="h-3.5 w-3.5" />
-        Fizetve
-      </button>
+      ) : mostFizetett ? (
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => onVisszavon(row)}
+          aria-label="Fizetve visszavonása"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full disabled:opacity-50"
+          style={{ background: "#e3f2ec", color: SZIN_FIZETVE }}
+        >
+          <RotateCcw className="h-5 w-5" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => onFizetve(row)}
+          aria-label="Fizetve"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-50"
+          style={{ background: SZIN_FIZETVE }}
+        >
+          <Check className="h-5 w-5" strokeWidth={3} />
+        </button>
+      )}
     </div>
   );
 }
 
-function MappaSor({
-  cim,
-  rows,
-  ma,
-  szin,
-  onClick,
-}: {
-  cim: string;
-  rows: SzamlaRow[];
-  ma: string;
-  szin: string;
-  onClick: () => void;
-}) {
-  const lejart = rows.filter((r) => r.fizetesi_hatarido && r.fizetesi_hatarido < ma).length;
-  return (
-    <button type="button" onClick={onClick} className="flex w-full min-h-14 items-center gap-3 px-3 py-2.5 text-left">
-      <Folder className="h-5 w-5 shrink-0" style={{ color: szin }} />
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold">{cim}</span>
-        <span className="block text-[11px] text-[var(--at-muted)]">
-          {rows.length} nyitott
-          {lejart > 0 && <span className="text-[var(--at-negative)]"> · {lejart} lejárt</span>}
-        </span>
-      </span>
-      <span className="shrink-0 text-xs font-semibold tabular-nums">{osszegSzoveg(osszegez(rows), true)}</span>
-      <ChevronRight className="h-4 w-4 shrink-0 text-[var(--at-muted)]" />
-    </button>
-  );
-}
-
-export function SzamlakMobil({ initialRows }: { initialRows: SzamlaRow[] }) {
-  const [rows, setRows] = useState(initialRows);
+export function SzamlakMobil({ nyitott, fizetett }: { nyitott: SzamlaRow[]; fizetett: SzamlaRow[] }) {
+  // Ebben a nézetben fizetettre jelölt (eredetileg nyitott) számlák — a helyükön
+  // maradnak halványítva, visszavonás-gombbal; a mátrixban már a Fizetve oszlopban számolódnak.
+  const [mostFizetett, setMostFizetett] = useState<Set<string>>(new Set());
   const [pendingId, setPendingId] = useState<string | null>(null);
-  const [ful, setFul] = useState<Ful>("lejart");
-  const [mappa, setMappa] = useState<Mappa | null>(null);
+  const [mappa, setMappa] = useState<Mappa>("mind");
+  const [allapot, setAllapot] = useState<Allapot>("lejart");
+  const [kereses, setKereses] = useState("");
+  const [matrixNyitva, setMatrixNyitva] = useState(true);
+  const [kifizetveNyitva, setKifizetveNyitva] = useState(false);
   // A mai és a +7 napos határ (Budapest) — egyszer, betöltéskor számolva.
   const [napok] = useState(() => {
     const fmt = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Budapest" });
@@ -180,22 +182,16 @@ export function SzamlakMobil({ initialRows }: { initialRows: SzamlaRow[] }) {
   });
   const { ma, het } = napok;
 
-  // Visszavonáskor a sor az eredeti (esedékesség szerinti) helyére kerül vissza.
-  const eredetiSorrend = useMemo(() => new Map(initialRows.map((r, i) => [r.id, i])), [initialRows]);
+  const valodiNyitott = nyitott.filter((r) => !mostFizetett.has(r.id));
+  const valodiFizetett = [...nyitott.filter((r) => mostFizetett.has(r.id)), ...fizetett];
 
-  const lejart = rows.filter((r) => r.fizetesi_hatarido && r.fizetesi_hatarido < ma);
-  const kovetkezo = rows.filter((r) => !r.fizetesi_hatarido || r.fizetesi_hatarido >= ma).slice(0, 10);
-  const hetenBelul = rows.filter((r) => r.fizetesi_hatarido && r.fizetesi_hatarido >= ma && r.fizetesi_hatarido <= het);
-
-  async function handleVisszavon(row: SzamlaRow) {
-    try {
-      await visszavonFizetve(row.id);
-    } catch {
-      toast.error("Nem sikerült visszavonni.");
-      return;
-    }
-    setRows((rs) => [...rs, row].sort((a, b) => (eredetiSorrend.get(a.id) ?? 0) - (eredetiSorrend.get(b.id) ?? 0)));
-    toast.success("Visszavonva.");
+  /** Az állapot szerinti lista; a most fizetettre jelöltek a nyitott-alapú listákban a helyükön maradnak. */
+  function allapotLista(a: Allapot, szamlalashoz: boolean): SzamlaRow[] {
+    const alap = szamlalashoz ? valodiNyitott : nyitott;
+    if (a === "fizetve") return valodiFizetett;
+    if (a === "nyitott") return alap;
+    if (a === "lejart") return alap.filter((r) => r.fizetesi_hatarido && r.fizetesi_hatarido < ma);
+    return alap.filter((r) => r.fizetesi_hatarido && r.fizetesi_hatarido >= ma && r.fizetesi_hatarido <= het);
   }
 
   async function handleFizetve(row: SzamlaRow) {
@@ -208,109 +204,197 @@ export function SzamlakMobil({ initialRows }: { initialRows: SzamlaRow[] }) {
     } finally {
       setPendingId(null);
     }
-    setRows((rs) => rs.filter((r) => r.id !== row.id));
-    toast.success(`${row.szamlaszam} fizetve.`, {
-      duration: VISSZAVONAS_MS,
-      action: { label: "Visszavon", onClick: () => handleVisszavon(row) },
+    setMostFizetett((s) => new Set(s).add(row.id));
+    toast.success(`${row.szamlaszam} fizetve.`);
+  }
+
+  async function handleVisszavon(row: SzamlaRow) {
+    setPendingId(row.id);
+    try {
+      await visszavonFizetve(row.id);
+    } catch {
+      toast.error("Nem sikerült visszavonni.");
+      return;
+    } finally {
+      setPendingId(null);
+    }
+    setMostFizetett((s) => {
+      const uj = new Set(s);
+      uj.delete(row.id);
+      return uj;
     });
+    toast.success("Visszavonva.");
   }
 
-  function lista(sorok: SzamlaRow[], ures: string) {
-    if (sorok.length === 0) return <p className="py-4 text-center text-sm text-[var(--at-muted)]">{ures}</p>;
-    return sorok.map((row) => (
-      <SzamlaKartya key={row.id} row={row} ma={ma} pending={pendingId === row.id} onFizetve={handleFizetve} />
-    ));
-  }
+  const q = kereses.trim().toLowerCase();
+  const lista = q
+    ? mappaban(
+        [...nyitott, ...fizetett].filter(
+          (r) => r.vevo_nev.toLowerCase().includes(q) || r.szamlaszam.toLowerCase().includes(q)
+        ),
+        mappa
+      )
+    : mappaban(allapotLista(allapot, false), mappa);
+  const listaCim = q
+    ? `Keresés: „${kereses.trim()}”${mappa !== "mind" ? ` · ${MAPPA_CIM[mappa]}` : ""}`
+    : `${ALLAPOT_CIM[allapot]}${mappa !== "mind" ? ` · ${MAPPA_CIM[mappa]}` : ""}`;
+  const kifizetveBlokk = !q && mappa !== "mind" && allapot !== "fizetve" ? mappaban(fizetett, mappa) : null;
 
-  const fulek: { kulcs: Ful; cim: string }[] = [
-    { kulcs: "lejart", cim: `Lejárt ${lejart.length}` },
-    { kulcs: "kovetkezo", cim: "Következő 10" },
-    { kulcs: "mappak", cim: "Mappák" },
-  ];
-
-  let tartalom: React.ReactNode;
-  if (ful === "lejart") {
-    tartalom = lista(lejart, "Nincs lejárt számla.");
-  } else if (ful === "kovetkezo") {
-    tartalom = lista(kovetkezo, "Nincs közelgő esedékesség.");
-  } else if (mappa === null) {
-    tartalom = (
-      <div className="divide-y divide-[var(--at-border)] rounded-xl border border-[var(--at-border)] bg-[var(--at-card)]">
-        <MappaSor cim="Fuvar" rows={mappaSzamlai(rows, "fuvar")} ma={ma} szin={SZIN_FUVAR} onClick={() => setMappa("fuvar")} />
-        <MappaSor cim="Raklap" rows={mappaSzamlai(rows, "raklap")} ma={ma} szin={SZIN_RAKLAP} onClick={() => setMappa("raklap")} />
-      </div>
-    );
-  } else {
-    const almappa = mappa === "fabrika" || mappa === "keter" || mappa === "egyeb";
-    const sorok = mappaSzamlai(rows, mappa);
-    tartalom = (
-      <>
-        <button
-          type="button"
-          onClick={() => setMappa(almappa ? "raklap" : null)}
-          className="flex min-h-9 items-center gap-0.5 self-start text-xs font-medium text-[var(--at-accent)]"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          {almappa ? "Raklap" : "Mappák"}
-        </button>
-        <div className="flex items-baseline justify-between gap-2">
-          <span className="text-sm font-semibold">{almappa ? `Raklap › ${MAPPA_CIM[mappa]}` : MAPPA_CIM[mappa]}</span>
-          <span className="text-xs font-semibold tabular-nums">{osszegSzoveg(osszegez(sorok))}</span>
-        </div>
-        {mappa === "raklap" ? (
-          <div className="divide-y divide-[var(--at-border)] rounded-xl border border-[var(--at-border)] bg-[var(--at-card)]">
-            {(["fabrika", "keter", "egyeb"] as const).map((k) => (
-              <MappaSor
-                key={k}
-                cim={MAPPA_CIM[k]}
-                rows={mappaSzamlai(rows, k)}
-                ma={ma}
-                szin={SZIN_RAKLAP}
-                onClick={() => setMappa(k)}
-              />
-            ))}
-          </div>
-        ) : (
-          lista(sorok, "Nincs nyitott számla ebben a mappában.")
-        )}
-      </>
-    );
-  }
+  const sor = (row: SzamlaRow) => (
+    <SzamlaSor
+      key={row.id}
+      row={row}
+      ma={ma}
+      het={het}
+      mostFizetett={mostFizetett.has(row.id)}
+      pending={pendingId === row.id}
+      onFizetve={handleFizetve}
+      onVisszavon={handleVisszavon}
+    />
+  );
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-3 gap-2">
-        <FelsoSzam cim="Nyitott" rows={rows} szin="text-[var(--at-text)]" />
-        <FelsoSzam cim="Lejárt" rows={lejart} szin="text-[var(--at-negative)]" />
-        <FelsoSzam cim="7 napon belül" rows={hetenBelul} szin="text-[var(--at-text)]" />
+    <div className="flex flex-col gap-2">
+      <div className="rounded-xl border border-[var(--at-border)] bg-[var(--at-card)] px-2 py-1.5">
+        <button
+          type="button"
+          onClick={() => setMatrixNyitva((v) => !v)}
+          className="flex min-h-9 w-full items-center justify-between px-1 text-sm font-semibold"
+          aria-expanded={matrixNyitva}
+        >
+          Áttekintés
+          <ChevronDown className={`h-4 w-4 text-[var(--at-muted)] transition-transform ${matrixNyitva ? "rotate-180" : ""}`} />
+        </button>
+        {matrixNyitva && (
+          <>
+            <div className="grid grid-cols-[4.5rem_repeat(4,1fr)] items-center gap-0.5 text-xs">
+              <span />
+              {ALLAPOT_OSZLOPOK.map((o) => (
+                <span key={o.kulcs} className="text-center text-[10px] font-medium" style={{ color: ALLAPOT_SZIN[o.kulcs] }}>
+                  {o.cim}
+                </span>
+              ))}
+              {MAPPA_SOROK.map((m) => (
+                <MatrixSor
+                  key={m}
+                  mappa={m}
+                  aktivMappa={q ? null : mappa}
+                  aktivAllapot={allapot}
+                  darab={(a) => mappaban(allapotLista(a, true), m).length}
+                  onValaszt={(a) => {
+                    setMappa(m);
+                    setAllapot(a);
+                    setKereses("");
+                    setKifizetveNyitva(false);
+                  }}
+                />
+              ))}
+            </div>
+            <p className="px-1 pb-0.5 pt-1 text-[10px] text-[var(--at-muted)]">Koppints egy számra a listához</p>
+          </>
+        )}
       </div>
 
-      <div className="flex rounded-lg bg-[var(--at-tile)] p-1" role="tablist">
-        {fulek.map((f) => {
-          const aktiv = ful === f.kulcs;
-          return (
-            <button
-              key={f.kulcs}
-              type="button"
-              role="tab"
-              aria-selected={aktiv}
-              onClick={() => {
-                setFul(f.kulcs);
-                setMappa(null);
-              }}
-              className={`min-h-9 flex-1 rounded-md text-xs transition-colors ${
-                aktiv
-                  ? `bg-[var(--at-card)] font-semibold ${f.kulcs === "lejart" ? "text-[var(--at-negative)]" : "text-[var(--at-text)]"}`
-                  : "text-[var(--at-muted)]"
-              }`}
-            >
-              {f.cim}
+      <div className="flex items-baseline justify-between gap-2 px-0.5">
+        <span className="text-sm font-semibold" style={{ color: q ? "var(--at-text)" : ALLAPOT_SZIN[allapot] }}>
+          {listaCim}
+        </span>
+        <span className="shrink-0 text-xs text-[var(--at-muted)]">
+          {lista.length} db · <span className="font-semibold text-[var(--at-text)]">{osszegSzoveg(lista)}</span>
+        </span>
+      </div>
+
+      {lista.length === 0 ? (
+        <p className="py-6 text-center text-sm text-[var(--at-muted)]">{q ? "Nincs találat." : "Nincs ilyen számla."}</p>
+      ) : (
+        lista.map(sor)
+      )}
+
+      {kifizetveBlokk && (
+        <>
+          <button
+            type="button"
+            onClick={() => setKifizetveNyitva((v) => !v)}
+            className="mt-1 flex min-h-11 w-full items-center justify-between rounded-xl border border-[var(--at-border)] bg-[var(--at-card)] px-3 text-sm font-semibold"
+            style={{ color: SZIN_FIZETVE }}
+            aria-expanded={kifizetveNyitva}
+          >
+            <span className="flex items-center gap-1.5">
+              <Check className="h-4 w-4" />
+              {MAPPA_CIM[mappa]} – kifizetve ({kifizetveBlokk.length})
+            </span>
+            <ChevronDown className={`h-4 w-4 transition-transform ${kifizetveNyitva ? "rotate-180" : ""}`} />
+          </button>
+          {kifizetveNyitva && kifizetveBlokk.map(sor)}
+        </>
+      )}
+
+      {/* Kereső lent, a hüvelykujj alatt — a fix alsó fülsáv fölé ragad. */}
+      <div className="sticky bottom-[calc(3.75rem+env(safe-area-inset-bottom))] z-10 -mx-4 mt-2 bg-[var(--at-bg)] px-4 py-2">
+        <div className="flex h-11 items-center gap-2 rounded-xl border border-[var(--at-border)] bg-[var(--at-card)] px-3">
+          <Search className="h-4 w-4 shrink-0 text-[var(--at-muted)]" />
+          <input
+            type="search"
+            value={kereses}
+            onChange={(e) => setKereses(e.target.value)}
+            placeholder="Keresés: cég vagy sorszám"
+            className="h-full min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-[var(--at-muted)]"
+          />
+          {kereses && (
+            <button type="button" onClick={() => setKereses("")} aria-label="Keresés törlése" className="text-[var(--at-muted)]">
+              <X className="h-4 w-4" />
             </button>
-          );
-        })}
+          )}
+        </div>
       </div>
-
-      <div className="flex flex-col gap-2">{tartalom}</div>
     </div>
+  );
+}
+
+function MatrixSor({
+  mappa,
+  aktivMappa,
+  aktivAllapot,
+  darab,
+  onValaszt,
+}: {
+  mappa: Mappa;
+  aktivMappa: Mappa | null;
+  aktivAllapot: Allapot;
+  darab: (a: Allapot) => number;
+  onValaszt: (a: Allapot) => void;
+}) {
+  const osszesen = mappa === "mind";
+  const almappa = mappa === "fabrika" || mappa === "keter" || mappa === "egyeb";
+  return (
+    <>
+      <span
+        className={`truncate text-xs ${osszesen ? "border-t border-[var(--at-border)] pt-1 font-semibold" : ""}`}
+        style={{ color: MAPPA_SZIN[mappa] }}
+      >
+        {almappa ? "↳ " : ""}
+        {MAPPA_CIM[mappa]}
+      </span>
+      {ALLAPOT_OSZLOPOK.map((o) => {
+        const n = darab(o.kulcs);
+        const aktiv = aktivMappa === mappa && aktivAllapot === o.kulcs;
+        return (
+          <button
+            key={o.kulcs}
+            type="button"
+            onClick={() => onValaszt(o.kulcs)}
+            className={`min-h-9 rounded-md text-center text-sm font-semibold tabular-nums ${osszesen ? "mt-1" : ""}`}
+            style={
+              aktiv
+                ? { background: ALLAPOT_SZIN[o.kulcs], color: "#fff" }
+                : { color: n ? ALLAPOT_SZIN[o.kulcs] : "var(--at-border)" }
+            }
+            aria-pressed={aktiv}
+          >
+            {n}
+          </button>
+        );
+      })}
+    </>
   );
 }

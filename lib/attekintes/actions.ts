@@ -138,6 +138,11 @@ export async function getNyitottSzamlak(): Promise<SzamlaRow[]> {
   return getSzamlaLista({ csakNyitott: true });
 }
 
+/** A mobil Számlák mátrix "Fizetve" oszlopához: az utóbbi napokban fizetettre jelölt számlák, a legfrissebb elöl. */
+export async function getFrissenFizetettSzamlak(napok: number): Promise<SzamlaRow[]> {
+  return getSzamlaLista({ csakFizetve: true, fizetveNapon: napok });
+}
+
 // ---------------------------------------------------------------------------
 // Fuvar fül
 // ---------------------------------------------------------------------------

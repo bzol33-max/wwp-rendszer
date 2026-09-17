@@ -48,6 +48,8 @@ export type SzamlaListaSzuro = {
   csakNyitott?: boolean;
   /** "lejart" = a határidő elmúlt; "het" = ma és ma+7 nap között esedékes. */
   hatarido?: "lejart" | "het";
+  /** Csak az utóbbi ennyi napban fizetettre jelöltek (a csakFizetve mellé, pl. a mobil "Fizetve" oszlophoz). */
+  fizetveNapon?: number;
 };
 
 /**
@@ -80,6 +82,10 @@ export async function getSzamlaLista(szuro: SzamlaListaSzuro): Promise<SzamlaRow
   }
   if (szuro.csakFizetve) {
     feltetelek.push("fizetve");
+  }
+  if (szuro.fizetveNapon) {
+    parameterek.push(szuro.fizetveNapon);
+    feltetelek.push(`fizetve_datum >= now() - ($${parameterek.length}::int * interval '1 day')`);
   }
   if (szuro.csakNyitott) {
     feltetelek.push("not fizetve");
