@@ -296,3 +296,16 @@
   is nyitott hibaként szerepelt. Javítás: `var(--font-geist-sans)`, amit az
   `app/layout.tsx` Geist-betöltése ad. Helyi Playwright-képernyőképen a
   Fuvar fül Geist Sans-szal jelenik meg. Minden modult érint, ezért külön PR.
+
+## 2026-09-18 (19. kör) — Drive-import: kocsi felismerése két rendszámból
+
+- Hiba: a Drive-importból jött megbízásokon a Kocsi mező üres maradt, kézzel
+  kellett kocsit választani (Hajdúspedíció 09.18, BB-Logistic 09.17, Ghibli).
+  Ok: a megbízók a vontató ÉS a pótkocsi rendszámát együtt írják
+  ("NMZ492/XZV926", "AOPU-427 AOTY-474"), a `findJarmuByPlate` pedig a teljes
+  szöveget egyetlen rendszámhoz hasonlította — sosem egyezett.
+- Javítás: `lib/fuvarozas/vehicles.ts` `findJarmuInSzoveg` — a szöveg minden
+  rendszám-szerű darabját külön illeszti (pontos, majd 1 karakternyi elgépelés,
+  pl. RBT "AODU427"), rendszám nélkül a sofőr teljes/keresztneve. Két saját
+  kocsi egy szövegben → nem tippel. Az import (`drive-sync-core.ts`
+  `resolveJarmuMezo`) ezt használja. Regressziós teszt: `scripts/teszt-import.mts`.

@@ -34,7 +34,7 @@ import {
   setFuvarPostazasiCim,
 } from "@/lib/fuvarozas/megbizasok";
 import { sajatCegunkE, type FuvardijPenznem } from "@/lib/fuvarozas/fuvar-constants";
-import { findJarmuByPlate, jarmuLabel } from "@/lib/fuvarozas/vehicles";
+import { findJarmuInSzoveg, jarmuLabel } from "@/lib/fuvarozas/vehicles";
 import {
   mentDuvenbeckDokumentumot,
   ismertDriveFileIdk,
@@ -330,10 +330,15 @@ async function kivonatolFuvarAdatot(szoveg: string): Promise<LlmValasz | null> {
   return parseJsonValasz(tartalom);
 }
 
-/** A kivont "rendszamVagySofor" szöveg alapján megkeresi a hozzá tartozó saját jármű kanonikus címkéjét, ha van egyezés. */
+/**
+ * A kivont "rendszamVagySofor" szöveg alapján megkeresi a hozzá tartozó saját
+ * jármű kanonikus címkéjét, ha van egyezés. A megbízók a vontató és a
+ * pótkocsi rendszámát együtt írják ("NMZ492/XZV926", "AOPU-427 AOTY-474"),
+ * ezért nem az egész szöveget, hanem a benne lévő rendszámokat egyenként
+ * illesztjük — lásd findJarmuInSzoveg.
+ */
 function resolveJarmuMezo(rendszamVagySofor: string | null): string | undefined {
-  if (!rendszamVagySofor) return undefined;
-  const jarmu = findJarmuByPlate(rendszamVagySofor);
+  const jarmu = findJarmuInSzoveg(rendszamVagySofor);
   return jarmu ? jarmuLabel(jarmu) : undefined;
 }
 

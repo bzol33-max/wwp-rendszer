@@ -82,6 +82,104 @@ export function findJarmuByPlate(plate: string): SajatJarmu | null {
   );
 }
 
+/**
+ * Rendszám-szerű darabok egy szabad szövegben ("AOPU-427 AOTY-474",
+ * "NMZ492/XZV926", "AOPU427,/AOTY474"). Ugyanaz a szűk alak, mint a
+ * Duvenbeck-olvasóban: 3–4 betű + 3 számjegy, kötőjellel vagy anélkül — a
+ * hosszabb azonosítók (HU13500287, UH748629) nem illeszkednek.
+ */
+const RENDSZAM_ALAK = /\b([A-Z]{3,4})-?(\d{3})\b/g;
+
+/** Két normalizált rendszám Levenshtein-távolsága — az elgépelt rendszámok felismeréséhez. */
+function szerkesztesiTavolsag(a: string, b: string): number {
+  const sor = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    let elozo = sor[0];
+    sor[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const temp = sor[j];
+      sor[j] = Math.min(sor[j] + 1, sor[j - 1] + 1, elozo + (a[i - 1] === b[j - 1] ? 0 : 1));
+      elozo = temp;
+    }
+  }
+  return sor[b.length];
+}
+
+/** Legfeljebb ennyi karakternyi eltérést tekintünk elgépelésnek egy rendszámban ("AODU427" → AOPU-427). */
+const RENDSZAM_ELTERES_HATAR = 1;
+
+/**
+ * Egy megbízásból kiolvasott szabad szöveghez ("Rendszám: AOPU-427 AOTY-474",
+ * "NMZ492/XZV926", "Vadon Gergő") megkeresi a saját járművet.
+ *
+ * A megbízók szinte mindig a VONTATÓ ÉS A PÓTKOCSI rendszámát EGYÜTT írják
+ * a megbízásra, ezért a szöveg egésze soha nem egyezett egyetlen rendszámmal
+ * sem (findJarmuByPlate), és a Drive-importból a Kocsi mező üresen jött —
+ * minden ilyen fuvarnál kézzel kellett kocsit választani (Hajdúspedíció
+ * "NMZ492/XZV926", BB-Logistic "AOPU-427 AOTY-474", Ghibli "AOPU427/AOTY474",
+ * 2026-09-17/18). Itt a szöveg MINDEN rendszám-szerű darabját külön nézzük:
+ *
+ *   1. pontos egyezés (a valódi rendszámok és az ismert írásváltozatok);
+ *   2. ha nincs pontos, egyetlen karakternyi elgépelés (RBT: "AODU427");
+ *   3. ha rendszám nincs a szövegben, a sofőr neve (resolveJarmu).
+ *
+ * Ha a darabok KÜLÖNBÖZŐ járművekre mutatnak (két kocsi egy megbízáson,
+ * vagy egy elgépelés véletlenül máshoz áll közel), nem tippelünk: null —
+ * a Kocsi mezőt ilyenkor ember tölti ki, ahogy eddig.
+ */
+export function findJarmuInSzoveg(szoveg: string | null | undefined): SajatJarmu | null {
+  if (!szoveg) return null;
+  const jeloltek = [...new Set([...szoveg.toUpperCase().matchAll(RENDSZAM_ALAK)].map((m) => m[1] + m[2]))];
+  if (jeloltek.length === 0) return findJarmuBySoforNev(szoveg);
+
+  const talalatok = new Set<SajatJarmu>();
+  for (const jelolt of jeloltek) {
+    const pontos = findJarmuByPlate(jelolt);
+    if (pontos) {
+      talalatok.add(pontos);
+      continue;
+    }
+    const kozeliek = SAJAT_JARMUVEK.filter((j) =>
+      j.rendszamok.some((r) => szerkesztesiTavolsag(jelolt, normalizePlate(r)) <= RENDSZAM_ELTERES_HATAR)
+    );
+    if (kozeliek.length === 1) talalatok.add(kozeliek[0]);
+  }
+  if (talalatok.size === 1) return [...talalatok][0];
+  // Egy idegen rendszám mellett a sofőr neve még dönthet; két saját jármű
+  // egy szövegben viszont kétértelmű — azt nem döntjük el gép által.
+  return talalatok.size === 0 ? findJarmuBySoforNev(szoveg) : null;
+}
+
+/** Ékezet- és írásjel-független összehasonlító alak ("Vadon Gergő" → "vadon gergo"). */
+function normalizeNev(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+/**
+ * Sofőrnév szabad szövegben: a "Sofőr — címke" alak és a keresztnév
+ * (resolveJarmu) mellett a teljes nevet ("Vadon Gergő", "Takács Miklós") és
+ * a keresztnevet bárhol a szövegben ("sofőr: Gergő") is elfogadja — szóhatáron,
+ * hogy egy másik név része ne egyezzen. Csak egyértelmű találatot ad vissza.
+ */
+function findJarmuBySoforNev(szoveg: string): SajatJarmu | null {
+  const gyors = resolveJarmu(szoveg);
+  if (gyors) return gyors;
+  const norm = normalizeNev(szoveg);
+  if (!norm) return null;
+  const szavak = new Set(norm.split(" "));
+  const talalatok = SAJAT_JARMUVEK.filter(
+    (j) =>
+      (j.alkalmazottNevek ?? []).some((n) => norm.includes(normalizeNev(n))) ||
+      szavak.has(normalizeNev(j.sofor))
+  );
+  return talalatok.length === 1 ? talalatok[0] : null;
+}
+
 /** Egy elmentett "Sofőr — címke" szöveg alapján visszaadja a hozzá tartozó saját járművet, ha van. */
 export function findJarmuByLabel(value: string): SajatJarmu | null {
   return SAJAT_JARMUVEK.find((j) => jarmuLabel(j) === value) ?? null;

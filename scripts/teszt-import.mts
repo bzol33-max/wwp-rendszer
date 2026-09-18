@@ -20,6 +20,7 @@ import path from "node:path";
 import { normalizaltSzoveg, torzsSzoveg } from "@/lib/fuvarozas/import/normalizalas";
 import { felismerPartner, partnerKodSzerint } from "@/lib/fuvarozas/import/partnerek";
 import { ellenorizKivontFuvart, type KivontFuvar } from "@/lib/fuvarozas/import/ellenorzes";
+import { findJarmuInSzoveg } from "@/lib/fuvarozas/vehicles";
 
 const mintaDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "teszt-minta");
 const minta = (nev: string) => readFileSync(path.join(mintaDir, nev), "utf8");
@@ -255,6 +256,30 @@ egyenlo(
   "ellenorizendo",
   "a tippelt megrendelőjű rekord ellenőrizendő, de nem elutasított"
 );
+
+// ---------------------------------------------------------------------------
+// Kocsi felismerése a megbízás rendszám-szövegéből (vehicles.ts
+// findJarmuInSzoveg). A megbízók a vontató és a pótkocsi rendszámát együtt
+// írják — az alakok az élesben látott iratokból valók (2026-09-15..18).
+// ---------------------------------------------------------------------------
+const kocsi = (szoveg: string | null) => findJarmuInSzoveg(szoveg)?.sofor ?? null;
+egyenlo(kocsi("NMZ492/XZV926"), "Micó", "Hajdúspedíció: vontató/pótkocsi perjellel");
+egyenlo(kocsi("AOPU-427 AOTY-474"), "Gergő", "BB-Logistic: két rendszám szóközzel");
+egyenlo(kocsi("AOPU427/AOTY474"), "Gergő", "Ghibli: kötőjel nélkül, perjellel");
+egyenlo(kocsi("AOPU427,/AOTY474"), "Gergő", "Ghibli: vesszővel elgépelve");
+egyenlo(kocsi("Rendszám: AOPU-427 Pótkocsi: AOTY-474"), "Gergő", "címkékkel együtt kiolvasva");
+egyenlo(kocsi("AODU427"), "Gergő", "RBT: egy betű elgépelve (AODU427)");
+egyenlo(kocsi("NZM-492"), "Micó", "Duvenbeck írásváltozat (NZM492)");
+egyenlo(kocsi("AOPU-427"), "Gergő", "egyetlen rendszám továbbra is megy");
+egyenlo(kocsi("Vadon Gergő"), "Gergő", "sofőrnév rendszám nélkül");
+egyenlo(kocsi("Micó"), "Micó", "keresztnév rendszám nélkül");
+egyenlo(kocsi("Sofőr: Takács Miklós"), "Micó", "hivatalos teljes név címkével");
+egyenlo(kocsi("Gergely Kovács"), null, "hasonló, de más név nem egyezik");
+egyenlo(kocsi("AOPU-427 NMZ-492"), null, "két saját kocsi egy szövegben: nem tippelünk");
+egyenlo(kocsi("KLM-123"), null, "idegen rendszám: nincs kocsi");
+egyenlo(kocsi("HU13500287 UH748629"), null, "hosszabb azonosítók nem rendszámok");
+egyenlo(kocsi(null), null, "üres szöveg");
+egyenlo(kocsi(""), null, "üres string");
 
 // ---------------------------------------------------------------------------
 if (hibak.length > 0) {
