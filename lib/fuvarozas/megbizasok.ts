@@ -164,6 +164,18 @@ export async function getSajatFuvarokErinteshez(kezdetNapISO: string): Promise<F
 const CSUSZO_FUVAR_NAPOK = 3;
 
 /**
+ * A csúszó fuvar akkor is a nap része, ha AZNAP zárult le: a #134 (Ghibli
+ * Gyöngyöshalász → Debrecen, tervezett lerakás 09-17) 09-18 07:57-kor ért a
+ * lerakóhoz, és 09:25-kor automatikusan Teljesítve lett — attól a perctől
+ * eltűnt a mai GPS lapról, a reggeli debreceni lerakás sehol nem látszott,
+ * miközben a kocsi már a következő fuvar felrakójához ment. A megjelenített
+ * nap ELŐTT lezárt csúszó fuvar viszont nem a nap munkája (azt a
+ * szamitsIdovonalakat napElottKesz szűrője is kizárja).
+ */
+const CSUSZO_NYITOTT_VAGY_AZNAP_KESZ_SQL = `(not teljesitve
+  or (teljesitve_at at time zone 'Europe/Budapest')::date = coalesce($1::date, ${FUVAR_MA_SQL}))`;
+
+/**
  * Egy adott nap (alapértelmezetten a mai) saját fuvarjai — akár aznap
  * kell felrakni, akár aznap kell lerakni, AKÁR a kettő közé eső napon (egy
  * többnapos fuvar felrakás és lerakás közti napjain, pl. amíg a jármű a
@@ -176,8 +188,9 @@ const CSUSZO_FUVAR_NAPOK = 3;
  * "visszatért"), holott a fuvar ezeken a napokon is folyamatban van (csak
  * éppen áll). A tartomány-illesztés ezt a hézagot zárja be.
  *
- * `csuszokIs`: a CSUSZO_FUVAR_NAPOK napon belül lerakandó, de még nem
- * Teljesítve, járművel rendelkező fuvarok is (a GPS lap mai nézetéhez).
+ * `csuszokIs`: a CSUSZO_FUVAR_NAPOK napon belül lerakandó, még nem
+ * Teljesítve VAGY aznap Teljesítve lett, járművel rendelkező fuvarok is (a
+ * GPS lap mai nézetéhez — lásd CSUSZO_NYITOTT_VAGY_AZNAP_KESZ_SQL).
  */
 export async function getMaiSajatFuvarok(nap?: string, csuszokIs = false): Promise<MaiFuvarSor[]> {
   return query<MaiFuvarSor>(
@@ -195,7 +208,8 @@ export async function getMaiSajatFuvarok(nap?: string, csuszokIs = false): Promi
        and (
          (datum <= coalesce($1::date, ${FUVAR_MA_SQL})
           and coalesce(lerakas_datum, datum) >= coalesce($1::date, ${FUVAR_MA_SQL}))
-         or ($2::boolean and not teljesitve and coalesce(szamla_szam, '') = '' and jarmu is not null and jarmu <> ''
+         or ($2::boolean and ${CSUSZO_NYITOTT_VAGY_AZNAP_KESZ_SQL}
+             and coalesce(szamla_szam, '') = '' and jarmu is not null and jarmu <> ''
              and coalesce(lerakas_datum, datum)
                between coalesce($1::date, ${FUVAR_MA_SQL}) - ${CSUSZO_FUVAR_NAPOK}
                    and coalesce($1::date, ${FUVAR_MA_SQL}) - 1)
@@ -230,7 +244,8 @@ export async function getMaiValodiSajatFuvarok(nap?: string, csuszokIs = false):
        and (
          (datum <= coalesce($1::date, ${FUVAR_MA_SQL})
           and coalesce(lerakas_datum, datum) >= coalesce($1::date, ${FUVAR_MA_SQL}))
-         or ($2::boolean and not teljesitve and coalesce(szamla_szam, '') = '' and jarmu is not null and jarmu <> ''
+         or ($2::boolean and ${CSUSZO_NYITOTT_VAGY_AZNAP_KESZ_SQL}
+             and coalesce(szamla_szam, '') = '' and jarmu is not null and jarmu <> ''
              and coalesce(lerakas_datum, datum)
                between coalesce($1::date, ${FUVAR_MA_SQL}) - ${CSUSZO_FUVAR_NAPOK}
                    and coalesce($1::date, ${FUVAR_MA_SQL}) - 1)

@@ -44,6 +44,7 @@ import type { KivontFuvar } from "./ellenorzes";
 
 import type { SzovegElem } from "./pdf-elemek";
 import { kivonSpediTransMezoket } from "./speditrans";
+import { kivonGhibliMezoket } from "./ghibli";
 
 export type Partner = {
   /** Belső azonosító (napló, mintafájlok neve). */
@@ -182,6 +183,9 @@ export const PARTNEREK: readonly Partner[] = [
     // "A számla beérkezését követő 45. naptári nap utáni kedd."
     fizetesiHataridoNap: 45,
     hivatkozasNeve: "Pozíciószámunk",
+    // A lerakási dátumtartomány végét, a pozíciószámot, a díjat és a
+    // rendszámokat címkéhez horgonyzott minta adja (lásd ghibli.ts).
+    kivon: (nyersSzoveg) => kivonGhibliMezoket(nyersSzoveg),
   },
   {
     kod: "hajduspedicio",

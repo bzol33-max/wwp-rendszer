@@ -420,3 +420,24 @@
 - Nyitott kérdés a felhasználónak: HRT és K+K a 45 napot BANKI napokban
   számolja (a rendszer naptári napot tárol); a már kiszámlázott sorok
   megrendelőjéhez a helyesbítés szándékosan nem nyúl.
+
+## 2026-09-18 (25. kör) — Aznap lezárt csúszó fuvar a GPS lapon; Ghibli lerakási dátumtartomány
+
+- Eset (Gergő): a #134 Ghibli Gyöngyöshalász→Debrecen (felrakás 09-17
+  11:01–14:57) tegnap nem ért a lerakóhoz; ma 07:57-kor érkezett Debrecenbe,
+  08:35-kor indult tovább, a figyelő 09:25-kor automatikusan Teljesítve-re
+  tette. Attól a perctől a fuvar ELTŰNT a mai GPS lapról: a csúszó-ág
+  (`getMaiSajatFuvarok`/`getMaiValodiSajatFuvarok`) csak a még nem
+  teljesített csúszó fuvart vette be, a reggeli debreceni lerakás sehol nem
+  látszott, miközben a kocsi már a #135 felrakójához (Gyöngyöshalász) ment.
+- Javítás: `CSUSZO_NYITOTT_VAGY_AZNAP_KESZ_SQL` — a csúszó fuvar akkor is a
+  nap része, ha AZNAP (Budapest szerint) zárult le. A nap előtt lezárt
+  csúszó fuvar továbbra is kimarad (napElottKesz). A "Csúszik (korábbról)"
+  jelvény csak a még nyitottakon marad.
+- Ok a háttérben: a Ghibli-iraton "Lerakás dátuma: 2026.09.17 - 2026.09.18"
+  tartomány áll, a nyelvi modell egynaposnak vette → lerakási dátum üres.
+  Új `lib/fuvarozas/import/ghibli.ts` (`kivonGhibliMezoket`): a tartomány
+  vége a lerakás napja; pozíciószám ("Pozíciószámunk N26/…"), díj
+  ("átvételi díjtétel 800.00 EUR +ÁFA"), rendszámok ("Rendszám: AOPU427,/
+  AOTY474") címkéhez horgonyzott, fehér karakterre érzéketlen mintával — nem
+  illeszkedésnél a modell tippje marad. Tesztek: 101 állítás.
