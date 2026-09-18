@@ -275,6 +275,30 @@ function vezetes(honnan: { lat: number; lon: number }, hova: { lat: number; lon:
   eq("épp csak továbbindult: nincs beszúrt állás", gyors.length, lezart.length + 1);
 }
 
+// 3e) Lezárt fuvar nem kaphat a lezárása utáni látogatást: a tegnapi #134
+//     (Gyöngyöshalász→Debrecen, ma 09:25-kor Teljesítve) felrakója és a mai
+//     #135 felrakója ugyanaz a cím; a mai 11:01-es érkezés a #135-é.
+{
+  const GYONGYOSHALASZ = { lat: 47.7239, lon: 19.9619 };
+  const lezaras = t(9, 25, 18);
+  const f134 = [
+    { ...megallo(0, "felrako", GYONGYOSHALASZ, t(0, 0, 17)), fuvarLezarva: lezaras },
+    { ...megallo(1, "lerako", DEBRECEN, t(0, 0, 17)), fuvarLezarva: lezaras },
+  ];
+  const f135 = [megallo(0, "felrako", GYONGYOSHALASZ, t(0, 0, 18)), megallo(1, "lerako", DEBRECEN, t(0, 0, 18))];
+  const ma: IdovonalSzakasz[] = [
+    { tipus: "indulas", idopont: t(7, 0, 18), cim: null, lat: DEBRECEN.lat, lon: DEBRECEN.lon },
+    allas(DEBRECEN, t(7, 57, 18), 81),
+    vezetes(DEBRECEN, GYONGYOSHALASZ, t(9, 18, 18), t(11, 1, 18)),
+    allas(GYONGYOSHALASZ, t(11, 1, 18), 240),
+  ];
+  const [j134, j135] = jelolMegallokat([f134, f135], ma);
+  eq("lezárt fuvar lerakója a lezárás előtti látogatást megkapja", j134[1].elhagyva, true);
+  eq("lezárt fuvar felrakója a lezárás utáni látogatást nem kapja", j134[0].tenylegesIdo, null);
+  eq("a mai fuvar felrakója éppen itt", j135[0].eppenItt, true);
+  eq("a mai fuvar felrakója 11:01-kor érkezett", j135[0].tenylegesIdo?.toISOString(), t(11, 1, 18).toISOString());
+}
+
 // 4) Kézi jelölés: a sofőr megerősítése készre teszi a megállót és felülírja az "éppen itt"-et; a fuvar Teljesítve mindent készre tesz.
 {
   const f = [megallo(0, "felrako", PAPA, t(0, 0, 16)), megallo(1, "lerako", DEBRECEN, t(0, 0, 16))];

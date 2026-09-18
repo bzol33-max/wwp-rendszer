@@ -147,6 +147,7 @@ export async function getSajatFuvarokErinteshez(kezdetNapISO: string): Promise<F
        to_char(felrakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as felrakas_ablak_tol,
        to_char(lerakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as lerakas_ablak_tol,
        teljesitve,
+       to_char(teljesitve_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as teljesitve_at,
        (coalesce(szamla_szam, '') <> '') as szamlas,
        ${FUVAR_HELY_SQL} as hely
      from fuvar_megbizasok

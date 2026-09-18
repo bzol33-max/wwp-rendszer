@@ -31,6 +31,9 @@ export type AblakosFuvarSor = {
   felrakas_ablak_tol: string | null;
   /** ISO időbélyeg (UTC, "…Z"), ha a megbízás megadta a lerakási ablak kezdetét. */
   lerakas_ablak_tol: string | null;
+  /** Igaz, ha a fuvar Teljesítve; ekkor `teljesitve_at` a jelölés ideje (ISO, UTC). */
+  teljesitve?: boolean;
+  teljesitve_at?: string | null;
 };
 
 function napKezdete(napISO: string): Date {
@@ -129,6 +132,7 @@ export async function epitsErintesMegallokat(
       lat: koordinatak[i]?.lat ?? null,
       lon: koordinatak[i]?.lon ?? null,
       geoCimke: koordinatak[i]?.label ?? null,
+      fuvarLezarva: sor.teljesitve && sor.teljesitve_at ? new Date(sor.teljesitve_at) : null,
       idopont: ablakKezdet,
       elhagyva: false,
       eppenItt: false,

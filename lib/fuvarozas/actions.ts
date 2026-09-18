@@ -709,6 +709,7 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus, kali
     lat: megallokKoordinatak[i]?.lat ?? null,
     lon: megallokKoordinatak[i]?.lon ?? null,
     geoCimke: megallokKoordinatak[i]?.label ?? null,
+    fuvarLezarva: row.teljesitve && row.teljesitve_at ? new Date(row.teljesitve_at) : null,
     // Kezdeti, statikus becslés — ha van élő pozíció, actions.ts a mai
     // napra láncba fűzve (lásd chainEloEta) ezt felülírja.
     idopont: m.tipus === "felrako" ? kezdet : veg,

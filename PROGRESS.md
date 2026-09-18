@@ -553,3 +553,11 @@
   Megjegyzés: a telefonon a lehúzásra frissítés a RÉGI kliens-kódot futtatja
   egy új kiadás után — a sor-logika a böngészőben fut —, ezért kiadás után
   egyszer újra kell tölteni az oldalt.
+- Kiegészítés 4 (az új `[idovonal]` naplóból): a GPS lap útján Gergő
+  tegnapi, ma 09:25-kor lezárt #134-es fuvarjának felrakója (Gyöngyöshalász,
+  azonos cím) vitte el a mai 11:01-es érkezést a #135 felrakója elől — a lap
+  csak a mai nyomvonalat látja, a #134 tegnapi valódi látogatása nem volt
+  benne, és a párosítás a korábbi fuvart részesíti előnyben. Új szabály
+  (`TervezettMegallo.fuvarLezarva`, `jelolMegallokat`): egy lezárt fuvar
+  megállója a Teljesítve-jelölés UTÁN kezdődött látogatást nem kaphatja meg.
+  A figyelő is megkapja (`FuvarErintesSor.teljesitve_at`). Teszt: 3e.
