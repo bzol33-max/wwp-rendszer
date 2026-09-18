@@ -42,6 +42,7 @@ export type FelvasarlasOsszefoglalo = {
 
 /** A "Nyíregyháza" fül fő adatai: a mai felvásárlás típusonként (csempénként) és a kassza egyenleg. */
 export async function getFelvasarlasOsszefoglalo(): Promise<FelvasarlasOsszefoglalo> {
+  await requireViewPermission("attekintes");
   const [typeRows, kasszaRows] = await Promise.all([
     query<{ type: string; qty: string }>(
       `select t.name as type, sum(p.qty) as qty
@@ -62,6 +63,7 @@ export async function getFelvasarlasOsszefoglalo(): Promise<FelvasarlasOsszefogl
 
 /** A Nyíregyháza fülön, a "Mai felvásárlás típusonként" sor szélén nyíló havi összesítő: a folyó hónap felvásárlása típusonként. */
 export async function getHaviFelvasarlasOsszefoglalo(): Promise<FelvasarlasTipusSor[]> {
+  await requireViewPermission("attekintes");
   const rows = await query<{ type: string; qty: string }>(
     `select t.name as type, sum(p.qty) as qty
      from nyiregyhaza_purchases p
@@ -83,6 +85,7 @@ export type HaviKasszaOsszesito = {
 
 /** A Kassza egyenlegre kattintva megnyíló havi összesítő: folyó havi be- és kifizetés. */
 export async function getHaviKasszaOsszesito(): Promise<HaviKasszaOsszesito> {
+  await requireViewPermission("attekintes");
   const rows = await query<{ bevetel: string; kiadas: string }>(
     `select
        coalesce(sum(amount) filter (where amount > 0), 0) as bevetel,
@@ -112,6 +115,7 @@ export type KasszaKiadasTetel = {
  * csempék már mutatják — ez a lista a teljes mai kassza-kiáramlást adja Ft-ban.
  */
 export async function getMaiKiadasok(): Promise<KasszaKiadasTetel[]> {
+  await requireViewPermission("attekintes");
   const rows = await query<{ id: string; description: string; amount: number; created_at: string }>(
     `select id::text, description, amount, created_at::text
      from kassza_movements
@@ -138,11 +142,13 @@ export async function getMaiKiadasok(): Promise<KasszaKiadasTetel[]> {
  * "Fizetve" jelölés mindhárom helyen és a felső számokban is azonnal látszik.
  */
 export async function getNyitottSzamlak(): Promise<SzamlaRow[]> {
+  await requireViewPermission("attekintes");
   return getSzamlaLista({ csakNyitott: true });
 }
 
 /** A mobil Számlák mátrix "Fizetve" oszlopához: az idén (január 1. óta) fizetettre jelölt számlák, a legfrissebb elöl. */
 export async function getIdeiFizetettSzamlak(): Promise<SzamlaRow[]> {
+  await requireViewPermission("attekintes");
   return getSzamlaLista({ csakFizetve: true, fizetveIdei: true, limit: 5000 });
 }
 
@@ -162,6 +168,7 @@ export type JarmuPoziciSor = {
 
 /** A "Fuvar" fülön: saját járművenként az utolsó ismert hely, sebesség és motorállapot. */
 export async function getJarmuPoziciok(): Promise<JarmuPoziciSor[]> {
+  await requireViewPermission("attekintes");
   const result = await getFleetPositions();
   const positions = result.ok ? result.positions : [];
 
@@ -323,6 +330,7 @@ function folyamatban(row: FuvarRow, ma: string): boolean {
  * "folyamatban lévőként" látszott.
  */
 export async function getFuvarFulAdatok(): Promise<FuvarFulAdatok> {
+  await requireViewPermission("attekintes");
   const ma = budapestNapISO();
   const [idovonal, berTabRows, sajatTabRows] = await Promise.all([
     getIdovonalak(ma),
