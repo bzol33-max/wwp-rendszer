@@ -16,7 +16,6 @@ import {
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { recordMovements, type Direction } from "@/lib/keszlet/actions";
-import { getCurrentUser } from "@/lib/current-user";
 import { useCanEdit } from "@/components/auth/edit-permission-context";
 
 type Sor = { key: number; type: string; qty: string; targetSite: string };
@@ -130,7 +129,6 @@ export function MovementForm({
         direction,
         items,
         partner: direction === "mozgatas" ? undefined : partner,
-        createdBy: getCurrentUser() || undefined,
       });
       setSorok([ujSor(types[0] ?? "", otherSites[0] ?? "")]);
       setPartner("");

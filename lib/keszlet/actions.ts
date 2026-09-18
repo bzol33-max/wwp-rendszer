@@ -3,6 +3,8 @@
 import { randomUUID } from "node:crypto";
 import { query, withTransaction, type Querier } from "@/lib/db";
 import type { ModuleKey } from "@/lib/auth/permissions";
+import { verifySession } from "@/lib/auth/dal";
+import { rendszerFutasban } from "@/lib/auth/system-context";
 import {
   requireAnyEditPermission,
   requireAnyViewPermission,
@@ -95,6 +97,16 @@ function ellenorizdAzonosito(id: unknown): string {
     throw new Error(`Érvénytelen azonosító: ${String(id)}`);
   }
   return id;
+}
+
+// A "ki rögzítette" bélyegző a munkamenetből jön, nem a kliensről. Korábban a
+// kliens küldte a (nem httpOnly) "wwp_user" süti tartalmát, amit bárki
+// átírhatott — a napló így nem volt megbízható. Ütemezőből indított hívásnál
+// nincs munkamenet, ott a mező üresen marad.
+async function rogzitoNeve(): Promise<string | null> {
+  if (rendszerFutasban()) return null;
+  const session = await verifySession();
+  return session.isAuth ? session.name : null;
 }
 
 // Ezek a lekérdezések csak ezen a modulon belülről hívódnak (getSiteSnapshot,
@@ -223,9 +235,9 @@ export async function recordMovements(input: {
   direction: Direction;
   items: { type: string; qty: number; targetSite?: string }[];
   partner?: string;
-  createdBy?: string;
 }) {
   const jog = await requireAnyEditPermission(["keszlet", "keszlet_sajat"]);
+  const createdBy = await rogzitoNeve();
   ellenorizdSajatKeszletHatokor(
     jog,
     input.site,
@@ -257,7 +269,7 @@ export async function recordMovements(input: {
         qty: item.qty,
         partner: input.partner,
         targetSite: input.direction === "mozgatas" ? item.targetSite : undefined,
-        createdBy: input.createdBy,
+        createdBy: createdBy ?? undefined,
         movementGroup,
       });
     }
@@ -270,7 +282,7 @@ export async function recordMovements(input: {
           direction: "mozgatas_be",
           qty: item.qty,
           targetSite: input.site,
-          createdBy: input.createdBy,
+          createdBy: createdBy ?? undefined,
           movementGroup,
         });
       }
@@ -297,7 +309,7 @@ export async function recordMovements(input: {
       await q(
         `insert into keszlet_events (site_id, kind, details, effect, created_by, movement_group)
          values ((select id from sites where name = 'Nyíregyháza'), 'mozgas', $1, $2, $3, $4)`,
-        [details, effect, input.createdBy ?? null, movementGroup]
+        [details, effect, createdBy, movementGroup]
       );
     }
     if (input.direction === "mozgatas") {
@@ -310,7 +322,7 @@ export async function recordMovements(input: {
           [
             `${itemsText} érkezett innen: ${input.site}`,
             toNyiregyhaza.map((i) => `${i.type} +${i.qty}`).join(" · "),
-            input.createdBy ?? null,
+            createdBy,
             movementGroup,
           ]
         );
@@ -338,8 +350,9 @@ export async function deleteMovement(id: string) {
       purchase_id: string | null;
       direction: Direction;
       movement_group: string | null;
+      partner: string | null;
     }>(
-      `select purchase_id::text, direction, movement_group::text from keszlet_movements where id = $1`,
+      `select purchase_id::text, direction, movement_group::text, partner from keszlet_movements where id = $1`,
       [id]
     );
     if (rows.length === 0) return;
@@ -348,8 +361,16 @@ export async function deleteMovement(id: string) {
         "Ez a tétel egy felvásárláshoz tartozik — a Havi fülön, a felvásárlás törlésével vonható vissza."
       );
     }
-    const { direction, movement_group } = rows[0];
-    if ((direction === "mozgatas" || direction === "mozgatas_be") && movement_group) {
+    const { direction, movement_group, partner } = rows[0];
+    // Két eset, ahol a sor NEM önmagában áll, hanem egy kiegyensúlyozott
+    // tétel része, és a féloldalas törlés elrontaná a készletet:
+    // a telephelyek közti mozgatás (forrás levonás + cél jóváírás) és a
+    // szétválogatás (vegyes − / világos, szürke +). Ilyenkor a teljes
+    // movement_group-ot töröljük. A sima be/ki sorok (akár egy mentésből)
+    // továbbra is egyenként törölhetők.
+    const egybenTorlendo =
+      direction === "mozgatas" || direction === "mozgatas_be" || partner === "Szétválogatás";
+    if (egybenTorlendo && movement_group) {
       // A másik oldalon (jellemzően Nyíregyházán) a mozgatáshoz tartozhat egy
       // összevont keszlet_events-sor is (lásd recordMovements) — ezt is
       // töröljük, különben egy már nem létező mozgatásra hivatkozó, "árva"
@@ -370,8 +391,11 @@ export async function deleteMovementEvent(id: string) {
   await requireEditPermission("keszlet");
   ellenorizdAzonosito(id);
   await withTransaction(async (q) => {
+    // A 'csere' szándékosan kimarad: az egy felvásárlási tétel hatása, és a
+    // Havi fülön, a tétel törlésével vonható vissza (deletePurchase).
     const rows = await q<{ movement_group: string | null }>(
-      `select movement_group::text from keszlet_events where id = $1 and kind = 'mozgas'`,
+      `select movement_group::text from keszlet_events
+       where id = $1 and kind in ('mozgas', 'szet', 'leltar')`,
       [id]
     );
     if (rows.length === 0) return;
@@ -718,9 +742,9 @@ async function rogzitsFelvasarlast(q: Querier, input: UjFelvasarlas) {
 export async function addPurchases(input: {
   items: { type: string; qty: number; unitPrice: number }[];
   method?: PaymentMethod;
-  createdBy?: string;
 }) {
   await requireAnyEditPermission(["keszlet", "felvasarlas_mobil"]);
+  const createdBy = await rogzitoNeve();
   const method: PaymentMethod = input.method ?? "keszpenz";
   if (method !== "keszpenz" && method !== "atutalas") {
     throw new Error(`Érvénytelen fizetési mód: ${String(method)}`);
@@ -740,7 +764,7 @@ export async function addPurchases(input: {
         pending: false,
         method,
         date: null,
-        createdBy: input.createdBy ?? null,
+        createdBy: createdBy,
       });
     }
   });
@@ -807,9 +831,9 @@ export async function addPendingPurchases(input: {
   seller: string;
   date: string;
   items: { type: string; qty: number }[];
-  createdBy?: string;
 }) {
   await requireEditPermission("keszlet");
+  const createdBy = await rogzitoNeve();
   const seller = input.seller.trim();
   if (!seller) throw new Error("A név megadása kötelező.");
   ellenorizdDatum(input.date);
@@ -825,7 +849,7 @@ export async function addPendingPurchases(input: {
         pending: true,
         method: "keszpenz",
         date: input.date,
-        createdBy: input.createdBy ?? null,
+        createdBy: createdBy,
       });
     }
   });
@@ -833,9 +857,10 @@ export async function addPendingPurchases(input: {
 
 export async function updatePendingPurchase(
   id: string,
-  input: { type: string; qty: number; date: string; createdBy?: string }
+  input: { type: string; qty: number; date: string }
 ) {
   await requireEditPermission("keszlet");
+  const createdBy = await rogzitoNeve();
   ellenorizdAzonosito(id);
   ellenorizdDarabszam(input.qty, input.type);
   ellenorizdDatum(input.date);
@@ -862,13 +887,14 @@ export async function updatePendingPurchase(
       unitPrice,
       total,
       seller: rows[0].seller,
-      createdBy: input.createdBy ?? null,
+      createdBy: createdBy,
     });
   });
 }
 
-export async function payPendingSeller(seller: string, createdBy?: string) {
+export async function payPendingSeller(seller: string) {
   await requireEditPermission("keszlet");
+  const createdBy = await rogzitoNeve();
   await withTransaction(async (q) => {
     // Egyetlen "update ... returning": ha két kifizetés egyszerre indul, a
     // tételeket csak az egyik kapja meg, így a kassza nem terhelődik duplán.
@@ -891,8 +917,9 @@ export async function payPendingSeller(seller: string, createdBy?: string) {
   });
 }
 
-export async function addKasszaMovement(description: string, amount: number, createdBy?: string) {
+export async function addKasszaMovement(description: string, amount: number) {
   await requireEditPermission("keszlet");
+  const createdBy = await rogzitoNeve();
   if (!description.trim()) throw new Error("A leírás megadása kötelező.");
   if (!Number.isInteger(amount) || amount === 0) {
     throw new Error(`Érvénytelen összeg: ${String(amount)}`);
@@ -900,7 +927,7 @@ export async function addKasszaMovement(description: string, amount: number, cre
   await query(`insert into kassza_movements (description, amount, created_by) values ($1, $2, $3)`, [
     description,
     amount,
-    createdBy ?? null,
+    createdBy,
   ]);
 }
 
@@ -959,7 +986,7 @@ export async function getKasszaMovements(): Promise<KasszaMovementRow[]> {
 export type EventRow = {
   id: string;
   date: string;
-  kind: "csere" | "szet" | "havi-zaras" | "mozgas";
+  kind: "csere" | "szet" | "havi-zaras" | "mozgas" | "leltar";
   details: string;
   effect: string;
   created_by: string | null;
@@ -967,16 +994,18 @@ export type EventRow = {
 
 export async function getNyiregyhazaFoSnapshot() {
   await requireViewPermission("keszlet");
-  // A "Legutóbbi mozgások" itt csak a be/ki szállításokat és a telephelyek közti
-  // mozgatást mutatja (kind = 'mozgas') — a Csere/Szétválogatás tételenkénti
-  // története a saját fülén (Havi, ill. a Vegyes EUR sor) tekinthető meg.
+  // A "Legutóbbi mozgások" a be/ki szállítást, a telephelyek közti mozgatást
+  // ('mozgas'), a Vegyes EUR szétválogatást ('szet') és a leltári korrekciót
+  // ('leltar') mutatja — ez utóbbi kettő 2026-09-18-ig sehol nem látszott
+  // Nyíregyházán, pedig változtatja a készletet. A 'csere' kimarad: annak a
+  // tételenkénti története a Havi fülön van.
   const [stock, events] = await Promise.all([
     getStock("Nyíregyháza"),
     query<EventRow>(
       `select id::text, to_char(created_at at time zone 'Europe/Budapest', '${TIME_FMT}') as date, kind, details, effect, created_by
        from keszlet_events
        where site_id = (select id from sites where name = 'Nyíregyháza')
-         and kind = 'mozgas'
+         and kind in ('mozgas', 'szet', 'leltar')
        order by created_at desc
        limit 20`
     ),
@@ -989,9 +1018,9 @@ export async function recordSzetvalogatas(input: {
   vilagos: number;
   szurke: number;
   torott?: number;
-  createdBy?: string;
 }) {
   await requireEditPermission("keszlet");
+  const createdBy = await rogzitoNeve();
   ellenorizdTelephely(input.site);
   const torott = input.torott ?? 0;
   ellenorizdDarabszam(input.vilagos, "világos", true);
@@ -999,24 +1028,30 @@ export async function recordSzetvalogatas(input: {
   ellenorizdDarabszam(torott, "törött", true);
   const total = input.vilagos + input.szurke + torott;
   if (total === 0) return;
+  // Közös movement_group: a szétválogatás egy kiegyensúlyozott átalakítás
+  // (vegyes −, világos/szürke +). A sorok a "Legutóbbi mozgások" listából
+  // korábban egyenként voltak törölhetők, és egy féloldalas törlés elrontotta
+  // az egyensúlyt — a csoport miatt most együtt vonódnak vissza (deleteMovement).
+  const movementGroup = randomUUID();
   await withTransaction(async (q) => {
-    await addMovement(q, { site: input.site, type: "Vegyes EUR", direction: "ki", qty: total, partner: "Szétválogatás", createdBy: input.createdBy });
+    await addMovement(q, { site: input.site, type: "Vegyes EUR", direction: "ki", qty: total, partner: "Szétválogatás", createdBy: createdBy ?? undefined, movementGroup });
     if (input.vilagos > 0) {
-      await addMovement(q, { site: input.site, type: "EUR világos", direction: "be", qty: input.vilagos, partner: "Szétválogatás", createdBy: input.createdBy });
+      await addMovement(q, { site: input.site, type: "EUR világos", direction: "be", qty: input.vilagos, partner: "Szétválogatás", createdBy: createdBy ?? undefined, movementGroup });
     }
     if (input.szurke > 0) {
-      await addMovement(q, { site: input.site, type: "EUR szürke", direction: "be", qty: input.szurke, partner: "Szétválogatás", createdBy: input.createdBy });
+      await addMovement(q, { site: input.site, type: "EUR szürke", direction: "be", qty: input.szurke, partner: "Szétválogatás", createdBy: createdBy ?? undefined, movementGroup });
     }
     // A "Legutóbbi mozgások" görgetett esemény-feed egyelőre csak Nyíregyházán van —
     // a többi telepen a nyers mozgás-lista (getMovements) már mutatja ugyanezt.
     if (input.site === "Nyíregyháza") {
       await q(
-        `insert into keszlet_events (site_id, kind, details, effect, created_by)
-         values ((select id from sites where name = 'Nyíregyháza'), 'szet', $1, $2, $3)`,
+        `insert into keszlet_events (site_id, kind, details, effect, created_by, movement_group)
+         values ((select id from sites where name = 'Nyíregyháza'), 'szet', $1, $2, $3, $4)`,
         [
           "Vegyes EUR → világos/szürke/törött",
           `vegyes −${total} · világos +${input.vilagos} · szürke +${input.szurke} · törött +${torott}`,
-          input.createdBy ?? null,
+          createdBy,
+          movementGroup,
         ]
       );
     }
@@ -1037,9 +1072,9 @@ export async function recordInventoryCount(input: {
   countedQty: number;
   accepted: boolean;
   comment?: string;
-  createdBy?: string;
 }): Promise<{ expectedQty: number; countedQty: number; diff: number }> {
   const jog = await requireAnyEditPermission(["keszlet", "keszlet_sajat"]);
+  const createdBy = await rogzitoNeve();
   ellenorizdSajatKeszletHatokor(jog, input.site);
   ellenorizdTelephely(input.site);
   ellenorizdDarabszam(input.countedQty, input.type, true);
@@ -1059,17 +1094,36 @@ export async function recordInventoryCount(input: {
     await q(
       `insert into inventory_counts (site_id, type_id, expected_qty, counted_qty, accepted, comment, created_by)
        values ((select id from sites where name = $1), (select id from pallet_types where name = $2), $3, $4, $5, $6, $7)`,
-      [input.site, input.type, expectedQty, input.countedQty, input.accepted, input.comment ?? null, input.createdBy ?? null]
+      [input.site, input.type, expectedQty, input.countedQty, input.accepted, input.comment ?? null, createdBy]
     );
     if (input.accepted && diff !== 0) {
+      // A korrekciós mozgás és (Nyíregyházán) a hozzá tartozó esemény közös
+      // movement_group-ot kap, hogy a "Legutóbbi mozgások" listából egyben
+      // visszavonható legyen — ld. deleteMovementEvent.
+      const movementGroup = randomUUID();
       await addMovement(q, {
         site: input.site,
         type: input.type,
         direction: diff > 0 ? "be" : "ki",
         qty: Math.abs(diff),
         partner: "Leltári korrekció",
-        createdBy: input.createdBy,
+        createdBy: createdBy ?? undefined,
+        movementGroup,
       });
+      // Az esemény-feed egyelőre csak Nyíregyházán van; a többi telepen a nyers
+      // mozgás-lista már mutatja a korrekciót (ld. recordSzetvalogatas).
+      if (input.site === "Nyíregyháza") {
+        await q(
+          `insert into keszlet_events (site_id, kind, details, effect, created_by, movement_group)
+           values ((select id from sites where name = 'Nyíregyháza'), 'leltar', $1, $2, $3, $4)`,
+          [
+            `${input.type} — leltári korrekció${input.comment ? ` (${input.comment})` : ""}`,
+            `nyilvántartott ${expectedQty} → megszámolt ${input.countedQty} · ${diff > 0 ? "+" : "−"}${Math.abs(diff)}`,
+            createdBy,
+            movementGroup,
+          ]
+        );
+      }
     }
     return { expectedQty, countedQty: input.countedQty, diff };
   });

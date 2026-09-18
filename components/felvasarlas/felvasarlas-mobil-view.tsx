@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { logout } from "@/lib/auth/actions";
 import { addPurchases, type PriceRow } from "@/lib/keszlet/actions";
-import { getCurrentUser } from "@/lib/current-user";
 import { MOBIL_THEME } from "@/lib/mobil-theme";
 import { PullToRefresh } from "@/components/mobil/pull-to-refresh";
 
@@ -53,7 +52,6 @@ export function FelvasarlasMobilView({ prices }: { prices: PriceRow[] }) {
             unitPrice: priceMap[type] ?? 0,
           })),
           method: "keszpenz",
-          createdBy: getCurrentUser() || undefined,
         });
         setQty({});
         toast.success("Vétel rögzítve a mai napra.");

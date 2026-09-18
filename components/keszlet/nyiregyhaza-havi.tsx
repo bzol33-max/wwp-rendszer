@@ -43,7 +43,6 @@ import {
   type PurchaseRow,
 } from "@/lib/keszlet/actions";
 import { kbNav } from "@/lib/keszlet/kbnav";
-import { getCurrentUser } from "@/lib/current-user";
 import { useCanEdit } from "@/components/auth/edit-permission-context";
 
 function todayLabel() {
@@ -78,6 +77,14 @@ const DAILY_TILE_COLOR = {
   text: "text-orange-700 dark:text-orange-400",
 };
 
+// "Korábbi napok" — ugyanaz a csempe-forma, mint a Havi/Mai számlálóknál, de
+// visszafogottabb (semleges) színnel, hogy a két felső sor maradjon a hangsúlyos.
+const PAST_TILE_COLOR = {
+  border: "border-border",
+  bg: "bg-muted/40",
+  text: "text-muted-foreground",
+};
+
 function dayGroupLabel(dayKey: string) {
   return new Date(`${dayKey}T00:00:00`).toLocaleDateString("hu-HU", {
     year: "numeric",
@@ -102,6 +109,7 @@ export function NyiregyhazaHaviTab() {
   const [submitting, setSubmitting] = useState(false);
   const [kasszaDesc, setKasszaDesc] = useState("");
   const [kasszaAmount, setKasszaAmount] = useState("");
+  const [kasszaSubmitting, setKasszaSubmitting] = useState(false);
   const [kasszaDetailOpen, setKasszaDetailOpen] = useState(false);
   const [kasszaDetailLoading, setKasszaDetailLoading] = useState(false);
   const [kasszaMovements, setKasszaMovements] = useState<KasszaMovementRow[]>([]);
@@ -175,7 +183,6 @@ export function NyiregyhazaHaviTab() {
           unitPrice: prices[type] ?? 0,
         })),
         method,
-        createdBy: getCurrentUser() || undefined,
       });
       setTodayQty({});
       await load();
@@ -222,7 +229,6 @@ export function NyiregyhazaHaviTab() {
           unitPrice: Number(customPrices[type]) || 0,
         })),
         method: "keszpenz",
-        createdBy: getCurrentUser() || undefined,
       });
       setTodayQty({});
       setCustomPriceOpen(false);
@@ -235,9 +241,18 @@ export function NyiregyhazaHaviTab() {
     }
   }
 
-  async function handleDelete(id: string) {
+  // A törlés a készletet és a kasszát is visszaírja, és nem vonható vissza —
+  // ezért minden törlés előtt rákérdezünk, mi tűnik el pontosan.
+  async function handleDelete(p: PurchaseRow) {
+    if (
+      !window.confirm(
+        `Biztosan törlöd? ${p.qty} db ${p.type}, ${p.total.toLocaleString("hu-HU")} Ft (${p.date})`
+      )
+    ) {
+      return;
+    }
     try {
-      await deletePurchase(id);
+      await deletePurchase(p.id);
       await load();
       toast.success("Tétel törölve.");
     } catch {
@@ -245,9 +260,17 @@ export function NyiregyhazaHaviTab() {
     }
   }
 
-  async function handleDeleteGroup(ids: string[]) {
+  async function handleDeleteGroup(dayKey: string, line: { type: string; qty: number; ids: string[] }) {
+    if (
+      !window.confirm(
+        `Biztosan törlöd? ${dayGroupLabel(dayKey)} — ${line.type}, összesen ${line.qty} db ` +
+          `(${line.ids.length} tétel). A készletből és a kasszából is visszaíródik.`
+      )
+    ) {
+      return;
+    }
     try {
-      await deletePurchases(ids);
+      await deletePurchases(line.ids);
       await load();
       toast.success("Tétel törölve.");
     } catch {
@@ -295,7 +318,6 @@ export function NyiregyhazaHaviTab() {
         seller: pendingSeller.trim(),
         date: pendingDate,
         items: entries.map(([type, qtyStr]) => ({ type, qty: Number(qtyStr) })),
-        createdBy: getCurrentUser() || undefined,
       });
       setPendingAddOpen(false);
       await load();
@@ -331,7 +353,6 @@ export function NyiregyhazaHaviTab() {
         type: pendingEditType,
         qty,
         date: pendingEditDate,
-        createdBy: getCurrentUser() || undefined,
       });
       setPendingEditRow(null);
       await load();
@@ -343,13 +364,23 @@ export function NyiregyhazaHaviTab() {
     }
   }
 
-  async function handlePaySeller(seller: string) {
+  async function handlePaySeller(seller: string, total: number) {
+    if (
+      !window.confirm(
+        `${seller} kifizetése: ${total.toLocaleString("hu-HU")} Ft kerül ki a kasszából. Mehet?`
+      )
+    ) {
+      return;
+    }
+    setPendingSubmitting(true);
     try {
-      await payPendingSeller(seller, getCurrentUser() || undefined);
+      await payPendingSeller(seller);
       await load();
       toast.success(`${seller} kifizetve.`);
     } catch {
       toast.error("Nem sikerült kifizetni.");
+    } finally {
+      setPendingSubmitting(false);
     }
   }
 
@@ -373,11 +404,20 @@ export function NyiregyhazaHaviTab() {
       toast.error("Az összeg csak egész szám lehet (Ft).");
       return;
     }
-    await addKasszaMovement(kasszaDesc, amount, getCurrentUser() || undefined);
-    setKasszaDesc("");
-    setKasszaAmount("");
-    await load();
-    toast.success("Kassza-mozgás rögzítve.");
+    // Mentés közben tiltott gomb + hibakezelés: dupla koppintásra eddig két
+    // kassza-tétel keletkezett, egy hibát pedig semmi nem jelzett.
+    setKasszaSubmitting(true);
+    try {
+      await addKasszaMovement(kasszaDesc, amount);
+      setKasszaDesc("");
+      setKasszaAmount("");
+      await load();
+      toast.success("Kassza-mozgás rögzítve.");
+    } catch {
+      toast.error("Nem sikerült rögzíteni a kassza-mozgást.");
+    } finally {
+      setKasszaSubmitting(false);
+    }
   }
 
   // A "Havi felvásárlások" táblázat a rögzítés módjától (gyors rögzítés vagy
@@ -589,7 +629,7 @@ export function NyiregyhazaHaviTab() {
                   <TableCell>
                     <button
                       type="button"
-                      onClick={() => handleDelete(p.id)}
+                      onClick={() => handleDelete(p)}
                       title="Törlés (hibás rögzítés)"
                       className="text-destructive/70 hover:text-destructive"
                     >
@@ -604,24 +644,38 @@ export function NyiregyhazaHaviTab() {
           {pastGroups.length > 0 && (
             <div className="space-y-3 pt-2">
               <h3 className="text-sm font-medium">Korábbi napok</h3>
+              {/* Ugyanaz a csempe-rács, mint fent a Havi és a Mai számlálóknál —
+                  típusnév + darabszám, a nap fejlécével. A törlés a csempe
+                  sarkában lévő ✕, ami az adott nap adott típusának MINDEN
+                  tételét visszavonja (megerősítés után). */}
               {pastGroups.map((g) => (
-                <div key={g.dayKey} className="rounded-md border px-3 py-2">
-                  <div className="text-xs font-medium text-muted-foreground">
+                <div key={g.dayKey} className="space-y-1.5">
+                  <div className={`text-xs font-semibold ${PAST_TILE_COLOR.text}`}>
                     {dayGroupLabel(g.dayKey)}
                   </div>
-                  <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                  <div className="grid grid-cols-[repeat(auto-fill,minmax(5.5rem,1fr))] gap-1.5">
                     {g.lines.map((l) => (
-                      <span key={l.type} className="inline-flex items-center gap-1">
-                        {l.type}: <span className="font-medium tabular-nums">{l.qty} db</span>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteGroup(l.ids)}
-                          title="Törlés (hibás rögzítés)"
-                          className="text-destructive/70 hover:text-destructive"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </span>
+                      <div
+                        key={l.type}
+                        className={`relative min-w-0 rounded-lg border px-1.5 py-2 text-center ${PAST_TILE_COLOR.border} ${PAST_TILE_COLOR.bg}`}
+                      >
+                        <div className={`text-[11px] font-medium leading-tight ${PAST_TILE_COLOR.text}`}>
+                          {l.type}
+                        </div>
+                        <div className={`text-lg font-bold tabular-nums ${PAST_TILE_COLOR.text}`}>
+                          {l.qty}
+                        </div>
+                        {canEdit && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteGroup(g.dayKey, l)}
+                            title="Törlés (hibás rögzítés)"
+                            className="absolute top-0.5 right-0.5 rounded p-0.5 text-destructive/50 hover:text-destructive"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        )}
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -703,7 +757,7 @@ export function NyiregyhazaHaviTab() {
                       >
                         <Plus className="h-3.5 w-3.5" />
                       </button>
-                      <Button size="sm" onClick={() => handlePaySeller(g.seller)}>
+                      <Button size="sm" disabled={pendingSubmitting} onClick={() => handlePaySeller(g.seller, g.total)}>
                         Kifizetés
                       </Button>
                     </div>
@@ -733,7 +787,7 @@ export function NyiregyhazaHaviTab() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDelete(e.id)}
+                          onClick={() => handleDelete(e)}
                           title="Törlés"
                           className="text-destructive/70 hover:text-destructive"
                         >
@@ -769,8 +823,13 @@ export function NyiregyhazaHaviTab() {
               value={kasszaAmount}
               onChange={(e) => setKasszaAmount(e.target.value)}
             />
-            <Button variant="outline" className="w-full" onClick={recordKassza}>
-              Rögzítés
+            <Button
+              variant="outline"
+              className="w-full"
+              disabled={kasszaSubmitting}
+              onClick={recordKassza}
+            >
+              {kasszaSubmitting ? "Mentés…" : "Rögzítés"}
             </Button>
           </CardContent>
         </Card>

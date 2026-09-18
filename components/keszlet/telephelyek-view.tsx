@@ -30,7 +30,6 @@ import {
   type OsszkeszletRow,
   type OsszkeszletHaviRow,
 } from "@/lib/keszlet/actions";
-import { getCurrentUser } from "@/lib/current-user";
 import { useCanEdit } from "@/components/auth/edit-permission-context";
 
 type SiteKey = "Nyíregyháza" | "Balkány" | "Szakoly" | "Összkészlet";
@@ -46,6 +45,7 @@ const KIND_LABEL: Record<EventRow["kind"], string> = {
   szet: "Szétválogatás",
   "havi-zaras": "Havi zárás",
   mozgas: "Mozgás",
+  leltar: "Leltár",
 };
 
 const KIND_CLASS: Record<EventRow["kind"], string> = {
@@ -53,6 +53,7 @@ const KIND_CLASS: Record<EventRow["kind"], string> = {
   szet: "bg-blue-100 text-blue-700 hover:bg-blue-100",
   "havi-zaras": "bg-muted text-muted-foreground hover:bg-muted",
   mozgas: "bg-muted text-muted-foreground hover:bg-muted",
+  leltar: "bg-amber-100 text-amber-700 hover:bg-amber-100",
 };
 
 function Tile({ name, qty }: { name: string; qty: number }) {
@@ -149,7 +150,6 @@ export function TelephelyekView({ site: active }: { site: SiteKey }) {
         site: active,
         vilagos,
         szurke,
-        createdBy: getCurrentUser() || undefined,
       });
       await load();
       toast.success("Szétválogatás rögzítve.");
@@ -158,9 +158,18 @@ export function TelephelyekView({ site: active }: { site: SiteKey }) {
     }
   }
 
-  async function handleDeleteMovement(id: string) {
+  async function handleDeleteMovement(m: MovementRow) {
+    // A törlés azonnali és végleges, ezért rákérdezünk — mozgatásnál és
+    // szétválogatásnál ráadásul az egész tétel (mindkét oldal) eltűnik.
+    const mit =
+      m.direction === "mozgatas" || m.direction === "mozgatas_be"
+        ? `${m.qty} db ${m.type} mozgatása (mindkét telephelyen)`
+        : m.partner === "Szétválogatás"
+          ? "ez a szétválogatás, a hozzá tartozó összes sorral"
+          : `${m.qty} db ${m.type} (${m.date})`;
+    if (!window.confirm(`Biztosan törlöd? ${mit}`)) return;
     try {
-      await deleteMovement(id);
+      await deleteMovement(m.id);
       await load();
       toast.success("Mozgás törölve.");
     } catch (err) {
@@ -168,9 +177,10 @@ export function TelephelyekView({ site: active }: { site: SiteKey }) {
     }
   }
 
-  async function handleDeleteEvent(id: string) {
+  async function handleDeleteEvent(e: EventRow) {
+    if (!window.confirm(`Biztosan törlöd? ${e.details} (${e.date})`)) return;
     try {
-      await deleteMovementEvent(id);
+      await deleteMovementEvent(e.id);
       await load();
       toast.success("Mozgás törölve.");
     } catch (err) {
@@ -365,10 +375,10 @@ export function TelephelyekView({ site: active }: { site: SiteKey }) {
                         <TableCell className="text-muted-foreground">{e.created_by ?? "—"}</TableCell>
                         {canEdit && (
                           <TableCell>
-                            {e.kind === "mozgas" && (
+                            {e.kind !== "csere" && e.kind !== "havi-zaras" && (
                               <button
                                 type="button"
-                                onClick={() => handleDeleteEvent(e.id)}
+                                onClick={() => handleDeleteEvent(e)}
                                 title="Törlés (hibás rögzítés)"
                                 className="text-destructive/70 hover:text-destructive"
                               >
@@ -429,7 +439,7 @@ export function TelephelyekView({ site: active }: { site: SiteKey }) {
                           <TableCell>
                             <button
                               type="button"
-                              onClick={() => handleDeleteMovement(m.id)}
+                              onClick={() => handleDeleteMovement(m)}
                               title="Törlés (hibás rögzítés)"
                               className="text-destructive/70 hover:text-destructive"
                             >

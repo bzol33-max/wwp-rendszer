@@ -839,3 +839,15 @@ create table if not exists fuvar_helyszin_koordinata (
 -- megbízás részletein látja. Csak jelzés, nem automatikus számlázás.
 alter table fuvar_megallo_allapot add column if not exists varakozas_kezdete timestamptz;
 alter table fuvar_megallo_allapot add column if not exists varakozas_vege timestamptz;
+
+-- Készlet, 2026-09-18: a Nyíregyháza fül "Legutóbbi mozgások" listája eddig
+-- csak a be/ki szállítást és a telephelyek közti mozgatást (kind = 'mozgas')
+-- mutatta. A leltári korrekció és a Vegyes EUR szétválogatás készletet
+-- változtat, de sehol nem hagyott nyomot a felületen, és visszavonni sem
+-- lehetett. Az új 'leltar' esemény-fajta ezt pótolja; a hozzá (és a
+-- szétválogatáshoz) tartozó keszlet_movements-sorokat a közös
+-- movement_group köti az eseményhez, hogy egy törlés az egész tételt
+-- vonja vissza — ld. lib/keszlet/actions.ts deleteMovementEvent.
+alter table keszlet_events drop constraint if exists keszlet_events_kind_check;
+alter table keszlet_events add constraint keszlet_events_kind_check
+  check (kind in ('csere', 'szet', 'havi-zaras', 'mozgas', 'leltar'));
