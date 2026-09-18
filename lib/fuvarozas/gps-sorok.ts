@@ -98,11 +98,23 @@ export type SorKornyezet = {
   /** Van élő GPS-pozíció a kocsihoz (a hátralévő megállók ideje élő becslés, nem terv). */
   eloVan: boolean;
   kovetkezo: MegalloBejegyzes | null;
+  /**
+   * Igaz, ha a kocsi a nap valamelyik megállóján ÉPPEN ÁLL (rakodik) —
+   * ilyenkor a következő megálló még nem "Úton oda", hanem terv: Gergő
+   * Gyöngyöshalászon rakodott, és a debreceni lerakó sora "Úton oda"-t
+   * mutatott (2026-09-18).
+   */
+  allValahol: boolean;
   /** Az adatok betöltésének pillanata (ms). */
   most: number;
   /** Igaz, ha ez a fuvar utolsó megállója — ide kerül a fuvarlevél-fotó és a gond. */
   utolsoLerako: boolean;
 };
+
+/** Igaz, ha a kocsi a nap valamelyik megállóján éppen áll. */
+export function allValahol(fuvarok: FuvarBlokk[]): boolean {
+  return fuvarok.some((f) => f.megallok.some((b) => b.eppenItt));
+}
 
 export function sorAdatok(b: MegalloBejegyzes, f: FuvarBlokk, ctx: SorKornyezet): SorAdat {
   const gpsLatta = b.tenylegesTavozas !== null || b.eppenItt || b.keszForras === "gps";
@@ -112,7 +124,7 @@ export function sorAdatok(b: MegalloBejegyzes, f: FuvarBlokk, ctx: SorKornyezet)
   if (b.elhagyva) allapot = "Kész";
   else if (b.eppenItt) allapot = "Rakodik";
   else if (f.csuszo) allapot = "Csúszik";
-  else if (ctx.maiNap && ctx.eloVan && kovetkezoE) allapot = "Úton oda";
+  else if (ctx.maiNap && ctx.eloVan && kovetkezoE && !ctx.allValahol) allapot = "Úton oda";
   else allapot = "Terv";
 
   const bizonytalanJel = b.bizonytalanFelismeres ? "? " : "";
@@ -205,11 +217,11 @@ export function osszkep(adatok: JarmuIdovonalEredmeny[], maiNap: boolean, most: 
 }
 
 /** A "Következő" mező szövege a Hol van most sávban. */
-export function kovetkezoSzoveg(kovetkezo: MegalloBejegyzes | null, eloEta: JarmuIdovonalEredmeny["eloEta"]): string {
+export function kovetkezoSzoveg(kovetkezo: MegalloBejegyzes | null, eloEta: JarmuIdovonalEredmeny["eloEta"], rakodasUtan = false): string {
   if (!kovetkezo) return "nincs több megálló ma";
   const mi = kovetkezo.tipus === "felrako" ? "Felrakás" : "Lerakás";
   const ido = eloEta && !eloEta.bizonytalan ? `, kb. ${formatIdo(eloEta.erkezes)}` : ", érkezés nem becsülhető";
-  return `${mi} ${kovetkezo.cim}${ido}`;
+  return `${rakodasUtan ? "rakodás után " : ""}${mi} ${kovetkezo.cim}${ido}`;
 }
 
 /** A nem tervezett állások egy sorban: "Nyírbátor 08:52–09:05 (13 perc) · …". */

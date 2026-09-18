@@ -6,6 +6,7 @@ import { JARMU_SZIN_DOT_CLASS, SAJAT_JARMUVEK } from "@/lib/fuvarozas/vehicles";
 import type { FuvarBlokk, JarmuIdovonalEredmeny, MegalloBejegyzes } from "@/lib/fuvarozas/actions";
 import type { JarmuFuvarCsoport } from "@/lib/attekintes/actions";
 import {
+  allValahol,
   allasokSzoveg,
   formatEltelt,
   formatIdo,
@@ -87,7 +88,7 @@ function HolVanMost({ eredmeny, most, jarmuNincsGps }: { eredmeny: JarmuIdovonal
         }
       />
       <Mezo cimke="Ma megtett" ertek={eredmeny?.napiKm !== null && eredmeny?.napiKm !== undefined ? `${formatSzam(eredmeny.napiKm)} km` : "—"} />
-      <Mezo cimke="Következő" ertek={kovetkezoSzoveg(kovetkezo, eredmeny?.eloEta ?? null)} szeles />
+      <Mezo cimke="Következő" ertek={kovetkezoSzoveg(kovetkezo, eredmeny?.eloEta ?? null, allValahol(eredmeny?.fuvarok ?? []))} szeles />
       {allasok && <Mezo cimke="Nem tervezett állás ma" ertek={allasok} szeles />}
     </div>
   );
@@ -181,7 +182,7 @@ function MegalloSorok({ b, s, utolso }: { b: MegalloBejegyzes; s: SorAdat; utols
 function KocsiLap({ jarmu, eredmeny, csoport, most }: { jarmu: (typeof SAJAT_JARMUVEK)[number]; eredmeny: JarmuIdovonalEredmeny | undefined; csoport: JarmuFuvarCsoport | undefined; most: number }) {
   const fuvarok = eredmeny?.fuvarok ?? [];
   const kovetkezo = kovetkezoMegallo(fuvarok);
-  const ctx = { maiNap: true, eloVan: !!eredmeny?.eloPozicio, kovetkezo, most };
+  const ctx = { maiNap: true, eloVan: !!eredmeny?.eloPozicio, kovetkezo, allValahol: allValahol(fuvarok), most };
   const kovetkezok = csoport?.kovetkezok ?? [];
   return (
     <div className="flex flex-col gap-3">

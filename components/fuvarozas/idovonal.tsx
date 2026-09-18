@@ -21,6 +21,7 @@ import { SAJAT_JARMUVEK, JARMU_SZIN_DOT_CLASS, type JarmuSzin } from "@/lib/fuva
 import type { FuvarTipus } from "@/lib/fuvarozas/fuvar-constants";
 import { budapestNapISO } from "@/lib/fuvarozas/idozona";
 import {
+  allValahol,
   allasokSzoveg,
   formatEltelt,
   formatIdo,
@@ -234,7 +235,7 @@ function HolVanMostSav({
         }
       />
       <Mezo cimke="Ma megtett" ertek={eredmeny?.napiKm !== null && eredmeny?.napiKm !== undefined ? `${formatSzam(eredmeny.napiKm)} km` : "—"} />
-      <Mezo cimke="Következő" ertek={kovetkezoSzoveg(kovetkezo, eredmeny?.eloEta ?? null)} szeles={mobil} />
+      <Mezo cimke="Következő" ertek={kovetkezoSzoveg(kovetkezo, eredmeny?.eloEta ?? null, allValahol(eredmeny?.fuvarok ?? []))} szeles={mobil} />
       {allasSzoveg && <Mezo cimke="Nem tervezett állás ma" ertek={allasSzoveg} szeles />}
     </div>
   );
@@ -248,6 +249,7 @@ type TablaCtx = {
   maiNap: boolean;
   eloVan: boolean;
   kovetkezo: MegalloBejegyzes | null;
+  allValahol: boolean;
   most: number;
   onKeszJelolve: () => void;
 };
@@ -542,7 +544,7 @@ function KocsiSzakasz({
 }) {
   const fuvarok = eredmeny?.fuvarok ?? [];
   const kovetkezo = kovetkezoMegallo(fuvarok);
-  const ctx: TablaCtx = { maiNap, eloVan: !!eredmeny?.eloPozicio, kovetkezo, most, onKeszJelolve };
+  const ctx: TablaCtx = { maiNap, eloVan: !!eredmeny?.eloPozicio, kovetkezo, allValahol: allValahol(fuvarok), most, onKeszJelolve };
   return (
     <div className="flex flex-col gap-3 rounded-xl border bg-card p-3">
       <KocsiCim jarmu={jarmu} napiKm={eredmeny?.napiKm ?? null} />
