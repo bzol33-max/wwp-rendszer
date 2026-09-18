@@ -526,3 +526,19 @@
   Kész (elhagyva) csak a tényleges továbbhaladás után, mint eddig. A figyelő
   naplózza az élő pozíciót, a jel idejét és az utolsó lezárt szakasz végét.
   Teszt: `scripts/teszt-erintes.mts` 3c.
+- Kiegészítés 2 (Budaházi Zoltán: „Micó mindjárt visszaér a telepre,
+  megpakolt Nyírjákón”; „Gergő sem úton van, hanem pakol rég óta”):
+  a napló szerint Micó 12:26-kor ért Nyírjákóra (a trip lezárult), 14:57-kor
+  már 72 km/h-val jött hazafelé, de az Ecofleet az utolsó lezárt trip
+  `stoppedAfter` mezőjét a következő trip lezárásáig nem tölti ki, ezért a
+  nyomvonalon nem volt állás. `kiegesziteloAllapottal`: ha a kocsi MOZOG, az
+  utolsó lezárt szakasz vezetés (állás nélkül), és a lezárás óta a
+  légvonalból becsült menetidőnél legalább 10 perccel több telt el, az
+  állás a végpontra kerül (érkezés = a trip lezárása, továbbindulás = most −
+  becsült menetidő), utána élő vezetés — a felrakó így kész (elhagyva).
+  Amint az Ecofleet lezárja a következő tripet, a valódi érték lép a
+  helyébe. Teszt: `scripts/teszt-erintes.mts` 3d.
+  Gergőnél a felrakó sor „Rakodik” volt, de a lerakó sora „Úton oda”: a
+  `sorAdatok` mostantól csak akkor ad „Úton oda”-t, ha a kocsi sehol nem
+  áll éppen (`SorKornyezet.allValahol`, `allValahol(fuvarok)`); a „Következő”
+  mező ilyenkor „rakodás után Lerakás Debrecen, kb. …”.

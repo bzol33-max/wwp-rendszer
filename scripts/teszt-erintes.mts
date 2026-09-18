@@ -249,6 +249,32 @@ function vezetes(honnan: { lat: number; lon: number }, hova: { lat: number; lon:
   eq("frissen érkezett (piros lámpa): még nincs állás", lampa[lampa.length - 1].tipus, "vezetes");
 }
 
+// 3d) Lezárt vezetés állás nélkül, a kocsi már mozog: 12:26-kor ért
+//     Nyírjákóra (a trip lezárult, de a "stoppedAfter" még 0), 14:57-kor
+//     26 km-re halad 72 km/h-val — a végpontra becsült állás kerül
+//     (12:26 → kb. 14:23), a felrakó kész (elhagyva), érkezés 12:26.
+{
+  const BALKANY = { lat: 47.7695, lon: 21.863 };
+  const NYIRJAKO = { lat: 48.0281, lon: 22.079 };
+  const UTON = { lat: 47.8462, lon: 21.8511 };
+  const lezart: IdovonalSzakasz[] = [
+    { tipus: "indulas", idopont: t(6, 0, 18), cim: null, lat: PAPA.lat, lon: PAPA.lon },
+    vezetes(PAPA, BALKANY, t(6, 0, 18), t(10, 33, 18)),
+    allas(BALKANY, t(10, 33, 18), 63),
+    vezetes(BALKANY, NYIRJAKO, t(11, 36, 18), t(12, 26, 18)),
+  ];
+  const most = t(14, 57, 18);
+  const f = [{ ...megallo(0, "felrako", NYIRJAKO, t(0, 0, 18)), pontossag: "csak_varos" as const }, megallo(1, "lerako", PAPA, t(0, 0, 21))];
+  const all = kiegesziteloAllapottal(lezart, { ...UTON, cim: null, mozog: true, idobelyeg: t(14, 57, 18) }, most);
+  eq("hiányzó állás pótolva: állás, majd élő vezetés", all.slice(-2).map((sz) => sz.tipus), ["allas", "vezetes"]);
+  const [j] = jelolMegallokat([f], all);
+  eq("hiányzó állás pótolva: a felrakó kész", j[0].elhagyva, true);
+  eq("hiányzó állás pótolva: érkezés a trip lezárásakor", j[0].tenylegesIdo?.toISOString(), t(12, 26, 18).toISOString());
+  const gyors = kiegesziteloAllapottal(lezart, { ...UTON, cim: null, mozog: true, idobelyeg: t(13, 5, 18) }, t(13, 5, 18));
+  eq("épp csak továbbindult (39 perc, 34 perc út): nincs képzett állás", gyors[gyors.length - 1].tipus, "vezetes");
+  eq("épp csak továbbindult: nincs beszúrt állás", gyors.length, lezart.length + 1);
+}
+
 // 4) Kézi jelölés: a sofőr megerősítése készre teszi a megállót és felülírja az "éppen itt"-et; a fuvar Teljesítve mindent készre tesz.
 {
   const f = [megallo(0, "felrako", PAPA, t(0, 0, 16)), megallo(1, "lerako", DEBRECEN, t(0, 0, 16))];
