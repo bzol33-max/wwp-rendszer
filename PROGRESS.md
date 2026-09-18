@@ -441,3 +441,37 @@
   ("átvételi díjtétel 800.00 EUR +ÁFA"), rendszámok ("Rendszám: AOPU427,/
   AOTY474") címkéhez horgonyzott, fehér karakterre érzéketlen mintával — nem
   illeszkedésnél a modell tippje marad. Tesztek: 101 állítás.
+
+## 2026-09-18 (26. kör) — GPS lap: táblázatos nap asztalon, lapozható kocsik telefonon
+
+- A GPS lap új elrendezése a jóváhagyott látványtervek (T1 asztali táblázat,
+  M4 mobil kocsi-fülek) szerint. Fent a nap összképe hét számmal (fuvar,
+  kész, folyamatban, csúszik, nyitott gond, GPS nélküli kocsi, megtett km),
+  alatta kocsinként: név + rendszám + mai km, a „Hol van most” sáv (hely,
+  sebesség, utolsó GPS-jel, mai km, következő megálló becsült érkezéssel,
+  nem tervezett állások), és a táblázat: Fuvar (megbízó, hivatkozás, áru,
+  mennyiség, súly, díj) · Megálló · Város · Állapot (Kész / Rakodik / Úton
+  oda / Csúszik / Terv) · Érkezés · Távozás · Rakodás · Sofőr jelzése.
+- Telefonon (lg alatt) ugyanez kocsinként egy lapon: fent a három kocsi
+  füle, a lapok között balra-jobbra húzással (scroll-snap) vagy a fülre
+  koppintva lehet váltani; három oszlop (Megálló, Érkezés, Távozás), a
+  rakodás, a sofőr jelzése és a gond a sor alatt. A cellák tartalmát az
+  asztali és a mobil nézet ugyanabból a `sorAdatok` függvényből kapja.
+- Új adatok az idővonal-eredményben (`lib/fuvarozas/actions.ts`):
+  `MegalloBejegyzes.tenylegesTavozas` (GPS szerinti továbbindulás),
+  `keziErkezes` (a sofőr „Megérkeztem” koppintása), `keszAt` (kézi készre
+  jelölés ideje); `FuvarBlokk.aru/mennyiseg/suly/fuvardij/fuvardijPenznem/
+  fuvarlevelFotoDb/gondok`; `JarmuIdovonalEredmeny.napiKm` és
+  `nemTervezettAllasok` (≥15 perces, tervezett címtől 2 km-nél távolabbi
+  GPS-állások, pihenő nélkül). A gondjelzések a `feladatok` táblából
+  jönnek (`getGondJelzesek`), a nyitottak és a 3 napon belül lezártak.
+- Ehhez a napi fuvar-lekérdezések (`getMaiSajatFuvarok`,
+  `getMaiValodiSajatFuvarok`, intervallum) az áru/díj mezőket és a
+  fuvarlevél-fotók számát is hozzák; `getMegalloAllapotok` a `kesz_at` és
+  `kezi_erkezes` oszlopot is, és a csak „Megérkeztem”-mel rendelkező sort is.
+- A rakodási idő a GPS érkezés → távozás különbsége, a sofőr által jelölt
+  várakozással („38 perc, ebből 25 perc várakozás”). Kézzel készre jelölt,
+  GPS által nem látott megállónál csak a sofőr ideje áll, ha koppintott.
+- Megmaradt: a lerakó sor kézi „kész” pipája, a fogyasztás doboz és a
+  következő napok doboz (a táblázat alatt), a „Nincs kocsi hozzárendelve”
+  lista, a napok közti lapozás (csak visszafelé).

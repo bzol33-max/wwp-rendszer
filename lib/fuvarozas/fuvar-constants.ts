@@ -129,6 +129,14 @@ export type MaiFuvarSor = {
   teljesitve: boolean;
   /** ISO időbélyeg (UTC, "…Z"), mikor lett Teljesítve — a GPS lap a megjelenített nap ELŐTT lezárt fuvart nem mutatja. */
   teljesitve_at: string | null;
+  /** Áru, mennyiség, súly — a GPS lap táblázatának Fuvar oszlopához (szabad szöveg, lehet üres). */
+  aru: string | null;
+  mennyiseg: string | null;
+  suly: string | null;
+  fuvardij: number | null;
+  fuvardij_penznem: FuvardijPenznem;
+  /** A sofőr által feltöltött fuvarlevél-fotók száma (fuvar_dokumentumok, tipus 'fuvarlevel'). */
+  fuvarlevel_foto_db: number;
 };
 
 /**
