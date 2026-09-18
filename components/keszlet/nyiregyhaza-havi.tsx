@@ -31,9 +31,10 @@ import {
 import { toast } from "sonner";
 import {
   addKasszaMovement,
-  addPendingPurchase,
-  addPurchase,
+  addPendingPurchases,
+  addPurchases,
   deletePurchase,
+  deletePurchases,
   getHaviSnapshot,
   getKasszaMovements,
   payPendingSeller,
@@ -147,23 +148,35 @@ export function NyiregyhazaHaviTab() {
     return Object.entries(todayQty).filter(([, v]) => Number(v) > 0);
   }
 
+  // Csak egész darabszám mehet tovább: a tört szám a szerveren (integer
+  // oszlop) hibára futna, és a mentés félúton szakadna meg.
+  function egeszDarabszamok(entries: [string, string][]) {
+    const hibas = entries.find(([, v]) => !Number.isInteger(Number(v)));
+    if (hibas) {
+      toast.error(`Érvénytelen darabszám ehhez: ${hibas[0]}. Csak egész szám adható meg.`);
+      return false;
+    }
+    return true;
+  }
+
   async function recordDay(method: "keszpenz" | "atutalas" = "keszpenz") {
     const entries = getEntries();
     if (entries.length === 0) {
       toast.error("Adj meg legalább egy típust darabszámmal.");
       return;
     }
+    if (!egeszDarabszamok(entries)) return;
     setSubmitting(true);
     try {
-      for (const [type, qtyStr] of entries) {
-        await addPurchase({
+      await addPurchases({
+        items: entries.map(([type, qtyStr]) => ({
           type,
           qty: Number(qtyStr),
           unitPrice: prices[type] ?? 0,
-          method,
-          createdBy: getCurrentUser() || undefined,
-        });
-      }
+        })),
+        method,
+        createdBy: getCurrentUser() || undefined,
+      });
       setTodayQty({});
       await load();
       toast.success(
@@ -192,18 +205,25 @@ export function NyiregyhazaHaviTab() {
 
   async function recordCustomPrice() {
     const entries = getEntries();
+    if (!egeszDarabszamok(entries)) return;
+    const rosszAr = entries.find(
+      ([type]) => !Number.isInteger(Number(customPrices[type]) || 0)
+    );
+    if (rosszAr) {
+      toast.error(`Érvénytelen egységár ehhez: ${rosszAr[0]}.`);
+      return;
+    }
     setSubmitting(true);
     try {
-      for (const [type, qtyStr] of entries) {
-        const unitPrice = Number(customPrices[type]) || 0;
-        await addPurchase({
+      await addPurchases({
+        items: entries.map(([type, qtyStr]) => ({
           type,
           qty: Number(qtyStr),
-          unitPrice,
-          method: "keszpenz",
-          createdBy: getCurrentUser() || undefined,
-        });
-      }
+          unitPrice: Number(customPrices[type]) || 0,
+        })),
+        method: "keszpenz",
+        createdBy: getCurrentUser() || undefined,
+      });
       setTodayQty({});
       setCustomPriceOpen(false);
       await load();
@@ -227,9 +247,7 @@ export function NyiregyhazaHaviTab() {
 
   async function handleDeleteGroup(ids: string[]) {
     try {
-      for (const id of ids) {
-        await deletePurchase(id);
-      }
+      await deletePurchases(ids);
       await load();
       toast.success("Tétel törölve.");
     } catch {
@@ -270,17 +288,15 @@ export function NyiregyhazaHaviTab() {
       toast.error("Adj meg nevet, és legalább egy típust darabszámmal.");
       return;
     }
+    if (!egeszDarabszamok(entries)) return;
     setPendingSubmitting(true);
     try {
-      for (const [type, qtyStr] of entries) {
-        await addPendingPurchase({
-          seller: pendingSeller.trim(),
-          type,
-          qty: Number(qtyStr),
-          date: pendingDate,
-          createdBy: getCurrentUser() || undefined,
-        });
-      }
+      await addPendingPurchases({
+        seller: pendingSeller.trim(),
+        date: pendingDate,
+        items: entries.map(([type, qtyStr]) => ({ type, qty: Number(qtyStr) })),
+        createdBy: getCurrentUser() || undefined,
+      });
       setPendingAddOpen(false);
       await load();
       toast.success("Kifizetésre váró tétel(ek) rögzítve.");
@@ -303,6 +319,10 @@ export function NyiregyhazaHaviTab() {
     const qty = Number(pendingEditQty);
     if (!pendingEditType || !qty) {
       toast.error("Adj meg típust és darabszámot.");
+      return;
+    }
+    if (!Number.isInteger(qty) || qty <= 0) {
+      toast.error("A darabszám csak pozitív egész szám lehet.");
       return;
     }
     setPendingSubmitting(true);
@@ -347,6 +367,10 @@ export function NyiregyhazaHaviTab() {
     const amount = Number(kasszaAmount);
     if (!kasszaDesc.trim() || !amount) {
       toast.error("Adj meg leírást és összeget.");
+      return;
+    }
+    if (!Number.isInteger(amount)) {
+      toast.error("Az összeg csak egész szám lehet (Ft).");
       return;
     }
     await addKasszaMovement(kasszaDesc, amount, getCurrentUser() || undefined);

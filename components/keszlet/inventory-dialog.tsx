@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { recordInventoryCount } from "@/lib/keszlet/actions";
+import { getSiteSnapshot, recordInventoryCount } from "@/lib/keszlet/actions";
 import { kbNav } from "@/lib/keszlet/kbnav";
 import { getCurrentUser } from "@/lib/current-user";
 
@@ -39,18 +39,32 @@ export function InventoryDialog({
   const [counted, setCounted] = useState("");
   const [comment, setComment] = useState("");
   const [saving, setSaving] = useState(false);
+  // A leltár megnyitásakor frissen lekért készlet: a szülő nézet adata a
+  // betöltése óta elavulhatott, ha közben más rögzített egy mozgást. A
+  // korrekciót ettől függetlenül a szerver számolja (recordInventoryCount) —
+  // ez csak azt a számot javítja, amit a felhasználó a képernyőn lát.
+  const [freshStock, setFreshStock] = useState<Record<string, number> | null>(null);
 
   useEffect(() => {
-    if (open) {
-      setStep(0);
-      setCounted("");
-      setComment("");
-    }
-  }, [open]);
+    if (!open) return;
+    setStep(0);
+    setCounted("");
+    setComment("");
+    setFreshStock(null);
+    let mounted = true;
+    getSiteSnapshot(site)
+      .then((snap) => {
+        if (mounted) setFreshStock(snap.stock);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, [open, site]);
 
   const type = types[step];
-  const expected = currentStock[type] ?? 0;
-  const countedNum = counted === "" ? null : Number(counted);
+  const expected = (freshStock ?? currentStock)[type] ?? 0;
+  const countedNum = counted === "" || !Number.isInteger(Number(counted)) ? null : Number(counted);
   const diff = countedNum === null ? 0 : countedNum - expected;
   const done = step >= types.length;
 
@@ -58,25 +72,33 @@ export function InventoryDialog({
     if (accept !== null && countedNum !== null && diff !== 0) {
       setSaving(true);
       try {
-        await recordInventoryCount({
+        const eredmeny = await recordInventoryCount({
           site,
           type,
-          expectedQty: expected,
           countedQty: countedNum,
           accepted: accept,
           comment: comment || undefined,
           createdBy: getCurrentUser() || undefined,
         });
-        if (accept) {
-          toast.success(`${type}: készlet korrigálva ${countedNum} db-ra.`);
+        if (!accept) {
+          toast.info(`${type}: eltérés elutasítva, marad ${eredmeny.expectedQty} db.`);
+        } else if (eredmeny.diff === 0) {
+          toast.success(`${type}: nincs eltérés, marad ${eredmeny.expectedQty} db.`);
         } else {
-          toast.info(`${type}: eltérés elutasítva, marad ${expected} db.`);
+          toast.success(`${type}: készlet korrigálva ${countedNum} db-ra.`);
         }
+        setFreshStock((prev) => ({
+          ...(prev ?? currentStock),
+          [type]: accept ? countedNum : eredmeny.expectedQty,
+        }));
       } catch {
-        toast.error("Nem sikerült menteni a leltári tételt.");
-      } finally {
+        // Mentési hiba után NEM lépünk a következő típusra — különben a tétel
+        // csendben kimaradna a leltárból.
+        toast.error("Nem sikerült menteni a leltári tételt. Próbáld újra.");
         setSaving(false);
+        return;
       }
+      setSaving(false);
     }
     setCounted("");
     setComment("");
@@ -116,6 +138,9 @@ export function InventoryDialog({
                   data-kbnav-item
                   onKeyDown={kbNav}
                 />
+                {counted !== "" && countedNum === null && (
+                  <p className="text-xs text-destructive">Csak egész szám adható meg.</p>
+                )}
               </div>
 
               {countedNum !== null && diff !== 0 && (

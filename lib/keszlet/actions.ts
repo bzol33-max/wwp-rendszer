@@ -1,7 +1,7 @@
 "use server";
 
 import { randomUUID } from "node:crypto";
-import { query } from "@/lib/db";
+import { query, withTransaction, type Querier } from "@/lib/db";
 import type { ModuleKey } from "@/lib/auth/permissions";
 import {
   requireAnyEditPermission,
@@ -54,6 +54,47 @@ function ellenorizdSajatKeszletHatokor(jog: ModuleKey, ...sites: (string | undef
       );
     }
   }
+}
+
+// Szerver oldali bemenet-ellenőrzés. A kliens is ellenőriz, de a szerver-akció
+// közvetlenül is hívható, és egy hibás érték (pl. tört darabszám) különben
+// csak a DB-nél, félig lefutott mentés közben derülne ki.
+const TELEPHELYEK = ["Nyíregyháza", "Szakoly", "Balkány"];
+
+function ellenorizdDarabszam(qty: unknown, mihez: string, nullaIsLehet = false): number {
+  const min = nullaIsLehet ? 0 : 1;
+  if (typeof qty !== "number" || !Number.isInteger(qty) || qty < min || qty > 1_000_000) {
+    throw new Error(`Érvénytelen darabszám (${mihez}): ${String(qty)}`);
+  }
+  return qty;
+}
+
+function ellenorizdTelephely(site: unknown): string {
+  if (typeof site !== "string" || !TELEPHELYEK.includes(site)) {
+    throw new Error(`Ismeretlen telephely: ${String(site)}`);
+  }
+  return site;
+}
+
+function ellenorizdAr(price: unknown): number {
+  if (typeof price !== "number" || !Number.isInteger(price) || price < 0 || price > 10_000_000) {
+    throw new Error(`Érvénytelen egységár: ${String(price)}`);
+  }
+  return price;
+}
+
+function ellenorizdDatum(date: unknown): string {
+  if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    throw new Error(`Érvénytelen dátum: ${String(date)}`);
+  }
+  return date;
+}
+
+function ellenorizdAzonosito(id: unknown): string {
+  if (typeof id !== "string" || !/^\d+$/.test(id)) {
+    throw new Error(`Érvénytelen azonosító: ${String(id)}`);
+  }
+  return id;
 }
 
 // Ezek a lekérdezések csak ezen a modulon belülről hívódnak (getSiteSnapshot,
@@ -116,7 +157,9 @@ async function getMovements(site: string, limit = 20): Promise<MovementRow[]> {
 // Belső segéd (nem exportált, ld. fent): minden hívója exportált akció,
 // ami már elvégezte a jogosultság- és hatókör-ellenőrzést. Saját őrt
 // szándékosan nem tartalmaz — az itt a keszlet_sajat ágat vágná el.
-async function addMovement(input: {
+// A `q` a hívó tranzakciója (withTransaction), hogy a mozgás a többi
+// összetartozó írással együtt rögzüljön vagy maradjon el.
+async function addMovement(q: Querier, input: {
   site: string;
   type: string;
   direction: Direction;
@@ -127,7 +170,7 @@ async function addMovement(input: {
   createdBy?: string;
   movementGroup?: string;
 }) {
-  await query(
+  await q(
     `insert into keszlet_movements (site_id, type_id, direction, qty, partner, target_site_id, purchase_id, created_by, movement_group)
      values (
        (select id from sites where name = $1),
@@ -172,6 +215,9 @@ async function addMovement(input: {
 // cél telephely is megadható (pl. 10 db EUR világos Szakolyra, 5 db EUR
 // szürke Balkányra, egy mentésben) — ezért a cél telephely soronkénti
 // (items[].targetSite), nem egyetlen, a teljes mentésre érvényes mező.
+// FONTOS (2026-09-18): az egész mentés egy tranzakció — egy félúton elbukó
+// mentés (pl. hibás második sor) különben levonná a forrásnál, de nem írná
+// jóvá a célnál, vagy a sikeres sorokat az újrapróbálás megduplázná.
 export async function recordMovements(input: {
   site: string;
   direction: Direction;
@@ -185,76 +231,92 @@ export async function recordMovements(input: {
     input.site,
     ...input.items.map((i) => i.targetSite)
   );
+  ellenorizdTelephely(input.site);
+  // A "mozgatas_be" csak a rendszer által generált cél oldali pár lehet.
+  if (!["be", "ki", "mozgatas"].includes(input.direction)) {
+    throw new Error(`Érvénytelen irány: ${String(input.direction)}`);
+  }
+  for (const item of input.items) {
+    ellenorizdDarabszam(item.qty, item.type);
+    if (input.direction === "mozgatas") {
+      ellenorizdTelephely(item.targetSite);
+      if (item.targetSite === input.site) {
+        throw new Error("A mozgatás cél telephelye nem lehet ugyanaz, mint a forrás.");
+      }
+    }
+  }
   if (input.items.length === 0) return;
 
   const movementGroup = randomUUID();
-  for (const item of input.items) {
-    await addMovement({
-      site: input.site,
-      type: item.type,
-      direction: input.direction,
-      qty: item.qty,
-      partner: input.partner,
-      targetSite: input.direction === "mozgatas" ? item.targetSite : undefined,
-      createdBy: input.createdBy,
-      movementGroup,
-    });
-  }
-  if (input.direction === "mozgatas") {
+  await withTransaction(async (q) => {
     for (const item of input.items) {
-      if (!item.targetSite) continue;
-      await addMovement({
-        site: item.targetSite,
+      await addMovement(q, {
+        site: input.site,
         type: item.type,
-        direction: "mozgatas_be",
+        direction: input.direction,
         qty: item.qty,
-        targetSite: input.site,
+        partner: input.partner,
+        targetSite: input.direction === "mozgatas" ? item.targetSite : undefined,
         createdBy: input.createdBy,
         movementGroup,
       });
     }
-  }
+    if (input.direction === "mozgatas") {
+      for (const item of input.items) {
+        if (!item.targetSite) continue;
+        await addMovement(q, {
+          site: item.targetSite,
+          type: item.type,
+          direction: "mozgatas_be",
+          qty: item.qty,
+          targetSite: input.site,
+          createdBy: input.createdBy,
+          movementGroup,
+        });
+      }
+    }
 
-  if (input.site === "Nyíregyháza") {
-    const itemsText =
-      input.direction === "mozgatas"
-        ? input.items.map((i) => `${i.qty} db ${i.type} → ${i.targetSite}`).join(", ")
-        : input.items.map((i) => `${i.qty} db ${i.type}`).join(", ");
-    const details =
-      input.direction === "mozgatas"
-        ? itemsText
-        : `${itemsText}${input.partner ? ` — ${input.partner}` : ""}`;
-    const effect = input.items
-      .map((i) =>
-        input.direction === "be"
-          ? `${i.type} +${i.qty}`
-          : input.direction === "ki"
-            ? `${i.type} −${i.qty}`
-            : `${i.type} −${i.qty} → ${i.targetSite}`
-      )
-      .join(" · ");
-    await query(
-      `insert into keszlet_events (site_id, kind, details, effect, created_by, movement_group)
-       values ((select id from sites where name = 'Nyíregyháza'), 'mozgas', $1, $2, $3, $4)`,
-      [details, effect, input.createdBy ?? null, movementGroup]
-    );
-  }
-  if (input.direction === "mozgatas") {
-    const toNyiregyhaza = input.items.filter((i) => i.targetSite === "Nyíregyháza");
-    if (toNyiregyhaza.length > 0) {
-      const itemsText = toNyiregyhaza.map((i) => `${i.qty} db ${i.type}`).join(", ");
-      await query(
+    if (input.site === "Nyíregyháza") {
+      const itemsText =
+        input.direction === "mozgatas"
+          ? input.items.map((i) => `${i.qty} db ${i.type} → ${i.targetSite}`).join(", ")
+          : input.items.map((i) => `${i.qty} db ${i.type}`).join(", ");
+      const details =
+        input.direction === "mozgatas"
+          ? itemsText
+          : `${itemsText}${input.partner ? ` — ${input.partner}` : ""}`;
+      const effect = input.items
+        .map((i) =>
+          input.direction === "be"
+            ? `${i.type} +${i.qty}`
+            : input.direction === "ki"
+              ? `${i.type} −${i.qty}`
+              : `${i.type} −${i.qty} → ${i.targetSite}`
+        )
+        .join(" · ");
+      await q(
         `insert into keszlet_events (site_id, kind, details, effect, created_by, movement_group)
          values ((select id from sites where name = 'Nyíregyháza'), 'mozgas', $1, $2, $3, $4)`,
-        [
-          `${itemsText} érkezett innen: ${input.site}`,
-          toNyiregyhaza.map((i) => `${i.type} +${i.qty}`).join(" · "),
-          input.createdBy ?? null,
-          movementGroup,
-        ]
+        [details, effect, input.createdBy ?? null, movementGroup]
       );
     }
-  }
+    if (input.direction === "mozgatas") {
+      const toNyiregyhaza = input.items.filter((i) => i.targetSite === "Nyíregyháza");
+      if (toNyiregyhaza.length > 0) {
+        const itemsText = toNyiregyhaza.map((i) => `${i.qty} db ${i.type}`).join(", ");
+        await q(
+          `insert into keszlet_events (site_id, kind, details, effect, created_by, movement_group)
+           values ((select id from sites where name = 'Nyíregyháza'), 'mozgas', $1, $2, $3, $4)`,
+          [
+            `${itemsText} érkezett innen: ${input.site}`,
+            toNyiregyhaza.map((i) => `${i.type} +${i.qty}`).join(" · "),
+            input.createdBy ?? null,
+            movementGroup,
+          ]
+        );
+      }
+    }
+  });
 }
 
 // Egyetlen mozgás-sor törlése a "Legutóbbi mozgások" listából (Szakoly,
@@ -270,31 +332,34 @@ export async function recordMovements(input: {
 // recordMovements) megszüntetett.
 export async function deleteMovement(id: string) {
   await requireEditPermission("keszlet");
-  const rows = await query<{
-    purchase_id: string | null;
-    direction: Direction;
-    movement_group: string | null;
-  }>(
-    `select purchase_id::text, direction, movement_group::text from keszlet_movements where id = $1`,
-    [id]
-  );
-  if (rows.length === 0) return;
-  if (rows[0].purchase_id) {
-    throw new Error(
-      "Ez a tétel egy felvásárláshoz tartozik — a Havi fülön, a felvásárlás törlésével vonható vissza."
+  ellenorizdAzonosito(id);
+  await withTransaction(async (q) => {
+    const rows = await q<{
+      purchase_id: string | null;
+      direction: Direction;
+      movement_group: string | null;
+    }>(
+      `select purchase_id::text, direction, movement_group::text from keszlet_movements where id = $1`,
+      [id]
     );
-  }
-  const { direction, movement_group } = rows[0];
-  if ((direction === "mozgatas" || direction === "mozgatas_be") && movement_group) {
-    // A másik oldalon (jellemzően Nyíregyházán) a mozgatáshoz tartozhat egy
-    // összevont keszlet_events-sor is (lásd recordMovements) — ezt is
-    // töröljük, különben egy már nem létező mozgatásra hivatkozó, "árva"
-    // esemény maradna a Legutóbbi mozgások listában.
-    await query(`delete from keszlet_events where movement_group = $1`, [movement_group]);
-    await query(`delete from keszlet_movements where movement_group = $1`, [movement_group]);
-    return;
-  }
-  await query(`delete from keszlet_movements where id = $1`, [id]);
+    if (rows.length === 0) return;
+    if (rows[0].purchase_id) {
+      throw new Error(
+        "Ez a tétel egy felvásárláshoz tartozik — a Havi fülön, a felvásárlás törlésével vonható vissza."
+      );
+    }
+    const { direction, movement_group } = rows[0];
+    if ((direction === "mozgatas" || direction === "mozgatas_be") && movement_group) {
+      // A másik oldalon (jellemzően Nyíregyházán) a mozgatáshoz tartozhat egy
+      // összevont keszlet_events-sor is (lásd recordMovements) — ezt is
+      // töröljük, különben egy már nem létező mozgatásra hivatkozó, "árva"
+      // esemény maradna a Legutóbbi mozgások listában.
+      await q(`delete from keszlet_events where movement_group = $1`, [movement_group]);
+      await q(`delete from keszlet_movements where movement_group = $1`, [movement_group]);
+      return;
+    }
+    await q(`delete from keszlet_movements where id = $1`, [id]);
+  });
 }
 
 // Egy "Legutóbbi mozgások" esemény (Nyíregyháza — keszlet_events, kind =
@@ -303,25 +368,28 @@ export async function deleteMovement(id: string) {
 // movement_group köti össze, lásd db/schema.sql).
 export async function deleteMovementEvent(id: string) {
   await requireEditPermission("keszlet");
-  const rows = await query<{ movement_group: string | null }>(
-    `select movement_group::text from keszlet_events where id = $1 and kind = 'mozgas'`,
-    [id]
-  );
-  if (rows.length === 0) return;
-  const group = rows[0].movement_group;
-  if (group) {
-    const linkedToPurchase = await query<{ id: string }>(
-      `select id from keszlet_movements where movement_group = $1 and purchase_id is not null`,
-      [group]
+  ellenorizdAzonosito(id);
+  await withTransaction(async (q) => {
+    const rows = await q<{ movement_group: string | null }>(
+      `select movement_group::text from keszlet_events where id = $1 and kind = 'mozgas'`,
+      [id]
     );
-    if (linkedToPurchase.length > 0) {
-      throw new Error(
-        "Ez a tétel egy felvásárláshoz tartozik — a Havi fülön, a felvásárlás törlésével vonható vissza."
+    if (rows.length === 0) return;
+    const group = rows[0].movement_group;
+    if (group) {
+      const linkedToPurchase = await q<{ id: string }>(
+        `select id from keszlet_movements where movement_group = $1 and purchase_id is not null`,
+        [group]
       );
+      if (linkedToPurchase.length > 0) {
+        throw new Error(
+          "Ez a tétel egy felvásárláshoz tartozik — a Havi fülön, a felvásárlás törlésével vonható vissza."
+        );
+      }
+      await q(`delete from keszlet_movements where movement_group = $1`, [group]);
     }
-    await query(`delete from keszlet_movements where movement_group = $1`, [group]);
-  }
-  await query(`delete from keszlet_events where id = $1`, [id]);
+    await q(`delete from keszlet_events where id = $1`, [id]);
+  });
 }
 
 // --- Összkészlet (Szakoly/Archívum fülek közötti összesítő) ---
@@ -472,14 +540,24 @@ export async function getNyiregyhazaPurchasePrices(): Promise<PriceRow[]> {
 
 export async function getHaviSnapshot() {
   await requireViewPermission("keszlet");
+  // FONTOS (2026-09-18): korábban "limit 60" volt — napi 20–35 vétel mellett
+  // ez alig 2-3 nap, így a "Korábbi napok" összegei csonkák voltak, a pár
+  // napnál régebbi kifizetésre váró tétel pedig eltűnt a listából (a
+  // Kifizetés gomb viszont azt is kifizette). Most: a folyó hónap ÉS az
+  // utolsó 7 nap (hónap elején is javítható legyen a tegnapi hiba), valamint
+  // MINDEN kifizetésre váró tétel, dátumtól függetlenül.
   const purchases = await query<PurchaseRow>(
     `select p.id::text, to_char(p.created_at at time zone 'Europe/Budapest', '${TIME_FMT}') as date,
        to_char(p.created_at at time zone 'Europe/Budapest', 'YYYY-MM-DD') as day_key, t.name as type,
        p.qty, p.unit_price, p.total, p.seller, p.pending, p.payment_method, p.created_by
      from nyiregyhaza_purchases p
      join pallet_types t on t.id = p.type_id
-     order by p.created_at desc
-     limit 60`
+     where p.pending
+        or (p.created_at at time zone 'Europe/Budapest')::date >= least(
+             date_trunc('month', now() at time zone 'Europe/Budapest')::date,
+             ${BUDAPEST_NOW_DATE} - 7
+           )
+     order by p.created_at desc`
   );
   const kasszaRows = await query<{ total: string }>(
     `select coalesce(sum(amount), 0) as total from kassza_movements`
@@ -533,93 +611,157 @@ export async function getHaviSnapshot() {
   };
 }
 
-export async function addPurchase(input: {
-  type: string;
-  qty: number;
-  unitPrice: number;
-  seller?: string;
-  pending?: boolean;
-  method?: PaymentMethod;
-  date?: string;
-  createdBy?: string;
-}) {
-  await requireAnyEditPermission(["keszlet", "felvasarlas_mobil"]);
-  const seller = input.seller ?? "";
-  const total = input.qty * input.unitPrice;
-  const method: PaymentMethod = input.method ?? "keszpenz";
-  const createdBy = input.createdBy ?? null;
-  // Átutalással fizetett vétel: a készletet növeli, de a kasszát nem érinti —
-  // az összeg banki átutalással rendeződik, nem készpénzből.
-  const affectsKassza = !input.pending && method === "keszpenz";
-  const rows = await query<{ id: string }>(
-    `insert into nyiregyhaza_purchases (type_id, qty, unit_price, total, seller, pending, payment_method, created_at, created_by)
-     values ((select id from pallet_types where name = $1), $2, $3, $4, $5, $6, $7, coalesce($8::timestamptz, now()), $9)
-     returning id`,
-    [input.type, input.qty, input.unitPrice, total, seller, input.pending ?? false, method, input.date ?? null, createdBy]
-  );
-  const purchaseId = rows[0].id;
-
-  if (input.type === "Csere") {
+// Egy felvásárlás KÉSZLET-hatása (kassza nélkül) — a rögzítés (addPurchases)
+// és a kifizetésre váró tétel módosítása (updatePendingPurchase) is ezt írja,
+// hogy a "Csere" mindkét úton ugyanúgy (világos +db, szürke −db, esemény)
+// kerüljön be. Korábban a módosítás mindig egyetlen "be" mozgást írt a tétel
+// típusára, ami Csere esetén egy rejtett "Csere" készletet hozott létre, a
+// világos/szürke pár pedig elveszett.
+async function irjFelvasarlasKeszlethatast(
+  q: Querier,
+  p: {
+    purchaseId: string;
+    type: string;
+    qty: number;
+    unitPrice: number;
+    total: number;
+    seller: string;
+    createdBy: string | null;
+  }
+) {
+  const createdBy = p.createdBy ?? undefined;
+  if (p.type === "Csere") {
     // A "Csere" nem önálló készlettétel: világos +db, szürke −db a Nyíregyháza készleten.
-    // Kasszaszempontból ugyanolyan kiadás, mint bármelyik más felvásárlás — készpénzért vesszük.
-    await addMovement({ site: "Nyíregyháza", type: "EUR világos", direction: "be", qty: input.qty, partner: "Csere", purchaseId, createdBy: createdBy ?? undefined });
-    await addMovement({ site: "Nyíregyháza", type: "EUR szürke", direction: "ki", qty: input.qty, partner: "Csere", purchaseId, createdBy: createdBy ?? undefined });
-    if (affectsKassza) {
-      await query(
-        `insert into kassza_movements (description, amount, purchase_id, created_by, category)
-         values ($1, $2, $3, $4, 'felvasarlas')`,
-        [`Csere (${input.qty} db × ${input.unitPrice} Ft)`, -total, purchaseId, createdBy]
-      );
-    }
-    await query(
+    await addMovement(q, { site: "Nyíregyháza", type: "EUR világos", direction: "be", qty: p.qty, partner: "Csere", purchaseId: p.purchaseId, createdBy });
+    await addMovement(q, { site: "Nyíregyháza", type: "EUR szürke", direction: "ki", qty: p.qty, partner: "Csere", purchaseId: p.purchaseId, createdBy });
+    await q(
       `insert into keszlet_events (site_id, kind, details, effect, purchase_id, created_by)
        values ((select id from sites where name = 'Nyíregyháza'), 'csere', $1, $2, $3, $4)`,
       [
-        `${input.qty} db csere, ${input.unitPrice} Ft/db`,
-        `világos +${input.qty} · szürke −${input.qty} · kassza −${total.toLocaleString("hu-HU")} Ft`,
-        purchaseId,
-        createdBy,
+        `${p.qty} db csere, ${p.unitPrice} Ft/db`,
+        `világos +${p.qty} · szürke −${p.qty} · kassza −${p.total.toLocaleString("hu-HU")} Ft`,
+        p.purchaseId,
+        p.createdBy,
       ]
     );
     return;
   }
 
-  // Havi fülről automatikusan bekerül a Nyíregyháza fül (tényleges készlet) állományba is,
-  // kivéve ha kifizetésre vár (akkor a darabszám már benne van, csak a kassza vár).
-  await addMovement({
+  // Havi fülről automatikusan bekerül a Nyíregyháza fül (tényleges készlet)
+  // állományba is — a kifizetésre váró tétel darabszáma is azonnal itt van,
+  // csak a kassza vár.
+  await addMovement(q, {
     site: "Nyíregyháza",
-    type: input.type,
+    type: p.type,
     direction: "be",
-    qty: input.qty,
-    partner: seller || undefined,
+    qty: p.qty,
+    partner: p.seller || undefined,
+    purchaseId: p.purchaseId,
+    createdBy,
+  });
+}
+
+type UjFelvasarlas = {
+  type: string;
+  qty: number;
+  unitPrice: number;
+  seller: string;
+  pending: boolean;
+  method: PaymentMethod;
+  date: string | null;
+  createdBy: string | null;
+};
+
+async function rogzitsFelvasarlast(q: Querier, input: UjFelvasarlas) {
+  const total = input.qty * input.unitPrice;
+  // Átutalással fizetett vétel: a készletet növeli, de a kasszát nem érinti —
+  // az összeg banki átutalással rendeződik, nem készpénzből.
+  const affectsKassza = !input.pending && input.method === "keszpenz";
+  const rows = await q<{ id: string }>(
+    `insert into nyiregyhaza_purchases (type_id, qty, unit_price, total, seller, pending, payment_method, created_at, created_by)
+     values ((select id from pallet_types where name = $1), $2, $3, $4, $5, $6, $7, coalesce($8::timestamptz, now()), $9)
+     returning id::text`,
+    [input.type, input.qty, input.unitPrice, total, input.seller, input.pending, input.method, input.date, input.createdBy]
+  );
+  const purchaseId = rows[0].id;
+  await irjFelvasarlasKeszlethatast(q, {
     purchaseId,
-    createdBy: createdBy ?? undefined,
+    type: input.type,
+    qty: input.qty,
+    unitPrice: input.unitPrice,
+    total,
+    seller: input.seller,
+    createdBy: input.createdBy,
   });
   if (affectsKassza) {
-    await query(
+    // Kasszaszempontból a Csere ugyanolyan kiadás, mint bármelyik más
+    // felvásárlás — készpénzért vesszük.
+    await q(
       `insert into kassza_movements (description, amount, purchase_id, created_by, category)
        values ($1, $2, $3, $4, 'felvasarlas')`,
-      [`Felvásárlás — ${input.type} (${input.qty} db)`, -total, purchaseId, createdBy]
+      [
+        input.type === "Csere"
+          ? `Csere (${input.qty} db × ${input.unitPrice} Ft)`
+          : `Felvásárlás — ${input.type} (${input.qty} db)`,
+        -total,
+        purchaseId,
+        input.createdBy,
+      ]
     );
   }
 }
 
-export async function deletePurchase(id: string) {
-  await requireEditPermission("keszlet");
-  // Visszavonja a felvásárlás összes hatását: mozgás(ok), kassza-tétel, esemény, majd maga a tétel.
-  const purchaseRows = await query<{
+// Egy "Vétel" gombnyomás összes típusa egy hívásban, egy tranzakcióban (Havi
+// fül gyors rögzítés / egyedi ár, /felvasarlas mobil nézet) — korábban a
+// kliens típusonként külön hívta, így egy félúton elbukó mentés után az
+// újrapróbálás a már rögzített típusokat megduplázta.
+export async function addPurchases(input: {
+  items: { type: string; qty: number; unitPrice: number }[];
+  method?: PaymentMethod;
+  createdBy?: string;
+}) {
+  await requireAnyEditPermission(["keszlet", "felvasarlas_mobil"]);
+  const method: PaymentMethod = input.method ?? "keszpenz";
+  if (method !== "keszpenz" && method !== "atutalas") {
+    throw new Error(`Érvénytelen fizetési mód: ${String(method)}`);
+  }
+  for (const item of input.items) {
+    ellenorizdDarabszam(item.qty, item.type);
+    ellenorizdAr(item.unitPrice);
+  }
+  if (input.items.length === 0) return;
+  await withTransaction(async (q) => {
+    for (const item of input.items) {
+      await rogzitsFelvasarlast(q, {
+        type: item.type,
+        qty: item.qty,
+        unitPrice: item.unitPrice,
+        seller: "",
+        pending: false,
+        method,
+        date: null,
+        createdBy: input.createdBy ?? null,
+      });
+    }
+  });
+}
+
+// Visszavonja a felvásárlás összes hatását: mozgás(ok), kassza-tétel, esemény,
+// majd maga a tétel.
+async function torolFelvasarlast(q: Querier, id: string) {
+  const purchaseRows = await q<{
     total: number;
     payment_method: string;
     pending: boolean;
   }>(`select total, payment_method, pending from nyiregyhaza_purchases where id = $1`, [id]);
 
-  await query(`delete from keszlet_movements where purchase_id = $1`, [id]);
-  const deletedKassza = await query<{ id: string }>(
+  await q(`delete from keszlet_movements where purchase_id = $1`, [id]);
+  const deletedKassza = await q<{ id: string }>(
     `delete from kassza_movements where purchase_id = $1 returning id`,
     [id]
   );
-  await query(`delete from keszlet_events where purchase_id = $1`, [id]);
-  await query(`delete from nyiregyhaza_purchases where id = $1`, [id]);
+  await q(`delete from keszlet_events where purchase_id = $1`, [id]);
+  await q(`delete from nyiregyhaza_purchases where id = $1`, [id]);
 
   // Régebbi, eladónkénti gyűjtő kifizetésből származó (a konkrét tételhez nem
   // közvetlenül kötött) kassza-terhelést nem tudtuk a fenti purchase_id
@@ -628,7 +770,7 @@ export async function deletePurchase(id: string) {
   if (deletedKassza.length === 0 && purchaseRows.length > 0) {
     const p = purchaseRows[0];
     if (!p.pending && p.payment_method === "keszpenz") {
-      await query(
+      await q(
         `insert into kassza_movements (description, amount, category) values ($1, $2, 'felvasarlas')`,
         [`Törölt felvásárlási tétel visszaírása`, Number(p.total)]
       );
@@ -636,29 +778,56 @@ export async function deletePurchase(id: string) {
   }
 }
 
+export async function deletePurchase(id: string) {
+  await deletePurchases([id]);
+}
+
+// A "Korábbi napok" egy sora (egy nap egy típusa) több tételt is összevonhat —
+// ezek együtt, egy tranzakcióban törlődnek, nem félig.
+export async function deletePurchases(ids: string[]) {
+  await requireEditPermission("keszlet");
+  ids.forEach((id) => ellenorizdAzonosito(id));
+  if (ids.length === 0) return;
+  await withTransaction(async (q) => {
+    for (const id of ids) await torolFelvasarlast(q, id);
+  });
+}
+
 // --- Kifizetésre váró tételek (nyitvatartáson túl/hétvégén leadott felvásárlás) ---
 
-export async function addPendingPurchase(input: {
+async function alapar(q: Querier, type: string): Promise<number> {
+  const priceRows = await q<{ default_price: number | null }>(
+    `select default_price from pallet_types where name = $1`,
+    [type]
+  );
+  return priceRows[0]?.default_price ?? 0;
+}
+
+export async function addPendingPurchases(input: {
   seller: string;
-  type: string;
-  qty: number;
   date: string;
+  items: { type: string; qty: number }[];
   createdBy?: string;
 }) {
   await requireEditPermission("keszlet");
-  const priceRows = await query<{ default_price: number | null }>(
-    `select default_price from pallet_types where name = $1`,
-    [input.type]
-  );
-  const unitPrice = priceRows[0]?.default_price ?? 0;
-  await addPurchase({
-    type: input.type,
-    qty: input.qty,
-    unitPrice,
-    seller: input.seller,
-    pending: true,
-    date: input.date,
-    createdBy: input.createdBy,
+  const seller = input.seller.trim();
+  if (!seller) throw new Error("A név megadása kötelező.");
+  ellenorizdDatum(input.date);
+  for (const item of input.items) ellenorizdDarabszam(item.qty, item.type);
+  if (input.items.length === 0) return;
+  await withTransaction(async (q) => {
+    for (const item of input.items) {
+      await rogzitsFelvasarlast(q, {
+        type: item.type,
+        qty: item.qty,
+        unitPrice: await alapar(q, item.type),
+        seller,
+        pending: true,
+        method: "keszpenz",
+        date: input.date,
+        createdBy: input.createdBy ?? null,
+      });
+    }
   });
 }
 
@@ -667,59 +836,67 @@ export async function updatePendingPurchase(
   input: { type: string; qty: number; date: string; createdBy?: string }
 ) {
   await requireEditPermission("keszlet");
-  const priceRows = await query<{ default_price: number | null }>(
-    `select default_price from pallet_types where name = $1`,
-    [input.type]
-  );
-  const unitPrice = priceRows[0]?.default_price ?? 0;
-  const total = input.qty * unitPrice;
-  const rows = await query<{ seller: string }>(
-    `update nyiregyhaza_purchases
-     set type_id = (select id from pallet_types where name = $1),
-         qty = $2, unit_price = $3, total = $4, created_at = $5::timestamptz
-     where id = $6 and pending = true
-     returning seller`,
-    [input.type, input.qty, unitPrice, total, input.date, id]
-  );
-  if (rows.length === 0) return;
-  // A kapcsolódó készletmozgást is frissítjük az új típusra/darabszámra.
-  await query(`delete from keszlet_movements where purchase_id = $1`, [id]);
-  await addMovement({
-    site: "Nyíregyháza",
-    type: input.type,
-    direction: "be",
-    qty: input.qty,
-    partner: rows[0].seller || undefined,
-    purchaseId: id,
-    createdBy: input.createdBy,
+  ellenorizdAzonosito(id);
+  ellenorizdDarabszam(input.qty, input.type);
+  ellenorizdDatum(input.date);
+  await withTransaction(async (q) => {
+    const unitPrice = await alapar(q, input.type);
+    const total = input.qty * unitPrice;
+    const rows = await q<{ seller: string }>(
+      `update nyiregyhaza_purchases
+       set type_id = (select id from pallet_types where name = $1),
+           qty = $2, unit_price = $3, total = $4, created_at = $5::timestamptz
+       where id = $6 and pending = true
+       returning seller`,
+      [input.type, input.qty, unitPrice, total, input.date, id]
+    );
+    if (rows.length === 0) return;
+    // A tétel teljes készlet-hatását (mozgás(ok), Csere esetén az esemény is)
+    // újraírjuk az új típusra/darabszámra.
+    await q(`delete from keszlet_movements where purchase_id = $1`, [id]);
+    await q(`delete from keszlet_events where purchase_id = $1`, [id]);
+    await irjFelvasarlasKeszlethatast(q, {
+      purchaseId: id,
+      type: input.type,
+      qty: input.qty,
+      unitPrice,
+      total,
+      seller: rows[0].seller,
+      createdBy: input.createdBy ?? null,
+    });
   });
 }
 
 export async function payPendingSeller(seller: string, createdBy?: string) {
   await requireEditPermission("keszlet");
-  const rows = await query<{ id: string; total: number }>(
-    `select id::text, total from nyiregyhaza_purchases where seller = $1 and pending = true`,
-    [seller]
-  );
-  if (rows.length === 0) return;
-  await query(
-    `update nyiregyhaza_purchases set pending = false, paid_at = now() where seller = $1 and pending = true`,
-    [seller]
-  );
-  // Tételenként külön kassza-sor (purchase_id-hoz kötve), hogy egy később
-  // törölt tétel pénze pontosan visszaíródjon a kasszába — nem egy közös,
-  // eladónkénti gyűjtő összeg, amit nem lehetne utólag tételre bontani.
-  for (const r of rows) {
-    await query(
-      `insert into kassza_movements (description, amount, purchase_id, created_by, category)
-       values ($1, $2, $3, $4, 'felvasarlas')`,
-      [`Kifizetés — ${seller}`, -Number(r.total), r.id, createdBy ?? null]
+  await withTransaction(async (q) => {
+    // Egyetlen "update ... returning": ha két kifizetés egyszerre indul, a
+    // tételeket csak az egyik kapja meg, így a kassza nem terhelődik duplán.
+    const rows = await q<{ id: string; total: number }>(
+      `update nyiregyhaza_purchases set pending = false, paid_at = now()
+       where seller = $1 and pending = true
+       returning id::text, total`,
+      [seller]
     );
-  }
+    // Tételenként külön kassza-sor (purchase_id-hoz kötve), hogy egy később
+    // törölt tétel pénze pontosan visszaíródjon a kasszába — nem egy közös,
+    // eladónkénti gyűjtő összeg, amit nem lehetne utólag tételre bontani.
+    for (const r of rows) {
+      await q(
+        `insert into kassza_movements (description, amount, purchase_id, created_by, category)
+         values ($1, $2, $3, $4, 'felvasarlas')`,
+        [`Kifizetés — ${seller}`, -Number(r.total), r.id, createdBy ?? null]
+      );
+    }
+  });
 }
 
 export async function addKasszaMovement(description: string, amount: number, createdBy?: string) {
   await requireEditPermission("keszlet");
+  if (!description.trim()) throw new Error("A leírás megadása kötelező.");
+  if (!Number.isInteger(amount) || amount === 0) {
+    throw new Error(`Érvénytelen összeg: ${String(amount)}`);
+  }
   await query(`insert into kassza_movements (description, amount, created_by) values ($1, $2, $3)`, [
     description,
     amount,
@@ -815,54 +992,77 @@ export async function recordSzetvalogatas(input: {
   createdBy?: string;
 }) {
   await requireEditPermission("keszlet");
+  ellenorizdTelephely(input.site);
   const torott = input.torott ?? 0;
+  ellenorizdDarabszam(input.vilagos, "világos", true);
+  ellenorizdDarabszam(input.szurke, "szürke", true);
+  ellenorizdDarabszam(torott, "törött", true);
   const total = input.vilagos + input.szurke + torott;
-  if (total > 0) {
-    await addMovement({ site: input.site, type: "Vegyes EUR", direction: "ki", qty: total, partner: "Szétválogatás", createdBy: input.createdBy });
-  }
-  if (input.vilagos > 0) {
-    await addMovement({ site: input.site, type: "EUR világos", direction: "be", qty: input.vilagos, partner: "Szétválogatás", createdBy: input.createdBy });
-  }
-  if (input.szurke > 0) {
-    await addMovement({ site: input.site, type: "EUR szürke", direction: "be", qty: input.szurke, partner: "Szétválogatás", createdBy: input.createdBy });
-  }
-  // A "Legutóbbi mozgások" görgetett esemény-feed egyelőre csak Nyíregyházán van —
-  // a többi telepen a nyers mozgás-lista (getMovements) már mutatja ugyanezt.
-  if (input.site === "Nyíregyháza") {
-    await query(
-      `insert into keszlet_events (site_id, kind, details, effect, created_by)
-       values ((select id from sites where name = 'Nyíregyháza'), 'szet', $1, $2, $3)`,
-      [
-        "Vegyes EUR → világos/szürke/törött",
-        `vegyes −${total} · világos +${input.vilagos} · szürke +${input.szurke} · törött +${torott}`,
-        input.createdBy ?? null,
-      ]
-    );
-  }
+  if (total === 0) return;
+  await withTransaction(async (q) => {
+    await addMovement(q, { site: input.site, type: "Vegyes EUR", direction: "ki", qty: total, partner: "Szétválogatás", createdBy: input.createdBy });
+    if (input.vilagos > 0) {
+      await addMovement(q, { site: input.site, type: "EUR világos", direction: "be", qty: input.vilagos, partner: "Szétválogatás", createdBy: input.createdBy });
+    }
+    if (input.szurke > 0) {
+      await addMovement(q, { site: input.site, type: "EUR szürke", direction: "be", qty: input.szurke, partner: "Szétválogatás", createdBy: input.createdBy });
+    }
+    // A "Legutóbbi mozgások" görgetett esemény-feed egyelőre csak Nyíregyházán van —
+    // a többi telepen a nyers mozgás-lista (getMovements) már mutatja ugyanezt.
+    if (input.site === "Nyíregyháza") {
+      await q(
+        `insert into keszlet_events (site_id, kind, details, effect, created_by)
+         values ((select id from sites where name = 'Nyíregyháza'), 'szet', $1, $2, $3)`,
+        [
+          "Vegyes EUR → világos/szürke/törött",
+          `vegyes −${total} · világos +${input.vilagos} · szürke +${input.szurke} · törött +${torott}`,
+          input.createdBy ?? null,
+        ]
+      );
+    }
+  });
 }
 
 // --- Leltár ---
 
+// A "nyilvántartott" mennyiséget NEM a kliens küldi: az a párbeszéd
+// megnyitásakori állapot lenne, és ha közben más rögzített egy mozgást, a
+// korrekció pont annyival lenne hibás. A megszámolt darabszám a valóság, a
+// különbséget ezért a szerver számolja a friss készletből, a korrekciós
+// mozgással egy tranzakcióban. A visszatérési érték az, amit ténylegesen
+// rögzítettünk — a kliens ezt írja ki.
 export async function recordInventoryCount(input: {
   site: string;
   type: string;
-  expectedQty: number;
   countedQty: number;
   accepted: boolean;
   comment?: string;
   createdBy?: string;
-}) {
+}): Promise<{ expectedQty: number; countedQty: number; diff: number }> {
   const jog = await requireAnyEditPermission(["keszlet", "keszlet_sajat"]);
   ellenorizdSajatKeszletHatokor(jog, input.site);
-  await query(
-    `insert into inventory_counts (site_id, type_id, expected_qty, counted_qty, accepted, comment, created_by)
-     values ((select id from sites where name = $1), (select id from pallet_types where name = $2), $3, $4, $5, $6, $7)`,
-    [input.site, input.type, input.expectedQty, input.countedQty, input.accepted, input.comment ?? null, input.createdBy ?? null]
-  );
-  if (input.accepted) {
-    const diff = input.countedQty - input.expectedQty;
-    if (diff !== 0) {
-      await addMovement({
+  ellenorizdTelephely(input.site);
+  ellenorizdDarabszam(input.countedQty, input.type, true);
+  return withTransaction(async (q) => {
+    const stockRows = await q<{ qty: string }>(
+      `select coalesce(sum(case
+         when direction in ('be','mozgatas_be') then qty
+         else -qty
+       end), 0) as qty
+       from keszlet_movements
+       where site_id = (select id from sites where name = $1)
+         and type_id = (select id from pallet_types where name = $2)`,
+      [input.site, input.type]
+    );
+    const expectedQty = Number(stockRows[0]?.qty ?? 0);
+    const diff = input.countedQty - expectedQty;
+    await q(
+      `insert into inventory_counts (site_id, type_id, expected_qty, counted_qty, accepted, comment, created_by)
+       values ((select id from sites where name = $1), (select id from pallet_types where name = $2), $3, $4, $5, $6, $7)`,
+      [input.site, input.type, expectedQty, input.countedQty, input.accepted, input.comment ?? null, input.createdBy ?? null]
+    );
+    if (input.accepted && diff !== 0) {
+      await addMovement(q, {
         site: input.site,
         type: input.type,
         direction: diff > 0 ? "be" : "ki",
@@ -871,7 +1071,8 @@ export async function recordInventoryCount(input: {
         createdBy: input.createdBy,
       });
     }
-  }
+    return { expectedQty, countedQty: input.countedQty, diff };
+  });
 }
 
 // --- Admin: típusok és árak ---

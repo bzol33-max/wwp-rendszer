@@ -101,8 +101,8 @@ export function MovementForm({
         return;
       }
       if (!s.qty) continue; // üresen hagyott sor kihagyva, ha van másik kitöltött
-      if (!n || n <= 0) {
-        toast.error(`Érvénytelen darabszám ehhez: ${s.type || "típus"}.`);
+      if (!Number.isInteger(n) || n <= 0) {
+        toast.error(`Érvénytelen darabszám ehhez: ${s.type || "típus"}. Csak egész szám adható meg.`);
         return;
       }
       if (!s.type) {

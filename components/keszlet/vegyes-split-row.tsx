@@ -24,6 +24,9 @@ export function VegyesSplitRow({
 
   const total = (Number(vilagos) || 0) + (Number(szurke) || 0);
   const over = total > qty;
+  const nemEgesz = [vilagos, szurke].some(
+    (v) => v !== "" && !Number.isInteger(Number(v))
+  );
 
   function close() {
     setOpen(false);
@@ -32,7 +35,7 @@ export function VegyesSplitRow({
   }
 
   async function handleSubmit() {
-    if (total <= 0 || over) return;
+    if (total <= 0 || over || nemEgesz) return;
     setSubmitting(true);
     try {
       await onSubmit(Number(vilagos) || 0, Number(szurke) || 0);
@@ -83,11 +86,14 @@ export function VegyesSplitRow({
               A megadott összeg ({total}) meghaladja az elérhető Vegyes EUR mennyiséget.
             </p>
           )}
+          {nemEgesz && (
+            <p className="text-xs text-destructive">Csak egész szám adható meg.</p>
+          )}
           <div className="flex justify-end gap-2">
             <Button size="sm" variant="ghost" disabled={submitting} onClick={close}>
               Mégse
             </Button>
-            <Button size="sm" disabled={total <= 0 || over || submitting} onClick={handleSubmit}>
+            <Button size="sm" disabled={total <= 0 || over || nemEgesz || submitting} onClick={handleSubmit}>
               {submitting ? "Mentés…" : "Szétválogatás"}
             </Button>
           </div>

@@ -5,7 +5,7 @@ import { LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { logout } from "@/lib/auth/actions";
-import { addPurchase, type PriceRow } from "@/lib/keszlet/actions";
+import { addPurchases, type PriceRow } from "@/lib/keszlet/actions";
 import { getCurrentUser } from "@/lib/current-user";
 import { MOBIL_THEME } from "@/lib/mobil-theme";
 import { PullToRefresh } from "@/components/mobil/pull-to-refresh";
@@ -37,17 +37,24 @@ export function FelvasarlasMobilView({ prices }: { prices: PriceRow[] }) {
       toast.error("Adj meg legalább egy típust darabszámmal.");
       return;
     }
+    const hibas = entries.find(([, v]) => !Number.isInteger(Number(v)));
+    if (hibas) {
+      toast.error(`Érvénytelen darabszám ehhez: ${hibas[0]}. Csak egész szám adható meg.`);
+      return;
+    }
     startSubmit(async () => {
       try {
-        for (const [type, v] of entries) {
-          await addPurchase({
+        // Egy hívás, egy tranzakció: félúton elbukó mentés után az
+        // újrapróbálás nem duplázza a már rögzített típusokat.
+        await addPurchases({
+          items: entries.map(([type, v]) => ({
             type,
             qty: Number(v),
             unitPrice: priceMap[type] ?? 0,
-            method: "keszpenz",
-            createdBy: getCurrentUser() || undefined,
-          });
-        }
+          })),
+          method: "keszpenz",
+          createdBy: getCurrentUser() || undefined,
+        });
         setQty({});
         toast.success("Vétel rögzítve a mai napra.");
       } catch {
