@@ -410,12 +410,13 @@ function becsultMenetidoMs(lat1: number, lon1: number, lat2: number, lon2: numbe
  * `elozmeny`: a kocsi korábbi élő megfigyelései, időrendben (lehet üres).
  */
 export function kiegesziteloAllapottal(
-  szakaszok: IdovonalSzakasz[],
+  lezartSzakaszok: IdovonalSzakasz[],
   elo: EloPozicio | null,
   most: Date,
   tervezettCimek: TervezettCim[] = [],
   elozmeny: EloMegfigyeles[] = []
 ): IdovonalSzakasz[] {
+  let szakaszok = lezartSzakaszok;
   if (!elo || szakaszok.length === 0) return szakaszok;
 
   const utolso = szakaszok[szakaszok.length - 1];
@@ -494,7 +495,16 @@ export function kiegesziteloAllapottal(
     // Az utolsó lezárt szakasz vezetés volt: P-n bizonyítottan állt a kocsi
     // (a trip lezárult), csak az állás hossza hiányzik — pótoljuk.
     const pAllas = utolso.tipus === "vezetes" && jelFriss && pElhagyasa.getTime() - utolsoVeg.getTime() >= ELO_ALLAS_MIN_PERC * 60000 ? allas(utolsoVeg, pElhagyasa, utolsoHely) : null;
-    const vezetesKezdet = pAllas ? pElhagyasa : utolsoVeg;
+    // Az utolsó lezárt szakasz állás volt, de a kocsit UTÁNA is P-n állva
+    // láttuk (a telepen belüli átállás tripje még nyitott, az azt követő
+    // állás hiányzik): az állást a megfigyelt elhagyásig hosszabbítjuk —
+    // Gergő 15:15-kor indult Gyöngyöshalászról, a lezárt állás 13:40-ig tartott.
+    const lezartAllasHosszabbitva =
+      utolso.tipus === "allas" && jelFriss && utoljaraPn && pElhagyasa.getTime() > utolsoVeg.getTime()
+        ? [...szakaszok.slice(0, -1), { ...utolso, veg: pElhagyasa, idotartamSec: (pElhagyasa.getTime() - utolso.kezdet.getTime()) / 1000, elo: true }]
+        : null;
+    if (lezartAllasHosszabbitva) szakaszok = lezartAllasHosszabbitva;
+    const vezetesKezdet = pAllas || lezartAllasHosszabbitva ? pElhagyasa : utolsoVeg;
 
     if (!elo.mozog && jelFriss) {
       // Q-ra érkezés: megfigyelésből (mióta látjuk ott), különben a P

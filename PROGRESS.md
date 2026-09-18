@@ -574,3 +574,8 @@
   hely (Q) állása a Q-n való első megfigyeléstől számít, megfigyelés nélkül
   csak akkor, ha P-nél az elhagyás ismert (utolsó lezárt szakasz állás).
   Teszt: `scripts/teszt-erintes.mts` 3f (előzmény nélkül és előzménnyel).
+- Kiegészítés 6: Gergő 15:15 körül indult el Gyöngyöshalászról, a
+  távozás mégis 13:40 volt (az utolsó lezárt állás vége; a telepen belüli
+  átállás tripje még nyitott). Ha a kocsit a lezárt állás után is a
+  helyszínen állva láttuk (élő előzmény), az állás a megfigyelt
+  elhagyásig hosszabbodik. Teszt: 3g.
