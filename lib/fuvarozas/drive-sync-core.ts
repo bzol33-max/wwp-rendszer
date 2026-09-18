@@ -33,7 +33,7 @@ import {
   setFuvarFizetesiHatarido,
   setFuvarPostazasiCim,
 } from "@/lib/fuvarozas/megbizasok";
-import { sajatCegunkE, type FuvardijPenznem } from "@/lib/fuvarozas/fuvar-constants";
+import { normalizaltCegKulcs, sajatCegunkE, type FuvardijPenznem } from "@/lib/fuvarozas/fuvar-constants";
 import { findJarmuInSzoveg, jarmuLabel } from "@/lib/fuvarozas/vehicles";
 import {
   mentDuvenbeckDokumentumot,
@@ -75,6 +75,8 @@ export type DriveSyncEredmeny = {
   levaltottRegiSorok: number;
   /** Iratok, amikből SZÁNDÉKOSAN nem lett sor, mert hiányos volt — lásd fuvar_import_naplo. */
   elutasitottIratok: number;
+  /** Korábban beolvasott sorok, amelyek megrendelőjét a partner-sablon utólag helyesbítette — lásd megrendelokHelyesbitese. */
+  helyesbitettMegrendelok: number;
   /** Emberi döntést igénylő esetek (pl. már kiszámlázott régi sor) — nem hiba. */
   figyelmeztetesek: string[];
   hibak: string[];
@@ -284,7 +286,10 @@ HÁROM DOLOG, AMIT EZEK A SABLONOK RENDRE ELRONTANAK — figyelj rájuk:
    csúsznak. A "Well Worn Pallett Kft" / "WELL-WORN PALLET KFT" MINDIG a
    megbízott (mi vagyunk a fuvarozó) — SOHA nem ő a megrendelő. Ha ezt a
    nevet látod, a MÁSIK cég a megrendelő. A felrakó és a lerakó cég sem
-   megrendelő: ők a rakodás helyszínei.
+   megrendelő: ők a rakodás helyszínei — a "Felrakóhely: … (Valami Kft.)"
+   zárójeles cége a rakodóhely üzemeltetője, NEM a megbízó. A megbízó az a
+   cég, amelyik az iratot kiadta: a fejlécben/levélpapíron álló név, az
+   e-mail-cím domainje, az "Ügyintéző" munkáltatója.
 
 3. A FUVARDÍJ NEM KÖTBÉR. A dokumentumokban sok más pénzösszeg is szerepel:
    kötbér, meghiúsulási kötbér, állásdíj (pl. 210 EUR/nap), késedelmi díj
@@ -554,7 +559,7 @@ async function ujFajlokFeldolgozasa(
       // a nyers érték "Cannot read properties of undefined (reading 'min')"
       // hibával buktatta el a fájlt minden szinkronban (02215-2026.pdf, 2026-09-17).
       kivont.fuvardijPenznem = normalizaltFuvardijPenznem(kivont.fuvardijPenznem) ?? null;
-      const { verdikt, kifogasok } = ellenorizKivontFuvart(kivont, !!partner);
+      const { verdikt, kifogasok } = ellenorizKivontFuvart(kivont, !!partner, new Date(), !!partner?.nincsHivatkozas);
       if (verdikt === "elutasitva") {
         // Inkább ne legyen sor, mint rossz sor: egy hiányos irat csendben
         // felvitt fuvarja eddig számlázásig eljutott.
@@ -579,6 +584,9 @@ async function ujFajlokFeldolgozasa(
         fizetesiHataridoNap: kivont.fizetesiHataridoNap ?? undefined,
         postazasiCim: kivont.postazasiCim || undefined,
         pozicioszam: kivont.pozicioszam || undefined,
+        // A tudottan hivatkozás nélküli partnernél (pl. Hajdúspedíció) a
+        // "nincs ilyen" jelölés eleve be van pipálva, nem kell kézzel.
+        pozicioszamNincs: !kivont.pozicioszam && !!partner?.nincsHivatkozas,
         megjegyzes: kivont.megjegyzes || undefined,
         lerakasDatum: kivont.lerakasDatum || undefined,
         dokumentumUrl: url,
@@ -716,6 +724,79 @@ async function hianyokPotlasa(drive: ReturnType<typeof driveClient>, hibak: stri
 }
 
 /**
+ * A MÁR BEOLVASOTT sorok megrendelőjének helyesbítése a partner-sablonból.
+ *
+ * Miért kell: amíg egy megbízó nem szerepel a partnerek.ts listában, a
+ * megrendelőt a nyelvi modell tippeli — és rendre a rakodóhely cégét írja
+ * be (Ghibli N26/22795 és N26/22824: "Apollo Tyres (Hungary) Kft",
+ * 2026-09-17). Amikor a partner utólag bekerül a listába, az ÚJ iratai már
+ * jók lesznek, de a korábbi sorok rossz megrendelővel maradnának — és a
+ * számla a rossz félnek szólna. A napló őrzi minden irat nyers szövegét,
+ * abból az ujjlenyomat most is felismerhető: a sor megrendelője a partner
+ * hivatalos neve lesz, a hiányzó fizetési határidő / postázási cím /
+ * "nincs hivatkozás" jelölés a partner tartalékából pótlódik.
+ *
+ * Csak DB-munka (nincs Drive-letöltés, nincs nyelvi modell), és soronként
+ * legfeljebb egyszer fut: a napló partner_kod mezője jelzi, melyik sablon
+ * szerint helyesbítettük már — a partnerlista változásáig nem nyúl hozzá
+ * újra, tehát egy kézi javítást sem ír felül óránként. A már kiszámlázott
+ * sorokhoz nem nyúl: ott a kiállított számla a tény, ember döntsön.
+ */
+async function megrendelokHelyesbitese(hibak: string[], figyelmeztetesek: string[]): Promise<number> {
+  const sorok = await query<{
+    id: string;
+    megrendelo: string | null;
+    pozicioszam: string | null;
+    partner_kod: string | null;
+    drive_file_id: string;
+    fajlnev: string | null;
+    nyers_szoveg: string;
+  }>(
+    `select f.id::text, f.megrendelo, f.pozicioszam,
+            n.partner_kod, n.drive_file_id, n.fajlnev, n.nyers_szoveg
+       from fuvar_megbizasok f
+       join fuvar_import_naplo n on n.fuvar_id = f.id
+      where f.forras = 'pdf_import'
+        and f.statusz <> 'torolt'
+        and coalesce(f.szamla_szam, '') = ''
+        and n.nyers_szoveg is not null
+        and n.olvaso is distinct from 'duvenbeck'
+      order by f.id`
+  );
+  let helyesbitett = 0;
+  for (const sor of sorok) {
+    try {
+      const partner = felismerPartner(normalizaltSzoveg(sor.nyers_szoveg));
+      if (!partner || partner.kod === sor.partner_kod) continue;
+      const regi = sor.megrendelo ?? "";
+      const nevValtozik = normalizaltCegKulcs(regi) !== normalizaltCegKulcs(partner.nev);
+      await query(
+        `update fuvar_megbizasok
+            set megrendelo = $2,
+                fizetesi_hatarido_nap = coalesce(fizetesi_hatarido_nap, $3),
+                postazasi_cim = case when coalesce(trim(postazasi_cim), '') = '' then $4 else postazasi_cim end,
+                pozicioszam_nincs = pozicioszam_nincs or (pozicioszam is null and $5)
+          where id = $1`,
+        [sor.id, partner.nev, partner.fizetesiHataridoNap ?? null, partner.postazasiCim ?? null, !!partner.nincsHivatkozas]
+      );
+      await query(`update fuvar_import_naplo set partner_kod = $2, frissitve_at = now() where drive_file_id = $1`, [
+        sor.drive_file_id,
+        partner.kod,
+      ]);
+      if (nevValtozik) {
+        helyesbitett++;
+        figyelmeztetesek.push(
+          `${sor.fajlnev ?? sor.drive_file_id}: a megrendelő „${regi || "—"}" helyett „${partner.nev}" (a partner-sablon szerint) — nézd át a sort.`
+        );
+      }
+    } catch (err) {
+      hibak.push(`megrendelő-helyesbítés (${sor.id}): ${err instanceof Error ? err.message : "ismeretlen hiba"}`);
+    }
+  }
+  return helyesbitett;
+}
+
+/**
  * A teljes Drive-import lefutása: új fájlok felvitele + korábbi hiányos
  * sorok pótlása. Ugyanazt a két lépést végzi, mint eddig a Claude-routine +
  * a /api/fuvarozas/drive-import + drive-hianyok/drive-frissites páros —
@@ -729,13 +810,17 @@ export async function vegrehajtDriveSync(): Promise<DriveSyncEredmeny> {
     ujFajlokFeldolgozasa(drive, hibak),
     hianyokPotlasa(drive, hibak),
   ]);
+  // Az új iratok után, hogy a most felvett sorok naplója már megvan.
+  const figyelmeztetesek = [...uj.figyelmeztetesek];
+  const helyesbitettMegrendelok = await megrendelokHelyesbitese(hibak, figyelmeztetesek);
   return {
     ujFuvarok: uj.ujFuvarok,
     vizsgaltFajlok: uj.vizsgaltFajlok,
     osszefuzottDokumentumok: uj.osszefuzottDokumentumok,
     levaltottRegiSorok: uj.levaltottRegiSorok,
     elutasitottIratok: uj.elutasitottIratok,
-    figyelmeztetesek: uj.figyelmeztetesek,
+    helyesbitettMegrendelok,
+    figyelmeztetesek,
     potoltSorok,
     hibak,
   };

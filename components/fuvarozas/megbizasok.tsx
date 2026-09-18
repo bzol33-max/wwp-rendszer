@@ -1674,7 +1674,8 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
         eredmeny.potoltSorok === 0 &&
         eredmeny.osszefuzottDokumentumok === 0 &&
         eredmeny.levaltottRegiSorok === 0 &&
-        eredmeny.elutasitottIratok === 0
+        eredmeny.elutasitottIratok === 0 &&
+        eredmeny.helyesbitettMegrendelok === 0
       ) {
         toast.success("Nincs új fuvarmegbízás a Drive-ban.");
       } else {
@@ -1693,6 +1694,11 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
         // úgy látszana, mintha nem történt volna semmi.
         if (eredmeny.elutasitottIratok > 0) {
           reszek.push(`${eredmeny.elutasitottIratok} irat kihagyva (hiányos)`);
+        }
+        // Egy újonnan felvett partner-sablon a korábban rosszul olvasott
+        // megrendelőket is helyesbíti (pl. Ghibli helyett a felrakó cég állt).
+        if (eredmeny.helyesbitettMegrendelok > 0) {
+          reszek.push(`${eredmeny.helyesbitettMegrendelok} megrendelő helyesbítve`);
         }
         reszek.push(`${eredmeny.potoltSorok} sor pótolva`);
         toast.success(`${reszek.join(", ")}.`);

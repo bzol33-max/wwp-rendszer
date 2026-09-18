@@ -266,13 +266,82 @@ egyenlo(
 // ---------------------------------------------------------------------------
 const kocsi = (szoveg: string | null) => findJarmuInSzoveg(szoveg)?.sofor ?? null;
 const spediNyers = minta("speditrans-megbizas.txt");
-egyenlo(felismerPartner(normalizaltSzoveg(spediNyers))?.kod, "bb-logistic", "BB-Logistic felismerése a SpediTrans lábjegyzetből");
-egyenlo(felismerPartner("Cégnév ... SpediTrans for Windows v2.11.741")?.kod, "bb-logistic", "BB-Logistic felismerése a szoftver nevéből");
+egyenlo(felismerPartner(normalizaltSzoveg(spediNyers))?.kod, "bb-logistic", "BB-Logistic felismerése a cégnévből");
+// A szoftver neve NEM ujjlenyomat: a SpediTranst az Alpok-Trans is használja.
+egyenlo(felismerPartner("Cégnév ... SpediTrans for Windows v2.11.741"), null, "a szoftver nevéből önmagában nincs partner");
+egyenlo(
+  felismerPartner("Megbízó Vállalkozó Alpok-Trans Kft HU-9730, Kőszeg … SpediTrans for Windows v2.11.777")?.kod,
+  "alpok-trans",
+  "Alpok-Trans felismerése ugyanabból a SpediTrans-sablonból"
+);
+egyenlo(
+  felismerPartner("Megbízó: BB-Logistic Solution kft … Vállalkozó: Alpok-Trans Kft"),
+  null,
+  "döntetlen (két partner ugyanannyi ujjlenyomattal) esetén nem tippelünk"
+);
+
+// ---------------------------------------------------------------------------
+// A többi visszatérő megbízó — a Drive-mappa 2026-09-18-i átvizsgálása
+// szerint minden kibocsátónak van sablonja. A minták az iratok egysoros,
+// cégre jellemző darabjai (fejléc, e-mail-domain).
+// ---------------------------------------------------------------------------
+egyenlo(
+  felismerPartner("Ghibli Szállítmányozási Kft. H-1211 Budapest, Petróleum u. 2. E-mail: info@ghibli.hu")?.kod,
+  "ghibli",
+  "Ghibli felismerése a fejlécből"
+);
+egyenlo(felismerPartner("NK_FUVMEGREND")?.kod, "ghibli", "Ghibli felismerése a nyomtatvány kódjából");
+egyenlo(
+  felismerPartner("HAJDÚSPEDÍCIÓ Fuvarozó és Szolgáltató Kft. 3360 Heves, Táncsics M. út 4. sz.")?.kod,
+  "hajduspedicio",
+  "Hajdúspedíció felismerése"
+);
+allit(partnerKodSzerint("hajduspedicio")?.nincsHivatkozas === true, "a Hajdúspedíció megbízásán tudottan nincs pozíciószám");
+egyenlo(felismerPartner("E-mail: iroda@hrtsped.hu Pénzügy: penzugy@hrtsped.hu")?.kod, "hrt-spedition", "HRT Spedition felismerése a domainből");
+egyenlo(felismerPartner("SG Transport Kft HU-4033 Debrecen, Skalnitzky A. u. 7")?.kod, "sg-transport", "SG Transport felismerése");
+egyenlo(felismerPartner("FUVAROZÁSI MEGBÍZÁS PRO LINE SPEED KFT H-4030 DEBRECEN")?.kod, "pro-line-speed", "Pro Line Speed felismerése");
+egyenlo(felismerPartner("K + K Spedit Kft. 4400 Nyíregyháza Búza tér 10.")?.kod, "kk-spedit", "K+K Spedit felismerése");
+egyenlo(felismerPartner("MEGBÍZÁS WELL PACK HUNGARIA KFT PN:2667/30")?.kod, "well-pack", "Well Pack felismerése");
+egyenlo(
+  ellenorizKivontFuvart({ ...alap, megrendelo: "Well Pack Hungária Kft." }, true, MOST).kifogasok.some((k) => k.includes("saját")),
+  false,
+  "a Well Pack NEM a saját cégünk (Well-Worn Pallet) — nem törlődik ki"
+);
+egyenlo(felismerPartner("VOXOV Logistics Kft. Szerződéses feltételek")?.kod, "voxov", "VOXOV felismerése");
+
+// A megrendelőnek olvasott cég a rakodóhely cége (Ghibli-eset: Apollo Tyres).
+allit(
+  ellenorizKivontFuvart(
+    {
+      ...alap,
+      megrendelo: "Apollo Tyres (Hungary) Kft",
+      felrako: "Magyarország, 3212 Gyöngyöshalász, Apollo Road 106 (Apollo Tyres (Hungary) Kft.)",
+    },
+    false,
+    MOST
+  ).kifogasok.some((k) => k.includes("felrakó-/lerakóhely cége")),
+  "a felrakóhely cége megrendelőként kifogást ad"
+);
+allit(
+  !ellenorizKivontFuvart({ ...alap }, false, MOST).kifogasok.some((k) => k.includes("felrakó-/lerakóhely cége")),
+  "egy valódi megrendelő nem kap rakodóhely-kifogást"
+);
+// Hivatkozás nélküli partner: a hiányzó pozíciószám nem kifogás.
+egyenlo(
+  ellenorizKivontFuvart({ ...alap, pozicioszam: null }, true, MOST, true).verdikt,
+  "biztos",
+  "hivatkozás nélküli partnernél a hiányzó pozíciószám nem kifogás"
+);
 // A pdfjs szövegelemei koordinátával: a BAL hasáb ("Felrakás helye:" alatt)
 // a felrakó — a pdf-parse szövegében a jobb hasáb blokkja áll előbb, ezért
 // a szövegsorrend fordítva adná (élesben így is történt).
 const spediElemek = JSON.parse(minta("speditrans-megbizas.json")).map((e: Omit<SzovegElem, "oldal">) => ({ oldal: 1, ...e })) as SzovegElem[];
 const spedi = kivonSpediTransMezoket(spediNyers, spediElemek);
+egyenlo(
+  partnerKodSzerint("alpok-trans")?.kivon?.(spediNyers, spediElemek).fuvardij,
+  spedi.fuvardij,
+  "az Alpok-Trans is a SpediTrans-olvasót kapja"
+);
 egyenlo(spedi.felrako, "Példa Raklap Kft., 4254 Nyíradony, Kossuth utca 17.", "SpediTrans: a BAL hasáb (Felrakás helye alatt) a felrakó");
 egyenlo(spedi.lerako, "Minta Csomagolás Kft., 3390 Füzesabony, Fő utca 1", "SpediTrans: a JOBB hasáb (Lerakás helye alatt) a lerakó");
 const csakSzoveg = kivonSpediTransMezoket(spediNyers, null);

@@ -382,3 +382,41 @@
   `felszabaditFuvarDokumentumot` szerver-akció (törlés + irat elengedése +
   napló/csatolmány hivatkozás oldása), utána azonnal `frissitsDriveBol()`.
   A sima Törlés viselkedése változatlan (nem hoz vissza semmit).
+
+## 2026-09-18 (24. kör) — Minden Drive-megbízó partner-sablont kap; a megrendelő utólagos helyesbítése
+
+- Hiba: a Ghibli (N26/22795, N26/22824) megbízásain a megrendelő "Apollo
+  Tyres (Hungary) Kft" lett — a nyelvi modell a "Felrakóhely: … (Apollo
+  Tyres…)" zárójeles cégét vette megbízónak, mert a Ghibli nem volt ismert
+  partner. A Drive-mappa 60 iratának átvizsgálása szerint 15 kibocsátóból
+  9-nek nem volt sablonja; ráadásul a SpediTrans-szoftver ujjlenyomata
+  (`speditrans.hu`, "SpediTrans for Windows") az Alpok-Trans iratát is
+  BB-Logisticnek vette volna.
+- `lib/fuvarozas/import/partnerek.ts`: új partnerek — Ghibli
+  Szállítmányozási Kft. (45 nap, "Pozíciószámunk"), Hajdúspedíció Kft. (30
+  nap, nincs hivatkozás), HRT Spedition Kft. (45), Alpok-Trans Kft. (30,
+  SpediTrans-olvasó), SG Transport Kft. (45), Pro Line Speed Kft. (30, nincs
+  hivatkozás), K+K Spedit Kft. (45), Well Pack Hungária Kft. (60), VOXOV
+  Logistics Kft. (60) — postázási címmel, ahol az irat megadja. A
+  BB-Logistic ujjlenyomata csak a cégnév. Szabály: SZOFTVERNÉV NEM
+  UJJLENYOMAT. `felismerPartner` döntetlennél null-t ad (nem tippel). Új
+  `Partner.nincsHivatkozas`: az import bepipálja a "nincs ilyen" jelölést,
+  és a hiányzó pozíciószám nem kifogás (`ellenorzes.ts` 4. paraméter).
+- `ellenorzes.ts`: kifogás, ha a tippelt megrendelő a felrakó-/lerakóhely
+  szövegében szereplő cég. A nyelvi modell utasítása is kimondja: a
+  rakodóhely zárójeles cége nem megbízó, a megbízó a fejléc kibocsátója.
+- `drive-sync-core.ts` `megrendelokHelyesbitese`: minden szinkron végén a
+  napló nyers szövegéből újra felismeri a partnert a már beolvasott,
+  számlátlan, nem törölt sorokra; ha a napló `partner_kod`-ja nem ez,
+  a megrendelőt a partner hivatalos nevére írja, pótolja a hiányzó fizetési
+  határidőt/postázási címet/"nincs hivatkozás" jelölést, és a naplóba írja a
+  partnerkódot (soronként egyszer fut, kézi javítást nem ír felül óránként).
+  Névváltozásnál figyelmeztetés a Frissítés gomb visszajelzésében
+  (`helyesbitettMegrendelok`). Így a két Ghibli-sor is Ghiblire vált a
+  következő szinkronnál, kézi átírás nélkül.
+- Tesztek: `scripts/teszt-import.mts` (92 állítás) — az új partnerek
+  felismerése, döntetlen → null, Well Pack ≠ saját cég, rakodóhely-cég
+  kifogás, hivatkozás nélküli partner.
+- Nyitott kérdés a felhasználónak: HRT és K+K a 45 napot BANKI napokban
+  számolja (a rendszer naptári napot tárol); a már kiszámlázott sorok
+  megrendelőjéhez a helyesbítés szándékosan nem nyúl.
