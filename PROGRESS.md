@@ -309,3 +309,21 @@
   pl. RBT "AODU427"), rendszám nélkül a sofőr teljes/keresztneve. Két saját
   kocsi egy szövegben → nem tippel. Az import (`drive-sync-core.ts`
   `resolveJarmuMezo`) ezt használja. Regressziós teszt: `scripts/teszt-import.mts`.
+
+## 2026-09-18 (20. kör) — GPS lap: időpont nélküli többnapos fuvar a nap végére
+
+- Hiba: Micó az aznapi Ebes→Balkány fuvart csinálta, a GPS lap mégis a
+  Hajdúspedíció Nyírjákó→Mosonmagyaróvár (péntek fel, hétfő le) fuvart
+  jelölte "Folyamatban". Ok: időpont nélkül mindkét fuvar reggel 7-es
+  alapértelmezett kezdést kapott, és a többnapos fuvar (kisebb becsült
+  érkezés / sorrend) a lista elejére került — a "következő pont" az ő
+  felrakója lett.
+- Javítás: `lib/fuvarozas/actions.ts` `napVegereSorolt` — egy időpont
+  nélküli, többnapos fuvar a felrakás napján a lista végére kerül (a
+  rakomány a kocsin marad, előbb az aznap le is rakott fuvarok jönnek), a
+  láncolt élő becslésben és a blokkok sorrendjében is. Nem él, ha van
+  időpont, ha a kocsi már járt a fuvar egy pontján, vagy ha csúszó fuvar.
+  Új mező: `TervezettFuvarSzakasz.tobbNapos`.
+- Megfigyelés (nem kód): BB-Logistic 02215-2026 (hétfő, Füzesabony→
+  Nyíradony) a SpediTrans kéthasábos fel-/lerakó táblája miatt fordítva
+  jött be (Fel Nyíradony, Le Füzesabony) — a Megbízásokon kézzel cserélendő.
