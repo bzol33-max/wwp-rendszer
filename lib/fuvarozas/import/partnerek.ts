@@ -22,9 +22,14 @@
 //     -> lib/fuvarozas/vehicles.ts `irasvaltozatok`.
 //
 // AZ UJJLENYOMATOKRÓL — EZT A SZABÁLYT NE SZEGD MEG:
-// Ide KIZÁRÓLAG egysoros, szövegdarab-szintű minta kerülhet (cégnév,
-// e-mail-domain, szoftver neve). Ezek mindegy, milyen PDF-kiolvasóval
-// nézzük, egyformán megvannak. TÖBBSOROS vagy POZÍCIÓFÜGGŐ mintát
+// Ide KIZÁRÓLAG egysoros, szövegdarab-szintű, A CÉGRE JELLEMZŐ minta
+// kerülhet (cégnév, e-mail-domain). Ezek mindegy, milyen PDF-kiolvasóval
+// nézzük, egyformán megvannak. A MEGBÍZÁS-KÉSZÍTŐ SZOFTVER NEVE NEM
+// UJJLENYOMAT: ugyanazt a programot több megbízó is használja (SpediTrans:
+// BB-Logistic ÉS Alpok-Trans; InnoManagement, FuvarSys, SELEXPED…), és a
+// szoftvernév alapján az egyik partner iratát a másik nevére vettük volna
+// fel (2026-09-18). A szoftver a `kivon` olvasót választhatja, a partnert
+// csak a cégnév/domain azonosítja. TÖBBSOROS vagy POZÍCIÓFÜGGŐ mintát
 // (pl. "a város a cím alatti második sorban") ide írni TILOS: az a
 // kiolvasó elrendezésétől függ, és pontosan ezen bukott meg egy korábbi
 // nekifutás — a minták a Drive saját szöveg-megjelenítéséhez készültek,
@@ -58,6 +63,12 @@ export type Partner = {
   fizetesiHataridoNap?: number;
   /** Hogyan hívja a partner a saját hivatkozási számát (ember számára). */
   hivatkozasNeve?: string;
+  /**
+   * A partner megbízásán NINCS hivatkozási/pozíciószám (pl. Hajdúspedíció:
+   * kézzel írt Word-irat). Az ilyen sor a "nincs ilyen" jelölést kapja
+   * (pozicioszam_nincs), és a hiányzó szám nem kifogás.
+   */
+  nincsHivatkozas?: boolean;
   /**
    * A partner sablonjából determinisztikusan kiolvasható mezők a pdf-parse
    * NYERS szövegéből és (PDF-nél) a pdfjs koordinátás szövegelemeiből
@@ -135,7 +146,8 @@ export const PARTNEREK: readonly Partner[] = [
   {
     kod: "bb-logistic",
     nev: "BB-Logistic Solution Kft.",
-    ujjlenyomat: [/BB-Logistic/i, /speditrans\.hu/i, /SpediTrans for Windows/i],
+    // Csak a cégnév: a SpediTrans szoftvert az Alpok-Trans is használja.
+    ujjlenyomat: [/BB-Logistic/i],
     // Egyoldalas irat, a fuvardíj és a postacím a szerződéses mondatok
     // UTÁN áll a kiolvasásban — nincs mit levágni.
     torzsVege: [],
@@ -145,25 +157,131 @@ export const PARTNEREK: readonly Partner[] = [
     // pozíciószámot, a fuvardíjat és a rendszámokat reguláris kifejezés adja.
     kivon: kivonSpediTransMezoket,
   },
+  {
+    kod: "alpok-trans",
+    nev: "Alpok-Trans Kft.",
+    // Ugyanaz a SpediTrans-sablon, mint a BB-Logisticé (MGB/26/001754,
+    // 2026-08-18) — a koordinátás olvasó itt is érvényes.
+    ujjlenyomat: [/Alpok-?Trans\s+Kft/i, /alpoktrans/i],
+    torzsVege: [],
+    postazasiCim: "9730 Kőszeg, Kelcz-Adelffy utca 13. 1/3.",
+    fizetesiHataridoNap: 30,
+    hivatkozasNeve: "Pozíciószám",
+    kivon: kivonSpediTransMezoket,
+  },
+  {
+    kod: "ghibli",
+    nev: "Ghibli Szállítmányozási Kft.",
+    // A nyelvi modell a felrakóhely zárójeles cégét (Apollo Tyres) írta
+    // megrendelőnek (N26/22795, N26/22824, 2026-09-17).
+    ujjlenyomat: [/ghibli\.hu/i, /Ghibli\s+Sz[áa]ll[íi]tm[áa]nyoz[áa]si/i, /NK_FUVMEGREND/],
+    torzsVege: [/Sz[áa]ml[áa]z[áa]s menete, fuvarokm[áa]nyok megk[üu]ld[ée]se/i],
+    // Az iratuk szerint az eredeti fuvarokmányoknak postai úton kell a
+    // Ghibli Kft.-hez érkezniük.
+    postazasiCim: "1211 Budapest, Petróleum u. 2.",
+    // "A számla beérkezését követő 45. naptári nap utáni kedd."
+    fizetesiHataridoNap: 45,
+    hivatkozasNeve: "Pozíciószámunk",
+  },
+  {
+    kod: "hajduspedicio",
+    nev: "Hajdúspedíció Kft.",
+    ujjlenyomat: [/hajduspedicio@t-online\.hu/i, /HAJD[ÚU]SPED[ÍI]CI[ÓO]/i],
+    torzsVege: [/Megb[íi]z[áa]sunk visszaigazol[áa]s n[ée]lk[üu]l is [ée]rv[ée]nyes/i],
+    postazasiCim: "3360 Heves, Táncsics M. út 4.",
+    fizetesiHataridoNap: 30,
+    // Kézzel írt Word-megbízás, pozíciószám nélkül.
+    nincsHivatkozas: true,
+  },
+  {
+    kod: "hrt-spedition",
+    nev: "HRT Spedition Kft.",
+    ujjlenyomat: [/hrtsped\.hu/i, /HRT\s+Spedition/i],
+    torzsVege: [/A HRT el[őo]zetes [íi]r[áa]sbeli enged[ée]lye n[ée]lk[üu]l/i],
+    postazasiCim: "1037 Budapest, Bécsi út 224.",
+    // "45 napon belül, átutalással" — banki napokkal, a számla kézhezvételétől.
+    fizetesiHataridoNap: 45,
+    hivatkozasNeve: "Pozíciószám",
+  },
+  {
+    kod: "sg-transport",
+    nev: "SG Transport Kft.",
+    ujjlenyomat: [/sgtransportkft@gmail\.com/i, /SG\s+Transport\s+Kft/i],
+    torzsVege: [/Egy[ée]b felt[ée]telek/],
+    // Az iratukon kifejezetten szerepel: "Postázási cím".
+    postazasiCim: "4220 Hajdúböszörmény, Kálmán Ferenc utca 18/B",
+    fizetesiHataridoNap: 45,
+    hivatkozasNeve: "SG Tr. Kft hivatkozási szám",
+  },
+  {
+    kod: "pro-line-speed",
+    nev: "Pro Line Speed Kft.",
+    ujjlenyomat: [/PRO\s*LINE\s*SPEED/i],
+    torzsVege: [/[ÁA]ltal[áa]nos szerz[őo]d[ée]si felt[ée]telek/i],
+    postazasiCim: "4030 Debrecen, Árnyas u. 10.",
+    fizetesiHataridoNap: 30,
+    // Egyoldalas, kézzel írt megbízás, hivatkozási szám nélkül.
+    nincsHivatkozas: true,
+  },
+  {
+    kod: "kk-spedit",
+    nev: "K+K Spedit Kft.",
+    ujjlenyomat: [/kkspedit\.hu/i, /K\s*\+\s*K\s+Spedit/i],
+    torzsVege: [/K[ée]rj[üu]k a sz[áa]mla mell[ée]klet[ée]k[ée]nt csatolni/i],
+    postazasiCim: "4400 Nyíregyháza, Búza tér 10.",
+    // "45 napon belül átutalással" — banki napokkal, a számla kézhezvételétől.
+    fizetesiHataridoNap: 45,
+    hivatkozasNeve: "Pozició",
+  },
+  {
+    kod: "well-pack",
+    nev: "Well Pack Hungária Kft.",
+    // FIGYELEM: nem a saját cégünk (Well-Worn Pallet) — a sajatCegunkE
+    // mintája erre nem illeszkedik, de a neve hasonló, ne keverd.
+    ujjlenyomat: [/wellpack\.hu/i, /WELL\s*PACK\s+HUNGARIA/i],
+    torzsVege: [],
+    // Az iratukon kifejezetten szerepel: "Postázási cím".
+    postazasiCim: "2051 Biatorbágy, Rozália Park 11.",
+    // "60 nap a leigazolt CMR beérkezési napjától számítva".
+    fizetesiHataridoNap: 60,
+    hivatkozasNeve: "Pozició szám",
+  },
+  {
+    kod: "voxov",
+    nev: "VOXOV Logistics Kft.",
+    ujjlenyomat: [/VOXOV\s+Logistics/i],
+    torzsVege: [/Szerz[őo]d[ée]ses felt[ée]telek/],
+    // "Kérjük az eredeti okmányokat a számlával együtt a 1601. Budapest Pf. 131-re postázni!"
+    postazasiCim: "1601 Budapest, Pf. 131.",
+    fizetesiHataridoNap: 60,
+    hivatkozasNeve: "Rendelési szám",
+  },
 ] as const;
 
 /**
  * Megkeresi, melyik ismert partner sablonjából származik a dokumentum.
  * Több illeszkedés esetén a TÖBB ujjlenyomattal illeszkedő nyer — így egy
  * futólagos névemlítés (pl. egy másik fuvarozó neve a szerződéses részben)
- * nem üti ki az irat valódi kibocsátóját.
+ * nem üti ki az irat valódi kibocsátóját. DÖNTETLENNÉL (két partner
+ * ugyanannyi ujjlenyomattal) nem tippelünk: null, és a megrendelő a nyelvi
+ * modellé marad, "nem ismert partner-sablon" kifogással — egy rossz
+ * megrendelő drágább, mint egy ellenőrizendő sor.
  */
 export function felismerPartner(szoveg: string): Partner | null {
   let legjobb: Partner | null = null;
   let legjobbPont = 0;
+  let dontetlen = false;
   for (const partner of PARTNEREK) {
     const pont = partner.ujjlenyomat.filter((minta) => minta.test(szoveg)).length;
     if (pont > legjobbPont) {
       legjobb = partner;
       legjobbPont = pont;
+      dontetlen = false;
+    } else if (pont > 0 && pont === legjobbPont) {
+      dontetlen = true;
     }
   }
-  return legjobb;
+  return dontetlen ? null : legjobb;
 }
 
 export function partnerKodSzerint(kod: string | null | undefined): Partner | null {

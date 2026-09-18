@@ -12,7 +12,7 @@
 //
 // NEM "use server" fájl — sima segédmodul, tesztből is hívható.
 
-import { sajatCegunkE } from "@/lib/fuvarozas/fuvar-constants";
+import { normalizaltCegKulcs, sajatCegunkE } from "@/lib/fuvarozas/fuvar-constants";
 
 /** Egy dokumentumból kiolvasott fuvar — a determinisztikus olvasók és a nyelvi modell KÖZÖS kimeneti alakja. */
 export type KivontFuvar = {
@@ -71,17 +71,35 @@ function napEltres(a: Date, b: Date): number {
 }
 
 /**
+ * Igaz, ha a megrendelőnek olvasott cég valójában a felrakó- vagy a
+ * lerakóhely cége: a modell a "Felrakóhely: … (Apollo Tyres (Hungary) Kft.)"
+ * zárójeles cégét írta megrendelőnek a fejléc kibocsátója (Ghibli) helyett
+ * (2026-09-17). A rakodóhely cége sosem a megbízó.
+ */
+function megrendeloRakodohelyE(kivont: KivontFuvar): boolean {
+  const kulcs = kivont.megrendelo ? normalizaltCegKulcs(kivont.megrendelo) : "";
+  if (kulcs.length < 4) return false;
+  return [kivont.felrako, kivont.lerako].some(
+    (hely) => !!hely && normalizaltCegKulcs(hely).includes(kulcs)
+  );
+}
+
+/**
  * Átvizsgálja a kiolvasott fuvart.
  *
  * @param kivont      a dokumentumból kiolvasott adatok
  * @param partnerBol  igaz, ha a megrendelőt ISMERT PARTNER ujjlenyomata adta
  *                    (nem a nyelvi modell tippelte) — lásd partnerek.ts
  * @param most        a "ma" referenciapontja (tesztelhetőség miatt paraméter)
+ * @param hivatkozasNelkuli  igaz, ha a partner megbízásán tudottan nincs
+ *                    hivatkozási szám (Partner.nincsHivatkozas) — akkor a
+ *                    hiánya nem kifogás
  */
 export function ellenorizKivontFuvart(
   kivont: KivontFuvar,
   partnerBol: boolean,
-  most: Date = new Date()
+  most: Date = new Date(),
+  hivatkozasNelkuli = false
 ): Ellenorzes {
   const kifogasok: string[] = [];
   let elutasit = false;
@@ -109,6 +127,11 @@ export function ellenorizKivontFuvart(
     kifogasok.push("Nincs megrendelő.");
   } else if (!partnerBol) {
     kifogasok.push("A megrendelőt nem ismert partner-sablon adta, hanem a szövegből olvastuk ki.");
+    if (megrendeloRakodohelyE(kivont)) {
+      kifogasok.push(
+        `A megrendelőnek olvasott cég (${kivont.megrendelo}) a felrakó-/lerakóhely cége — a megbízó valószínűleg az irat fejlécében álló cég.`
+      );
+    }
   }
 
   // --- Fuvardíj ---
@@ -151,7 +174,7 @@ export function ellenorizKivontFuvart(
   }
 
   // --- Hivatkozási szám: enélkül nem tudunk számlázni ---
-  if (!kivont.pozicioszam?.trim()) {
+  if (!kivont.pozicioszam?.trim() && !hivatkozasNelkuli) {
     kifogasok.push("Nincs hivatkozási/pozíciószám — a partner ezt általában kéri a számlán.");
   }
 
