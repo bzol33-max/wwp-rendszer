@@ -1,0 +1,6672 @@
+{
+ "forras": "régi fuvar-diszpécser rendszer (Nyíregyháza archív), 2026-09-18-i export",
+ "felvasarlas": [
+  {
+   "nap": "2026-01-05",
+   "tipus": "EUR világos",
+   "qty": 248,
+   "unitPrice": 2700,
+   "total": 669600
+  },
+  {
+   "nap": "2026-01-05",
+   "tipus": "EUR szürke",
+   "qty": 120,
+   "unitPrice": 1500,
+   "total": 180000
+  },
+  {
+   "nap": "2026-01-05",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 800,
+   "total": 800
+  },
+  {
+   "nap": "2026-01-05",
+   "tipus": "Színes",
+   "qty": 4,
+   "unitPrice": 1000,
+   "total": 4000
+  },
+  {
+   "nap": "2026-01-06",
+   "tipus": "EUR világos",
+   "qty": 47,
+   "unitPrice": 2700,
+   "total": 126900
+  },
+  {
+   "nap": "2026-01-06",
+   "tipus": "EUR szürke",
+   "qty": 11,
+   "unitPrice": 1500,
+   "total": 16500
+  },
+  {
+   "nap": "2026-01-06",
+   "tipus": "Egyutas 80-as",
+   "qty": 7,
+   "unitPrice": 800,
+   "total": 5600
+  },
+  {
+   "nap": "2026-01-06",
+   "tipus": "Színes",
+   "qty": 1,
+   "unitPrice": 1000,
+   "total": 1000
+  },
+  {
+   "nap": "2026-01-07",
+   "tipus": "EUR világos",
+   "qty": 142,
+   "unitPrice": 2700,
+   "total": 383400
+  },
+  {
+   "nap": "2026-01-07",
+   "tipus": "EUR szürke",
+   "qty": 60,
+   "unitPrice": 1500,
+   "total": 90000
+  },
+  {
+   "nap": "2026-01-07",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 800,
+   "total": 800
+  },
+  {
+   "nap": "2026-01-07",
+   "tipus": "Egyutas gyenge",
+   "qty": 33,
+   "unitPrice": 400,
+   "total": 13200
+  },
+  {
+   "nap": "2026-01-07",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-01-08",
+   "tipus": "EUR világos",
+   "qty": 29,
+   "unitPrice": 2700,
+   "total": 78300
+  },
+  {
+   "nap": "2026-01-08",
+   "tipus": "EUR szürke",
+   "qty": 38,
+   "unitPrice": 1500,
+   "total": 57000
+  },
+  {
+   "nap": "2026-01-08",
+   "tipus": "Egyutas 80-as",
+   "qty": 2,
+   "unitPrice": 800,
+   "total": 1600
+  },
+  {
+   "nap": "2026-01-08",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-01-09",
+   "tipus": "EUR világos",
+   "qty": 94,
+   "unitPrice": 2700,
+   "total": 253800
+  },
+  {
+   "nap": "2026-01-09",
+   "tipus": "EUR szürke",
+   "qty": 14,
+   "unitPrice": 1500,
+   "total": 21000
+  },
+  {
+   "nap": "2026-01-09",
+   "tipus": "Gitterbox",
+   "qty": 3,
+   "unitPrice": 17000,
+   "total": 51000
+  },
+  {
+   "nap": "2026-01-10",
+   "tipus": "EUR világos",
+   "qty": 33,
+   "unitPrice": 2700,
+   "total": 89100
+  },
+  {
+   "nap": "2026-01-10",
+   "tipus": "EUR szürke",
+   "qty": 75,
+   "unitPrice": 1500,
+   "total": 112500
+  },
+  {
+   "nap": "2026-01-12",
+   "tipus": "EUR világos",
+   "qty": 39,
+   "unitPrice": 2700,
+   "total": 105300
+  },
+  {
+   "nap": "2026-01-12",
+   "tipus": "EUR szürke",
+   "qty": 43,
+   "unitPrice": 1500,
+   "total": 64500
+  },
+  {
+   "nap": "2026-01-12",
+   "tipus": "Színes",
+   "qty": 3,
+   "unitPrice": 1000,
+   "total": 3000
+  },
+  {
+   "nap": "2026-01-12",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-01-13",
+   "tipus": "EUR világos",
+   "qty": 16,
+   "unitPrice": 2700,
+   "total": 43200
+  },
+  {
+   "nap": "2026-01-13",
+   "tipus": "EUR szürke",
+   "qty": 21,
+   "unitPrice": 1500,
+   "total": 31500
+  },
+  {
+   "nap": "2026-01-13",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 800,
+   "total": 800
+  },
+  {
+   "nap": "2026-01-13",
+   "tipus": "Egyutas gyenge",
+   "qty": 98,
+   "unitPrice": 400,
+   "total": 39200
+  },
+  {
+   "nap": "2026-01-14",
+   "tipus": "EUR világos",
+   "qty": 16,
+   "unitPrice": 2700,
+   "total": 43200
+  },
+  {
+   "nap": "2026-01-14",
+   "tipus": "EUR szürke",
+   "qty": 21,
+   "unitPrice": 1500,
+   "total": 31500
+  },
+  {
+   "nap": "2026-01-14",
+   "tipus": "Egyutas 80-as",
+   "qty": 2,
+   "unitPrice": 800,
+   "total": 1600
+  },
+  {
+   "nap": "2026-01-14",
+   "tipus": "Egyutas gyenge",
+   "qty": 33,
+   "unitPrice": 400,
+   "total": 13200
+  },
+  {
+   "nap": "2026-01-14",
+   "tipus": "Színes",
+   "qty": 9,
+   "unitPrice": 1000,
+   "total": 9000
+  },
+  {
+   "nap": "2026-01-15",
+   "tipus": "EUR világos",
+   "qty": 138,
+   "unitPrice": 2700,
+   "total": 372600
+  },
+  {
+   "nap": "2026-01-15",
+   "tipus": "EUR szürke",
+   "qty": 79,
+   "unitPrice": 1500,
+   "total": 118500
+  },
+  {
+   "nap": "2026-01-15",
+   "tipus": "Egyutas 80-as",
+   "qty": 4,
+   "unitPrice": 800,
+   "total": 3200
+  },
+  {
+   "nap": "2026-01-15",
+   "tipus": "Egyutas gyenge",
+   "qty": 44,
+   "unitPrice": 400,
+   "total": 17600
+  },
+  {
+   "nap": "2026-01-15",
+   "tipus": "Csere",
+   "qty": 5,
+   "unitPrice": 1000,
+   "total": 5000
+  },
+  {
+   "nap": "2026-01-16",
+   "tipus": "EUR világos",
+   "qty": 228,
+   "unitPrice": 2700,
+   "total": 615600
+  },
+  {
+   "nap": "2026-01-16",
+   "tipus": "EUR szürke",
+   "qty": 36,
+   "unitPrice": 1500,
+   "total": 54000
+  },
+  {
+   "nap": "2026-01-16",
+   "tipus": "Egyutas 80-as",
+   "qty": 2,
+   "unitPrice": 800,
+   "total": 1600
+  },
+  {
+   "nap": "2026-01-16",
+   "tipus": "Egyutas gyenge",
+   "qty": 9,
+   "unitPrice": 400,
+   "total": 3600
+  },
+  {
+   "nap": "2026-01-16",
+   "tipus": "Csere",
+   "qty": 4,
+   "unitPrice": 1000,
+   "total": 4000
+  },
+  {
+   "nap": "2026-01-17",
+   "tipus": "EUR világos",
+   "qty": 52,
+   "unitPrice": 2700,
+   "total": 140400
+  },
+  {
+   "nap": "2026-01-17",
+   "tipus": "EUR szürke",
+   "qty": 13,
+   "unitPrice": 1500,
+   "total": 19500
+  },
+  {
+   "nap": "2026-01-17",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 800,
+   "total": 800
+  },
+  {
+   "nap": "2026-01-17",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-01-19",
+   "tipus": "EUR világos",
+   "qty": 69,
+   "unitPrice": 2700,
+   "total": 186300
+  },
+  {
+   "nap": "2026-01-19",
+   "tipus": "EUR szürke",
+   "qty": 50,
+   "unitPrice": 1500,
+   "total": 75000
+  },
+  {
+   "nap": "2026-01-19",
+   "tipus": "Színes",
+   "qty": 7,
+   "unitPrice": 1000,
+   "total": 7000
+  },
+  {
+   "nap": "2026-01-20",
+   "tipus": "EUR világos",
+   "qty": 101,
+   "unitPrice": 2700,
+   "total": 272700
+  },
+  {
+   "nap": "2026-01-20",
+   "tipus": "EUR szürke",
+   "qty": 24,
+   "unitPrice": 1500,
+   "total": 36000
+  },
+  {
+   "nap": "2026-01-20",
+   "tipus": "Egyutas gyenge",
+   "qty": 2,
+   "unitPrice": 400,
+   "total": 800
+  },
+  {
+   "nap": "2026-01-20",
+   "tipus": "Színes",
+   "qty": 3,
+   "unitPrice": 1000,
+   "total": 3000
+  },
+  {
+   "nap": "2026-01-20",
+   "tipus": "Gitterbox",
+   "qty": 3,
+   "unitPrice": 17000,
+   "total": 51000
+  },
+  {
+   "nap": "2026-01-20",
+   "tipus": "Csere",
+   "qty": 10,
+   "unitPrice": 1000,
+   "total": 10000
+  },
+  {
+   "nap": "2026-01-21",
+   "tipus": "EUR világos",
+   "qty": 182,
+   "unitPrice": 2700,
+   "total": 491400
+  },
+  {
+   "nap": "2026-01-21",
+   "tipus": "EUR szürke",
+   "qty": 28,
+   "unitPrice": 1500,
+   "total": 42000
+  },
+  {
+   "nap": "2026-01-21",
+   "tipus": "Színes",
+   "qty": 2,
+   "unitPrice": 1000,
+   "total": 2000
+  },
+  {
+   "nap": "2026-01-21",
+   "tipus": "Csere",
+   "qty": 15,
+   "unitPrice": 1000,
+   "total": 15000
+  },
+  {
+   "nap": "2026-01-22",
+   "tipus": "EUR világos",
+   "qty": 52,
+   "unitPrice": 2700,
+   "total": 140400
+  },
+  {
+   "nap": "2026-01-22",
+   "tipus": "EUR szürke",
+   "qty": 42,
+   "unitPrice": 1500,
+   "total": 63000
+  },
+  {
+   "nap": "2026-01-22",
+   "tipus": "Egyutas gyenge",
+   "qty": 1,
+   "unitPrice": 400,
+   "total": 400
+  },
+  {
+   "nap": "2026-01-23",
+   "tipus": "EUR világos",
+   "qty": 49,
+   "unitPrice": 2700,
+   "total": 132300
+  },
+  {
+   "nap": "2026-01-23",
+   "tipus": "EUR szürke",
+   "qty": 55,
+   "unitPrice": 1500,
+   "total": 82500
+  },
+  {
+   "nap": "2026-01-23",
+   "tipus": "Egyutas 80-as",
+   "qty": 5,
+   "unitPrice": 800,
+   "total": 4000
+  },
+  {
+   "nap": "2026-01-23",
+   "tipus": "Egyutas gyenge",
+   "qty": 10,
+   "unitPrice": 400,
+   "total": 4000
+  },
+  {
+   "nap": "2026-01-23",
+   "tipus": "Színes",
+   "qty": 9,
+   "unitPrice": 1000,
+   "total": 9000
+  },
+  {
+   "nap": "2026-01-23",
+   "tipus": "Csere",
+   "qty": 1,
+   "unitPrice": 1000,
+   "total": 1000
+  },
+  {
+   "nap": "2026-01-26",
+   "tipus": "EUR világos",
+   "qty": 84,
+   "unitPrice": 2700,
+   "total": 226800
+  },
+  {
+   "nap": "2026-01-26",
+   "tipus": "EUR szürke",
+   "qty": 92,
+   "unitPrice": 1500,
+   "total": 138000
+  },
+  {
+   "nap": "2026-01-26",
+   "tipus": "Színes",
+   "qty": 1,
+   "unitPrice": 1000,
+   "total": 1000
+  },
+  {
+   "nap": "2026-01-27",
+   "tipus": "EUR világos",
+   "qty": 140,
+   "unitPrice": 2700,
+   "total": 378000
+  },
+  {
+   "nap": "2026-01-27",
+   "tipus": "EUR szürke",
+   "qty": 31,
+   "unitPrice": 1500,
+   "total": 46500
+  },
+  {
+   "nap": "2026-01-27",
+   "tipus": "Egyutas 80-as",
+   "qty": 35,
+   "unitPrice": 800,
+   "total": 28000
+  },
+  {
+   "nap": "2026-01-27",
+   "tipus": "Egyutas gyenge",
+   "qty": 22,
+   "unitPrice": 400,
+   "total": 8800
+  },
+  {
+   "nap": "2026-01-27",
+   "tipus": "Színes",
+   "qty": 18,
+   "unitPrice": 1000,
+   "total": 18000
+  },
+  {
+   "nap": "2026-01-27",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-01-28",
+   "tipus": "EUR világos",
+   "qty": 153,
+   "unitPrice": 2700,
+   "total": 413100
+  },
+  {
+   "nap": "2026-01-28",
+   "tipus": "EUR szürke",
+   "qty": 249,
+   "unitPrice": 1500,
+   "total": 373500
+  },
+  {
+   "nap": "2026-01-28",
+   "tipus": "Egyutas 80-as",
+   "qty": 2,
+   "unitPrice": 800,
+   "total": 1600
+  },
+  {
+   "nap": "2026-01-28",
+   "tipus": "Egyutas gyenge",
+   "qty": 1,
+   "unitPrice": 400,
+   "total": 400
+  },
+  {
+   "nap": "2026-01-28",
+   "tipus": "Csere",
+   "qty": 8,
+   "unitPrice": 1000,
+   "total": 8000
+  },
+  {
+   "nap": "2026-01-29",
+   "tipus": "EUR világos",
+   "qty": 37,
+   "unitPrice": 2700,
+   "total": 99900
+  },
+  {
+   "nap": "2026-01-29",
+   "tipus": "EUR szürke",
+   "qty": 43,
+   "unitPrice": 1500,
+   "total": 64500
+  },
+  {
+   "nap": "2026-01-29",
+   "tipus": "Egyutas 80-as",
+   "qty": 11,
+   "unitPrice": 800,
+   "total": 8800
+  },
+  {
+   "nap": "2026-01-29",
+   "tipus": "Egyutas gyenge",
+   "qty": 48,
+   "unitPrice": 400,
+   "total": 19200
+  },
+  {
+   "nap": "2026-01-29",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-01-29",
+   "tipus": "Csere",
+   "qty": 8,
+   "unitPrice": 1000,
+   "total": 8000
+  },
+  {
+   "nap": "2026-01-30",
+   "tipus": "EUR világos",
+   "qty": 264,
+   "unitPrice": 2700,
+   "total": 712800
+  },
+  {
+   "nap": "2026-01-30",
+   "tipus": "EUR szürke",
+   "qty": 150,
+   "unitPrice": 1500,
+   "total": 225000
+  },
+  {
+   "nap": "2026-01-30",
+   "tipus": "Egyutas 80-as",
+   "qty": 4,
+   "unitPrice": 800,
+   "total": 3200
+  },
+  {
+   "nap": "2026-01-30",
+   "tipus": "Csere",
+   "qty": 7,
+   "unitPrice": 1000,
+   "total": 7000
+  },
+  {
+   "nap": "2026-02-02",
+   "tipus": "EUR világos",
+   "qty": 232,
+   "unitPrice": 2700,
+   "total": 626400
+  },
+  {
+   "nap": "2026-02-02",
+   "tipus": "EUR szürke",
+   "qty": 467,
+   "unitPrice": 1500,
+   "total": 700500
+  },
+  {
+   "nap": "2026-02-02",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 800,
+   "total": 800
+  },
+  {
+   "nap": "2026-02-02",
+   "tipus": "Színes",
+   "qty": 11,
+   "unitPrice": 1000,
+   "total": 11000
+  },
+  {
+   "nap": "2026-02-02",
+   "tipus": "Gitterbox",
+   "qty": 3,
+   "unitPrice": 17000,
+   "total": 51000
+  },
+  {
+   "nap": "2026-02-02",
+   "tipus": "Raklap magasító",
+   "qty": 4,
+   "unitPrice": 500,
+   "total": 2000
+  },
+  {
+   "nap": "2026-02-03",
+   "tipus": "EUR világos",
+   "qty": 92,
+   "unitPrice": 2700,
+   "total": 248400
+  },
+  {
+   "nap": "2026-02-03",
+   "tipus": "EUR szürke",
+   "qty": 32,
+   "unitPrice": 1500,
+   "total": 48000
+  },
+  {
+   "nap": "2026-02-03",
+   "tipus": "Egyutas 80-as",
+   "qty": 51,
+   "unitPrice": 800,
+   "total": 40800
+  },
+  {
+   "nap": "2026-02-03",
+   "tipus": "Egyutas gyenge",
+   "qty": 1,
+   "unitPrice": 400,
+   "total": 400
+  },
+  {
+   "nap": "2026-02-03",
+   "tipus": "Színes",
+   "qty": 18,
+   "unitPrice": 1000,
+   "total": 18000
+  },
+  {
+   "nap": "2026-02-03",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-02-04",
+   "tipus": "EUR világos",
+   "qty": 186,
+   "unitPrice": 2700,
+   "total": 502200
+  },
+  {
+   "nap": "2026-02-04",
+   "tipus": "EUR szürke",
+   "qty": 71,
+   "unitPrice": 1500,
+   "total": 106500
+  },
+  {
+   "nap": "2026-02-04",
+   "tipus": "Egyutas 80-as",
+   "qty": 49,
+   "unitPrice": 800,
+   "total": 39200
+  },
+  {
+   "nap": "2026-02-05",
+   "tipus": "EUR világos",
+   "qty": 315,
+   "unitPrice": 2700,
+   "total": 850500
+  },
+  {
+   "nap": "2026-02-05",
+   "tipus": "EUR szürke",
+   "qty": 56,
+   "unitPrice": 1500,
+   "total": 84000
+  },
+  {
+   "nap": "2026-02-05",
+   "tipus": "Gitterbox",
+   "qty": 2,
+   "unitPrice": 17000,
+   "total": 34000
+  },
+  {
+   "nap": "2026-02-06",
+   "tipus": "EUR világos",
+   "qty": 541,
+   "unitPrice": 2700,
+   "total": 1460700
+  },
+  {
+   "nap": "2026-02-06",
+   "tipus": "EUR szürke",
+   "qty": 105,
+   "unitPrice": 1500,
+   "total": 157500
+  },
+  {
+   "nap": "2026-02-06",
+   "tipus": "Egyutas 80-as",
+   "qty": 5,
+   "unitPrice": 800,
+   "total": 4000
+  },
+  {
+   "nap": "2026-02-06",
+   "tipus": "Színes",
+   "qty": 20,
+   "unitPrice": 1000,
+   "total": 20000
+  },
+  {
+   "nap": "2026-02-07",
+   "tipus": "EUR világos",
+   "qty": 65,
+   "unitPrice": 2700,
+   "total": 175500
+  },
+  {
+   "nap": "2026-02-09",
+   "tipus": "EUR világos",
+   "qty": 64,
+   "unitPrice": 2700,
+   "total": 172800
+  },
+  {
+   "nap": "2026-02-09",
+   "tipus": "EUR szürke",
+   "qty": 278,
+   "unitPrice": 1500,
+   "total": 417000
+  },
+  {
+   "nap": "2026-02-09",
+   "tipus": "Egyutas 80-as",
+   "qty": 4,
+   "unitPrice": 800,
+   "total": 3200
+  },
+  {
+   "nap": "2026-02-09",
+   "tipus": "Színes",
+   "qty": 9,
+   "unitPrice": 1000,
+   "total": 9000
+  },
+  {
+   "nap": "2026-02-10",
+   "tipus": "EUR világos",
+   "qty": 220,
+   "unitPrice": 2700,
+   "total": 594000
+  },
+  {
+   "nap": "2026-02-10",
+   "tipus": "EUR szürke",
+   "qty": 62,
+   "unitPrice": 1500,
+   "total": 93000
+  },
+  {
+   "nap": "2026-02-10",
+   "tipus": "Egyutas gyenge",
+   "qty": 223,
+   "unitPrice": 400,
+   "total": 89200
+  },
+  {
+   "nap": "2026-02-10",
+   "tipus": "Gitterbox",
+   "qty": 2,
+   "unitPrice": 17000,
+   "total": 34000
+  },
+  {
+   "nap": "2026-02-11",
+   "tipus": "EUR világos",
+   "qty": 75,
+   "unitPrice": 2700,
+   "total": 202500
+  },
+  {
+   "nap": "2026-02-11",
+   "tipus": "EUR szürke",
+   "qty": 49,
+   "unitPrice": 1500,
+   "total": 73500
+  },
+  {
+   "nap": "2026-02-11",
+   "tipus": "Egyutas 80-as",
+   "qty": 2,
+   "unitPrice": 800,
+   "total": 1600
+  },
+  {
+   "nap": "2026-02-11",
+   "tipus": "Színes",
+   "qty": 9,
+   "unitPrice": 1000,
+   "total": 9000
+  },
+  {
+   "nap": "2026-02-12",
+   "tipus": "EUR világos",
+   "qty": 119,
+   "unitPrice": 2700,
+   "total": 321300
+  },
+  {
+   "nap": "2026-02-12",
+   "tipus": "EUR szürke",
+   "qty": 38,
+   "unitPrice": 1500,
+   "total": 57000
+  },
+  {
+   "nap": "2026-02-12",
+   "tipus": "Egyutas 80-as",
+   "qty": 5,
+   "unitPrice": 800,
+   "total": 4000
+  },
+  {
+   "nap": "2026-02-12",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-02-13",
+   "tipus": "EUR világos",
+   "qty": 392,
+   "unitPrice": 2700,
+   "total": 1058400
+  },
+  {
+   "nap": "2026-02-13",
+   "tipus": "EUR szürke",
+   "qty": 48,
+   "unitPrice": 1500,
+   "total": 72000
+  },
+  {
+   "nap": "2026-02-13",
+   "tipus": "Egyutas 80-as",
+   "qty": 46,
+   "unitPrice": 800,
+   "total": 36800
+  },
+  {
+   "nap": "2026-02-14",
+   "tipus": "EUR világos",
+   "qty": 65,
+   "unitPrice": 2700,
+   "total": 175500
+  },
+  {
+   "nap": "2026-02-14",
+   "tipus": "EUR szürke",
+   "qty": 60,
+   "unitPrice": 1500,
+   "total": 90000
+  },
+  {
+   "nap": "2026-02-16",
+   "tipus": "EUR világos",
+   "qty": 97,
+   "unitPrice": 2700,
+   "total": 261900
+  },
+  {
+   "nap": "2026-02-16",
+   "tipus": "EUR szürke",
+   "qty": 77,
+   "unitPrice": 1500,
+   "total": 115500
+  },
+  {
+   "nap": "2026-02-16",
+   "tipus": "Egyutas 80-as",
+   "qty": 2,
+   "unitPrice": 800,
+   "total": 1600
+  },
+  {
+   "nap": "2026-02-16",
+   "tipus": "Egyutas gyenge",
+   "qty": 6,
+   "unitPrice": 400,
+   "total": 2400
+  },
+  {
+   "nap": "2026-02-16",
+   "tipus": "Színes",
+   "qty": 46,
+   "unitPrice": 1000,
+   "total": 46000
+  },
+  {
+   "nap": "2026-02-16",
+   "tipus": "Gitterbox",
+   "qty": 4,
+   "unitPrice": 17000,
+   "total": 68000
+  },
+  {
+   "nap": "2026-02-17",
+   "tipus": "EUR világos",
+   "qty": 514,
+   "unitPrice": 2700,
+   "total": 1387800
+  },
+  {
+   "nap": "2026-02-17",
+   "tipus": "EUR szürke",
+   "qty": 107,
+   "unitPrice": 1500,
+   "total": 160500
+  },
+  {
+   "nap": "2026-02-17",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 800,
+   "total": 800
+  },
+  {
+   "nap": "2026-02-17",
+   "tipus": "Egyutas gyenge",
+   "qty": 1,
+   "unitPrice": 400,
+   "total": 400
+  },
+  {
+   "nap": "2026-02-17",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-02-18",
+   "tipus": "EUR világos",
+   "qty": 184,
+   "unitPrice": 2700,
+   "total": 496800
+  },
+  {
+   "nap": "2026-02-18",
+   "tipus": "EUR szürke",
+   "qty": 51,
+   "unitPrice": 1500,
+   "total": 76500
+  },
+  {
+   "nap": "2026-02-18",
+   "tipus": "Egyutas 80-as",
+   "qty": 4,
+   "unitPrice": 800,
+   "total": 3200
+  },
+  {
+   "nap": "2026-02-18",
+   "tipus": "Egyutas 100-as",
+   "qty": 1,
+   "unitPrice": 800,
+   "total": 800
+  },
+  {
+   "nap": "2026-02-18",
+   "tipus": "Egyutas gyenge",
+   "qty": 2,
+   "unitPrice": 400,
+   "total": 800
+  },
+  {
+   "nap": "2026-02-18",
+   "tipus": "Színes",
+   "qty": 12,
+   "unitPrice": 1000,
+   "total": 12000
+  },
+  {
+   "nap": "2026-02-18",
+   "tipus": "Csere",
+   "qty": 5,
+   "unitPrice": 1000,
+   "total": 5000
+  },
+  {
+   "nap": "2026-02-19",
+   "tipus": "EUR világos",
+   "qty": 200,
+   "unitPrice": 2700,
+   "total": 540000
+  },
+  {
+   "nap": "2026-02-19",
+   "tipus": "EUR szürke",
+   "qty": 179,
+   "unitPrice": 1500,
+   "total": 268500
+  },
+  {
+   "nap": "2026-02-19",
+   "tipus": "Színes",
+   "qty": 44,
+   "unitPrice": 1000,
+   "total": 44000
+  },
+  {
+   "nap": "2026-02-19",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-02-19",
+   "tipus": "Csere",
+   "qty": 5,
+   "unitPrice": 1000,
+   "total": 5000
+  },
+  {
+   "nap": "2026-02-20",
+   "tipus": "EUR világos",
+   "qty": 213,
+   "unitPrice": 2700,
+   "total": 575100
+  },
+  {
+   "nap": "2026-02-20",
+   "tipus": "EUR szürke",
+   "qty": 26,
+   "unitPrice": 1500,
+   "total": 39000
+  },
+  {
+   "nap": "2026-02-20",
+   "tipus": "Egyutas gyenge",
+   "qty": 1,
+   "unitPrice": 400,
+   "total": 400
+  },
+  {
+   "nap": "2026-02-20",
+   "tipus": "Színes",
+   "qty": 12,
+   "unitPrice": 1000,
+   "total": 12000
+  },
+  {
+   "nap": "2026-02-20",
+   "tipus": "Csere",
+   "qty": 5,
+   "unitPrice": 1000,
+   "total": 5000
+  },
+  {
+   "nap": "2026-02-23",
+   "tipus": "EUR világos",
+   "qty": 128,
+   "unitPrice": 2700,
+   "total": 345600
+  },
+  {
+   "nap": "2026-02-23",
+   "tipus": "EUR szürke",
+   "qty": 50,
+   "unitPrice": 1500,
+   "total": 75000
+  },
+  {
+   "nap": "2026-02-23",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 800,
+   "total": 800
+  },
+  {
+   "nap": "2026-02-23",
+   "tipus": "Színes",
+   "qty": 42,
+   "unitPrice": 1000,
+   "total": 42000
+  },
+  {
+   "nap": "2026-02-23",
+   "tipus": "Csere",
+   "qty": 1,
+   "unitPrice": 1000,
+   "total": 1000
+  },
+  {
+   "nap": "2026-02-24",
+   "tipus": "EUR világos",
+   "qty": 158,
+   "unitPrice": 2700,
+   "total": 426600
+  },
+  {
+   "nap": "2026-02-24",
+   "tipus": "EUR szürke",
+   "qty": 59,
+   "unitPrice": 1500,
+   "total": 88500
+  },
+  {
+   "nap": "2026-02-24",
+   "tipus": "Egyutas 80-as",
+   "qty": 11,
+   "unitPrice": 800,
+   "total": 8800
+  },
+  {
+   "nap": "2026-02-24",
+   "tipus": "Egyutas gyenge",
+   "qty": 158,
+   "unitPrice": 400,
+   "total": 63200
+  },
+  {
+   "nap": "2026-02-25",
+   "tipus": "EUR világos",
+   "qty": 93,
+   "unitPrice": 2700,
+   "total": 251100
+  },
+  {
+   "nap": "2026-02-25",
+   "tipus": "EUR szürke",
+   "qty": 43,
+   "unitPrice": 1500,
+   "total": 64500
+  },
+  {
+   "nap": "2026-02-25",
+   "tipus": "Egyutas 80-as",
+   "qty": 4,
+   "unitPrice": 800,
+   "total": 3200
+  },
+  {
+   "nap": "2026-02-25",
+   "tipus": "Egyutas 100-as",
+   "qty": 3,
+   "unitPrice": 800,
+   "total": 2400
+  },
+  {
+   "nap": "2026-02-25",
+   "tipus": "Egyutas gyenge",
+   "qty": 7,
+   "unitPrice": 400,
+   "total": 2800
+  },
+  {
+   "nap": "2026-02-25",
+   "tipus": "Színes",
+   "qty": 19,
+   "unitPrice": 1000,
+   "total": 19000
+  },
+  {
+   "nap": "2026-02-25",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-02-26",
+   "tipus": "EUR világos",
+   "qty": 184,
+   "unitPrice": 2700,
+   "total": 496800
+  },
+  {
+   "nap": "2026-02-26",
+   "tipus": "EUR szürke",
+   "qty": 79,
+   "unitPrice": 1500,
+   "total": 118500
+  },
+  {
+   "nap": "2026-02-26",
+   "tipus": "Egyutas gyenge",
+   "qty": 59,
+   "unitPrice": 400,
+   "total": 23600
+  },
+  {
+   "nap": "2026-02-26",
+   "tipus": "Színes",
+   "qty": 18,
+   "unitPrice": 1000,
+   "total": 18000
+  },
+  {
+   "nap": "2026-02-26",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-02-27",
+   "tipus": "EUR világos",
+   "qty": 102,
+   "unitPrice": 2700,
+   "total": 275400
+  },
+  {
+   "nap": "2026-02-27",
+   "tipus": "EUR szürke",
+   "qty": 83,
+   "unitPrice": 1500,
+   "total": 124500
+  },
+  {
+   "nap": "2026-02-27",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 800,
+   "total": 800
+  },
+  {
+   "nap": "2026-02-27",
+   "tipus": "Egyutas 100-as",
+   "qty": 1,
+   "unitPrice": 800,
+   "total": 800
+  },
+  {
+   "nap": "2026-02-27",
+   "tipus": "Egyutas gyenge",
+   "qty": 7,
+   "unitPrice": 400,
+   "total": 2800
+  },
+  {
+   "nap": "2026-02-27",
+   "tipus": "Színes",
+   "qty": 38,
+   "unitPrice": 1000,
+   "total": 38000
+  },
+  {
+   "nap": "2026-02-27",
+   "tipus": "Raklap magasító",
+   "qty": 4,
+   "unitPrice": 500,
+   "total": 2000
+  },
+  {
+   "nap": "2026-03-02",
+   "tipus": "EUR világos",
+   "qty": 303,
+   "unitPrice": 2700,
+   "total": 818100
+  },
+  {
+   "nap": "2026-03-02",
+   "tipus": "EUR szürke",
+   "qty": 42,
+   "unitPrice": 1500,
+   "total": 63000
+  },
+  {
+   "nap": "2026-03-02",
+   "tipus": "Egyutas gyenge",
+   "qty": 70,
+   "unitPrice": 600,
+   "total": 42000
+  },
+  {
+   "nap": "2026-03-02",
+   "tipus": "Színes",
+   "qty": 5,
+   "unitPrice": 1000,
+   "total": 5000
+  },
+  {
+   "nap": "2026-03-03",
+   "tipus": "EUR világos",
+   "qty": 84,
+   "unitPrice": 2700,
+   "total": 226800
+  },
+  {
+   "nap": "2026-03-03",
+   "tipus": "EUR szürke",
+   "qty": 107,
+   "unitPrice": 1500,
+   "total": 160500
+  },
+  {
+   "nap": "2026-03-03",
+   "tipus": "Egyutas gyenge",
+   "qty": 112,
+   "unitPrice": 600,
+   "total": 67200
+  },
+  {
+   "nap": "2026-03-03",
+   "tipus": "Színes",
+   "qty": 11,
+   "unitPrice": 1000,
+   "total": 11000
+  },
+  {
+   "nap": "2026-03-03",
+   "tipus": "Gitterbox",
+   "qty": 2,
+   "unitPrice": 17000,
+   "total": 34000
+  },
+  {
+   "nap": "2026-03-04",
+   "tipus": "EUR világos",
+   "qty": 137,
+   "unitPrice": 2700,
+   "total": 369900
+  },
+  {
+   "nap": "2026-03-04",
+   "tipus": "EUR szürke",
+   "qty": 96,
+   "unitPrice": 1500,
+   "total": 144000
+  },
+  {
+   "nap": "2026-03-04",
+   "tipus": "Egyutas 80-as",
+   "qty": 5,
+   "unitPrice": 1100,
+   "total": 5500
+  },
+  {
+   "nap": "2026-03-04",
+   "tipus": "Egyutas gyenge",
+   "qty": 45,
+   "unitPrice": 600,
+   "total": 27000
+  },
+  {
+   "nap": "2026-03-04",
+   "tipus": "Csere",
+   "qty": 4,
+   "unitPrice": 800,
+   "total": 3200
+  },
+  {
+   "nap": "2026-03-05",
+   "tipus": "EUR világos",
+   "qty": 129,
+   "unitPrice": 2700,
+   "total": 348300
+  },
+  {
+   "nap": "2026-03-05",
+   "tipus": "EUR szürke",
+   "qty": 56,
+   "unitPrice": 1500,
+   "total": 84000
+  },
+  {
+   "nap": "2026-03-05",
+   "tipus": "Egyutas 100-as",
+   "qty": 20,
+   "unitPrice": 800,
+   "total": 16000
+  },
+  {
+   "nap": "2026-03-05",
+   "tipus": "Egyutas gyenge",
+   "qty": 47,
+   "unitPrice": 600,
+   "total": 28200
+  },
+  {
+   "nap": "2026-03-06",
+   "tipus": "EUR világos",
+   "qty": 149,
+   "unitPrice": 2700,
+   "total": 402300
+  },
+  {
+   "nap": "2026-03-06",
+   "tipus": "EUR szürke",
+   "qty": 97,
+   "unitPrice": 1500,
+   "total": 145500
+  },
+  {
+   "nap": "2026-03-06",
+   "tipus": "Egyutas 100-as",
+   "qty": 2,
+   "unitPrice": 800,
+   "total": 1600
+  },
+  {
+   "nap": "2026-03-06",
+   "tipus": "Színes",
+   "qty": 42,
+   "unitPrice": 1000,
+   "total": 42000
+  },
+  {
+   "nap": "2026-03-09",
+   "tipus": "EUR világos",
+   "qty": 138,
+   "unitPrice": 2700,
+   "total": 372600
+  },
+  {
+   "nap": "2026-03-09",
+   "tipus": "EUR szürke",
+   "qty": 38,
+   "unitPrice": 1500,
+   "total": 57000
+  },
+  {
+   "nap": "2026-03-09",
+   "tipus": "Egyutas gyenge",
+   "qty": 63,
+   "unitPrice": 600,
+   "total": 37800
+  },
+  {
+   "nap": "2026-03-09",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-03-10",
+   "tipus": "EUR világos",
+   "qty": 234,
+   "unitPrice": 2700,
+   "total": 631800
+  },
+  {
+   "nap": "2026-03-10",
+   "tipus": "EUR szürke",
+   "qty": 62,
+   "unitPrice": 1500,
+   "total": 93000
+  },
+  {
+   "nap": "2026-03-10",
+   "tipus": "Egyutas 80-as",
+   "qty": 7,
+   "unitPrice": 1100,
+   "total": 7700
+  },
+  {
+   "nap": "2026-03-10",
+   "tipus": "Egyutas 100-as",
+   "qty": 2,
+   "unitPrice": 800,
+   "total": 1600
+  },
+  {
+   "nap": "2026-03-10",
+   "tipus": "Egyutas gyenge",
+   "qty": 50,
+   "unitPrice": 600,
+   "total": 30000
+  },
+  {
+   "nap": "2026-03-10",
+   "tipus": "Színes",
+   "qty": 15,
+   "unitPrice": 1000,
+   "total": 15000
+  },
+  {
+   "nap": "2026-03-10",
+   "tipus": "Gitterbox",
+   "qty": 2,
+   "unitPrice": 17000,
+   "total": 34000
+  },
+  {
+   "nap": "2026-03-11",
+   "tipus": "EUR világos",
+   "qty": 76,
+   "unitPrice": 2700,
+   "total": 205200
+  },
+  {
+   "nap": "2026-03-11",
+   "tipus": "EUR szürke",
+   "qty": 74,
+   "unitPrice": 1500,
+   "total": 111000
+  },
+  {
+   "nap": "2026-03-11",
+   "tipus": "Egyutas gyenge",
+   "qty": 91,
+   "unitPrice": 600,
+   "total": 54600
+  },
+  {
+   "nap": "2026-03-11",
+   "tipus": "Színes",
+   "qty": 7,
+   "unitPrice": 1000,
+   "total": 7000
+  },
+  {
+   "nap": "2026-03-11",
+   "tipus": "Gitterbox",
+   "qty": 2,
+   "unitPrice": 17000,
+   "total": 34000
+  },
+  {
+   "nap": "2026-03-11",
+   "tipus": "Csere",
+   "qty": 4,
+   "unitPrice": 800,
+   "total": 3200
+  },
+  {
+   "nap": "2026-03-12",
+   "tipus": "EUR világos",
+   "qty": 54,
+   "unitPrice": 2700,
+   "total": 145800
+  },
+  {
+   "nap": "2026-03-12",
+   "tipus": "EUR szürke",
+   "qty": 113,
+   "unitPrice": 1500,
+   "total": 169500
+  },
+  {
+   "nap": "2026-03-12",
+   "tipus": "Egyutas 80-as",
+   "qty": 7,
+   "unitPrice": 1100,
+   "total": 7700
+  },
+  {
+   "nap": "2026-03-12",
+   "tipus": "Egyutas gyenge",
+   "qty": 90,
+   "unitPrice": 600,
+   "total": 54000
+  },
+  {
+   "nap": "2026-03-12",
+   "tipus": "Színes",
+   "qty": 22,
+   "unitPrice": 1000,
+   "total": 22000
+  },
+  {
+   "nap": "2026-03-13",
+   "tipus": "EUR világos",
+   "qty": 195,
+   "unitPrice": 2700,
+   "total": 526500
+  },
+  {
+   "nap": "2026-03-13",
+   "tipus": "EUR szürke",
+   "qty": 66,
+   "unitPrice": 1500,
+   "total": 99000
+  },
+  {
+   "nap": "2026-03-13",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 1100,
+   "total": 1100
+  },
+  {
+   "nap": "2026-03-13",
+   "tipus": "Egyutas 100-as",
+   "qty": 21,
+   "unitPrice": 800,
+   "total": 16800
+  },
+  {
+   "nap": "2026-03-13",
+   "tipus": "Színes",
+   "qty": 11,
+   "unitPrice": 1000,
+   "total": 11000
+  },
+  {
+   "nap": "2026-03-13",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-03-13",
+   "tipus": "Csere",
+   "qty": 59,
+   "unitPrice": 800,
+   "total": 47200
+  },
+  {
+   "nap": "2026-03-16",
+   "tipus": "EUR világos",
+   "qty": 130,
+   "unitPrice": 2700,
+   "total": 351000
+  },
+  {
+   "nap": "2026-03-16",
+   "tipus": "EUR szürke",
+   "qty": 48,
+   "unitPrice": 1500,
+   "total": 72000
+  },
+  {
+   "nap": "2026-03-16",
+   "tipus": "Egyutas gyenge",
+   "qty": 46,
+   "unitPrice": 600,
+   "total": 27600
+  },
+  {
+   "nap": "2026-03-16",
+   "tipus": "Színes",
+   "qty": 16,
+   "unitPrice": 1000,
+   "total": 16000
+  },
+  {
+   "nap": "2026-03-17",
+   "tipus": "EUR világos",
+   "qty": 170,
+   "unitPrice": 2700,
+   "total": 459000
+  },
+  {
+   "nap": "2026-03-17",
+   "tipus": "EUR szürke",
+   "qty": 83,
+   "unitPrice": 1500,
+   "total": 124500
+  },
+  {
+   "nap": "2026-03-17",
+   "tipus": "Egyutas 80-as",
+   "qty": 10,
+   "unitPrice": 1100,
+   "total": 11000
+  },
+  {
+   "nap": "2026-03-17",
+   "tipus": "Egyutas gyenge",
+   "qty": 46,
+   "unitPrice": 600,
+   "total": 27600
+  },
+  {
+   "nap": "2026-03-17",
+   "tipus": "Színes",
+   "qty": 16,
+   "unitPrice": 1000,
+   "total": 16000
+  },
+  {
+   "nap": "2026-03-17",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-03-18",
+   "tipus": "EUR világos",
+   "qty": 176,
+   "unitPrice": 2700,
+   "total": 475200
+  },
+  {
+   "nap": "2026-03-18",
+   "tipus": "EUR szürke",
+   "qty": 118,
+   "unitPrice": 1500,
+   "total": 177000
+  },
+  {
+   "nap": "2026-03-18",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 1100,
+   "total": 1100
+  },
+  {
+   "nap": "2026-03-18",
+   "tipus": "Egyutas gyenge",
+   "qty": 40,
+   "unitPrice": 600,
+   "total": 24000
+  },
+  {
+   "nap": "2026-03-18",
+   "tipus": "Színes",
+   "qty": 15,
+   "unitPrice": 1000,
+   "total": 15000
+  },
+  {
+   "nap": "2026-03-18",
+   "tipus": "Gitterbox",
+   "qty": 2,
+   "unitPrice": 17000,
+   "total": 34000
+  },
+  {
+   "nap": "2026-03-19",
+   "tipus": "EUR világos",
+   "qty": 202,
+   "unitPrice": 2700,
+   "total": 545400
+  },
+  {
+   "nap": "2026-03-19",
+   "tipus": "EUR szürke",
+   "qty": 41,
+   "unitPrice": 1500,
+   "total": 61500
+  },
+  {
+   "nap": "2026-03-19",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 1100,
+   "total": 1100
+  },
+  {
+   "nap": "2026-03-19",
+   "tipus": "Egyutas gyenge",
+   "qty": 85,
+   "unitPrice": 600,
+   "total": 51000
+  },
+  {
+   "nap": "2026-03-19",
+   "tipus": "Színes",
+   "qty": 30,
+   "unitPrice": 1000,
+   "total": 30000
+  },
+  {
+   "nap": "2026-03-19",
+   "tipus": "Gitterbox",
+   "qty": 2,
+   "unitPrice": 17000,
+   "total": 34000
+  },
+  {
+   "nap": "2026-03-20",
+   "tipus": "EUR világos",
+   "qty": 140,
+   "unitPrice": 2700,
+   "total": 378000
+  },
+  {
+   "nap": "2026-03-20",
+   "tipus": "EUR szürke",
+   "qty": 15,
+   "unitPrice": 1500,
+   "total": 22500
+  },
+  {
+   "nap": "2026-03-20",
+   "tipus": "Egyutas 80-as",
+   "qty": 4,
+   "unitPrice": 1100,
+   "total": 4400
+  },
+  {
+   "nap": "2026-03-20",
+   "tipus": "Egyutas gyenge",
+   "qty": 3,
+   "unitPrice": 600,
+   "total": 1800
+  },
+  {
+   "nap": "2026-03-23",
+   "tipus": "EUR világos",
+   "qty": 116,
+   "unitPrice": 2700,
+   "total": 313200
+  },
+  {
+   "nap": "2026-03-23",
+   "tipus": "EUR szürke",
+   "qty": 53,
+   "unitPrice": 1500,
+   "total": 79500
+  },
+  {
+   "nap": "2026-03-23",
+   "tipus": "Egyutas 80-as",
+   "qty": 4,
+   "unitPrice": 1100,
+   "total": 4400
+  },
+  {
+   "nap": "2026-03-23",
+   "tipus": "Színes",
+   "qty": 39,
+   "unitPrice": 1000,
+   "total": 39000
+  },
+  {
+   "nap": "2026-03-23",
+   "tipus": "Csere",
+   "qty": 14,
+   "unitPrice": 800,
+   "total": 11200
+  },
+  {
+   "nap": "2026-03-24",
+   "tipus": "EUR világos",
+   "qty": 237,
+   "unitPrice": 2700,
+   "total": 639900
+  },
+  {
+   "nap": "2026-03-24",
+   "tipus": "EUR szürke",
+   "qty": 69,
+   "unitPrice": 1500,
+   "total": 103500
+  },
+  {
+   "nap": "2026-03-24",
+   "tipus": "Egyutas 80-as",
+   "qty": 27,
+   "unitPrice": 1100,
+   "total": 29700
+  },
+  {
+   "nap": "2026-03-24",
+   "tipus": "Egyutas gyenge",
+   "qty": 10,
+   "unitPrice": 600,
+   "total": 6000
+  },
+  {
+   "nap": "2026-03-24",
+   "tipus": "Színes",
+   "qty": 3,
+   "unitPrice": 1000,
+   "total": 3000
+  },
+  {
+   "nap": "2026-03-24",
+   "tipus": "Csere",
+   "qty": 44,
+   "unitPrice": 800,
+   "total": 35200
+  },
+  {
+   "nap": "2026-03-25",
+   "tipus": "EUR világos",
+   "qty": 22,
+   "unitPrice": 2700,
+   "total": 59400
+  },
+  {
+   "nap": "2026-03-25",
+   "tipus": "EUR szürke",
+   "qty": 40,
+   "unitPrice": 1500,
+   "total": 60000
+  },
+  {
+   "nap": "2026-03-25",
+   "tipus": "Egyutas gyenge",
+   "qty": 201,
+   "unitPrice": 600,
+   "total": 120600
+  },
+  {
+   "nap": "2026-03-25",
+   "tipus": "Csere",
+   "qty": 3,
+   "unitPrice": 800,
+   "total": 2400
+  },
+  {
+   "nap": "2026-03-26",
+   "tipus": "EUR világos",
+   "qty": 82,
+   "unitPrice": 2700,
+   "total": 221400
+  },
+  {
+   "nap": "2026-03-26",
+   "tipus": "EUR szürke",
+   "qty": 66,
+   "unitPrice": 1500,
+   "total": 99000
+  },
+  {
+   "nap": "2026-03-26",
+   "tipus": "Egyutas gyenge",
+   "qty": 109,
+   "unitPrice": 600,
+   "total": 65400
+  },
+  {
+   "nap": "2026-03-26",
+   "tipus": "Színes",
+   "qty": 3,
+   "unitPrice": 1000,
+   "total": 3000
+  },
+  {
+   "nap": "2026-03-26",
+   "tipus": "Gitterbox",
+   "qty": 2,
+   "unitPrice": 17000,
+   "total": 34000
+  },
+  {
+   "nap": "2026-03-27",
+   "tipus": "EUR világos",
+   "qty": 272,
+   "unitPrice": 2700,
+   "total": 734400
+  },
+  {
+   "nap": "2026-03-27",
+   "tipus": "EUR szürke",
+   "qty": 76,
+   "unitPrice": 1500,
+   "total": 114000
+  },
+  {
+   "nap": "2026-03-27",
+   "tipus": "Egyutas 80-as",
+   "qty": 21,
+   "unitPrice": 1100,
+   "total": 23100
+  },
+  {
+   "nap": "2026-03-27",
+   "tipus": "Színes",
+   "qty": 3,
+   "unitPrice": 1000,
+   "total": 3000
+  },
+  {
+   "nap": "2026-03-30",
+   "tipus": "EUR világos",
+   "qty": 118,
+   "unitPrice": 2700,
+   "total": 318600
+  },
+  {
+   "nap": "2026-03-30",
+   "tipus": "EUR szürke",
+   "qty": 78,
+   "unitPrice": 1500,
+   "total": 117000
+  },
+  {
+   "nap": "2026-03-30",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 1100,
+   "total": 1100
+  },
+  {
+   "nap": "2026-03-30",
+   "tipus": "Egyutas gyenge",
+   "qty": 81,
+   "unitPrice": 600,
+   "total": 48600
+  },
+  {
+   "nap": "2026-03-30",
+   "tipus": "Színes",
+   "qty": 36,
+   "unitPrice": 1000,
+   "total": 36000
+  },
+  {
+   "nap": "2026-03-31",
+   "tipus": "EUR világos",
+   "qty": 84,
+   "unitPrice": 2700,
+   "total": 226800
+  },
+  {
+   "nap": "2026-03-31",
+   "tipus": "EUR szürke",
+   "qty": 56,
+   "unitPrice": 1500,
+   "total": 84000
+  },
+  {
+   "nap": "2026-03-31",
+   "tipus": "Egyutas 80-as",
+   "qty": 2,
+   "unitPrice": 1100,
+   "total": 2200
+  },
+  {
+   "nap": "2026-03-31",
+   "tipus": "Egyutas 100-as",
+   "qty": 2,
+   "unitPrice": 800,
+   "total": 1600
+  },
+  {
+   "nap": "2026-03-31",
+   "tipus": "Egyutas gyenge",
+   "qty": 46,
+   "unitPrice": 600,
+   "total": 27600
+  },
+  {
+   "nap": "2026-03-31",
+   "tipus": "Színes",
+   "qty": 14,
+   "unitPrice": 1000,
+   "total": 14000
+  },
+  {
+   "nap": "2026-03-31",
+   "tipus": "Csere",
+   "qty": 6,
+   "unitPrice": 800,
+   "total": 4800
+  },
+  {
+   "nap": "2026-04-01",
+   "tipus": "EUR világos",
+   "qty": 213,
+   "unitPrice": 2700,
+   "total": 575100
+  },
+  {
+   "nap": "2026-04-01",
+   "tipus": "EUR szürke",
+   "qty": 44,
+   "unitPrice": 1500,
+   "total": 66000
+  },
+  {
+   "nap": "2026-04-01",
+   "tipus": "Egyutas 80-as",
+   "qty": 2,
+   "unitPrice": 1100,
+   "total": 2200
+  },
+  {
+   "nap": "2026-04-01",
+   "tipus": "Egyutas gyenge",
+   "qty": 48,
+   "unitPrice": 600,
+   "total": 28800
+  },
+  {
+   "nap": "2026-04-01",
+   "tipus": "Színes",
+   "qty": 15,
+   "unitPrice": 1000,
+   "total": 15000
+  },
+  {
+   "nap": "2026-04-01",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-04-01",
+   "tipus": "H1 raklap",
+   "qty": 1,
+   "unitPrice": 5500,
+   "total": 5500
+  },
+  {
+   "nap": "2026-04-02",
+   "tipus": "EUR világos",
+   "qty": 116,
+   "unitPrice": 2700,
+   "total": 313200
+  },
+  {
+   "nap": "2026-04-02",
+   "tipus": "EUR szürke",
+   "qty": 140,
+   "unitPrice": 1500,
+   "total": 210000
+  },
+  {
+   "nap": "2026-04-02",
+   "tipus": "Színes",
+   "qty": 21,
+   "unitPrice": 1000,
+   "total": 21000
+  },
+  {
+   "nap": "2026-04-02",
+   "tipus": "Csere",
+   "qty": 1,
+   "unitPrice": 800,
+   "total": 800
+  },
+  {
+   "nap": "2026-04-07",
+   "tipus": "EUR világos",
+   "qty": 40,
+   "unitPrice": 2700,
+   "total": 108000
+  },
+  {
+   "nap": "2026-04-07",
+   "tipus": "EUR szürke",
+   "qty": 30,
+   "unitPrice": 1500,
+   "total": 45000
+  },
+  {
+   "nap": "2026-04-07",
+   "tipus": "Egyutas gyenge",
+   "qty": 24,
+   "unitPrice": 600,
+   "total": 14400
+  },
+  {
+   "nap": "2026-04-07",
+   "tipus": "Színes",
+   "qty": 19,
+   "unitPrice": 1000,
+   "total": 19000
+  },
+  {
+   "nap": "2026-04-07",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-04-07",
+   "tipus": "Csere",
+   "qty": 2,
+   "unitPrice": 800,
+   "total": 1600
+  },
+  {
+   "nap": "2026-04-08",
+   "tipus": "EUR világos",
+   "qty": 86,
+   "unitPrice": 2700,
+   "total": 232200
+  },
+  {
+   "nap": "2026-04-08",
+   "tipus": "EUR szürke",
+   "qty": 70,
+   "unitPrice": 1500,
+   "total": 105000
+  },
+  {
+   "nap": "2026-04-08",
+   "tipus": "Egyutas gyenge",
+   "qty": 52,
+   "unitPrice": 600,
+   "total": 31200
+  },
+  {
+   "nap": "2026-04-08",
+   "tipus": "Színes",
+   "qty": 40,
+   "unitPrice": 1000,
+   "total": 40000
+  },
+  {
+   "nap": "2026-04-08",
+   "tipus": "Gitterbox",
+   "qty": 2,
+   "unitPrice": 17000,
+   "total": 34000
+  },
+  {
+   "nap": "2026-04-08",
+   "tipus": "Csere",
+   "qty": 1,
+   "unitPrice": 800,
+   "total": 800
+  },
+  {
+   "nap": "2026-04-09",
+   "tipus": "EUR világos",
+   "qty": 169,
+   "unitPrice": 2700,
+   "total": 456300
+  },
+  {
+   "nap": "2026-04-09",
+   "tipus": "EUR szürke",
+   "qty": 98,
+   "unitPrice": 1500,
+   "total": 147000
+  },
+  {
+   "nap": "2026-04-09",
+   "tipus": "Egyutas gyenge",
+   "qty": 23,
+   "unitPrice": 600,
+   "total": 13800
+  },
+  {
+   "nap": "2026-04-09",
+   "tipus": "Színes",
+   "qty": 1,
+   "unitPrice": 1000,
+   "total": 1000
+  },
+  {
+   "nap": "2026-04-09",
+   "tipus": "Csere",
+   "qty": 7,
+   "unitPrice": 800,
+   "total": 5600
+  },
+  {
+   "nap": "2026-04-10",
+   "tipus": "EUR világos",
+   "qty": 178,
+   "unitPrice": 2700,
+   "total": 480600
+  },
+  {
+   "nap": "2026-04-10",
+   "tipus": "EUR szürke",
+   "qty": 47,
+   "unitPrice": 1500,
+   "total": 70500
+  },
+  {
+   "nap": "2026-04-10",
+   "tipus": "Egyutas gyenge",
+   "qty": 1,
+   "unitPrice": 600,
+   "total": 600
+  },
+  {
+   "nap": "2026-04-13",
+   "tipus": "EUR világos",
+   "qty": 73,
+   "unitPrice": 2700,
+   "total": 197100
+  },
+  {
+   "nap": "2026-04-13",
+   "tipus": "EUR szürke",
+   "qty": 95,
+   "unitPrice": 1500,
+   "total": 142500
+  },
+  {
+   "nap": "2026-04-13",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 1100,
+   "total": 1100
+  },
+  {
+   "nap": "2026-04-13",
+   "tipus": "Egyutas gyenge",
+   "qty": 68,
+   "unitPrice": 600,
+   "total": 40800
+  },
+  {
+   "nap": "2026-04-13",
+   "tipus": "Színes",
+   "qty": 25,
+   "unitPrice": 1000,
+   "total": 25000
+  },
+  {
+   "nap": "2026-04-13",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-04-14",
+   "tipus": "EUR világos",
+   "qty": 81,
+   "unitPrice": 2700,
+   "total": 218700
+  },
+  {
+   "nap": "2026-04-14",
+   "tipus": "EUR szürke",
+   "qty": 53,
+   "unitPrice": 1500,
+   "total": 79500
+  },
+  {
+   "nap": "2026-04-14",
+   "tipus": "Egyutas 80-as",
+   "qty": 2,
+   "unitPrice": 1100,
+   "total": 2200
+  },
+  {
+   "nap": "2026-04-14",
+   "tipus": "Egyutas gyenge",
+   "qty": 1,
+   "unitPrice": 600,
+   "total": 600
+  },
+  {
+   "nap": "2026-04-14",
+   "tipus": "Színes",
+   "qty": 14,
+   "unitPrice": 1000,
+   "total": 14000
+  },
+  {
+   "nap": "2026-04-14",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-04-15",
+   "tipus": "EUR világos",
+   "qty": 90,
+   "unitPrice": 2700,
+   "total": 243000
+  },
+  {
+   "nap": "2026-04-15",
+   "tipus": "EUR szürke",
+   "qty": 69,
+   "unitPrice": 1500,
+   "total": 103500
+  },
+  {
+   "nap": "2026-04-15",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 1100,
+   "total": 1100
+  },
+  {
+   "nap": "2026-04-15",
+   "tipus": "Egyutas 100-as",
+   "qty": 21,
+   "unitPrice": 800,
+   "total": 16800
+  },
+  {
+   "nap": "2026-04-15",
+   "tipus": "Egyutas gyenge",
+   "qty": 9,
+   "unitPrice": 600,
+   "total": 5400
+  },
+  {
+   "nap": "2026-04-15",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-04-16",
+   "tipus": "EUR világos",
+   "qty": 119,
+   "unitPrice": 2700,
+   "total": 321300
+  },
+  {
+   "nap": "2026-04-16",
+   "tipus": "EUR szürke",
+   "qty": 42,
+   "unitPrice": 1500,
+   "total": 63000
+  },
+  {
+   "nap": "2026-04-16",
+   "tipus": "Egyutas 80-as",
+   "qty": 16,
+   "unitPrice": 1100,
+   "total": 17600
+  },
+  {
+   "nap": "2026-04-16",
+   "tipus": "Egyutas gyenge",
+   "qty": 96,
+   "unitPrice": 600,
+   "total": 57600
+  },
+  {
+   "nap": "2026-04-16",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-04-16",
+   "tipus": "Csere",
+   "qty": 37,
+   "unitPrice": 800,
+   "total": 29600
+  },
+  {
+   "nap": "2026-04-16",
+   "tipus": "Raklap magasító",
+   "qty": 8,
+   "unitPrice": 500,
+   "total": 4000
+  },
+  {
+   "nap": "2026-04-17",
+   "tipus": "EUR világos",
+   "qty": 210,
+   "unitPrice": 2700,
+   "total": 567000
+  },
+  {
+   "nap": "2026-04-17",
+   "tipus": "EUR szürke",
+   "qty": 102,
+   "unitPrice": 1500,
+   "total": 153000
+  },
+  {
+   "nap": "2026-04-17",
+   "tipus": "Egyutas 80-as",
+   "qty": 3,
+   "unitPrice": 1100,
+   "total": 3300
+  },
+  {
+   "nap": "2026-04-17",
+   "tipus": "Egyutas gyenge",
+   "qty": 8,
+   "unitPrice": 600,
+   "total": 4800
+  },
+  {
+   "nap": "2026-04-17",
+   "tipus": "Csere",
+   "qty": 9,
+   "unitPrice": 800,
+   "total": 7200
+  },
+  {
+   "nap": "2026-04-20",
+   "tipus": "EUR világos",
+   "qty": 124,
+   "unitPrice": 2700,
+   "total": 334800
+  },
+  {
+   "nap": "2026-04-20",
+   "tipus": "EUR szürke",
+   "qty": 90,
+   "unitPrice": 1500,
+   "total": 135000
+  },
+  {
+   "nap": "2026-04-20",
+   "tipus": "Színes",
+   "qty": 49,
+   "unitPrice": 1000,
+   "total": 49000
+  },
+  {
+   "nap": "2026-04-20",
+   "tipus": "Gitterbox",
+   "qty": 2,
+   "unitPrice": 17000,
+   "total": 34000
+  },
+  {
+   "nap": "2026-04-20",
+   "tipus": "Csere",
+   "qty": 2,
+   "unitPrice": 800,
+   "total": 1600
+  },
+  {
+   "nap": "2026-04-21",
+   "tipus": "EUR világos",
+   "qty": 245,
+   "unitPrice": 2700,
+   "total": 661500
+  },
+  {
+   "nap": "2026-04-21",
+   "tipus": "EUR szürke",
+   "qty": 68,
+   "unitPrice": 1500,
+   "total": 102000
+  },
+  {
+   "nap": "2026-04-21",
+   "tipus": "Egyutas gyenge",
+   "qty": 33,
+   "unitPrice": 600,
+   "total": 19800
+  },
+  {
+   "nap": "2026-04-21",
+   "tipus": "Színes",
+   "qty": 20,
+   "unitPrice": 1000,
+   "total": 20000
+  },
+  {
+   "nap": "2026-04-21",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-04-22",
+   "tipus": "EUR világos",
+   "qty": 231,
+   "unitPrice": 2700,
+   "total": 623700
+  },
+  {
+   "nap": "2026-04-22",
+   "tipus": "EUR szürke",
+   "qty": 60,
+   "unitPrice": 1500,
+   "total": 90000
+  },
+  {
+   "nap": "2026-04-22",
+   "tipus": "Egyutas gyenge",
+   "qty": 46,
+   "unitPrice": 600,
+   "total": 27600
+  },
+  {
+   "nap": "2026-04-22",
+   "tipus": "Csere",
+   "qty": 3,
+   "unitPrice": 800,
+   "total": 2400
+  },
+  {
+   "nap": "2026-04-23",
+   "tipus": "EUR világos",
+   "qty": 71,
+   "unitPrice": 2700,
+   "total": 191700
+  },
+  {
+   "nap": "2026-04-23",
+   "tipus": "EUR szürke",
+   "qty": 26,
+   "unitPrice": 1500,
+   "total": 39000
+  },
+  {
+   "nap": "2026-04-23",
+   "tipus": "Egyutas 80-as",
+   "qty": 11,
+   "unitPrice": 1100,
+   "total": 12100
+  },
+  {
+   "nap": "2026-04-23",
+   "tipus": "Egyutas gyenge",
+   "qty": 51,
+   "unitPrice": 600,
+   "total": 30600
+  },
+  {
+   "nap": "2026-04-23",
+   "tipus": "Csere",
+   "qty": 9,
+   "unitPrice": 800,
+   "total": 7200
+  },
+  {
+   "nap": "2026-04-24",
+   "tipus": "EUR világos",
+   "qty": 81,
+   "unitPrice": 2700,
+   "total": 218700
+  },
+  {
+   "nap": "2026-04-24",
+   "tipus": "EUR szürke",
+   "qty": 54,
+   "unitPrice": 1500,
+   "total": 81000
+  },
+  {
+   "nap": "2026-04-24",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 1100,
+   "total": 1100
+  },
+  {
+   "nap": "2026-04-24",
+   "tipus": "Színes",
+   "qty": 1,
+   "unitPrice": 1000,
+   "total": 1000
+  },
+  {
+   "nap": "2026-04-24",
+   "tipus": "Csere",
+   "qty": 3,
+   "unitPrice": 800,
+   "total": 2400
+  },
+  {
+   "nap": "2026-04-24",
+   "tipus": "Raklap magasító",
+   "qty": 1,
+   "unitPrice": 500,
+   "total": 500
+  },
+  {
+   "nap": "2026-04-25",
+   "tipus": "EUR világos",
+   "qty": 14,
+   "unitPrice": 2700,
+   "total": 37800
+  },
+  {
+   "nap": "2026-04-25",
+   "tipus": "EUR szürke",
+   "qty": 19,
+   "unitPrice": 1500,
+   "total": 28500
+  },
+  {
+   "nap": "2026-04-25",
+   "tipus": "Színes",
+   "qty": 10,
+   "unitPrice": 1000,
+   "total": 10000
+  },
+  {
+   "nap": "2026-04-25",
+   "tipus": "Gitterbox",
+   "qty": 5,
+   "unitPrice": 17000,
+   "total": 85000
+  },
+  {
+   "nap": "2026-04-27",
+   "tipus": "EUR világos",
+   "qty": 75,
+   "unitPrice": 2700,
+   "total": 202500
+  },
+  {
+   "nap": "2026-04-27",
+   "tipus": "EUR szürke",
+   "qty": 175,
+   "unitPrice": 1500,
+   "total": 262500
+  },
+  {
+   "nap": "2026-04-27",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 1100,
+   "total": 1100
+  },
+  {
+   "nap": "2026-04-27",
+   "tipus": "Egyutas gyenge",
+   "qty": 23,
+   "unitPrice": 600,
+   "total": 13800
+  },
+  {
+   "nap": "2026-04-27",
+   "tipus": "Színes",
+   "qty": 14,
+   "unitPrice": 1000,
+   "total": 14000
+  },
+  {
+   "nap": "2026-04-27",
+   "tipus": "Gitterbox",
+   "qty": 2,
+   "unitPrice": 17000,
+   "total": 34000
+  },
+  {
+   "nap": "2026-04-27",
+   "tipus": "Csere",
+   "qty": 9,
+   "unitPrice": 800,
+   "total": 7200
+  },
+  {
+   "nap": "2026-04-28",
+   "tipus": "EUR világos",
+   "qty": 110,
+   "unitPrice": 2700,
+   "total": 297000
+  },
+  {
+   "nap": "2026-04-28",
+   "tipus": "EUR szürke",
+   "qty": 33,
+   "unitPrice": 1500,
+   "total": 49500
+  },
+  {
+   "nap": "2026-04-28",
+   "tipus": "Egyutas 80-as",
+   "qty": 8,
+   "unitPrice": 1100,
+   "total": 8800
+  },
+  {
+   "nap": "2026-04-28",
+   "tipus": "Egyutas 100-as",
+   "qty": 1,
+   "unitPrice": 800,
+   "total": 800
+  },
+  {
+   "nap": "2026-04-28",
+   "tipus": "Egyutas gyenge",
+   "qty": 51,
+   "unitPrice": 600,
+   "total": 30600
+  },
+  {
+   "nap": "2026-04-28",
+   "tipus": "Színes",
+   "qty": 24,
+   "unitPrice": 1000,
+   "total": 24000
+  },
+  {
+   "nap": "2026-04-28",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-04-29",
+   "tipus": "EUR világos",
+   "qty": 31,
+   "unitPrice": 2700,
+   "total": 83700
+  },
+  {
+   "nap": "2026-04-29",
+   "tipus": "EUR szürke",
+   "qty": 30,
+   "unitPrice": 1500,
+   "total": 45000
+  },
+  {
+   "nap": "2026-04-29",
+   "tipus": "Egyutas 80-as",
+   "qty": 14,
+   "unitPrice": 1100,
+   "total": 15400
+  },
+  {
+   "nap": "2026-04-29",
+   "tipus": "Egyutas 100-as",
+   "qty": 3,
+   "unitPrice": 800,
+   "total": 2400
+  },
+  {
+   "nap": "2026-04-29",
+   "tipus": "Egyutas gyenge",
+   "qty": 2,
+   "unitPrice": 600,
+   "total": 1200
+  },
+  {
+   "nap": "2026-04-29",
+   "tipus": "Színes",
+   "qty": 28,
+   "unitPrice": 1000,
+   "total": 28000
+  },
+  {
+   "nap": "2026-04-29",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-04-30",
+   "tipus": "EUR világos",
+   "qty": 146,
+   "unitPrice": 2700,
+   "total": 394200
+  },
+  {
+   "nap": "2026-04-30",
+   "tipus": "EUR szürke",
+   "qty": 65,
+   "unitPrice": 1500,
+   "total": 97500
+  },
+  {
+   "nap": "2026-04-30",
+   "tipus": "Egyutas 80-as",
+   "qty": 2,
+   "unitPrice": 1100,
+   "total": 2200
+  },
+  {
+   "nap": "2026-04-30",
+   "tipus": "Egyutas gyenge",
+   "qty": 10,
+   "unitPrice": 600,
+   "total": 6000
+  },
+  {
+   "nap": "2026-04-30",
+   "tipus": "Színes",
+   "qty": 6,
+   "unitPrice": 1000,
+   "total": 6000
+  },
+  {
+   "nap": "2026-05-04",
+   "tipus": "EUR világos",
+   "qty": 58,
+   "unitPrice": 2700,
+   "total": 156600
+  },
+  {
+   "nap": "2026-05-04",
+   "tipus": "EUR szürke",
+   "qty": 37,
+   "unitPrice": 1500,
+   "total": 55500
+  },
+  {
+   "nap": "2026-05-04",
+   "tipus": "Egyutas gyenge",
+   "qty": 69,
+   "unitPrice": 600,
+   "total": 41400
+  },
+  {
+   "nap": "2026-05-04",
+   "tipus": "Színes",
+   "qty": 39,
+   "unitPrice": 1000,
+   "total": 39000
+  },
+  {
+   "nap": "2026-05-04",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-05-05",
+   "tipus": "EUR világos",
+   "qty": 299,
+   "unitPrice": 2700,
+   "total": 807300
+  },
+  {
+   "nap": "2026-05-05",
+   "tipus": "EUR szürke",
+   "qty": 37,
+   "unitPrice": 1500,
+   "total": 55500
+  },
+  {
+   "nap": "2026-05-05",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 1100,
+   "total": 1100
+  },
+  {
+   "nap": "2026-05-05",
+   "tipus": "Egyutas gyenge",
+   "qty": 24,
+   "unitPrice": 600,
+   "total": 14400
+  },
+  {
+   "nap": "2026-05-05",
+   "tipus": "Színes",
+   "qty": 5,
+   "unitPrice": 1000,
+   "total": 5000
+  },
+  {
+   "nap": "2026-05-05",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-05-05",
+   "tipus": "Csere",
+   "qty": 3,
+   "unitPrice": 800,
+   "total": 2400
+  },
+  {
+   "nap": "2026-05-06",
+   "tipus": "EUR világos",
+   "qty": 90,
+   "unitPrice": 2700,
+   "total": 243000
+  },
+  {
+   "nap": "2026-05-06",
+   "tipus": "EUR szürke",
+   "qty": 47,
+   "unitPrice": 1500,
+   "total": 70500
+  },
+  {
+   "nap": "2026-05-06",
+   "tipus": "Egyutas 80-as",
+   "qty": 2,
+   "unitPrice": 1100,
+   "total": 2200
+  },
+  {
+   "nap": "2026-05-06",
+   "tipus": "Egyutas gyenge",
+   "qty": 45,
+   "unitPrice": 600,
+   "total": 27000
+  },
+  {
+   "nap": "2026-05-06",
+   "tipus": "Színes",
+   "qty": 4,
+   "unitPrice": 1000,
+   "total": 4000
+  },
+  {
+   "nap": "2026-05-06",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-05-07",
+   "tipus": "EUR világos",
+   "qty": 153,
+   "unitPrice": 2700,
+   "total": 413100
+  },
+  {
+   "nap": "2026-05-07",
+   "tipus": "EUR szürke",
+   "qty": 25,
+   "unitPrice": 1500,
+   "total": 37500
+  },
+  {
+   "nap": "2026-05-07",
+   "tipus": "Egyutas 80-as",
+   "qty": 3,
+   "unitPrice": 1100,
+   "total": 3300
+  },
+  {
+   "nap": "2026-05-07",
+   "tipus": "Egyutas 100-as",
+   "qty": 22,
+   "unitPrice": 800,
+   "total": 17600
+  },
+  {
+   "nap": "2026-05-07",
+   "tipus": "Egyutas gyenge",
+   "qty": 71,
+   "unitPrice": 600,
+   "total": 42600
+  },
+  {
+   "nap": "2026-05-07",
+   "tipus": "Csere",
+   "qty": 1,
+   "unitPrice": 800,
+   "total": 800
+  },
+  {
+   "nap": "2026-05-08",
+   "tipus": "EUR világos",
+   "qty": 397,
+   "unitPrice": 2700,
+   "total": 1071900
+  },
+  {
+   "nap": "2026-05-08",
+   "tipus": "EUR szürke",
+   "qty": 52,
+   "unitPrice": 1500,
+   "total": 78000
+  },
+  {
+   "nap": "2026-05-08",
+   "tipus": "Egyutas 80-as",
+   "qty": 8,
+   "unitPrice": 1100,
+   "total": 8800
+  },
+  {
+   "nap": "2026-05-08",
+   "tipus": "Egyutas gyenge",
+   "qty": 50,
+   "unitPrice": 600,
+   "total": 30000
+  },
+  {
+   "nap": "2026-05-08",
+   "tipus": "Színes",
+   "qty": 10,
+   "unitPrice": 1000,
+   "total": 10000
+  },
+  {
+   "nap": "2026-05-08",
+   "tipus": "Gitterbox",
+   "qty": 2,
+   "unitPrice": 17000,
+   "total": 34000
+  },
+  {
+   "nap": "2026-05-08",
+   "tipus": "Csere",
+   "qty": 35,
+   "unitPrice": 800,
+   "total": 28000
+  },
+  {
+   "nap": "2026-05-11",
+   "tipus": "EUR világos",
+   "qty": 270,
+   "unitPrice": 2700,
+   "total": 729000
+  },
+  {
+   "nap": "2026-05-11",
+   "tipus": "EUR szürke",
+   "qty": 73,
+   "unitPrice": 1500,
+   "total": 109500
+  },
+  {
+   "nap": "2026-05-11",
+   "tipus": "Egyutas 80-as",
+   "qty": 4,
+   "unitPrice": 1100,
+   "total": 4400
+  },
+  {
+   "nap": "2026-05-11",
+   "tipus": "Egyutas gyenge",
+   "qty": 72,
+   "unitPrice": 600,
+   "total": 43200
+  },
+  {
+   "nap": "2026-05-11",
+   "tipus": "Színes",
+   "qty": 1,
+   "unitPrice": 1000,
+   "total": 1000
+  },
+  {
+   "nap": "2026-05-12",
+   "tipus": "EUR világos",
+   "qty": 249,
+   "unitPrice": 2700,
+   "total": 672300
+  },
+  {
+   "nap": "2026-05-12",
+   "tipus": "EUR szürke",
+   "qty": 127,
+   "unitPrice": 1500,
+   "total": 190500
+  },
+  {
+   "nap": "2026-05-12",
+   "tipus": "Egyutas 80-as",
+   "qty": 10,
+   "unitPrice": 1100,
+   "total": 11000
+  },
+  {
+   "nap": "2026-05-12",
+   "tipus": "Színes",
+   "qty": 7,
+   "unitPrice": 1000,
+   "total": 7000
+  },
+  {
+   "nap": "2026-05-12",
+   "tipus": "Csere",
+   "qty": 1,
+   "unitPrice": 800,
+   "total": 800
+  },
+  {
+   "nap": "2026-05-13",
+   "tipus": "EUR világos",
+   "qty": 49,
+   "unitPrice": 2700,
+   "total": 132300
+  },
+  {
+   "nap": "2026-05-13",
+   "tipus": "EUR szürke",
+   "qty": 86,
+   "unitPrice": 1500,
+   "total": 129000
+  },
+  {
+   "nap": "2026-05-13",
+   "tipus": "Színes",
+   "qty": 12,
+   "unitPrice": 1000,
+   "total": 12000
+  },
+  {
+   "nap": "2026-05-13",
+   "tipus": "Gitterbox",
+   "qty": 2,
+   "unitPrice": 17000,
+   "total": 34000
+  },
+  {
+   "nap": "2026-05-14",
+   "tipus": "EUR világos",
+   "qty": 184,
+   "unitPrice": 2700,
+   "total": 496800
+  },
+  {
+   "nap": "2026-05-14",
+   "tipus": "EUR szürke",
+   "qty": 61,
+   "unitPrice": 1500,
+   "total": 91500
+  },
+  {
+   "nap": "2026-05-14",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 1100,
+   "total": 1100
+  },
+  {
+   "nap": "2026-05-14",
+   "tipus": "Színes",
+   "qty": 13,
+   "unitPrice": 1000,
+   "total": 13000
+  },
+  {
+   "nap": "2026-05-15",
+   "tipus": "EUR világos",
+   "qty": 84,
+   "unitPrice": 2700,
+   "total": 226800
+  },
+  {
+   "nap": "2026-05-15",
+   "tipus": "EUR szürke",
+   "qty": 41,
+   "unitPrice": 1500,
+   "total": 61500
+  },
+  {
+   "nap": "2026-05-15",
+   "tipus": "Egyutas 80-as",
+   "qty": 7,
+   "unitPrice": 1100,
+   "total": 7700
+  },
+  {
+   "nap": "2026-05-15",
+   "tipus": "Egyutas 100-as",
+   "qty": 22,
+   "unitPrice": 800,
+   "total": 17600
+  },
+  {
+   "nap": "2026-05-15",
+   "tipus": "Színes",
+   "qty": 6,
+   "unitPrice": 1000,
+   "total": 6000
+  },
+  {
+   "nap": "2026-05-15",
+   "tipus": "Csere",
+   "qty": 1,
+   "unitPrice": 800,
+   "total": 800
+  },
+  {
+   "nap": "2026-05-18",
+   "tipus": "EUR világos",
+   "qty": 57,
+   "unitPrice": 2700,
+   "total": 153900
+  },
+  {
+   "nap": "2026-05-18",
+   "tipus": "EUR szürke",
+   "qty": 45,
+   "unitPrice": 1500,
+   "total": 67500
+  },
+  {
+   "nap": "2026-05-18",
+   "tipus": "Egyutas 80-as",
+   "qty": 2,
+   "unitPrice": 1100,
+   "total": 2200
+  },
+  {
+   "nap": "2026-05-18",
+   "tipus": "Színes",
+   "qty": 45,
+   "unitPrice": 1000,
+   "total": 45000
+  },
+  {
+   "nap": "2026-05-18",
+   "tipus": "Gitterbox",
+   "qty": 2,
+   "unitPrice": 17000,
+   "total": 34000
+  },
+  {
+   "nap": "2026-05-18",
+   "tipus": "Csere",
+   "qty": 1,
+   "unitPrice": 800,
+   "total": 800
+  },
+  {
+   "nap": "2026-05-19",
+   "tipus": "EUR világos",
+   "qty": 191,
+   "unitPrice": 2700,
+   "total": 515700
+  },
+  {
+   "nap": "2026-05-19",
+   "tipus": "EUR szürke",
+   "qty": 78,
+   "unitPrice": 1500,
+   "total": 117000
+  },
+  {
+   "nap": "2026-05-19",
+   "tipus": "Egyutas gyenge",
+   "qty": 3,
+   "unitPrice": 600,
+   "total": 1800
+  },
+  {
+   "nap": "2026-05-19",
+   "tipus": "Színes",
+   "qty": 16,
+   "unitPrice": 1000,
+   "total": 16000
+  },
+  {
+   "nap": "2026-05-20",
+   "tipus": "EUR világos",
+   "qty": 74,
+   "unitPrice": 2700,
+   "total": 199800
+  },
+  {
+   "nap": "2026-05-20",
+   "tipus": "EUR szürke",
+   "qty": 48,
+   "unitPrice": 1500,
+   "total": 72000
+  },
+  {
+   "nap": "2026-05-20",
+   "tipus": "Színes",
+   "qty": 20,
+   "unitPrice": 1000,
+   "total": 20000
+  },
+  {
+   "nap": "2026-05-20",
+   "tipus": "Csere",
+   "qty": 8,
+   "unitPrice": 800,
+   "total": 6400
+  },
+  {
+   "nap": "2026-05-21",
+   "tipus": "EUR világos",
+   "qty": 91,
+   "unitPrice": 2700,
+   "total": 245700
+  },
+  {
+   "nap": "2026-05-21",
+   "tipus": "EUR szürke",
+   "qty": 46,
+   "unitPrice": 1500,
+   "total": 69000
+  },
+  {
+   "nap": "2026-05-21",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 1100,
+   "total": 1100
+  },
+  {
+   "nap": "2026-05-21",
+   "tipus": "Egyutas 100-as",
+   "qty": 22,
+   "unitPrice": 800,
+   "total": 17600
+  },
+  {
+   "nap": "2026-05-21",
+   "tipus": "Színes",
+   "qty": 9,
+   "unitPrice": 1000,
+   "total": 9000
+  },
+  {
+   "nap": "2026-05-22",
+   "tipus": "EUR világos",
+   "qty": 152,
+   "unitPrice": 2700,
+   "total": 410400
+  },
+  {
+   "nap": "2026-05-22",
+   "tipus": "EUR szürke",
+   "qty": 41,
+   "unitPrice": 1500,
+   "total": 61500
+  },
+  {
+   "nap": "2026-05-22",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 1100,
+   "total": 1100
+  },
+  {
+   "nap": "2026-05-22",
+   "tipus": "Színes",
+   "qty": 19,
+   "unitPrice": 1000,
+   "total": 19000
+  },
+  {
+   "nap": "2026-05-22",
+   "tipus": "Csere",
+   "qty": 54,
+   "unitPrice": 800,
+   "total": 43200
+  },
+  {
+   "nap": "2026-05-22",
+   "tipus": "H1 raklap",
+   "qty": 4,
+   "unitPrice": 5500,
+   "total": 22000
+  },
+  {
+   "nap": "2026-05-26",
+   "tipus": "EUR világos",
+   "qty": 31,
+   "unitPrice": 2700,
+   "total": 83700
+  },
+  {
+   "nap": "2026-05-26",
+   "tipus": "EUR szürke",
+   "qty": 101,
+   "unitPrice": 1500,
+   "total": 151500
+  },
+  {
+   "nap": "2026-05-26",
+   "tipus": "Egyutas 80-as",
+   "qty": 2,
+   "unitPrice": 1100,
+   "total": 2200
+  },
+  {
+   "nap": "2026-05-26",
+   "tipus": "Egyutas gyenge",
+   "qty": 123,
+   "unitPrice": 600,
+   "total": 73800
+  },
+  {
+   "nap": "2026-05-26",
+   "tipus": "Színes",
+   "qty": 48,
+   "unitPrice": 1000,
+   "total": 48000
+  },
+  {
+   "nap": "2026-05-26",
+   "tipus": "Gitterbox",
+   "qty": 2,
+   "unitPrice": 17000,
+   "total": 34000
+  },
+  {
+   "nap": "2026-05-26",
+   "tipus": "Csere",
+   "qty": 2,
+   "unitPrice": 800,
+   "total": 1600
+  },
+  {
+   "nap": "2026-05-27",
+   "tipus": "EUR világos",
+   "qty": 48,
+   "unitPrice": 2700,
+   "total": 129600
+  },
+  {
+   "nap": "2026-05-27",
+   "tipus": "EUR szürke",
+   "qty": 25,
+   "unitPrice": 1500,
+   "total": 37500
+  },
+  {
+   "nap": "2026-05-27",
+   "tipus": "Színes",
+   "qty": 7,
+   "unitPrice": 1000,
+   "total": 7000
+  },
+  {
+   "nap": "2026-05-27",
+   "tipus": "Gitterbox",
+   "qty": 3,
+   "unitPrice": 17000,
+   "total": 51000
+  },
+  {
+   "nap": "2026-05-27",
+   "tipus": "Csere",
+   "qty": 3,
+   "unitPrice": 800,
+   "total": 2400
+  },
+  {
+   "nap": "2026-05-28",
+   "tipus": "EUR világos",
+   "qty": 84,
+   "unitPrice": 2700,
+   "total": 226800
+  },
+  {
+   "nap": "2026-05-28",
+   "tipus": "EUR szürke",
+   "qty": 26,
+   "unitPrice": 1500,
+   "total": 39000
+  },
+  {
+   "nap": "2026-05-28",
+   "tipus": "Egyutas 80-as",
+   "qty": 14,
+   "unitPrice": 1100,
+   "total": 15400
+  },
+  {
+   "nap": "2026-05-28",
+   "tipus": "Egyutas 100-as",
+   "qty": 27,
+   "unitPrice": 800,
+   "total": 21600
+  },
+  {
+   "nap": "2026-05-28",
+   "tipus": "Színes",
+   "qty": 1,
+   "unitPrice": 1000,
+   "total": 1000
+  },
+  {
+   "nap": "2026-05-28",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-05-29",
+   "tipus": "EUR világos",
+   "qty": 26,
+   "unitPrice": 2700,
+   "total": 70200
+  },
+  {
+   "nap": "2026-05-29",
+   "tipus": "EUR szürke",
+   "qty": 28,
+   "unitPrice": 1500,
+   "total": 42000
+  },
+  {
+   "nap": "2026-05-29",
+   "tipus": "Egyutas 80-as",
+   "qty": 2,
+   "unitPrice": 1100,
+   "total": 2200
+  },
+  {
+   "nap": "2026-05-29",
+   "tipus": "Színes",
+   "qty": 1,
+   "unitPrice": 1000,
+   "total": 1000
+  },
+  {
+   "nap": "2026-05-29",
+   "tipus": "Csere",
+   "qty": 1,
+   "unitPrice": 800,
+   "total": 800
+  },
+  {
+   "nap": "2026-05-29",
+   "tipus": "H1 raklap",
+   "qty": 6,
+   "unitPrice": 5500,
+   "total": 33000
+  },
+  {
+   "nap": "2026-06-01",
+   "tipus": "EUR világos",
+   "qty": 35,
+   "unitPrice": 2700,
+   "total": 94500
+  },
+  {
+   "nap": "2026-06-01",
+   "tipus": "EUR szürke",
+   "qty": 139,
+   "unitPrice": 1500,
+   "total": 208500
+  },
+  {
+   "nap": "2026-06-01",
+   "tipus": "Egyutas 80-as",
+   "qty": 10,
+   "unitPrice": 1100,
+   "total": 11000
+  },
+  {
+   "nap": "2026-06-01",
+   "tipus": "Csere",
+   "qty": 12,
+   "unitPrice": 800,
+   "total": 9600
+  },
+  {
+   "nap": "2026-06-02",
+   "tipus": "EUR világos",
+   "qty": 60,
+   "unitPrice": 2700,
+   "total": 162000
+  },
+  {
+   "nap": "2026-06-02",
+   "tipus": "EUR szürke",
+   "qty": 51,
+   "unitPrice": 1500,
+   "total": 76500
+  },
+  {
+   "nap": "2026-06-02",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 1100,
+   "total": 1100
+  },
+  {
+   "nap": "2026-06-02",
+   "tipus": "Egyutas gyenge",
+   "qty": 100,
+   "unitPrice": 600,
+   "total": 60000
+  },
+  {
+   "nap": "2026-06-02",
+   "tipus": "H1 raklap",
+   "qty": 3,
+   "unitPrice": 5500,
+   "total": 16500
+  },
+  {
+   "nap": "2026-06-03",
+   "tipus": "EUR világos",
+   "qty": 110,
+   "unitPrice": 2700,
+   "total": 297000
+  },
+  {
+   "nap": "2026-06-03",
+   "tipus": "EUR szürke",
+   "qty": 59,
+   "unitPrice": 1500,
+   "total": 88500
+  },
+  {
+   "nap": "2026-06-03",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 1100,
+   "total": 1100
+  },
+  {
+   "nap": "2026-06-03",
+   "tipus": "Egyutas 100-as",
+   "qty": 23,
+   "unitPrice": 800,
+   "total": 18400
+  },
+  {
+   "nap": "2026-06-03",
+   "tipus": "Egyutas gyenge",
+   "qty": 7,
+   "unitPrice": 600,
+   "total": 4200
+  },
+  {
+   "nap": "2026-06-03",
+   "tipus": "Színes",
+   "qty": 4,
+   "unitPrice": 1000,
+   "total": 4000
+  },
+  {
+   "nap": "2026-06-03",
+   "tipus": "Csere",
+   "qty": 2,
+   "unitPrice": 800,
+   "total": 1600
+  },
+  {
+   "nap": "2026-06-04",
+   "tipus": "EUR világos",
+   "qty": 38,
+   "unitPrice": 2700,
+   "total": 102600
+  },
+  {
+   "nap": "2026-06-04",
+   "tipus": "EUR szürke",
+   "qty": 16,
+   "unitPrice": 1500,
+   "total": 24000
+  },
+  {
+   "nap": "2026-06-04",
+   "tipus": "Egyutas gyenge",
+   "qty": 94,
+   "unitPrice": 600,
+   "total": 56400
+  },
+  {
+   "nap": "2026-06-04",
+   "tipus": "Színes",
+   "qty": 25,
+   "unitPrice": 1000,
+   "total": 25000
+  },
+  {
+   "nap": "2026-06-05",
+   "tipus": "EUR világos",
+   "qty": 250,
+   "unitPrice": 2700,
+   "total": 675000
+  },
+  {
+   "nap": "2026-06-05",
+   "tipus": "EUR szürke",
+   "qty": 65,
+   "unitPrice": 1500,
+   "total": 97500
+  },
+  {
+   "nap": "2026-06-08",
+   "tipus": "EUR világos",
+   "qty": 120,
+   "unitPrice": 2700,
+   "total": 324000
+  },
+  {
+   "nap": "2026-06-08",
+   "tipus": "EUR szürke",
+   "qty": 48,
+   "unitPrice": 1500,
+   "total": 72000
+  },
+  {
+   "nap": "2026-06-08",
+   "tipus": "Egyutas 80-as",
+   "qty": 9,
+   "unitPrice": 1100,
+   "total": 9900
+  },
+  {
+   "nap": "2026-06-08",
+   "tipus": "Egyutas gyenge",
+   "qty": 101,
+   "unitPrice": 600,
+   "total": 60600
+  },
+  {
+   "nap": "2026-06-08",
+   "tipus": "Színes",
+   "qty": 44,
+   "unitPrice": 1000,
+   "total": 44000
+  },
+  {
+   "nap": "2026-06-08",
+   "tipus": "H1 raklap",
+   "qty": 6,
+   "unitPrice": 5500,
+   "total": 33000
+  },
+  {
+   "nap": "2026-06-09",
+   "tipus": "EUR világos",
+   "qty": 42,
+   "unitPrice": 2700,
+   "total": 113400
+  },
+  {
+   "nap": "2026-06-09",
+   "tipus": "EUR szürke",
+   "qty": 64,
+   "unitPrice": 1500,
+   "total": 96000
+  },
+  {
+   "nap": "2026-06-09",
+   "tipus": "Egyutas 80-as",
+   "qty": 24,
+   "unitPrice": 1100,
+   "total": 26400
+  },
+  {
+   "nap": "2026-06-09",
+   "tipus": "Egyutas gyenge",
+   "qty": 82,
+   "unitPrice": 600,
+   "total": 49200
+  },
+  {
+   "nap": "2026-06-09",
+   "tipus": "Színes",
+   "qty": 1,
+   "unitPrice": 1000,
+   "total": 1000
+  },
+  {
+   "nap": "2026-06-09",
+   "tipus": "Gitterbox",
+   "qty": 2,
+   "unitPrice": 17000,
+   "total": 34000
+  },
+  {
+   "nap": "2026-06-09",
+   "tipus": "Csere",
+   "qty": 34,
+   "unitPrice": 800,
+   "total": 27200
+  },
+  {
+   "nap": "2026-06-10",
+   "tipus": "EUR világos",
+   "qty": 63,
+   "unitPrice": 2700,
+   "total": 170100
+  },
+  {
+   "nap": "2026-06-10",
+   "tipus": "EUR szürke",
+   "qty": 37,
+   "unitPrice": 1500,
+   "total": 55500
+  },
+  {
+   "nap": "2026-06-10",
+   "tipus": "Egyutas 80-as",
+   "qty": 2,
+   "unitPrice": 1100,
+   "total": 2200
+  },
+  {
+   "nap": "2026-06-10",
+   "tipus": "Egyutas 100-as",
+   "qty": 6,
+   "unitPrice": 800,
+   "total": 4800
+  },
+  {
+   "nap": "2026-06-10",
+   "tipus": "Egyutas gyenge",
+   "qty": 10,
+   "unitPrice": 600,
+   "total": 6000
+  },
+  {
+   "nap": "2026-06-10",
+   "tipus": "Csere",
+   "qty": 2,
+   "unitPrice": 800,
+   "total": 1600
+  },
+  {
+   "nap": "2026-06-11",
+   "tipus": "EUR világos",
+   "qty": 70,
+   "unitPrice": 2700,
+   "total": 189000
+  },
+  {
+   "nap": "2026-06-11",
+   "tipus": "EUR szürke",
+   "qty": 8,
+   "unitPrice": 1500,
+   "total": 12000
+  },
+  {
+   "nap": "2026-06-11",
+   "tipus": "Egyutas 80-as",
+   "qty": 2,
+   "unitPrice": 1100,
+   "total": 2200
+  },
+  {
+   "nap": "2026-06-11",
+   "tipus": "Egyutas 100-as",
+   "qty": 22,
+   "unitPrice": 800,
+   "total": 17600
+  },
+  {
+   "nap": "2026-06-11",
+   "tipus": "Egyutas gyenge",
+   "qty": 1,
+   "unitPrice": 600,
+   "total": 600
+  },
+  {
+   "nap": "2026-06-11",
+   "tipus": "Színes",
+   "qty": 10,
+   "unitPrice": 1000,
+   "total": 10000
+  },
+  {
+   "nap": "2026-06-12",
+   "tipus": "EUR világos",
+   "qty": 118,
+   "unitPrice": 2700,
+   "total": 318600
+  },
+  {
+   "nap": "2026-06-12",
+   "tipus": "EUR szürke",
+   "qty": 49,
+   "unitPrice": 1500,
+   "total": 73500
+  },
+  {
+   "nap": "2026-06-12",
+   "tipus": "Egyutas 80-as",
+   "qty": 10,
+   "unitPrice": 1100,
+   "total": 11000
+  },
+  {
+   "nap": "2026-06-12",
+   "tipus": "Egyutas gyenge",
+   "qty": 26,
+   "unitPrice": 600,
+   "total": 15600
+  },
+  {
+   "nap": "2026-06-15",
+   "tipus": "EUR világos",
+   "qty": 179,
+   "unitPrice": 2700,
+   "total": 483300
+  },
+  {
+   "nap": "2026-06-15",
+   "tipus": "EUR szürke",
+   "qty": 86,
+   "unitPrice": 1500,
+   "total": 129000
+  },
+  {
+   "nap": "2026-06-15",
+   "tipus": "Egyutas 80-as",
+   "qty": 17,
+   "unitPrice": 1100,
+   "total": 18700
+  },
+  {
+   "nap": "2026-06-15",
+   "tipus": "Egyutas gyenge",
+   "qty": 85,
+   "unitPrice": 600,
+   "total": 51000
+  },
+  {
+   "nap": "2026-06-15",
+   "tipus": "Színes",
+   "qty": 13,
+   "unitPrice": 1000,
+   "total": 13000
+  },
+  {
+   "nap": "2026-06-15",
+   "tipus": "Csere",
+   "qty": 2,
+   "unitPrice": 800,
+   "total": 1600
+  },
+  {
+   "nap": "2026-06-15",
+   "tipus": "H1 raklap",
+   "qty": 18,
+   "unitPrice": 5500,
+   "total": 99000
+  },
+  {
+   "nap": "2026-06-16",
+   "tipus": "EUR világos",
+   "qty": 113,
+   "unitPrice": 2700,
+   "total": 305100
+  },
+  {
+   "nap": "2026-06-16",
+   "tipus": "EUR szürke",
+   "qty": 34,
+   "unitPrice": 1500,
+   "total": 51000
+  },
+  {
+   "nap": "2026-06-16",
+   "tipus": "Egyutas gyenge",
+   "qty": 94,
+   "unitPrice": 600,
+   "total": 56400
+  },
+  {
+   "nap": "2026-06-16",
+   "tipus": "Színes",
+   "qty": 3,
+   "unitPrice": 1000,
+   "total": 3000
+  },
+  {
+   "nap": "2026-06-17",
+   "tipus": "EUR világos",
+   "qty": 62,
+   "unitPrice": 2700,
+   "total": 167400
+  },
+  {
+   "nap": "2026-06-17",
+   "tipus": "EUR szürke",
+   "qty": 59,
+   "unitPrice": 1500,
+   "total": 88500
+  },
+  {
+   "nap": "2026-06-17",
+   "tipus": "Egyutas 80-as",
+   "qty": 13,
+   "unitPrice": 1100,
+   "total": 14300
+  },
+  {
+   "nap": "2026-06-17",
+   "tipus": "Egyutas gyenge",
+   "qty": 67,
+   "unitPrice": 600,
+   "total": 40200
+  },
+  {
+   "nap": "2026-06-17",
+   "tipus": "Csere",
+   "qty": 1,
+   "unitPrice": 800,
+   "total": 800
+  },
+  {
+   "nap": "2026-06-17",
+   "tipus": "H1 raklap",
+   "qty": 6,
+   "unitPrice": 5500,
+   "total": 33000
+  },
+  {
+   "nap": "2026-06-18",
+   "tipus": "EUR világos",
+   "qty": 348,
+   "unitPrice": 2700,
+   "total": 939600
+  },
+  {
+   "nap": "2026-06-18",
+   "tipus": "EUR szürke",
+   "qty": 43,
+   "unitPrice": 1500,
+   "total": 64500
+  },
+  {
+   "nap": "2026-06-18",
+   "tipus": "Egyutas gyenge",
+   "qty": 93,
+   "unitPrice": 600,
+   "total": 55800
+  },
+  {
+   "nap": "2026-06-18",
+   "tipus": "Színes",
+   "qty": 28,
+   "unitPrice": 1000,
+   "total": 28000
+  },
+  {
+   "nap": "2026-06-19",
+   "tipus": "EUR világos",
+   "qty": 51,
+   "unitPrice": 2700,
+   "total": 137700
+  },
+  {
+   "nap": "2026-06-19",
+   "tipus": "EUR szürke",
+   "qty": 14,
+   "unitPrice": 1500,
+   "total": 21000
+  },
+  {
+   "nap": "2026-06-19",
+   "tipus": "Egyutas 80-as",
+   "qty": 18,
+   "unitPrice": 1100,
+   "total": 19800
+  },
+  {
+   "nap": "2026-06-19",
+   "tipus": "Egyutas gyenge",
+   "qty": 60,
+   "unitPrice": 600,
+   "total": 36000
+  },
+  {
+   "nap": "2026-06-19",
+   "tipus": "Gitterbox",
+   "qty": 2,
+   "unitPrice": 17000,
+   "total": 34000
+  },
+  {
+   "nap": "2026-06-19",
+   "tipus": "Csere",
+   "qty": 23,
+   "unitPrice": 800,
+   "total": 18400
+  },
+  {
+   "nap": "2026-06-22",
+   "tipus": "EUR világos",
+   "qty": 83,
+   "unitPrice": 2700,
+   "total": 224100
+  },
+  {
+   "nap": "2026-06-22",
+   "tipus": "EUR szürke",
+   "qty": 54,
+   "unitPrice": 1500,
+   "total": 81000
+  },
+  {
+   "nap": "2026-06-22",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 1100,
+   "total": 1100
+  },
+  {
+   "nap": "2026-06-22",
+   "tipus": "Egyutas gyenge",
+   "qty": 50,
+   "unitPrice": 600,
+   "total": 30000
+  },
+  {
+   "nap": "2026-06-23",
+   "tipus": "EUR világos",
+   "qty": 39,
+   "unitPrice": 2700,
+   "total": 105300
+  },
+  {
+   "nap": "2026-06-23",
+   "tipus": "EUR szürke",
+   "qty": 65,
+   "unitPrice": 1500,
+   "total": 97500
+  },
+  {
+   "nap": "2026-06-23",
+   "tipus": "Egyutas 80-as",
+   "qty": 21,
+   "unitPrice": 1100,
+   "total": 23100
+  },
+  {
+   "nap": "2026-06-23",
+   "tipus": "Egyutas gyenge",
+   "qty": 82,
+   "unitPrice": 600,
+   "total": 49200
+  },
+  {
+   "nap": "2026-06-23",
+   "tipus": "Színes",
+   "qty": 14,
+   "unitPrice": 1000,
+   "total": 14000
+  },
+  {
+   "nap": "2026-06-23",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-06-24",
+   "tipus": "EUR világos",
+   "qty": 16,
+   "unitPrice": 2700,
+   "total": 43200
+  },
+  {
+   "nap": "2026-06-24",
+   "tipus": "EUR szürke",
+   "qty": 40,
+   "unitPrice": 1500,
+   "total": 60000
+  },
+  {
+   "nap": "2026-06-24",
+   "tipus": "Egyutas 80-as",
+   "qty": 18,
+   "unitPrice": 1100,
+   "total": 19800
+  },
+  {
+   "nap": "2026-06-24",
+   "tipus": "Egyutas gyenge",
+   "qty": 39,
+   "unitPrice": 600,
+   "total": 23400
+  },
+  {
+   "nap": "2026-06-24",
+   "tipus": "Színes",
+   "qty": 10,
+   "unitPrice": 1000,
+   "total": 10000
+  },
+  {
+   "nap": "2026-06-24",
+   "tipus": "Csere",
+   "qty": 4,
+   "unitPrice": 800,
+   "total": 3200
+  },
+  {
+   "nap": "2026-06-25",
+   "tipus": "EUR világos",
+   "qty": 32,
+   "unitPrice": 2700,
+   "total": 86400
+  },
+  {
+   "nap": "2026-06-25",
+   "tipus": "EUR szürke",
+   "qty": 68,
+   "unitPrice": 1500,
+   "total": 102000
+  },
+  {
+   "nap": "2026-06-25",
+   "tipus": "Egyutas 80-as",
+   "qty": 6,
+   "unitPrice": 1100,
+   "total": 6600
+  },
+  {
+   "nap": "2026-06-25",
+   "tipus": "Színes",
+   "qty": 1,
+   "unitPrice": 1000,
+   "total": 1000
+  },
+  {
+   "nap": "2026-06-25",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-06-25",
+   "tipus": "Csere",
+   "qty": 2,
+   "unitPrice": 800,
+   "total": 1600
+  },
+  {
+   "nap": "2026-06-26",
+   "tipus": "EUR világos",
+   "qty": 143,
+   "unitPrice": 2700,
+   "total": 386100
+  },
+  {
+   "nap": "2026-06-26",
+   "tipus": "EUR szürke",
+   "qty": 25,
+   "unitPrice": 1500,
+   "total": 37500
+  },
+  {
+   "nap": "2026-06-26",
+   "tipus": "Színes",
+   "qty": 17,
+   "unitPrice": 1000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-06-26",
+   "tipus": "Csere",
+   "qty": 14,
+   "unitPrice": 800,
+   "total": 11200
+  },
+  {
+   "nap": "2026-06-26",
+   "tipus": "H1 raklap",
+   "qty": 7,
+   "unitPrice": 5500,
+   "total": 38500
+  },
+  {
+   "nap": "2026-06-27",
+   "tipus": "EUR világos",
+   "qty": 63,
+   "unitPrice": 2700,
+   "total": 170100
+  },
+  {
+   "nap": "2026-06-27",
+   "tipus": "EUR szürke",
+   "qty": 18,
+   "unitPrice": 1500,
+   "total": 27000
+  },
+  {
+   "nap": "2026-06-27",
+   "tipus": "Egyutas gyenge",
+   "qty": 1,
+   "unitPrice": 600,
+   "total": 600
+  },
+  {
+   "nap": "2026-06-29",
+   "tipus": "EUR világos",
+   "qty": 128,
+   "unitPrice": 2700,
+   "total": 345600
+  },
+  {
+   "nap": "2026-06-29",
+   "tipus": "EUR szürke",
+   "qty": 60,
+   "unitPrice": 1500,
+   "total": 90000
+  },
+  {
+   "nap": "2026-06-29",
+   "tipus": "Egyutas 80-as",
+   "qty": 3,
+   "unitPrice": 1100,
+   "total": 3300
+  },
+  {
+   "nap": "2026-06-29",
+   "tipus": "Színes",
+   "qty": 5,
+   "unitPrice": 1000,
+   "total": 5000
+  },
+  {
+   "nap": "2026-06-29",
+   "tipus": "Csere",
+   "qty": 18,
+   "unitPrice": 800,
+   "total": 14400
+  },
+  {
+   "nap": "2026-06-29",
+   "tipus": "H1 raklap",
+   "qty": 75,
+   "unitPrice": 5500,
+   "total": 412500
+  },
+  {
+   "nap": "2026-06-30",
+   "tipus": "EUR világos",
+   "qty": 32,
+   "unitPrice": 2700,
+   "total": 86400
+  },
+  {
+   "nap": "2026-06-30",
+   "tipus": "EUR szürke",
+   "qty": 49,
+   "unitPrice": 1500,
+   "total": 73500
+  },
+  {
+   "nap": "2026-06-30",
+   "tipus": "Egyutas 80-as",
+   "qty": 2,
+   "unitPrice": 1100,
+   "total": 2200
+  },
+  {
+   "nap": "2026-06-30",
+   "tipus": "Egyutas gyenge",
+   "qty": 49,
+   "unitPrice": 600,
+   "total": 29400
+  },
+  {
+   "nap": "2026-06-30",
+   "tipus": "Gitterbox",
+   "qty": 2,
+   "unitPrice": 17000,
+   "total": 34000
+  },
+  {
+   "nap": "2026-06-30",
+   "tipus": "Csere",
+   "qty": 2,
+   "unitPrice": 800,
+   "total": 1600
+  },
+  {
+   "nap": "2026-07-01",
+   "tipus": "EUR világos",
+   "qty": 48,
+   "unitPrice": 2700,
+   "total": 129600
+  },
+  {
+   "nap": "2026-07-01",
+   "tipus": "EUR szürke",
+   "qty": 36,
+   "unitPrice": 1500,
+   "total": 54000
+  },
+  {
+   "nap": "2026-07-01",
+   "tipus": "Egyutas gyenge",
+   "qty": 71,
+   "unitPrice": 600,
+   "total": 42600
+  },
+  {
+   "nap": "2026-07-01",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-07-02",
+   "tipus": "EUR világos",
+   "qty": 85,
+   "unitPrice": 2700,
+   "total": 229500
+  },
+  {
+   "nap": "2026-07-02",
+   "tipus": "EUR szürke",
+   "qty": 15,
+   "unitPrice": 1500,
+   "total": 22500
+  },
+  {
+   "nap": "2026-07-02",
+   "tipus": "Egyutas 80-as",
+   "qty": 6,
+   "unitPrice": 1100,
+   "total": 6600
+  },
+  {
+   "nap": "2026-07-02",
+   "tipus": "Egyutas 100-as",
+   "qty": 22,
+   "unitPrice": 800,
+   "total": 17600
+  },
+  {
+   "nap": "2026-07-02",
+   "tipus": "Egyutas gyenge",
+   "qty": 71,
+   "unitPrice": 600,
+   "total": 42600
+  },
+  {
+   "nap": "2026-07-03",
+   "tipus": "EUR világos",
+   "qty": 56,
+   "unitPrice": 2700,
+   "total": 151200
+  },
+  {
+   "nap": "2026-07-03",
+   "tipus": "EUR szürke",
+   "qty": 33,
+   "unitPrice": 1500,
+   "total": 49500
+  },
+  {
+   "nap": "2026-07-03",
+   "tipus": "Gitterbox",
+   "qty": 2,
+   "unitPrice": 17000,
+   "total": 34000
+  },
+  {
+   "nap": "2026-07-03",
+   "tipus": "Csere",
+   "qty": 5,
+   "unitPrice": 800,
+   "total": 4000
+  },
+  {
+   "nap": "2026-07-06",
+   "tipus": "EUR világos",
+   "qty": 23,
+   "unitPrice": 2700,
+   "total": 62100
+  },
+  {
+   "nap": "2026-07-06",
+   "tipus": "EUR szürke",
+   "qty": 62,
+   "unitPrice": 1500,
+   "total": 93000
+  },
+  {
+   "nap": "2026-07-06",
+   "tipus": "Egyutas gyenge",
+   "qty": 48,
+   "unitPrice": 600,
+   "total": 28800
+  },
+  {
+   "nap": "2026-07-06",
+   "tipus": "Színes",
+   "qty": 63,
+   "unitPrice": 1000,
+   "total": 63000
+  },
+  {
+   "nap": "2026-07-07",
+   "tipus": "EUR világos",
+   "qty": 19,
+   "unitPrice": 2700,
+   "total": 51300
+  },
+  {
+   "nap": "2026-07-07",
+   "tipus": "EUR szürke",
+   "qty": 13,
+   "unitPrice": 1500,
+   "total": 19500
+  },
+  {
+   "nap": "2026-07-07",
+   "tipus": "Egyutas 100-as",
+   "qty": 2,
+   "unitPrice": 800,
+   "total": 1600
+  },
+  {
+   "nap": "2026-07-07",
+   "tipus": "Egyutas gyenge",
+   "qty": 24,
+   "unitPrice": 600,
+   "total": 14400
+  },
+  {
+   "nap": "2026-07-07",
+   "tipus": "Csere",
+   "qty": 1,
+   "unitPrice": 800,
+   "total": 800
+  },
+  {
+   "nap": "2026-07-08",
+   "tipus": "EUR világos",
+   "qty": 87,
+   "unitPrice": 2700,
+   "total": 234900
+  },
+  {
+   "nap": "2026-07-08",
+   "tipus": "EUR szürke",
+   "qty": 21,
+   "unitPrice": 1500,
+   "total": 31500
+  },
+  {
+   "nap": "2026-07-08",
+   "tipus": "Csere",
+   "qty": 2,
+   "unitPrice": 800,
+   "total": 1600
+  },
+  {
+   "nap": "2026-07-09",
+   "tipus": "EUR világos",
+   "qty": 93,
+   "unitPrice": 2700,
+   "total": 251100
+  },
+  {
+   "nap": "2026-07-09",
+   "tipus": "EUR szürke",
+   "qty": 55,
+   "unitPrice": 1500,
+   "total": 82500
+  },
+  {
+   "nap": "2026-07-09",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 1100,
+   "total": 1100
+  },
+  {
+   "nap": "2026-07-09",
+   "tipus": "Egyutas 100-as",
+   "qty": 22,
+   "unitPrice": 800,
+   "total": 17600
+  },
+  {
+   "nap": "2026-07-09",
+   "tipus": "Egyutas gyenge",
+   "qty": 69,
+   "unitPrice": 600,
+   "total": 41400
+  },
+  {
+   "nap": "2026-07-10",
+   "tipus": "EUR világos",
+   "qty": 77,
+   "unitPrice": 2700,
+   "total": 207900
+  },
+  {
+   "nap": "2026-07-10",
+   "tipus": "EUR szürke",
+   "qty": 15,
+   "unitPrice": 1500,
+   "total": 22500
+  },
+  {
+   "nap": "2026-07-10",
+   "tipus": "Egyutas 80-as",
+   "qty": 8,
+   "unitPrice": 1100,
+   "total": 8800
+  },
+  {
+   "nap": "2026-07-10",
+   "tipus": "Egyutas gyenge",
+   "qty": 45,
+   "unitPrice": 600,
+   "total": 27000
+  },
+  {
+   "nap": "2026-07-10",
+   "tipus": "Csere",
+   "qty": 36,
+   "unitPrice": 800,
+   "total": 28800
+  },
+  {
+   "nap": "2026-07-13",
+   "tipus": "EUR világos",
+   "qty": 41,
+   "unitPrice": 2700,
+   "total": 110700
+  },
+  {
+   "nap": "2026-07-13",
+   "tipus": "EUR szürke",
+   "qty": 42,
+   "unitPrice": 1500,
+   "total": 63000
+  },
+  {
+   "nap": "2026-07-13",
+   "tipus": "Egyutas 80-as",
+   "qty": 9,
+   "unitPrice": 1100,
+   "total": 9900
+  },
+  {
+   "nap": "2026-07-13",
+   "tipus": "Egyutas 100-as",
+   "qty": 1,
+   "unitPrice": 800,
+   "total": 800
+  },
+  {
+   "nap": "2026-07-13",
+   "tipus": "Egyutas gyenge",
+   "qty": 71,
+   "unitPrice": 600,
+   "total": 42600
+  },
+  {
+   "nap": "2026-07-13",
+   "tipus": "Színes",
+   "qty": 19,
+   "unitPrice": 1000,
+   "total": 19000
+  },
+  {
+   "nap": "2026-07-13",
+   "tipus": "Gitterbox",
+   "qty": 3,
+   "unitPrice": 17000,
+   "total": 51000
+  },
+  {
+   "nap": "2026-07-13",
+   "tipus": "H1 raklap",
+   "qty": 27,
+   "unitPrice": 6000,
+   "total": 162000
+  },
+  {
+   "nap": "2026-07-14",
+   "tipus": "EUR világos",
+   "qty": 217,
+   "unitPrice": 2700,
+   "total": 585900
+  },
+  {
+   "nap": "2026-07-14",
+   "tipus": "EUR szürke",
+   "qty": 24,
+   "unitPrice": 1500,
+   "total": 36000
+  },
+  {
+   "nap": "2026-07-14",
+   "tipus": "Egyutas gyenge",
+   "qty": 71,
+   "unitPrice": 600,
+   "total": 42600
+  },
+  {
+   "nap": "2026-07-14",
+   "tipus": "Színes",
+   "qty": 3,
+   "unitPrice": 1000,
+   "total": 3000
+  },
+  {
+   "nap": "2026-07-14",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-07-15",
+   "tipus": "EUR világos",
+   "qty": 140,
+   "unitPrice": 2700,
+   "total": 378000
+  },
+  {
+   "nap": "2026-07-15",
+   "tipus": "EUR szürke",
+   "qty": 59,
+   "unitPrice": 1500,
+   "total": 88500
+  },
+  {
+   "nap": "2026-07-15",
+   "tipus": "Egyutas 80-as",
+   "qty": 4,
+   "unitPrice": 1100,
+   "total": 4400
+  },
+  {
+   "nap": "2026-07-15",
+   "tipus": "Egyutas gyenge",
+   "qty": 25,
+   "unitPrice": 600,
+   "total": 15000
+  },
+  {
+   "nap": "2026-07-15",
+   "tipus": "Színes",
+   "qty": 13,
+   "unitPrice": 1000,
+   "total": 13000
+  },
+  {
+   "nap": "2026-07-15",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-07-15",
+   "tipus": "H1 raklap",
+   "qty": 5,
+   "unitPrice": 6000,
+   "total": 30000
+  },
+  {
+   "nap": "2026-07-16",
+   "tipus": "EUR világos",
+   "qty": 119,
+   "unitPrice": 2700,
+   "total": 321300
+  },
+  {
+   "nap": "2026-07-16",
+   "tipus": "EUR szürke",
+   "qty": 21,
+   "unitPrice": 1500,
+   "total": 31500
+  },
+  {
+   "nap": "2026-07-16",
+   "tipus": "Egyutas 100-as",
+   "qty": 22,
+   "unitPrice": 800,
+   "total": 17600
+  },
+  {
+   "nap": "2026-07-16",
+   "tipus": "Egyutas gyenge",
+   "qty": 35,
+   "unitPrice": 600,
+   "total": 21000
+  },
+  {
+   "nap": "2026-07-16",
+   "tipus": "Csere",
+   "qty": 2,
+   "unitPrice": 800,
+   "total": 1600
+  },
+  {
+   "nap": "2026-07-17",
+   "tipus": "EUR világos",
+   "qty": 74,
+   "unitPrice": 2700,
+   "total": 199800
+  },
+  {
+   "nap": "2026-07-17",
+   "tipus": "EUR szürke",
+   "qty": 83,
+   "unitPrice": 1500,
+   "total": 124500
+  },
+  {
+   "nap": "2026-07-17",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 1100,
+   "total": 1100
+  },
+  {
+   "nap": "2026-07-20",
+   "tipus": "EUR világos",
+   "qty": 257,
+   "unitPrice": 2700,
+   "total": 693900
+  },
+  {
+   "nap": "2026-07-20",
+   "tipus": "EUR szürke",
+   "qty": 65,
+   "unitPrice": 1500,
+   "total": 97500
+  },
+  {
+   "nap": "2026-07-20",
+   "tipus": "Egyutas 80-as",
+   "qty": 14,
+   "unitPrice": 1100,
+   "total": 15400
+  },
+  {
+   "nap": "2026-07-20",
+   "tipus": "Egyutas gyenge",
+   "qty": 3,
+   "unitPrice": 600,
+   "total": 1800
+  },
+  {
+   "nap": "2026-07-20",
+   "tipus": "Csere",
+   "qty": 11,
+   "unitPrice": 800,
+   "total": 8800
+  },
+  {
+   "nap": "2026-07-20",
+   "tipus": "H1 raklap",
+   "qty": 6,
+   "unitPrice": 6000,
+   "total": 36000
+  },
+  {
+   "nap": "2026-07-21",
+   "tipus": "EUR világos",
+   "qty": 273,
+   "unitPrice": 2700,
+   "total": 737100
+  },
+  {
+   "nap": "2026-07-21",
+   "tipus": "EUR szürke",
+   "qty": 26,
+   "unitPrice": 1500,
+   "total": 39000
+  },
+  {
+   "nap": "2026-07-21",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 1100,
+   "total": 1100
+  },
+  {
+   "nap": "2026-07-21",
+   "tipus": "Egyutas gyenge",
+   "qty": 2,
+   "unitPrice": 600,
+   "total": 1200
+  },
+  {
+   "nap": "2026-07-21",
+   "tipus": "Színes",
+   "qty": 4,
+   "unitPrice": 1000,
+   "total": 4000
+  },
+  {
+   "nap": "2026-07-22",
+   "tipus": "EUR világos",
+   "qty": 206,
+   "unitPrice": 2700,
+   "total": 556200
+  },
+  {
+   "nap": "2026-07-22",
+   "tipus": "EUR szürke",
+   "qty": 49,
+   "unitPrice": 1500,
+   "total": 73500
+  },
+  {
+   "nap": "2026-07-22",
+   "tipus": "Egyutas 80-as",
+   "qty": 4,
+   "unitPrice": 1100,
+   "total": 4400
+  },
+  {
+   "nap": "2026-07-22",
+   "tipus": "Egyutas gyenge",
+   "qty": 2,
+   "unitPrice": 600,
+   "total": 1200
+  },
+  {
+   "nap": "2026-07-22",
+   "tipus": "Színes",
+   "qty": 2,
+   "unitPrice": 1000,
+   "total": 2000
+  },
+  {
+   "nap": "2026-07-23",
+   "tipus": "EUR világos",
+   "qty": 197,
+   "unitPrice": 2700,
+   "total": 531900
+  },
+  {
+   "nap": "2026-07-23",
+   "tipus": "EUR szürke",
+   "qty": 74,
+   "unitPrice": 1500,
+   "total": 111000
+  },
+  {
+   "nap": "2026-07-23",
+   "tipus": "Egyutas 80-as",
+   "qty": 30,
+   "unitPrice": 1100,
+   "total": 33000
+  },
+  {
+   "nap": "2026-07-24",
+   "tipus": "EUR világos",
+   "qty": 191,
+   "unitPrice": 2700,
+   "total": 515700
+  },
+  {
+   "nap": "2026-07-24",
+   "tipus": "EUR szürke",
+   "qty": 67,
+   "unitPrice": 1500,
+   "total": 100500
+  },
+  {
+   "nap": "2026-07-24",
+   "tipus": "Színes",
+   "qty": 10,
+   "unitPrice": 1000,
+   "total": 10000
+  },
+  {
+   "nap": "2026-07-24",
+   "tipus": "Csere",
+   "qty": 1,
+   "unitPrice": 800,
+   "total": 800
+  },
+  {
+   "nap": "2026-07-24",
+   "tipus": "H1 raklap",
+   "qty": 55,
+   "unitPrice": 6000,
+   "total": 330000
+  },
+  {
+   "nap": "2026-07-27",
+   "tipus": "EUR világos",
+   "qty": 167,
+   "unitPrice": 2700,
+   "total": 450900
+  },
+  {
+   "nap": "2026-07-27",
+   "tipus": "EUR szürke",
+   "qty": 110,
+   "unitPrice": 1500,
+   "total": 165000
+  },
+  {
+   "nap": "2026-07-27",
+   "tipus": "Egyutas 80-as",
+   "qty": 5,
+   "unitPrice": 1100,
+   "total": 5500
+  },
+  {
+   "nap": "2026-07-27",
+   "tipus": "Színes",
+   "qty": 1,
+   "unitPrice": 1000,
+   "total": 1000
+  },
+  {
+   "nap": "2026-07-27",
+   "tipus": "H1 raklap",
+   "qty": 53,
+   "unitPrice": 6000,
+   "total": 318000
+  },
+  {
+   "nap": "2026-07-28",
+   "tipus": "EUR világos",
+   "qty": 26,
+   "unitPrice": 2700,
+   "total": 70200
+  },
+  {
+   "nap": "2026-07-28",
+   "tipus": "EUR szürke",
+   "qty": 61,
+   "unitPrice": 1500,
+   "total": 91500
+  },
+  {
+   "nap": "2026-07-28",
+   "tipus": "Egyutas 80-as",
+   "qty": 7,
+   "unitPrice": 1100,
+   "total": 7700
+  },
+  {
+   "nap": "2026-07-28",
+   "tipus": "Színes",
+   "qty": 6,
+   "unitPrice": 1000,
+   "total": 6000
+  },
+  {
+   "nap": "2026-07-28",
+   "tipus": "Csere",
+   "qty": 7,
+   "unitPrice": 800,
+   "total": 5600
+  },
+  {
+   "nap": "2026-07-29",
+   "tipus": "EUR világos",
+   "qty": 85,
+   "unitPrice": 2700,
+   "total": 229500
+  },
+  {
+   "nap": "2026-07-29",
+   "tipus": "EUR szürke",
+   "qty": 55,
+   "unitPrice": 1500,
+   "total": 82500
+  },
+  {
+   "nap": "2026-07-29",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 1100,
+   "total": 1100
+  },
+  {
+   "nap": "2026-07-29",
+   "tipus": "Egyutas 100-as",
+   "qty": 22,
+   "unitPrice": 800,
+   "total": 17600
+  },
+  {
+   "nap": "2026-07-29",
+   "tipus": "Egyutas gyenge",
+   "qty": 138,
+   "unitPrice": 600,
+   "total": 82800
+  },
+  {
+   "nap": "2026-07-29",
+   "tipus": "Színes",
+   "qty": 1,
+   "unitPrice": 1000,
+   "total": 1000
+  },
+  {
+   "nap": "2026-07-29",
+   "tipus": "Gitterbox",
+   "qty": 14,
+   "unitPrice": 17000,
+   "total": 238000
+  },
+  {
+   "nap": "2026-07-29",
+   "tipus": "Csere",
+   "qty": 3,
+   "unitPrice": 800,
+   "total": 2400
+  },
+  {
+   "nap": "2026-07-30",
+   "tipus": "EUR világos",
+   "qty": 210,
+   "unitPrice": 2700,
+   "total": 567000
+  },
+  {
+   "nap": "2026-07-30",
+   "tipus": "EUR szürke",
+   "qty": 14,
+   "unitPrice": 1500,
+   "total": 21000
+  },
+  {
+   "nap": "2026-07-30",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 1100,
+   "total": 1100
+  },
+  {
+   "nap": "2026-07-30",
+   "tipus": "Egyutas gyenge",
+   "qty": 60,
+   "unitPrice": 600,
+   "total": 36000
+  },
+  {
+   "nap": "2026-07-30",
+   "tipus": "Színes",
+   "qty": 89,
+   "unitPrice": 1000,
+   "total": 89000
+  },
+  {
+   "nap": "2026-07-31",
+   "tipus": "EUR világos",
+   "qty": 51,
+   "unitPrice": 2700,
+   "total": 137700
+  },
+  {
+   "nap": "2026-07-31",
+   "tipus": "EUR szürke",
+   "qty": 14,
+   "unitPrice": 1500,
+   "total": 21000
+  },
+  {
+   "nap": "2026-07-31",
+   "tipus": "Egyutas 80-as",
+   "qty": 6,
+   "unitPrice": 1100,
+   "total": 6600
+  },
+  {
+   "nap": "2026-07-31",
+   "tipus": "Színes",
+   "qty": 1,
+   "unitPrice": 1000,
+   "total": 1000
+  },
+  {
+   "nap": "2026-07-31",
+   "tipus": "Csere",
+   "qty": 15,
+   "unitPrice": 800,
+   "total": 12000
+  },
+  {
+   "nap": "2026-07-31",
+   "tipus": "H1 raklap",
+   "qty": 10,
+   "unitPrice": 6000,
+   "total": 60000
+  },
+  {
+   "nap": "2026-08-03",
+   "tipus": "EUR világos",
+   "qty": 76,
+   "unitPrice": 2700,
+   "total": 205200
+  },
+  {
+   "nap": "2026-08-03",
+   "tipus": "EUR szürke",
+   "qty": 63,
+   "unitPrice": 1500,
+   "total": 94500
+  },
+  {
+   "nap": "2026-08-03",
+   "tipus": "Egyutas gyenge",
+   "qty": 42,
+   "unitPrice": 600,
+   "total": 25200
+  },
+  {
+   "nap": "2026-08-03",
+   "tipus": "H1 raklap",
+   "qty": 10,
+   "unitPrice": 6000,
+   "total": 60000
+  },
+  {
+   "nap": "2026-08-04",
+   "tipus": "EUR világos",
+   "qty": 26,
+   "unitPrice": 2700,
+   "total": 70200
+  },
+  {
+   "nap": "2026-08-04",
+   "tipus": "EUR szürke",
+   "qty": 16,
+   "unitPrice": 1500,
+   "total": 24000
+  },
+  {
+   "nap": "2026-08-04",
+   "tipus": "Egyutas gyenge",
+   "qty": 51,
+   "unitPrice": 600,
+   "total": 30600
+  },
+  {
+   "nap": "2026-08-04",
+   "tipus": "Csere",
+   "qty": 9,
+   "unitPrice": 800,
+   "total": 7200
+  },
+  {
+   "nap": "2026-08-05",
+   "tipus": "EUR világos",
+   "qty": 31,
+   "unitPrice": 2700,
+   "total": 83700
+  },
+  {
+   "nap": "2026-08-05",
+   "tipus": "EUR szürke",
+   "qty": 69,
+   "unitPrice": 1500,
+   "total": 103500
+  },
+  {
+   "nap": "2026-08-05",
+   "tipus": "Egyutas 80-as",
+   "qty": 2,
+   "unitPrice": 1100,
+   "total": 2200
+  },
+  {
+   "nap": "2026-08-05",
+   "tipus": "Egyutas gyenge",
+   "qty": 51,
+   "unitPrice": 600,
+   "total": 30600
+  },
+  {
+   "nap": "2026-08-05",
+   "tipus": "Gitterbox",
+   "qty": 2,
+   "unitPrice": 17000,
+   "total": 34000
+  },
+  {
+   "nap": "2026-08-06",
+   "tipus": "EUR világos",
+   "qty": 123,
+   "unitPrice": 2700,
+   "total": 332100
+  },
+  {
+   "nap": "2026-08-06",
+   "tipus": "EUR szürke",
+   "qty": 56,
+   "unitPrice": 1500,
+   "total": 84000
+  },
+  {
+   "nap": "2026-08-06",
+   "tipus": "Egyutas 80-as",
+   "qty": 12,
+   "unitPrice": 1100,
+   "total": 13200
+  },
+  {
+   "nap": "2026-08-06",
+   "tipus": "Egyutas gyenge",
+   "qty": 12,
+   "unitPrice": 600,
+   "total": 7200
+  },
+  {
+   "nap": "2026-08-06",
+   "tipus": "Színes",
+   "qty": 1,
+   "unitPrice": 1000,
+   "total": 1000
+  },
+  {
+   "nap": "2026-08-06",
+   "tipus": "H1 raklap",
+   "qty": 3,
+   "unitPrice": 6000,
+   "total": 18000
+  },
+  {
+   "nap": "2026-08-06",
+   "tipus": "Gitterbox",
+   "qty": 5,
+   "unitPrice": 17000,
+   "total": 85000
+  },
+  {
+   "nap": "2026-08-07",
+   "tipus": "EUR világos",
+   "qty": 63,
+   "unitPrice": 2700,
+   "total": 170100
+  },
+  {
+   "nap": "2026-08-07",
+   "tipus": "EUR szürke",
+   "qty": 5,
+   "unitPrice": 1500,
+   "total": 7500
+  },
+  {
+   "nap": "2026-08-07",
+   "tipus": "Egyutas 80-as",
+   "qty": 28,
+   "unitPrice": 1100,
+   "total": 30800
+  },
+  {
+   "nap": "2026-08-10",
+   "tipus": "EUR világos",
+   "qty": 54,
+   "unitPrice": 2700,
+   "total": 145800
+  },
+  {
+   "nap": "2026-08-10",
+   "tipus": "EUR szürke",
+   "qty": 74,
+   "unitPrice": 1500,
+   "total": 111000
+  },
+  {
+   "nap": "2026-08-10",
+   "tipus": "Egyutas 80-as",
+   "qty": 4,
+   "unitPrice": 1100,
+   "total": 4400
+  },
+  {
+   "nap": "2026-08-10",
+   "tipus": "Egyutas gyenge",
+   "qty": 66,
+   "unitPrice": 600,
+   "total": 39600
+  },
+  {
+   "nap": "2026-08-11",
+   "tipus": "H1 raklap",
+   "qty": 24,
+   "unitPrice": 6000,
+   "total": 144000
+  },
+  {
+   "nap": "2026-08-11",
+   "tipus": "EUR világos",
+   "qty": 57,
+   "unitPrice": 2700,
+   "total": 153900
+  },
+  {
+   "nap": "2026-08-11",
+   "tipus": "EUR szürke",
+   "qty": 76,
+   "unitPrice": 1500,
+   "total": 114000
+  },
+  {
+   "nap": "2026-08-11",
+   "tipus": "Egyutas gyenge",
+   "qty": 70,
+   "unitPrice": 600,
+   "total": 42000
+  },
+  {
+   "nap": "2026-08-12",
+   "tipus": "EUR világos",
+   "qty": 39,
+   "unitPrice": 2700,
+   "total": 105300
+  },
+  {
+   "nap": "2026-08-12",
+   "tipus": "EUR szürke",
+   "qty": 54,
+   "unitPrice": 1500,
+   "total": 81000
+  },
+  {
+   "nap": "2026-08-12",
+   "tipus": "Egyutas 100-as",
+   "qty": 1,
+   "unitPrice": 800,
+   "total": 800
+  },
+  {
+   "nap": "2026-08-12",
+   "tipus": "Egyutas gyenge",
+   "qty": 53,
+   "unitPrice": 600,
+   "total": 31800
+  },
+  {
+   "nap": "2026-08-12",
+   "tipus": "Színes",
+   "qty": 4,
+   "unitPrice": 1000,
+   "total": 4000
+  },
+  {
+   "nap": "2026-08-12",
+   "tipus": "H1 raklap",
+   "qty": 14,
+   "unitPrice": 6000,
+   "total": 84000
+  },
+  {
+   "nap": "2026-08-12",
+   "tipus": "Csere",
+   "qty": 27,
+   "unitPrice": 800,
+   "total": 21600
+  },
+  {
+   "nap": "2026-08-12",
+   "tipus": "Gitterbox",
+   "qty": 11,
+   "unitPrice": 17000,
+   "total": 187000
+  },
+  {
+   "nap": "2026-08-13",
+   "tipus": "EUR világos",
+   "qty": 35,
+   "unitPrice": 2700,
+   "total": 94500
+  },
+  {
+   "nap": "2026-08-13",
+   "tipus": "EUR szürke",
+   "qty": 28,
+   "unitPrice": 1500,
+   "total": 42000
+  },
+  {
+   "nap": "2026-08-13",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 1100,
+   "total": 1100
+  },
+  {
+   "nap": "2026-08-13",
+   "tipus": "Egyutas gyenge",
+   "qty": 24,
+   "unitPrice": 600,
+   "total": 14400
+  },
+  {
+   "nap": "2026-08-13",
+   "tipus": "Csere",
+   "qty": 40,
+   "unitPrice": 800,
+   "total": 32000
+  },
+  {
+   "nap": "2026-08-14",
+   "tipus": "EUR világos",
+   "qty": 52,
+   "unitPrice": 2700,
+   "total": 140400
+  },
+  {
+   "nap": "2026-08-14",
+   "tipus": "EUR szürke",
+   "qty": 30,
+   "unitPrice": 1500,
+   "total": 45000
+  },
+  {
+   "nap": "2026-08-14",
+   "tipus": "Egyutas 80-as",
+   "qty": 2,
+   "unitPrice": 1100,
+   "total": 2200
+  },
+  {
+   "nap": "2026-08-14",
+   "tipus": "Színes",
+   "qty": 53,
+   "unitPrice": 1000,
+   "total": 53000
+  },
+  {
+   "nap": "2026-08-14",
+   "tipus": "H1 raklap",
+   "qty": 13,
+   "unitPrice": 6000,
+   "total": 78000
+  },
+  {
+   "nap": "2026-08-17",
+   "tipus": "EUR világos",
+   "qty": 62,
+   "unitPrice": 2700,
+   "total": 167400
+  },
+  {
+   "nap": "2026-08-17",
+   "tipus": "EUR szürke",
+   "qty": 77,
+   "unitPrice": 1500,
+   "total": 115500
+  },
+  {
+   "nap": "2026-08-17",
+   "tipus": "Egyutas 80-as",
+   "qty": 5,
+   "unitPrice": 1100,
+   "total": 5500
+  },
+  {
+   "nap": "2026-08-17",
+   "tipus": "Egyutas gyenge",
+   "qty": 17,
+   "unitPrice": 600,
+   "total": 10200
+  },
+  {
+   "nap": "2026-08-17",
+   "tipus": "Színes",
+   "qty": 5,
+   "unitPrice": 1000,
+   "total": 5000
+  },
+  {
+   "nap": "2026-08-17",
+   "tipus": "H1 raklap",
+   "qty": 1,
+   "unitPrice": 6000,
+   "total": 6000
+  },
+  {
+   "nap": "2026-08-18",
+   "tipus": "EUR világos",
+   "qty": 65,
+   "unitPrice": 2700,
+   "total": 175500
+  },
+  {
+   "nap": "2026-08-18",
+   "tipus": "EUR szürke",
+   "qty": 20,
+   "unitPrice": 1500,
+   "total": 30000
+  },
+  {
+   "nap": "2026-08-18",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 1100,
+   "total": 1100
+  },
+  {
+   "nap": "2026-08-18",
+   "tipus": "Egyutas 100-as",
+   "qty": 22,
+   "unitPrice": 800,
+   "total": 17600
+  },
+  {
+   "nap": "2026-08-18",
+   "tipus": "Egyutas gyenge",
+   "qty": 19,
+   "unitPrice": 600,
+   "total": 11400
+  },
+  {
+   "nap": "2026-08-18",
+   "tipus": "H1 raklap",
+   "qty": 7,
+   "unitPrice": 6000,
+   "total": 42000
+  },
+  {
+   "nap": "2026-08-18",
+   "tipus": "Gitterbox",
+   "qty": 5,
+   "unitPrice": 17000,
+   "total": 85000
+  },
+  {
+   "nap": "2026-08-19",
+   "tipus": "EUR világos",
+   "qty": 40,
+   "unitPrice": 2700,
+   "total": 108000
+  },
+  {
+   "nap": "2026-08-19",
+   "tipus": "EUR szürke",
+   "qty": 22,
+   "unitPrice": 1500,
+   "total": 33000
+  },
+  {
+   "nap": "2026-08-19",
+   "tipus": "Színes",
+   "qty": 21,
+   "unitPrice": 1000,
+   "total": 21000
+  },
+  {
+   "nap": "2026-08-19",
+   "tipus": "Csere",
+   "qty": 113,
+   "unitPrice": 800,
+   "total": 90400
+  },
+  {
+   "nap": "2026-08-24",
+   "tipus": "EUR világos",
+   "qty": 51,
+   "unitPrice": 2700,
+   "total": 137700
+  },
+  {
+   "nap": "2026-08-24",
+   "tipus": "EUR szürke",
+   "qty": 52,
+   "unitPrice": 1500,
+   "total": 78000
+  },
+  {
+   "nap": "2026-08-24",
+   "tipus": "Egyutas 80-as",
+   "qty": 6,
+   "unitPrice": 1100,
+   "total": 6600
+  },
+  {
+   "nap": "2026-08-24",
+   "tipus": "Egyutas gyenge",
+   "qty": 4,
+   "unitPrice": 600,
+   "total": 2400
+  },
+  {
+   "nap": "2026-08-24",
+   "tipus": "Színes",
+   "qty": 5,
+   "unitPrice": 1000,
+   "total": 5000
+  },
+  {
+   "nap": "2026-08-24",
+   "tipus": "Csere",
+   "qty": 45,
+   "unitPrice": 800,
+   "total": 36000
+  },
+  {
+   "nap": "2026-08-24",
+   "tipus": "Gitterbox",
+   "qty": 12,
+   "unitPrice": 17000,
+   "total": 204000
+  },
+  {
+   "nap": "2026-08-25",
+   "tipus": "EUR világos",
+   "qty": 20,
+   "unitPrice": 2700,
+   "total": 54000
+  },
+  {
+   "nap": "2026-08-25",
+   "tipus": "EUR szürke",
+   "qty": 29,
+   "unitPrice": 1500,
+   "total": 43500
+  },
+  {
+   "nap": "2026-08-25",
+   "tipus": "Egyutas 80-as",
+   "qty": 5,
+   "unitPrice": 1100,
+   "total": 5500
+  },
+  {
+   "nap": "2026-08-25",
+   "tipus": "Egyutas gyenge",
+   "qty": 50,
+   "unitPrice": 600,
+   "total": 30000
+  },
+  {
+   "nap": "2026-08-25",
+   "tipus": "Színes",
+   "qty": 10,
+   "unitPrice": 1000,
+   "total": 10000
+  },
+  {
+   "nap": "2026-08-25",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-08-26",
+   "tipus": "EUR világos",
+   "qty": 65,
+   "unitPrice": 2700,
+   "total": 175500
+  },
+  {
+   "nap": "2026-08-26",
+   "tipus": "EUR szürke",
+   "qty": 69,
+   "unitPrice": 1500,
+   "total": 103500
+  },
+  {
+   "nap": "2026-08-26",
+   "tipus": "Egyutas 80-as",
+   "qty": 5,
+   "unitPrice": 1100,
+   "total": 5500
+  },
+  {
+   "nap": "2026-08-26",
+   "tipus": "Egyutas 100-as",
+   "qty": 2,
+   "unitPrice": 800,
+   "total": 1600
+  },
+  {
+   "nap": "2026-08-26",
+   "tipus": "Egyutas gyenge",
+   "qty": 50,
+   "unitPrice": 600,
+   "total": 30000
+  },
+  {
+   "nap": "2026-08-26",
+   "tipus": "Színes",
+   "qty": 3,
+   "unitPrice": 1000,
+   "total": 3000
+  },
+  {
+   "nap": "2026-08-26",
+   "tipus": "H1 raklap",
+   "qty": 37,
+   "unitPrice": 6000,
+   "total": 222000
+  },
+  {
+   "nap": "2026-08-26",
+   "tipus": "Csere",
+   "qty": 1,
+   "unitPrice": 800,
+   "total": 800
+  },
+  {
+   "nap": "2026-08-26",
+   "tipus": "Gitterbox",
+   "qty": 1,
+   "unitPrice": 17000,
+   "total": 17000
+  },
+  {
+   "nap": "2026-08-27",
+   "tipus": "EUR világos",
+   "qty": 43,
+   "unitPrice": 2700,
+   "total": 116100
+  },
+  {
+   "nap": "2026-08-27",
+   "tipus": "EUR szürke",
+   "qty": 5,
+   "unitPrice": 1500,
+   "total": 7500
+  },
+  {
+   "nap": "2026-08-27",
+   "tipus": "Egyutas 80-as",
+   "qty": 1,
+   "unitPrice": 1100,
+   "total": 1100
+  },
+  {
+   "nap": "2026-08-27",
+   "tipus": "Egyutas gyenge",
+   "qty": 43,
+   "unitPrice": 600,
+   "total": 25800
+  },
+  {
+   "nap": "2026-08-27",
+   "tipus": "EUR világos",
+   "qty": 14,
+   "unitPrice": 2700,
+   "total": 37800
+  },
+  {
+   "nap": "2026-08-27",
+   "tipus": "EUR világos",
+   "qty": 5,
+   "unitPrice": 2700,
+   "total": 13500
+  },
+  {
+   "nap": "2026-08-27",
+   "tipus": "EUR világos",
+   "qty": 522,
+   "unitPrice": 3300,
+   "total": 1722600
+  },
+  {
+   "nap": "2026-08-27",
+   "tipus": "EUR világos",
+   "qty": 5,
+   "unitPrice": 2700,
+   "total": 13500
+  },
+  {
+   "nap": "2026-08-27",
+   "tipus": "EUR világos",
+   "qty": 24,
+   "unitPrice": 2700,
+   "total": 64800
+  },
+  {
+   "nap": "2026-08-27",
+   "tipus": "EUR szürke",
+   "qty": 8,
+   "unitPrice": 1500,
+   "total": 12000
+  },
+  {
+   "nap": "2026-08-27",
+   "tipus": "EUR szürke",
+   "qty": 41,
+   "unitPrice": 1500,
+   "total": 61500
+  },
+  {
+   "nap": "2026-08-27",
+   "tipus": "EUR világos",
+   "qty": 2,
+   "unitPrice": 2700,
+   "total": 5400
+  },
+  {
+   "nap": "2026-08-27",
+   "tipus": "EUR világos",
+   "qty": 2,
+   "unitPrice": 2700,
+   "total": 5400
+  },
+  {
+   "nap": "2026-08-27",
+   "tipus": "EUR világos",
+   "qty": 200,
+   "unitPrice": 2700,
+   "total": 540000
+  },
+  {
+   "nap": "2026-08-27",
+   "tipus": "EUR szürke",
+   "qty": 1,
+   "unitPrice": 1500,
+   "total": 1500
+  },
+  {
+   "nap": "2026-08-27",
+   "tipus": "EUR világos",
+   "qty": 1,
+   "unitPrice": 2700,
+   "total": 2700
+  },
+  {
+   "nap": "2026-08-27",
+   "tipus": "EUR világos",
+   "qty": 1,
+   "unitPrice": 2700,
+   "total": 2700
+  },
+  {
+   "nap": "2026-08-27",
+   "tipus": "EUR szürke",
+   "qty": 19,
+   "unitPrice": 1500,
+   "total": 28500
+  },
+  {
+   "nap": "2026-08-27",
+   "tipus": "EUR világos",
+   "qty": 4,
+   "unitPrice": 2700,
+   "total": 10800
+  },
+  {
+   "nap": "2026-08-27",
+   "tipus": "EUR szürke",
+   "qty": 16,
+   "unitPrice": 1500,
+   "total": 24000
+  },
+  {
+   "nap": "2026-08-27",
+   "tipus": "EUR szürke",
+   "qty": 1,
+   "unitPrice": 1500,
+   "total": 1500
+  },
+  {
+   "nap": "2026-08-27",
+   "tipus": "Egyutas gyenge",
+   "qty": 2,
+   "unitPrice": 600,
+   "total": 1200
+  },
+  {
+   "nap": "2026-08-27",
+   "tipus": "EUR világos",
+   "qty": 27,
+   "unitPrice": 2700,
+   "total": 72900
+  },
+  {
+   "nap": "2026-08-27",
+   "tipus": "H1 raklap",
+   "qty": 1,
+   "unitPrice": 6000,
+   "total": 6000
+  },
+  {
+   "nap": "2026-08-28",
+   "tipus": "EUR világos",
+   "qty": 4,
+   "unitPrice": 2700,
+   "total": 10800
+  },
+  {
+   "nap": "2026-08-28",
+   "tipus": "EUR világos",
+   "qty": 2,
+   "unitPrice": 2700,
+   "total": 5400
+  },
+  {
+   "nap": "2026-08-28",
+   "tipus": "EUR szürke",
+   "qty": 18,
+   "unitPrice": 1500,
+   "total": 27000
+  },
+  {
+   "nap": "2026-08-28",
+   "tipus": "EUR világos",
+   "qty": 30,
+   "unitPrice": 2700,
+   "total": 81000
+  },
+  {
+   "nap": "2026-08-28",
+   "tipus": "EUR világos",
+   "qty": 30,
+   "unitPrice": 2700,
+   "total": 81000
+  },
+  {
+   "nap": "2026-08-28",
+   "tipus": "EUR világos",
+   "qty": 1,
+   "unitPrice": 2700,
+   "total": 2700
+  },
+  {
+   "nap": "2026-08-28",
+   "tipus": "EUR világos",
+   "qty": 3,
+   "unitPrice": 2700,
+   "total": 8100
+  },
+  {
+   "nap": "2026-08-28",
+   "tipus": "EUR szürke",
+   "qty": 2,
+   "unitPrice": 1500,
+   "total": 3000
+  },
+  {
+   "nap": "2026-08-28",
+   "tipus": "EUR világos",
+   "qty": 30,
+   "unitPrice": 2700,
+   "total": 81000
+  },
+  {
+   "nap": "2026-08-28",
+   "tipus": "EUR szürke",
+   "qty": 17,
+   "unitPrice": 1500,
+   "total": 25500
+  },
+  {
+   "nap": "2026-08-28",
+   "tipus": "EUR szürke",
+   "qty": 2,
+   "unitPrice": 1500,
+   "total": 3000
+  },
+  {
+   "nap": "2026-08-28",
+   "tipus": "EUR világos",
+   "qty": 6,
+   "unitPrice": 2700,
+   "total": 16200
+  },
+  {
+   "nap": "2026-08-28",
+   "tipus": "EUR szürke",
+   "qty": 3,
+   "unitPrice": 1500,
+   "total": 4500
+  },
+  {
+   "nap": "2026-08-28",
+   "tipus": "EUR szürke",
+   "qty": 4,
+   "unitPrice": 1500,
+   "total": 6000
+  },
+  {
+   "nap": "2026-08-28",
+   "tipus": "EUR világos",
+   "qty": 6,
+   "unitPrice": 2700,
+   "total": 16200
+  },
+  {
+   "nap": "2026-08-28",
+   "tipus": "EUR szürke",
+   "qty": 8,
+   "unitPrice": 1500,
+   "total": 12000
+  },
+  {
+   "nap": "2026-08-28",
+   "tipus": "EUR világos",
+   "qty": 3,
+   "unitPrice": 2700,
+   "total": 8100
+  },
+  {
+   "nap": "2026-08-28",
+   "tipus": "EUR világos",
+   "qty": 4,
+   "unitPrice": 2700,
+   "total": 10800
+  },
+  {
+   "nap": "2026-08-28",
+   "tipus": "EUR világos",
+   "qty": 7,
+   "unitPrice": 2700,
+   "total": 18900
+  }
+ ],
+ "befizetes": [
+  {
+   "nap": "2026-01-05",
+   "amount": 1000000
+  },
+  {
+   "nap": "2026-01-07",
+   "amount": 1300000
+  },
+  {
+   "nap": "2026-01-10",
+   "amount": 1800000
+  },
+  {
+   "nap": "2026-01-19",
+   "amount": 2000000
+  },
+  {
+   "nap": "2026-01-23",
+   "amount": 2540000
+  },
+  {
+   "nap": "2026-01-30",
+   "amount": 1800000
+  },
+  {
+   "nap": "2026-02-02",
+   "amount": 1900000
+  },
+  {
+   "nap": "2026-02-03",
+   "amount": 300000
+  },
+  {
+   "nap": "2026-02-05",
+   "amount": 1700000
+  },
+  {
+   "nap": "2026-02-05",
+   "amount": 87000
+  },
+  {
+   "nap": "2026-02-06",
+   "amount": 280000
+  },
+  {
+   "nap": "2026-02-06",
+   "amount": 192000
+  },
+  {
+   "nap": "2026-02-08",
+   "amount": 420000
+  },
+  {
+   "nap": "2026-02-09",
+   "amount": 1000000
+  },
+  {
+   "nap": "2026-02-11",
+   "amount": 1000000
+  },
+  {
+   "nap": "2026-02-12",
+   "amount": 200000
+  },
+  {
+   "nap": "2026-02-13",
+   "amount": 63000
+  },
+  {
+   "nap": "2026-02-14",
+   "amount": 1000000
+  },
+  {
+   "nap": "2026-02-16",
+   "amount": 42000
+  },
+  {
+   "nap": "2026-02-17",
+   "amount": 3700000
+  },
+  {
+   "nap": "2026-02-20",
+   "amount": -163020
+  },
+  {
+   "nap": "2026-02-21",
+   "amount": 1000000
+  },
+  {
+   "nap": "2026-02-23",
+   "amount": 1500000
+  },
+  {
+   "nap": "2026-03-02",
+   "amount": 400000
+  },
+  {
+   "nap": "2026-03-03",
+   "amount": 2100000
+  },
+  {
+   "nap": "2026-03-06",
+   "amount": 1500000
+  },
+  {
+   "nap": "2026-03-09",
+   "amount": 1500000
+  },
+  {
+   "nap": "2026-03-11",
+   "amount": 1500000
+  },
+  {
+   "nap": "2026-03-17",
+   "amount": 1040000
+  },
+  {
+   "nap": "2026-03-18",
+   "amount": 500000
+  },
+  {
+   "nap": "2026-03-19",
+   "amount": 12000
+  },
+  {
+   "nap": "2026-03-20",
+   "amount": 800000
+  },
+  {
+   "nap": "2026-03-24",
+   "amount": 1000000
+  },
+  {
+   "nap": "2026-03-26",
+   "amount": 266000
+  },
+  {
+   "nap": "2026-03-27",
+   "amount": 73000
+  },
+  {
+   "nap": "2026-03-30",
+   "amount": 1500000
+  },
+  {
+   "nap": "2026-04-01",
+   "amount": 1000000
+  },
+  {
+   "nap": "2026-04-02",
+   "amount": 193000
+  },
+  {
+   "nap": "2026-04-06",
+   "amount": 1400000
+  },
+  {
+   "nap": "2026-04-07",
+   "amount": -52000
+  },
+  {
+   "nap": "2026-04-07",
+   "amount": 100000
+  },
+  {
+   "nap": "2026-04-11",
+   "amount": 1000000
+  },
+  {
+   "nap": "2026-04-13",
+   "amount": 2000000
+  },
+  {
+   "nap": "2026-04-17",
+   "amount": 92075
+  },
+  {
+   "nap": "2026-04-20",
+   "amount": 600000
+  },
+  {
+   "nap": "2026-04-20",
+   "amount": 692075
+  },
+  {
+   "nap": "2026-04-22",
+   "amount": 600000
+  },
+  {
+   "nap": "2026-04-23",
+   "amount": 1000000
+  },
+  {
+   "nap": "2026-04-27",
+   "amount": 1900000
+  },
+  {
+   "nap": "2026-05-04",
+   "amount": 1400000
+  },
+  {
+   "nap": "2026-05-08",
+   "amount": 1492075
+  },
+  {
+   "nap": "2026-05-10",
+   "amount": 1000000
+  },
+  {
+   "nap": "2026-05-12",
+   "amount": 335000
+  },
+  {
+   "nap": "2026-05-13",
+   "amount": 1000000
+  },
+  {
+   "nap": "2026-05-15",
+   "amount": 2000000
+  },
+  {
+   "nap": "2026-05-18",
+   "amount": 1119190
+  },
+  {
+   "nap": "2026-05-19",
+   "amount": 92075
+  },
+  {
+   "nap": "2026-05-22",
+   "amount": 100000
+  },
+  {
+   "nap": "2026-05-26",
+   "amount": 1055245
+  },
+  {
+   "nap": "2026-05-27",
+   "amount": 300000
+  },
+  {
+   "nap": "2026-05-28",
+   "amount": 246400
+  },
+  {
+   "nap": "2026-05-29",
+   "amount": 120523
+  },
+  {
+   "nap": "2026-06-01",
+   "amount": 152075
+  },
+  {
+   "nap": "2026-06-02",
+   "amount": 92075
+  },
+  {
+   "nap": "2026-06-03",
+   "amount": -49990
+  },
+  {
+   "nap": "2026-06-06",
+   "amount": 1500000
+  },
+  {
+   "nap": "2026-06-08",
+   "amount": 7445
+  },
+  {
+   "nap": "2026-06-10",
+   "amount": 1142240
+  },
+  {
+   "nap": "2026-06-12",
+   "amount": 109000
+  },
+  {
+   "nap": "2026-06-15",
+   "amount": 500000
+  },
+  {
+   "nap": "2026-06-16",
+   "amount": 3000000
+  },
+  {
+   "nap": "2026-06-18",
+   "amount": 800000
+  },
+  {
+   "nap": "2026-06-21",
+   "amount": 1000000
+  },
+  {
+   "nap": "2026-06-25",
+   "amount": 40000
+  },
+  {
+   "nap": "2026-06-27",
+   "amount": 1000000
+  },
+  {
+   "nap": "2026-06-29",
+   "amount": 1000000
+  },
+  {
+   "nap": "2026-06-30",
+   "amount": -5000
+  },
+  {
+   "nap": "2026-07-02",
+   "amount": 75000
+  },
+  {
+   "nap": "2026-07-03",
+   "amount": 67500
+  },
+  {
+   "nap": "2026-07-03",
+   "amount": -48510
+  },
+  {
+   "nap": "2026-07-07",
+   "amount": 1500000
+  },
+  {
+   "nap": "2026-07-09",
+   "amount": 50000
+  },
+  {
+   "nap": "2026-07-13",
+   "amount": 2507500
+  },
+  {
+   "nap": "2026-07-17",
+   "amount": 500000
+  },
+  {
+   "nap": "2026-07-21",
+   "amount": 1060000
+  },
+  {
+   "nap": "2026-07-23",
+   "amount": 900000
+  },
+  {
+   "nap": "2026-07-27",
+   "amount": 2460000
+  },
+  {
+   "nap": "2026-07-29",
+   "amount": 1944000
+  },
+  {
+   "nap": "2026-08-03",
+   "amount": 500000
+  },
+  {
+   "nap": "2026-08-04",
+   "amount": 276000
+  },
+  {
+   "nap": "2026-08-11",
+   "amount": 470000
+  },
+  {
+   "nap": "2026-08-14",
+   "amount": 500000
+  },
+  {
+   "nap": "2026-08-17",
+   "amount": 1000000
+  },
+  {
+   "nap": "2026-08-21",
+   "amount": 800000
+  },
+  {
+   "nap": "2026-08-24",
+   "amount": 1500000
+  },
+  {
+   "nap": "2026-08-25",
+   "amount": 2714920
+  },
+  {
+   "nap": "2026-08-26",
+   "amount": 11500
+  },
+  {
+   "nap": "2026-08-27",
+   "amount": 1500000
+  },
+  {
+   "nap": "2026-08-27",
+   "amount": 1500000
+  },
+  {
+   "nap": "2026-08-28",
+   "amount": 2300000
+  }
+ ]
+}

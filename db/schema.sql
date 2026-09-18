@@ -881,16 +881,36 @@ create index if not exists idx_keszlet_movements_fuggo
   on keszlet_movements (site_id) where direction = 'mozgatas_be' and elfogadva_at is null;
 
 -- Készlet, 2026-09-18: a Nyíregyháza archív korábbi (a rendszer indulása
--- előtti) hónapjai. Ezek a sorok CSAK az archívumban jelennek meg: nem
--- csinálnak készletmozgást és nem érintik a kasszát, mert az akkori
--- raklapok és pénzmozgások már rég lezárultak — a mai készletnek és
--- kasszának semmi köze hozzájuk. Hónaponként és típusonként egy sor.
-create table if not exists felvasarlas_archivum (
-  ho         date not null,      -- a hónap első napja
+-- előtti) hónapjai, a régi fuvar-diszpécser rendszerből átvéve. Ezek a sorok
+-- CSAK az archívumban jelennek meg: nem csinálnak készletmozgást és nem
+-- érintik a kasszát, mert az akkori raklapok és pénzmozgások már rég
+-- lezárultak — a mai készletnek és kasszának semmi köze hozzájuk.
+--
+-- Az adat napi, tételes bontásban érkezett (nap, típus, db, egységár), ezért
+-- így is tároljuk; a havi összesítést a lekérdezés végzi. A korábbi, havi
+-- szintű felvasarlas_archivum tábla üresen maradt, eldobjuk.
+drop table if exists felvasarlas_archivum;
+
+create table if not exists archiv_felvasarlas (
+  id         bigserial primary key,
+  nap        date not null,
   type_id    smallint not null references pallet_types(id),
   qty        integer not null,
-  total      integer,            -- Ft; null, ha csak darabszám ismert
-  forras     text,               -- honnan származik az adat (pl. régi rendszer)
-  created_at timestamptz not null default now(),
-  primary key (ho, type_id)
+  unit_price integer,
+  total      integer,
+  forras     text,
+  created_at timestamptz not null default now()
 );
+create index if not exists idx_archiv_felvasarlas_nap on archiv_felvasarlas (nap);
+
+-- A régi rendszer "befizetés" tételei: a telepre bevitt készpénz, amiből a
+-- felvásárlás ment. Az archív hónapok egyenlegéhez kell (befizetés −
+-- felvásárlás), a mai kasszát nem érinti.
+create table if not exists archiv_befizetes (
+  id         bigserial primary key,
+  nap        date not null,
+  amount     integer not null,
+  forras     text,
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_archiv_befizetes_nap on archiv_befizetes (nap);

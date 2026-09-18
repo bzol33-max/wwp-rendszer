@@ -233,6 +233,7 @@ async function main() {
   await torolDokumentumNelkuliDuplikatumokatOnce(pool);
   await rendezFuvarHelyeketOnce(pool);
   await vonjaVisszaSzamlatlanArchivalastOnce(pool);
+  await toltsdBeNyiregyhazaArchivumotOnce(pool);
   await javitsaSajatCegMegrendelotSzamlabol(pool);
   await javitsaMaradekSajatCegMegrendelotOnce(pool);
   await toroljeDuplikatumSorokatOnce(pool);
@@ -336,6 +337,79 @@ async function vonjaVisszaSzamlatlanArchivalastOnce(pool) {
   console.log(
     `[migrate] számlázatlan, script-archivált bér fuvar visszatéve a Számla/Postára: ${rows.length} sor` +
       (rows.length ? ": " + rows.map((r) => `#${r.id} ${r.nap} ${r.megrendelo ?? "-"}`).join("; ") : ".")
+  );
+}
+
+
+// Egyszeri betöltés: a Nyíregyháza archív 2026. január–augusztusi adatai a
+// régi fuvar-diszpécser rendszerből (db/nyiregyhaza-archivum-2026.json).
+// Ezek CSAK az archívumban jelennek meg — nem csinálnak készletmozgást és
+// nem érintik a kasszát, mert az akkori raklapok és pénz már rég lezárultak.
+async function toltsdBeNyiregyhazaArchivumotOnce(pool) {
+  const JAVITAS_KOD = "nyiregyhaza-archivum-2026-jan-aug";
+  const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (mar.length > 0) return;
+
+  const utvonal = path.join(dbDir, "nyiregyhaza-archivum-2026.json");
+  let adat;
+  try {
+    adat = JSON.parse(readFileSync(utvonal, "utf8"));
+  } catch {
+    console.warn("[migrate] Nyíregyháza archív adatfájl nem olvasható, kihagyva.");
+    return;
+  }
+
+  // Ismeretlen típusnév esetén inkább semmit ne töltsünk be, mint félig.
+  const { rows: tipusok } = await pool.query(`select name from pallet_types`);
+  const ismert = new Set(tipusok.map((t) => t.name));
+  const hianyzo = [...new Set(adat.felvasarlas.map((r) => r.tipus))].filter((t) => !ismert.has(t));
+  if (hianyzo.length > 0) {
+    console.warn(`[migrate] Nyíregyháza archív: ismeretlen típus(ok), betöltés kihagyva: ${hianyzo.join(", ")}`);
+    return;
+  }
+
+  // A betöltés hibája nem akaszthatja meg az indulást: a tranzakció
+  // visszagördül, a "kész" jelölés sem íródik ki, tehát javítás után újra
+  // megpróbálja a következő indulás.
+  const kliens = await pool.connect();
+  try {
+    await kliens.query("begin");
+    await kliens.query(`delete from archiv_felvasarlas`);
+    await kliens.query(`delete from archiv_befizetes`);
+    for (const r of adat.felvasarlas) {
+      await kliens.query(
+        `insert into archiv_felvasarlas (nap, type_id, qty, unit_price, total, forras)
+         values ($1::date, (select id from pallet_types where name = $2), $3, $4, $5, $6)`,
+        [r.nap, r.tipus, r.qty, r.unitPrice ?? null, r.total ?? null, adat.forras ?? null]
+      );
+    }
+    for (const r of adat.befizetes ?? []) {
+      await kliens.query(
+        `insert into archiv_befizetes (nap, amount, forras) values ($1::date, $2, $3)`,
+        [r.nap, r.amount, adat.forras ?? null]
+      );
+    }
+    await kliens.query(`insert into alkalmazott_javitasok (kod) values ($1) on conflict (kod) do nothing`, [
+      JAVITAS_KOD,
+    ]);
+    await kliens.query("commit");
+  } catch (err) {
+    await kliens.query("rollback").catch(() => {});
+    console.warn(`[migrate] Nyíregyháza archív betöltése nem sikerült: ${err?.message ?? err}`);
+    return;
+  } finally {
+    kliens.release();
+  }
+
+  const { rows: osszesito } = await pool.query(
+    `select to_char(nap, 'YYYY-MM') as ho, sum(qty)::int as db, sum(total)::int as ft
+     from archiv_felvasarlas group by 1 order by 1`
+  );
+  const { rows: befizetes } = await pool.query(`select coalesce(sum(amount), 0)::int as ft from archiv_befizetes`);
+  console.log(
+    `[migrate] Nyíregyháza archív betöltve: ${adat.felvasarlas.length} felvásárlási tétel, ` +
+      `${(adat.befizetes ?? []).length} befizetés (összesen ${befizetes[0].ft.toLocaleString("hu-HU")} Ft). ` +
+      osszesito.map((r) => `${r.ho}: ${r.db} db / ${r.ft.toLocaleString("hu-HU")} Ft`).join("; ")
   );
 }
 

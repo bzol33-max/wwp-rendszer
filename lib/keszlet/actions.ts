@@ -1356,10 +1356,12 @@ const FELVASARLAS_HAVI_SQL = `
     group by t.id, t.name, t.sort_order
   ),
   archiv as (
-    select t.id as type_id, t.name as type, t.sort_order, a.qty, a.total, true as archiv
-    from felvasarlas_archivum a
+    select t.id as type_id, t.name as type, t.sort_order,
+      sum(a.qty)::int as qty, sum(a.total)::int as total, true as archiv
+    from archiv_felvasarlas a
     join pallet_types t on t.id = a.type_id
-    where a.ho = $1::date
+    where a.nap >= $1::date and a.nap < ($1::date + interval '1 month')::date
+    group by t.id, t.name, t.sort_order
   ),
   egyesitve as (
     select * from elo
@@ -1373,6 +1375,8 @@ export type ArchivumSnapshot = {
   keszlet: ArchivumSorRow[];
   felvasarlas: ArchivumFelvasarlasRow[];
   kassza: { bevetel: number; kiadas: number; zaroEgyenleg: number };
+  /** A régi rendszer befizetései erre a hónapra (a telepre bevitt készpénz). */
+  befizetes: { db: number; osszeg: number };
 };
 
 function honapCimke(monthKey: string) {
@@ -1389,7 +1393,7 @@ export async function getArchivumHonapok(): Promise<ArchivumHonap[]> {
          coalesce((select min(created_at) from keszlet_movements), now()),
          coalesce((select min(created_at) from nyiregyhaza_purchases), now()),
          -- A régi rendszerből átvett hónapok is bekerülnek a listába.
-         coalesce((select min(ho)::timestamptz from felvasarlas_archivum), now())
+         coalesce((select min(nap)::timestamptz from archiv_felvasarlas), now())
        ) at time zone 'Europe/Budapest' as elso
      )
      select to_char(g, 'YYYY-MM') as month_key
@@ -1475,8 +1479,19 @@ export async function getArchivumSnapshot(monthKey: string): Promise<ArchivumSna
     [hoKezd]
   );
 
+  const befizetesRows = await query<{ db: number; osszeg: number }>(
+    `select count(*)::int as db, coalesce(sum(amount), 0)::int as osszeg
+     from archiv_befizetes
+     where nap >= $1::date and nap < ($1::date + interval '1 month')::date`,
+    [hoKezd]
+  );
+
   return {
     monthKey,
+    befizetes: {
+      db: Number(befizetesRows[0]?.db ?? 0),
+      osszeg: Number(befizetesRows[0]?.osszeg ?? 0),
+    },
     keszlet: keszletRows
       .map((r) => ({
         site: r.site,
@@ -1535,12 +1550,13 @@ export async function getArchivumEv(year: number): Promise<ArchivumEvRow[]> {
        group by 1, 2, 3, 4
      ),
      archiv as (
-       select to_char(a.ho, 'YYYY-MM') as month_key,
+       select to_char(a.nap, 'YYYY-MM') as month_key,
          t.id as type_id, t.name as type, t.sort_order,
-         a.qty, a.total, true as archiv
-       from felvasarlas_archivum a
+         sum(a.qty)::int as qty, sum(a.total)::int as total, true as archiv
+       from archiv_felvasarlas a
        join pallet_types t on t.id = a.type_id
-       where extract(year from a.ho) = $1
+       where extract(year from a.nap) = $1
+       group by 1, 2, 3, 4
      )
      select month_key, type, sort_order, qty, total, archiv from elo
      union all

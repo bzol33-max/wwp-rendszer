@@ -142,6 +142,13 @@ export function ArchivumView() {
     return { tipusok, cellak, honapOsszeg };
   }, [evRows, evHonapjai]);
 
+  // A havi nézethez: a hónap felvásárlásának forintösszege, és hogy van-e
+  // egyáltalán élő kassza-adat (a régi, archív hónapokban nincs).
+  const felvasarlasOsszeg = snap?.felvasarlas.reduce((sum, r) => sum + (r.total ?? 0), 0) ?? 0;
+  const vanEloKassza =
+    !!snap &&
+    (snap.kassza.bevetel !== 0 || snap.kassza.kiadas !== 0 || snap.kassza.zaroEgyenleg !== 0);
+
   const evesQty = matrix?.honapOsszeg.reduce((s, m) => s + m.qty, 0) ?? 0;
   const evesTotal = matrix?.honapOsszeg.reduce((s, m) => s + (m.total ?? 0), 0) ?? 0;
 
@@ -351,6 +358,39 @@ export function ArchivumView() {
             </Card>
           ))}
 
+          {snap.befizetes.db > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">Befizetés és egyenleg — régi rendszer</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div className="rounded-lg border px-3 py-2.5">
+                    <div className="text-xs text-muted-foreground">
+                      Befizetés ({snap.befizetes.db} alkalom)
+                    </div>
+                    <div className="text-lg font-bold tabular-nums text-success">
+                      {ft(snap.befizetes.osszeg)}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border px-3 py-2.5">
+                    <div className="text-xs text-muted-foreground">Felvásárlás</div>
+                    <div className="text-lg font-bold tabular-nums text-destructive">
+                      {ft(felvasarlasOsszeg)}
+                    </div>
+                  </div>
+                  <div className="rounded-lg border px-3 py-2.5">
+                    <div className="text-xs text-muted-foreground">Egyenleg</div>
+                    <div className="text-lg font-bold tabular-nums">
+                      {ft(snap.befizetes.osszeg - felvasarlasOsszeg)}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {vanEloKassza && (
           <Card>
             <CardHeader>
               <CardTitle className="text-sm">Kassza</CardTitle>
@@ -376,6 +416,7 @@ export function ArchivumView() {
               </div>
             </CardContent>
           </Card>
+          )}
 
           <p className="text-xs text-muted-foreground">
             A készlet Be és Ki oszlopa a telephelyek közti mozgatást is tartalmazza. A mozgatás a
