@@ -22,6 +22,7 @@ import { felismerPartner, partnerKodSzerint } from "@/lib/fuvarozas/import/partn
 import { ellenorizKivontFuvart, type KivontFuvar } from "@/lib/fuvarozas/import/ellenorzes";
 import { findJarmuInSzoveg } from "@/lib/fuvarozas/vehicles";
 import { kivonSpediTransMezoket } from "@/lib/fuvarozas/import/speditrans";
+import { kivonGhibliMezoket } from "@/lib/fuvarozas/import/ghibli";
 import type { SzovegElem } from "@/lib/fuvarozas/import/pdf-elemek";
 
 const mintaDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "teszt-minta");
@@ -308,6 +309,26 @@ egyenlo(
   "a Well Pack NEM a saját cégünk (Well-Worn Pallet) — nem törlődik ki"
 );
 egyenlo(felismerPartner("VOXOV Logistics Kft. Szerződéses feltételek")?.kod, "voxov", "VOXOV felismerése");
+
+// Ghibli: a lerakási dátumTARTOMÁNY vége a lerakás napja; a modell ezt
+// egynaposnak vette (#134, 2026-09-17). A minta a Drive szövegének tördelése
+// tabulátorral/sortöréssel is — a címke és az érték közti fehér karakter
+// szabad.
+const ghibliSzoveg =
+  "Pozíciószámunk\tN26/22795\n\nFelrakás dátuma: 2026.09.17 Lerakás dátuma: 2026.09.17 - 2026.09.18 Rendszám: AOPU427/AOTY474\n\nÁru:\n\nFuvardíj:\n\nKözösségi szállítmányozás átvételi díjtétel 400.00 EUR +ÁFA A számlán";
+const ghibli = kivonGhibliMezoket(ghibliSzoveg);
+egyenlo(ghibli.felrakasDatum, "2026-09-17", "Ghibli: felrakás dátuma");
+egyenlo(ghibli.lerakasDatum, "2026-09-18", "Ghibli: a lerakási tartomány VÉGE a lerakás napja");
+egyenlo(ghibli.pozicioszam, "N26/22795", "Ghibli: pozíciószám");
+egyenlo(ghibli.fuvardij, 400, "Ghibli: fuvardíj 400.00 EUR → 400");
+egyenlo(ghibli.fuvardijPenznem, "EUR", "Ghibli: pénznem EUR");
+egyenlo(kocsi(ghibli.rendszamVagySofor ?? null), "Gergő", "Ghibli: a rendszámokból Gergő kocsija");
+const ghibliEgynapos = kivonGhibliMezoket(
+  "Felrakás dátuma: 2026.09.18\nLerakás dátuma: 2026.09.18\nRendszám: AOPU427,/AOTY474\n"
+);
+egyenlo(ghibliEgynapos.lerakasDatum, null, "Ghibli: azonos napi lerakásnál a lerakási dátum null");
+egyenlo(ghibliEgynapos.rendszamVagySofor, "AOPU427,/AOTY474", "Ghibli: vesszős rendszám-elgépelés szó szerint");
+egyenlo(Object.keys(kivonGhibliMezoket("Felrakás helye: Budapest")).length, 0, "Ghibli: idegen szövegből nincs mező");
 
 // A megrendelőnek olvasott cég a rakodóhely cége (Ghibli-eset: Apollo Tyres).
 allit(
