@@ -384,6 +384,43 @@ export async function deleteFuvar(id: string) {
   await query(`update fuvar_megbizasok set statusz = 'torolt' where id = $1`, [id]);
 }
 
+/**
+ * Egy Drive-ból importált megbízás ÚJRAOLVASÁSRA felszabadítása: a sor
+ * törölt lesz, és elengedi a Drive-iratot (dokumentum_url, drive_file_id),
+ * hogy a következő szinkron-kör a jelenlegi olvasóval újra felvegye. A sima
+ * törlés ezt NEM teszi: a törölt sor továbbra is fogja az iratot, a szinkron
+ * "ismertnek" veszi, és a dokumentum_url egyedi indexe miatt új sor sem
+ * születhetne belőle — így egy rosszul beolvasott megbízást eddig csak kézzel
+ * lehetett javítani (2026-09-18, BB-Logistic 02215-2026). Ugyanaz, mint a
+ * scripts/migrate.mjs egyszeri "szabaditsaFel…" javításai, csak gombról.
+ */
+export async function felszabaditFuvarDokumentumot(id: string): Promise<void> {
+  await requireEditPermission("fuvarozas");
+  const [sor] = await query<{ drive_file_id: string | null; dokumentum_url: string | null }>(
+    `select drive_file_id, dokumentum_url from fuvar_megbizasok where id = $1`,
+    [id]
+  );
+  if (!sor) throw new Error("Nincs ilyen fuvar.");
+  const fileId = sor.drive_file_id ?? sor.dokumentum_url?.match(/\/file\/d\/([^/]+)\//)?.[1] ?? null;
+  await query(
+    `update fuvar_megbizasok
+     set statusz = 'torolt',
+         megjegyzes = coalesce(megjegyzes || ' | ', '') ||
+           'Újraolvasásra felszabadítva, eredeti dokumentum: ' || coalesce(dokumentum_url, '-'),
+         dokumentum_url = null,
+         drive_file_id = null
+     where id = $1`,
+    [id]
+  );
+  if (fileId) {
+    // A csatolt irat és a napló hivatkozása se fogja tovább a fájlt — a
+    // szinkron a napló nyers szövegét megtartja (nem tölti le újra hiába).
+    await query(`delete from fuvar_dokumentumok where drive_file_id = $1 and fuvar_id = $2`, [fileId, id]);
+    await query(`update fuvar_import_naplo set fuvar_id = null where drive_file_id = $1 and fuvar_id = $2`, [fileId, id]);
+  }
+  toroljIdovonalCachet();
+}
+
 /** A lista soron belüli, azonnali javítás: a hivatkozási szám kitöltése vagy "nincs" jelölése. */
 export async function setFuvarPoziciszam(
   id: string,
