@@ -347,7 +347,22 @@
 - GPS lap: a "Következő napok" doboz eddig csak a lap megnyitásakor töltődött
   be — most minden frissítéssel (5 percenként, kész-jelölés után is), így a
   Megbízásokon közben javított felrakó/lerakó/kocsi itt is látszik.
-- Megjegyzés: a már beimportált #136 sor felrakója/lerakója az iratnak
-  megfelelő (Fel Füzesabony 11:00, Le Nyíradony 14:00); a megrendelője
-  viszont "DS Smith Packaging Hungary Kft." — kézzel BB-Logistic-re
-  javítandó, különben rossz vevőre menne a számla.
+- (Ugyanaznap javítva, 22. kör:) a fenti szövegsorrendes olvasás HAMIS volt.
+
+## 2026-09-18 (22. kör) — SpediTrans: felrakó/lerakó oldalkoordinátából
+
+- A pdf-parse sima szövegében a SpediTrans JOBB hasábjának (Lerakás helye)
+  blokkja áll a BAL (Felrakás helye) előtt — ezért a nyelvi modell ÉS a 21.
+  körös, szövegsorrendre épülő olvasó is fordítva adta (Fel Füzesabony, Le
+  Nyíradony); a valóság és az irat: Fel Nyíradony (Bestpallet), Le
+  Füzesabony (DS Smith). A pdfjs koordinátái egyértelműek: a Bestpallet-blokk
+  x≈25, a "Felrakás helye:" alatt; a DS Smith-blokk x≈301, a "Lerakás helye"
+  alatt, ugyanazokon a sorokon.
+- Javítás: `lib/fuvarozas/import/pdf-elemek.ts` (`pdfSzovegElemek`: pdfjs
+  szövegelemek x/y-nal, `pdfjs-dist` közvetlen függőség), a `Partner.kivon`
+  második paramétere az elemek (docx/Docs: null); `speditrans.ts` a felrakót
+  és a lerakót KIZÁRÓLAG koordinátából olvassa (címke alatti hasáb),
+  koordináta nélkül nem tippel. `drive-sync-core.ts` `fajlSzovege` a PDF
+  bájtokat is visszaadja. Minta: `scripts/teszt-minta/speditrans-megbizas.json`.
+- Teendő kézzel (a már beimportált #136 sor): Fel/Le csere (Fel Nyíradony,
+  Le Füzesabony) és megrendelő "DS Smith…" → "BB-Logistic Solution Kft.".

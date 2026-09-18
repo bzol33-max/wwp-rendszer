@@ -37,6 +37,7 @@
 
 import type { KivontFuvar } from "./ellenorzes";
 
+import type { SzovegElem } from "./pdf-elemek";
 import { kivonSpediTransMezoket } from "./speditrans";
 
 export type Partner = {
@@ -58,12 +59,13 @@ export type Partner = {
   /** Hogyan hívja a partner a saját hivatkozási számát (ember számára). */
   hivatkozasNeve?: string;
   /**
-   * A partner sablonjából determinisztikusan (reguláris kifejezéssel)
-   * kiolvasható mezők a pdf-parse NYERS szövegéből. Ami itt nem null, az
-   * felülírja a nyelvi modell tippjét; ami hiányzik, az a modellé marad.
-   * Csak VALÓDI pdf-parse kimenetre írt olvasó kerülhet ide (lásd fent).
+   * A partner sablonjából determinisztikusan kiolvasható mezők a pdf-parse
+   * NYERS szövegéből és (PDF-nél) a pdfjs koordinátás szövegelemeiből
+   * (pdf-elemek.ts; docx/Docs esetén null). Ami itt nem null, az felülírja
+   * a nyelvi modell tippjét; ami hiányzik, az a modellé marad. Csak VALÓDI
+   * pdf-parse/pdfjs kimenetre írt olvasó kerülhet ide (lásd fent).
    */
-  kivon?: (nyersSzoveg: string) => Partial<KivontFuvar>;
+  kivon?: (nyersSzoveg: string, elemek: SzovegElem[] | null) => Partial<KivontFuvar>;
 };
 
 export const PARTNEREK: readonly Partner[] = [
@@ -139,8 +141,8 @@ export const PARTNEREK: readonly Partner[] = [
     torzsVege: [],
     hivatkozasNeve: "Pozíciószám",
     // A kéthasábos felrakó/lerakó táblát a nyelvi modell fordítva olvasta
-    // (2026-09-17) — a blokkokat, a határidőket, a pozíciószámot, a
-    // fuvardíjat és a rendszámokat reguláris kifejezés adja.
+    // (2026-09-17) — a két blokkot oldalkoordinátából, a határidőket, a
+    // pozíciószámot, a fuvardíjat és a rendszámokat reguláris kifejezés adja.
     kivon: kivonSpediTransMezoket,
   },
 ] as const;
