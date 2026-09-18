@@ -1575,3 +1575,86 @@ export async function getArchivumEv(year: number): Promise<ArchivumEvRow[]> {
     archiv: r.archiv,
   }));
 }
+
+// Az "Év összesen" nézet kimutatásaihoz: havi befizetés és napi aktivitás.
+// A felvásárlás típus × hónap sorait a getArchivumEv adja.
+export type ArchivumEvKimutatas = {
+  /** Havonta a telepre bevitt készpénz (befizetés). */
+  befizetes: { monthKey: string; osszeg: number; alkalom: number }[];
+  /** Havonta: hány napon volt felvásárlás, napi átlag, legerősebb nap. */
+  napok: {
+    monthKey: string;
+    aktivNapok: number;
+    atlagDb: number;
+    legjobbNap: string;
+    legjobbDb: number;
+  }[];
+};
+
+export async function getArchivumEvKimutatas(year: number): Promise<ArchivumEvKimutatas> {
+  await requireViewPermission("keszlet");
+  if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+    throw new Error(`Érvénytelen év: ${String(year)}`);
+  }
+  // Befizetés: a régi rendszer hónapjaiban az archiv_befizetes, az élő
+  // rendszerben a kassza bevétel-oldali "egyéb" tételei. A nyitóegyenleg
+  // ("NYITÓ …") NEM befizetés, csak az induló pénzkészlet átvezetése, ezért
+  // kimarad; az eladás bevétele (category = 'eladas') sem az.
+  const befizetes = await query<{ month_key: string; osszeg: number; alkalom: number }>(
+    `with tetel as (
+       select nap, amount from archiv_befizetes
+       where extract(year from nap) = $1
+       union all
+       select (created_at at time zone 'Europe/Budapest')::date as nap, amount
+       from kassza_movements
+       where amount > 0
+         and category = 'egyeb'
+         and description !~* '^\\s*nyit[óo]'
+         and extract(year from (created_at at time zone 'Europe/Budapest')) = $1
+     )
+     select to_char(nap, 'YYYY-MM') as month_key, sum(amount)::int as osszeg, count(*)::int as alkalom
+     from tetel group by 1 order by 1`,
+    [year]
+  );
+
+  // Napi aktivitás: az archív és az élő felvásárlás napi összege, havonta.
+  const napok = await query<{
+    month_key: string;
+    aktiv_napok: number;
+    atlag_db: number;
+    legjobb_nap: string;
+    legjobb_db: number;
+  }>(
+    `with napi as (
+       select nap, sum(qty)::int as db from archiv_felvasarlas
+       where extract(year from nap) = $1 group by 1
+       union all
+       select (created_at at time zone 'Europe/Budapest')::date as nap, sum(qty)::int as db
+       from nyiregyhaza_purchases
+       where extract(year from (created_at at time zone 'Europe/Budapest')) = $1 group by 1
+     ),
+     osszevont as (select nap, sum(db)::int as db from napi group by 1)
+     select to_char(nap, 'YYYY-MM') as month_key,
+       count(*)::int as aktiv_napok,
+       round(avg(db))::int as atlag_db,
+       (array_agg(to_char(nap, 'YYYY-MM-DD') order by db desc, nap))[1] as legjobb_nap,
+       max(db)::int as legjobb_db
+     from osszevont group by 1 order by 1`,
+    [year]
+  );
+
+  return {
+    befizetes: befizetes.map((r) => ({
+      monthKey: r.month_key,
+      osszeg: Number(r.osszeg),
+      alkalom: Number(r.alkalom),
+    })),
+    napok: napok.map((r) => ({
+      monthKey: r.month_key,
+      aktivNapok: Number(r.aktiv_napok),
+      atlagDb: Number(r.atlag_db),
+      legjobbNap: r.legjobb_nap,
+      legjobbDb: Number(r.legjobb_db),
+    })),
+  };
+}

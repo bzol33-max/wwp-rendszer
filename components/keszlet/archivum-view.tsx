@@ -21,12 +21,15 @@ import {
 } from "@/components/ui/table";
 import {
   getArchivumEv,
+  getArchivumEvKimutatas,
   getArchivumHonapok,
   getArchivumSnapshot,
+  type ArchivumEvKimutatas,
   type ArchivumEvRow,
   type ArchivumHonap,
   type ArchivumSnapshot,
 } from "@/lib/keszlet/actions";
+import { ArchivumEv } from "@/components/keszlet/archivum-ev";
 
 const SITE_ORDER = ["Nyíregyháza", "Balkány", "Szakoly"];
 
@@ -64,6 +67,7 @@ export function ArchivumView() {
   const [ev, setEv] = useState<string>("");
   const [nezet, setNezet] = useState<string>("ev");
   const [evRows, setEvRows] = useState<ArchivumEvRow[] | null>(null);
+  const [kimutatas, setKimutatas] = useState<ArchivumEvKimutatas | null>(null);
   const [snap, setSnap] = useState<ArchivumSnapshot | null>(null);
 
   useEffect(() => {
@@ -86,6 +90,11 @@ export function ArchivumView() {
     getArchivumEv(Number(ev))
       .then((rows) => {
         if (mounted) setEvRows(rows);
+      })
+      .catch(() => {});
+    getArchivumEvKimutatas(Number(ev))
+      .then((k) => {
+        if (mounted) setKimutatas(k);
       })
       .catch(() => {});
     return () => {
@@ -119,29 +128,6 @@ export function ArchivumView() {
     [honapok, ev]
   );
 
-  // Típus × hónap mátrix az éves nézethez.
-  const matrix = useMemo(() => {
-    if (!evRows) return null;
-    const tipusok: string[] = [];
-    const cellak = new Map<string, { qty: number; total: number | null }>();
-    for (const r of evRows) {
-      if (!tipusok.includes(r.type)) tipusok.push(r.type);
-      cellak.set(`${r.type}|${r.monthKey}`, { qty: r.qty, total: r.total });
-    }
-    const honapOsszeg = evHonapjai.map((mk) => {
-      const sorok = evRows.filter((r) => r.monthKey === mk);
-      return {
-        monthKey: mk,
-        qty: sorok.reduce((s, r) => s + r.qty, 0),
-        total: sorok.some((r) => r.total !== null)
-          ? sorok.reduce((s, r) => s + (r.total ?? 0), 0)
-          : null,
-        archiv: sorok.length > 0 && sorok.every((r) => r.archiv),
-      };
-    });
-    return { tipusok, cellak, honapOsszeg };
-  }, [evRows, evHonapjai]);
-
   // A havi nézethez: a hónap felvásárlásának forintösszege, és hogy van-e
   // egyáltalán élő kassza-adat (a régi, archív hónapokban nincs).
   const felvasarlasOsszeg = snap?.felvasarlas.reduce((sum, r) => sum + (r.total ?? 0), 0) ?? 0;
@@ -149,8 +135,6 @@ export function ArchivumView() {
     !!snap &&
     (snap.kassza.bevetel !== 0 || snap.kassza.kiadas !== 0 || snap.kassza.zaroEgyenleg !== 0);
 
-  const evesQty = matrix?.honapOsszeg.reduce((s, m) => s + m.qty, 0) ?? 0;
-  const evesTotal = matrix?.honapOsszeg.reduce((s, m) => s + (m.total ?? 0), 0) ?? 0;
 
   return (
     <div className="space-y-4">
@@ -189,84 +173,10 @@ export function ArchivumView() {
       </div>
 
       {nezet === "ev" ? (
-        !matrix ? (
+        !evRows ? (
           <p className="text-sm text-muted-foreground">Betöltés…</p>
         ) : (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Felvásárlás {ev} — típusonként, havonta (db)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {matrix.tipusok.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Ebben az évben nincs rögzített felvásárlás.</p>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Típus</TableHead>
-                      {evHonapjai.map((mk) => (
-                        <TableHead key={mk} className="text-right">
-                          {honapNev(mk)}
-                        </TableHead>
-                      ))}
-                      <TableHead className="text-right">Összesen</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {matrix.tipusok.map((tipus) => {
-                      const sorOsszeg = evHonapjai.reduce(
-                        (s, mk) => s + (matrix.cellak.get(`${tipus}|${mk}`)?.qty ?? 0),
-                        0
-                      );
-                      return (
-                        <TableRow key={tipus}>
-                          <TableCell className="font-medium">{tipus}</TableCell>
-                          {evHonapjai.map((mk) => {
-                            const cella = matrix.cellak.get(`${tipus}|${mk}`);
-                            return (
-                              <TableCell key={mk} className="text-right tabular-nums">
-                                {cella ? cella.qty : <span className="text-muted-foreground">—</span>}
-                              </TableCell>
-                            );
-                          })}
-                          <TableCell className="text-right font-semibold tabular-nums">
-                            {sorOsszeg}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                    <TableRow>
-                      <TableCell className="font-semibold">Összesen (db)</TableCell>
-                      {matrix.honapOsszeg.map((m) => (
-                        <TableCell key={m.monthKey} className="text-right font-semibold tabular-nums">
-                          {m.qty}
-                        </TableCell>
-                      ))}
-                      <TableCell className="text-right font-bold tabular-nums">{evesQty}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell className="font-semibold">Összeg</TableCell>
-                      {matrix.honapOsszeg.map((m) => (
-                        <TableCell
-                          key={m.monthKey}
-                          className="text-right text-xs font-medium tabular-nums text-muted-foreground"
-                        >
-                          {m.total === null ? "—" : m.total.toLocaleString("hu-HU")}
-                        </TableCell>
-                      ))}
-                      <TableCell className="text-right text-xs font-bold tabular-nums">
-                        {evesTotal.toLocaleString("hu-HU")}
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              )}
-              <p className="mt-2 text-xs text-muted-foreground">
-                A cellákban a darabszám, az „Összeg” sorban a forint. Egy hónap részleteiért
-                válaszd a fenti fülek közül a hónapot.
-              </p>
-            </CardContent>
-          </Card>
+          <ArchivumEv ev={ev} honapok={evHonapjai} rows={evRows} kimutatas={kimutatas} />
         )
       ) : !snap || snap.monthKey !== nezet ? (
         <p className="text-sm text-muted-foreground">Betöltés…</p>
