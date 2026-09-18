@@ -33,6 +33,7 @@ import { getSajatFuvarokErinteshez, setFuvarTeljesitve } from "./megbizasok";
 import { cimSugarKm, epitsIdovonal, fuvarKeszGpsSzerint, haversineKm, jelolMegallokat, kiegesziteloAllapottal } from "./idovonal";
 import { epitsErintesMegallokat, mozogE } from "./erintes-felismeres";
 import { rogzitGpsErinteseket } from "./megallo-naplo";
+import { getEloElozmeny, rogzitEloMegfigyelest } from "./elo-elozmeny";
 import { budapestFalioraToInstant, budapestNapISO, formatBudapestFaliora } from "./idozona";
 import type { IdovonalSzakasz, TervezettCim, TervezettMegallo } from "./idovonal";
 
@@ -145,12 +146,10 @@ export async function futtatTeljesitesFigyeles(): Promise<TeljesitesFigyelesEred
       const eloIdo = elo ? parseEcofleetTimestamp(elo.timestamp) : null;
       const utolsoLezart = szakaszok[szakaszok.length - 1];
       if (elo && eloIdo) {
-        szakaszok = kiegesziteloAllapottal(
-          szakaszok,
-          { lat: elo.latitude, lon: elo.longitude, cim: null, mozog: mozogE(elo), idobelyeg: eloIdo },
-          most,
-          tervezettCimek
-        );
+        const megfigyeles = { lat: elo.latitude, lon: elo.longitude, mozog: mozogE(elo), idobelyeg: eloIdo };
+        const elozmeny = getEloElozmeny(jarmu.ecofleetObjectId);
+        rogzitEloMegfigyelest(jarmu.ecofleetObjectId, megfigyeles);
+        szakaszok = kiegesziteloAllapottal(szakaszok, { ...megfigyeles, cim: null }, most, tervezettCimek, elozmeny);
       }
       // A jármű élő helyzete és a nyomvonal vége a naplóba — látszik, ha a
       // kocsi áll valahol, de az Ecofleet még nem zárta le az odavezető tripet.

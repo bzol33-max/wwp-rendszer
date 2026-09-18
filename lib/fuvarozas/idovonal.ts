@@ -362,6 +362,20 @@ export type EloPozicio = {
 };
 
 /**
+ * Egy korábbi élő megfigyelés (a 15 perces figyelő egy köre vagy egy
+ * oldalbetöltés): hol volt a kocsi, és mozgott-e. Lásd lib/fuvarozas/
+ * elo-elozmeny.ts — ebből tudjuk pontosítani, mikor hagyta el a kocsi a
+ * lezárt trip végpontját, és mióta áll a mostani helyén, amíg az Ecofleet
+ * a nyitott tripet le nem zárja.
+ */
+export type EloMegfigyeles = { idobelyeg: Date; lat: number; lon: number; mozog: boolean };
+
+/** Légvonalból becsült menetidő (ms) két pont közt: kerülő-szorzóval, átlagsebességgel. */
+function becsultMenetidoMs(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  return ((haversineKm(lat1, lon1, lat2, lon2) * ELO_KERULO_SZORZO) / ELO_ATLAG_KMH) * 3600000;
+}
+
+/**
  * Az Ecofleet Vehicles/getTrips csak a MÁR LEZÁRULT trip-eket adja vissza —
  * egy éppen folyamatban lévő fuvar (vagy egy még véget nem ért állás) tehát
  * nem jelenik meg benne, amíg be nem fejeződik. Emiatt egy ténylegesen most
@@ -372,13 +386,35 @@ export type EloPozicio = {
  * hozzá; ha áll és közel van, az utolsó állás-szakaszt hosszabbítja meg a
  * jelenig.
  *
+ * A HIÁNYZÓ ÁLLÁSOK pótlása (élesben 2026-09-18, Micó): az Ecofleet az
+ * utolsó lezárt trip "stoppedAfter" mezőjét a következő trip lezárásáig
+ * nem tölti ki, ezért a lezárt trip végpontján (P) töltött állás nem
+ * látszik; közben a kocsi már a következő helyen (Q) áll, vagy úton van.
+ * Egy lezárt trip vége bizonyítottan állás volt P-n, ezért:
+ *   - ha a kocsi MOZOG: P-re állás kerül a lezárástól a P elhagyásáig (a
+ *     megfigyelésekből, különben a mostani helyig becsült menetidővel
+ *     visszaszámolva), utána élő vezetés;
+ *   - ha a kocsi Q-n ÁLL, messze P-től: P-re állás a lezárástól a P
+ *     elhagyásáig, élő vezetés, majd Q-n élő állás a Q-ra érkezéstől (a
+ *     megfigyelésekből: mióta látjuk ott folyamatosan). Megfigyelés nélkül
+ *     az egész ismeretlen idő P-é (a lezárt trip a bizonyíték), Q-n az
+ *     állás csak a következő megfigyelésekkel nő — a mostani hely nem
+ *     kaphatja meg a P-n töltött rakodás idejét (Micó Szakolyba hazaérve a
+ *     nyírjákói felrakó "nincs érintés" lett).
+ *   - ha az utolsó lezárt szakasz állás volt (a P elhagyása ismert), és a
+ *     kocsi Q-n áll: Q-n élő állás a becsült (vagy megfigyelt) érkezéstől.
+ * Az élő állás csak akkor jön létre, ha legalább ELO_ALLAS_MIN_PERC-nyi
+ * (piros lámpa, sorompó nem), és a jel friss (ELO_JEL_MAX_PERC).
+ *
  * `tervezettCimek`: lásd epitsIdovonal — ugyanaz a lista, a most meghosszabbított/újonnan létrehozott élő állás-szakasz kategorizálásához.
+ * `elozmeny`: a kocsi korábbi élő megfigyelései, időrendben (lehet üres).
  */
 export function kiegesziteloAllapottal(
   szakaszok: IdovonalSzakasz[],
   elo: EloPozicio | null,
   most: Date,
-  tervezettCimek: TervezettCim[] = []
+  tervezettCimek: TervezettCim[] = [],
+  elozmeny: EloMegfigyeles[] = []
 ): IdovonalSzakasz[] {
   if (!elo || szakaszok.length === 0) return szakaszok;
 
@@ -396,104 +432,82 @@ export function kiegesziteloAllapottal(
   const tavolsagKm = haversineKm(utolsoHely.lat, utolsoHely.lon, elo.lat, elo.lon);
   const folyamatbanVezet = elo.mozog || tavolsagKm >= OSSZEVONAS_KM;
 
-  if (folyamatbanVezet) {
-    // A jármű ÁLL, de messze az utolsó lezárt ponttól, és a jel friss: a
-    // Balkány→Nyírjákó út még nyitott trip az Ecofleetben (a motor jár a
-    // rakodás alatt, vagy a trip-lezárás késik), ezért a nyomvonalon nincs
-    // állás ott, ahol a kamion ténylegesen rakodik — élesben (2026-09-18)
-    // Micó három órán át "élő vezetés"-nek látszott, és a nyírjákói felrakó
-    // "nincs érintés" maradt. Ilyenkor a megtett légvonalból becsült
-    // menetidővel egy élő vezetést és utána egy élő állást képzünk a
-    // jelenlegi helyre — csak akkor, ha a becsült érkezés óta legalább
-    // ELO_ALLAS_MIN_PERC eltelt, hogy egy piros lámpa ne legyen "rakodás".
-    const jelKoraPerc = (most.getTime() - elo.idobelyeg.getTime()) / 60000;
-    const menetidoMs = ((tavolsagKm * ELO_KERULO_SZORZO) / ELO_ATLAG_KMH) * 3600000;
-    const becsultErkezes = new Date(utolsoVeg.getTime() + menetidoMs);
-    const allPercek = (most.getTime() - becsultErkezes.getTime()) / 60000;
-
-    // A jármű MOZOG, az utolsó lezárt szakasz egy vezetés (állás nélkül
-    // utána), és a lezárás óta jóval több idő telt el, mint amennyi az
-    // onnan idáig vezető út: a kocsi a lezárt trip végpontján ÁLLT, csak
-    // az Ecofleet az utolsó lezárt trip "stoppedAfter" mezőjét még nem
-    // töltötte ki, amíg a következő trip nyitott — élesben (2026-09-18)
-    // Micó 12:26-kor ért Nyírjákóra, két órát rakodott, 14:57-kor már úton
-    // volt, és a nyomvonalon egyetlen állás sem látszott. Az állást a
-    // végpontra képezzük, a becsült továbbindulással; amint az Ecofleet
-    // lezárja a következő tripet, a valódi érték lép a helyébe.
-    if (elo.mozog && utolso.tipus === "vezetes" && jelKoraPerc <= ELO_JEL_MAX_PERC && allPercek >= ELO_ALLAS_MIN_PERC) {
-      const becsultTavozas = new Date(most.getTime() - menetidoMs);
-      const allasSec = (becsultTavozas.getTime() - utolsoVeg.getTime()) / 1000;
-      const allas: IdovonalSzakasz = {
-        tipus: "allas",
-        kezdet: utolsoVeg,
-        veg: becsultTavozas,
-        idotartamSec: allasSec,
-        cim: utolsoHely.cim,
-        lat: utolsoHely.lat,
-        lon: utolsoHely.lon,
-        kategoria: allasKategoria(allasSec, utolsoHely.lat, utolsoHely.lon, tervezettCimek),
-        osszevontLepesek: 0,
-        elo: true,
-      };
-      const vezetes: IdovonalSzakasz = {
-        tipus: "vezetes",
-        kezdet: becsultTavozas,
-        veg: most,
-        tavKm: tavolsagKm,
-        idotartamSec: menetidoMs / 1000,
-        atlagSebesseg: 0,
-        honnan: utolsoHely.cim,
-        hova: elo.cim,
-        hovaLat: elo.lat,
-        hovaLon: elo.lon,
-        elo: true,
-      };
-      return [...szakaszok, allas, vezetes];
-    }
-
-    if (!elo.mozog && jelKoraPerc <= ELO_JEL_MAX_PERC && allPercek >= ELO_ALLAS_MIN_PERC) {
-      const vezetes: IdovonalSzakasz = {
-        tipus: "vezetes",
-        kezdet: utolsoVeg,
-        veg: becsultErkezes,
-        tavKm: tavolsagKm,
-        idotartamSec: (becsultErkezes.getTime() - utolsoVeg.getTime()) / 1000,
-        atlagSebesseg: 0,
-        honnan: utolsoHely.cim,
-        hova: elo.cim,
-        hovaLat: elo.lat,
-        hovaLon: elo.lon,
-        elo: true,
-      };
-      const idotartamSec = (most.getTime() - becsultErkezes.getTime()) / 1000;
-      const allas: IdovonalSzakasz = {
-        tipus: "allas",
-        kezdet: becsultErkezes,
-        veg: most,
-        idotartamSec,
-        cim: elo.cim,
-        lat: elo.lat,
-        lon: elo.lon,
-        kategoria: allasKategoria(idotartamSec, elo.lat, elo.lon, tervezettCimek),
-        osszevontLepesek: 0,
-        elo: true,
-      };
-      return [...szakaszok, vezetes, allas];
-    }
-    const uj: IdovonalSzakasz = {
-      tipus: "vezetes",
-      kezdet: utolsoVeg,
-      veg: most,
-      tavKm: tavolsagKm,
-      idotartamSec: Math.max(0, (most.getTime() - utolsoVeg.getTime()) / 1000),
-      atlagSebesseg: 0,
-      honnan: utolsoHely.cim,
-      hova: elo.cim,
-      hovaLat: elo.lat,
-      hovaLon: elo.lon,
+  const allas = (kezdet: Date, veg: Date, hely: { lat: number; lon: number; cim: string | null }): IdovonalSzakasz => {
+    const idotartamSec = Math.max(0, (veg.getTime() - kezdet.getTime()) / 1000);
+    return {
+      tipus: "allas",
+      kezdet,
+      veg,
+      idotartamSec,
+      cim: hely.cim,
+      lat: hely.lat,
+      lon: hely.lon,
+      kategoria: allasKategoria(idotartamSec, hely.lat, hely.lon, tervezettCimek),
+      osszevontLepesek: 0,
       elo: true,
     };
-    return [...szakaszok, uj];
+  };
+  const vezetes = (kezdet: Date, veg: Date): IdovonalSzakasz => ({
+    tipus: "vezetes",
+    kezdet,
+    veg,
+    tavKm: tavolsagKm,
+    idotartamSec: Math.max(0, (veg.getTime() - kezdet.getTime()) / 1000),
+    atlagSebesseg: 0,
+    honnan: utolsoHely.cim,
+    hova: elo.cim,
+    hovaLat: elo.lat,
+    hovaLon: elo.lon,
+    elo: true,
+  });
+
+  if (folyamatbanVezet) {
+    const jelFriss = (most.getTime() - elo.idobelyeg.getTime()) / 60000 <= ELO_JEL_MAX_PERC;
+    const menetidoMs = becsultMenetidoMs(utolsoHely.lat, utolsoHely.lon, elo.lat, elo.lon);
+    const megfigyelesek = elozmeny
+      .filter((m) => m.idobelyeg.getTime() > utolsoVeg.getTime() && m.idobelyeg.getTime() <= most.getTime())
+      .sort((a, b) => a.idobelyeg.getTime() - b.idobelyeg.getTime());
+
+    // Mióta áll a kocsi a mostani helyen (Q)? A legkorábbi megfigyelés,
+    // amelytől kezdve mindegyik Q közelében, állva látta.
+    let qOta: Date | null = null;
+    for (let i = megfigyelesek.length - 1; i >= 0; i--) {
+      const m = megfigyelesek[i];
+      if (m.mozog || haversineKm(elo.lat, elo.lon, m.lat, m.lon) >= OSSZEVONAS_KM) break;
+      qOta = m.idobelyeg;
+    }
+
+    // Mikor hagyta el a kocsi P-t (az utolsó lezárt szakasz helyét)?
+    // Legkorábban akkor, amikor utoljára P-n állva láttuk; legkésőbb annyival
+    // egy P-től távoli megfigyelés (vagy a Q-ra érkezés, vagy a jelen) előtt,
+    // amennyi az odavezető becsült menetidő. A kettő közül a szűkebb dönt.
+    const utoljaraPn = megfigyelesek.filter((m) => !m.mozog && haversineKm(utolsoHely.lat, utolsoHely.lon, m.lat, m.lon) < OSSZEVONAS_KM).pop();
+    const felsoKorlatok = [
+      most.getTime() - menetidoMs,
+      ...(qOta ? [qOta.getTime() - menetidoMs] : []),
+      ...megfigyelesek
+        .filter((m) => m.mozog || haversineKm(utolsoHely.lat, utolsoHely.lon, m.lat, m.lon) >= OSSZEVONAS_KM)
+        .map((m) => m.idobelyeg.getTime() - becsultMenetidoMs(utolsoHely.lat, utolsoHely.lon, m.lat, m.lon)),
+    ];
+    const pElhagyasa = new Date(Math.max(utolsoVeg.getTime(), utoljaraPn?.idobelyeg.getTime() ?? 0, Math.min(...felsoKorlatok)));
+
+    // Az utolsó lezárt szakasz vezetés volt: P-n bizonyítottan állt a kocsi
+    // (a trip lezárult), csak az állás hossza hiányzik — pótoljuk.
+    const pAllas = utolso.tipus === "vezetes" && jelFriss && pElhagyasa.getTime() - utolsoVeg.getTime() >= ELO_ALLAS_MIN_PERC * 60000 ? allas(utolsoVeg, pElhagyasa, utolsoHely) : null;
+    const vezetesKezdet = pAllas ? pElhagyasa : utolsoVeg;
+
+    if (!elo.mozog && jelFriss) {
+      // Q-ra érkezés: megfigyelésből (mióta látjuk ott), különben a P
+      // elhagyásától becsült menetidővel — de ha P-n pótolt állás van, a
+      // Q-n töltött idő csak a megfigyelésekből számít (lásd fent).
+      const becsultErkezes = new Date(vezetesKezdet.getTime() + menetidoMs);
+      const qKezdet = qOta ?? (pAllas ? null : becsultErkezes);
+      const qErkezes = qKezdet ? new Date(Math.max(vezetesKezdet.getTime(), Math.min(qKezdet.getTime(), becsultErkezes.getTime()))) : null;
+      if (qErkezes && most.getTime() - qErkezes.getTime() >= ELO_ALLAS_MIN_PERC * 60000) {
+        return [...szakaszok, ...(pAllas ? [pAllas] : []), vezetes(vezetesKezdet, qErkezes), allas(qErkezes, most, elo)];
+      }
+    }
+    return [...szakaszok, ...(pAllas ? [pAllas] : []), vezetes(vezetesKezdet, most)];
   }
 
   if (utolso.tipus === "allas") {
@@ -509,20 +523,7 @@ export function kiegesziteloAllapottal(
 
   // Az utolsó lezárt szakasz vezetés volt, a jármű azóta (még le nem zárt
   // trip formájában) megállt a végpontján — ezt egy új, élő állás-szakasszal jelezzük.
-  const idotartamSec = Math.max(0, (most.getTime() - utolsoVeg.getTime()) / 1000);
-  const ujAllas: IdovonalSzakasz = {
-    tipus: "allas",
-    kezdet: utolsoVeg,
-    veg: most,
-    idotartamSec,
-    cim: utolsoHely.cim,
-    lat: utolsoHely.lat,
-    lon: utolsoHely.lon,
-    kategoria: allasKategoria(idotartamSec, utolsoHely.lat, utolsoHely.lon, tervezettCimek),
-    osszevontLepesek: 0,
-    elo: true,
-  };
-  return [...szakaszok, ujAllas];
+  return [...szakaszok, allas(utolsoVeg, most, utolsoHely)];
 }
 
 /** Szabad szöveges időpont-mezőből ("06:00", "de. 6", stb.) kiolvasott óra:perc, ha felismerhető. */

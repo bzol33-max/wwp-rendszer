@@ -561,3 +561,16 @@
   (`TervezettMegallo.fuvarLezarva`, `jelolMegallokat`): egy lezárt fuvar
   megállója a Teljesítve-jelölés UTÁN kezdődött látogatást nem kaphatja meg.
   A figyelő is megkapja (`FuvarErintesSor.teljesitve_at`). Teszt: 3e.
+- Kiegészítés 5 (Micó hazaért Szakolyba és áll): a 4. kiegészítés „álló
+  kocsi” ága a 12:26 óta eltelt teljes időt a mostani (szakolyi) állásra
+  tette, a nyírjákói állás eltűnt, a felrakó megint „nincs érintés” lett.
+  Új modul `lib/fuvarozas/elo-elozmeny.ts`: a figyelő minden köre és minden
+  GPS lap / Áttekintés betöltés felírja (memóriában, 1 napra) a kocsi élő
+  pozícióját és hogy mozgott-e. `kiegesziteloAllapottal` (`elozmeny`
+  paraméter): egy lezárt trip végpontján (P) bizonyítottan állt a kocsi,
+  ezért P-re mindig kerül állás (a lezárástól a P elhagyásáig — a
+  megfigyelésekből: mikor láttuk utoljára P-n állva / először távol,
+  különben a mostani helyig becsült menetidővel visszaszámolva); a mostani
+  hely (Q) állása a Q-n való első megfigyeléstől számít, megfigyelés nélkül
+  csak akkor, ha P-nél az elhagyás ismert (utolsó lezárt szakasz állás).
+  Teszt: `scripts/teszt-erintes.mts` 3f (előzmény nélkül és előzménnyel).
