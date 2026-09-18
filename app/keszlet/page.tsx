@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { NyiregyhazaHaviTab } from "@/components/keszlet/nyiregyhaza-havi";
 import { TelephelyekView } from "@/components/keszlet/telephelyek-view";
+import { ArchivumView } from "@/components/keszlet/archivum-view";
 
 const TABS = ["havi", "Nyíregyháza", "Balkány", "Szakoly", "osszkeszlet", "archivum"] as const;
 type Tab = (typeof TABS)[number];
@@ -68,9 +69,7 @@ function KeszletTabs() {
         <TelephelyekView site="Összkészlet" />
       </TabsContent>
       <TabsContent value="archivum" className="mt-5">
-        <p className="text-sm text-muted-foreground">
-          Lezárt hónapok típusonkénti összesítése — csak megtekinthető. (Hamarosan.)
-        </p>
+        <ArchivumView />
       </TabsContent>
     </Tabs>
   );

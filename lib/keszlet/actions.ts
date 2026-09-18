@@ -1313,3 +1313,155 @@ export async function setTypeSiteActive(typeId: number, site: string, active: bo
     );
   }
 }
+
+// --- Archívum: egy lezárt (vagy folyó) hónap összesítése ---
+//
+// Minden szám a nyers tételekből számolódik, nincs külön havi zárás — így egy
+// utólag javított tétel a korábbi hónapok összesítőjében is helyesen jelenik
+// meg. A mozgatás a cél telepen az ÁTVÉTEL napjával számít bele (elfogadva_at),
+// mert a készletbe is akkor kerül; az át nem vett (úton lévő) tétel egyik
+// telep hónapjában sem szerepel.
+
+export type ArchivumHonap = { monthKey: string; label: string };
+
+export type ArchivumSorRow = {
+  site: string;
+  type: string;
+  nyito: number;
+  be: number;
+  ki: number;
+  zaro: number;
+};
+
+export type ArchivumFelvasarlasRow = { type: string; qty: number; total: number };
+
+export type ArchivumSnapshot = {
+  monthKey: string;
+  keszlet: ArchivumSorRow[];
+  felvasarlas: ArchivumFelvasarlasRow[];
+  kassza: { bevetel: number; kiadas: number; zaroEgyenleg: number };
+};
+
+function honapCimke(monthKey: string) {
+  const [y, m] = monthKey.split("-").map(Number);
+  const raw = new Date(y, m - 1, 1).toLocaleDateString("hu-HU", { year: "numeric", month: "long" });
+  return raw.replace(/\.$/, "");
+}
+
+export async function getArchivumHonapok(): Promise<ArchivumHonap[]> {
+  await requireViewPermission("keszlet");
+  const rows = await query<{ month_key: string }>(
+    `with hatar as (
+       select least(
+         coalesce((select min(created_at) from keszlet_movements), now()),
+         coalesce((select min(created_at) from nyiregyhaza_purchases), now())
+       ) at time zone 'Europe/Budapest' as elso
+     )
+     select to_char(g, 'YYYY-MM') as month_key
+     from hatar
+     cross join lateral generate_series(
+       date_trunc('month', hatar.elso),
+       date_trunc('month', now() at time zone 'Europe/Budapest'),
+       interval '1 month'
+     ) as g
+     order by 1 desc`
+  );
+  return rows.map((r) => ({ monthKey: r.month_key, label: honapCimke(r.month_key) }));
+}
+
+export async function getArchivumSnapshot(monthKey: string): Promise<ArchivumSnapshot> {
+  await requireViewPermission("keszlet");
+  if (!/^\d{4}-\d{2}$/.test(monthKey)) {
+    throw new Error(`Érvénytelen hónap: ${String(monthKey)}`);
+  }
+  const hoKezd = `${monthKey}-01`;
+
+  // Nyitó = a hónap kezdete előtti összes mozgás egyenlege; Be/Ki = a hónapban
+  // történt tételek. A "mikor" a készletbe kerülés ideje (mozgatásnál az átvétel).
+  const keszletRows = await query<{
+    site: string;
+    type: string;
+    nyito: number;
+    be: number;
+    ki: number;
+  }>(
+    `with hatar as (
+       select $1::date as ho_kezd, ($1::date + interval '1 month')::date as ho_veg
+     ),
+     tetel as (
+       select m.site_id, m.type_id,
+         (case when m.direction = 'mozgatas_be' then m.elfogadva_at else m.created_at end
+            at time zone 'Europe/Budapest')::date as mikor,
+         case when m.direction in ('be','mozgatas_be') then m.qty else -m.qty end as elojeles,
+         case when m.direction in ('be','mozgatas_be') then m.qty else 0 end as be,
+         case when m.direction in ('ki','mozgatas') then m.qty else 0 end as ki
+       from keszlet_movements m
+       where m.direction <> 'mozgatas_be' or m.elfogadva_at is not null
+     )
+     select s.name as site, t.name as type,
+       coalesce(sum(x.elojeles) filter (where x.mikor < h.ho_kezd), 0)::int as nyito,
+       coalesce(sum(x.be) filter (where x.mikor >= h.ho_kezd), 0)::int as be,
+       coalesce(sum(x.ki) filter (where x.mikor >= h.ho_kezd), 0)::int as ki
+     from tetel x
+     join sites s on s.id = x.site_id
+     join pallet_types t on t.id = x.type_id
+     cross join hatar h
+     where x.mikor < h.ho_veg
+     group by s.name, t.name, t.sort_order, t.id
+     order by s.name, t.sort_order, t.id`,
+    [hoKezd]
+  );
+
+  const felvasarlasRows = await query<{ type: string; qty: number; total: number }>(
+    `select t.name as type, sum(p.qty)::int as qty, sum(p.total)::int as total
+     from nyiregyhaza_purchases p
+     join pallet_types t on t.id = p.type_id
+     where (p.created_at at time zone 'Europe/Budapest')::date >= $1::date
+       and (p.created_at at time zone 'Europe/Budapest')::date < ($1::date + interval '1 month')::date
+     group by t.name, t.sort_order, t.id
+     order by t.sort_order, t.id`,
+    [hoKezd]
+  );
+
+  const kasszaRows = await query<{ bevetel: number; kiadas: number; zaro: number }>(
+    `with hatar as (
+       select $1::date as ho_kezd, ($1::date + interval '1 month')::date as ho_veg
+     ),
+     tetel as (
+       select amount, (created_at at time zone 'Europe/Budapest')::date as mikor
+       from kassza_movements
+     )
+     select
+       coalesce(sum(t.amount) filter (where t.amount > 0 and t.mikor >= h.ho_kezd and t.mikor < h.ho_veg), 0)::int as bevetel,
+       coalesce(sum(-t.amount) filter (where t.amount < 0 and t.mikor >= h.ho_kezd and t.mikor < h.ho_veg), 0)::int as kiadas,
+       coalesce(sum(t.amount) filter (where t.mikor < h.ho_veg), 0)::int as zaro
+     from tetel t
+     cross join hatar h`,
+    [hoKezd]
+  );
+
+  return {
+    monthKey,
+    keszlet: keszletRows
+      .map((r) => ({
+        site: r.site,
+        type: r.type,
+        nyito: Number(r.nyito),
+        be: Number(r.be),
+        ki: Number(r.ki),
+        zaro: Number(r.nyito) + Number(r.be) - Number(r.ki),
+      }))
+      // Az adott hónapban érintetlen, nulla készletű típusok kimaradnak.
+      .filter((r) => r.nyito !== 0 || r.be !== 0 || r.ki !== 0 || r.zaro !== 0),
+    felvasarlas: felvasarlasRows.map((r) => ({
+      type: r.type,
+      qty: Number(r.qty),
+      total: Number(r.total),
+    })),
+    kassza: {
+      bevetel: Number(kasszaRows[0]?.bevetel ?? 0),
+      kiadas: Number(kasszaRows[0]?.kiadas ?? 0),
+      zaroEgyenleg: Number(kasszaRows[0]?.zaro ?? 0),
+    },
+  };
+}
