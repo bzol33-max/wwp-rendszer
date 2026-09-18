@@ -851,3 +851,12 @@ alter table fuvar_megallo_allapot add column if not exists varakozas_vege timest
 alter table keszlet_events drop constraint if exists keszlet_events_kind_check;
 alter table keszlet_events add constraint keszlet_events_kind_check
   check (kind in ('csere', 'szet', 'havi-zaras', 'mozgas', 'leltar'));
+
+-- Készlet, 2026-09-18: raklap-eladás a telepen. A Nyíregyháza fül "Mozgás
+-- rögzítése" kártyáján a Kiszállítás / Eladás irányhoz soronként megadható
+-- egy Ft/db ár; ilyenkor a készlet csökken, az ellenérték pedig bevételként
+-- a kasszába kerül (category = 'eladas'). A kassza-sort a mozgásokkal közös
+-- movement_group köti a tételhez, hogy a "Legutóbbi mozgások" listából
+-- törölve a pénz is visszavonódjon — ld. lib/keszlet/actions.ts.
+alter table kassza_movements add column if not exists movement_group uuid;
+create index if not exists idx_kassza_movements_group on kassza_movements (movement_group);

@@ -230,11 +230,19 @@ async function addMovement(q: Querier, input: {
 // FONTOS (2026-09-18): az egész mentés egy tranzakció — egy félúton elbukó
 // mentés (pl. hibás második sor) különben levonná a forrásnál, de nem írná
 // jóvá a célnál, vagy a sikeres sorokat az újrapróbálás megduplázná.
+// ELADÁS (2026-09-18): a Kiszállítás / Eladás irányhoz soronként megadható
+// egy Ft/db ár (items[].unitPrice). Ha van ár, a kiszállítás egyben eladás:
+// a készlet csökken, az ellenérték pedig bevételként a kasszába kerül. Az
+// `afa` jelölővel a beírt ár a NETTÓ, és a kasszába a bruttó kerül — a vevő
+// ennyit fizet. Kassza csak Nyíregyházán van, ezért máshol nem adható ár.
+const AFA_KULCS = 0.27;
+
 export async function recordMovements(input: {
   site: string;
   direction: Direction;
-  items: { type: string; qty: number; targetSite?: string }[];
+  items: { type: string; qty: number; targetSite?: string; unitPrice?: number }[];
   partner?: string;
+  afa?: boolean;
 }) {
   const jog = await requireAnyEditPermission(["keszlet", "keszlet_sajat"]);
   const createdBy = await rogzitoNeve();
@@ -250,6 +258,7 @@ export async function recordMovements(input: {
   }
   for (const item of input.items) {
     ellenorizdDarabszam(item.qty, item.type);
+    if (item.unitPrice !== undefined) ellenorizdAr(item.unitPrice);
     if (input.direction === "mozgatas") {
       ellenorizdTelephely(item.targetSite);
       if (item.targetSite === input.site) {
@@ -257,6 +266,17 @@ export async function recordMovements(input: {
       }
     }
   }
+  const eladottTetelek = input.items.filter((i) => (i.unitPrice ?? 0) > 0);
+  const nettoOsszeg = eladottTetelek.reduce((sum, i) => sum + i.qty * (i.unitPrice ?? 0), 0);
+  if (nettoOsszeg > 0) {
+    if (input.direction !== "ki") {
+      throw new Error("Eladási ár csak a Kiszállítás / Eladás irányhoz adható meg.");
+    }
+    if (input.site !== "Nyíregyháza") {
+      throw new Error("Eladás csak Nyíregyházán rögzíthető — kassza csak ott van.");
+    }
+  }
+  const bruttoOsszeg = input.afa ? Math.round(nettoOsszeg * (1 + AFA_KULCS)) : nettoOsszeg;
   if (input.items.length === 0) return;
 
   const movementGroup = randomUUID();
@@ -306,10 +326,36 @@ export async function recordMovements(input: {
               : `${i.type} −${i.qty} → ${i.targetSite}`
         )
         .join(" · ");
+      // Eladásnál a pénz is látszik az eseményen, hogy a "Legutóbbi mozgások"
+      // listából egyben olvasható legyen, mi ment ki és mennyiért.
+      const penzText =
+        nettoOsszeg > 0
+          ? ` · kassza +${bruttoOsszeg.toLocaleString("hu-HU")} Ft${
+              input.afa ? ` (nettó ${nettoOsszeg.toLocaleString("hu-HU")} + 27% ÁFA)` : ""
+            }`
+          : "";
       await q(
         `insert into keszlet_events (site_id, kind, details, effect, created_by, movement_group)
          values ((select id from sites where name = 'Nyíregyháza'), 'mozgas', $1, $2, $3, $4)`,
-        [details, effect, createdBy, movementGroup]
+        [details, `${effect}${penzText}`, createdBy, movementGroup]
+      );
+    }
+
+    if (nettoOsszeg > 0) {
+      const tetelek = eladottTetelek
+        .map((i) => `${i.qty} db ${i.type} × ${(i.unitPrice ?? 0).toLocaleString("hu-HU")} Ft`)
+        .join(", ");
+      await q(
+        `insert into kassza_movements (description, amount, created_by, category, movement_group)
+         values ($1, $2, $3, 'eladas', $4)`,
+        [
+          `Eladás${input.partner ? ` — ${input.partner}` : ""} (${tetelek})${
+            input.afa ? ` + 27% ÁFA` : ""
+          }`,
+          bruttoOsszeg,
+          createdBy,
+          movementGroup,
+        ]
       );
     }
     if (input.direction === "mozgatas") {
@@ -368,9 +414,23 @@ export async function deleteMovement(id: string) {
     // szétválogatás (vegyes − / világos, szürke +). Ilyenkor a teljes
     // movement_group-ot töröljük. A sima be/ki sorok (akár egy mentésből)
     // továbbra is egyenként törölhetők.
+    // Eladásnál (kassza-bevétel a mozgás csoportjához kötve) sem törölhető
+    // csak az egyik oldal: a pénznek a készlettel együtt kell visszaíródnia.
+    const eladasSor = movement_group
+      ? (
+          await q<{ id: string }>(
+            `select id from kassza_movements where movement_group = $1 limit 1`,
+            [movement_group]
+          )
+        ).length > 0
+      : false;
     const egybenTorlendo =
-      direction === "mozgatas" || direction === "mozgatas_be" || partner === "Szétválogatás";
+      direction === "mozgatas" ||
+      direction === "mozgatas_be" ||
+      partner === "Szétválogatás" ||
+      eladasSor;
     if (egybenTorlendo && movement_group) {
+      await q(`delete from kassza_movements where movement_group = $1`, [movement_group]);
       // A másik oldalon (jellemzően Nyíregyházán) a mozgatáshoz tartozhat egy
       // összevont keszlet_events-sor is (lásd recordMovements) — ezt is
       // töröljük, különben egy már nem létező mozgatásra hivatkozó, "árva"
@@ -410,6 +470,8 @@ export async function deleteMovementEvent(id: string) {
           "Ez a tétel egy felvásárláshoz tartozik — a Havi fülön, a felvásárlás törlésével vonható vissza."
         );
       }
+      // Eladás esetén a kassza-bevétel is ehhez a csoporthoz tartozik.
+      await q(`delete from kassza_movements where movement_group = $1`, [group]);
       await q(`delete from keszlet_movements where movement_group = $1`, [group]);
     }
     await q(`delete from keszlet_events where id = $1`, [id]);

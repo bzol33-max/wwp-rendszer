@@ -18,7 +18,7 @@ import { toast } from "sonner";
 import { recordMovements, type Direction } from "@/lib/keszlet/actions";
 import { useCanEdit } from "@/components/auth/edit-permission-context";
 
-type Sor = { key: number; type: string; qty: string; targetSite: string };
+type Sor = { key: number; type: string; qty: string; targetSite: string; unitPrice: string };
 
 const DIRECTION_OPTIONS: readonly [Direction, string][] = [
   ["be", "Beérkezés"],
@@ -26,9 +26,11 @@ const DIRECTION_OPTIONS: readonly [Direction, string][] = [
   ["mozgatas", "Telephelyek közti mozgatás"],
 ];
 
+const AFA_KULCS = 0.27;
+
 let nextKey = 1;
 function ujSor(type: string, targetSite: string): Sor {
-  return { key: nextKey++, type, qty: "", targetSite };
+  return { key: nextKey++, type, qty: "", targetSite, unitPrice: "" };
 }
 
 /**
@@ -46,6 +48,7 @@ export function MovementForm({
   otherSites,
   onRecorded,
   allowTransfer = true,
+  allowSale = false,
 }: {
   site: string;
   types: string[];
@@ -53,12 +56,26 @@ export function MovementForm({
   onRecorded: () => void | Promise<void>;
   /** Korlátozott (mobil) nézeteken kikapcsolható, ha csak Be/Ki rögzítés kell. */
   allowTransfer?: boolean;
+  /**
+   * Eladás (helyben, készpénzért): a Kiszállítás / Eladás irányhoz soronként
+   * Ft/db ár is megadható, és az ellenérték a kasszába kerül. Csak
+   * Nyíregyházán van bekapcsolva — kassza is csak ott van.
+   */
+  allowSale?: boolean;
 }) {
   const canEdit = useCanEdit();
   const [direction, setDirection] = useState<Direction>("be");
   const [sorok, setSorok] = useState<Sor[]>([ujSor(types[0] ?? "", otherSites[0] ?? "")]);
   const [partner, setPartner] = useState("");
+  const [afa, setAfa] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Az árak csak a Kiszállítás / Eladás irányban jelennek meg.
+  const eladasLehet = allowSale && direction === "ki";
+  const netto = eladasLehet
+    ? sorok.reduce((sum, s) => sum + (Number(s.qty) || 0) * (Number(s.unitPrice) || 0), 0)
+    : 0;
+  const brutto = afa ? Math.round(netto * (1 + AFA_KULCS)) : netto;
 
   useEffect(() => {
     setSorok((prev) =>
@@ -92,9 +109,14 @@ export function MovementForm({
   }
 
   async function submit() {
-    const items: { type: string; qty: number; targetSite?: string }[] = [];
+    const items: { type: string; qty: number; targetSite?: string; unitPrice?: number }[] = [];
     for (const s of sorok) {
       const n = Number(s.qty);
+      const ar = s.unitPrice === "" ? undefined : Number(s.unitPrice);
+      if (eladasLehet && ar !== undefined && (!Number.isInteger(ar) || ar < 0)) {
+        toast.error(`Érvénytelen egységár ehhez: ${s.type || "típus"}.`);
+        return;
+      }
       if (!s.qty && sorok.length === 1) {
         toast.error("Adj meg érvényes darabszámot.");
         return;
@@ -112,7 +134,12 @@ export function MovementForm({
         toast.error(`Válaszd ki, hová megy ez a tétel: ${s.type}.`);
         return;
       }
-      items.push({ type: s.type, qty: n, targetSite: direction === "mozgatas" ? s.targetSite : undefined });
+      items.push({
+        type: s.type,
+        qty: n,
+        targetSite: direction === "mozgatas" ? s.targetSite : undefined,
+        unitPrice: eladasLehet ? ar : undefined,
+      });
     }
     if (items.length === 0) {
       toast.error("Adj meg legalább egy típust és darabszámot.");
@@ -129,12 +156,18 @@ export function MovementForm({
         direction,
         items,
         partner: direction === "mozgatas" ? undefined : partner,
+        afa: eladasLehet ? afa : undefined,
       });
       setSorok([ujSor(types[0] ?? "", otherSites[0] ?? "")]);
       setPartner("");
+      setAfa(false);
       await onRecorded();
       toast.success(
-        items.length > 1 ? `${items.length} típus rögzítve.` : "Mozgás rögzítve."
+        netto > 0
+          ? `Eladás rögzítve — ${brutto.toLocaleString("hu-HU")} Ft a kasszába.`
+          : items.length > 1
+            ? `${items.length} típus rögzítve.`
+            : "Mozgás rögzítve."
       );
     } catch {
       toast.error("Nem sikerült menteni. Próbáld újra.");
@@ -163,7 +196,7 @@ export function MovementForm({
                     : "border-border text-muted-foreground hover:bg-muted"
                 )}
               >
-                {label}
+                {allowSale && value === "ki" ? "Kiszállítás / Eladás" : label}
               </button>
             )
           )}
@@ -177,7 +210,9 @@ export function MovementForm({
                 "grid items-end gap-2",
                 direction === "mozgatas"
                   ? "grid-cols-1 sm:grid-cols-[1fr_5.5rem_1fr_auto]"
-                  : "grid-cols-[1fr_auto_auto]"
+                  : eladasLehet
+                    ? "grid-cols-[1fr_5rem_6rem_auto]"
+                    : "grid-cols-[1fr_auto_auto]"
               )}
             >
               <div className="space-y-1.5">
@@ -195,7 +230,9 @@ export function MovementForm({
                   </SelectContent>
                 </Select>
               </div>
-              <div className={cn("space-y-1.5", direction !== "mozgatas" && "w-24")}>
+              <div
+                className={cn("space-y-1.5", direction !== "mozgatas" && !eladasLehet && "w-24")}
+              >
                 {i === 0 && <Label>Darabszám</Label>}
                 <Input
                   type="number"
@@ -204,6 +241,17 @@ export function MovementForm({
                   onChange={(e) => updateSor(sor.key, { qty: e.target.value })}
                 />
               </div>
+              {eladasLehet && (
+                <div className="space-y-1.5">
+                  {i === 0 && <Label>Ft/db</Label>}
+                  <Input
+                    type="number"
+                    placeholder="—"
+                    value={sor.unitPrice}
+                    onChange={(e) => updateSor(sor.key, { unitPrice: e.target.value })}
+                  />
+                </div>
+              )}
               {direction === "mozgatas" && (
                 <div className="space-y-1.5">
                   {i === 0 && <Label>Hová</Label>}
@@ -249,11 +297,45 @@ export function MovementForm({
           </Button>
         </div>
 
+        {eladasLehet && (
+          // Az ár üresen hagyható: akkor ez sima kiszállítás, pénzmozgás nélkül.
+          <div className="space-y-2 rounded-md border bg-muted/30 px-3 py-2.5">
+            <label className="flex items-center gap-2 text-sm max-md:min-h-11">
+              <input
+                type="checkbox"
+                checked={afa}
+                onChange={(e) => setAfa(e.target.checked)}
+                className="h-4 w-4 accent-primary"
+              />
+              + ÁFA (27%)
+            </label>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">{afa ? "Nettó" : "Eladási összeg"}</span>
+              <span className="font-medium tabular-nums">
+                {netto.toLocaleString("hu-HU")} Ft
+              </span>
+            </div>
+            {afa && (
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Fizetendő (bruttó)</span>
+                <span className="font-semibold tabular-nums">
+                  {brutto.toLocaleString("hu-HU")} Ft
+                </span>
+              </div>
+            )}
+            <p className="text-[11px] text-muted-foreground">
+              {netto > 0
+                ? `A készletből levonjuk, ${brutto.toLocaleString("hu-HU")} Ft pedig bevételként a kasszába kerül.`
+                : "Ár nélkül ez sima kiszállítás — a kassza nem változik."}
+            </p>
+          </div>
+        )}
+
         {direction !== "mozgatas" && (
           <div className="space-y-1.5">
-            <Label>Partner</Label>
+            <Label>{eladasLehet ? "Partner / vevő" : "Partner"}</Label>
             <Input
-              placeholder="Partner neve"
+              placeholder={eladasLehet ? "Kinek adtuk el" : "Partner neve"}
               value={partner}
               onChange={(e) => setPartner(e.target.value)}
             />

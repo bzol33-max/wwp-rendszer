@@ -344,6 +344,7 @@ export function TelephelyekView({ site: active }: { site: SiteKey }) {
             types={types}
             otherSites={OTHER_SITES[active]}
             onRecorded={load}
+            allowSale={isNyiregyhaza}
           />
 
           <Card className="lg:col-span-2">
