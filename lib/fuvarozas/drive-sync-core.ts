@@ -520,8 +520,16 @@ async function ujFajlokFeldolgozasa(
         continue;
       }
 
+      // A partner sablonjából determinisztikusan olvasható mezők (pl. a
+      // SpediTrans kéthasábos felrakó/lerakó táblája, lásd
+      // lib/fuvarozas/import/speditrans.ts) felülírják a modell tippjét —
+      // csak a ténylegesen kiolvasott (nem null) értékek.
+      const determinisztikus = Object.fromEntries(
+        Object.entries(partner?.kivon?.(nyersSzoveg) ?? {}).filter(([, v]) => v !== null && v !== undefined)
+      ) as Partial<KivontFuvar>;
       const kivont: KivontFuvar = {
         ...llm,
+        ...determinisztikus,
         // Ha az irat ismert partner sablonja, a megrendelő NEM TIPP: a
         // partner hivatalos nevét írjuk be. Ez zárja ki véglegesen, hogy a
         // hasábos fejlécből minket (vagy egy felrakó céget) olvasson

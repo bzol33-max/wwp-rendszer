@@ -35,6 +35,10 @@
 //
 // NEM "use server" fájl — sima adatmodul, tesztből is hívható.
 
+import type { KivontFuvar } from "./ellenorzes";
+
+import { kivonSpediTransMezoket } from "./speditrans";
+
 export type Partner = {
   /** Belső azonosító (napló, mintafájlok neve). */
   kod: string;
@@ -53,6 +57,13 @@ export type Partner = {
   fizetesiHataridoNap?: number;
   /** Hogyan hívja a partner a saját hivatkozási számát (ember számára). */
   hivatkozasNeve?: string;
+  /**
+   * A partner sablonjából determinisztikusan (reguláris kifejezéssel)
+   * kiolvasható mezők a pdf-parse NYERS szövegéből. Ami itt nem null, az
+   * felülírja a nyelvi modell tippjét; ami hiányzik, az a modellé marad.
+   * Csak VALÓDI pdf-parse kimenetre írt olvasó kerülhet ide (lásd fent).
+   */
+  kivon?: (nyersSzoveg: string) => Partial<KivontFuvar>;
 };
 
 export const PARTNEREK: readonly Partner[] = [
@@ -118,6 +129,19 @@ export const PARTNEREK: readonly Partner[] = [
     postazasiCim: "3300 Eger, Kistályai út 12.",
     fizetesiHataridoNap: 30,
     hivatkozasNeve: "Hivatkozási szám",
+  },
+  {
+    kod: "bb-logistic",
+    nev: "BB-Logistic Solution Kft.",
+    ujjlenyomat: [/BB-Logistic/i, /speditrans\.hu/i, /SpediTrans for Windows/i],
+    // Egyoldalas irat, a fuvardíj és a postacím a szerződéses mondatok
+    // UTÁN áll a kiolvasásban — nincs mit levágni.
+    torzsVege: [],
+    hivatkozasNeve: "Pozíciószám",
+    // A kéthasábos felrakó/lerakó táblát a nyelvi modell fordítva olvasta
+    // (2026-09-17) — a blokkokat, a határidőket, a pozíciószámot, a
+    // fuvardíjat és a rendszámokat reguláris kifejezés adja.
+    kivon: kivonSpediTransMezoket,
   },
 ] as const;
 

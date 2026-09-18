@@ -21,6 +21,7 @@ import { normalizaltSzoveg, torzsSzoveg } from "@/lib/fuvarozas/import/normaliza
 import { felismerPartner, partnerKodSzerint } from "@/lib/fuvarozas/import/partnerek";
 import { ellenorizKivontFuvart, type KivontFuvar } from "@/lib/fuvarozas/import/ellenorzes";
 import { findJarmuInSzoveg } from "@/lib/fuvarozas/vehicles";
+import { kivonSpediTransMezoket } from "@/lib/fuvarozas/import/speditrans";
 
 const mintaDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "teszt-minta");
 const minta = (nev: string) => readFileSync(path.join(mintaDir, nev), "utf8");
@@ -258,11 +259,37 @@ egyenlo(
 );
 
 // ---------------------------------------------------------------------------
+// SpediTrans (BB-Logistic) — determinisztikus mezők a pdf-parse tényleges
+// tördeléséből. A kéthasábos felrakó/lerakó tábla a nyelvi modellnek
+// kétértelmű volt; itt a blokkok sorrendje dönt: előbb a felrakó.
+// ---------------------------------------------------------------------------
+const kocsi = (szoveg: string | null) => findJarmuInSzoveg(szoveg)?.sofor ?? null;
+const spediNyers = minta("speditrans-megbizas.txt");
+egyenlo(felismerPartner(normalizaltSzoveg(spediNyers))?.kod, "bb-logistic", "BB-Logistic felismerése a SpediTrans lábjegyzetből");
+egyenlo(felismerPartner("Cégnév ... SpediTrans for Windows v2.11.741")?.kod, "bb-logistic", "BB-Logistic felismerése a szoftver nevéből");
+const spedi = kivonSpediTransMezoket(spediNyers);
+egyenlo(spedi.felrako, "Minta Csomagolás Kft., 3390 Füzesabony, Fő utca 1", "SpediTrans: az ELSŐ blokk a felrakó");
+egyenlo(spedi.lerako, "Példa Raklap Kft., 4254 Nyíradony, Kossuth utca 17.", "SpediTrans: a MÁSODIK blokk a lerakó");
+egyenlo(spedi.felrakasDatum, "2026-09-21", "SpediTrans: felrakás határideje");
+egyenlo(spedi.lerakasDatum, null, "SpediTrans: azonos napi lerakás -> null");
+egyenlo(spedi.pozicioszam, "001234/26", "SpediTrans: pozíciószám a szögletes zárójelből");
+egyenlo(spedi.fuvardij, 123000, "SpediTrans: fuvardíj a címke ELŐTTI értékből");
+egyenlo(spedi.fuvardijPenznem, "Ft", "SpediTrans: HUF -> Ft");
+egyenlo(spedi.rendszamVagySofor, "AOPU-427 AOTY-474", "SpediTrans: vontató + pótkocsi rendszám");
+egyenlo(kocsi(spedi.rendszamVagySofor ?? null), "Gergő", "SpediTrans: a két rendszámból a kocsi");
+// Nem SpediTrans-szerkezet: semmit nem tippel.
+const idegen = kivonSpediTransMezoket("Felrakás helye: Budapest\nLerakás helye: Győr\nFuvardíj: 100 000 Ft");
+egyenlo(idegen.felrako, undefined, "idegen szerkezetből nincs felrakó");
+egyenlo(idegen.fuvardij, undefined, "idegen szerkezetből nincs fuvardíj");
+// Több napos: a két határidő eltérő napra esik.
+const tobbNapos = kivonSpediTransMezoket(spediNyers.replace("2026.09.21. 14:00", "2026.09.22. 08:00"));
+egyenlo(tobbNapos.lerakasDatum, "2026-09-22", "SpediTrans: eltérő napi lerakás dátuma");
+
+// ---------------------------------------------------------------------------
 // Kocsi felismerése a megbízás rendszám-szövegéből (vehicles.ts
 // findJarmuInSzoveg). A megbízók a vontató és a pótkocsi rendszámát együtt
 // írják — az alakok az élesben látott iratokból valók (2026-09-15..18).
 // ---------------------------------------------------------------------------
-const kocsi = (szoveg: string | null) => findJarmuInSzoveg(szoveg)?.sofor ?? null;
 egyenlo(kocsi("NMZ492/XZV926"), "Micó", "Hajdúspedíció: vontató/pótkocsi perjellel");
 egyenlo(kocsi("AOPU-427 AOTY-474"), "Gergő", "BB-Logistic: két rendszám szóközzel");
 egyenlo(kocsi("AOPU427/AOTY474"), "Gergő", "Ghibli: kötőjel nélkül, perjellel");

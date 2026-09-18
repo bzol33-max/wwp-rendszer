@@ -539,6 +539,11 @@ export function GpsStatus() {
   const load = useCallback(async (nap: string) => {
     // A fogyasztás külön, nem blokkolja az idővonalat (saját hibaüzenete van).
     getFogyasztas(nap).then(setFogyasztas);
+    // A "Következő napok" doboz is minden frissítéssel újratöltődik — eddig
+    // csak egyszer, a lap megnyitásakor kérdeztük le, így egy közben a
+    // Megbízásokon javított felrakó/lerakó vagy kocsi itt a régi maradt,
+    // amíg az egész lapot újra nem töltötték.
+    getKovetkezoNapokElonezet(3).then(setKovetkezoNapok);
     const res = await getIdovonalak(nap);
     setAdatok(res.jarmuvek);
     setElakadtak(res.elakadtak);
@@ -553,10 +558,6 @@ export function GpsStatus() {
     const interval = setInterval(() => load(napISO), 5 * 60 * 1000);
     return () => clearInterval(interval);
   }, [load, napISO]);
-
-  useEffect(() => {
-    getKovetkezoNapokElonezet(3).then(setKovetkezoNapok);
-  }, []);
 
   return (
     <Card>
