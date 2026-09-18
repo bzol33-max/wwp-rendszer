@@ -34,7 +34,7 @@ function KeszletTabs() {
     Balkány: "Balkány",
     Szakoly: "Szakoly",
     osszkeszlet: "Összkészlet",
-    archivum: "Archívum",
+    archivum: "Nyíregyháza archív",
   };
 
   function handleTabChange(v: string) {

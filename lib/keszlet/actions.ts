@@ -1333,7 +1333,40 @@ export type ArchivumSorRow = {
   zaro: number;
 };
 
-export type ArchivumFelvasarlasRow = { type: string; qty: number; total: number };
+export type ArchivumFelvasarlasRow = {
+  type: string;
+  qty: number;
+  /** null, ha a régi rendszerből csak darabszám van meg. */
+  total: number | null;
+  /** true: a rendszer indulása előtti, kézzel átvett adat (felvasarlas_archivum). */
+  archiv: boolean;
+};
+
+// Egy hónap felvásárlása típusonként: az élő tételekből (nyiregyhaza_purchases)
+// és a régi rendszerből átvett archív sorokból. Ha ugyanarra a hónap+típus
+// párra mindkettő van, az ÉLŐ adat nyer — az a tételes, ellenőrizhető.
+const FELVASARLAS_HAVI_SQL = `
+  with elo as (
+    select t.id as type_id, t.name as type, t.sort_order,
+      sum(p.qty)::int as qty, sum(p.total)::int as total, false as archiv
+    from nyiregyhaza_purchases p
+    join pallet_types t on t.id = p.type_id
+    where (p.created_at at time zone 'Europe/Budapest')::date >= $1::date
+      and (p.created_at at time zone 'Europe/Budapest')::date < ($1::date + interval '1 month')::date
+    group by t.id, t.name, t.sort_order
+  ),
+  archiv as (
+    select t.id as type_id, t.name as type, t.sort_order, a.qty, a.total, true as archiv
+    from felvasarlas_archivum a
+    join pallet_types t on t.id = a.type_id
+    where a.ho = $1::date
+  ),
+  egyesitve as (
+    select * from elo
+    union all
+    select * from archiv a where not exists (select 1 from elo e where e.type_id = a.type_id)
+  )
+`;
 
 export type ArchivumSnapshot = {
   monthKey: string;
@@ -1354,7 +1387,9 @@ export async function getArchivumHonapok(): Promise<ArchivumHonap[]> {
     `with hatar as (
        select least(
          coalesce((select min(created_at) from keszlet_movements), now()),
-         coalesce((select min(created_at) from nyiregyhaza_purchases), now())
+         coalesce((select min(created_at) from nyiregyhaza_purchases), now()),
+         -- A régi rendszerből átvett hónapok is bekerülnek a listába.
+         coalesce((select min(ho)::timestamptz from felvasarlas_archivum), now())
        ) at time zone 'Europe/Budapest' as elso
      )
      select to_char(g, 'YYYY-MM') as month_key
@@ -1412,14 +1447,14 @@ export async function getArchivumSnapshot(monthKey: string): Promise<ArchivumSna
     [hoKezd]
   );
 
-  const felvasarlasRows = await query<{ type: string; qty: number; total: number }>(
-    `select t.name as type, sum(p.qty)::int as qty, sum(p.total)::int as total
-     from nyiregyhaza_purchases p
-     join pallet_types t on t.id = p.type_id
-     where (p.created_at at time zone 'Europe/Budapest')::date >= $1::date
-       and (p.created_at at time zone 'Europe/Budapest')::date < ($1::date + interval '1 month')::date
-     group by t.name, t.sort_order, t.id
-     order by t.sort_order, t.id`,
+  const felvasarlasRows = await query<{
+    type: string;
+    qty: number;
+    total: number | null;
+    archiv: boolean;
+  }>(
+    `${FELVASARLAS_HAVI_SQL}
+     select type, qty, total, archiv from egyesitve order by sort_order, type_id`,
     [hoKezd]
   );
 
@@ -1456,7 +1491,8 @@ export async function getArchivumSnapshot(monthKey: string): Promise<ArchivumSna
     felvasarlas: felvasarlasRows.map((r) => ({
       type: r.type,
       qty: Number(r.qty),
-      total: Number(r.total),
+      total: r.total === null ? null : Number(r.total),
+      archiv: r.archiv,
     })),
     kassza: {
       bevetel: Number(kasszaRows[0]?.bevetel ?? 0),
@@ -1464,4 +1500,62 @@ export async function getArchivumSnapshot(monthKey: string): Promise<ArchivumSna
       zaroEgyenleg: Number(kasszaRows[0]?.zaro ?? 0),
     },
   };
+}
+
+// Egy teljes év felvásárlása hónapról hónapra, típusonként — a Nyíregyháza
+// archív nyitó (éves) nézetéhez. Ugyanaz az élő + archív egyesítés, mint a
+// havi nézetben, csak 12 hónapra egyszerre.
+export type ArchivumEvRow = {
+  monthKey: string;
+  type: string;
+  qty: number;
+  total: number | null;
+  archiv: boolean;
+};
+
+export async function getArchivumEv(year: number): Promise<ArchivumEvRow[]> {
+  await requireViewPermission("keszlet");
+  if (!Number.isInteger(year) || year < 2000 || year > 2100) {
+    throw new Error(`Érvénytelen év: ${String(year)}`);
+  }
+  const rows = await query<{
+    month_key: string;
+    type: string;
+    qty: number;
+    total: number | null;
+    archiv: boolean;
+  }>(
+    `with elo as (
+       select to_char(p.created_at at time zone 'Europe/Budapest', 'YYYY-MM') as month_key,
+         t.id as type_id, t.name as type, t.sort_order,
+         sum(p.qty)::int as qty, sum(p.total)::int as total, false as archiv
+       from nyiregyhaza_purchases p
+       join pallet_types t on t.id = p.type_id
+       where extract(year from (p.created_at at time zone 'Europe/Budapest')) = $1
+       group by 1, 2, 3, 4
+     ),
+     archiv as (
+       select to_char(a.ho, 'YYYY-MM') as month_key,
+         t.id as type_id, t.name as type, t.sort_order,
+         a.qty, a.total, true as archiv
+       from felvasarlas_archivum a
+       join pallet_types t on t.id = a.type_id
+       where extract(year from a.ho) = $1
+     )
+     select month_key, type, sort_order, qty, total, archiv from elo
+     union all
+     select a.month_key, a.type, a.sort_order, a.qty, a.total, a.archiv from archiv a
+     where not exists (
+       select 1 from elo e where e.month_key = a.month_key and e.type_id = a.type_id
+     )
+     order by sort_order, month_key`,
+    [year]
+  );
+  return rows.map((r) => ({
+    monthKey: r.month_key,
+    type: r.type,
+    qty: Number(r.qty),
+    total: r.total === null ? null : Number(r.total),
+    archiv: r.archiv,
+  }));
 }

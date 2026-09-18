@@ -879,3 +879,18 @@ update keszlet_movements set elfogadva_at = created_at
     and created_at < timestamptz '2026-09-18 08:00:00+02';
 create index if not exists idx_keszlet_movements_fuggo
   on keszlet_movements (site_id) where direction = 'mozgatas_be' and elfogadva_at is null;
+
+-- Készlet, 2026-09-18: a Nyíregyháza archív korábbi (a rendszer indulása
+-- előtti) hónapjai. Ezek a sorok CSAK az archívumban jelennek meg: nem
+-- csinálnak készletmozgást és nem érintik a kasszát, mert az akkori
+-- raklapok és pénzmozgások már rég lezárultak — a mai készletnek és
+-- kasszának semmi köze hozzájuk. Hónaponként és típusonként egy sor.
+create table if not exists felvasarlas_archivum (
+  ho         date not null,      -- a hónap első napja
+  type_id    smallint not null references pallet_types(id),
+  qty        integer not null,
+  total      integer,            -- Ft; null, ha csak darabszám ismert
+  forras     text,               -- honnan származik az adat (pl. régi rendszer)
+  created_at timestamptz not null default now(),
+  primary key (ho, type_id)
+);
