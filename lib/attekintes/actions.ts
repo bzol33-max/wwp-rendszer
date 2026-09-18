@@ -293,6 +293,8 @@ export type FuvarFulAdatok = {
   jarmuvek: JarmuFuvarCsoport[];
   /** Folyamatban lévő megbízások, amelyekhez egyik saját kocsi sincs hozzárendelve — ezek döntést várnak. */
   kocsiNelkul: JarmuMegbizasSor[];
+  /** Az adatok összeállításának pillanata (ms) — a felület ehhez méri az élő jel korát és a folyó rakodás idejét. */
+  betoltve: number;
 };
 
 const BUDAPEST_ORA = new Intl.DateTimeFormat("hu-HU", {
@@ -454,7 +456,7 @@ export async function getFuvarFulAdatok(): Promise<FuvarFulAdatok> {
     )
     .map(megbizasSor);
 
-  return { jarmuvek, kocsiNelkul };
+  return { jarmuvek, kocsiNelkul, betoltve: most };
 }
 
 // ---------------------------------------------------------------------------
