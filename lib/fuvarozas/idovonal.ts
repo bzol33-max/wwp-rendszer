@@ -303,6 +303,15 @@ export type TervezettMegallo = {
   eppenItt: boolean;
   /** A geokódoló által visszaadott cím-alak (a naplóhoz: látszik, hova tette a rendszer a címet), ha ismert. */
   geoCimke?: string | null;
+  /**
+   * A fuvar Teljesítve-jelölésének ideje, ha a fuvar már le van zárva. Egy
+   * lezárt fuvar megállója a LEZÁRÁS UTÁN kezdődött látogatást nem kaphatja
+   * meg: élesben (2026-09-18) a tegnapi, 09:25-kor lezárt #134 felrakója
+   * (Gyöngyöshalász) vitte el a 11:01-es érkezést a mai #135 azonos című
+   * felrakója elől, mert a GPS lap csak a mai nyomvonalat látja, és a
+   * tegnapi (valódi) látogatása nem volt benne.
+   */
+  fuvarLezarva?: Date | null;
   /** Ha a jármű járt itt, a tényleges (GPS szerinti) MEGÉRKEZÉS ideje — ide kerül a pont az idővonalon. */
   tenylegesIdo: Date | null;
   /** Ha a jármű már tovább is ment, a tényleges (GPS szerinti) TOVÁBBINDULÁS ideje. Amíg itt áll, null. */
@@ -672,6 +681,8 @@ export function jelolMegallokat(
     for (const l of latogatasok(m, allasok, pontok)) {
       // Az időablak előtt véget ért látogatás nem ehhez a megállóhoz tartozik (lásd TervezettMegallo.ablakKezdet).
       if (m.ablakKezdet && l.veg.getTime() < m.ablakKezdet.getTime()) continue;
+      // A fuvar lezárása után kezdődött látogatás sem (lásd TervezettMegallo.fuvarLezarva).
+      if (m.fuvarLezarva && l.kezdet.getTime() > m.fuvarLezarva.getTime()) continue;
       if (l.idotartamSec < ERINTES_MIN_IDOTARTAM_SEC && l.tav >= KOZVETLEN_KOZELSEG_KM) continue;
       parok.push({ fi, mi, latogatas: l, tav: l.tav });
     }

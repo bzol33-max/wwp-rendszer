@@ -158,6 +158,8 @@ export type FuvarErintesSor = {
   felrakas_ablak_tol: string | null;
   lerakas_ablak_tol: string | null;
   teljesitve: boolean;
+  /** A Teljesítve-jelölés ideje (ISO, UTC), ha van — lásd TervezettMegallo.fuvarLezarva. */
+  teljesitve_at: string | null;
   /** Van-e már számlaszáma — a kiszámlázott fuvart az automatika nem bántja. */
   szamlas: boolean;
   /** A sor helye a Megbízások fülek szerint (lásd lib/fuvarozas/fuvar-hely.ts). */
