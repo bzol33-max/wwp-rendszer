@@ -105,11 +105,22 @@ export type SorKornyezet = {
    * mutatott (2026-09-18).
    */
   allValahol: boolean;
+  /**
+   * Igaz, ha a kocsi az élő GPS szerint MOZOG (> 3 km/h). "Úton oda" csak
+   * mozgó kocsira igaz: az álló kocsi (rakodik, vár, a telepen áll) nem
+   * úton van — Gergő négy órája rakodott, és a sora "Úton oda" volt.
+   */
+  mozog: boolean;
   /** Az adatok betöltésének pillanata (ms). */
   most: number;
   /** Igaz, ha ez a fuvar utolsó megállója — ide kerül a fuvarlevél-fotó és a gond. */
   utolsoLerako: boolean;
 };
+
+/** Igaz, ha a kocsi az élő GPS szerint mozog (> 3 km/h) — lásd SorKornyezet.mozog. */
+export function eloMozog(eredmeny: JarmuIdovonalEredmeny | undefined): boolean {
+  return (eredmeny?.eloPozicio?.sebesseg ?? 0) > 3;
+}
 
 /** Igaz, ha a kocsi a nap valamelyik megállóján éppen áll. */
 export function allValahol(fuvarok: FuvarBlokk[]): boolean {
@@ -124,7 +135,10 @@ export function sorAdatok(b: MegalloBejegyzes, f: FuvarBlokk, ctx: SorKornyezet)
   if (b.elhagyva) allapot = "Kész";
   else if (b.eppenItt) allapot = "Rakodik";
   else if (f.csuszo) allapot = "Csúszik";
-  else if (ctx.maiNap && ctx.eloVan && kovetkezoE && !ctx.allValahol) allapot = "Úton oda";
+  // "Úton oda": mai megálló, a kocsi mozog, sehol nem áll éppen, és ez a
+  // következő pont. Egy későbbi napra eső megálló (Micó hétfői
+  // mosonmagyaróvári lerakója) soha nem "úton", csak terv.
+  else if (ctx.maiNap && ctx.eloVan && ctx.mozog && kovetkezoE && !ctx.allValahol && b.napElteres === 0) allapot = "Úton oda";
   else allapot = "Terv";
 
   const bizonytalanJel = b.bizonytalanFelismeres ? "? " : "";

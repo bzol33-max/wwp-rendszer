@@ -542,3 +542,14 @@
   `sorAdatok` mostantól csak akkor ad „Úton oda”-t, ha a kocsi sehol nem
   áll éppen (`SorKornyezet.allValahol`, `allValahol(fuvarok)`); a „Következő”
   mező ilyenkor „rakodás után Lerakás Debrecen, kb. …”.
+- Kiegészítés 3 („Gergőnél mindig úton oda, holott órák óta pakolják; Micónál
+  Mosonmagyaróvárhoz úton oda, pedig hétfőn indul”): „Úton oda” mostantól
+  csak akkor, ha a kocsi az élő GPS szerint MOZOG (> 3 km/h,
+  `SorKornyezet.mozog`, `eloMozog`), sehol nem áll éppen, a megálló a
+  következő ÉS mai (`napElteres === 0`) — a hétfői lerakó „Terv”. A mobil
+  fuvar-kártya fejléce ugyanígy. A GPS lap útján számolt állapot is a
+  naplóba kerül (`[idovonal] Gergő (0 km/h): #135 Fel Gyöngyöshalász itt
+  áll 11:01 óta, …`), hogy a figyelő és a lap eltérése azonnal látsszon.
+  Megjegyzés: a telefonon a lehúzásra frissítés a RÉGI kliens-kódot futtatja
+  egy új kiadás után — a sor-logika a böngészőben fut —, ezért kiadás után
+  egyszer újra kell tölteni az oldalt.

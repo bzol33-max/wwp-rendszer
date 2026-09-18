@@ -8,6 +8,7 @@ import type { JarmuFuvarCsoport } from "@/lib/attekintes/actions";
 import {
   allValahol,
   allasokSzoveg,
+  eloMozog,
   formatEltelt,
   formatIdo,
   formatSzam,
@@ -95,11 +96,11 @@ function HolVanMost({ eredmeny, most, jarmuNincsGps }: { eredmeny: JarmuIdovonal
 }
 
 /** A fuvar egészének állapota a kártya fejlécébe: minden megállója kész, van már érintett/aktuális megállója, csúszik, vagy még terv. */
-function fuvarAllapot(f: FuvarBlokk, kovetkezo: MegalloBejegyzes | null): Allapot {
+function fuvarAllapot(f: FuvarBlokk, kovetkezo: MegalloBejegyzes | null, mozog: boolean): Allapot {
   if (fuvarKesz(f)) return "Kész";
   if (f.megallok.some((b) => b.eppenItt)) return "Rakodik";
   if (f.csuszo) return "Csúszik";
-  if (f.megallok.some((b) => b.elhagyva) || (kovetkezo !== null && kovetkezo.fuvarId === f.fuvarId)) return "Úton oda";
+  if (mozog && ((f.megallok.some((b) => b.elhagyva) && f.megallok.some((b) => b.napElteres === 0)) || (kovetkezo !== null && kovetkezo.fuvarId === f.fuvarId && kovetkezo.napElteres === 0))) return "Úton oda";
   return "Terv";
 }
 
@@ -182,7 +183,7 @@ function MegalloSorok({ b, s, utolso }: { b: MegalloBejegyzes; s: SorAdat; utols
 function KocsiLap({ jarmu, eredmeny, csoport, most }: { jarmu: (typeof SAJAT_JARMUVEK)[number]; eredmeny: JarmuIdovonalEredmeny | undefined; csoport: JarmuFuvarCsoport | undefined; most: number }) {
   const fuvarok = eredmeny?.fuvarok ?? [];
   const kovetkezo = kovetkezoMegallo(fuvarok);
-  const ctx = { maiNap: true, eloVan: !!eredmeny?.eloPozicio, kovetkezo, allValahol: allValahol(fuvarok), most };
+  const ctx = { maiNap: true, eloVan: !!eredmeny?.eloPozicio, kovetkezo, allValahol: allValahol(fuvarok), mozog: eloMozog(eredmeny), most };
   const kovetkezok = csoport?.kovetkezok ?? [];
   return (
     <div className="flex flex-col gap-3">
@@ -199,7 +200,7 @@ function KocsiLap({ jarmu, eredmeny, csoport, most }: { jarmu: (typeof SAJAT_JAR
       ) : (
         fuvarok.map((f, i) => (
           <div key={f.fuvarId} className="rounded-xl border border-[var(--at-border)] bg-[var(--at-card)]">
-            <FuvarFejsor f={f} sorszam={i + 1} osszes={fuvarok.length} allapot={fuvarAllapot(f, kovetkezo)} />
+            <FuvarFejsor f={f} sorszam={i + 1} osszes={fuvarok.length} allapot={fuvarAllapot(f, kovetkezo, ctx.mozog)} />
             <table className="w-full border-collapse">
               <thead>
                 <tr>
