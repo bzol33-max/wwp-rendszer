@@ -227,6 +227,12 @@ export type TervezettFuvarSzakasz = {
   idoBizonytalan: boolean;
   /** Igaz, ha a menetidőt nem sikerült kiszámolni (cím hiányzik/nem geokódolható), ezért egy átalány (2 óra) szerepel. */
   utvonalBizonytalan: boolean;
+  /**
+   * Igaz, ha a megbízás lerakási napja későbbi a felrakásénál (pl. pénteki
+   * felrakás, hétfői lerakás) — a rakomány a kocsin marad, ezért a nap
+   * többi, aznap le is rakott fuvarja után következik (lásd napVegereSorolt).
+   */
+  tobbNapos: boolean;
 };
 
 /** Egy tervezett fuvar egyetlen fel- vagy lerakó állomása, az idővonalon egy kis ponttal jelölve. */

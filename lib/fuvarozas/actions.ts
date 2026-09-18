@@ -690,7 +690,30 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus, kali
     veg,
     idoBizonytalan,
     utvonalBizonytalan,
+    tobbNapos: tobbNaposFuvar,
   };
+}
+
+/**
+ * Egy időpont nélküli, TÖBBNAPOS fuvar (a lerakás egy későbbi napon van)
+ * a felrakás napján az utolsó: a rakomány a kocsin marad, tehát a kocsi
+ * előbb elvégzi az aznap le is rakott fuvarjait. Az alapértelmezett reggel
+ * 7-es kezdés miatt eddig az ilyen fuvar a lista ELEJÉRE került, és a GPS
+ * lap azt jelölte "Folyamatban"-nak, miközben a kocsi egy másik, aznapi
+ * fuvart csinált (Micó, Hajdúspedíció Nyírjákó→Mosonmagyaróvár péntek→
+ * hétfő, közben Ebes→Balkány, 2026-09-18). Ha a megbízáson van időpont,
+ * vagy a kocsi már járt a fuvar egy pontján, a szabály nem él — a
+ * tény erősebb a feltevésnél.
+ */
+function napVegereSorolt(f: TervezettFuvarSzakasz, napISO: string): boolean {
+  return (
+    f.tobbNapos &&
+    f.idoBizonytalan &&
+    // Csak a felrakás napján: egy csúszó (korábbról hozott) rakományt előbb
+    // le kell rakni, az nem a nap végére való.
+    budapestNapISO(f.kezdet) === napISO &&
+    !f.megallok.some((m) => m.elhagyva || m.eppenItt)
+  );
 }
 
 /**
@@ -726,7 +749,13 @@ async function lancoltEloBecsles(
     // pontok idejét is a jelen pillanattól számolná, mintha a rakodás már
     // véget ért volna.
     .filter(({ m }) => !m.elhagyva && !m.eppenItt && budapestNapISO(m.idopont) === maiNapISO)
-    .sort((a, b) => a.m.idopont.getTime() - b.m.idopont.getTime());
+    // A lánc sorrendje: előbb az aznapi fuvarok pontjai, a nap végére sorolt
+    // (időpont nélküli többnapos) fuvaré utánuk — lásd napVegereSorolt.
+    .sort(
+      (a, b) =>
+        Number(napVegereSorolt(fuvarok[a.fi], maiNapISO)) - Number(napVegereSorolt(fuvarok[b.fi], maiNapISO)) ||
+        a.m.idopont.getTime() - b.m.idopont.getTime()
+    );
 
   const eredmeny = fuvarok.map((f) => ({ ...f, megallok: [...f.megallok] }));
 
@@ -801,7 +830,7 @@ function fuvarBlokkok(
   csuszoIds: Set<string> = new Set()
 ): FuvarBlokk[] {
   return tervezettFuvarok
-    .map((f): FuvarBlokk => {
+    .map((f): { blokk: FuvarBlokk; napVegen: boolean } => {
       const megallok = [...f.megallok]
         .sort((a, b) => a.index - b.index)
         .map((m): MegalloBejegyzes => {
@@ -828,16 +857,27 @@ function fuvarBlokkok(
           };
         });
       return {
-        fuvarId: f.id,
-        fuvarTipus: f.fuvarTipus,
-        megrendelo: f.megrendelo,
-        pozicioszam: f.pozicioszam,
-        megallok,
-        kezdetIdo: megallok[0]?.idopont ?? f.kezdet,
-        csuszo: csuszoIds.has(f.id),
+        blokk: {
+          fuvarId: f.id,
+          fuvarTipus: f.fuvarTipus,
+          megrendelo: f.megrendelo,
+          pozicioszam: f.pozicioszam,
+          megallok,
+          kezdetIdo: megallok[0]?.idopont ?? f.kezdet,
+          csuszo: csuszoIds.has(f.id),
+        },
+        napVegen: napVegereSorolt(f, napISO),
       };
     })
-    .sort((a, b) => a.kezdetIdo.getTime() - b.kezdetIdo.getTime() || Number(a.fuvarId) - Number(b.fuvarId));
+    // Az időpont nélküli többnapos fuvar a nap végére (lásd napVegereSorolt),
+    // a többi az első pontjuk ideje szerint.
+    .sort(
+      (a, b) =>
+        Number(a.napVegen) - Number(b.napVegen) ||
+        a.blokk.kezdetIdo.getTime() - b.blokk.kezdetIdo.getTime() ||
+        Number(a.blokk.fuvarId) - Number(b.blokk.fuvarId)
+    )
+    .map(({ blokk }) => blokk);
 }
 
 /**
