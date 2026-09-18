@@ -314,6 +314,30 @@ function vezetes(honnan: { lat: number; lon: number }, hova: { lat: number; lon:
   eq("előzménnyel: a felrakó kész", jelolMegallokat([f()], vele)[0][0].elhagyva, true);
 }
 
+// 3g) Lezárt állás után is a helyszínen látott kocsi: Gergő lezárt
+//     gyöngyöshalászi állása 13:40-ig tart, 15:05-kor még ott állt, 15:22-kor
+//     már úton volt — az állás a megfigyelt elhagyásig (15:05 után) tart.
+{
+  const GYONGYOSHALASZ = { lat: 47.7239, lon: 19.9619 };
+  const lezart: IdovonalSzakasz[] = [
+    { tipus: "indulas", idopont: t(9, 18, 18), cim: null, lat: DEBRECEN.lat, lon: DEBRECEN.lon },
+    vezetes(DEBRECEN, GYONGYOSHALASZ, t(9, 18, 18), t(11, 1, 18)),
+    allas(GYONGYOSHALASZ, t(11, 1, 18), 159),
+  ];
+  const elozmeny = [
+    { ...GYONGYOSHALASZ, mozog: false, idobelyeg: t(14, 50, 18) },
+    { ...GYONGYOSHALASZ, mozog: false, idobelyeg: t(15, 5, 18) },
+  ];
+  const uton = { lat: 47.72, lon: 20.1, cim: null, mozog: true, idobelyeg: t(15, 22, 18) };
+  const all = kiegesziteloAllapottal(lezart, uton, t(15, 22, 18), [], elozmeny);
+  const utolsoAllas = all.filter((sz) => sz.tipus === "allas").pop();
+  const veg = utolsoAllas?.tipus === "allas" ? utolsoAllas.veg.getTime() : 0;
+  eq("lezárt állás a megfigyelt ottlétig hosszabbítva (≥ 15:05)", veg >= t(15, 5, 18).getTime() && veg <= t(15, 22, 18).getTime(), true);
+  eq("utána élő vezetés", all[all.length - 1].tipus, "vezetes");
+  const f = [megallo(0, "felrako", GYONGYOSHALASZ, t(0, 0, 18)), megallo(1, "lerako", DEBRECEN, t(0, 0, 18))];
+  eq("a felrakó kész, a távozás a meghosszabbított vég", jelolMegallokat([f], all)[0][0].tenylegesTavozas?.getTime(), veg);
+}
+
 // 3e) Lezárt fuvar nem kaphat a lezárása utáni látogatást: a tegnapi #134
 //     (Gyöngyöshalász→Debrecen, ma 09:25-kor Teljesítve) felrakója és a mai
 //     #135 felrakója ugyanaz a cím; a mai 11:01-es érkezés a #135-é.
