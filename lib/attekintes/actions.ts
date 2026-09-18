@@ -8,6 +8,7 @@
 // csak tömörebben, mobilra optimalizálva.
 
 import { query } from "@/lib/db";
+import { requireViewPermission } from "@/lib/auth/require-permission";
 import { getFleetPositions, getIdovonalak } from "@/lib/fuvarozas/actions";
 import { getFuvarHelye } from "@/lib/fuvarozas/fuvar-hely";
 import { budapestNapISO } from "@/lib/fuvarozas/idozona";
@@ -446,4 +447,111 @@ export async function getFuvarFulAdatok(): Promise<FuvarFulAdatok> {
     .map(megbizasSor);
 
   return { jarmuvek, kocsiNelkul };
+}
+
+// ---------------------------------------------------------------------------
+// Készlet fül
+// ---------------------------------------------------------------------------
+
+export type KeszletTipusSor = {
+  tipus: string;
+  osszes: number;
+  /** Telephely neve → aktuális darabszám (csak ahol a típus aktív). */
+  telepenkent: Record<string, number>;
+};
+
+export type KeszletUtonSor = {
+  id: string;
+  tipus: string;
+  qty: number;
+  honnan: string | null;
+  hova: string;
+  mikor: string;
+};
+
+export type KeszletFulAdatok = {
+  telepek: { nev: string; osszes: number }[];
+  tipusok: KeszletTipusSor[];
+  uton: KeszletUtonSor[];
+};
+
+// A telepek sorrendje a Készlet fülön — ugyanaz, mint a Készlet modulban.
+const KESZLET_TELEP_SORREND = ["Nyíregyháza", "Balkány", "Szakoly"];
+
+/**
+ * A "Készlet" fül: az összes telephely aktuális készlete típusonként, plusz
+ * az úton lévő (a fogadó telepen még át nem vett) mozgatások. Ugyanaz a
+ * számítás, mint a Készlet modul Összkészlet nézetében (getOsszkeszlet): a
+ * "Csere" nem önálló készlettétel, a mozgatás a cél telepen csak az átvétel
+ * után számít — az úton lévő mennyiség így egyik telep számában sincs benne,
+ * ezért külön soroljuk fel.
+ */
+export async function getKeszletFulAdatok(): Promise<KeszletFulAdatok> {
+  await requireViewPermission("attekintes");
+  const [keszletRows, utonRows] = await Promise.all([
+    query<{ type: string; site: string; qty: string }>(
+      `select t.name as type, s.name as site,
+         coalesce(sum(case
+           when m.direction = 'be' then m.qty
+           when m.direction = 'mozgatas_be' and m.elfogadva_at is not null then m.qty
+           when m.direction in ('ki','mozgatas') then -m.qty
+           else 0
+         end), 0) as qty
+       from pallet_types t
+       join site_active_types sat on sat.type_id = t.id
+       join sites s on s.id = sat.site_id
+       left join keszlet_movements m on m.type_id = t.id and m.site_id = s.id
+       where t.name <> 'Csere'
+       group by t.name, s.name, t.sort_order, t.id
+       order by t.sort_order, t.id`
+    ),
+    query<{ id: string; type: string; qty: number; from_site: string | null; to_site: string; mikor: string }>(
+      `select m.id::text, t.name as type, m.qty, fs.name as from_site, s.name as to_site,
+         to_char(m.created_at at time zone 'Europe/Budapest', 'MM.DD. HH24:MI') as mikor
+       from keszlet_movements m
+       join pallet_types t on t.id = m.type_id
+       join sites s on s.id = m.site_id
+       left join sites fs on fs.id = m.target_site_id
+       where m.direction = 'mozgatas_be' and m.elfogadva_at is null
+       order by m.created_at`
+    ),
+  ]);
+
+  const tipusMap = new Map<string, KeszletTipusSor>();
+  const telepOsszes = new Map<string, number>();
+  for (const r of keszletRows) {
+    const qty = Number(r.qty);
+    let sor = tipusMap.get(r.type);
+    if (!sor) {
+      sor = { tipus: r.type, osszes: 0, telepenkent: {} };
+      tipusMap.set(r.type, sor);
+    }
+    sor.telepenkent[r.site] = qty;
+    sor.osszes += qty;
+    telepOsszes.set(r.site, (telepOsszes.get(r.site) ?? 0) + qty);
+  }
+
+  const rang = (nev: string) => {
+    const i = KESZLET_TELEP_SORREND.indexOf(nev);
+    return i === -1 ? KESZLET_TELEP_SORREND.length : i;
+  };
+  const telepek = Array.from(telepOsszes, ([nev, osszes]) => ({ nev, osszes })).sort(
+    (a, b) => rang(a.nev) - rang(b.nev) || a.nev.localeCompare(b.nev, "hu")
+  );
+
+  return {
+    telepek,
+    // A sehol sem lévő típusokat nem soroljuk fel — csak zajt jelentenének.
+    tipusok: Array.from(tipusMap.values()).filter((t) =>
+      Object.values(t.telepenkent).some((q) => q !== 0)
+    ),
+    uton: utonRows.map((r) => ({
+      id: r.id,
+      tipus: r.type,
+      qty: Number(r.qty),
+      honnan: r.from_site,
+      hova: r.to_site,
+      mikor: r.mikor,
+    })),
+  };
 }
