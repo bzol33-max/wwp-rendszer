@@ -514,3 +514,15 @@
   megbízás külön kártya, színezett fejléccel („1. fuvar / 2”, megbízó,
   hivatkozás, áru, díj) és a fuvar egészének állapotával (Kész / Rakodik /
   Úton oda / Csúszik / Terv), alatta a saját megálló-táblázata.
+- Kiegészítés (az új napló alapján): az Ebes→Balkány saját fuvar az első
+  körben Teljesítve lett (Ebes 08:51–09:44, Balkány 10:33–11:36). Nyírjákóhoz
+  viszont 11:36 óta egyetlen lezárt megállás sem volt a nyomvonalon: a
+  Balkány→Nyírjákó út még nyitott trip az Ecofleetben (járó motor a rakodás
+  alatt, vagy késő trip-lezárás), a rendszer a kocsit három órán át „élő
+  vezetés”-nek vette. `kiegesziteloAllapottal`: ha az élő pozíció ÁLL
+  (≤3 km/h), a jel friss (≤30 perc), és a légvonalból becsült érkezés
+  (×1,3 kerülő, 60 km/h) óta legalább 10 perc eltelt, élő vezetés + élő
+  állás képződik a jelenlegi helyre — a felrakó „éppen itt / Rakodik” lesz.
+  Kész (elhagyva) csak a tényleges továbbhaladás után, mint eddig. A figyelő
+  naplózza az élő pozíciót, a jel idejét és az utolsó lezárt szakasz végét.
+  Teszt: `scripts/teszt-erintes.mts` 3c.

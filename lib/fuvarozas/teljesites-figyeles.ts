@@ -143,6 +143,7 @@ export async function futtatTeljesitesFigyeles(): Promise<TeljesitesFigyelesEred
 
       const elo = eloPoziciok.find((p) => p.objectId === jarmu.ecofleetObjectId);
       const eloIdo = elo ? parseEcofleetTimestamp(elo.timestamp) : null;
+      const utolsoLezart = szakaszok[szakaszok.length - 1];
       if (elo && eloIdo) {
         szakaszok = kiegesziteloAllapottal(
           szakaszok,
@@ -151,6 +152,16 @@ export async function futtatTeljesitesFigyeles(): Promise<TeljesitesFigyelesEred
           tervezettCimek
         );
       }
+      // A jármű élő helyzete és a nyomvonal vége a naplóba — látszik, ha a
+      // kocsi áll valahol, de az Ecofleet még nem zárta le az odavezető tripet.
+      const utolso = szakaszok[szakaszok.length - 1];
+      console.log(
+        `[teljesites-figyeles] ${jarmu.sofor} élő: ${
+          elo && eloIdo ? `${elo.latitude.toFixed(4)},${elo.longitude.toFixed(4)} ${elo.speed} km/h, jel ${ido(eloIdo)}` : "nincs"
+        }; utolsó lezárt szakasz: ${
+          utolsoLezart ? `${utolsoLezart.tipus} ${ido(utolsoLezart.tipus === "indulas" ? utolsoLezart.idopont : utolsoLezart.veg)}-ig` : "nincs"
+        }; nyomvonal vége: ${utolso ? `${utolso.tipus}${utolso.tipus !== "indulas" && utolso.elo ? " (élő)" : ""}` : "üres"}`
+      );
 
       const jelolt = jelolMegallokat(
         fuvarok.map((f) => f.megallok),

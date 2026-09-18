@@ -11,6 +11,7 @@
 import {
   fuvarKeszGpsSzerint,
   jelolMegallokat,
+  kiegesziteloAllapottal,
   ratesziKeziJeloleseket,
   type IdovonalSzakasz,
   type TervezettMegallo,
@@ -217,6 +218,35 @@ function vezetes(honnan: { lat: number; lon: number }, hova: { lat: number; lon:
   eq("csak városnév: a felismerés bizonytalan jelölésű", j[1].bizonytalanFelismeres, true);
   const pontos = [megallo(0, "felrako", PAPA, t(0, 0, 16)), megallo(1, "lerako", DEBRECEN, t(0, 0, 16))];
   eq("pontos cím, állás 3 km-re: nem érintés", jelolMegallokat([pontos], rakodas)[0][1].elhagyva, false);
+}
+
+// 3c) Álló élő pozíció nyitott trippel: az utolsó lezárt szakasz a balkányi
+//     állás (11:36-ig), a kocsi 14:50-kor 33 km-re áll (0 km/h, friss jel) —
+//     a becsült érkezés (11:36 + 33×1,3/60 h ≈ 12:19) óta eltelt idő állás,
+//     ezért a csak városnév szintű felrakó "éppen itt" lesz. Ha a kocsi
+//     mozog, vagy a jel régi, marad az élő vezetés, nincs érintés.
+{
+  const BALKANY = { lat: 47.7695, lon: 21.863 };
+  const NYIRJAKO = { lat: 48.0281, lon: 22.079 };
+  const RAKODO = { lat: NYIRJAKO.lat + 0.02, lon: NYIRJAKO.lon };
+  const lezart: IdovonalSzakasz[] = [
+    { tipus: "indulas", idopont: t(6, 0, 18), cim: null, lat: PAPA.lat, lon: PAPA.lon },
+    vezetes(PAPA, BALKANY, t(6, 0, 18), t(10, 33, 18)),
+    allas(BALKANY, t(10, 33, 18), 63),
+  ];
+  const most = t(14, 50, 18);
+  const f = () => [{ ...megallo(0, "felrako", NYIRJAKO, t(0, 0, 18)), pontossag: "csak_varos" as const }, megallo(1, "lerako", PAPA, t(0, 0, 21))];
+  const all = kiegesziteloAllapottal(lezart, { ...RAKODO, cim: null, mozog: false, idobelyeg: t(14, 48, 18) }, most);
+  eq("álló élő pozíció: a nyomvonal vége élő állás", all[all.length - 1].tipus, "allas");
+  const [j] = jelolMegallokat([f()], all);
+  eq("álló élő pozíció: a felrakó éppen itt", j[0].eppenItt, true);
+  eq("álló élő pozíció: nem kész (nem ment tovább)", j[0].elhagyva, false);
+  const mozog = kiegesziteloAllapottal(lezart, { ...RAKODO, cim: null, mozog: true, idobelyeg: t(14, 48, 18) }, most);
+  eq("mozgó élő pozíció: élő vezetés marad", mozog[mozog.length - 1].tipus, "vezetes");
+  const regi = kiegesziteloAllapottal(lezart, { ...RAKODO, cim: null, mozog: false, idobelyeg: t(13, 0, 18) }, most);
+  eq("régi jel: nincs képzett állás", regi[regi.length - 1].tipus, "vezetes");
+  const lampa = kiegesziteloAllapottal(lezart, { ...RAKODO, cim: null, mozog: false, idobelyeg: t(12, 20, 18) }, t(12, 22, 18));
+  eq("frissen érkezett (piros lámpa): még nincs állás", lampa[lampa.length - 1].tipus, "vezetes");
 }
 
 // 4) Kézi jelölés: a sofőr megerősítése készre teszi a megállót és felülírja az "éppen itt"-et; a fuvar Teljesítve mindent készre tesz.

@@ -335,6 +335,14 @@ export type TervezettMegallo = {
   keziErkezes?: Date | null;
 };
 
+/** Az élő, álló pozícióból képzett állás menetidő-becslése: légvonal × kerülő-szorzó, átlagsebességgel (lásd kiegesziteloAllapottal). */
+const ELO_KERULO_SZORZO = 1.3;
+const ELO_ATLAG_KMH = 60;
+/** Ennyi percnek kell a becsült érkezés óta eltelnie, hogy az álló élő pozíció állásnak számítson (piros lámpa, sorompó nem). */
+const ELO_ALLAS_MIN_PERC = 10;
+/** Ennél régebbi élő jelre nem képzünk állást: a kocsi azóta bárhol lehet. */
+const ELO_JEL_MAX_PERC = 30;
+
 export type EloPozicio = {
   lat: number;
   lon: number;
@@ -380,6 +388,47 @@ export function kiegesziteloAllapottal(
   const folyamatbanVezet = elo.mozog || tavolsagKm >= OSSZEVONAS_KM;
 
   if (folyamatbanVezet) {
+    // A jármű ÁLL, de messze az utolsó lezárt ponttól, és a jel friss: a
+    // Balkány→Nyírjákó út még nyitott trip az Ecofleetben (a motor jár a
+    // rakodás alatt, vagy a trip-lezárás késik), ezért a nyomvonalon nincs
+    // állás ott, ahol a kamion ténylegesen rakodik — élesben (2026-09-18)
+    // Micó három órán át "élő vezetés"-nek látszott, és a nyírjákói felrakó
+    // "nincs érintés" maradt. Ilyenkor a megtett légvonalból becsült
+    // menetidővel egy élő vezetést és utána egy élő állást képzünk a
+    // jelenlegi helyre — csak akkor, ha a becsült érkezés óta legalább
+    // ELO_ALLAS_MIN_PERC eltelt, hogy egy piros lámpa ne legyen "rakodás".
+    const jelKoraPerc = (most.getTime() - elo.idobelyeg.getTime()) / 60000;
+    const becsultErkezes = new Date(utolsoVeg.getTime() + (tavolsagKm * ELO_KERULO_SZORZO) / ELO_ATLAG_KMH * 3600000);
+    const allPercek = (most.getTime() - becsultErkezes.getTime()) / 60000;
+    if (!elo.mozog && jelKoraPerc <= ELO_JEL_MAX_PERC && allPercek >= ELO_ALLAS_MIN_PERC) {
+      const vezetes: IdovonalSzakasz = {
+        tipus: "vezetes",
+        kezdet: utolsoVeg,
+        veg: becsultErkezes,
+        tavKm: tavolsagKm,
+        idotartamSec: (becsultErkezes.getTime() - utolsoVeg.getTime()) / 1000,
+        atlagSebesseg: 0,
+        honnan: utolsoHely.cim,
+        hova: elo.cim,
+        hovaLat: elo.lat,
+        hovaLon: elo.lon,
+        elo: true,
+      };
+      const idotartamSec = (most.getTime() - becsultErkezes.getTime()) / 1000;
+      const allas: IdovonalSzakasz = {
+        tipus: "allas",
+        kezdet: becsultErkezes,
+        veg: most,
+        idotartamSec,
+        cim: elo.cim,
+        lat: elo.lat,
+        lon: elo.lon,
+        kategoria: allasKategoria(idotartamSec, elo.lat, elo.lon, tervezettCimek),
+        osszevontLepesek: 0,
+        elo: true,
+      };
+      return [...szakaszok, vezetes, allas];
+    }
     const uj: IdovonalSzakasz = {
       tipus: "vezetes",
       kezdet: utolsoVeg,
