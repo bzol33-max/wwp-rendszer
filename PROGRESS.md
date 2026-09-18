@@ -327,3 +327,27 @@
 - Megfigyelés (nem kód): BB-Logistic 02215-2026 (hétfő, Füzesabony→
   Nyíradony) a SpediTrans kéthasábos fel-/lerakó táblája miatt fordítva
   jött be (Fel Nyíradony, Le Füzesabony) — a Megbízásokon kézzel cserélendő.
+
+## 2026-09-18 (21. kör) — SpediTrans (BB-Logistic) sablon: felrakó/lerakó determinisztikusan
+
+- Hiba: a BB-Logistic (SpediTrans for Windows) megbízáson a felrakó és a
+  lerakó két hasábban áll egymás mellett; a nyelvi modell ezt fordítva is
+  olvashatja (02215-2026.pdf, hétfői Füzesabony→Nyíradony), és a megrendelőnek
+  a felrakó céget (DS Smith) írta a BB-Logistic helyett.
+- Javítás: új partner `bb-logistic` (`lib/fuvarozas/import/partnerek.ts`,
+  ujjlenyomat: "BB-Logistic", "speditrans.hu", "SpediTrans for Windows") és
+  `lib/fuvarozas/import/speditrans.ts` — a pdf-parse VALÓDI kimenetében a két
+  háromsoros blokk (cég / HU-irsz város / utca) egymás után áll, előbb a
+  felrakó; ezt, a két határidőt, a pozíciószámot, a fuvardíjat és a
+  rendszámokat reguláris kifejezés adja. Új `Partner.kivon` horog: a
+  determinisztikus mezők felülírják a modell tippjét (`drive-sync-core.ts`).
+  A megrendelő partnerből: "BB-Logistic Solution Kft.". Minta:
+  `scripts/teszt-minta/speditrans-megbizas.txt` (tabulátorokkal, kitalált
+  nevekkel), tesztek a `scripts/teszt-import.mts`-ben.
+- GPS lap: a "Következő napok" doboz eddig csak a lap megnyitásakor töltődött
+  be — most minden frissítéssel (5 percenként, kész-jelölés után is), így a
+  Megbízásokon közben javított felrakó/lerakó/kocsi itt is látszik.
+- Megjegyzés: a már beimportált #136 sor felrakója/lerakója az iratnak
+  megfelelő (Fel Füzesabony 11:00, Le Nyíradony 14:00); a megrendelője
+  viszont "DS Smith Packaging Hungary Kft." — kézzel BB-Logistic-re
+  javítandó, különben rossz vevőre menne a számla.
