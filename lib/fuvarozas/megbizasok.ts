@@ -128,13 +128,20 @@ export async function getFolyamatbanValodiSajatFuvarok(): Promise<FuvarRow[]> {
 /**
  * A GPS-érintés-felismerés bemenete (lásd teljesites-figyeles.ts): a
  * `kezdetNapISO` óta lerakandó (vagy már lerakott), járművel rendelkező
- * saját fuvarok — a MÁR LEZÁRTAK is (ők foglalják a párosításban a saját
+ * fuvarok MINDKÉT fülről (tipus='sajat' = Bér fuvarok, tipus='ber' = Saját
+ * fuvarok) — a MÁR LEZÁRTAK is (ők foglalják a párosításban a saját
  * megállásukat), de csak a mai napig felrakottak (a holnapi fuvarhoz még
  * nincs mit felismerni).
+ *
+ * Korábban csak a Bér fuvarok voltak benne: a Saját fuvarok fül tételeit
+ * (élesben 2026-09-18: Micó Ebes→Balkány, a saját balkányi telepre) a
+ * figyelő se nem naplózta, se nem zárta le, és a párosításban sem
+ * foglalták a saját megállásukat — a GPS lap ugyanakkor mindkét fület
+ * mutatja, így a kettő nem ugyanazt látta.
  */
 export async function getSajatFuvarokErinteshez(kezdetNapISO: string): Promise<FuvarErintesSor[]> {
   return query<FuvarErintesSor>(
-    `select id::text, jarmu, felrako, lerako,
+    `select id::text, tipus, jarmu, felrako, lerako,
        to_char(datum, 'YYYY-MM-DD') as datum,
        to_char(lerakas_datum, 'YYYY-MM-DD') as lerakas_datum,
        to_char(felrakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as felrakas_ablak_tol,
@@ -143,7 +150,7 @@ export async function getSajatFuvarokErinteshez(kezdetNapISO: string): Promise<F
        (coalesce(szamla_szam, '') <> '') as szamlas,
        ${FUVAR_HELY_SQL} as hely
      from fuvar_megbizasok
-     where tipus = 'sajat' and statusz <> 'torolt'
+     where tipus in ('sajat', 'ber') and statusz <> 'torolt'
        and jarmu is not null and jarmu <> ''
        and coalesce(lerakas_datum, datum) >= $1::date
        and datum <= ${FUVAR_MA_SQL}

@@ -484,3 +484,33 @@
   formázók), a /fuvarozas GPS fül és az Áttekintés ugyanazt számolja.
   `FuvarFulAdatok.betoltve` a betöltés pillanata (a renderben nincs
   `Date.now()`).
+
+## 2026-09-18 (27. kör) — Csak városnév szintű cím felismerése; a figyelő a Saját fuvarokat is nézi; megbízásonként külön kártya telefonon
+
+- Hiba (Budaházi Zoltán): Micó Nyírjákón felrakott, a rendszer mégsem
+  jelölte késznek; az Ebes→Balkány saját fuvar sem zárult le; telefonon a
+  két megbízás egyetlen listának látszott. A figyelő naplója 11:02 óta
+  minden körben „Fel Nyírjákó [geo ~csak_varos] nincs érintés”.
+- Ok 1: a megbízáson csak a település neve áll („Nyírjákó”, „Ebes”), a
+  geokódolt pont a falu közepe, a rakodó a szélén — a 2 km-es kör nem
+  érte el. Javítás: `lib/fuvarozas/idovonal.ts` `cimSugarKm` — csak
+  városnév pontosságú címnél 4 km-es felismerési kör (pontos címnél marad
+  2 km); a felismerés bizonytalan (kérdőjeles) jelölést kap, ahogy eddig.
+  A tervezett címek listája (`TervezettCim`, `sugarKm`) ugyanezt a kört
+  használja az állás-kategorizálásnál és a „nem tervezett állás” szűrőnél
+  (`tervezettCimKozeleben`). Teszt: `scripts/teszt-erintes.mts` 3b.
+- Ok 2: a 15 perces figyelő (`getSajatFuvarokErinteshez`) csak a Bér
+  fuvarokat (tipus='sajat') vette — a Saját fuvarok fül tételeit se nem
+  naplózta, se nem zárta le, és a párosításban sem foglalták a
+  megállásukat. Most mindkét típus benne van; a GPS szerint kész saját
+  fuvar Teljesítve lesz (és mint a kézi Kész gombnál, az Archívba kerül).
+  `FuvarErintesSor.tipus` új mező, a naplóban „(saját)” jelölés.
+- Napló-diagnosztika: nem érintett megállónál a figyelő kiírja a
+  geokódoló cím-alakját és koordinátáját (`TervezettMegallo.geoCimke`),
+  valamint a nyomvonal legközelebbi, 5 percnél hosszabb állását (távolság,
+  idő, hossz, Ecofleet-cím) és a felismerési kört — a Railway-naplóból
+  látszik, miért nincs érintés (messze állt / rossz geokódolás / nem járt ott).
+- Telefon (`components/attekintes/fuvar-tablazat-mobil.tsx`): minden
+  megbízás külön kártya, színezett fejléccel („1. fuvar / 2”, megbízó,
+  hivatkozás, áru, díj) és a fuvar egészének állapotával (Kész / Rakodik /
+  Úton oda / Csúszik / Terv), alatta a saját megálló-táblázata.

@@ -10,6 +10,7 @@ import {
   formatEltelt,
   formatIdo,
   formatSzam,
+  fuvarKesz,
   fuvarReszletek,
   jelRegi,
   kovetkezoMegallo,
@@ -92,23 +93,44 @@ function HolVanMost({ eredmeny, most, jarmuNincsGps }: { eredmeny: JarmuIdovonal
   );
 }
 
-function FuvarFejsor({ f }: { f: FuvarBlokk }) {
+/** A fuvar egészének állapota a kártya fejlécébe: minden megállója kész, van már érintett/aktuális megállója, csúszik, vagy még terv. */
+function fuvarAllapot(f: FuvarBlokk, kovetkezo: MegalloBejegyzes | null): Allapot {
+  if (fuvarKesz(f)) return "Kész";
+  if (f.megallok.some((b) => b.eppenItt)) return "Rakodik";
+  if (f.csuszo) return "Csúszik";
+  if (f.megallok.some((b) => b.elhagyva) || (kovetkezo !== null && kovetkezo.fuvarId === f.fuvarId)) return "Úton oda";
+  return "Terv";
+}
+
+/**
+ * A fuvar kártyájának fejléce: sorszám a kocsi napján belül, megbízó,
+ * hivatkozás, áru, díj és a fuvar egészének állapota. Külön, színezett
+ * sáv, hogy két egymás utáni megbízás (élesben Micó: Ebes→Balkány, majd
+ * Nyírjákó→Mosonmagyaróvár) ne olvadjon egyetlen megállólistává.
+ */
+function FuvarFejsor({ f, sorszam, osszes, allapot }: { f: FuvarBlokk; sorszam: number; osszes: number; allapot: Allapot }) {
   const r = fuvarReszletek(f);
   return (
-    <div className="flex items-baseline justify-between gap-2">
+    <div className="flex items-start justify-between gap-2 rounded-t-xl border-b border-[var(--at-border)] bg-[var(--at-tile)] px-3 py-2">
       <div className="min-w-0">
+        <div className={CIMKE}>
+          {sorszam}. fuvar / {osszes}
+        </div>
         <div className="truncate text-sm font-bold">{r.megrendelo}</div>
         <div className="text-xs text-[var(--at-muted)]">
           {r.hivatkozas}
           {r.aru && ` · ${r.aru}`}
         </div>
       </div>
-      {r.dij && <span className="shrink-0 text-sm font-bold">{r.dij}</span>}
+      <div className="flex shrink-0 flex-col items-end gap-1">
+        <span className={`inline-block rounded-md px-2 py-0.5 text-xs font-semibold ${ALLAPOT_CLASS[allapot]}`}>{allapot}</span>
+        {r.dij && <span className="text-sm font-bold">{r.dij}</span>}
+      </div>
     </div>
   );
 }
 
-function MegalloSorok({ b, s }: { b: MegalloBejegyzes; s: SorAdat }) {
+function MegalloSorok({ b, s, utolso }: { b: MegalloBejegyzes; s: SorAdat; utolso: boolean }) {
   const TD = "px-2 py-2 align-top text-sm";
   const vanReszlet = s.rakodas !== "—" || s.sofor.length > 0 || s.gondok.length > 0;
   return (
@@ -127,7 +149,7 @@ function MegalloSorok({ b, s }: { b: MegalloBejegyzes; s: SorAdat }) {
         <td className={TD}>{s.tavozas}</td>
       </tr>
       <tr>
-        <td colSpan={3} className={`border-b border-[var(--at-border)] px-2 ${vanReszlet ? "pb-2.5" : "pb-0"}`}>
+        <td colSpan={3} className={`${utolso ? "" : "border-b border-[var(--at-border)]"} px-2 ${vanReszlet ? "pb-2.5" : "pb-0"}`}>
           {vanReszlet && (
             <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
               <div className="flex flex-col gap-0.5">
@@ -169,28 +191,38 @@ function KocsiLap({ jarmu, eredmeny, csoport, most }: { jarmu: (typeof SAJAT_JAR
         <span className="text-sm text-[var(--at-muted)]">{jarmu.label}</span>
       </div>
       <HolVanMost eredmeny={eredmeny} most={most} jarmuNincsGps={jarmu.ecofleetObjectId === null} />
-      <div className="rounded-xl border border-[var(--at-border)] bg-[var(--at-card)] px-1 py-1">
-        {fuvarok.length === 0 ? (
-          <p className="px-2 py-2 text-sm text-[var(--at-muted)]">Mára nincs fuvar ezen a kocsin.</p>
-        ) : (
-          <table className="w-full border-collapse">
-            <thead>
-              <tr>
-                {["Megálló", "Érkezés", "Távozás"].map((c) => (
-                  <th key={c} className={`border-b-2 border-[var(--at-border)] px-2 py-1.5 text-left ${CIMKE}`}>
-                    {c}
-                  </th>
+      {fuvarok.length === 0 ? (
+        <div className="rounded-xl border border-[var(--at-border)] bg-[var(--at-card)] px-3 py-2">
+          <p className="text-sm text-[var(--at-muted)]">Mára nincs fuvar ezen a kocsin.</p>
+        </div>
+      ) : (
+        fuvarok.map((f, i) => (
+          <div key={f.fuvarId} className="rounded-xl border border-[var(--at-border)] bg-[var(--at-card)]">
+            <FuvarFejsor f={f} sorszam={i + 1} osszes={fuvarok.length} allapot={fuvarAllapot(f, kovetkezo)} />
+            <table className="w-full border-collapse">
+              <thead>
+                <tr>
+                  {["Megálló", "Érkezés", "Távozás"].map((c) => (
+                    <th key={c} className={`border-b border-[var(--at-border)] px-2 py-1.5 text-left ${CIMKE}`}>
+                      {c}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {f.megallok.map((b, j) => (
+                  <MegalloSorok
+                    key={`${b.fuvarId}-${b.megalloIndex}`}
+                    b={b}
+                    s={sorAdatok(b, f, { ...ctx, utolsoLerako: j === f.megallok.length - 1 })}
+                    utolso={j === f.megallok.length - 1}
+                  />
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {fuvarok.map((f) => (
-                <FuvarSorok key={f.fuvarId} f={f} ctx={ctx} />
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
+              </tbody>
+            </table>
+          </div>
+        ))
+      )}
       <div>
         <h3 className="mb-2 text-sm font-semibold">Következő napok</h3>
         {kovetkezok.length === 0 ? (
@@ -204,21 +236,6 @@ function KocsiLap({ jarmu, eredmeny, csoport, most }: { jarmu: (typeof SAJAT_JAR
         )}
       </div>
     </div>
-  );
-}
-
-function FuvarSorok({ f, ctx }: { f: FuvarBlokk; ctx: { maiNap: boolean; eloVan: boolean; kovetkezo: MegalloBejegyzes | null; most: number } }) {
-  return (
-    <>
-      <tr>
-        <td colSpan={3} className="px-2 pb-1 pt-3">
-          <FuvarFejsor f={f} />
-        </td>
-      </tr>
-      {f.megallok.map((b, i) => (
-        <MegalloSorok key={`${b.fuvarId}-${b.megalloIndex}`} b={b} s={sorAdatok(b, f, { ...ctx, utolsoLerako: i === f.megallok.length - 1 })} />
-      ))}
-    </>
   );
 }
 

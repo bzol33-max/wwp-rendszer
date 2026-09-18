@@ -128,6 +128,7 @@ export async function epitsErintesMegallokat(
       pontossag: cimPontossaga(m.szoveg),
       lat: koordinatak[i]?.lat ?? null,
       lon: koordinatak[i]?.lon ?? null,
+      geoCimke: koordinatak[i]?.label ?? null,
       idopont: ablakKezdet,
       elhagyva: false,
       eppenItt: false,

@@ -46,14 +46,40 @@ export type AllasKategoria = "rovid" | "rakodas" | "piheno";
 const CIM_TAVOLSAG_KM = 2;
 
 /**
- * Becslés arra, hogy egy állás inkább rövid megállás, rakodás/ügyintézés,
- * vagy (napi/heti) pihenő volt-e. Elsősorban helyalapú: ha az állás
- * CIM_TAVOLSAG_KM-en belül van a nap tervezett fuvarjainak geokódolt
- * fel-/lerakó címéhez, biztosan rakodás/ügyintézés, függetlenül attól, meddig
- * tartott. Enélkül tisztán időtartam-alapú heurisztika. Tájékoztató jellegű.
+ * Ha a megbízáson CSAK a település neve szerepel ("Nyírjákó", "Ebes"),
+ * a geokódolt pont a falu/város közepe, a tényleges rakodóhely (major,
+ * ipartelep, raktár) viszont jellemzően a település szélén van — élesben
+ * (2026-09-18) Micó Nyírjákón felrakott, Ebesen az ipartelepen állt két
+ * órát, és a 2 km-es kör egyiket sem érte el, a fuvar "nincs érintés"
+ * maradt. Ilyen címnél a település kiterjedésének megfelelő, tágabb kört
+ * nézünk; a felismerés ettől "bizonytalan" jelölést kap (lásd
+ * TervezettMegallo.bizonytalanFelismeres), a felület kérdőjellel mutatja.
  */
-function allasKategoria(durationSec: number, lat: number, lon: number, tervezettCimek: { lat: number; lon: number }[]): AllasKategoria {
-  if (tervezettCimek.some((c) => haversineKm(lat, lon, c.lat, c.lon) < CIM_TAVOLSAG_KM)) return "rakodas";
+const CIM_TAVOLSAG_CSAK_VAROS_KM = 4;
+
+/** Egy tervezett cím felismerési köre (km) a cím pontossága szerint. */
+export function cimSugarKm(pontossag: CimPontossag): number {
+  return pontossag === "csak_varos" ? CIM_TAVOLSAG_CSAK_VAROS_KM : CIM_TAVOLSAG_KM;
+}
+
+/** Egy tervezett fel-/lerakó cím koordinátája és felismerési köre (km, alapértelmezés CIM_TAVOLSAG_KM). */
+export type TervezettCim = { lat: number; lon: number; sugarKm?: number };
+
+/** Igaz, ha a pont valamelyik tervezett cím felismerési körén belül van. */
+export function tervezettCimKozeleben(lat: number, lon: number, tervezettCimek: TervezettCim[]): boolean {
+  return tervezettCimek.some((c) => haversineKm(lat, lon, c.lat, c.lon) < (c.sugarKm ?? CIM_TAVOLSAG_KM));
+}
+
+/**
+ * Becslés arra, hogy egy állás inkább rövid megállás, rakodás/ügyintézés,
+ * vagy (napi/heti) pihenő volt-e. Elsősorban helyalapú: ha az állás a nap
+ * tervezett fuvarjainak valamelyik geokódolt fel-/lerakó címének
+ * felismerési körén belül van, biztosan rakodás/ügyintézés, függetlenül
+ * attól, meddig tartott. Enélkül tisztán időtartam-alapú heurisztika.
+ * Tájékoztató jellegű.
+ */
+function allasKategoria(durationSec: number, lat: number, lon: number, tervezettCimek: TervezettCim[]): AllasKategoria {
+  if (tervezettCimKozeleben(lat, lon, tervezettCimek)) return "rakodas";
   if (durationSec >= 6 * 3600) return "piheno";
   if (durationSec >= 15 * 60) return "rakodas";
   return "rovid";
@@ -104,7 +130,7 @@ export type IdovonalSzakasz =
  * koordinátái (lásd allasKategoria) — csak a helyalapú állás-kategorizáláshoz
  * kell, a szakaszok felépítését nem befolyásolja.
  */
-export function epitsIdovonal(trips: EcofleetTrip[], tervezettCimek: { lat: number; lon: number }[] = []): IdovonalSzakasz[] {
+export function epitsIdovonal(trips: EcofleetTrip[], tervezettCimek: TervezettCim[] = []): IdovonalSzakasz[] {
   const rendezett = [...trips]
     .filter((t) => parseEcofleetTimestamp(t.startTimestamp) && parseEcofleetTimestamp(t.endTimestamp))
     .sort((a, b) => parseEcofleetTimestamp(a.startTimestamp)!.getTime() - parseEcofleetTimestamp(b.startTimestamp)!.getTime());
@@ -275,6 +301,8 @@ export type TervezettMegallo = {
   elhagyva: boolean;
   /** Igaz, ha a jármű a GPS szerint MOST is itt áll (megérkezett, de még nem indult tovább) — lásd jelolMegallokElhagyottkent. */
   eppenItt: boolean;
+  /** A geokódoló által visszaadott cím-alak (a naplóhoz: látszik, hova tette a rendszer a címet), ha ismert. */
+  geoCimke?: string | null;
   /** Ha a jármű járt itt, a tényleges (GPS szerinti) MEGÉRKEZÉS ideje — ide kerül a pont az idővonalon. */
   tenylegesIdo: Date | null;
   /** Ha a jármű már tovább is ment, a tényleges (GPS szerinti) TOVÁBBINDULÁS ideje. Amíg itt áll, null. */
@@ -333,7 +361,7 @@ export function kiegesziteloAllapottal(
   szakaszok: IdovonalSzakasz[],
   elo: EloPozicio | null,
   most: Date,
-  tervezettCimek: { lat: number; lon: number }[] = []
+  tervezettCimek: TervezettCim[] = []
 ): IdovonalSzakasz[] {
   if (!elo || szakaszok.length === 0) return szakaszok;
 
@@ -463,7 +491,7 @@ const TAV_SAV_KM = 0.5;
  * érintette már, és melyeket hagyta el. Három lépés:
  *
  * 1. ÉRINTÉS — a valós GPS-idővonal ÁLLÁS-szakaszai közül keressük a
- *    legutolsót, ami CIM_TAVOLSAG_KM-en belül van a ponthoz, és elég sokáig
+ *    legutolsót, ami a cím felismerési körén (cimSugarKm) belül van, és elég sokáig
  *    tartott (vagy a helye alapján eleve rakodásnak minősült). Kifejezetten
  *    csak állásokat nézünk: aki csak elhajtott a cím mellett, az nem volt ott.
  *
@@ -479,7 +507,7 @@ const TAV_SAV_KM = 0.5;
  */
 /**
  * Egy tervezett megálló egy LÁTOGATÁSA: egy vagy több, egymást követő
- * állás-szakasz a cím CIM_TAVOLSAG_KM-es körzetében, amik közt a jármű nem
+ * állás-szakasz a cím felismerési körében (cimSugarKm), amik közt a jármű nem
  * távolodott TOVABBHALADAS_TAVOLSAG_KM-nél messzebb. Egy nagy telephelyen
  * (élesben a debreceni BMW-gyár) a kamion a portától a rámpáig, majd a
  * parkolóba másfél-két km-t is gurul, amiből az Ecofleet KÜLÖN trip-eket és
@@ -505,9 +533,10 @@ function latogatasok(
 ): Latogatas[] {
   const eredmeny: Latogatas[] = [];
   let aktualis: Latogatas | null = null;
+  const sugar = cimSugarKm(m.pontossag);
   allasok.forEach((a, ai) => {
     const tav = haversineKm(m.lat as number, m.lon as number, a.lat, a.lon);
-    if (tav >= CIM_TAVOLSAG_KM) return;
+    if (tav >= sugar) return;
     if (aktualis) {
       const elozoVeg = aktualis.veg.getTime();
       const elment = pontok.some(
