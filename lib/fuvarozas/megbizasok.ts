@@ -199,6 +199,8 @@ export async function getMaiSajatFuvarok(nap?: string, csuszokIs = false): Promi
        to_char(datum, 'YYYY-MM-DD') as datum,
        to_char(lerakas_datum, 'YYYY-MM-DD') as lerakas_datum,
        jarmu, sofor, pozicioszam,
+       aru, mennyiseg, suly, fuvardij, fuvardij_penznem,
+       (select count(*) from fuvar_dokumentumok d where d.fuvar_id = fuvar_megbizasok.id and d.tipus = 'fuvarlevel')::int as fuvarlevel_foto_db,
        to_char(felrakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as felrakas_ablak_tol,
        to_char(lerakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as lerakas_ablak_tol,
        teljesitve,
@@ -235,6 +237,8 @@ export async function getMaiValodiSajatFuvarok(nap?: string, csuszokIs = false):
        to_char(datum, 'YYYY-MM-DD') as datum,
        to_char(lerakas_datum, 'YYYY-MM-DD') as lerakas_datum,
        jarmu, sofor, pozicioszam,
+       aru, mennyiseg, suly, fuvardij, fuvardij_penznem,
+       (select count(*) from fuvar_dokumentumok d where d.fuvar_id = fuvar_megbizasok.id and d.tipus = 'fuvarlevel')::int as fuvarlevel_foto_db,
        to_char(felrakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as felrakas_ablak_tol,
        to_char(lerakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as lerakas_ablak_tol,
        teljesitve,
@@ -270,6 +274,8 @@ export async function getFuvarokIdoszakban(kezdetNapISO: string, vegNapISO: stri
        to_char(datum, 'YYYY-MM-DD') as datum,
        to_char(lerakas_datum, 'YYYY-MM-DD') as lerakas_datum,
        jarmu, sofor, pozicioszam,
+       aru, mennyiseg, suly, fuvardij, fuvardij_penznem,
+       (select count(*) from fuvar_dokumentumok d where d.fuvar_id = fuvar_megbizasok.id and d.tipus = 'fuvarlevel')::int as fuvarlevel_foto_db,
        to_char(felrakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as felrakas_ablak_tol,
        to_char(lerakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as lerakas_ablak_tol,
        teljesitve
@@ -535,16 +541,21 @@ export async function getMegalloAllapotok(fuvarIds: string[]): Promise<
     megallo_index: number;
     kesz: boolean;
     kesz_by: string | null;
+    /** Mikor lett kézzel készre jelölve (sofőr mobil, GPS lap pipa). */
+    kesz_at: Date | null;
+    /** A sofőr "Megérkeztem" koppintásának ideje. */
+    kezi_erkezes: Date | null;
     varakozas_kezdete: Date | null;
     varakozas_vege: Date | null;
   }[]
 > {
   if (fuvarIds.length === 0) return [];
-  // Nem csak a kész sorok: a várakozás-jelölés kész megálló nélkül is létezik.
+  // Nem csak a kész sorok: a várakozás-jelölés és a "Megérkeztem" kész
+  // megálló nélkül is létezik — a GPS lap táblázata mindkettőt mutatja.
   return query(
-    `select fuvar_id::text as fuvar_id, megallo_index, kesz, kesz_by, varakozas_kezdete, varakozas_vege
+    `select fuvar_id::text as fuvar_id, megallo_index, kesz, kesz_by, kesz_at, kezi_erkezes, varakozas_kezdete, varakozas_vege
      from fuvar_megallo_allapot
-     where fuvar_id = any($1::bigint[]) and (kesz or varakozas_kezdete is not null)`,
+     where fuvar_id = any($1::bigint[]) and (kesz or varakozas_kezdete is not null or kezi_erkezes is not null)`,
     [fuvarIds]
   );
 }

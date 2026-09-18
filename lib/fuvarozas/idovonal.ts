@@ -15,7 +15,7 @@
 
 import type { EcofleetTrip } from "./ecofleet";
 import { parseEcofleetTimestamp } from "./ecofleet";
-import type { FuvarTipus } from "./fuvar-constants";
+import type { FuvardijPenznem, FuvarTipus } from "./fuvar-constants";
 import type { CimPontossag } from "./varos";
 
 /** Két koordináta közti távolság km-ben (haversine). */
@@ -210,6 +210,14 @@ export type TervezettFuvarSzakasz = {
   fuvarTipus: FuvarTipus;
   megrendelo: string | null;
   pozicioszam: string | null;
+  /** Áru, mennyiség, súly, díj — a GPS lap táblázatának Fuvar oszlopához (a megbízásról, lehet üres). */
+  aru: string | null;
+  mennyiseg: string | null;
+  suly: string | null;
+  fuvardij: number | null;
+  fuvardijPenznem: FuvardijPenznem;
+  /** A sofőr által feltöltött fuvarlevél-fotók száma. */
+  fuvarlevelFotoDb: number;
   honnan: string | null;
   hova: string;
   /**
@@ -293,6 +301,10 @@ export type TervezettMegallo = {
   keszForras: "gps" | "kezi" | null;
   /** Kézi jelölésnél a jelölő neve (fuvar_megallo_allapot.kesz_by), ha ismert. */
   keszBy: string | null;
+  /** Kézi készre jelölés ideje (fuvar_megallo_allapot.kesz_at), ha volt. */
+  keszAt?: Date | null;
+  /** A sofőr "Megérkeztem" koppintásának ideje (fuvar_megallo_allapot.kezi_erkezes), ha volt. */
+  keziErkezes?: Date | null;
 };
 
 export type EloPozicio = {
@@ -615,13 +627,22 @@ export function jelolMegallokat(
 export function ratesziKeziJeloleseket(
   megallok: TervezettMegallo[],
   fuvarTeljesitve: boolean,
-  keziAllapotok: Map<number, { kesz: boolean; keszBy: string | null; varakozasKezdete?: Date | null; varakozasVege?: Date | null }>
+  keziAllapotok: Map<
+    number,
+    { kesz: boolean; keszBy: string | null; keszAt?: Date | null; keziErkezes?: Date | null; varakozasKezdete?: Date | null; varakozasVege?: Date | null }
+  >
 ): TervezettMegallo[] {
   return megallok.map((m) => {
     const kezi = keziAllapotok.get(m.index);
-    // A várakozás-jelölés a kész állapottól független: akkor is látszik, ha a megálló még nincs kész.
+    // A várakozás-jelölés és a "Megérkeztem" a kész állapottól független: akkor is látszik, ha a megálló még nincs kész.
     const varakozassal = kezi
-      ? { ...m, varakozasKezdete: kezi.varakozasKezdete ?? null, varakozasVege: kezi.varakozasVege ?? null }
+      ? {
+          ...m,
+          varakozasKezdete: kezi.varakozasKezdete ?? null,
+          varakozasVege: kezi.varakozasVege ?? null,
+          keszAt: kezi.keszAt ?? null,
+          keziErkezes: kezi.keziErkezes ?? null,
+        }
       : m;
     const keziKesz = fuvarTeljesitve || !!kezi?.kesz;
     if (!keziKesz || m.elhagyva) return varakozassal;
