@@ -14,6 +14,7 @@ import {
 } from "./utdijkalkulacio";
 import { fetchGazolajAr, GazolajArError } from "./uzemanyagar";
 import {
+  cimSugarKm,
   epitsIdovonal,
   haversineKm,
   jelolMegallokat,
@@ -21,8 +22,10 @@ import {
   napiTavKm,
   parseIdopontSzoveg,
   ratesziKeziJeloleseket,
+  tervezettCimKozeleben,
   type EloPozicio,
   type IdovonalSzakasz,
+  type TervezettCim,
   type TervezettFuvarSzakasz,
   type TervezettMegallo,
 } from "./idovonal";
@@ -705,6 +708,7 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus, kali
     pontossag: cimPontossaga(m.szoveg),
     lat: megallokKoordinatak[i]?.lat ?? null,
     lon: megallokKoordinatak[i]?.lon ?? null,
+    geoCimke: megallokKoordinatak[i]?.label ?? null,
     // Kezdeti, statikus becslés — ha van élő pozíció, actions.ts a mai
     // napra láncba fűzve (lásd chainEloEta) ezt felülírja.
     idopont: m.tipus === "felrako" ? kezdet : veg,
@@ -1134,10 +1138,10 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
         // GPS-idővonal állás-szakaszainak helyalapú kategorizálásához
         // (allasKategoria): ha egy állás egy ilyen cím közelében van,
         // biztosan rakodás/ügyintézés, függetlenül az időtartamtól.
-        const tervezettCimek = tervezettFuvarok.flatMap((f) =>
+        const tervezettCimek: TervezettCim[] = tervezettFuvarok.flatMap((f) =>
           f.megallok
             .filter((m) => m.lat != null && m.lon != null)
-            .map((m) => ({ lat: m.lat as number, lon: m.lon as number }))
+            .map((m) => ({ lat: m.lat as number, lon: m.lon as number, sugarKm: cimSugarKm(m.pontossag) }))
         );
         let szakaszok = epitsIdovonal(trips, tervezettCimek);
 
@@ -1204,7 +1208,7 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
             (sz) =>
               sz.idotartamSec >= NEM_TERVEZETT_ALLAS_PERC * 60 &&
               sz.kategoria !== "piheno" &&
-              !tervezettCimek.some((c) => haversineKm(sz.lat, sz.lon, c.lat, c.lon) < 2)
+              !tervezettCimKozeleben(sz.lat, sz.lon, tervezettCimek)
           )
           .map((sz) => ({ kezdet: sz.kezdet, veg: sz.veg, cim: sz.cim, percek: Math.round(sz.idotartamSec / 60) }));
 

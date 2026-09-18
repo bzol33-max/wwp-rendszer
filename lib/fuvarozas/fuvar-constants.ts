@@ -148,6 +148,8 @@ export type MaiFuvarSor = {
  */
 export type FuvarErintesSor = {
   id: string;
+  /** Melyik fülről való (a DB-érték: 'sajat' = Bér fuvarok, 'ber' = Saját fuvarok fül). */
+  tipus: FuvarTipus;
   jarmu: string;
   felrako: string | null;
   lerako: string;

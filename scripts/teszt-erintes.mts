@@ -200,6 +200,25 @@ function vezetes(honnan: { lat: number; lon: number }, hova: { lat: number; lon:
   eq("rövid állás a kapunál (200 m): érintés", jelolMegallokat([f()], kapu)[0][1].elhagyva, true);
 }
 
+// 3b) Csak városnév szintű cím ("Nyírjákó"): a geokódolt pont a falu közepe,
+//     a rakodó 3 km-re a szélén — tágabb (4 km) körrel érintés, bizonytalan
+//     jelöléssel; pontos címnél ugyanez a 3 km már nem érintés.
+{
+  const SZELEN_3_KM = { lat: DEBRECEN.lat + 0.027, lon: DEBRECEN.lon };
+  const rakodas: IdovonalSzakasz[] = [
+    { tipus: "indulas", idopont: t(6, 0, 16), cim: null, lat: PAPA.lat, lon: PAPA.lon },
+    vezetes(PAPA, SZELEN_3_KM, t(6, 0, 16), t(10, 0, 16)),
+    allas(SZELEN_3_KM, t(10, 0, 16), 45),
+    vezetes(SZELEN_3_KM, PAPA, t(10, 45, 16), t(14, 0, 16)),
+  ];
+  const csakVaros = [megallo(0, "felrako", PAPA, t(0, 0, 16)), { ...megallo(1, "lerako", DEBRECEN, t(0, 0, 16)), pontossag: "csak_varos" as const }];
+  const [j] = jelolMegallokat([csakVaros], rakodas);
+  eq("csak városnév, rakodás 3 km-re a központtól: érintés", j[1].elhagyva, true);
+  eq("csak városnév: a felismerés bizonytalan jelölésű", j[1].bizonytalanFelismeres, true);
+  const pontos = [megallo(0, "felrako", PAPA, t(0, 0, 16)), megallo(1, "lerako", DEBRECEN, t(0, 0, 16))];
+  eq("pontos cím, állás 3 km-re: nem érintés", jelolMegallokat([pontos], rakodas)[0][1].elhagyva, false);
+}
+
 // 4) Kézi jelölés: a sofőr megerősítése készre teszi a megállót és felülírja az "éppen itt"-et; a fuvar Teljesítve mindent készre tesz.
 {
   const f = [megallo(0, "felrako", PAPA, t(0, 0, 16)), megallo(1, "lerako", DEBRECEN, t(0, 0, 16))];

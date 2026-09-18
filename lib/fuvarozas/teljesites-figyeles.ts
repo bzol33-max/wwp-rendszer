@@ -17,6 +17,11 @@
 //    egyben geokódolta, több-lerakós fuvarnál rossz címmel), így ugyanarra a
 //    fuvarra ellentmondó állapotot mutattak.
 //
+// A Bér fuvarok ÉS a Saját fuvarok fül tételei is részt vesznek (mindkét
+// tipus, lásd getSajatFuvarokErinteshez) — a Saját fuvar a GPS szerinti kész
+// állapottal Teljesítve lesz, és (postázási munkafolyamat híján) az Archívba
+// kerül, ahogy a kézi "Kész" gomb is teszi.
+//
 // A MÁR LEZÁRT fuvarok is részt vesznek a párosításban (getSajatFuvarokErinteshez):
 // ők "foglalják" a saját valós megállásukat, különben ugyanaz az egy érkezés
 // a következő körben egy másik, azonos lerakójú fuvart is lezárna (élesben:
@@ -25,11 +30,11 @@
 import { getFleetLastPositions, getVehicleTrips, parseEcofleetTimestamp, EcofleetError, type EcofleetPosition } from "./ecofleet";
 import { SAJAT_JARMUVEK, resolveJarmu } from "./vehicles";
 import { getSajatFuvarokErinteshez, setFuvarTeljesitve } from "./megbizasok";
-import { epitsIdovonal, fuvarKeszGpsSzerint, jelolMegallokat, kiegesziteloAllapottal } from "./idovonal";
+import { cimSugarKm, epitsIdovonal, fuvarKeszGpsSzerint, haversineKm, jelolMegallokat, kiegesziteloAllapottal } from "./idovonal";
 import { epitsErintesMegallokat, mozogE } from "./erintes-felismeres";
 import { rogzitGpsErinteseket } from "./megallo-naplo";
 import { budapestFalioraToInstant, budapestNapISO, formatBudapestFaliora } from "./idozona";
-import type { TervezettMegallo } from "./idovonal";
+import type { IdovonalSzakasz, TervezettCim, TervezettMegallo } from "./idovonal";
 
 /** Ennyi nappal visszamenőleg vesszük figyelembe a lerakandó fuvarokat és a trip-előzményt. */
 const VISSZATEKINTES_NAP = 3;
@@ -40,16 +45,43 @@ export type TeljesitesFigyelesEredmeny = {
   hibak: string[];
 };
 
-/** Egy megálló állapota egy sorban a naplóhoz: szerep, város, geokódolás, érkezés/távozás vagy "nincs érintés". */
-function megalloNaplo(m: TervezettMegallo): string {
+const ido = (d: Date | null) => (d ? formatBudapestFaliora(d).slice(5, 16) : "-");
+
+/**
+ * Egy nem érintett megállóhoz a nyomvonal LEGKÖZELEBBI állása (távolság,
+ * idő, hossz, Ecofleet-cím) — ebből a Railway-naplóban látszik, MIÉRT nincs
+ * érintés: a kocsi 3 km-re állt a geokódolt ponttól (a cím a falu közepe,
+ * a rakodó a szélén), vagy rossz helyre geokódolódott a cím, vagy tényleg
+ * nem járt arra. Enélkül csak annyi látszott, hogy "nincs érintés", és a
+ * GPS-adathoz nem lehetett hozzáférni a kivizsgáláshoz.
+ */
+function legkozelebbiAllasNaplo(m: TervezettMegallo, szakaszok: IdovonalSzakasz[]): string {
+  if (m.lat == null || m.lon == null) return "";
+  const { lat, lon } = m;
+  let legjobb: { tav: number; a: Extract<IdovonalSzakasz, { tipus: "allas" }> } | null = null;
+  for (const sz of szakaszok) {
+    if (sz.tipus !== "allas" || sz.idotartamSec < 5 * 60) continue;
+    if (m.ablakKezdet && sz.veg.getTime() < m.ablakKezdet.getTime()) continue;
+    const tav = haversineKm(lat, lon, sz.lat, sz.lon);
+    if (!legjobb || tav < legjobb.tav) legjobb = { tav, a: sz };
+  }
+  if (!legjobb) return ", az ablak óta nincs 5 percnél hosszabb állás";
+  const { tav, a } = legjobb;
+  return `, legközelebbi állás ${tav.toFixed(1)} km (${ido(a.kezdet)}–${ido(a.veg)}, ${Math.round(a.idotartamSec / 60)} perc${a.cim ? `, ${a.cim}` : ""}), kör ${cimSugarKm(m.pontossag)} km`;
+}
+
+/** Egy megálló állapota egy sorban a naplóhoz: szerep, város, geokódolás, érkezés/távozás vagy "nincs érintés" (+ a legközelebbi állás). */
+function megalloNaplo(m: TervezettMegallo, szakaszok: IdovonalSzakasz[]): string {
   const szerep = m.tipus === "felrako" ? "Fel" : "Le";
-  const geo = m.lat == null ? "geo ✗" : m.pontossag === "pontos" ? "geo ✓" : `geo ~${m.pontossag}`;
-  const ido = (d: Date | null) => (d ? formatBudapestFaliora(d).slice(5, 16) : "-");
+  const geo =
+    m.lat == null || m.lon == null
+      ? "geo ✗"
+      : `${m.pontossag === "pontos" ? "geo ✓" : `geo ~${m.pontossag}`}${m.geoCimke ? ` "${m.geoCimke}"` : ""} ${m.lat.toFixed(4)},${m.lon.toFixed(4)}`;
   const allapot = m.elhagyva
     ? `érk ${ido(m.tenylegesIdo)} táv ${ido(m.tenylegesTavozas)}`
     : m.eppenItt
       ? `érk ${ido(m.tenylegesIdo)}, itt áll`
-      : `nincs érintés (ablak ${ido(m.ablakKezdet)}-tól)`;
+      : `nincs érintés (ablak ${ido(m.ablakKezdet)}-tól${legkozelebbiAllasNaplo(m, szakaszok)})`;
   return `${szerep} ${m.cim || m.nyersCim.slice(0, 30)} [${geo}] ${allapot}`;
 }
 
@@ -94,8 +126,10 @@ export async function futtatTeljesitesFigyeles(): Promise<TeljesitesFigyelesEred
 
     try {
       const fuvarok = await Promise.all(sajat.map(async (sor) => ({ sor, megallok: await epitsErintesMegallokat(sor) })));
-      const tervezettCimek = fuvarok.flatMap((f) =>
-        f.megallok.filter((m) => m.lat != null && m.lon != null).map((m) => ({ lat: m.lat as number, lon: m.lon as number }))
+      const tervezettCimek: TervezettCim[] = fuvarok.flatMap((f) =>
+        f.megallok
+          .filter((m) => m.lat != null && m.lon != null)
+          .map((m) => ({ lat: m.lat as number, lon: m.lon as number, sugarKm: cimSugarKm(m.pontossag) }))
       );
 
       // Trip-előzmény a legkorábbi érintett felrakás napjától (de legfeljebb
@@ -137,7 +171,9 @@ export async function futtatTeljesitesFigyeles(): Promise<TeljesitesFigyelesEred
         // Körönkénti diagnosztika a nyitott fuvarokra — a Railway-naplóból
         // látszik, melyik megálló miért (nem) számít érintettnek.
         console.log(
-          `[teljesites-figyeles] ${jarmu.sofor} #${sor.id}${kesz ? " → TELJESÍTVE" : ""}: ${jelolt[i].map(megalloNaplo).join(" | ")}`
+          `[teljesites-figyeles] ${jarmu.sofor} #${sor.id}${sor.tipus === "ber" ? " (saját)" : ""}${kesz ? " → TELJESÍTVE" : ""}: ${jelolt[i]
+            .map((m) => megalloNaplo(m, szakaszok))
+            .join(" | ")}`
         );
         if (!kesz) continue;
         await setFuvarTeljesitve(sor.id, true);
