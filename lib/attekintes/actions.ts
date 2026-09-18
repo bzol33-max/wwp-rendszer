@@ -541,9 +541,11 @@ export async function getKeszletFulAdatok(): Promise<KeszletFulAdatok> {
 
   return {
     telepek,
-    // A sehol sem lévő típusokat nem soroljuk fel — csak zajt jelentenének.
-    tipusok: Array.from(tipusMap.values()).filter((t) =>
-      Object.values(t.telepenkent).some((q) => q !== 0)
+    // A sehol sem lévő (és úton sem lévő) típusokat nem soroljuk fel — csak
+    // zajt jelentenének.
+    tipusok: Array.from(tipusMap.values()).filter(
+      (t) =>
+        Object.values(t.telepenkent).some((q) => q !== 0) || utonRows.some((u) => u.type === t.tipus)
     ),
     uton: utonRows.map((r) => ({
       id: r.id,
