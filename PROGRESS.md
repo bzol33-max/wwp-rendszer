@@ -475,3 +475,12 @@
 - Megmaradt: a lerakó sor kézi „kész” pipája, a fogyasztás doboz és a
   következő napok doboz (a táblázat alatt), a „Nincs kocsi hozzárendelve”
   lista, a napok közti lapozás (csak visszafelé).
+- Kiegészítés: telefonon a diszpécser nem a /fuvarozas lapot, hanem az
+  Áttekintést (/attekintes, saját színséma) látja — ezért a Fuvar fül is a
+  táblázatos napot kapta (M4): összkép, kocsi-fülek balra-jobbra
+  húzással, kocsinként „Hol van most” doboz, háromoszlopos táblázat, alatta
+  a következő napok. A sor-logika közös modulba került
+  (`lib/fuvarozas/gps-sorok.ts`: `sorAdatok`, `osszkep`, `kovetkezoSzoveg`,
+  formázók), a /fuvarozas GPS fül és az Áttekintés ugyanazt számolja.
+  `FuvarFulAdatok.betoltve` a betöltés pillanata (a renderben nincs
+  `Date.now()`).

@@ -1,9 +1,13 @@
-import { getFuvarFulAdatok, getJarmuPoziciok } from "@/lib/attekintes/actions";
-import { JarmuKartya, MegbizasReszlet } from "@/components/attekintes/jarmu-kartya";
+import { getFuvarFulAdatok } from "@/lib/attekintes/actions";
+import { getIdovonalak } from "@/lib/fuvarozas/actions";
+import { budapestNapISO } from "@/lib/fuvarozas/idozona";
+import { MegbizasReszlet } from "@/components/attekintes/jarmu-kartya";
+import { FuvarTablazatMobil } from "@/components/attekintes/fuvar-tablazat-mobil";
 
 export default async function FuvarPage() {
-  const [poziciok, adatok] = await Promise.all([getJarmuPoziciok(), getFuvarFulAdatok()]);
-  const poziciokBySofor = Object.fromEntries(poziciok.map((p) => [p.jarmu.sofor, p]));
+  // Az idővonal a GPS lap gyorsítótárából jön (getIdovonalak, 1 perc a mai
+  // napra) — a getFuvarFulAdatok ugyanezt kéri, tehát nem fut kétszer.
+  const [idovonal, adatok] = await Promise.all([getIdovonalak(budapestNapISO()), getFuvarFulAdatok()]);
 
   return (
     <div className="flex flex-col gap-4 py-4">
@@ -23,11 +27,7 @@ export default async function FuvarPage() {
         </div>
       )}
 
-      <div className="flex flex-col gap-3">
-        {adatok.jarmuvek.map((cs) => (
-          <JarmuKartya key={cs.jarmu.sofor} csoport={cs} pozicio={poziciokBySofor[cs.jarmu.sofor]} />
-        ))}
-      </div>
+      <FuvarTablazatMobil jarmuvek={idovonal.jarmuvek} csoportok={adatok.jarmuvek} most={adatok.betoltve} />
     </div>
   );
 }

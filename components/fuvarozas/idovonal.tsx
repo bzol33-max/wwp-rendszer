@@ -18,8 +18,22 @@ import {
 import { setMegalloKesz } from "@/lib/fuvarozas/megbizasok";
 import { getFogyasztas, type FogyasztasEredmeny, type FogyasztasOsszeg, type JarmuFogyasztas } from "@/lib/fuvarozas/fogyasztas";
 import { SAJAT_JARMUVEK, JARMU_SZIN_DOT_CLASS, type JarmuSzin } from "@/lib/fuvarozas/vehicles";
-import type { FuvardijPenznem, FuvarTipus } from "@/lib/fuvarozas/fuvar-constants";
+import type { FuvarTipus } from "@/lib/fuvarozas/fuvar-constants";
 import { budapestNapISO } from "@/lib/fuvarozas/idozona";
+import {
+  allasokSzoveg,
+  formatEltelt,
+  formatIdo,
+  formatSzam,
+  fuvarReszletek,
+  jelRegi,
+  kovetkezoMegallo,
+  kovetkezoSzoveg,
+  osszkep,
+  sorAdatok,
+  type Allapot,
+  type SorAdat,
+} from "@/lib/fuvarozas/gps-sorok";
 
 // GPS lap — táblázatos nap. Fent a nap összképe (hét szám), alatta
 // kocsinként: a kocsi neve, a "Hol van most" sáv (hely, sebesség, utolsó
@@ -55,40 +69,7 @@ const FUVAR_TIPUS_BADGE: Record<FuvarTipus, string> = {
   ber: "bg-violet-100 text-violet-700 dark:bg-violet-900/50 dark:text-violet-300",
 };
 
-/** Ennél régebbi élő GPS-adatnál figyelmeztetünk: a pozíció nem "most", a készülék kieshetett. */
-const REGI_JEL_PERC = 30;
-
 const CIMKE = "text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
-
-function formatIdo(d: Date): string {
-  return new Date(d).toLocaleTimeString("hu-HU", { hour: "2-digit", minute: "2-digit" });
-}
-
-function formatEltelt(d: Date, most: number): string {
-  const perc = Math.round((most - new Date(d).getTime()) / 60000);
-  if (perc < 60) return `${perc} perce`;
-  const ora = Math.floor(perc / 60);
-  return `${ora} óra ${perc - ora * 60} perce`;
-}
-
-/** Perc → "38 perc" / "1 óra 10 perc". */
-function formatPerc(perc: number): string {
-  if (perc < 60) return `${perc} perc`;
-  const ora = Math.floor(perc / 60);
-  const maradek = perc - ora * 60;
-  return maradek === 0 ? `${ora} óra` : `${ora} óra ${maradek} perc`;
-}
-
-/**
- * Idő a nap jelölésével, ha a pont nem a megjelenített napra esik: "tegnap
- * 07:10", "holnap 08:00", távolabb "szept. 14., 08:00".
- */
-function formatIdoNapJelolessel(d: Date, napElteres: number): string {
-  if (napElteres === 0) return formatIdo(d);
-  if (napElteres === -1) return `tegnap ${formatIdo(d)}`;
-  if (napElteres === 1) return `holnap ${formatIdo(d)}`;
-  return `${new Date(d).toLocaleDateString("hu-HU", { month: "short", day: "numeric" })}, ${formatIdo(d)}`;
-}
 
 /** Egy "YYYY-MM-DD" naptári naphoz `delta` nappal odébbi nap — dél (UTC) horgonnyal, hogy DST-váltás körül se csúszhasson el. */
 function napEltolva(napISO: string, delta: number): string {
@@ -109,22 +90,6 @@ function formatNapRovid(napISO: string): string {
   return d.toLocaleDateString("hu-HU", { weekday: "long", month: "short", day: "numeric", timeZone: "UTC" });
 }
 
-function formatSzam(n: number, tizedes = 0): string {
-  return n.toLocaleString("hu-HU", { minimumFractionDigits: tizedes, maximumFractionDigits: tizedes });
-}
-
-function formatOsszeg(osszeg: number, penznem: FuvardijPenznem): string {
-  return penznem === "EUR" ? `${osszeg.toLocaleString("hu-HU")} €` : `${osszeg.toLocaleString("hu-HU")} Ft`;
-}
-
-// ---------------------------------------------------------------------------
-// Sor-adatok: egy megálló táblázat-sorának cellái, egy helyen számolva, hogy
-// az asztali (8 oszlop) és a telefonos (3 oszlop + részletsor) nézet
-// pontosan ugyanazt mutassa.
-// ---------------------------------------------------------------------------
-
-type Allapot = "Kész" | "Rakodik" | "Úton oda" | "Csúszik" | "Terv";
-
 const ALLAPOT_CLASS: Record<Allapot, string> = {
   Kész: "bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300",
   Rakodik: "bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300",
@@ -132,84 +97,6 @@ const ALLAPOT_CLASS: Record<Allapot, string> = {
   Csúszik: "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300",
   Terv: "bg-muted text-muted-foreground",
 };
-
-type SorAdat = {
-  allapot: Allapot;
-  /** Érkezés cella szövege és magyarázata (title). */
-  erkezes: string;
-  erkezesCim: string;
-  tavozas: string;
-  rakodas: string;
-  /** A sofőr jelzései, soronként egy elem. */
-  sofor: string[];
-  /** Gondjelzések (a fuvar utolsó lerakó sorában). */
-  gondok: GondJelzes[];
-};
-
-function sorAdatok(
-  b: MegalloBejegyzes,
-  f: FuvarBlokk,
-  ctx: { maiNap: boolean; eloVan: boolean; kovetkezo: MegalloBejegyzes | null; most: number; utolsoLerako: boolean }
-): SorAdat {
-  const gpsLatta = b.tenylegesTavozas !== null || b.eppenItt || b.keszForras === "gps";
-  const kovetkezoE = ctx.kovetkezo !== null && ctx.kovetkezo.fuvarId === b.fuvarId && ctx.kovetkezo.megalloIndex === b.megalloIndex;
-
-  let allapot: Allapot;
-  if (b.elhagyva) allapot = "Kész";
-  else if (b.eppenItt) allapot = "Rakodik";
-  else if (f.csuszo) allapot = "Csúszik";
-  else if (ctx.maiNap && ctx.eloVan && kovetkezoE) allapot = "Úton oda";
-  else allapot = "Terv";
-
-  const bizonytalanJel = b.bizonytalanFelismeres ? "? " : "";
-  let erkezes = "—";
-  let erkezesCim = "";
-  let tavozas = "—";
-  let rakodas = "—";
-
-  if ((b.elhagyva || b.eppenItt) && gpsLatta) {
-    erkezes = `${bizonytalanJel}${formatIdoNapJelolessel(b.idopont, b.napElteres)}`;
-    erkezesCim = b.bizonytalanFelismeres
-      ? "A GPS szerint a jármű a város közelében állt meg — a megbízáson csak a város szerepel, ezért nem biztos, hogy EZ a rakodás volt."
-      : "Tényleges érkezés (GPS)";
-    if (b.tenylegesTavozas) {
-      tavozas = formatIdoNapJelolessel(b.tenylegesTavozas, b.napElteres);
-      const perc = Math.round((new Date(b.tenylegesTavozas).getTime() - new Date(b.idopont).getTime()) / 60000);
-      rakodas = formatPerc(Math.max(perc, 0));
-      if (b.varakozasKezdete && b.varakozasVege) {
-        const varakozas = Math.round((new Date(b.varakozasVege).getTime() - new Date(b.varakozasKezdete).getTime()) / 60000);
-        if (varakozas > 0) rakodas += `, ebből ${varakozas} perc várakozás`;
-      }
-    } else if (b.eppenItt) {
-      const perc = Math.round((ctx.most - new Date(b.idopont).getTime()) / 60000);
-      rakodas = `${formatPerc(Math.max(perc, 0))} eddig`;
-    }
-  } else if (b.elhagyva) {
-    // Kézzel készre jelölve, a GPS nem látta: csak a sofőr ideje van, ha koppintott.
-    if (b.keziErkezes) {
-      erkezes = formatIdoNapJelolessel(b.keziErkezes, b.napElteres);
-      erkezesCim = "A sofőr „Megérkeztem” koppintása";
-    }
-  } else if (b.becslesElavult) {
-    erkezes = "nincs friss becslés";
-    erkezesCim = "A megbízás tervezett időpontja elmúlt, és nem sikerült élő becslést számolni — ellenőrizd a megbízáson a címet.";
-  } else if (ctx.maiNap && ctx.eloVan) {
-    erkezes = `várható ${formatIdoNapJelolessel(b.idopont, b.napElteres)}`;
-    erkezesCim = "Élő GPS-pozícióból becsült érkezés";
-  } else {
-    erkezes = `terv ${formatIdoNapJelolessel(b.idopont, b.napElteres)}`;
-    erkezesCim = "A megbízás tervezett időpontja (nincs élő GPS-becslés)";
-  }
-
-  const sofor: string[] = [];
-  if (b.keziErkezes) sofor.push(`Megérkeztem: ${formatIdo(b.keziErkezes)}`);
-  if (b.varakozasKezdete && !b.varakozasVege) sofor.push(`Várakozik ${formatIdo(b.varakozasKezdete)} óta`);
-  if (b.keszForras === "kezi") sofor.push(`Készre jelölte: ${b.keszBy ?? "?"}${b.keszAt ? `, ${formatIdo(b.keszAt)}` : ""}`);
-  if (ctx.utolsoLerako && f.fuvarlevelFotoDb > 0)
-    sofor.push(f.fuvarlevelFotoDb === 1 ? "Fuvarlevél fotó feltöltve" : `Fuvarlevél fotó feltöltve (${f.fuvarlevelFotoDb})`);
-
-  return { allapot, erkezes, erkezesCim, tavozas, rakodas, sofor, gondok: ctx.utolsoLerako ? f.gondok : [] };
-}
 
 function AllapotJelveny({ a }: { a: Allapot }) {
   return <span className={`inline-block whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-semibold ${ALLAPOT_CLASS[a]}`}>{a}</span>;
@@ -286,10 +173,6 @@ function KocsiCim({ jarmu, napiKm }: { jarmu: Jarmu; napiKm: number | null }) {
   );
 }
 
-function jelRegi(pos: NonNullable<JarmuIdovonalEredmeny["eloPozicio"]>, most: number): boolean {
-  return most - new Date(pos.utolsoAdat).getTime() > REGI_JEL_PERC * 60000;
-}
-
 function HolVanMostSav({
   jarmu,
   eredmeny,
@@ -305,10 +188,7 @@ function HolVanMostSav({
   kovetkezo: MegalloBejegyzes | null;
   mobil: boolean;
 }) {
-  const allasok = eredmeny?.nemTervezettAllasok ?? [];
-  const allasSzoveg = allasok.length
-    ? allasok.map((a) => `${a.cim ?? "ismeretlen hely"} ${formatIdo(a.kezdet)}–${formatIdo(a.veg)} (${a.percek} perc)`).join(" · ")
-    : null;
+  const allasSzoveg = allasokSzoveg(eredmeny?.nemTervezettAllasok ?? []);
 
   if (jarmu.ecofleetObjectId === null) {
     return (
@@ -331,11 +211,6 @@ function HolVanMostSav({
 
   const pos = eredmeny?.eloPozicio ?? null;
   const regi = pos ? jelRegi(pos, most) : false;
-  const kovetkezoSzoveg = kovetkezo
-    ? `${kovetkezo.tipus === "felrako" ? "Felrakás" : "Lerakás"} ${kovetkezo.cim}${
-        eredmeny?.eloEta && !eredmeny.eloEta.bizonytalan ? `, kb. ${formatIdo(eredmeny.eloEta.erkezes)}` : ", érkezés nem becsülhető"
-      }`
-    : "nincs több megálló ma";
 
   return (
     <div className={`grid gap-3 rounded-lg border px-3 py-2 ${mobil ? "grid-cols-2" : "grid-cols-5"} ${SZIN_SAV[jarmu.szin]}`}>
@@ -359,7 +234,7 @@ function HolVanMostSav({
         }
       />
       <Mezo cimke="Ma megtett" ertek={eredmeny?.napiKm !== null && eredmeny?.napiKm !== undefined ? `${formatSzam(eredmeny.napiKm)} km` : "—"} />
-      <Mezo cimke="Következő" ertek={kovetkezoSzoveg} szeles={mobil} />
+      <Mezo cimke="Következő" ertek={kovetkezoSzoveg(kovetkezo, eredmeny?.eloEta ?? null)} szeles={mobil} />
       {allasSzoveg && <Mezo cimke="Nem tervezett állás ma" ertek={allasSzoveg} szeles />}
     </div>
   );
@@ -378,16 +253,16 @@ type TablaCtx = {
 };
 
 function FuvarCella({ f }: { f: FuvarBlokk }) {
-  const reszletek = [f.aru, f.mennyiseg, f.suly].filter((x): x is string => !!x && x.trim() !== "").join(", ");
+  const r = fuvarReszletek(f);
   return (
     <div className="flex flex-col gap-0.5">
       <span className="flex flex-wrap items-center gap-1.5">
-        <span className="font-semibold">{f.megrendelo ?? "Megbízó ismeretlen"}</span>
+        <span className="font-semibold">{r.megrendelo}</span>
         <span className={`rounded px-1 py-0.5 text-[10px] font-medium ${FUVAR_TIPUS_BADGE[f.fuvarTipus]}`}>{FUVAR_TIPUS_CIMKE[f.fuvarTipus]}</span>
       </span>
-      <span className="text-muted-foreground">{f.pozicioszam ?? "hivatkozás nélkül"}</span>
-      {reszletek && <span className="text-muted-foreground">{reszletek}</span>}
-      {f.fuvardij !== null && <span className="font-semibold">{formatOsszeg(f.fuvardij, f.fuvardijPenznem)}</span>}
+      <span className="text-muted-foreground">{r.hivatkozas}</span>
+      {r.aru && <span className="text-muted-foreground">{r.aru}</span>}
+      {r.dij && <span className="font-semibold">{r.dij}</span>}
     </div>
   );
 }
@@ -644,11 +519,6 @@ function KovetkezoNapokDoboz({ napok }: { napok: KovetkezoNap[] }) {
 // Egy kocsi teljes szakasza (fejléc + sáv + táblázat + alsó dobozok)
 // ---------------------------------------------------------------------------
 
-/** A kocsi következő, még el nem ért megállója (a blokkok sorrendjében az első ilyen). */
-function kovetkezoMegallo(fuvarok: FuvarBlokk[]): MegalloBejegyzes | null {
-  return fuvarok.flatMap((f) => f.megallok).find((b) => !b.elhagyva && !b.eppenItt) ?? null;
-}
-
 function KocsiSzakasz({
   jarmu,
   eredmeny,
@@ -692,30 +562,11 @@ function KocsiSzakasz({
 // Nap összképe
 // ---------------------------------------------------------------------------
 
-function fuvarKesz(f: FuvarBlokk): boolean {
-  return f.megallok.length > 0 && f.megallok.every((b) => b.elhagyva);
-}
-
 function OsszkepDoboz({ adatok, maiNap, most, mobil }: { adatok: JarmuIdovonalEredmeny[]; maiNap: boolean; most: number; mobil: boolean }) {
-  const fuvarok = adatok.flatMap((a) => a.fuvarok);
-  const kesz = fuvarok.filter(fuvarKesz).length;
-  const folyamatban = adatok.reduce((n, a) => {
-    const kov = kovetkezoMegallo(a.fuvarok);
-    const aktivId = a.fuvarok.flatMap((f) => f.megallok).find((b) => b.eppenItt)?.fuvarId ?? kov?.fuvarId ?? null;
-    return n + a.fuvarok.filter((f) => !fuvarKesz(f) && (f.fuvarId === aktivId || f.megallok.some((b) => b.eppenItt))).length;
-  }, 0);
-  const csuszik = fuvarok.filter((f) => f.csuszo && !fuvarKesz(f)).length;
-  const nyitottGond = fuvarok.reduce((n, f) => n + f.gondok.filter((g) => g.nyitott).length, 0);
-  const gpsNelkul = SAJAT_JARMUVEK.filter((j) => {
-    if (j.ecofleetObjectId === null) return true;
-    if (!maiNap) return false;
-    const pos = adatok.find((a) => a.sofor === j.sofor)?.eloPozicio ?? null;
-    return !pos || jelRegi(pos, most);
-  }).map((j) => j.sofor);
-  const km = adatok.reduce((n, a) => n + (a.napiKm ?? 0), 0);
-
+  const o = osszkep(adatok, maiNap, most);
+  const { kesz, folyamatban, csuszik, nyitottGond, gpsNelkul, km } = o;
   const cellak: { cimke: string; ertek: string; szin?: string }[] = [
-    { cimke: maiNap ? "Fuvar ma" : "Fuvar", ertek: String(fuvarok.length) },
+    { cimke: maiNap ? "Fuvar ma" : "Fuvar", ertek: String(o.fuvar) },
     { cimke: "Kész", ertek: String(kesz), szin: "text-green-700 dark:text-green-400" },
     { cimke: "Folyamatban", ertek: String(folyamatban), szin: "text-blue-700 dark:text-blue-400" },
     { cimke: "Csúszik", ertek: String(csuszik), szin: csuszik ? "text-amber-700 dark:text-amber-400" : undefined },
