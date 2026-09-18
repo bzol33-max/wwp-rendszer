@@ -366,3 +366,19 @@
   bájtokat is visszaadja. Minta: `scripts/teszt-minta/speditrans-megbizas.json`.
 - Teendő kézzel (a már beimportált #136 sor): Fel/Le csere (Fel Nyíradony,
   Le Füzesabony) és megrendelő "DS Smith…" → "BB-Logistic Solution Kft.".
+
+## 2026-09-18 (23. kör) — Törölt Drive-megbízás újraolvasása
+
+- Hiba: a felhasználó törölte a rosszul beolvasott #136-ot (BB-Logistic
+  02215-2026), hogy a frissítés újra behozza — de a törölt sor fogja a
+  Drive-fájlt (drive_file_id / dokumentum_url), ezért a szinkron "ismertnek"
+  veszi, és a dokumentum_url egyedi indexe miatt új sor sem születhet.
+- Egyszeri javítás: `scripts/migrate.mjs`
+  `szabaditsaFelTorortBbLogisticMegbizastOnce` — a törölt, számlátlan sor
+  elengedi az iratot (az RBT poz 3003 minta szerint), a következő szinkron-kör
+  a SpediTrans-olvasóval újra felveszi.
+- Tartós megoldás: "Újraolvasás a Drive-iratból" gomb (RefreshCw) a
+  Bér/Saját/Számla-posta listák sorain, csak Drive-ból importált sornál —
+  `felszabaditFuvarDokumentumot` szerver-akció (törlés + irat elengedése +
+  napló/csatolmány hivatkozás oldása), utána azonnal `frissitsDriveBol()`.
+  A sima Törlés viselkedése változatlan (nem hoz vissza semmit).

@@ -243,6 +243,7 @@ async function main() {
   await vonjaVisszaKetAllasosKettosLezarastOnce(pool);
   await toroljeEgybemosottGpsErinteseketOnce(pool);
   await szabaditsaFelTorortRbtMegbizastOnce(pool);
+  await szabaditsaFelTorortBbLogisticMegbizastOnce(pool);
   await toroljeMasodpeldanyokatOnce(pool);
   await toroljeMasodpeldanyokat2Once(pool);
   await naplozFuvarHelyEllenorzest(pool);
@@ -675,6 +676,39 @@ async function toroljeEgybemosottGpsErinteseketOnce(pool) {
   console.log(
     `[migrate] egybemosott GPS-érintések törölve: ${rows.length} sor` +
       (rows.length ? " — " + rows.map((r) => `#${r.fuvar_id}/${r.megallo_index}`).join(", ") : ".")
+  );
+}
+
+// Egyszeri javítás (2026-09-18): a "02215-2026.pdf" (BB-Logistic, 2026.09.21.
+// Nyíradony → Füzesabony) sora (#136) a 09-17-i importban fordított
+// felrakó/lerakóval és a felrakó céget megrendelőként kapta; a felhasználó
+// törölte, hogy a frissítés újra beolvassa — de a törölt sor fogja a
+// Drive-fájlt, ezért a szinkron "ismertnek" veszi. A hivatkozás
+// felszabadítása után a következő kör a SpediTrans-olvasóval (koordinátás
+// felrakó/lerakó, partnersablon adja a megrendelőt) újra felveszi. Ugyanaz a
+// minta, mint szabaditsaFelTorortRbtMegbizastOnce; csak a törölt, számlátlan
+// sorra hat.
+async function szabaditsaFelTorortBbLogisticMegbizastOnce(pool) {
+  const JAVITAS_KOD = "bb-logistic-poz-002215-ujraimport-2026-09-18";
+  const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (mar.length > 0) return;
+
+  const { rows } = await pool.query(
+    `update fuvar_megbizasok
+     set megjegyzes = coalesce(megjegyzes || ' | ', '') ||
+           'Kézi törlés után újraimportálásra felszabadítva 2026-09-18-án, eredeti dokumentum: ' || coalesce(dokumentum_url, '-'),
+         dokumentum_url = null,
+         drive_file_id = null
+     where drive_file_id = '1IfZIiGsWmKuePbnJmE6fcA4iLOkRSlSm'
+       and statusz = 'torolt'
+       and coalesce(szamla_szam, '') = ''
+     returning id`
+  );
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1) on conflict (kod) do nothing`, [
+    JAVITAS_KOD,
+  ]);
+  console.log(
+    `[migrate] BB-Logistic poz 002215 dokumentuma újraimportálásra felszabadítva: ${rows.length} sor${rows.length ? " (#" + rows.map((r) => r.id).join(", #") + ")" : ""}.`
   );
 }
 

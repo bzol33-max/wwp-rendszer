@@ -36,6 +36,7 @@ import {
   addFuvar,
   approveFuvar,
   deleteFuvar,
+  felszabaditFuvarDokumentumot,
   getAktivFuvarokUtkozeshez,
   getArchivFuvarok,
   getElokeszitettFuvarok,
@@ -534,6 +535,45 @@ function PostazvaCella({
 }
 
 /** Egy sor a fuvar-részletek nézetben — csak akkor jelenik meg, ha van értéke. */
+/**
+ * "Újraolvasás a Drive-iratból" — csak Drive-ból importált soron. A sor
+ * törlődik és elengedi az iratot (felszabaditFuvarDokumentumot), majd
+ * azonnal lefut a Drive-szinkron, ami a jelenlegi olvasóval új sort vesz
+ * fel belőle. A sima Törlés ezt nem teszi (a törölt sor fogja az iratot).
+ */
+function UjraolvasasGomb({ row, onDone }: { row: FuvarRow; onDone: () => Promise<void> }) {
+  const [fut, setFut] = useState(false);
+  if (row.forras !== "pdf_import" || !row.dokumentum_url) return null;
+
+  async function handle() {
+    if (!confirm("A sor törlődik, és a Drive-irat a jelenlegi olvasóval újra beolvasásra kerül. Folytatod?")) return;
+    setFut(true);
+    try {
+      await felszabaditFuvarDokumentumot(row.id);
+      const eredmeny = await frissitsDriveBol();
+      await onDone();
+      if (eredmeny.ujFuvarok > 0) toast.success("Az irat újra beolvasva — az új sor az Előkészített listán.");
+      else toast.warning("Az irat felszabadítva, de a szinkron nem vett fel új sort: " + (eredmeny.figyelmeztetesek[0] ?? eredmeny.hibak[0] ?? "nézd meg a Drive-import naplót."));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Nem sikerült az újraolvasás.");
+    } finally {
+      setFut(false);
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={handle}
+      disabled={fut}
+      title="Újraolvasás a Drive-iratból (a sor törlődik, és újra beolvassuk)"
+      className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+    >
+      <RefreshCw className={`h-3.5 w-3.5 ${fut ? "animate-spin" : ""}`} />
+    </button>
+  );
+}
+
 function ReszletSor({ label, children }: { label: string; children: ReactNode }) {
   if (children == null || children === "") return null;
   return (
@@ -1463,6 +1503,7 @@ function ValodiSajatFuvarLista({ refreshKey }: { refreshKey: number }) {
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
+                      <UjraolvasasGomb row={row} onDone={load} />
                       <button
                         type="button"
                         onClick={() => handleDelete(row.id)}
@@ -1801,6 +1842,7 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
+                      <UjraolvasasGomb row={row} onDone={load} />
                       <button
                         type="button"
                         onClick={() => handleDelete(row.id)}
@@ -2240,6 +2282,7 @@ function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
                     <PostazvaCella id={row.id} postazva={row.postazva} onToggle={handlePostazva} />
                   </TableCell>
                   <TableCell className="align-top">
+                    <UjraolvasasGomb row={row} onDone={load} />
                     <button
                       type="button"
                       onClick={() => handleDelete(row.id)}
