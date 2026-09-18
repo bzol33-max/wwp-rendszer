@@ -38,6 +38,8 @@ export type MovementRow = {
   qty: number;
   target_site: string | null;
   created_by: string | null;
+  /** "mozgatas_be" sornál: átvette-e már a fogadó telep (addig nincs a készletben). */
+  accepted: boolean;
 };
 
 // Az önkiszolgáló "keszlet_sajat" jog (a dolgozói mobil nézet Készlet
@@ -133,7 +135,8 @@ async function getStock(site: string): Promise<Record<string, number>> {
   const rows = await query<{ name: string; qty: string }>(
     `select t.name,
        coalesce(sum(case
-         when m.direction in ('be','mozgatas_be') then m.qty
+         when m.direction = 'be' then m.qty
+         when m.direction = 'mozgatas_be' and m.elfogadva_at is not null then m.qty
          when m.direction in ('ki','mozgatas') then -m.qty
          else 0
        end), 0) as qty
@@ -154,7 +157,8 @@ async function getStock(site: string): Promise<Record<string, number>> {
 async function getMovements(site: string, limit = 20): Promise<MovementRow[]> {
   const rows = await query<MovementRow>(
     `select m.id::text, to_char(m.created_at at time zone 'Europe/Budapest', '${TIME_FMT}') as date, t.name as type,
-       m.direction, m.partner, m.qty, ts.name as target_site, m.created_by
+       m.direction, m.partner, m.qty, ts.name as target_site, m.created_by,
+       (m.direction <> 'mozgatas_be' or m.elfogadva_at is not null) as accepted
      from keszlet_movements m
      join pallet_types t on t.id = m.type_id
      left join sites ts on ts.id = m.target_site_id
@@ -358,21 +362,90 @@ export async function recordMovements(input: {
         ]
       );
     }
-    if (input.direction === "mozgatas") {
-      const toNyiregyhaza = input.items.filter((i) => i.targetSite === "Nyíregyháza");
-      if (toNyiregyhaza.length > 0) {
-        const itemsText = toNyiregyhaza.map((i) => `${i.qty} db ${i.type}`).join(", ");
-        await q(
-          `insert into keszlet_events (site_id, kind, details, effect, created_by, movement_group)
-           values ((select id from sites where name = 'Nyíregyháza'), 'mozgas', $1, $2, $3, $4)`,
-          [
-            `${itemsText} érkezett innen: ${input.site}`,
-            toNyiregyhaza.map((i) => `${i.type} +${i.qty}`).join(" · "),
-            createdBy,
-            movementGroup,
-          ]
-        );
-      }
+    // A cél oldali "megérkezett" esemény NEM itt keletkezik, hanem az
+    // átvételkor (acceptIncomingMovement) — a mozgatás az okézásig úton van.
+  });
+}
+
+// --- Telephelyek közti mozgatás átvétele a cél telepen ---
+
+export type IncomingRow = {
+  id: string;
+  date: string;
+  type: string;
+  qty: number;
+  from_site: string | null;
+  created_by: string | null;
+};
+
+// A cél telepen még okézásra váró ("úton lévő") tételek. Ezek a küldő
+// készletéből már lekerültek, de a fogadóéba csak az átvétel után kerülnek be.
+async function getIncoming(site: string): Promise<IncomingRow[]> {
+  return query<IncomingRow>(
+    `select m.id::text, to_char(m.created_at at time zone 'Europe/Budapest', '${TIME_FMT}') as date,
+       t.name as type, m.qty, fs.name as from_site, m.created_by
+     from keszlet_movements m
+     join pallet_types t on t.id = m.type_id
+     left join sites fs on fs.id = m.target_site_id
+     where m.site_id = (select id from sites where name = $1)
+       and m.direction = 'mozgatas_be'
+       and m.elfogadva_at is null
+     order by m.created_at`,
+    [site]
+  );
+}
+
+export async function getIncomingMovements(site: string): Promise<IncomingRow[]> {
+  const jog = await requireAnyViewPermission(["keszlet", "keszlet_sajat"]);
+  ellenorizdSajatKeszletHatokor(jog, site);
+  ellenorizdTelephely(site);
+  return getIncoming(site);
+}
+
+// Átvétel ("okézás") a fogadó telepen: ettől a pillanattól számít bele a
+// mennyiség a telep készletébe. Azt is rögzítjük, ki és mikor vette át.
+export async function acceptIncomingMovement(id: string) {
+  const jog = await requireAnyEditPermission(["keszlet", "keszlet_sajat"]);
+  const elfogadta = await rogzitoNeve();
+  ellenorizdAzonosito(id);
+  await withTransaction(async (q) => {
+    const rows = await q<{
+      site: string;
+      from_site: string | null;
+      type: string;
+      qty: number;
+      movement_group: string | null;
+    }>(
+      `select s.name as site, fs.name as from_site, t.name as type, m.qty, m.movement_group::text
+       from keszlet_movements m
+       join sites s on s.id = m.site_id
+       join pallet_types t on t.id = m.type_id
+       left join sites fs on fs.id = m.target_site_id
+       where m.id = $1 and m.direction = 'mozgatas_be' and m.elfogadva_at is null`,
+      [id]
+    );
+    if (rows.length === 0) return;
+    const sor = rows[0];
+    // A telephelyet itt a sorból vesszük, nem a kliensről — a saját készlet
+    // jogosultság csak Szakolyra és Balkányra érvényes.
+    ellenorizdSajatKeszletHatokor(jog, sor.site);
+    await q(
+      `update keszlet_movements set elfogadva_at = now(), elfogadva_by = $2 where id = $1`,
+      [id, elfogadta]
+    );
+    // Nyíregyházán az esemény-feed mutatja a beérkezést (a többi telepen a
+    // nyers mozgás-lista már tartalmazza a sort).
+    if (sor.site === "Nyíregyháza") {
+      await q(
+        `insert into keszlet_events (site_id, kind, details, effect, created_by, movement_group)
+         values ((select id from sites where name = 'Nyíregyháza'), 'mozgas', $1, $2, $3, $4)`,
+        [
+          `${sor.qty} db ${sor.type} átvéve innen: ${sor.from_site ?? "ismeretlen telephely"}`,
+          `${sor.type} +${sor.qty}`,
+          elfogadta,
+          sor.movement_group,
+        ]
+      );
     }
   });
 }
@@ -494,7 +567,8 @@ export async function getOsszkeszlet(): Promise<OsszkeszletRow[]> {
   const rows = await query<{ type: string; site: string; qty: string }>(
     `select t.name as type, s.name as site,
        coalesce(sum(case
-         when m.direction in ('be','mozgatas_be') then m.qty
+         when m.direction = 'be' then m.qty
+         when m.direction = 'mozgatas_be' and m.elfogadva_at is not null then m.qty
          when m.direction in ('ki','mozgatas') then -m.qty
          else 0
        end), 0) as qty
@@ -582,12 +656,13 @@ export async function getOsszkeszletHavibontas(monthsBack = 4): Promise<Osszkesz
 export async function getSiteSnapshot(site: string) {
   const jog = await requireAnyViewPermission(["keszlet", "keszlet_sajat"]);
   ellenorizdSajatKeszletHatokor(jog, site);
-  const [stock, movements, types] = await Promise.all([
+  const [stock, movements, types, incoming] = await Promise.all([
     getStock(site),
     getMovements(site),
     getActiveTypes(site),
+    getIncoming(site),
   ]);
-  return { stock, movements, types };
+  return { stock, movements, types, incoming };
 }
 
 // --- Nyíregyháza — Havi fül ---
@@ -1061,7 +1136,7 @@ export async function getNyiregyhazaFoSnapshot() {
   // ('leltar') mutatja — ez utóbbi kettő 2026-09-18-ig sehol nem látszott
   // Nyíregyházán, pedig változtatja a készletet. A 'csere' kimarad: annak a
   // tételenkénti története a Havi fülön van.
-  const [stock, events] = await Promise.all([
+  const [stock, events, incoming] = await Promise.all([
     getStock("Nyíregyháza"),
     query<EventRow>(
       `select id::text, to_char(created_at at time zone 'Europe/Budapest', '${TIME_FMT}') as date, kind, details, effect, created_by
@@ -1071,8 +1146,9 @@ export async function getNyiregyhazaFoSnapshot() {
        order by created_at desc
        limit 20`
     ),
+    getIncoming("Nyíregyháza"),
   ]);
-  return { stock, events };
+  return { stock, events, incoming };
 }
 
 export async function recordSzetvalogatas(input: {
@@ -1143,8 +1219,10 @@ export async function recordInventoryCount(input: {
   return withTransaction(async (q) => {
     const stockRows = await q<{ qty: string }>(
       `select coalesce(sum(case
-         when direction in ('be','mozgatas_be') then qty
-         else -qty
+         when direction = 'be' then qty
+         when direction = 'mozgatas_be' and elfogadva_at is not null then qty
+         when direction in ('ki','mozgatas') then -qty
+         else 0
        end), 0) as qty
        from keszlet_movements
        where site_id = (select id from sites where name = $1)

@@ -860,3 +860,22 @@ alter table keszlet_events add constraint keszlet_events_kind_check
 -- törölve a pénz is visszavonódjon — ld. lib/keszlet/actions.ts.
 alter table kassza_movements add column if not exists movement_group uuid;
 create index if not exists idx_kassza_movements_group on kassza_movements (movement_group);
+
+-- Készlet, 2026-09-18: telephelyek közti mozgatás átvétele. A cél telepen a
+-- mennyiség eddig azonnal, magától a készletbe került. Mostantól a "mozgatas_be"
+-- sor előbb VÁRAKOZIK: a fogadó telepen beérkezésként jelenik meg, és csak az
+-- ottani okézás (elfogadva_at) után számít bele a készletbe — ld. getStock és
+-- getOsszkeszlet. A küldő telepen a mennyiség továbbra is azonnal lekerül
+-- (ami felment a kocsira, az már nincs ott), tehát az okézásig a tétel "úton" van.
+alter table keszlet_movements add column if not exists elfogadva_at timestamptz;
+alter table keszlet_movements add column if not exists elfogadva_by text;
+-- A bevezetés ELŐTTI mozgatások át vannak véve (eddig azonnal a készletben
+-- voltak) — e nélkül a bevezetés pillanatában csökkenne a cél telepek készlete.
+-- A dátumhatár fontos: a schema.sql minden induláskor lefut, és e nélkül a
+-- frissen felvett, még okézatlan tételeket is elfogadottá tenné.
+update keszlet_movements set elfogadva_at = created_at
+  where direction = 'mozgatas_be'
+    and elfogadva_at is null
+    and created_at < timestamptz '2026-09-18 08:00:00+02';
+create index if not exists idx_keszlet_movements_fuggo
+  on keszlet_movements (site_id) where direction = 'mozgatas_be' and elfogadva_at is null;

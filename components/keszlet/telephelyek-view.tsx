@@ -15,6 +15,7 @@ import {
 import { InventoryDialog } from "@/components/keszlet/inventory-dialog";
 import { MovementForm } from "@/components/keszlet/movement-form";
 import { VegyesSplitRow } from "@/components/keszlet/vegyes-split-row";
+import { BejovoSzallitmanyok } from "@/components/keszlet/bejovo-szallitmanyok";
 import { Package, X } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -26,6 +27,7 @@ import {
   deleteMovement,
   deleteMovementEvent,
   type EventRow,
+  type IncomingRow,
   type MovementRow,
   type OsszkeszletRow,
   type OsszkeszletHaviRow,
@@ -117,6 +119,7 @@ export function TelephelyekView({ site: active }: { site: SiteKey }) {
   const [events, setEvents] = useState<EventRow[]>([]);
   const [ossz, setOssz] = useState<OsszkeszletRow[]>([]);
   const [osszHavi, setOsszHavi] = useState<OsszkeszletHaviRow[]>([]);
+  const [incoming, setIncoming] = useState<IncomingRow[]>([]);
   const [inventoryOpen, setInventoryOpen] = useState(false);
 
   const load = useCallback(async () => {
@@ -130,12 +133,14 @@ export function TelephelyekView({ site: active }: { site: SiteKey }) {
       const snap = await getNyiregyhazaFoSnapshot();
       setStock(snap.stock);
       setEvents(snap.events);
+      setIncoming(snap.incoming);
       setTypes(Object.keys(snap.stock));
       return;
     }
     const snap = await getSiteSnapshot(active);
     setStock(snap.stock);
     setMovements(snap.movements);
+    setIncoming(snap.incoming);
     setTypes(snap.types);
   }, [active]);
 
@@ -310,6 +315,8 @@ export function TelephelyekView({ site: active }: { site: SiteKey }) {
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.4fr_1fr]">
+          <BejovoSzallitmanyok rows={incoming} onAccepted={load} />
+
           <Card>
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -422,9 +429,13 @@ export function TelephelyekView({ site: active }: { site: SiteKey }) {
                           {m.direction === "mozgatas" && (
                             <Badge className="bg-warning/15 text-warning hover:bg-warning/15">Mozgatás</Badge>
                           )}
-                          {m.direction === "mozgatas_be" && (
-                            <Badge className="bg-success/15 text-success hover:bg-success/15">Bejövő mozgatás</Badge>
-                          )}
+                          {m.direction === "mozgatas_be" &&
+                            (m.accepted ? (
+                              <Badge className="bg-success/15 text-success hover:bg-success/15">Bejövő mozgatás</Badge>
+                            ) : (
+                              // Még nem vették át: a mennyiség nincs benne a készletben.
+                              <Badge className="bg-warning/15 text-warning hover:bg-warning/15">Átvételre vár</Badge>
+                            ))}
                         </TableCell>
                         <TableCell>
                           {m.direction === "mozgatas" && `→ ${m.target_site}`}

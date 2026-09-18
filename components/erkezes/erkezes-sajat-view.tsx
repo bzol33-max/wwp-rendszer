@@ -29,9 +29,10 @@ import {
 } from "@/lib/jelenlet/actions";
 import type { JelenletSession } from "@/lib/jelenlet/shared";
 import { FeladatokMobilCsempe } from "@/components/erkezes/feladatok-mobil-csempe";
-import { getSiteSnapshot } from "@/lib/keszlet/actions";
+import { getSiteSnapshot, type IncomingRow } from "@/lib/keszlet/actions";
 import { MovementForm } from "@/components/keszlet/movement-form";
 import { InventoryDialog } from "@/components/keszlet/inventory-dialog";
+import { BejovoSzallitmanyok } from "@/components/keszlet/bejovo-szallitmanyok";
 import {
   acceptAdvance,
   getEmployeeAlapadatok,
@@ -492,12 +493,14 @@ function KeszletScreen({
   const [loading, setLoading] = useState(true);
   const [types, setTypes] = useState<string[]>([]);
   const [stock, setStock] = useState<Record<string, number>>({});
+  const [incoming, setIncoming] = useState<IncomingRow[]>([]);
   const [inventoryOpen, setInventoryOpen] = useState(false);
 
   const load = useCallback(async () => {
     const snap = await getSiteSnapshot(site);
     setTypes(snap.types);
     setStock(snap.stock);
+    setIncoming(snap.incoming);
   }, [site]);
 
   useEffect(() => {
@@ -531,6 +534,8 @@ function KeszletScreen({
         <p className="text-sm text-[var(--mob-muted)]">Betöltés…</p>
       ) : (
         <EditPermissionProvider canEdit={canEdit}>
+          <BejovoSzallitmanyok rows={incoming} onAccepted={load} />
+
           <MovementForm site={site} types={types} otherSites={[]} onRecorded={load} allowTransfer={false} />
 
           <Card className="border border-[var(--mob-border)] bg-[var(--mob-card)] ring-0">
