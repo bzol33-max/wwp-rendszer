@@ -1,6 +1,7 @@
 "use server";
 
 import { query } from "@/lib/db";
+import { getEloElozmeny, rogzitEloMegfigyelest } from "./elo-elozmeny";
 import { getFleetLastPositions, getVehicleTrips, parseEcofleetTimestamp, EcofleetError, type EcofleetPosition, type EcofleetTrip } from "./ecofleet";
 import {
   calculateToll,
@@ -1166,7 +1167,9 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
               mozog: mozogE(livePos),
               idobelyeg: parsedTs,
             };
-            szakaszok = kiegesziteloAllapottal(szakaszok, elo, veg, tervezettCimek);
+            const elozmeny = getEloElozmeny(jarmu.ecofleetObjectId);
+            rogzitEloMegfigyelest(jarmu.ecofleetObjectId, { lat: elo.lat, lon: elo.lon, mozog: elo.mozog, idobelyeg: elo.idobelyeg });
+            szakaszok = kiegesziteloAllapottal(szakaszok, elo, veg, tervezettCimek, elozmeny);
             eloPozicioEredmeny = {
               cim,
               sebesseg: livePos.speed,

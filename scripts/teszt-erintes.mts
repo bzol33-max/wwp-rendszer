@@ -275,6 +275,45 @@ function vezetes(honnan: { lat: number; lon: number }, hova: { lat: number; lon:
   eq("épp csak továbbindult: nincs beszúrt állás", gyors.length, lezart.length + 1);
 }
 
+// 3f) A kocsi hazaért és ÁLL (Szakoly), az utolsó lezárt szakasz a
+//     Nyírjákóra érkező vezetés (12:26): a nyírjákói állás megmarad (a lezárt
+//     trip a bizonyíték), a szakolyi állás csak a megfigyelésekből nő.
+{
+  const BALKANY = { lat: 47.7695, lon: 21.863 };
+  const NYIRJAKO = { lat: 48.0281, lon: 22.079 };
+  const SZAKOLY = { lat: 47.7575, lon: 21.9006 };
+  const lezart: IdovonalSzakasz[] = [
+    { tipus: "indulas", idopont: t(6, 0, 18), cim: null, lat: PAPA.lat, lon: PAPA.lon },
+    vezetes(PAPA, BALKANY, t(6, 0, 18), t(10, 33, 18)),
+    allas(BALKANY, t(10, 33, 18), 63),
+    vezetes(BALKANY, NYIRJAKO, t(11, 36, 18), t(12, 26, 18)),
+  ];
+  const most = t(15, 22, 18);
+  const f = () => [{ ...megallo(0, "felrako", NYIRJAKO, t(0, 0, 18)), pontossag: "csak_varos" as const }, megallo(1, "lerako", PAPA, t(0, 0, 21))];
+  const elo = { ...SZAKOLY, cim: null, mozog: false, idobelyeg: t(15, 22, 18) };
+  // Megfigyelés nélkül: a nyírjákói állás a becsült menetidővel visszaszámolva, Szakolyban nincs állás.
+  const nelkul = kiegesziteloAllapottal(lezart, elo, most);
+  eq("hazaért, áll, előzmény nélkül: nyírjákói állás + élő vezetés", nelkul.slice(-2).map((sz) => sz.tipus), ["allas", "vezetes"]);
+  eq("hazaért, áll, előzmény nélkül: a felrakó kész", jelolMegallokat([f()], nelkul)[0][0].elhagyva, true);
+  // Előzménnyel: 14:20-kor még Nyírjákón állt, 14:45-kor félúton mozgott,
+  // 15:05 óta Szakolyban áll → nyírjákói távozás 14:20 (a szűkebb korlát),
+  // szakolyi állás 15:05-től.
+  const elozmeny = [
+    { ...NYIRJAKO, mozog: false, idobelyeg: t(14, 20, 18) },
+    { lat: 47.8462, lon: 21.8511, mozog: true, idobelyeg: t(14, 45, 18) },
+    { ...SZAKOLY, mozog: false, idobelyeg: t(15, 5, 18) },
+  ];
+  const vele = kiegesziteloAllapottal(lezart, elo, most, [], elozmeny);
+  eq("előzménnyel: nyírjákói állás, vezetés, szakolyi állás", vele.slice(-3).map((sz) => sz.tipus), ["allas", "vezetes", "allas"]);
+  const nyirjako = vele[vele.length - 3];
+  eq("előzménnyel: Nyírjákó elhagyása 14:20", nyirjako.tipus === "allas" ? nyirjako.veg.toISOString() : null, t(14, 20, 18).toISOString());
+  const szakoly = vele[vele.length - 1];
+  // Az érkezés a becsült menetidő (14:20 + kb. 43 perc ≈ 15:03) és az első szakolyi megfigyelés (15:05) közül a korábbi.
+  const szakolyKezdet = szakoly.tipus === "allas" ? szakoly.kezdet.getTime() : 0;
+  eq("előzménnyel: Szakolyban 15:00 és 15:05 közt kezdődött az állás", szakolyKezdet >= t(15, 0, 18).getTime() && szakolyKezdet <= t(15, 5, 18).getTime(), true);
+  eq("előzménnyel: a felrakó kész", jelolMegallokat([f()], vele)[0][0].elhagyva, true);
+}
+
 // 3e) Lezárt fuvar nem kaphat a lezárása utáni látogatást: a tegnapi #134
 //     (Gyöngyöshalász→Debrecen, ma 09:25-kor Teljesítve) felrakója és a mai
 //     #135 felrakója ugyanaz a cím; a mai 11:01-es érkezés a #135-é.
