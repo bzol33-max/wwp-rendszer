@@ -16,24 +16,33 @@
 //   HU-4254 Nyíradony                   <-          irsz + város
 //   Kinizsi Pál utca 17.                <-          utca
 //
-// és a határidők egy sorral feljebb, ugyanebben a sorrendben:
+// CSAKHOGY EZ A SORREND HAMIS. A pdfjs oldalkoordinátái szerint (lásd
+// pdf-elemek.ts) a "Felrakás helye:" címke és alatta a Bestpallet-blokk a
+// BAL hasábban áll (x≈25), a "Lerakás helye" és a DS Smith-blokk a JOBB
+// hasábban (x≈301), ugyanazokon a sorokon. A pdf-parse a jobb hasáb blokkját
+// írta előbbre, ezért a felrakó és a lerakó a szövegből olvasva fordítva
+// jött (a nyelvi modelltől is, egy szövegsorrendre épülő olvasótól is —
+// 2026-09-18, a valóság: Nyíradonyban rakodnak fel, Füzesabonyban le).
+// Ezért a felrakót és a lerakót KIZÁRÓLAG koordinátából olvassuk: ami a
+// "Felrakás helye:" alatt, a bal hasáb x-énél áll, az a felrakó. Koordináta
+// nélkül (docx, Docs) ezt a két mezőt nem tippeljük — marad a modellé.
+//
+// A határidők egy sorban állnak, balról jobbra (felrakás, lerakás):
 //
 //   2026.09.21. 11:00 \t2026.09.21. 14:00\t-ig \t-ig
 //
-// Itt ezt a szerkezetet olvassuk ki. Ami itt megvan, az felülírja a nyelvi
-// modell tippjét (drive-sync-core.ts); ami nincs (áru, megjegyzés,
-// postázási cím), az marad a modelltől. Ha a szerkezet nem pontosan ez —
-// nem két, egyenként háromsoros blokk —, NEM tippelünk, a mező a modellé.
+// Ami itt megvan, az felülírja a nyelvi modell tippjét (drive-sync-core.ts);
+// ami nincs (áru, megjegyzés, postázási cím), az marad a modelltől.
 //
-// A minta a scripts/teszt-minta/speditrans-megbizas.txt, a pdf-parse
-// tényleges tördelésével (tabulátorokkal) — lásd partnerek.ts fejléce.
+// Minták: scripts/teszt-minta/speditrans-megbizas.txt (a pdf-parse
+// tényleges tördelése, tabulátorokkal) és speditrans-megbizas.json (a pdfjs
+// szövegelemei koordinátával) — kitalált nevekkel, lásd partnerek.ts fejléce.
 //
 // NEM "use server" fájl — sima adatmodul, tesztből is hívható.
 
 import type { KivontFuvar } from "./ellenorzes";
+import type { SzovegElem } from "./pdf-elemek";
 
-/** Cégnév-sor: cégforma-toldalék, számjegy nélkül (a "Pallet solution kft áruját kell kérni…" megjegyzés-sor nem ilyen: nem a toldalékkal végződik). */
-const CEG_SOR = /^[^\d\t]+\b(kft|zrt|bt|nyrt|kkt|gmbh|s\.r\.o|a\.s|sp\. z o\.o)\.?$/i;
 /** "HU-3390 Füzesabony" — országkód, irányítószám, város. */
 const IRSZ_VAROS_SOR = /^([A-Z]{2})-(\d{4})\s+(\S.*)$/;
 /** A határidő-sor: két "ÉÉÉÉ.HH.NN. ÓÓ:PP" egy sorban, a "-ig" toldalékokkal. */
@@ -49,46 +58,58 @@ const POZICIOSZAM = /Poz[íi]ci[óo]sz[áa]m:[^\[\n]*\[\s*([^\]\s][^\]]*?)\s*\]/
 /** Rendszám-sor: pontosan egy rendszám a sorban (a vontató és a pótkocsi külön sorban áll). */
 const RENDSZAM_SOR = /^[A-Z]{3,4}-?\d{3}$/;
 
-type Blokk = { ceg: string; irsz: string; varos: string; utca: string };
-
-/** "Cég, IRSZ Város, utca" — ugyanaz az alak, amit a többi partnernél a nyelvi modell is ad, és amit a varos.ts városnév-kinyerése biztosan olvas. */
-function blokkCim(b: Blokk): string {
-  return `${b.ceg}, ${b.irsz} ${b.varos}, ${b.utca}`;
+/** Egy hasáb sorai (felülről lefelé) egyetlen címmé: "Cég, IRSZ Város, utca" — a "HU-" országkód-előtag nélkül, ahogy a varos.ts városnév-kinyerése biztosan olvassa. */
+function hasabCim(sorok: string[]): string {
+  return sorok.map((sor) => sor.replace(/^[A-Z]{2}-(\d{4})\s+/, "$1 ")).join(", ");
 }
 
 /**
- * A "Határidő:" sor utáni sorokból a háromsoros (cég / irsz+város / utca)
- * blokkok. Csak addig olvasunk, amíg a szerkezet tart: az első olyan sor,
- * ami nem cégnév-sor, lezárja (a megjegyzés-sorok jönnek ott).
+ * A felrakó és a lerakó a koordinátákból: a "Felrakás helye:" és a
+ * "Lerakás helye" címke közti x-határ dönti el a hasábot, a címke sora és
+ * a "Rakomány megjegyzés:" sora közti y-sáv a blokkot; a "Határidő:" sort
+ * kihagyjuk. Mindkét hasábban legalább két sor és egy irányítószámos sor
+ * kell — különben nem ez a sablon, nem tippelünk.
  */
-function felLeBlokkok(sorok: string[]): Blokk[] {
-  // A SpediTrans a régi kódlapról "õ"-vel írja az ő-t ("Határidõ", "Sofõr") —
-  // mindhárom alakot elfogadjuk.
-  const hataridoIdx = sorok.findIndex((s) => /^Határid[őõo]:\s*\tHatárid[őõo]:/.test(s));
-  if (hataridoIdx === -1) return [];
-  const blokkok: Blokk[] = [];
-  for (let i = hataridoIdx + 1; i + 2 < sorok.length; i += 3) {
-    const ceg = sorok[i].trim();
-    const irszVaros = sorok[i + 1].trim().match(IRSZ_VAROS_SOR);
-    const utca = sorok[i + 2].trim();
-    if (!CEG_SOR.test(ceg) || !irszVaros || !utca || CEG_SOR.test(utca)) break;
-    blokkok.push({ ceg, irsz: irszVaros[2], varos: irszVaros[3].trim(), utca });
-  }
-  return blokkok;
+function felLeKoordinatabol(elemek: SzovegElem[]): { felrako: string; lerako: string } | null {
+  const fejFel = elemek.find((e) => /^Felrak[áa]s helye/.test(e.str));
+  const fejLe = elemek.find((e) => /^Lerak[áa]s helye/.test(e.str) && e.oldal === fejFel?.oldal);
+  if (!fejFel || !fejLe || fejLe.x <= fejFel.x) return null;
+  const oldal = elemek.filter((e) => e.oldal === fejFel.oldal);
+  const also = oldal
+    .filter((e) => e.y < fejFel.y && /^(Rakom[áa]ny megjegyz[ée]s|Egy[ée]b):/.test(e.str))
+    .reduce<number>((max, e) => Math.max(max, e.y), -Infinity);
+  if (also === -Infinity) return null;
+  const hataridoSorok = new Set(oldal.filter((e) => e.y < fejFel.y && /^Határid[őõo]:/.test(e.str)).map((e) => e.y));
+  const blokk = oldal.filter(
+    (e) => e.y < fejFel.y && e.y > also && ![...hataridoSorok].some((hy) => Math.abs(hy - e.y) <= 3)
+  );
+  const xHatar = (fejFel.x + fejLe.x) / 2;
+  const hasab = (bal: boolean) =>
+    blokk
+      .filter((e) => (e.x < xHatar) === bal)
+      .sort((a, b) => b.y - a.y || a.x - b.x)
+      .map((e) => e.str.trim());
+  const fel = hasab(true);
+  const le = hasab(false);
+  const ervenyes = (sorok: string[]) => sorok.length >= 2 && sorok.some((sor) => IRSZ_VAROS_SOR.test(sor));
+  if (!ervenyes(fel) || !ervenyes(le)) return null;
+  return { felrako: hasabCim(fel), lerako: hasabCim(le) };
 }
 
 /**
- * A SpediTrans-irat determinisztikusan olvasható mezői. Üres objektum, ha
- * a szöveg nem ezt a szerkezetet követi — akkor minden a nyelvi modellé.
+ * A SpediTrans-irat determinisztikusan olvasható mezői. `elemek`: a pdfjs
+ * szövegelemei koordinátával (pdf-elemek.ts), PDF-nél; null, ha nincs
+ * (docx, Docs) — akkor a felrakó/lerakó a modellé marad. Üres objektum, ha
+ * a szöveg nem ezt a szerkezetet követi.
  */
-export function kivonSpediTransMezoket(nyersSzoveg: string): Partial<KivontFuvar> {
+export function kivonSpediTransMezoket(nyersSzoveg: string, elemek: SzovegElem[] | null): Partial<KivontFuvar> {
   const sorok = nyersSzoveg.split(/\r?\n/);
   const eredmeny: Partial<KivontFuvar> = {};
 
-  const blokkok = felLeBlokkok(sorok);
-  if (blokkok.length === 2) {
-    eredmeny.felrako = blokkCim(blokkok[0]);
-    eredmeny.lerako = blokkCim(blokkok[1]);
+  const felLe = elemek ? felLeKoordinatabol(elemek) : null;
+  if (felLe) {
+    eredmeny.felrako = felLe.felrako;
+    eredmeny.lerako = felLe.lerako;
   }
 
   const hataridoSor = sorok.find((s) => /-ig/.test(s) && [...s.matchAll(HATARIDO_SOR)].length === 2);

@@ -41,6 +41,7 @@ import {
   ujUtonFeldolgozottFileIdk,
 } from "@/lib/fuvarozas/duvenbeck-import";
 import { normalizaltSzoveg, torzsSzoveg } from "@/lib/fuvarozas/import/normalizalas";
+import { pdfSzovegElemek } from "@/lib/fuvarozas/import/pdf-elemek";
 import { felismerPartner } from "@/lib/fuvarozas/import/partnerek";
 import { ellenorizKivontFuvart, type KivontFuvar } from "@/lib/fuvarozas/import/ellenorzes";
 import {
@@ -192,14 +193,22 @@ export async function feltoltFuvarlevelFotot(
   return { id: res.data.id, url: res.data.webViewLink ?? `https://drive.google.com/file/d/${res.data.id}/view` };
 }
 
-/** A fájl szöveges tartalma — PDF-hez pdf-parse, DOCX-hez mammoth, Google Docs-hoz natív export. */
-async function fajlSzovege(drive: ReturnType<typeof driveClient>, file: DriveFile): Promise<string> {
+/**
+ * A fájl szöveges tartalma — PDF-hez pdf-parse, DOCX-hez mammoth, Google
+ * Docs-hoz natív export. PDF-nél a letöltött bájtok is visszajönnek, hogy a
+ * hasábos partner-sablonok koordinátás olvasója (pdf-elemek.ts) ugyanabból
+ * a letöltésből dolgozhasson.
+ */
+async function fajlSzovege(
+  drive: ReturnType<typeof driveClient>,
+  file: DriveFile
+): Promise<{ szoveg: string; pdfBuffer: Buffer | null }> {
   if (file.mimeType === "application/vnd.google-apps.document") {
     const res = await drive.files.export(
       { fileId: file.id, mimeType: "text/plain" },
       { responseType: "text" }
     );
-    return String(res.data);
+    return { szoveg: String(res.data), pdfBuffer: null };
   }
 
   const res = await drive.files.get(
@@ -213,7 +222,7 @@ async function fajlSzovege(drive: ReturnType<typeof driveClient>, file: DriveFil
     const parser = new PDFParse({ data: buffer });
     try {
       const parsed = await parser.getText();
-      return parsed.text;
+      return { szoveg: parsed.text, pdfBuffer: buffer };
     } finally {
       await parser.destroy();
     }
@@ -222,7 +231,7 @@ async function fajlSzovege(drive: ReturnType<typeof driveClient>, file: DriveFil
   // .docx
   const mammoth = await import("mammoth");
   const parsed = await mammoth.extractRawText({ buffer });
-  return parsed.value;
+  return { szoveg: parsed.value, pdfBuffer: null };
 }
 
 function driveViewUrl(fileId: string): string {
@@ -419,7 +428,7 @@ async function ujFajlokFeldolgozasa(
     if (regiUtonIsmert && !duvenbeckUjrafeldolgozando && !naploraVar) continue;
 
     try {
-      const nyersSzoveg = await fajlSzovege(drive, file);
+      const { szoveg: nyersSzoveg, pdfBuffer } = await fajlSzovege(drive, file);
       const normalizalt = normalizaltSzoveg(nyersSzoveg);
       const partner = felismerPartner(normalizalt);
       const naploAlap = {
@@ -524,8 +533,9 @@ async function ujFajlokFeldolgozasa(
       // SpediTrans kéthasábos felrakó/lerakó táblája, lásd
       // lib/fuvarozas/import/speditrans.ts) felülírják a modell tippjét —
       // csak a ténylegesen kiolvasott (nem null) értékek.
+      const elemek = partner?.kivon && pdfBuffer ? await pdfSzovegElemek(pdfBuffer).catch(() => null) : null;
       const determinisztikus = Object.fromEntries(
-        Object.entries(partner?.kivon?.(nyersSzoveg) ?? {}).filter(([, v]) => v !== null && v !== undefined)
+        Object.entries(partner?.kivon?.(nyersSzoveg, elemek) ?? {}).filter(([, v]) => v !== null && v !== undefined)
       ) as Partial<KivontFuvar>;
       const kivont: KivontFuvar = {
         ...llm,
@@ -677,7 +687,7 @@ async function hianyokPotlasa(drive: ReturnType<typeof driveClient>, hibak: stri
     try {
       const meta = await drive.files.get({ fileId, fields: "id, name, mimeType" });
       if (!meta.data.mimeType) continue;
-      const szoveg = await fajlSzovege(drive, {
+      const { szoveg } = await fajlSzovege(drive, {
         id: fileId,
         name: meta.data.name ?? sor.dokumentum_url,
         mimeType: meta.data.mimeType,

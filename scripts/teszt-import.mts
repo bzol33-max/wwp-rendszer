@@ -22,6 +22,7 @@ import { felismerPartner, partnerKodSzerint } from "@/lib/fuvarozas/import/partn
 import { ellenorizKivontFuvart, type KivontFuvar } from "@/lib/fuvarozas/import/ellenorzes";
 import { findJarmuInSzoveg } from "@/lib/fuvarozas/vehicles";
 import { kivonSpediTransMezoket } from "@/lib/fuvarozas/import/speditrans";
+import type { SzovegElem } from "@/lib/fuvarozas/import/pdf-elemek";
 
 const mintaDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "teszt-minta");
 const minta = (nev: string) => readFileSync(path.join(mintaDir, nev), "utf8");
@@ -267,9 +268,17 @@ const kocsi = (szoveg: string | null) => findJarmuInSzoveg(szoveg)?.sofor ?? nul
 const spediNyers = minta("speditrans-megbizas.txt");
 egyenlo(felismerPartner(normalizaltSzoveg(spediNyers))?.kod, "bb-logistic", "BB-Logistic felismerése a SpediTrans lábjegyzetből");
 egyenlo(felismerPartner("Cégnév ... SpediTrans for Windows v2.11.741")?.kod, "bb-logistic", "BB-Logistic felismerése a szoftver nevéből");
-const spedi = kivonSpediTransMezoket(spediNyers);
-egyenlo(spedi.felrako, "Minta Csomagolás Kft., 3390 Füzesabony, Fő utca 1", "SpediTrans: az ELSŐ blokk a felrakó");
-egyenlo(spedi.lerako, "Példa Raklap Kft., 4254 Nyíradony, Kossuth utca 17.", "SpediTrans: a MÁSODIK blokk a lerakó");
+// A pdfjs szövegelemei koordinátával: a BAL hasáb ("Felrakás helye:" alatt)
+// a felrakó — a pdf-parse szövegében a jobb hasáb blokkja áll előbb, ezért
+// a szövegsorrend fordítva adná (élesben így is történt).
+const spediElemek = JSON.parse(minta("speditrans-megbizas.json")).map((e: Omit<SzovegElem, "oldal">) => ({ oldal: 1, ...e })) as SzovegElem[];
+const spedi = kivonSpediTransMezoket(spediNyers, spediElemek);
+egyenlo(spedi.felrako, "Példa Raklap Kft., 4254 Nyíradony, Kossuth utca 17.", "SpediTrans: a BAL hasáb (Felrakás helye alatt) a felrakó");
+egyenlo(spedi.lerako, "Minta Csomagolás Kft., 3390 Füzesabony, Fő utca 1", "SpediTrans: a JOBB hasáb (Lerakás helye alatt) a lerakó");
+const csakSzoveg = kivonSpediTransMezoket(spediNyers, null);
+egyenlo(csakSzoveg.felrako, undefined, "SpediTrans: koordináta nélkül a felrakót nem tippeljük");
+egyenlo(csakSzoveg.lerako, undefined, "SpediTrans: koordináta nélkül a lerakót nem tippeljük");
+egyenlo(csakSzoveg.fuvardij, 123000, "SpediTrans: koordináta nélkül a fuvardíj a szövegből megvan");
 egyenlo(spedi.felrakasDatum, "2026-09-21", "SpediTrans: felrakás határideje");
 egyenlo(spedi.lerakasDatum, null, "SpediTrans: azonos napi lerakás -> null");
 egyenlo(spedi.pozicioszam, "001234/26", "SpediTrans: pozíciószám a szögletes zárójelből");
@@ -278,11 +287,11 @@ egyenlo(spedi.fuvardijPenznem, "Ft", "SpediTrans: HUF -> Ft");
 egyenlo(spedi.rendszamVagySofor, "AOPU-427 AOTY-474", "SpediTrans: vontató + pótkocsi rendszám");
 egyenlo(kocsi(spedi.rendszamVagySofor ?? null), "Gergő", "SpediTrans: a két rendszámból a kocsi");
 // Nem SpediTrans-szerkezet: semmit nem tippel.
-const idegen = kivonSpediTransMezoket("Felrakás helye: Budapest\nLerakás helye: Győr\nFuvardíj: 100 000 Ft");
+const idegen = kivonSpediTransMezoket("Felrakás helye: Budapest\nLerakás helye: Győr\nFuvardíj: 100 000 Ft", null);
 egyenlo(idegen.felrako, undefined, "idegen szerkezetből nincs felrakó");
 egyenlo(idegen.fuvardij, undefined, "idegen szerkezetből nincs fuvardíj");
 // Több napos: a két határidő eltérő napra esik.
-const tobbNapos = kivonSpediTransMezoket(spediNyers.replace("2026.09.21. 14:00", "2026.09.22. 08:00"));
+const tobbNapos = kivonSpediTransMezoket(spediNyers.replace("2026.09.21. 14:00", "2026.09.22. 08:00"), null);
 egyenlo(tobbNapos.lerakasDatum, "2026-09-22", "SpediTrans: eltérő napi lerakás dátuma");
 
 // ---------------------------------------------------------------------------
