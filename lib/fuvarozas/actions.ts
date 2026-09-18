@@ -42,7 +42,7 @@ import {
   type PapirraVaroFuvar,
 } from "./megbizasok";
 import type { FuvardijPenznem, FuvarTipus, MaiFuvarSor } from "./fuvar-constants";
-import { budapestFalioraToInstant, budapestHetNapja, budapestNapISO, budapestOra } from "./idozona";
+import { budapestFalioraToInstant, budapestHetNapja, budapestNapISO, budapestOra, formatBudapestFaliora } from "./idozona";
 import { SAJAT_TELEPHELYEK } from "./telephelyek";
 
 // Ha a NAV oldala nem érhető el (átmeneti hiba, oldalszerkezet-változás),
@@ -1199,6 +1199,22 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
           ? await lancoltEloBecsles(jeloltFuvarok, { lat: livePos.latitude, lon: livePos.longitude }, veg, kalibracio)
           : jeloltFuvarok;
         const fuvarok = fuvarBlokkok(lancoltFuvarok, napISO, maiNap ? veg : null, csuszoIds, gondokByFuvar);
+        // Ugyanaz a diagnosztika, mint a figyelőé, a GPS lap útján számolva —
+        // ha a kettő eltér, a Railway-naplóból látszik, melyik mit lát.
+        if (maiNap) {
+          const ido = (d: Date | null) => (d ? formatBudapestFaliora(d).slice(11, 16) : "-");
+          console.log(
+            `[idovonal] ${jarmu.sofor} (${livePos ? `${livePos.speed} km/h` : "nincs élő"}): ${fuvarok
+              .map(
+                (f) =>
+                  `#${f.fuvarId} ` +
+                  f.megallok
+                    .map((m) => `${m.tipus === "felrako" ? "Fel" : "Le"} ${m.cim} ${m.elhagyva ? `kész ${ido(m.idopont)}–${ido(m.tenylegesTavozas)}` : m.eppenItt ? `itt áll ${ido(m.idopont)} óta` : "terv"}`)
+                    .join(", ")
+              )
+              .join(" | ")}`
+          );
+        }
 
         // A nap GPS szerinti km-e és a tervezetlen állásai a táblázat feletti "Hol van most" sávhoz.
         const napiKm = Math.round(napiTavKm(szakaszok));

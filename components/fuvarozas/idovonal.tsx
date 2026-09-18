@@ -23,6 +23,7 @@ import { budapestNapISO } from "@/lib/fuvarozas/idozona";
 import {
   allValahol,
   allasokSzoveg,
+  eloMozog,
   formatEltelt,
   formatIdo,
   formatSzam,
@@ -250,6 +251,7 @@ type TablaCtx = {
   eloVan: boolean;
   kovetkezo: MegalloBejegyzes | null;
   allValahol: boolean;
+  mozog: boolean;
   most: number;
   onKeszJelolve: () => void;
 };
@@ -544,7 +546,7 @@ function KocsiSzakasz({
 }) {
   const fuvarok = eredmeny?.fuvarok ?? [];
   const kovetkezo = kovetkezoMegallo(fuvarok);
-  const ctx: TablaCtx = { maiNap, eloVan: !!eredmeny?.eloPozicio, kovetkezo, allValahol: allValahol(fuvarok), most, onKeszJelolve };
+  const ctx: TablaCtx = { maiNap, eloVan: !!eredmeny?.eloPozicio, kovetkezo, allValahol: allValahol(fuvarok), mozog: eloMozog(eredmeny), most, onKeszJelolve };
   return (
     <div className="flex flex-col gap-3 rounded-xl border bg-card p-3">
       <KocsiCim jarmu={jarmu} napiKm={eredmeny?.napiKm ?? null} />
