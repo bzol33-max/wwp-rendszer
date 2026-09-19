@@ -1,5 +1,34 @@
 # PROGRESS
 
+## 2026-09-19 — Fuvarozás 2 átállás, E2: egyszer futó SQL-migrációk (B2) + állapotgép (B3)
+
+- **Probléma:** (B2) a `db/schema.sql` minden indításkor lefut, de nem
+  idempotens lépésnek (átnevezés, constraint csere, backfill) nem volt helye —
+  csak JS-ben, kézzel írt `...Once` függvényként. (B3) az új 9 állapotú
+  megbízás-életútnak nem volt kódban egyetlen forrása és tesztje.
+- **Ok:** a migráció-futtató a séma-újraalkalmazásra épült; állapotgép eddig
+  nem létezett (a besorolás a `fuvar-hely.ts` CASE-e).
+- **Módosítás:** `scripts/migrate.mjs` → `futtasdSqlMigraciokatOnce`: a
+  `db/migrations/NNN_leiras.sql` fájlok fájlnév szerint, egyenként egy
+  tranzakcióban, a lefutás az `alkalmazott_javitasok` táblába `sql:<fájl>`
+  kóddal (ugyanaz a mechanizmus, mint a meglévő `...Once` lépések); hiba →
+  rollback + az indulás megáll. `db/migrations/README.md` a szabályokkal. A
+  mappa még üres — az E4 séma-lépései kerülnek ide. Új
+  `lib/fuvarozas/allapot.ts` (tiszta modul, még sehol nincs bekötve): a 9
+  állapot, a 16 átmenet forrással és feltétellel
+  (`ellenorizAtmenet`, `lehetsegesCelok`, `induloAllapot`) — a
+  `claude/fuvarozas-atallas-ellenorzes.md` 11.1 szerint.
+- **Teszt:** `scripts/teszt-allapotgep.ts` a `teszt` láncban — 44 eset:
+  minden engedett él, a 11.1 tiltott élei, feltétel-hiányok, rossz forrás,
+  mind a 285 táblán kívüli (állapot, állapot, forrás) hármas tiltva, három
+  teljes életút (bér, saját rövid út, „nem kér postát"). A migráció-futtató
+  helyi Postgres 16-on kipróbálva: lefut egyszer, második indításkor „nincs
+  új", hibás fájlnál rollback (adat érintetlen, jelölés nincs, kilépés 1).
+  typecheck zöld, eslint az érintett fájlokon 0 hiba.
+- **Kockázat:** a futtató hibánál megállítja az indulást — ez szándékos
+  (félbe maradt séma rosszabb); Railway-en a deploy ekkor sikertelen marad az
+  előző verzión. Az `allapot.ts` még nem hat a működésre.
+
 ## 2026-09-19 — Fuvarozás 2 átállás, E1: a két hitelesítés nélküli Drive-végpont bezárása (B5)
 
 - **Probléma:** `/api/fuvarozas/drive-import` (új fuvar létrehozása) és

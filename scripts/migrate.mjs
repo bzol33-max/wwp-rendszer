@@ -9,7 +9,7 @@
 //   betöltötte a demó "Nyitókészlet" sorokat. Az alkalmazott_javitasok-os
 //   jelölés ettől független — egyszer fut le, aztán soha többé, akkor sem,
 //   ha valaki (jogosan) kiüríti a táblát.
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import pg from "pg";
@@ -28,6 +28,7 @@ async function main() {
   const schema = readFileSync(path.join(dbDir, "schema.sql"), "utf8");
   await pool.query(schema);
   console.log("[migrate] séma alkalmazva.");
+  await futtasdSqlMigraciokatOnce(pool);
 
   await runDemoSeedOnce(pool, dbDir);
   await seedFirstUserOnce(pool);
@@ -251,6 +252,48 @@ async function main() {
   await ellenorizSoforFiokokat(pool);
 
   await pool.end();
+}
+
+// Verziózott, EGYSZER futó SQL-migrációk (2026-09-19, Fuvarozás 2 átállás,
+// B2 tétel). A db/schema.sql továbbra is minden indításkor lefut (IF NOT
+// EXISTS), de az olyan lépések, amik nem idempotensek — oszlop átnevezése,
+// constraint csere, adat-backfill, index csere — a db/migrations/ mappába
+// kerülnek: NNN_leiras.sql fájlok, fájlnév szerint rendezve, mindegyik EGY
+// tranzakcióban, és a lefutást az alkalmazott_javitasok tábla jegyzi
+// ("sql:<fájlnév>" kóddal — ugyanaz a mechanizmus, mint a ...Once
+// lépéseknél). Ha egy fájl hibát dob, a tranzakció visszagördül, a jelölés
+// nem íródik be, és az indulás MEGÁLL (a hibás félbeni séma rosszabb, mint a
+// le nem futott migráció). Kétszer indítva nem csinál semmit.
+async function futtasdSqlMigraciokatOnce(pool) {
+  const dir = path.join(dbDir, "migrations");
+  if (!existsSync(dir)) return;
+  const fajlok = readdirSync(dir)
+    .filter((f) => /^\d{3}_[a-z0-9_-]+\.sql$/.test(f))
+    .sort();
+  const { rows } = await pool.query(`select kod from alkalmazott_javitasok where kod like 'sql:%'`);
+  const kesz = new Set(rows.map((r) => r.kod));
+  let futott = 0;
+  for (const f of fajlok) {
+    const kod = `sql:${f}`;
+    if (kesz.has(kod)) continue;
+    const sql = readFileSync(path.join(dir, f), "utf8");
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query(sql);
+      await client.query(`insert into alkalmazott_javitasok (kod) values ($1)`, [kod]);
+      await client.query("commit");
+      futott++;
+      console.log(`[migrate] sql-migráció lefutott: ${f}`);
+    } catch (err) {
+      await client.query("rollback").catch(() => {});
+      console.error(`[migrate] sql-migráció HIBA (${f}): ${err instanceof Error ? err.message : err}`);
+      throw err;
+    } finally {
+      client.release();
+    }
+  }
+  if (futott === 0) console.log(`[migrate] sql-migráció: nincs új (${fajlok.length} ismert).`);
 }
 
 // Sofőr fiókok ellenőrzése (2026-09-17, minden indításkor): a dolgozói mobil
