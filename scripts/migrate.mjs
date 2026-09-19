@@ -206,6 +206,29 @@ async function main() {
   // modul csak utólag került be), a seedUserOnce pedig csak létrehozáskor ír
   // jogosultságot, meglévő felhasználónál nem nyúl hozzá.
   await grantElolegekSajatOnce(pool);
+  // Fuvarozás 2 (2026-09-19, E3): napi vezetői fiók (Ma · Fuvar · Cég ·
+  // Rendszer) — a BudahaziZoltan fiók a régi Áttekintést tartja meg; az
+  // admin vésztartalék. Lásd claude/felhasznalok-leltar-es-dontesek.md 6.
+  await seedUserOnce(pool, {
+    code: "user-vezeto-2026-09-19",
+    username: "vezeto",
+    password: process.env.SEED_VEZETO_PASSWORD,
+    name: "Vezető",
+    role: "felhasznalo",
+    permissions: {
+      info: { view: true, edit: false },
+      fuvarozas: { view: true, edit: true },
+      elszamolas: { view: true, edit: true },
+      rendszer: { view: true, edit: true },
+      szamlak: { view: true, edit: false },
+      jarmuvek: { view: true, edit: false },
+      keszlet: { view: true, edit: false },
+      dolgozok: { view: true, edit: false },
+      jelenlet: { view: true, edit: false },
+      beallitasok: { view: false, edit: false },
+    },
+  });
+  await grantElszamolasSzabinanakOnce(pool);
   // 2026-09-17: a két sofőr fiók a 09-13-i seed után törlődött (a lépés
   // rögzítve maradt, ezért a seed nem hozta újra létre). A dolgozói mobil
   // sofőr nézetéhez (lásd docs/sofor-mobil-terv.md) kell a fiók ÉS az
@@ -1284,6 +1307,22 @@ async function grantElolegekSajatOnce(pool) {
   );
   await pool.query(`insert into alkalmazott_javitasok (kod) values ($1)`, [JAVITAS_KOD]);
   console.log("[migrate] BodoganGabor és VadonGabor megkapták a saját előlegek jogot.");
+}
+
+// Fuvarozás 2 (2026-09-19, E3): Szabina hatóköre = elszámolás (díjjal,
+// GPS-részlet nélkül — átállás-ellenőrzés S16). A "posta" joga marad, amíg a
+// régi /posta nézet él; az új Elszámolás fül az "elszamolas" kulcsot nézi.
+async function grantElszamolasSzabinanakOnce(pool) {
+  const JAVITAS_KOD = "fuvarozas2-elszamolas-szabina-2026-09-19";
+  const { rows } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (rows.length > 0) return;
+  await pool.query(
+    `update users
+     set permissions = permissions || '{"elszamolas": {"view": true, "edit": true}}'::jsonb
+     where username = 'BudahaziSzabina'`
+  );
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1)`, [JAVITAS_KOD]);
+  console.log("[migrate] BudahaziSzabina megkapta az elszámolás jogot.");
 }
 
 // Egyszeri javítás (2026-09-15): a Duvenbeck-megbízások újraimportálásra

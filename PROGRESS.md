@@ -1,5 +1,34 @@
 # PROGRESS
 
+## 2026-09-19 — Fuvarozás 2 átállás, E3: hatókör-kulcsok, `vezeto` fiók, Szabina elszámolás (B8)
+
+- **Probléma:** a Fuvarozás 2 nézeteihez nem volt hatókör: Szabina „csak
+  elszámolás" (díjjal, GPS nélkül — S16) és a Rendszer-egészség csempe nem
+  volt kifejezhető; a napi vezetői fiók (`vezeto`) nem létezett. Veszély: ha
+  egy új kulcs nem opt-in, a `resolvePermission` default-true szabálya
+  minden régi felhasználónak megnyitja.
+- **Ok:** a `ModuleKey` lista a régi modulokra készült; a hatókört eddig a
+  kulcsok fejezték ki (`fuvarozas_sajat` + szerveroldali saját-kocsi szűrés,
+  `posta`), új kulcs nem volt.
+- **Módosítás:** `lib/auth/permissions.ts`: `elszamolas` és `rendszer`
+  kulcs, mindkettő az `OPT_IN_MODULES`-ban (hiányzó bejegyzés = nem látja).
+  `scripts/migrate.mjs`: `vezeto` seed (`SEED_VEZETO_PASSWORD` env;
+  fuvarozas+elszamolas+rendszer szerkeszt, számlák/járművek/készlet/dolgozók/
+  jelenlét olvas, beállítások nem, régi Áttekintés nem) és
+  `grantElszamolasSzabinanakOnce` (Szabina: `elszamolas` view+edit, a `posta`
+  marad a régi nézethez). A hatókör-szűrés szabálya az új olvasó akciókhoz
+  (E4-től): sofőr → `requireSajatVagyModulJog` + saját kocsi szűrés a
+  lekérdezésben (a mai `getSoforAktualisTura` mintája); `elszamolas` jog →
+  GPS-részlet mezők nem kerülnek a válaszba.
+- **Teszt:** `scripts/teszt-jogosultsag.ts` a `teszt` láncban (28 eset:
+  opt-in kulcsok üres/null jogokkal, admin, MODULES lista, a vezeto/Szabina/
+  sofőr jogkészletek). Seed helyi Postgresen: `vezeto` létrejön a várt
+  jogokkal, a Szabina-grant egyszer fut. typecheck zöld, lint 0 hiba az
+  érintett fájlokon.
+- **Kockázat:** a `vezeto` fiók csak akkor jön létre, ha a Railway `web`
+  szolgáltatáson be van állítva a `SEED_VEZETO_PASSWORD`; a seed egyszer fut
+  (`user-vezeto-2026-09-19` kód), a jelszó utána a Beállításokban módosítható.
+
 ## 2026-09-19 — Fuvarozás 2 átállás, E2: egyszer futó SQL-migrációk (B2) + állapotgép (B3)
 
 - **Probléma:** (B2) a `db/schema.sql` minden indításkor lefut, de nem

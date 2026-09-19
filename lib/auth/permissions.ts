@@ -19,7 +19,9 @@ export type ModuleKey =
   | "attekintes"
   | "felvasarlas_mobil"
   | "fuvarozas_sajat"
-  | "elolegek_sajat";
+  | "elolegek_sajat"
+  | "elszamolas"
+  | "rendszer";
 
 export const MODULES: { key: ModuleKey; label: string }[] = [
   { key: "info", label: "Info (kezdőlap)" },
@@ -50,6 +52,15 @@ export const MODULES: { key: ModuleKey; label: string }[] = [
     key: "elolegek_sajat",
     label: "Saját előlegek megtekintése/elfogadása (dolgozói mobil nézet, az /erkezes Profil csempéje)",
   },
+  // Fuvarozás 2 (2026-09-19, átállás-ellenőrzés B8/E3): hatókör-kulcsok.
+  // A "fuvarozas" a teljes modul (díj + GPS-részlet + minden fül); az
+  // "elszamolas" csak az Elszámolás fül (díj IGEN, GPS-részlet NEM — S16);
+  // a "rendszer" a Rendszer-egészség csempe (figyelők, keretek, hibák).
+  {
+    key: "elszamolas",
+    label: "Elszámolás (Fuvarozás 2 — számlázható/számlázva/e-mail/posta; díjjal, GPS-részlet nélkül)",
+  },
+  { key: "rendszer", label: "Rendszer-egészség (Fuvarozás 2 — figyelők, keretek, hibák)" },
 ];
 
 /** Modulok, amik utólag, opt-in jelleggel lettek bevezetve — ld. resolvePermission. */
@@ -62,6 +73,8 @@ const OPT_IN_MODULES: ModuleKey[] = [
   "felvasarlas_mobil",
   "fuvarozas_sajat",
   "elolegek_sajat",
+  "elszamolas",
+  "rendszer",
 ];
 
 export type ModulePermission = { view: boolean; edit: boolean };
