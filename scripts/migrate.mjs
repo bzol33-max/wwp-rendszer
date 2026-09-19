@@ -1064,7 +1064,7 @@ async function naplozFuvarHelyEllenorzest(pool) {
          to_char(lerakas_ablak_tol at time zone 'Europe/Budapest', 'MM-DD HH24:MI') as ablak_tol,
          to_char(lerakas_ablak_ig at time zone 'Europe/Budapest', 'MM-DD HH24:MI') as ablak_ig,
          teljesitve, to_char(teljesitve_at at time zone 'Europe/Budapest', 'MM-DD HH24:MI') as teljesitve_kor,
-         szamla_szam, jarmu, left(megrendelo, 20) as megrendelo, left(felrako, 25) as felrako, left(lerako, 25) as lerako
+         szamla_szam, jarmu, left(megrendelo, 24) as megrendelo, left(felrako, 60) as felrako, left(lerako, 60) as lerako
        from fuvar_megbizasok
        where tipus = 'sajat' and statusz <> 'torolt' and coalesce(lerakas_datum, datum) >= current_date - 4
        order by datum, id`

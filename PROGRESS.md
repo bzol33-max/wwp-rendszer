@@ -600,3 +600,9 @@
   címét, a meglévő e-mailes/üres sorokat a migráció javítja (kézi postai
   címet nem bánt). A /posta csempén látszik, melyik kocsi vitte és honnan
   hová (csak városnév, `varosNev`).
+- Kiegészítés 2: az indítási napló „friss” sorai 25 karakternél vágták a
+  felrakó/lerakó címet, ebből hiányzónak tűnt a hétfői lerakók címe, pedig
+  bent van (60 karakterig naplózva). `varosNev`: az irányítószám után
+  vessző nélkül folytatódó utca levágva („3390 Füzesabony Kerecsendi út
+  123” → „Füzesabony”); `UTCA_SZAVAK` ékezetes szót (út, útja) is felismer
+  (\b helyett \p{L} lookaround). Teszt: teszt-erintes 67.
