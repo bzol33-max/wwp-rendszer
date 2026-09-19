@@ -1750,6 +1750,21 @@ async function applyPostazasiCimUpdates(pool, dbDir) {
   }
 
   console.log(`[migrate] postázási címek visszatöltve: ${updated} sor.`);
+
+  // Duvenbeck: az importőr korábban a megbízás "számla/POD cím" mezőjét — ami
+  // valójában egy e-mail-cím — írta postázási címnek. Az eredeti papírok
+  // postai címe a partner-sablonból jön (lib/fuvarozas/import/partnerek.ts);
+  // az e-mailes vagy üres címeket itt javítjuk. Kézzel beírt postai cím
+  // (nincs benne @) érintetlen marad. Újrafuttatható.
+  const duvenbeck = await pool.query(
+    `update fuvar_megbizasok
+        set postazasi_cim = $1
+      where megrendelo ilike '%duvenbeck%'
+        and (coalesce(trim(postazasi_cim), '') = '' or postazasi_cim like '%@%')
+        and coalesce(postazasi_cim, '') <> $1`,
+    ["8445 Csehbánya, Újtelep utca 41."]
+  );
+  console.log(`[migrate] Duvenbeck postázási cím javítva: ${duvenbeck.rowCount ?? 0} sor.`);
 }
 
 // Számlák — kifizetettség tömeges importja: a Számlázz.hu API nem ad vissza

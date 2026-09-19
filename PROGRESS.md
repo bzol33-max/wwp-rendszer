@@ -594,3 +594,9 @@
   kerül be (`getMegbizoCime`: partner-sablon címe `PARTNEREK`-ből,
   ennek hiányában ugyanannak a megbízónak a legutóbbi fuvarján rögzített
   cím), és el is mentődik (csak üres mezőt tölt, kézi címet nem ír felül).
+- Kiegészítés 1: Duvenbeck postázási címe „8445 Csehbánya, Újtelep utca 41.”
+  (partner-sablon). A Duvenbeck-importőr eddig a megbízás „számla/POD cím”
+  mezőjét — ami e-mail-cím — írta postázási címnek; mostantól a sablon
+  címét, a meglévő e-mailes/üres sorokat a migráció javítja (kézi postai
+  címet nem bánt). A /posta csempén látszik, melyik kocsi vitte és honnan
+  hová (csak városnév, `varosNev`).

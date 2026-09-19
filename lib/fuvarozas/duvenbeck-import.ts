@@ -13,6 +13,7 @@ import { requireEditPermission } from "@/lib/auth/require-permission";
 import { parseDuvenbeck, megalloCimek, type DuvenbeckDok } from "@/lib/fuvarozas/duvenbeck";
 import { findJarmuByPlate, jarmuLabel } from "@/lib/fuvarozas/vehicles";
 import { budapestFalioraToInstant } from "@/lib/fuvarozas/idozona";
+import { partnerKodSzerint } from "@/lib/fuvarozas/import/partnerek";
 
 /**
  * A megbízó neve kötött. A Duvenbeck-iratokon a CÍMZETT (mi) neve áll elöl,
@@ -196,7 +197,10 @@ export async function mentDuvenbeckDokumentumot(
     sofor: nyersRendszam,
     jarmu: jarmu ? jarmuLabel(jarmu) : null,
     pozicioszam: dok.reiseId,
-    postazasiCim: dok.szamlaCim,
+    // A dokumentumban "számla/POD cím" gyanánt csak e-mail-cím szerepel — az
+    // nem postázási cím. Az eredeti papírokat a partner-sablonban rögzített
+    // postai címre küldjük (lib/fuvarozas/import/partnerek.ts).
+    postazasiCim: partnerKodSzerint("duvenbeck")?.postazasiCim ?? dok.szamlaCim,
   };
 
   async function keresMeglevot(): Promise<MeglevoSor | undefined> {
