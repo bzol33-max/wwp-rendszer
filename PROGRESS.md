@@ -1,5 +1,43 @@
 # PROGRESS
 
+## 2026-09-19 — Fuvarozás 2 átállás, E4: séma a régiek mellé (`db/migrations/001`), E4b visszaállítás-próba
+
+- **Probléma:** az új modell (partner, megálló, elszámolás, esemény-napló,
+  állapot, kalkuláció, külső adatforrások, riasztás, Radar) táblái nem
+  léteztek; a `tipus` fordított elnevezése és a `statusz='torolt'` soft
+  delete a régi jelölőkön élt.
+- **Ok:** a modul egy táblán, jelölő-mezőkkel nőtt (logikai újratervezés 1.).
+- **Módosítás:** `db/migrations/001_fuvarozas2_sema.sql` — egyszer fut, egy
+  tranzakcióban, **csak hozzáad**: `fuvar_jarmuvek` (a 3 kocsi beszúrva),
+  `fuvar_partnerek`, `fuvar_megbizasok` új oszlopai (`partner_id`, `jelleg`
+  helyes irányban + backfill, `hivatkozas_*`, `jarmu_id`, `sofor_id`,
+  `allapot` (NULL az E6-ig), `hianylista`, `torolt_at/by`, bővített `forras`
+  check, `kulso_azonosito`, `kalkulacio_id`), `fuvar_megallok`,
+  `fuvar_megallo_allapot.megallo_id`, `fuvar_elszamolas`,
+  `fuvar_megbizas_esemeny` (zárt esemény-lista, `kliens_uuid` unique),
+  `fuvar_dokumentumok` (`drive_file_id` nullable, `tartalom_hash` unique,
+  `tarolas`, `tipus` check NOT VALID), `fuvar_migracio_hiba`, `arfolyam`,
+  `fuvar_megbizas_koltseg`, `fuvar_kalkulaciok`, `fuvar_utvonal_cache`,
+  `fuvar_ut_minta`, `utdij_tranzakcio`, `szallitolevel_import`,
+  `push_elofizetes`, `telegram_kotes`, `fuvar_riasztas`, `radar_kiiras`,
+  `partner_pontszam`, `viszonylat_stat`, `fuvar_napi_osszesito`, T7 indexek.
+  **Kettős írás triggerrel** (`trg_fuvar_megbizasok_kettos_iras`): amíg a
+  régi kód `tipus`/`statusz`-t ír, a `jelleg`/`torolt_at` ebből töltődik —
+  a régi kódhoz nem nyúltunk. Az üzleti kulcs (B6) unique indexe **nincs**
+  még: az E5 kézi rendezés után, az E6 migrációja hozza létre.
+  `docs/visszaallitas-30-perc.md`: a visszaállítás eljárása.
+- **Teszt:** helyi Postgres 16, üres sémán és sorokkal: lefut, második
+  indításkor „nincs új"; első próbában a `users.id` uuid-FK hibán a
+  tranzakció visszagördült (semmi félbe nem maradt), javítva. Trigger:
+  insert `tipus='sajat'` → `jelleg='ber'`; `statusz='torolt'` → `torolt_at`;
+  visszaállítás → NULL; `tipus` módosítás → `jelleg` követi. E4b: `pg_dump`
+  → `pg_restore` külön DB-be → `migrate.mjs` rajta: séma OK, migráció nem
+  fut újra. `next build` zöld.
+- **Kockázat:** élesben ha a `fuvar_dokumentumok.tipus`-ban váratlan érték
+  van, a NOT VALID miatt nem áll meg. A migráció ~30 objektumot hoz létre —
+  ha bármelyik hibázik, rollback és a deploy sikertelen marad az előző
+  verzión (szándékos). A régi működést semmi nem változtatja.
+
 ## 2026-09-19 — Fuvarozás 2 átállás, E3: hatókör-kulcsok, `vezeto` fiók, Szabina elszámolás (B8)
 
 - **Probléma:** a Fuvarozás 2 nézeteihez nem volt hatókör: Szabina „csak
