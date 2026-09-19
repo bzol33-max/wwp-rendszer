@@ -390,6 +390,10 @@ function vezetes(honnan: { lat: number; lon: number }, hova: { lat: number; lon:
   eq("RBT cím: város", varosNev("HAJDU HAJDUSÁGI ZRT [H-4243] TÉGLÁS, Hrsz. 0135/9"), "TÉGLÁS");
   eq("RBT cím: pontosság", cimPontossaga("HAJDU HAJDUSÁGI ZRT [H-4243] TÉGLÁS, Hrsz. 0135/9"), "pontos");
   eq("RBT cím 2: város", varosNev("BEZZEGH KFT [H-3200] GYÖNGYÖS, Szurdokpart u. 6-8."), "GYÖNGYÖS");
+  // SELEXPED (ÁJ-TRANS) alak: vessző nélkül, ékezetes utcatípus-szóval.
+  eq("SELEXPED cím: város", varosNev("1. Pikopack Zrt. HU- 3390 Füzesabony Kerecsendi út 123"), "Füzesabony");
+  eq("SELEXPED lerakó: város", varosNev("1. Szállítólevél szerint - Debrecen GLOBUS HU- 4000 Debrecen"), "Debrecen");
+  eq("SpediTrans cím: város", varosNev("Bestpallet Kft. HU-4254 Nyíradony Patak utca 1"), "Nyíradony");
   eq("Duvenbeck cím továbbra is jó", varosNev("Yanfeng International Automotive, Juhar utca 17, HU 8500 Papa"), "Papa");
   eq("zárójeles irsz továbbra is jó", varosNev("Nyíregyháza (4400 Móricz Zsigmond u. 24.)"), "Nyíregyháza");
 }

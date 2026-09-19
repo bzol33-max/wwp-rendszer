@@ -10,8 +10,12 @@ const ISMERT_IRSZ_KULCSSZO: Record<string, string> = {
  * ezért a városnév-kinyerés feladja, és a teljes nyers cím jelenik meg a
  * listákon város helyett.
  */
+// Szóhatárként nem \b-t használunk: a JavaScript \b csak ASCII betűt ismer,
+// így az ékezettel kezdődő "út" / "útja" elé sosem tett szóhatárt, és a
+// "3390 Füzesabony Kerecsendi út 123" alakból az utca nem vált le a
+// városról. A \p{L} lookaround minden betűre működik.
 const UTCA_SZAVAK =
-  /(\b(utca|út|útja|tér|tere|körút|sor|sétány|dűlő|park|ipartelep|telep|lakótelep|fasor|köz|rakpart|major|puszta|hrsz)\b|\b(u|krt|stny|sgt|ltp)\.)/i;
+  /((?<!\p{L})(utca|út|útja|tér|tere|körút|sor|sétány|dűlő|park|ipartelep|telep|lakótelep|fasor|köz|rakpart|major|puszta|hrsz)(?!\p{L})|(?<!\p{L})(u|krt|stny|sgt|ltp)\.)/iu;
 const CEGFORMA_SZAVAK = /\b(kft\.?|zrt\.?|bt\.?|nyrt\.?|kkt\.?|gmbh|s\.r\.o\.?|a\.s\.?|sp\.\s?z\s?o\.o\.?)\b/i;
 
 /**
@@ -79,6 +83,19 @@ export function bontsMegallokra(cim: string | null | undefined): string[] {
  * szám, nem utcatípus-szó és nem cégforma-toldalék (3+ darabnál az elsőt,
  * jellemzően a cégnevet, kihagyva).
  */
+/**
+ * Az irányítószám utáni szövegből csak a városnév, ha vessző nélkül az utca
+ * is ott folytatódik ("3390 Füzesabony Kerecsendi út 123" → "Füzesabony").
+ * Magyar településnév szóközt nem tartalmaz, ezért ha a maradékban
+ * utcatípus-szó van, az első szó a város, a többi az utca. Utcatípus-szó
+ * nélkül a szöveg változatlan (pl. "TÉGLÁS", "Debrecen").
+ */
+function varosUtcaNelkul(szoveg: string): string {
+  if (!UTCA_SZAVAK.test(szoveg)) return szoveg;
+  const [elso] = szoveg.split(/\s+/);
+  return elso && elso.length >= 3 ? elso : szoveg;
+}
+
 export function talalVaros(parts: string[]): { zip: string; city: string; idx: number } | null {
   // A lookbehind kizárja azt az esetet, amikor az irányítószám egy MÁSIK
   // minta (lásd lentebb) zárójelezett részében van — ott a városnév a
@@ -89,7 +106,7 @@ export function talalVaros(parts: string[]): { zip: string; city: string; idx: n
   // meg, és a GPS-felismerés (pontosság "ismeretlen") kihagyta a megállót.
   for (let i = 0; i < parts.length; i++) {
     const m = parts[i].match(/(?<!\()(\d{4})\]?\s+([^(]+)/);
-    if (m) return { zip: m[1], city: m[2].trim(), idx: i };
+    if (m) return { zip: m[1], city: varosUtcaNelkul(m[2].trim()), idx: i };
   }
 
   for (let i = 0; i < parts.length; i++) {
