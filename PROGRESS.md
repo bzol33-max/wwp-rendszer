@@ -1,5 +1,42 @@
 # PROGRESS
 
+## 2026-09-19 — Fuvarozás 2 átállás, E1: a két hitelesítés nélküli Drive-végpont bezárása (B5)
+
+- **Probléma:** `/api/fuvarozas/drive-import` (új fuvar létrehozása) és
+  `/api/fuvarozas/drive-frissites` (fuvardíj, számlaszám, postázva, postázási
+  cím felülírása id alapján) **hitelesítés nélkül** fogadott POST-ot — bárki,
+  aki ismerte az URL-t, írhatott a fuvar-adatokba. A `drive-sync` végpont
+  ezzel szemben Bearer-titokkal védett volt. (Átállás-ellenőrzés B5 tétel,
+  `claude/fuvarozas-atallas-ellenorzes.md` 11.4.)
+- **Ok:** a két végpontot eredetileg az ütemezett Claude-feladat hívta; azt
+  a `drive-sync-core.ts` váltotta ki, a végpontok ott maradtak guard nélkül.
+  Külső hívó ma nincs (repo-grep, ütemezett feladatok átnézve — azok a másik,
+  `fuvar-diszpecser` appot hívják).
+- **Módosítás (minimális):** új `lib/fuvarozas/drive-sync-guard.ts`
+  (`requireDriveSyncSecret(req)`: nincs `DRIVE_SYNC_SECRET` → 503, rossz/
+  hiányzó `Authorization: Bearer` → 401), a `drive-sync/route.ts` beágyazott
+  ellenőrzése ebbe kiemelve (viselkedés változatlan), a `drive-import` és a
+  `drive-frissites` ugyanezt hívja a body beolvasása előtt. A végpontok
+  megmaradnak (nem 410), mert a titokkal továbbra is használhatók; a 4 hetes
+  megfigyelés után, ha nincs hívás, törölhetők (7. takarítás-kör).
+- **Pipeline:** `npm run typecheck` = `next typegen && tsc --noEmit` (új;
+  a Next 16 route-típusok generálása nélkül a `tsc` a `LayoutProps`-on
+  elhasal). `scripts/teszt-drive-guard.ts` a `teszt` láncban: a guard
+  viselkedése + forrás-szintű ellenőrzés, hogy mindhárom route a guardot
+  hívja a body/munka előtt (a route-okat nem importálja, mert azok a teljes
+  szerver-oldalt húznák be). Szándékosan `.ts`, nem `.mts`: Node 22.22 +
+  tsx alatt az `.mts` tesztek `@/…` névvel importált tagjait nem látja
+  (CJS/ESM interop) — a meglévő 4 `.mts` teszt ebben a környezetben emiatt
+  nem fut, más Node-verzión igen; nem nyúltam hozzájuk.
+- **Teszt:** typecheck zöld; eslint az érintett 5 fájlon 0 hiba (a repo 39
+  korábbi lint-hibája változatlan, nem érintett); `teszt-drive-guard`
+  17/17; `next build` zöld.
+- **Kockázat:** ha valahol mégis van külső hívó a két végpontra, az mostantól
+  401-et kap (titok nélkül) — a Railway naplóban `401`/`503` a
+  `/api/fuvarozas/drive-import|drive-frissites` útvonalon jelzi. A
+  `DRIVE_SYNC_SECRET` Railway-változó nélkül mindhárom végpont 503 (ez a
+  szándékolt, biztonságos állapot).
+
 ## 2026-09-16 — Fuvarozás: minden megbízás a helyén (besorolás egy helyen + adatjavítás)
 
 - `lib/fuvarozas/fuvar-hely.ts`: a Megbízások fülei közti besorolás EGY helyen

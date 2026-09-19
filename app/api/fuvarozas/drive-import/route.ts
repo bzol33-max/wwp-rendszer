@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { addFuvar } from "@/lib/fuvarozas/megbizasok";
 import type { AddFuvarInput } from "@/lib/fuvarozas/fuvar-constants";
+import { requireDriveSyncSecret } from "@/lib/fuvarozas/drive-sync-guard";
 
 /**
  * A Drive-fuvarmegbízás-figyelő automatika (ütemezett Claude-feladat, lásd
@@ -13,8 +14,15 @@ import type { AddFuvarInput } from "@/lib/fuvarozas/fuvar-constants";
  *
  * Elvárt body: { fuvarok: AddFuvarInput[] } — minden elemnek legalább
  * `lerako` és `datum` mezője legyen (ezek kötelezőek az addFuvar-nál is).
+ *
+ * HITELESÍTÉS: csak "Authorization: Bearer <DRIVE_SYNC_SECRET>" fejléccel
+ * (lásd lib/fuvarozas/drive-sync-guard.ts) — korábban ez a végpont
+ * hitelesítés nélkül írt a fuvar-adatokba (átállás-ellenőrzés B5).
  */
 export async function POST(req: Request) {
+  const tiltas = requireDriveSyncSecret(req);
+  if (tiltas) return tiltas;
+
   let body: { fuvarok?: Partial<AddFuvarInput>[] };
   try {
     body = await req.json();

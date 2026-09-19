@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "node scripts/migrate.mjs && next start",
     "lint": "eslint",
-    "teszt": "tsx scripts/teszt-import.mts && tsx scripts/teszt-duvenbeck.mts && tsx scripts/teszt-megrendelo.mts && tsx scripts/teszt-erintes.mts"
+    "typecheck": "next typegen && tsc --noEmit",
+    "teszt": "tsx scripts/teszt-import.mts && tsx scripts/teszt-duvenbeck.mts && tsx scripts/teszt-megrendelo.mts && tsx scripts/teszt-erintes.mts && tsx scripts/teszt-drive-guard.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

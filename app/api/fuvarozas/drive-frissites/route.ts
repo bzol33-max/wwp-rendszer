@@ -7,6 +7,7 @@ import {
   setFuvarPostazasiCim,
 } from "@/lib/fuvarozas/megbizasok";
 import type { FuvardijPenznem } from "@/lib/fuvarozas/fuvar-constants";
+import { requireDriveSyncSecret } from "@/lib/fuvarozas/drive-sync-guard";
 
 /**
  * A Drive-fuvarmegbízás-figyelő automatika utólagos pótló körének
@@ -23,8 +24,15 @@ import type { FuvardijPenznem } from "@/lib/fuvarozas/fuvar-constants";
  * vesszen el, ha a törölt sor már postázva volt.
  *
  * Elvárt body: { frissitesek: [{ id, fuvardij?, fuvardijPenznem? ("Ft"|"EUR"), fizetesiHataridoNap?, szamlaSzam?, postazva?, postazasiCim? }] }
+ *
+ * HITELESÍTÉS: csak "Authorization: Bearer <DRIVE_SYNC_SECRET>" fejléccel
+ * (lásd lib/fuvarozas/drive-sync-guard.ts) — korábban ez a végpont
+ * hitelesítés nélkül írt a fuvar-adatokba (átállás-ellenőrzés B5).
  */
 export async function POST(req: Request) {
+  const tiltas = requireDriveSyncSecret(req);
+  if (tiltas) return tiltas;
+
   let body: {
     frissitesek?: {
       id?: string;
