@@ -1,7 +1,8 @@
 "use server";
 
 import { query } from "@/lib/db";
-import { requireEditPermission } from "@/lib/auth/require-permission";
+import { requireAnyEditPermission, requireEditPermission } from "@/lib/auth/require-permission";
+import { PARTNEREK } from "@/lib/fuvarozas/import/partnerek";
 import { ceglNevKanonikusan, normalizaltCegKulcs, sajatCegunkE } from "@/lib/fuvarozas/fuvar-constants";
 import { FUVAR_HELY_SQL, FUVAR_MA_SQL, type FuvarHely } from "@/lib/fuvarozas/fuvar-hely";
 import { toroljIdovonalCachet } from "@/lib/fuvarozas/idovonal-cache";
@@ -465,9 +466,14 @@ export async function setFuvarPoziciszam(
   );
 }
 
-/** A Számla/Posta nézet soron belüli, azonnali javítása: postázási cím kitöltése. */
+/**
+ * A Számla/Posta nézet soron belüli, azonnali javítása: postázási cím kitöltése.
+ * A "posta" jog önmagában is feljogosít rá — a /posta nézet felhasználója
+ * (Budaházi Szabina) a teljes Fuvarozás modulhoz nem fér hozzá, a lista
+ * viszont neki készült (lásd app/posta/page.tsx).
+ */
 export async function setFuvarPostazasiCim(id: string, postazasiCim: string | null) {
-  await requireEditPermission("fuvarozas");
+  await requireAnyEditPermission(["fuvarozas", "posta"]);
   await query(`update fuvar_megbizasok set postazasi_cim = $2 where id = $1`, [
     id,
     postazasiCim || null,
@@ -516,7 +522,11 @@ export async function setFuvarFizetesiHatarido(id: string, nap: number | null) {
  * archiváltnak számít, lásd getSzamlaPostaFuvarok / getArchivFuvarok.
  */
 export async function setFuvarPostazva(id: string, postazva: boolean) {
-  await requireEditPermission("fuvarozas");
+  // A "posta" jog is elég — ld. setFuvarPostazasiCim. Korábban csak a
+  // Fuvarozás szerkesztési jogát fogadta el, ezért a /posta nézetben a
+  // "Postázva" pipa hibával ("Nem sikerült menteni") visszapattant annál,
+  // akinek csak a Posta modulja van engedélyezve.
+  await requireAnyEditPermission(["fuvarozas", "posta"]);
   await query(
     `update fuvar_megbizasok set postazva = $2, postazva_at = case when $2 then now() else null end where id = $1`,
     [id, postazva]
@@ -658,13 +668,60 @@ export async function visszaallitFuvarArchivbol(id: string): Promise<FuvarHely |
  * ezek helyette az Archív fülön (getArchivFuvarok) jelennek meg.
  */
 export async function getSzamlaPostaFuvarok(): Promise<FuvarRow[]> {
-  return query<FuvarRow>(
+  const rows = await query<FuvarRow>(
     `select ${FUVAR_ROW_COLUMNS}
      from fuvar_megbizasok
      where statusz <> 'torolt' and ${FUVAR_HELY_SQL} = 'szamla_posta'
      order by ellenorzott asc, fuvar_megbizasok.erkezett_datum desc nulls last, datum desc, id desc
      limit 200`
   );
+  return potolHianyzoPostazasiCimeket(rows);
+}
+
+/**
+ * A megbízó (megrendelő) címe, ha a fuvarhoz nincs külön postázási cím
+ * megadva: először a partner-sablonban rögzített székhely/postacím (lib/
+ * fuvarozas/import/partnerek.ts), annak hiányában ugyanannak a megbízónak
+ * a legutóbbi fuvarján rögzített cím. Null, ha egyik sem ismert.
+ */
+export async function getMegbizoCime(megrendelo: string | null | undefined): Promise<string | null> {
+  const nev = megrendelo?.trim();
+  if (!nev) return null;
+  const kulcs = normalizaltCegKulcs(ceglNevKanonikusan(nev));
+  const sablon = PARTNEREK.find(
+    (p) => p.postazasiCim && normalizaltCegKulcs(ceglNevKanonikusan(p.nev)) === kulcs
+  );
+  if (sablon?.postazasiCim) return sablon.postazasiCim;
+  return getPostazasiCimJavaslat(nev);
+}
+
+/**
+ * Minden Számla/Posta sornak legyen postázási címe: ahol a dokumentumból
+ * nem került be külön cím, ott a megbízó címét írjuk be (getMegbizoCime),
+ * és el is mentjük, hogy a desktop lista és a /posta nézet ugyanazt
+ * mutassa, és a Számla/Posta füzet később is visszakereshető legyen. Csak
+ * üres mezőt tölt — kézzel beírt címet sosem ír felül. Egy megbízóhoz
+ * egyszer keresünk címet, hogy a lista betöltése ne lassuljon.
+ */
+async function potolHianyzoPostazasiCimeket(rows: FuvarRow[]): Promise<FuvarRow[]> {
+  const gyorsitotar = new Map<string, string | null>();
+  for (const row of rows) {
+    if (row.postazasi_cim?.trim() || !row.megrendelo?.trim()) continue;
+    const kulcs = normalizaltCegKulcs(ceglNevKanonikusan(row.megrendelo));
+    let cim = gyorsitotar.get(kulcs);
+    if (cim === undefined) {
+      cim = await getMegbizoCime(row.megrendelo);
+      gyorsitotar.set(kulcs, cim);
+    }
+    if (!cim) continue;
+    await query(
+      `update fuvar_megbizasok set postazasi_cim = $2
+        where id = $1 and coalesce(trim(postazasi_cim), '') = ''`,
+      [row.id, cim]
+    );
+    row.postazasi_cim = cim;
+  }
+  return rows;
 }
 
 /** Egy papírra váró fuvar minimális adatai a nyugtázó sávhoz. */

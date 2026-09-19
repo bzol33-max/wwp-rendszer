@@ -579,3 +579,18 @@
   átállás tripje még nyitott). Ha a kocsit a lezárt állás után is a
   helyszínen állva láttuk (élő előzmény), az állás a megfigyelt
   elhagyásig hosszabbodik. Teszt: 3g.
+
+## 2026-09-19 (28. kör) — /posta: a „Postázva” pipa hibája; minden sornak legyen postázási címe
+
+- Hiba: Budaházi Szabina /posta nézetében a „Postázva” pipa (és a
+  postázási cím szerkesztése) mindig „Nem sikerült menteni” hibával
+  pattant vissza. Ok: `setFuvarPostazva` / `setFuvarPostazasiCim` csak a
+  Fuvarozás modul szerkesztési jogát fogadta el, neki viszont csak a
+  Posta modulja van engedélyezve (`scripts/migrate.mjs`, a nézet is a
+  Posta jogot nézi). Javítás: `requireAnyEditPermission(["fuvarozas",
+  "posta"])` mindkét műveletnél.
+- `getSzamlaPostaFuvarok` (a desktop Számla/Posta fül és a /posta nézet
+  közös listája): ahol nincs külön postázási cím, ott a megbízó címe
+  kerül be (`getMegbizoCime`: partner-sablon címe `PARTNEREK`-ből,
+  ennek hiányában ugyanannak a megbízónak a legutóbbi fuvarján rögzített
+  cím), és el is mentődik (csak üres mezőt tölt, kézi címet nem ír felül).
