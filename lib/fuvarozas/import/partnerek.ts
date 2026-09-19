@@ -89,6 +89,10 @@ export const PARTNEREK: readonly Partner[] = [
     // (lib/fuvarozas/duvenbeck.ts), ott nincs mit levágni.
     torzsVege: [],
     hivatkozasNeve: "Út ID (Reise ID)",
+    // Az eredeti papírok postázási címe (Budaházi Zoltán, 2026-09-19). A
+    // Duvenbeck-megbízáson postai cím nincs, csak a POD/számla e-mail —
+    // ezért a fuvarokhoz ez a cím kerül (lib/fuvarozas/duvenbeck-import.ts).
+    postazasiCim: "8445 Csehbánya, Újtelep utca 41.",
   },
   {
     kod: "ab-speed",

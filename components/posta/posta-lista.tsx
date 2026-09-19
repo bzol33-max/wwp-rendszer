@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import type { FuvarRow } from "@/lib/fuvarozas/fuvar-constants";
+import { varosNev } from "@/lib/fuvarozas/varos";
 import { setFuvarPostazasiCim, setFuvarPostazva } from "@/lib/fuvarozas/megbizasok";
 
 /** Egy csempe "Postázva" jelölője — bepipálva a csempe azonnal eltűnik a listából. */
@@ -91,6 +92,17 @@ function PostaCsempe({
             {row.pozicioszam ? ` · ${row.pozicioszam}` : ""}
           </div>
         </div>
+      </div>
+
+      {/* Melyik kocsi vitte, és honnan hová — csak a városok, hogy a
+          csempe telefonon egy pillantással olvasható maradjon. */}
+      <div className="mt-2 flex flex-col gap-0.5 text-sm">
+        <div>
+          {row.felrako ? varosNev(row.felrako) || row.felrako : "?"}
+          {" → "}
+          {varosNev(row.lerako) || row.lerako}
+        </div>
+        <div className="text-xs text-[var(--mob-muted)]">{row.jarmu ?? "kocsi nincs megadva"}</div>
       </div>
 
       <div className="mt-3 flex flex-col gap-1">
