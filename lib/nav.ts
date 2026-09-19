@@ -15,11 +15,16 @@ export type NavItem = {
   label: string;
   icon: LucideIcon;
   key: ModuleKey;
+  /** További kulcsok, amelyek bármelyike is megjeleníti a menüpontot (pl. az Elszámolás hatóköre). */
+  altKeys?: ModuleKey[];
 };
 
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Info", icon: LayoutDashboard, key: "info" },
   { href: "/fuvarozas", label: "Fuvarozás", icon: Truck, key: "fuvarozas" },
+  // Fuvarozás 2 — a flag (lib/fuvarozas2/flag.ts) dönti, látszik-e; az
+  // AppShell a hiddenHrefs alapján rejti. Szabina az "elszamolas" kulccsal látja.
+  { href: "/fuvarozas2", label: "Fuvarozás 2", icon: Truck, key: "fuvarozas", altKeys: ["elszamolas"] },
   { href: "/keszlet", label: "Készlet", icon: Package, key: "keszlet" },
   { href: "/szamlak", label: "Számlák", icon: Receipt, key: "szamlak" },
   { href: "/dolgozok", label: "Dolgozók", icon: Users, key: "dolgozok" },

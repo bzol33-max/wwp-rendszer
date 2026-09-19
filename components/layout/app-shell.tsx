@@ -22,10 +22,13 @@ export function AppShell({
   children,
   isAdmin,
   visibleModuleKeys,
+  hiddenHrefs = [],
 }: {
   children: React.ReactNode;
   isAdmin: boolean;
   visibleModuleKeys: ModuleKey[];
+  /** Feature flaggel elrejtett menüpontok (lib/fuvarozas2/flag.ts). */
+  hiddenHrefs?: string[];
 }) {
   const pathname = usePathname();
   const userName = useCurrentUserName();
@@ -47,7 +50,11 @@ export function AppShell({
     return <>{children}</>;
   }
 
-  const navItems = NAV_ITEMS.filter((item) => visibleModuleKeys.includes(item.key));
+  const navItems = NAV_ITEMS.filter(
+    (item) =>
+      !hiddenHrefs.includes(item.href) &&
+      (visibleModuleKeys.includes(item.key) || (item.altKeys ?? []).some((k) => visibleModuleKeys.includes(k)))
+  );
   const primaryTabs = navItems.slice(0, MOBILE_PRIMARY_TAB_COUNT);
   const overflowNavItems = navItems.slice(MOBILE_PRIMARY_TAB_COUNT);
   const isActive = (href: string) =>

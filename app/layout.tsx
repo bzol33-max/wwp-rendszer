@@ -4,6 +4,7 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Toaster } from "@/components/ui/sonner";
 import { verifySession } from "@/lib/auth/dal";
 import type { ModuleKey } from "@/lib/auth/permissions";
+import { ujFuvarozasMenu, regiFuvarozasAktiv } from "@/lib/fuvarozas2/flag";
 import "./globals.css";
 
 const MODULES_FOR_NAV: ModuleKey[] = [
@@ -14,6 +15,7 @@ const MODULES_FOR_NAV: ModuleKey[] = [
   "dolgozok",
   "jelenlet",
   "jarmuvek",
+  "elszamolas",
 ];
 
 const geistSans = Geist({
@@ -37,6 +39,10 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   const visibleModuleKeys = session.isAuth
     ? MODULES_FOR_NAV.filter((key) => session.can(key).view)
     : [];
+  const hiddenHrefs = [
+    ...(ujFuvarozasMenu() ? [] : ["/fuvarozas2"]),
+    ...(regiFuvarozasAktiv() ? [] : ["/fuvarozas"]),
+  ];
 
   return (
     <html
@@ -44,7 +50,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full">
-        <AppShell isAdmin={isAdmin} visibleModuleKeys={visibleModuleKeys}>
+        <AppShell isAdmin={isAdmin} visibleModuleKeys={visibleModuleKeys} hiddenHrefs={hiddenHrefs}>
           {children}
         </AppShell>
         <Toaster />

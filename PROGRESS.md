@@ -1,5 +1,56 @@
 # PROGRESS
 
+## 2026-09-19 — Fuvarozás 2 átállás, E7a: az új felület alapja (Ma · Megbízások · Elszámolás · Partnerek) + kettős írás mindkét irányba
+
+- **Probléma:** az új modell (állapot, megállók, elszámolás, napló) élesben
+  fel volt töltve, de nem volt rá felület, és a régi kód írásai nem
+  frissítették az `allapot`-ot.
+- **Módosítás:**
+  - `db/migrations/002_fuvarozas2_allapot_trigger.sql`: az `allapot` követi
+    a régi jelölőket (11.2 SQL-tükör: `fuvar_megbizasok_allapot_regi_jelolokbol`),
+    ha a régi kód ír (insert allapot nélkül / jelölő-változás), és az új
+    kód nem írta ugyanabban az utasításban; napló-trigger minden
+    állapotváltásra (`forras_trigger: true`), amit az új kód
+    `set_config('fuvarozas2.uj_kod','1',true)`-val elnémít (nincs dupla).
+  - `scripts/fuvarozas2-backfill.ts`: `--apply` a dátum/ablak múlásával
+    továbbment sorokat utánahúzza (naplózva); `--check` az „új kód
+    döntötte” sorokat (ember-forrású esemény a mostani állapotra) nem
+    számolja eltérésnek.
+  - `lib/fuvarozas2/megbizasok.ts` (use server): lista/részlet az új
+    táblákból (elszámolás mezők coalesce új/régi), `valtAllapot` az
+    állapotgépen át (`ellenorizAtmenet`), **kettős írás** a régi jelölőkbe,
+    esemény `kliens_uuid`-dal (idempotens), `setPapirBeerkezett` (B7:
+    Szabina, `elszamolas` jog), `setSzamlaSzam` (szamla tábla párosítás →
+    számlázva), `setMegjegyzes`. Kézi kiskapuk naplózva: „számlázható fotó
+    nélkül”, „saját fuvar lezárása szállítólevél nélkül” (a K2 körig).
+  - `lib/fuvarozas2/partnerek.ts`: törzs, szerkesztés, **E5 összevonás**
+    (`osszevonPartnereket`: megbízások/kapcsolatok átírva, név →
+    névváltozat, naplózva) + javaslatok (cégforma nélküli azonos kulcs,
+    előtag).
+  - `lib/fuvarozas2/ma.ts`: Ma — kocsinként ma/holnap, kocsi nélkül,
+    jelzések (ellenőrzésre vár, lejárt, fotóra vár >2 ó, számlázható,
+    e-mail küldendő, postázandó), állapot-számok.
+  - Oldalak: `/fuvarozas2` (Ma), `/megbizasok` (csoport/állapot/jelleg
+    szűrő), `/megbizasok/[id]` (megállók, napló, műveletek, elszámolás,
+    dokumentumok, megjegyzés), `/elszamolas` (5 oszlop: Fotóra vár →
+    Számlázható → Számlázva→e-mail → E-mail elment→posta → Postázva),
+    `/partnerek`. Jogosultság: `fuvarozas` VAGY `elszamolas` (Szabina).
+  - **Feature flag** (`lib/fuvarozas2/flag.ts`, B1): `FUVAROZAS_UJ=on` →
+    „Fuvarozás 2” a menüben; `FUVAROZAS_REGI=off` → a régi eltűnik és a
+    `/fuvarozas` az újra irányít (cutover). Menü: `altKeys`, `hiddenHrefs`.
+  - **Színek a terv szerint** (döntés: nem a régi barna téma): `.fuvarozas2`
+    scope a `globals.css`-ben (háttér #F3F4F1, kártya fehér, menta #1F8F6E,
+    borostyán #A8690F, vörös #B93A2F, kék #2F6FA8), csak a `/fuvarozas2`
+    útvonalakon. Az oldalsáv közös, változatlan.
+- **Teszt:** typecheck, lint, `next build` zöld; helyi Postgres + Playwright:
+  bejelentkezés `vezeto`-ként, mind az 5 oldal 200, állapotváltás
+  (folyamatban → teljesítve) a felületről → napló egy ember-esemény, nincs
+  trigger-dupla; 002 trigger: insert/jelölő-változás → allapot követ,
+  új-kódos update-nél hallgat. `--check` a helyi adaton 0 eltérés.
+- **Kockázat:** a 002 trigger élesben minden régi írásnál fut (olcsó: egy
+  case + egy exists). Az új felület a régi mellett él a flag mögött; a
+  régi fülek változatlanok.
+
 ## 2026-09-19 — Fuvarozás 2 átállás, E4: séma a régiek mellé (`db/migrations/001`), E4b visszaállítás-próba
 
 - **Probléma:** az új modell (partner, megálló, elszámolás, esemény-napló,

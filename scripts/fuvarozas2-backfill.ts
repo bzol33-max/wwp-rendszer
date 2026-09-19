@@ -101,7 +101,16 @@ async function check(): Promise<number> {
   const { ma, sorok } = await beolvas();
   const most = new Date();
   const nincs = sorok.filter((s) => s.allapot === null);
-  const elter = sorok.filter((s) => s.allapot !== null && regiHelyUjAllapot(s, ma, most).allapot !== s.allapot);
+  // Ahol az ÚJ kód döntött (ember-forrású esemény vitte a mostani állapotba —
+  // pl. kézi „számlázható” fotó nélkül), ott a régi jelölők már nem az
+  // igazság; ezeket külön számoljuk, nem eltérésként.
+  const ujKodDontott = new Set(
+    (await query<{ id: string }>(
+      `select distinct m.id::text from fuvar_megbizasok m
+       where exists (select 1 from fuvar_megbizas_esemeny e where e.megbizas_id = m.id and e.forras = 'ember' and e.allapot_utan = m.allapot)`
+    )).map((r) => r.id)
+  );
+  const elter = sorok.filter((s) => s.allapot !== null && !ujKodDontott.has(s.id) && regiHelyUjAllapot(s, ma, most).allapot !== s.allapot);
   const [{ nyitott }] = await query<{ nyitott: string }>(`select count(*) as nyitott from fuvar_migracio_hiba where rendezve_at is null`);
   const [{ elsz }] = await query<{ elsz: string }>(
     `select count(*) as elsz from fuvar_megbizasok m
@@ -112,7 +121,7 @@ async function check(): Promise<number> {
   console.log(`E6 kapu:`);
   console.log(`  sorok összesen:                       ${sorok.length}`);
   console.log(`  allapot nélkül:                       ${nincs.length}`);
-  console.log(`  régi fül ≠ új allapot (11.2 szerint): ${elter.length}`);
+  console.log(`  régi fül ≠ új allapot (11.2 szerint): ${elter.length}  (új kód döntötte, kihagyva: ${ujKodDontott.size})`);
   console.log(`  nyitott migracio_hiba:                ${nyitott}`);
   console.log(`  bér, teljesített, elszámolás nélkül:  ${elsz}`);
   console.log(`  megallo_allapot megallo_id nélkül:    ${orphan}`);
@@ -148,6 +157,7 @@ async function apply() {
   const most = new Date();
   const client = await pool.connect();
   let irt = 0;
+  let frissitett = 0;
   try {
     await client.query("begin");
     // Partnerek (pontos kulcs).
@@ -177,6 +187,12 @@ async function apply() {
       );
     }
 
+    const ujKodDontott = new Set(
+      (await client.query<{ id: string }>(
+        `select distinct m.id::text from fuvar_megbizasok m
+         where exists (select 1 from fuvar_megbizas_esemeny e where e.megbizas_id = m.id and e.forras = 'ember' and e.allapot_utan = m.allapot)`
+      )).rows.map((r) => r.id)
+    );
     for (const s of sorok) {
       const jelleg = s.tipus === "sajat" ? "ber" : "sajat";
       const e = regiHelyUjAllapot(s, ma, most);
@@ -229,6 +245,18 @@ async function apply() {
         }
       }
 
+      // Cutover ELŐTT a régi jelölők az igazság: ha az idő múlásával a régi
+      // fül továbbment (lerakás napja elmúlt, postázási ablak lejárt), az
+      // allapot-ot utánahúzzuk, naplózva. (A trigger csak jelölő-változásra fut.)
+      if (s.allapot !== null && s.allapot !== e.allapot && !ujKodDontott.has(s.id)) {
+        await client.query(`update fuvar_megbizasok set allapot = $2, allapot_at = now() where id = $1`, [s.id, e.allapot]);
+        await client.query(
+          `insert into fuvar_megbizas_esemeny (megbizas_id, esemeny, allapot_elott, allapot_utan, forras, ki, reszletek)
+           values ($1, 'modositva', $2, $3, 'migracio', 'fuvarozas2-backfill', $4)`,
+          [s.id, s.allapot, e.allapot, JSON.stringify({ regi_hely: e.regiHely, indok: e.indok, utanhuzas: true })]
+        );
+        frissitett++;
+      }
       // Megbízás oszlopai (csak amit még nem töltöttünk — allapot NULL).
       if (s.allapot === null) {
         const elhagyva = becsultElhagyvaAt(s);
@@ -263,7 +291,7 @@ async function apply() {
       }
     }
     await client.query("commit");
-    console.log(`Beírva: ${irt} sor kapott allapot-ot (a többi már megvolt).`);
+    console.log(`Beírva: ${irt} sor kapott allapot-ot, ${frissitett} sor utánahúzva (a többi már megvolt).`);
   } catch (err) {
     await client.query("rollback").catch(() => {});
     throw err;

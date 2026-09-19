@@ -147,3 +147,40 @@
     @apply font-sans;
   }
 }
+/* Fuvarozás 2 — a terv (Claude Design vászon, „Asztali” oldal) színei:
+   világos zöldes-szürke háttér, fehér kártyák, menta elsődleges, borostyán
+   figyelmeztetés, tégla-vörös hiba, acélkék információ. Csak a /fuvarozas2
+   útvonalakon (app/fuvarozas2/layout.tsx), a régi modulok érintetlenek.
+   Döntés: 2026-09-19 (Budaházi Zoltán) — az új felület nem alkalmazkodik a
+   régi barna témához. */
+.fuvarozas2 {
+  --background: #f3f4f1;
+  --foreground: #1e2325;
+  --card: #ffffff;
+  --card-foreground: #1e2325;
+  --popover: #ffffff;
+  --popover-foreground: #1e2325;
+  --primary: #1f8f6e;
+  --primary-foreground: #ffffff;
+  --secondary: #e9ece8;
+  --secondary-foreground: #1e2325;
+  --muted: #e9ece8;
+  --muted-foreground: #5f6b6b;
+  --accent: #ddf2ea;
+  --accent-foreground: #1f8f6e;
+  --success: #1f8f6e;
+  --warning: #a8690f;
+  --destructive: #b93a2f;
+  --border: #d8ddd8;
+  --input: #d8ddd8;
+  --ring: #1f8f6e;
+  --radius: 0.75rem;
+  /* a terv jelzőszínei a komponenseknek */
+  --f2-mint: #1f8f6e; --f2-mint-l: #ddf2ea;
+  --f2-amb: #a8690f;  --f2-amb-l: #fbebcf;
+  --f2-red: #b93a2f;  --f2-red-l: #f9deda;
+  --f2-blue: #2f6fa8; --f2-blue-l: #dce9f5;
+  --f2-dark: #1e2325;
+  background: var(--background);
+  color: var(--foreground);
+}
