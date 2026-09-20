@@ -1259,3 +1259,39 @@
   vessző nélkül folytatódó utca levágva („3390 Füzesabony Kerecsendi út
   123” → „Füzesabony”); `UTCA_SZAVAK` ékezetes szót (út, útja) is felismer
   (\b helyett \p{L} lookaround). Teszt: teszt-erintes 67.
+
+## 2026-09-20 — Éles hibafeltárás (Fuvarozás 2), javítási terv
+
+Bizonyíték: Railway deploy + http napló (deployment `5bfdf202`), a Drive
+mappa tulajdonosa (Drive API), célzott kódellenőrzés. Részletek:
+`claude/fuvarozas-javitasi-terv.md` (projekt-dok).
+
+Megépült, de élesben nem működik:
+- **H1** `POST /api/fuvarozas2/gmail/csatolmany` → 500 (2×), naplózás nélkül.
+  Ok: a `Fuvarmegbizások` mappa tulajdonosa `wellwornpallet65@gmail.com`
+  (személyes My Drive), a `driveClient()` viszont service account — annak
+  nincs tárhelykvótája, így `files.create` 403 `storageQuotaExceeded`.
+  Olvasni tud (ezért megy a drive-sync), írni nem.
+- **H2** ugyanez `feltoltFuvarlevelFotot`-ra: a sofőr fuvarlevél-fotója
+  élesben nem tölthető fel (ugyanaz a hívás, ugyanaz a mappafa).
+- **H3** `fuvar_megallok` / `partner_id` / `jarmu_id` /
+  `hivatkozas_kanonikus` **csak** a kézi `scripts/fuvarozas2-backfill.ts`-ből
+  íródik, a deploy-lánc nem hívja. Az `allapot`-ot a 002 trigger tölti, ezért
+  a listák rendben látszanak — de az E6 backfill óta létrejött fuvarokon
+  (#133-tól) nincs megálló: nincs ablak-eltérés, várakozás/pótdíj-figyelés,
+  megállónkénti sofőr-„kész”, partner szintű kintlévőség.
+- **H4** időablakot **csak** `duvenbeck-import.ts` tölt; a `lib/fuvarozas/import/*`
+  egyáltalán nem. Napló: #133/#134/#135/#137/#139 `ablak: -–-`.
+- **H5** a Rendszer oldal nem néz Drive-**írást**, csatolmány-hibát, megálló
+  vagy ablak nélküli megbízást.
+- **H6** minden induláskor `lehetséges duplikátum bér fuvarok: 6` (külön
+  számlaszámmal — valószínűleg téves), és a `[torolt]` LLM-maradékok (#136).
+- **H7** `/fuvarozas2` hideg betöltés 6,2 s / 4,6 s / 2,7 s;
+  `/fuvarozas2/megbizasok` 3× 499. Az 1 perces idővonal-cache működik.
+
+Javítási sorrend: 1. hullám J1a (Apps Script tölti fel a PDF-et a saját
+kvótából) → J1c (naplózás + Drive-írás próba) → J2 (`frissitsdFuvarozas2Modellt`
+az import végén + idempotens backfill a deploy-láncban) → push.
+2. hullám J1b (OAuth refresh token az íráshoz) → J3 (ablak-kinyerés minden
+partnernél) → J5 (Rendszer-ellenőrzések) → J4 (duplikátumok nyugtázása).
+Kód ebben a körben nem változott — csak feltárás.
