@@ -13,20 +13,29 @@
  * MIT CSINÁL 5 PERCENKÉNT:
  *   1. Lekérdezi, mely korábbi levelek csatolmányát várja a rendszer, és
  *      feltölti azokat (csak amit a rendszer megbízásnak/papírnak ítélt).
- *   2. Az utolsó 3 nap beérkező leveleiről METAADATOT küld (feladó, tárgy,
- *      snippet, csatolmánynevek) — törzset SOHA. A rendszer ebből osztályoz.
+ *   2. A „Fuvarmegbízás" CÍMKÉVEL ellátott levelekről METAADATOT küld
+ *      (feladó, tárgy, snippet, csatolmánynevek) — törzset SOHA. A rendszer
+ *      ebből osztályoz.
+ *
+ * CSAK CÍMKÉZETT LEVÉL (Zoltán döntése, 2026-09-20): a figyelő NEM nézi a
+ * teljes postafiókot, csak azt, amit te (vagy egy Gmail-szűrő) a
+ * „Fuvarmegbízás" címkével megjelölsz. Más címke a CIMKE Script
+ * Propertyvel állítható. A `listazCimkeket` függvény kiírja a fiók összes
+ * címkéjét, ha a pontos nevet keresed.
  *
  * BEÁLLÍTÁS (egyszer, kb. 5 perc):
  *   1. script.google.com → Új projekt → a tartalom beillesztése ide.
- *   2. Projekt beállításai → Script Properties → két sor:
+ *   2. Projekt beállításai → Script Properties → két sor (a harmadik nem
+ *      kötelező):
  *        ALAP_URL = https://web-production-91051.up.railway.app
  *        TOKEN    = <ugyanaz, mint a Railway GMAIL_FIGYELO_SECRET>
+ *        CIMKE    = <a figyelt Gmail-címke, ha nem „Fuvarmegbízás">
  *   3. Futtatás: `egyszeriProba` — a Google engedélyt kér (Gmail olvasás +
  *      külső kérés), engedélyezd. A napló megmutatja, mit küldött volna.
  *   4. Futtatás: `telepitIdozitot` — ettől 5 percenként magától fut.
  *      (Leállítás: `torolIdozitot`.)
  *
- * ADATVÉDELEM: csak az INBOX utolsó 3 napját nézi, a KIZART_FELADO listát
+ * ADATVÉDELEM: csak a címkézett leveleket nézi, a KIZART_FELADO listát
  * kihagyja, és a levél törzsét nem küldi el. Csatolmányt csak arra a
  * levélre tölt fel, amit a rendszer KÉRT (tehát megbízásnak osztályozott).
  */
@@ -39,6 +48,11 @@ var KIZART_FELADO = [
 ];
 /** Ezeket a címkéket kihagyjuk (pl. ha valamit kézzel „Magán"-nak jelölsz). */
 var KIZART_CIMKE = ['Magán', 'Privat', 'Private'];
+
+/** Csak az ezzel a címkével megjelölt leveleket dolgozzuk fel. */
+var ALAP_CIMKE = 'Fuvarmegbízás';
+/** Ennyi napra visszamenőleg nézzük a címkézett leveleket. */
+var VISSZA_NAP = 14;
 
 var MAX_LEVEL_EGY_KORBEN = 60;
 var MAX_CSATOLMANY_BYTE = 15 * 1024 * 1024;
@@ -117,14 +131,32 @@ function kertCsatolmanyokFeltoltese_() {
 }
 
 /** 2. kör: az utolsó 3 nap leveleinek metaadata. */
+/** A figyelt címke (Script Property CIMKE, különben az alapértelmezett). */
+function cimkeNeve_() {
+  return PropertiesService.getScriptProperties().getProperty('CIMKE') || ALAP_CIMKE;
+}
+
+/** Ha a pontos címkenevet keresed: futtasd ezt, és nézd meg a naplót. */
+function listazCimkeket() {
+  var c = GmailApp.getUserLabels();
+  for (var i = 0; i < c.length; i++) Logger.log(c[i].getName() + ' — ' + c[i].getThreads(0, 1).length + ' szál (első oldal)');
+  if (c.length === 0) Logger.log('Nincs egyetlen saját címke sem ebben a fiókban.');
+}
+
 function ujLevelekBekuldese_(csakProba) {
-  var szalak = GmailApp.search('in:inbox newer_than:3d -in:chats', 0, 50);
+  var cimke = cimkeNeve_();
+  var cimkeObj = GmailApp.getUserLabelByName(cimke);
+  if (!cimkeObj) {
+    Logger.log('NINCS ILYEN CÍMKE: "' + cimke + '". Futtasd a listazCimkeket függvényt a pontos névért.');
+    return { uj: 0, ismert: 0, hiba: 'nincs cimke' };
+  }
+  var szalak = cimkeObj.getThreads(0, 50);
   var levelek = [];
   for (var i = 0; i < szalak.length && levelek.length < MAX_LEVEL_EGY_KORBEN; i++) {
     var uzenetek = szalak[i].getMessages();
     for (var j = 0; j < uzenetek.length && levelek.length < MAX_LEVEL_EGY_KORBEN; j++) {
       var u = uzenetek[j];
-      if (u.getDate().getTime() < Date.now() - 3 * 24 * 3600 * 1000) continue;
+      if (u.getDate().getTime() < Date.now() - VISSZA_NAP * 24 * 3600 * 1000) continue;
       if (kizart_(u)) continue;
       var cim = emailCim_(u.getFrom());
       if (cim.indexOf('wellwornpallet') === 0 || cim === 'bzol33@gmail.com') continue; // a saját kimenő levelünk
@@ -146,7 +178,7 @@ function ujLevelekBekuldese_(csakProba) {
     }
   }
   if (csakProba) {
-    Logger.log('Küldendő levelek: ' + levelek.length);
+    Logger.log('Címke: "' + cimke + '" · küldendő levelek: ' + levelek.length);
     for (var m = 0; m < Math.min(levelek.length, 10); m++) {
       Logger.log(levelek[m].erkezett + ' | ' + levelek[m].felado + ' | ' + levelek[m].targy + ' | csat: ' + levelek[m].csatolmanyNevek.join(', '));
     }

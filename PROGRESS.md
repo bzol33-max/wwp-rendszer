@@ -1,5 +1,28 @@
 # PROGRESS
 
+## 2026-09-20 — Gmail-figyelő élesítve, és CSAK a „Fuvarmegbízás" címkés levelekkel dolgozik
+
+- **Mi történt:** a `docs/gmail-fuvar-figyelo.gs` Apps Script telepítve Zoltán
+  Google-fiókjába (`wellwornpallet65@gmail.com`, projekt: „WWP — Gmail
+  fuvar-figyelő"), `ALAP_URL` + `TOKEN` beállítva, engedélyezve, 5 perces
+  időzítő telepítve. A két végpont éles válasza 200 volt, az első futás 16
+  levelet vitt át.
+- **Zoltán döntése (09-20):** a figyelő **ne a teljes postafiókot nézze**,
+  csak a **„Fuvarmegbízás"** Gmail-címkével megjelölt leveleket. A script
+  ezért `GmailApp.getUserLabelByName(...)`-ből dolgozik (`ALAP_CIMKE`,
+  felülírható a `CIMKE` Script Propertyvel), az időablak 3 napról **14 napra**
+  bővült (címkézett levélből kevés van, ne maradjon ki semmi), és új
+  `listazCimkeket()` függvény írja ki a fiók címkéit, ha a pontos név kell.
+  Ez derítette ki, hogy a címke **egyes számban** létezik („Fuvarmegbízás"),
+  nem többes számban.
+- **Következmény:** az első, még címke nélküli futás 16 levele bent maradt a
+  `fuvar_level` táblában; ezek a Levelek fül „Mind" nézetében látszanak, a
+  „Teendő" szűrő nem mutatja őket, ha nem megbízásnak lettek osztályozva.
+- **Kockázat:** ami nincs felcímkézve, azt a rendszer nem látja — érdemes egy
+  Gmail-szűrőt csinálni, ami a tipikus megbízó-feladókra automatikusan ráteszi
+  a címkét. A megosztott titok bekerült egy beszélgetésbe, cseréje javasolt
+  (előbb a Script Property, utána a Railway változó).
+
 ## 2026-09-20 — Fuvarozás 2, E10d: Kimutatás (D8) és Partnerek (D7) a tervvászon szerint
 
 - **Kimutatás**: a költségsor teljes lett. Eddig a bevétel, a megtakarítás, az
