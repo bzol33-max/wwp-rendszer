@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import {
   DAY_TYPE_LABELS,
+  DAY_TYPE_STYLES,
   type JelenletEmployee,
   type JelenletSession,
 } from "@/lib/jelenlet/shared";
@@ -223,8 +224,13 @@ function DolgozoNapja({
     <div className="space-y-2 rounded-md border p-2.5">
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-medium">{employee.name}</span>
-        {abszencia && (
-          <span className="rounded-full border px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+        {abszencia && abszencia.day_type !== "munka" && (
+          <span
+            className={cn(
+              "rounded-full border px-2 py-0.5 text-[11px] font-semibold",
+              DAY_TYPE_STYLES[abszencia.day_type]
+            )}
+          >
             {DAY_TYPE_LABELS[abszencia.day_type]}
           </span>
         )}

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
   DAY_TYPE_LABELS,
+  DAY_TYPE_STYLES,
   dayType,
   formatDiff,
   summarizeByDay,
@@ -83,7 +84,12 @@ export function MaiJelenletSav({ onOpenHonap }: { onOpenHonap: () => void }) {
             >
               <span className="shrink-0 text-sm font-semibold">{e.name}</span>
               {tipus !== "munka" ? (
-                <span className="shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+                <span
+                  className={cn(
+                    "shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold",
+                    DAY_TYPE_STYLES[tipus]
+                  )}
+                >
                   {DAY_TYPE_LABELS[tipus]}
                 </span>
               ) : (
@@ -91,8 +97,8 @@ export function MaiJelenletSav({ onOpenHonap }: { onOpenHonap: () => void }) {
                   className={cn(
                     "shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold",
                     nyitott
-                      ? "border-success/40 bg-success/10 text-success"
-                      : "text-muted-foreground"
+                      ? "border-success bg-success text-white"
+                      : "border-border bg-muted text-muted-foreground"
                   )}
                 >
                   {sajat.length === 0 ? "—" : nyitott ? "Bent" : "Kint"}

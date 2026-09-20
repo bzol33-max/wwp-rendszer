@@ -6,7 +6,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useCanEdit } from "@/components/auth/edit-permission-context";
-import { URGENCY_COLORS, weekInfo, type Feladat } from "@/lib/jelenlet/shared";
+import {
+  REPEAT_LABELS,
+  URGENCY_BORDERS,
+  URGENCY_COLORS,
+  URGENCY_LABELS,
+  weekInfo,
+  type Feladat,
+} from "@/lib/jelenlet/shared";
 import { getArchivedFeladatok, toggleFeladatDone } from "@/lib/jelenlet/actions";
 
 export function FeladatokArchivumView({ initialFeladatok }: { initialFeladatok: Feladat[] }) {
@@ -51,12 +58,28 @@ export function FeladatokArchivumView({ initialFeladatok }: { initialFeladatok: 
             <h3 className="text-sm font-semibold">{group.label}</h3>
             <ul className="divide-y">
               {group.items.map((f) => (
-                <li key={f.id} className="flex items-start justify-between gap-2 py-2 text-sm">
+                <li
+                  key={f.id}
+                  className={cn(
+                    "flex items-start justify-between gap-2 border-l-4 py-2 pl-2 text-sm",
+                    URGENCY_BORDERS[f.urgency]
+                  )}
+                >
                   <div className="flex min-w-0 items-start gap-2">
-                    <span className={cn("mt-1 size-2.5 shrink-0 rounded-full", URGENCY_COLORS[f.urgency])} />
+                    <span
+                      className={cn("mt-1 size-2.5 shrink-0 rounded-full", URGENCY_COLORS[f.urgency])}
+                      title={URGENCY_LABELS[f.urgency]}
+                    />
                     <div className="min-w-0">
                       <p className="font-medium">{f.description}</p>
-                      <p className="text-muted-foreground">{f.site_name}</p>
+                      <p className="text-muted-foreground">
+                        {f.site_name}
+                        {f.repeat_freq !== "egyszeri" && (
+                          <span className="ml-1.5 rounded-full border border-violet-300 bg-violet-100 px-1.5 text-[10px] font-semibold text-violet-700">
+                            {REPEAT_LABELS[f.repeat_freq]}
+                          </span>
+                        )}
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         Kiadva: {f.task_date} — Elvégezve: {f.elvegzes_datum ?? "—"}
                       </p>

@@ -353,3 +353,23 @@ export type SzabadsagKeret = {
   /** Ennyi vehető még ki (nem megy nulla alá). */
   maradek: number;
 };
+
+// A sürgősség színe a listasor bal szélén végigfutó sávként is megjelenik
+// (Jelenlét oldal, telephely-oszlopok). A meleg tónusú alaptémán egy apró
+// pötty önmagában alig olvasható, a sávval viszont egy pillantás alatt
+// végig lehet futni a listán. Ugyanaz az öt szín, mint az URGENCY_COLORS-ban.
+export const URGENCY_BORDERS: Record<number, string> = {
+  1: "border-l-red-500",
+  2: "border-l-orange-500",
+  3: "border-l-yellow-500",
+  4: "border-l-lime-500",
+  5: "border-l-green-500",
+};
+
+// A nap típusának színe (Jelenlét sáv és havi napló): a szabadság kék, a
+// betegszabadság borostyán — ugyanaz a két szín, mint a dolgozói mobilon,
+// hogy a két felület ne mondjon mást ugyanarról a napról.
+export const DAY_TYPE_STYLES: Record<Exclude<DayType, "munka">, string> = {
+  szabadsag: "border-blue-300 bg-blue-100 text-blue-700",
+  beteg: "border-orange-300 bg-orange-100 text-orange-700",
+};

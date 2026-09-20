@@ -11,6 +11,7 @@ import { useCanEdit } from "@/components/auth/edit-permission-context";
 import { HU_MONTHS } from "@/lib/dolgozok/shared";
 import {
   DAY_TYPE_LABELS,
+  DAY_TYPE_STYLES,
   currentYearMonth,
   formatDiff,
   summarizeByDay,
@@ -37,7 +38,16 @@ function napFelirat(iso: string): string {
 function NapCella({ nap }: { nap: DaySummary | undefined }) {
   if (!nap) return <span className="text-muted-foreground">—</span>;
   if (nap.dayType !== "munka") {
-    return <span className="text-muted-foreground">{DAY_TYPE_LABELS[nap.dayType]}</span>;
+    return (
+      <span
+        className={cn(
+          "rounded-full border px-2 py-0.5 text-[11px] font-semibold",
+          DAY_TYPE_STYLES[nap.dayType]
+        )}
+      >
+        {DAY_TYPE_LABELS[nap.dayType]}
+      </span>
+    );
   }
   return (
     <span className="tabular-nums">

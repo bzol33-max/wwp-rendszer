@@ -25,6 +25,8 @@ import {
 import {
   REPEAT_LABELS,
   URGENCY_COLORS,
+  URGENCY_LABELS,
+  URGENCY_LEVELS,
   marLathato,
   todayIso,
   type Feladat,
@@ -196,6 +198,19 @@ export function JelenletView() {
               keszMa={keszMa[s.id] ?? 0}
               onSelect={setSelected}
             />
+          ))}
+        </div>
+      )}
+
+      {/* Jelmagyarázat: a színkód csak akkor ér valamit, ha meg is lehet
+          fejteni. Ugyanaz az öt szín, ami a sorok bal szélén fut végig. */}
+      {!loading && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[11px] text-muted-foreground">
+          {URGENCY_LEVELS.map((szint) => (
+            <span key={szint} className="inline-flex items-center gap-1.5">
+              <span className={cn("size-2.5 rounded-full", URGENCY_COLORS[szint])} />
+              {URGENCY_LABELS[szint]}
+            </span>
           ))}
         </div>
       )}
