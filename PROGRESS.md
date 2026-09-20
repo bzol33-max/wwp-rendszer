@@ -1,5 +1,31 @@
 # PROGRESS
 
+## 2026-09-20 — Fuvarozás 2 átállás, E7c: Tervezés (heti rács, üres slotok)
+
+- **Probléma:** nem látszott egy nézetben, hol és mikor áll üresen kocsi —
+  pedig a heti fuvarkeresés ezen múlik (Budaházi Zoltán kérése, terv 10.1).
+- **Módosítás:** `lib/fuvarozas2/tervezes.ts` + `/fuvarozas2/tervezes`:
+  kocsi × nap rács (hétfőtől vasárnapig, hét-léptetéssel), a foglalt mezőben
+  a megbízás kártyája (megbízó, útvonal, állapot, díj — a részletre visz), az
+  üres MUNKANAPON piros szaggatott „ÜRES · fuvar kell" a kocsi aznapi
+  helyével és az üres hazaút becsült km-ével; hétvégén nincs üres-jelzés.
+  Jobb oldalt „Hová kell fuvar a héten" lista (nap · kocsi · honnan · üres km,
+  Timocom és Kalkulátor gombbal) és „Kocsi nélkül" panel. Fent heti
+  összesítő (foglalt/üres nap, bér/saját darab, Ft-os bevétel).
+- **Becslés, nem mérés:** a hazaút km a megállók geokód-snapshotjából
+  LÉGVONALBAN, 1,3-as közúti szorzóval — így a heti nézet egyetlen külső
+  hívást sem indít (T1); a felület kiírja, hogy becslés, a pontos km/útdíj a
+  Kalkulátorból (HU-GO) jön.
+- **Teszt:** typecheck, lint, build zöld; helyi adaton a rács, az üres
+  slotok és a „Kocsi nélkül" panel a várt tartalommal. A teljes `npm run
+  teszt` lánc **Node 24-en (a fejlesztői gépen) zöld: 339 eset, 0 hiba** —
+  a konténer Node 22.22-jén a négy régi `.mts` teszt továbbra sem fut
+  (CJS/ESM interop), ezért a `tsx` mostantól devDependency, hogy a lánc
+  friss klónon is induljon.
+- **Kockázat:** a kocsi „hol áll" értéke az utolsó ismert lerakóból jön; ha
+  egy fuvarhoz nincs kocsi rendelve, az a „Kocsi nélkül" panelen látszik, a
+  rácsban nem.
+
 ## 2026-09-20 — Fuvarozás 2 átállás, E9a: Levelek (Gmail-figyelő Apps Script-tel, determinisztikus osztályozás)
 
 - **Probléma:** a fuvarmegbízások e-mailben jönnek, és Zoltán kézzel teszi
