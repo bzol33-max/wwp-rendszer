@@ -577,8 +577,8 @@ export async function jelezGondot(fuvarId: string, szoveg: string): Promise<void
   const hiv = fuvar.reise_id ?? fuvar.pozicioszam;
   const leiras = `Sofőr jelzés (${session.name}) — fuvar #${fuvarId}${fuvar.megrendelo ? `, ${fuvar.megrendelo}` : ""}${hiv ? `, ${hiv}` : ""}, ${varosNev(fuvar.lerako)}: ${tiszta}`;
   await query(
-    `insert into feladatok (task_date, site_id, description, urgency, repeat_freq, created_by)
-     values (($1::timestamptz at time zone 'Europe/Budapest')::date, $2, $3, 4, 'egyszeri', $4)`,
+    `insert into feladatok (task_date, site_id, description, urgency, repeat_freq, created_by, forras)
+     values (($1::timestamptz at time zone 'Europe/Budapest')::date, $2, $3, 4, 'egyszeri', $4, 'sofor_gond')`,
     [new Date().toISOString(), site[0].id, leiras, session.name]
   );
   console.log(`[sofor] gondjelzés: ${leiras}`);

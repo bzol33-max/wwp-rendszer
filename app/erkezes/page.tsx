@@ -38,7 +38,6 @@ export default async function ErkezesPage() {
     <ErkezesSajatView
       employeeId={session.employeeId}
       employeeName={session.name}
-      role={session.role}
       keszletPermission={session.can("keszlet_sajat")}
       fuvarozasPermission={session.can("fuvarozas_sajat")}
       elolegekPermission={session.can("elolegek_sajat")}

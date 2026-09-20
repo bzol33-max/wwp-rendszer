@@ -11,6 +11,7 @@ import {
   REPEAT_LABELS,
   URGENCY_COLORS,
   URGENCY_LABELS,
+  kovetkezoEsedekesseg,
   type Feladat,
   type FeladatComment,
 } from "@/lib/jelenlet/shared";
@@ -153,6 +154,15 @@ export function FeladatCommentsDialog({
           >
             {feladat.done ? "Visszavonás (nincs kész)" : "✓ Elvégezve"}
           </Button>
+        )}
+        {/* Ismétlődő feladatnál a készre jelentés nem tünteti el a
+            tennivalót: a sor archívumba kerül, és rögtön létrejön a következő
+            példánya — itt írjuk ki, mikorra, hogy ne érje meglepetés. */}
+        {showDoneToggle && !feladat.done && feladat.repeat_freq !== "egyszeri" && (
+          <p className="text-center text-[11px] text-muted-foreground">
+            Készre jelentés után újra megjelenik:{" "}
+            {kovetkezoEsedekesseg(feladat.task_date, feladat.repeat_freq) ?? "—"}
+          </p>
         )}
         {canEdit && (
           <Button

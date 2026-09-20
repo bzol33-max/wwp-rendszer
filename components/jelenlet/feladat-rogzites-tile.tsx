@@ -2,14 +2,14 @@
 
 import { useState } from "react";
 import { Plus } from "lucide-react";
-import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { UjFeladatForm } from "@/components/jelenlet/uj-feladat-form";
 import type { Site } from "@/lib/jelenlet/shared";
 
-// Kompakt csempe a Jelenlét admin nézet felső sorában — koppintásra
-// megnyitja az új feladat felvételét.
-export function FeladatRogzitesTile({
+// A feladatrögzítő a fejléc gombja mögé került: a nyitóképen a hely a
+// telephelyek feladatlistáié, hogy telephelyenként 8-10 tétel elférjen.
+export function UjFeladatGomb({
   sites,
   canEdit,
   onCreated,
@@ -19,20 +19,14 @@ export function FeladatRogzitesTile({
   onCreated: () => void | Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
+  if (!canEdit) return null;
 
   return (
     <>
-      <Card>
-        <button
-          type="button"
-          onClick={() => canEdit && setOpen(true)}
-          disabled={!canEdit}
-          className="flex h-full w-full flex-col items-center justify-center gap-1.5 px-2.5 text-center disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <Plus className="h-5 w-5 text-muted-foreground" />
-          <span className="text-xs font-semibold">Feladat rögzítése</span>
-        </button>
-      </Card>
+      <Button size="sm" onClick={() => setOpen(true)}>
+        <Plus />
+        Feladat rögzítése
+      </Button>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>

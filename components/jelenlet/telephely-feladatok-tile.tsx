@@ -1,48 +1,67 @@
 "use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import { URGENCY_COLORS, type Feladat } from "@/lib/jelenlet/shared";
+import { REPEAT_LABELS, URGENCY_COLORS, type Feladat } from "@/lib/jelenlet/shared";
 
-// Álló téglalap csempe egy telephelyhez — az oda kiadott aktuális
-// (nincs kész) feladatokat listázza. Egy feladatra koppintva nyílik meg a
-// részlete (megjegyzés írása, elvégzettnek jelölés).
+const HO_ROVID = ["jan", "febr", "márc", "ápr", "máj", "jún", "júl", "aug", "szept", "okt", "nov", "dec"];
+
+function rovidDatum(iso: string): string {
+  const [, ho, nap] = iso.split("-").map(Number);
+  return `${HO_ROVID[ho - 1]}. ${nap}.`;
+}
+
+/**
+ * Egy telephely nyitott feladatai, soronként egy tétel. A sorok szándékosan
+ * egysorosak és sűrűk: telephelyenként 8-10 feladat is elfér görgetés
+ * nélkül. A hosszú szöveg a sor végén levágódik, a teljes szöveg a megnyitott
+ * feladatban látszik. A sorrend sürgősség, azon belül a régebbi kiadás elöl,
+ * hogy ami régóta lóg, ne csússzon a lista aljára.
+ */
 export function TelephelyFeladatokTile({
   siteName,
   feladatok,
+  keszMa,
   onSelect,
 }: {
   siteName: string;
   feladatok: Feladat[];
+  keszMa: number;
   onSelect: (feladat: Feladat) => void;
 }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-sm">{siteName}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-1.5">
+    <div className="overflow-hidden rounded-xl border bg-card">
+      <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-2">
+        <span className="text-sm font-semibold">{siteName}</span>
+        <span className="rounded-full border bg-card px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+          {feladatok.length === 0 ? "nincs" : `${feladatok.length} nyitott`}
+        </span>
+      </div>
+      <div className="py-1">
         {feladatok.length === 0 ? (
-          <p className="text-xs text-muted-foreground">Nincs aktuális feladat.</p>
+          <p className="px-3 py-2 text-xs text-muted-foreground">Nincs aktuális feladat.</p>
         ) : (
           feladatok.map((f) => (
             <button
               key={f.id}
               type="button"
               onClick={() => onSelect(f)}
-              className="flex w-full items-start gap-2 rounded-md border bg-card p-2 text-left text-xs active:bg-muted"
+              className={cn(
+                "flex w-full items-center gap-2 border-b border-border/40 px-3 py-1.5 text-left text-xs last:border-b-0 hover:bg-muted/40",
+                f.urgency === 1 && "bg-destructive/5"
+              )}
             >
-              <span
-                className={cn("mt-0.5 size-2.5 shrink-0 rounded-full", URGENCY_COLORS[f.urgency])}
-              />
-              <span className="min-w-0 flex-1">
-                <span className="block font-medium">{f.description}</span>
-                <span className="text-muted-foreground">{f.task_date}</span>
+              <span className={cn("size-2 shrink-0 rounded-full", URGENCY_COLORS[f.urgency])} />
+              <span className="min-w-0 flex-1 truncate">{f.description}</span>
+              <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
+                {f.repeat_freq === "egyszeri" ? rovidDatum(f.task_date) : REPEAT_LABELS[f.repeat_freq]}
               </span>
             </button>
           ))
         )}
-      </CardContent>
-    </Card>
+      </div>
+      <div className="border-t bg-muted/30 px-3 py-1.5 text-[11px] text-muted-foreground">
+        Ma készre jelentve: {keszMa}
+      </div>
+    </div>
   );
 }

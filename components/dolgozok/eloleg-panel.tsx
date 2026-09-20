@@ -41,6 +41,21 @@ function ElolegRow({ advance, canEdit, onReload }: { advance: AdvanceRow; canEdi
           </span>
         </div>
         {advance.note && <p className="truncate text-muted-foreground">{advance.note}</p>}
+        {/* A dolgozó a telefonján nyugtázza az előleget (Profil > Előlegek,
+            "ELFOGADOM"). Az elfogadás ténye és időpontja eddig csak az
+            adatbázisban volt meg, a kártyán nem látszott — pedig épp ezért
+            van a gomb. A tétel felvitele után ez üresen marad, amíg a
+            dolgozó rá nem nyomott. Az automata (bérkártyáról szinkronizált)
+            sorokat nem kell nyugtázni, ott nem is jelezzük. */}
+        {!auto &&
+          (advance.accepted_at ? (
+            <p className="truncate text-success">
+              Elfogadva: {advance.accepted_at}
+              {advance.accepted_by ? ` · ${advance.accepted_by}` : ""}
+            </p>
+          ) : (
+            <p className="truncate text-muted-foreground">Elfogadásra vár</p>
+          ))}
       </div>
       {canEdit && !auto && (
         <Button size="icon-xs" variant="ghost" disabled={pending} onClick={remove}>

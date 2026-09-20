@@ -137,6 +137,12 @@ export type DaySummary = {
   dayType: DayType;
   workedMinutes: number;
   diffMinutes: number | null;
+  /**
+   * Van a napon hiányos munkaszakasz (nincs távozás, vagy nincs érkezés).
+   * Ilyenkor a nap hossza nem ismert, ezért diffMinutes null, és a nap sem a
+   * heti, sem a havi egyenlegbe nem számít bele — amíg az admin le nem zárja.
+   */
+  nyitott: boolean;
 };
 
 /** Napi bontás, a legfrissebb nap elöl — egy nap összes szakaszával és eltérésével. */
@@ -148,12 +154,17 @@ export function summarizeByDay(sessions: JelenletSession[]): DaySummary[] {
         (a.arrival_time ?? "").localeCompare(b.arrival_time ?? "")
       );
       const type = dayType(sorted);
+      // A hiányos szakasz korábban csendben kimaradt az összeadásból: egy
+      // 07:00-kor nyitva hagyott nap "−9:00"-ként jelent meg, mintha ott se
+      // lett volna senki. Most a nap jelöletlen marad, és az admin zárja le.
+      const nyitott = type === "munka" && vanNyitottSzakasz(sorted);
       return {
         date,
         sessions: sorted,
         dayType: type,
         workedMinutes: sumWorkedMinutes(sorted),
-        diffMinutes: type === "munka" ? dayDiffFromWorkday(sorted) : null,
+        diffMinutes: type === "munka" && !nyitott ? dayDiffFromWorkday(sorted) : null,
+        nyitott,
       };
     })
     .sort((a, b) => b.date.localeCompare(a.date));
@@ -214,3 +225,131 @@ export function weekInfo(dateStr: string): WeekInfo {
 
   return { mondayIso: monday.toISOString().slice(0, 10), year: isoYear, week, label };
 }
+
+// ---------------------------------------------------------------------------
+// Ismétlődő feladatok (2026-09-20)
+// ---------------------------------------------------------------------------
+
+/**
+ * Hány nappal az esedékesség ELŐTT jelenjen meg egy feladat a nyitott
+ * listákon (Jelenlét oldal, dolgozói mobil). Budaházi Zoltán kérése: a
+ * készre jelentett ismétlődő feladat archívumba kerül, és "esedékessége
+ * előtt 3 nappal újra megjelenik".
+ */
+export const LATHATO_NAPPAL = 3;
+
+function napokkalEltolva(datum: string, napok: number): string {
+  const [ev, ho, nap] = datum.split("-").map(Number);
+  const d = new Date(Date.UTC(ev, ho - 1, nap + napok));
+  return d.toISOString().slice(0, 10);
+}
+
+function honappalEltolva(datum: string, honapok: number): string {
+  const [ev, ho, nap] = datum.split("-").map(Number);
+  // Hónap-végi csúszás kezelése: jan. 31. + 1 hónap = febr. 28./29., nem
+  // márc. 3. (a Date magától átfordulna a következő hónapra).
+  const cel = new Date(Date.UTC(ev, ho - 1 + honapok, 1));
+  const utolsoNap = new Date(Date.UTC(cel.getUTCFullYear(), cel.getUTCMonth() + 1, 0)).getUTCDate();
+  cel.setUTCDate(Math.min(nap, utolsoNap));
+  return cel.toISOString().slice(0, 10);
+}
+
+/**
+ * Egy ismétlődő feladat következő esedékessége. Az ALAP az előző példány
+ * kiadási dátuma (nem a készre jelentés napja) — így a heti feladat megtartja
+ * a ritmusát akkor is, ha egyszer később végezték el. Ha a számított nap már
+ * elmúlt (késve jelentették készre), addig léptetjük, amíg a mai nap utánra
+ * nem kerül. Egyszeri feladatnál null.
+ */
+export function kovetkezoEsedekesseg(
+  elozoTaskDate: string,
+  freq: RepeatFreq,
+  maIso: string = todayIso()
+): string | null {
+  if (freq === "egyszeri") return null;
+  const lepes = (d: string) =>
+    freq === "heti" ? napokkalEltolva(d, 7)
+      : freq === "ketheti" ? napokkalEltolva(d, 14)
+        : honappalEltolva(d, 1);
+  let kovetkezo = lepes(elozoTaskDate);
+  // Védelem a végtelen ciklus ellen (elrontott dátum): legfeljebb 60 lépés,
+  // ami heti ismétlődésnél is több mint egy év.
+  for (let i = 0; i < 60 && kovetkezo <= maIso; i++) kovetkezo = lepes(kovetkezo);
+  return kovetkezo;
+}
+
+/** Látszik-e már a nyitott listákon? Esedékes, vagy LATHATO_NAPPAL napon belül az lesz. */
+export function marLathato(taskDate: string, maIso: string = todayIso()): boolean {
+  return taskDate <= napokkalEltolva(maIso, LATHATO_NAPPAL);
+}
+
+// ---------------------------------------------------------------------------
+// Nyitva maradt nap és heti összesítés (2026-09-20)
+// ---------------------------------------------------------------------------
+
+/**
+ * Van-e a napon nyitva hagyott munkaszakasz (érkezés van, távozás nincs)?
+ * Ilyenkor a nap hossza nem ismert, ezért a nap NEM számít bele sem a heti,
+ * sem a havi egyenlegbe — az admin egy kattintással lezárja, és onnantól
+ * beleszámít. A csak-távozás sor (elfelejtett érkezés) ugyanígy hiányos.
+ */
+export function vanNyitottSzakasz(sessions: JelenletSession[]): boolean {
+  return sessions.some(
+    (s) => s.day_type === "munka" && (!s.arrival_time || !s.departure_time)
+  );
+}
+
+export type WeekSummary = {
+  week: WeekInfo;
+  days: DaySummary[];
+  /** A hét lezárt napjainak összege percben. */
+  diffMinutes: number;
+  workedDays: number;
+  szabadsagDays: number;
+  betegDays: number;
+  nyitottDays: number;
+};
+
+/** A napokat ISO-hetekbe csoportosítja, a legfrissebb hét elöl. */
+export function summarizeByWeek(days: DaySummary[]): WeekSummary[] {
+  const map = new Map<string, WeekSummary>();
+  for (const d of days) {
+    const w = weekInfo(d.date);
+    const meglevo = map.get(w.mondayIso);
+    const cel: WeekSummary =
+      meglevo ??
+      { week: w, days: [], diffMinutes: 0, workedDays: 0, szabadsagDays: 0, betegDays: 0, nyitottDays: 0 };
+    cel.days.push(d);
+    if (d.nyitott) cel.nyitottDays++;
+    else if (d.dayType === "szabadsag") cel.szabadsagDays++;
+    else if (d.dayType === "beteg") cel.betegDays++;
+    else {
+      cel.workedDays++;
+      cel.diffMinutes += d.diffMinutes ?? 0;
+    }
+    map.set(w.mondayIso, cel);
+  }
+  for (const w of map.values()) w.days.sort((a, b) => a.date.localeCompare(b.date));
+  return Array.from(map.values()).sort((a, b) => b.week.mondayIso.localeCompare(a.week.mondayIso));
+}
+
+// ---------------------------------------------------------------------------
+// Szabadságkeret (dolgozói mobil Profil, 2026-09-20)
+// ---------------------------------------------------------------------------
+
+/**
+ * Hány nap szabadság vehető még ki. A fordulónapon még kivehető napok
+ * számából (a bérjegyzékről átvett érték) levonjuk a fordulónap UTÁN
+ * rögzített szabadság-napokat. A betegszabadság nem fogyaszt keretet.
+ * Null, ha a dolgozóhoz nincs keret beállítva — ilyenkor a Profil nem
+ * mutat szabadság-szakaszt.
+ */
+export type SzabadsagKeret = {
+  /** A fordulónapon még kivehető napok száma. */
+  keret: number;
+  fordulonap: string;
+  /** A fordulónap óta jelentett szabadság-napok száma. */
+  felhasznalt: number;
+  /** Ennyi vehető még ki (nem megy nulla alá). */
+  maradek: number;
+};

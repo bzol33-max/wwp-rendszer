@@ -914,3 +914,41 @@ create table if not exists archiv_befizetes (
   created_at timestamptz not null default now()
 );
 create index if not exists idx_archiv_befizetes_nap on archiv_befizetes (nap);
+
+-- ---------------------------------------------------------------------------
+-- Jelenléti/üzenőfal modul befejezése (2026-09-20)
+-- ---------------------------------------------------------------------------
+
+-- A feladatok tábla két különböző dolgot hordoz: a telephelyi üzenőfal
+-- tennivalóit (Jelenlét modul), és a sofőrök fuvarhoz fűzött gondjelzéseit
+-- (lib/fuvarozas/sofor.ts jelezGondot), amiket a Fuvarozás és az Áttekintés
+-- olvas vissza. A kettő eddig egy listában keveredett: a sofőr jelzése
+-- megjelent a dolgozók üzenőfalán Szakolyon. A "forras" szétválasztja őket —
+-- a Jelenlét oldal és a dolgozói mobil csak a 'jelenlet' sorokat mutatja, a
+-- fuvaros oldalak csak a 'sofor_gond' sorokat olvassák.
+alter table feladatok add column if not exists forras text not null default 'jelenlet';
+do $$ begin
+  alter table feladatok add constraint feladatok_forras_check
+    check (forras in ('jelenlet', 'sofor_gond'));
+exception when duplicate_object then null; end $$;
+create index if not exists idx_feladatok_forras on feladatok (forras, done, urgency, task_date);
+
+-- Ismétlődő feladat: készre jelentéskor a sor archívumba kerül, és létrejön
+-- a KÖVETKEZŐ példánya (task_date = az előző esedékesség + a gyakoriság). A
+-- sorozat_id az első példány id-ja, ez köti össze a láncot — enélkül egy
+-- visszanyitás után nem lenne eldönthető, hogy létezik-e már a következő
+-- példány, és minden készre jelentés újat gyártana. A nyitott listák
+-- (Jelenlét oldal, dolgozói mobil) csak azt mutatják, ami esedékes, vagy
+-- LATHATO_NAPPAL napon belül az lesz — lásd lib/jelenlet/shared.ts.
+alter table feladatok add column if not exists sorozat_id bigint;
+create index if not exists idx_feladatok_sorozat on feladatok (sorozat_id) where sorozat_id is not null;
+
+-- Szabadságkeret (dolgozói mobil Profil): hány nap vehető még ki. A
+-- nyilvántartás nem a teljes éves keretet tárolja, hanem egy fordulónapot és
+-- az azon a napon még kivehető napok számát (a bérjegyzékről átvéve). A
+-- Profil ebből vonja le a fordulónap UTÁN rögzített szabadság-napokat
+-- (jelenletek.day_type = 'szabadsag'), így a telefonon jelentett szabadság
+-- automatikusan fogyasztja a keretet, és nem kell kézzel karbantartani.
+-- A betegszabadság NEM fogyaszt keretet.
+alter table alkalmazottak add column if not exists szabadsag_keret_nap integer;
+alter table alkalmazottak add column if not exists szabadsag_keret_datum date;

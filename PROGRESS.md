@@ -1,5 +1,68 @@
 # PROGRESS
 
+## 2026-09-20 — Jelenléti/üzenőfal: havi napló, ismétlődő feladatok, mobil javítások
+
+- **Probléma (éles adatból):** a modult szeptember 12. óta nem használták, és
+  az addigi kilenc jelenlét-sor megmutatta, miért. Egyetlen napra (09-08)
+  nyolc sor került: azonos percben nyitott-zárt szakaszok, egy máig nyitva
+  maradt szakasz, valamint szabadság ÉS betegszabadság ugyanarra a napra — a
+  telefon nem mondta meg, bent van-e, és semmit nem lehetett visszavonni.
+  Megjegyzés egyetlen bejegyzésen sem volt (a mező a gombok ALATT volt), és a
+  feladatokhoz egyetlen hozzászólás sem született: a küldés a teljes
+  `jelenlet` modul jogát kérte, ami a két dolgozónak nincs meg, így minden
+  küldés hibára futott. A `repeat_freq` halott adat volt: heti feladat
+  beállítható, de semmi nem hozta vissza. A sofőrök gondjelzései a dolgozók
+  üzenőfalán jelentek meg Szakolyon.
+- **Módosítás — admin (`/jelenlet`):** a mai jelenlét vékony sávba került
+  (`mai-jelenlet-sav.tsx`), a felszabaduló helyen telephelyenként 8-10 feladat
+  fér el görgetés nélkül. Új havi napló (`havi-naplo-dialog.tsx`): a hónap
+  hetekre bontva, naponta minden érkezés-távozás, heti és havi összeggel,
+  dolgozónként; egy napra kattintva helyben javítható (`nap-szerkeszto.tsx`),
+  és olyan nap is pótolható, amin még nincs bejegyzés. A nyitva maradt napok
+  figyelmeztető sávba kerültek, egy időpont beírásával lezárhatók.
+- **Módosítás — számolás:** a hiányos (távozás nélküli) nap mostantól
+  `nyitott`, és NEM számít bele a heti/havi egyenlegbe. Eddig csendben
+  kimaradt az összeadásból, így egy 07:00-kor nyitva hagyott nap −9:00-ként
+  jelent meg, mintha ott se lett volna senki.
+- **Módosítás — ismétlődés:** készre jelentéskor a sor archívumba kerül, és
+  létrejön a következő példány az előző kiadási dátumhoz igazítva (nem a
+  készre jelentés napjához, hogy a ritmus ne csússzon). A nyitott listákon 3
+  nappal az esedékesség előtt jelenik meg; addig az „Ütemezett" sorban van. A
+  `sorozat_id` köti össze a láncot, ezért visszanyitás sem gyárt duplikátumot.
+- **Módosítás — sofőrjelzés:** `feladatok.forras` (`jelenlet` / `sofor_gond`).
+  A Jelenlét és a mobil csak a telephelyi feladatokat mutatja; a
+  `lib/fuvarozas/actions.ts:getGondJelzesek` és a `lib/attekintes/actions.ts`
+  a `sofor_gond` sorokat olvassa, tehát a fuvaros oldalakon semmi nem vész el.
+- **Módosítás — dolgozói mobil (`/erkezes`):** állapotsor (bent/kint, mióta) +
+  a mai nap idővonala; a gombok közül csak az él, aminek értelme van; az
+  utolsó koppintás 10 percig visszavonható; a megjegyzés a gombok FÖLÉ
+  került. Egy napra nem kerülhet egyszerre munka és távollét (a távollét
+  megerősítés után felváltja a nap bejegyzéseit). Feladatok: telephely-fülek.
+  Profil: már csak a kivehető szabadság és az előlegek — a szerepkör és a
+  bérezés lekerült. Az elfogadásra váró előleg piros sávban áll minden
+  képernyő tetején (külön push-értesítés nincs, ez volt a kérés).
+- **Módosítás — szabadságkeret:** `alkalmazottak.szabadsag_keret_nap` +
+  `szabadsag_keret_datum`. A Profil a fordulónap utáni szabadság-napokat vonja
+  le belőle, így a telefonon jelentett szabadság automatikusan fogyaszt.
+- **Hibák:** a feladat-megjegyzés jogosultsága (`requireAnyEditPermission`);
+  az előleg `accepted_at` formázatlanul, dátum-objektumként ment a kliensre,
+  ami eldobta a Profil > Előlegek szakaszt annál, akinek van elfogadott
+  előlege (Bodogán Gábor); az előleg megjegyzése nem jelent meg a telefonon;
+  az admin előleg-kártyáján nem látszott az elfogadás ténye és időpontja; a
+  távozás-gomb érkezés nélküli sort hozott létre; az „Új szakasz" üres sort.
+- **Egyszeri lépés:** `db/migrations/006_jelenlet_befejezes.sql` — a meglévő
+  sofőrjelzések átjelölése, a 09-08-i próbasorok és az üres szakaszok
+  törlése, a szabadságkeret indulása a 2026. augusztusi bérjegyzékről
+  (Bodogán Gábor 14, Vadon Gábor 15 nap, 2026-08-31-i fordulónappal).
+- **Teszt:** `scripts/teszt-jelenlet.ts` (30 eset) a `teszt` láncban; a teljes
+  lánc, `typecheck`, `build` zöld. A `react-hooks/set-state-in-effect`
+  darabszám ezekben a fájlokban 10-ről 8-ra csökkent.
+- **Kockázat:** a felületet böngészőben nem tudtam kipróbálni (nincs helyi
+  Postgres), ezért az első éles használatot érdemes végignézni. A
+  `006`-os migráció adatot töröl (a 09-08-i próbasorok) — Budaházi Zoltán
+  megerősítette, hogy az a nap próba volt.
+
+
 ## 2026-09-20 — Levelek: a „Mind" nézet nem mutatja az elvetett leveleket
 
 - **Probléma:** a takarítás után is ott maradtak a nem odavaló levelek a

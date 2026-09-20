@@ -1031,7 +1031,8 @@ async function getGondJelzesek(fuvarIds: string[]): Promise<Map<string, GondJelz
   const sorok = await query<{ description: string; done: boolean; created_at: Date | null; created_by: string | null }>(
     `select description, done, created_at, created_by
        from feladatok
-      where description like 'Sofőr jelzés (%'
+      where forras = 'sofor_gond'
+        and description like 'Sofőr jelzés (%'
         and (done = false or created_at >= now() - interval '3 days')
       order by id asc
       limit 100`

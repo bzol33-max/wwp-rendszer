@@ -148,7 +148,10 @@ export async function getAlkalmazottakSnapshot(): Promise<Snapshot> {
     ),
     query<AdvanceRow>(
       `select id::text, employee_id::text, to_char(advance_date, 'YYYY-MM-DD') as advance_date,
-         amount, note, auto_key, created_by, created_at, accepted_at, accepted_by
+         amount, note, auto_key, created_by,
+         to_char(created_at at time zone 'Europe/Budapest', 'YYYY-MM-DD HH24:MI') as created_at,
+         to_char(accepted_at at time zone 'Europe/Budapest', 'YYYY-MM-DD HH24:MI') as accepted_at,
+         accepted_by
        from alkalmazott_elolegek
        order by advance_date desc, id desc`
     ),
@@ -392,7 +395,9 @@ export async function getEmployeeElolegek(employeeId: string): Promise<EmployeeE
     accepted_at: string | null;
     accepted_by: string | null;
   }>(
-    `select id::text, to_char(advance_date, 'YYYY-MM-DD') as advance_date, amount, note, accepted_at, accepted_by
+    `select id::text, to_char(advance_date, 'YYYY-MM-DD') as advance_date, amount, note,
+       to_char(accepted_at at time zone 'Europe/Budapest', 'YYYY-MM-DD HH24:MI') as accepted_at,
+       accepted_by
      from alkalmazott_elolegek
      where employee_id = $1
      order by advance_date desc, id desc`,

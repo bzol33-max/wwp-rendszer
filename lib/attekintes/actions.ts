@@ -348,7 +348,7 @@ export async function getFuvarFulAdatok(): Promise<FuvarFulAdatok> {
   const gondSorok = erintettIds.length
     ? await query<{ description: string }>(
         `select description from feladatok
-          where done = false and description like 'Sofőr jelzés (%'
+          where done = false and forras = 'sofor_gond' and description like 'Sofőr jelzés (%'
           order by id desc limit 50`
       ).catch(() => [])
     : [];

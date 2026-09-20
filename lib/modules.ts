@@ -75,6 +75,6 @@ export const MODULES: ModuleInfo[] = [
     icon: MessageSquare,
     status: "fejlesztes-alatt",
     description:
-      "Dolgozói mobil bejelentkezés (napi érkezés/távozás, feladat-üzenőfal, Profil — alapadatok és előleg-elfogadás; sofőröknél saját fuvar-nézet is).",
+      "Napi érkezés és távozás (naponta többször is), havi napló hetekre bontva a 9 órás mércéhez mért eltéréssel, telephelyi feladat-üzenőfal ismétlődéssel. Dolgozói mobil: jelenlét, feladatok, Profil (kivehető szabadság, előleg-elfogadás); sofőröknél saját fuvar-nézet is.",
   },
 ];
