@@ -1,5 +1,51 @@
 # PROGRESS
 
+## 2026-09-20 — Fuvarozás 2 átállás, E9a: Levelek (Gmail-figyelő Apps Script-tel, determinisztikus osztályozás)
+
+- **Probléma:** a fuvarmegbízások e-mailben jönnek, és Zoltán kézzel teszi
+  őket a Drive-ba; a nem-megbízás levelek (okmánysürgetés, módosítás,
+  kérdés) sehol nem látszanak összegyűjtve.
+- **Ok / architektúra-döntés (az S17 határozat pontosítása):** a tervben
+  OAuth (`gmail.readonly`) szerepelt. Ez itt **nem járható**: a Gmail
+  olvasó jogosultsága a Google-nál „restricted scope" — éles használathoz
+  alkalmazás-hitelesítés és éves biztonsági audit kellene, „Testing" módban
+  pedig a refresh token 7 naponta lejár (hetente újra be kellene lépni).
+  Helyette a figyelő a felhasználó SAJÁT Google-fiókjában futó Apps Script
+  (`docs/gmail-fuvar-figyelo.gs`), ami 5 percenként megosztott titokkal
+  POST-ol a rendszernek. Nincs tárolt Gmail-token, nincs lejárat, és a
+  levél törzse nem hagyja el a postafiókot.
+- **Módosítás:**
+  - `lib/fuvarozas2/level-osztalyozo.ts` — tiszta, determinisztikus
+    osztályozó 10 osztállyal (megbizas · modositas · adatkeres ·
+    okmanykeres · papirok · fizetes · szamla_ertesito · timocom · reklam ·
+    egyeb), bizalommal és indoklással; partnert a meglévő
+    `import/partnerek.ts` ujjlenyomataiból, rendszámot (a Duvenbeck elírt
+    alakját is) és hivatkozási számot a tárgyból olvas. A szabályok a
+    postafiók 3 hetének valódi mintáiból készültek.
+  - `db/migrations/004_fuvarozas2_levelek.sql` — `fuvar_level` (metaadat +
+    osztályozás + feldolgozás), `gmail_figyelo_allapot` (életjel).
+  - API: `POST /api/fuvarozas2/gmail/levelek` (metaadat, idempotens),
+    `GET …/kert` (mely levelek csatolmánya kell), `POST …/csatolmany`
+    (a megbízás irata a Drive **figyelt** mappájába → a meglévő drive-sync
+    importálja; nincs új import-út). Hitelesítés: `GMAIL_FIGYELO_SECRET`,
+    a közös guard (`requireBearerSecret`) query-tokennel is — a Drive
+    végpontokon a query továbbra sem engedett.
+  - `/fuvarozas2/levelek` fül: figyelő-életjel, szűrők (Teendő · Új ·
+    Megbízás · Mind), levélkártyák („miért ez?" indoklással), gombok:
+    Megnyitás Gmailben · Irat a Drive-ba · Ez megbízás · Nem teendő · Kész.
+  - `feltoltMegbizasIratot` a `drive-sync-core.ts`-ben.
+- **Teszt:** `teszt-level-osztalyozo` 25 eset a `teszt` láncban (kitalált
+  nevekkel, valódi tárgysor-alakokkal); végponti próba helyi Postgresen:
+  titok nélkül 401, 4 levél osztályozása helyes (megbizas 100 % / ab-speed /
+  26/3700 / AOPU-427, okmanykeres 90 %, szamla_ertesito 99 %, egyeb 30 %),
+  ismételt beküldés 0 új, nem kért levél csatolmánya elutasítva; böngésző:
+  a Levelek fül és a gombok működnek. typecheck, lint, build zöld.
+- **Kockázat / teendő:** a figyelő csak akkor indul, ha a Railway-en van
+  `GMAIL_FIGYELO_SECRET`, és a Google-fiókban telepítve van a script
+  (egyszeri, ~5 perc). Amíg nincs, a Levelek fül üres, minden más
+  változatlan. A KIZART_FELADO listát (bank, NAV) a script tartalmazza —
+  bővíthető.
+
 ## 2026-09-20 — Fuvarozás 2 átállás, E7b: sofőr mobil (`/m` Ma · Holnap · Profil) + megálló/fotó triggerek
 
 - **Probléma:** a sofőröknek nem volt a terv szerinti nézete (Ma · Holnap ·

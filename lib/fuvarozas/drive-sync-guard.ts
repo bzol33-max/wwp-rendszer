@@ -20,14 +20,35 @@ import { NextResponse } from "next/server";
  * Nem "use server" fájl — sima segédmodul, route handlerek hívják.
  */
 export function requireDriveSyncSecret(req: Request): NextResponse | null {
-  const titok = process.env.DRIVE_SYNC_SECRET;
+  return requireBearerSecret(req, "DRIVE_SYNC_SECRET");
+}
+
+/**
+ * Ugyanez tetszőleges megosztott titokhoz (pl. GMAIL_FIGYELO_SECRET a
+ * felhasználó Gmail-fiókjában futó Apps Script-hez — lásd
+ * docs/gmail-fuvar-figyelo.gs). A titok jöhet az Authorization fejlécben
+ * vagy — ha a hívó ezt kéri (`queryEngedett`) — a `token` query
+ * paraméterben. A Drive-végpontokon a query NEM engedett: az URL a
+ * naplókba is bekerülhet.
+ */
+export function requireBearerSecret(req: Request, envNev: string, queryEngedett = false): NextResponse | null {
+  const titok = process.env[envNev];
   if (!titok) {
     return NextResponse.json(
-      { hiba: "A DRIVE_SYNC_SECRET nincs beállítva, a végpont le van tiltva." },
+      { hiba: `A ${envNev} nincs beállítva, a végpont le van tiltva.` },
       { status: 503 }
     );
   }
-  if (req.headers.get("authorization") !== `Bearer ${titok}`) {
+  const fejlecOk = req.headers.get("authorization") === `Bearer ${titok}`;
+  let queryOk = false;
+  if (queryEngedett) {
+    try {
+      queryOk = new URL(req.url).searchParams.get("token") === titok;
+    } catch {
+      queryOk = false;
+    }
+  }
+  if (!fejlecOk && !queryOk) {
     return NextResponse.json({ hiba: "Érvénytelen vagy hiányzó Authorization fejléc." }, { status: 401 });
   }
   return null;

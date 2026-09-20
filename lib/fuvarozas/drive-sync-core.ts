@@ -164,6 +164,27 @@ const FUVARLEVEL_MAPPA_NEV = "Fuvarlevelek";
  * olvassa megbízásként. Egy kép mime-típusa ugyan kiesne a szűrőn, de az
  * almappa a biztos: a fotók sosem keverednek a megbízás-iratok közé.
  */
+/**
+ * Egy e-mailből érkezett megbízás-irat feltöltése a FIGYELT mappába — onnan
+ * a szokásos drive-sync veszi fel (nincs külön import-út). A Gmail-figyelő
+ * (lib/fuvarozas2/levelek-core.ts) hívja.
+ */
+export async function feltoltMegbizasIratot(
+  nev: string,
+  mimeType: string,
+  tartalom: Buffer
+): Promise<{ id: string; url: string }> {
+  const drive = driveClient();
+  const { Readable } = await import("node:stream");
+  const res = await drive.files.create({
+    requestBody: { name: nev, parents: [DRIVE_FOLDER_ID], mimeType },
+    media: { mimeType, body: Readable.from(tartalom) },
+    fields: "id, webViewLink",
+  });
+  if (!res.data.id) throw new Error("A Drive nem adott vissza fájl-azonosítót.");
+  return { id: res.data.id, url: res.data.webViewLink ?? `https://drive.google.com/file/d/${res.data.id}/view` };
+}
+
 export async function feltoltFuvarlevelFotot(
   nev: string,
   mimeType: string,

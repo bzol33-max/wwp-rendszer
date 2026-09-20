@@ -64,6 +64,7 @@ export function formatNap(nap: string | null | undefined) {
 const FULEK = [
   { href: "/fuvarozas2", label: "Ma" },
   { href: "/fuvarozas2/megbizasok", label: "Megbízások" },
+  { href: "/fuvarozas2/levelek", label: "Levelek" },
   { href: "/fuvarozas2/elszamolas", label: "Elszámolás" },
   { href: "/fuvarozas2/partnerek", label: "Partnerek" },
 ];
