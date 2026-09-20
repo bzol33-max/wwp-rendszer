@@ -65,6 +65,7 @@ export function PartnerekNezet({ partnerek, javaslatok, szerkeszthet }: { partne
             <tr>
               {szerkeszthet ? <th className="px-2 py-2" /> : null}
               <th className="px-3 py-2 font-medium">Partner</th>
+              <th className="px-3 py-2 font-medium">Sablon</th>
               <th className="px-3 py-2 text-right font-medium">Megbízás</th>
               <th className="px-3 py-2 text-right font-medium">Fizet (nap)</th>
               <th className="px-3 py-2 text-right font-medium">Papír (nap)</th>
@@ -128,7 +129,11 @@ function PartnerSor({ p, nyitott, onNyit, szerkeszthet, kijelolve, onKijelol }: 
           <button className="text-left font-medium hover:underline" onClick={onNyit}>{p.nev}</button>
           {p.nevvaltozatok.length > 0 ? <div className="text-xs text-muted-foreground">= {p.nevvaltozatok.join(", ")}</div> : null}
         </td>
-        <td className="px-3 py-2 text-right tabular-nums">{p.megbizas_db}<div className="text-xs text-muted-foreground">{p.utolso_megbizas ?? ""}</div></td>
+        <td className="px-3 py-2 text-xs text-muted-foreground">{p.sablon_azonosito ?? <span className="opacity-60">LLM (nincs sablon)</span>}</td>
+        <td className="px-3 py-2 text-right tabular-nums">
+          <a href={`/fuvarozas2/megbizasok?partner=${p.id}`} className="hover:underline">{p.megbizas_db}</a>
+          <div className="text-xs text-muted-foreground">{p.utolso_megbizas ?? ""}</div>
+        </td>
         <td className="px-3 py-2 text-right tabular-nums">{p.fizetesi_hatarido_nap ?? "—"}</td>
         <td className="px-3 py-2 text-right tabular-nums">{p.papir_bekuldesi_hatarido_nap ?? "—"}</td>
         <td className="max-w-[14rem] truncate px-3 py-2">{p.szamlazasi_email ?? <span className="text-muted-foreground">—</span>}</td>
@@ -137,7 +142,7 @@ function PartnerSor({ p, nyitott, onNyit, szerkeszthet, kijelolve, onKijelol }: 
       </tr>
       {nyitott ? (
         <tr className="border-t border-foreground/5 bg-muted/20">
-          <td colSpan={szerkeszthet ? 8 : 7} className="px-3 py-3">
+          <td colSpan={szerkeszthet ? 9 : 8} className="px-3 py-3">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {M("nev", "Név")}
               {M("nevvaltozatok", "Névváltozatok (; elválasztva)")}
@@ -154,6 +159,30 @@ function PartnerSor({ p, nyitott, onNyit, szerkeszthet, kijelolve, onKijelol }: 
               </label>
               <div className="flex flex-col gap-1 pt-4">{K("szamla_email_nem_kell", "nem kér számla-e-mailt")}{K("posta_nem_kell", "nem kér postát")}{K("megbizas_pdf_csatolva", "megbízás PDF-et is csatolni")}</div>
               {M("megjegyzes", "Megjegyzés")}
+            </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Kapcsolattartók</div>
+                {p.kapcsolatok.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Még nincs kapcsolattartó a megbízásokból.</p>
+                ) : (
+                  <ul className="mt-1 flex flex-col gap-0.5 text-sm">
+                    {p.kapcsolatok.map((k, i) => (
+                      <li key={i}>{k.nev ?? "—"}{k.telefon ? ` · ${k.telefon}` : ""}{k.email ? ` · ${k.email}` : ""}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+              <div>
+                <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Tanult rakodási idő</div>
+                <p className="mt-1 text-sm">
+                  felrakó {p.rakodasFelrako ? <b>{p.rakodasFelrako.perc} p</b> : "—"}
+                  {p.rakodasFelrako ? <span className="text-xs text-muted-foreground"> ({p.rakodasFelrako.minta} minta)</span> : null}
+                  {" · "}lerakó {p.rakodasLerako ? <b>{p.rakodasLerako.perc} p</b> : "—"}
+                  {p.rakodasLerako ? <span className="text-xs text-muted-foreground"> ({p.rakodasLerako.minta} minta)</span> : null}
+                </p>
+                <p className="text-[11px] text-muted-foreground">A megállókon mért érkezés→távozás mediánja (min. 3 minta).</p>
+              </div>
             </div>
             {szerkeszthet ? <div className="mt-3 flex gap-2"><Button size="sm" disabled={pending} onClick={ment}>Ment</Button><Button size="sm" variant="ghost" onClick={onNyit}>Bezár</Button></div> : null}
           </td>

@@ -59,6 +59,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ i
             className={cn("rounded-md px-3 py-1 text-sm", idoszak === i.k ? "bg-muted font-medium" : "text-muted-foreground hover:bg-muted/60")}>{i.c}</Link>
         ))}
         <span className="ml-2 text-sm text-muted-foreground">{k.kezdet === k.veg ? formatNap(k.kezdet) : `${formatNap(k.kezdet)} – ${formatNap(k.veg)}`}</span>
+        <span className="ml-auto text-xs text-muted-foreground">
+          Források: GPS {k.gpsHiba ? "✗" : "✓"} · HU-GO {k.ossz.utdijFt != null ? "✓" : "nincs import"} · gázolajár {k.gazolajAr ? `✓ ${k.gazolajCimke}` : "✗"}
+        </span>
       </div>
 
       {k.gpsHiba ? (
@@ -73,17 +76,23 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ i
         <Mezo cim="Bér Ft/km" ertek={k.ossz.berFtKm ? `${k.ossz.berFtKm.toLocaleString("hu-HU")} Ft/km` : "—"} alcim="bér bevétel ÷ bér km" />
         <Mezo cim="Saját fuvar megtakarítás" ertek={formatFt(k.ossz.megtakaritasFt)} alcim="saját km × bér Ft/km — becslés" szin="text-[var(--f2-blue)]" />
       </div>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Mezo cim="Üzemanyag" ertek={formatFt(k.ossz.uzemanyagFt)} alcim={k.gazolajAr ? `${k.ossz.liter.toLocaleString("hu-HU")} l × ${k.gazolajAr} Ft (${k.gazolajCimke})` : "nincs ár"} />
         <Mezo cim="Útdíj (HU-GO)" ertek={k.ossz.utdijFt != null ? formatFt(k.ossz.utdijFt) : "nincs importálva"} alcim={k.ossz.utdijFt != null ? undefined : "a HU-GO lista importja után"} />
-        <Mezo cim="Eredmény" ertek={k.ossz.eredmenyFt != null ? formatFt(k.ossz.eredmenyFt) : "—"} alcim="bevétel + megtakarítás − üzemanyag − útdíj" />
+        <Mezo cim="Sofőr + kocsi napi fix" ertek={formatFt(k.ossz.napiKoltsegFt)} alcim={`${k.ossz.aktivNap} aktív nap × 50 000 Ft`} />
+        <Mezo
+          cim="Eredmény"
+          ertek={formatFt(k.ossz.eredmenyFt ?? 0)}
+          alcim="bevétel + megtakarítás − üzemanyag − útdíj − napi fix"
+          szin={(k.ossz.eredmenyFt ?? 0) < 0 ? "text-[var(--f2-red)]" : "text-[var(--f2-mint)]"}
+        />
         <Mezo cim="Kocsi nélküli megbízás" ertek={String(k.kocsiNelkul)} alcim={k.kocsiNelkul > 0 ? "ezek km-je sehol nem szerepel" : undefined} szin={k.kocsiNelkul > 0 ? "text-[var(--f2-red)]" : undefined} />
       </div>
 
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-base">Kocsinként</CardTitle></CardHeader>
         <CardContent className="overflow-x-auto p-0">
-          <table className="w-full min-w-[52rem] text-sm">
+          <table className="w-full min-w-[64rem] text-sm">
             <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
               <tr>
                 <th className="px-3 py-2 font-medium">Kocsi</th>
@@ -96,6 +105,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ i
                 <th className="px-3 py-2 text-right font-medium">Ft/km</th>
                 <th className="px-3 py-2 text-right font-medium">Megtakarítás</th>
                 <th className="px-3 py-2 text-right font-medium">Üzemanyag</th>
+                <th className="px-3 py-2 text-right font-medium">Napi fix</th>
+                <th className="px-3 py-2 text-right font-medium">Eredmény</th>
+                <th className="px-3 py-2 text-right font-medium">Ft/km</th>
               </tr>
             </thead>
             <tbody>
@@ -111,6 +123,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ i
                   <td className="px-3 py-2 text-right tabular-nums">{j.ftKm ? `${j.ftKm.toLocaleString("hu-HU")}` : "—"}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{formatFt(j.megtakaritasFt)}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{formatFt(j.uzemanyagFt)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{formatFt(j.napiKoltsegFt)}<div className="text-[10px]">{j.aktivNap} nap</div></td>
+                  <td className={cn("px-3 py-2 text-right font-semibold tabular-nums", j.eredmenyFt < 0 ? "text-[var(--f2-red)]" : "text-[var(--f2-mint)]")}>{formatFt(j.eredmenyFt)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{j.eredmenyFtKm != null ? `${j.eredmenyFtKm}` : "—"}</td>
                 </tr>
               ))}
             </tbody>
@@ -141,6 +156,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ i
         A km és a liter az Ecofleet útvonal-jelentéséből jön (tény). A rakott/üres bontás napi szintű: egy nap km-je ahhoz a
         jelleghez tartozik, amilyen megbízás aznap futott (ha bér és saját is, felezve). A megállónkénti pontos bontás akkor jön,
         amikor a megállók GPS-adatai minden soron megvannak. Az EUR-os díjak nincsenek átváltva.
+        A sofőr és a kocsi napi fix költsége 50 000 Ft/nap (Zoltán, 2026-09-20), annyi napra számolva, ahányon a kocsi
+        a GPS szerint mozgott.
       </p>
     </div>
   );

@@ -17,7 +17,7 @@ const CSOPORT_ALLAPOT: Record<string, Allapot> = {
 };
 
 export default async function Page({ searchParams }: {
-  searchParams: Promise<{ jelleg?: string; allapot?: string; jarmu?: string; idoszak?: string; reszlet?: string; csoport?: string }>;
+  searchParams: Promise<{ jelleg?: string; allapot?: string; jarmu?: string; idoszak?: string; reszlet?: string; csoport?: string; partner?: string }>;
 }) {
   const sp = await searchParams;
   const allapotParam = sp.allapot ?? (sp.csoport ? CSOPORT_ALLAPOT[sp.csoport] : undefined);
@@ -26,7 +26,7 @@ export default async function Page({ searchParams }: {
   const idoszak = ["ez_a_het", "mult_het", "regebbi"].includes(sp.idoszak ?? "") ? (sp.idoszak as "ez_a_het" | "mult_het" | "regebbi") : undefined;
   const szuro: SzuroErtekek = { jelleg, allapot, jarmu: sp.jarmu, idoszak, reszlet: sp.reszlet };
 
-  const { sorok, ma, szamok } = await getMegbizasokVaszon({ jelleg, allapot, jarmu: sp.jarmu, idoszak });
+  const { sorok, ma, szamok } = await getMegbizasokVaszon({ jelleg, allapot, jarmu: sp.jarmu, partner: sp.partner, idoszak });
 
   const session = await requireSession();
   const reszlet = sp.reszlet && /^\d+$/.test(sp.reszlet) ? await getMegbizas(sp.reszlet) : null;

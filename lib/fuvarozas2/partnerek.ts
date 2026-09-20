@@ -30,11 +30,46 @@ export type Partner = {
   megjegyzes: string | null;
   megbizas_db: number;
   utolso_megbizas: string | null;
+  /** Kapcsolattartók a megbízásokból gyűjtve (fuvar_kapcsolatok). */
+  kapcsolatok: { nev: string | null; telefon: string | null; email: string | null }[];
+  /** Tanult rakodási idő percben, a megállókon mért érkezés→távozás mediánja. */
+  rakodasFelrako: { perc: number; minta: number } | null;
+  rakodasLerako: { perc: number; minta: number } | null;
 };
 
 export async function getPartnerek(): Promise<Partner[]> {
   await requireAnyViewPermission(["fuvarozas", "elszamolas"]);
-  return query<Partner>(
+  const [alap, kapcsolatok, rakodas] = await Promise.all([
+    getPartnerAlap(),
+    query<{ partner_id: string; nev: string | null; telefon: string | null; email: string | null }>(
+      `select partner_id::text, kapcsolattarto as nev, telefon, email from fuvar_kapcsolatok
+       where partner_id is not null order by partner_id, id`
+    ),
+    query<{ partner_id: string; tipus: string; percek: number[] }>(
+      `select m.partner_id::text, g.tipus,
+         array_agg(extract(epoch from (g.gps_tavozas - g.gps_erkezes)) / 60) as percek
+       from fuvar_megallok g join fuvar_megbizasok m on m.id = g.megbizas_id
+       where m.partner_id is not null and g.gps_erkezes is not null and g.gps_tavozas > g.gps_erkezes
+       group by 1, 2`
+    ),
+  ]);
+  const median = (sorok: { percek: number[] } | undefined) => {
+    if (!sorok) return null;
+    const e = (sorok.percek ?? []).map(Number).filter((n) => Number.isFinite(n) && n > 0 && n < 600).sort((a, b) => a - b);
+    return e.length >= 3 ? { perc: Math.round(e[Math.floor(e.length / 2)]), minta: e.length } : null;
+  };
+  return alap.map((p) => ({
+    ...p,
+    kapcsolatok: kapcsolatok.filter((k) => k.partner_id === p.id).map(({ nev, telefon, email }) => ({ nev, telefon, email })),
+    rakodasFelrako: median(rakodas.find((r) => r.partner_id === p.id && r.tipus === "felrako")),
+    rakodasLerako: median(rakodas.find((r) => r.partner_id === p.id && r.tipus === "lerako")),
+  }));
+}
+
+type PartnerAlap = Omit<Partner, "kapcsolatok" | "rakodasFelrako" | "rakodasLerako">;
+
+async function getPartnerAlap(): Promise<PartnerAlap[]> {
+  return query<PartnerAlap>(
     `select p.id::text, p.nev, p.nev_kulcs, p.nevvaltozatok, p.szekhely, p.szamlazasi_cim, p.postazasi_cim, p.szamlazasi_email,
        p.fizetesi_hatarido_nap, p.papir_bekuldesi_hatarido_nap, p.szamlan_kert_szam, p.sablon_azonosito,
        p.szamla_email_nem_kell, p.posta_nem_kell, p.megbizas_pdf_csatolva, p.email_domainek, p.megjegyzes,

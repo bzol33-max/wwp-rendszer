@@ -25,6 +25,7 @@ import { query } from "@/lib/db";
 import { requireAnyViewPermission } from "@/lib/auth/require-permission";
 import { getUtvonalJelentes, rendszamKulcs } from "@/lib/fuvarozas/ecofleet";
 import { fetchGazolajAr } from "@/lib/fuvarozas/uzemanyagar";
+import { NAPI_KOLTSEG_FT } from "@/lib/fuvarozas2/kalkulator-alap";
 
 export type KimutatasIdoszak = "nap" | "het" | "ho";
 
@@ -45,6 +46,13 @@ export type KimutatasJarmu = {
   uzemanyagFt: number;
   utdijFt: number | null;
   ftKm: number | null;
+  /** Hány napon mozgott a kocsi az időszakban (GPS) — ennyi napi költséget terhelünk rá. */
+  aktivNap: number;
+  /** Sofőr + kocsi napi fix (50 000 Ft/nap, lásd kalkulator-alap.ts). */
+  napiKoltsegFt: number;
+  /** Bevétel + saját fuvar megtakarítás − üzemanyag − útdíj − napi költség. */
+  eredmenyFt: number;
+  eredmenyFtKm: number | null;
 };
 
 export type KimutatasNap = { nap: string; km: number; berKm: number; sajatKm: number; uresKm: number; bevetelFt: number };
@@ -59,6 +67,7 @@ export type KimutatasEredmeny = {
     km: number; berKm: number; sajatKm: number; uresKm: number; liter: number;
     bevetelFt: number; bevetelEur: number; megtakaritasFt: number; uzemanyagFt: number; utdijFt: number | null;
     berFtKm: number | null; eredmenyFt: number | null;
+    aktivNap: number; napiKoltsegFt: number;
   };
   gazolajAr: number | null;
   gazolajCimke: string | null;
@@ -180,7 +189,12 @@ export async function getKimutatas(idoszak: KimutatasIdoszak = "het", nap?: stri
       napok.set(m.nap, n);
     }
 
+    const aktivNap = napiKm.size;
     ki.push({
+      aktivNap,
+      napiKoltsegFt: aktivNap * NAPI_KOLTSEG_FT,
+      eredmenyFt: 0, // lent, a flotta Ft/km ismeretében
+      eredmenyFtKm: null,
       kod: j.kod, cimke: j.cimke, sofor: j.sofor,
       km: Math.round(km), berKm: Math.round(berKm), sajatKm: Math.round(sajatKm), uresKm: Math.round(uresKm),
       liter: Math.round(liter),
@@ -197,7 +211,11 @@ export async function getKimutatas(idoszak: KimutatasIdoszak = "het", nap?: stri
   const berKmOssz = ki.reduce((a, j) => a + j.berKm, 0);
   const bevetelFtOssz = ki.reduce((a, j) => a + j.bevetelFt, 0);
   const berFtKm = berKmOssz > 0 && bevetelFtOssz > 0 ? Math.round(bevetelFtOssz / berKmOssz) : null;
-  for (const j of ki) j.megtakaritasFt = berFtKm ? Math.round(j.sajatKm * berFtKm) : 0;
+  for (const j of ki) {
+    j.megtakaritasFt = berFtKm ? Math.round(j.sajatKm * berFtKm) : 0;
+    j.eredmenyFt = j.bevetelFt + j.megtakaritasFt - j.uzemanyagFt - (j.utdijFt ?? 0) - j.napiKoltsegFt;
+    j.eredmenyFtKm = j.km > 0 ? Math.round(j.eredmenyFt / j.km) : null;
+  }
 
   const uzemanyagOssz = ki.reduce((a, j) => a + j.uzemanyagFt, 0);
   const utdijOssz = vanUtdij ? ki.reduce((a, j) => a + (j.utdijFt ?? 0), 0) : null;
@@ -219,7 +237,9 @@ export async function getKimutatas(idoszak: KimutatasIdoszak = "het", nap?: stri
       uzemanyagFt: uzemanyagOssz,
       utdijFt: utdijOssz,
       berFtKm,
-      eredmenyFt: bevetelFtOssz > 0 ? bevetelFtOssz + megtakaritasOssz - uzemanyagOssz - (utdijOssz ?? 0) : null,
+      aktivNap: ki.reduce((a, j) => a + j.aktivNap, 0),
+      napiKoltsegFt: ki.reduce((a, j) => a + j.napiKoltsegFt, 0),
+      eredmenyFt: ki.reduce((a, j) => a + j.eredmenyFt, 0),
     },
     gazolajAr, gazolajCimke, gpsHiba, kocsiNelkul,
   };

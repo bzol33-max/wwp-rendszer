@@ -345,6 +345,7 @@ export async function getMegbizasokVaszon(szuro: {
   jelleg?: "ber" | "sajat";
   allapot?: Allapot;
   jarmu?: string;
+  partner?: string;
   idoszak?: "ez_a_het" | "mult_het" | "regebbi" | "mind";
 } = {}): Promise<{
   sorok: MegbizasSor[];
@@ -384,6 +385,7 @@ export async function getMegbizasokVaszon(szuro: {
     if (szuro.allapot && s.allapot !== szuro.allapot) return false;
     if (szuro.jarmu === "nincs" && s.jarmu_kod) return false;
     if (szuro.jarmu && szuro.jarmu !== "nincs" && s.jarmu_kod !== szuro.jarmu) return false;
+    if (szuro.partner && s.partner_id !== szuro.partner) return false;
     if (szuro.idoszak && szuro.idoszak !== "mind" && idoszakVodor(s.lerakas_nap, ma) !== szuro.idoszak) return false;
     return true;
   });

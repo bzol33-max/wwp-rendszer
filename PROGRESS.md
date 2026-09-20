@@ -1,5 +1,28 @@
 # PROGRESS
 
+## 2026-09-20 — Fuvarozás 2, E10d: Kimutatás (D8) és Partnerek (D7) a tervvászon szerint
+
+- **Kimutatás**: a költségsor teljes lett. Eddig a bevétel, a megtakarítás, az
+  üzemanyag és (ha van import) az útdíj szerepelt; mostantól a **sofőr + kocsi
+  napi fix** is (50 000 Ft/nap × ahány napon a kocsi a GPS szerint mozgott), és
+  ebből számolódik az **eredmény** és az **eredmény/km** — kocsinként és
+  flottára. A fejlécben ott a **Források** sor (GPS · HU-GO · gázolajár),
+  ahogy a vásznon.
+- **Partnerek**: a listán megjelent a **Sablon** oszlop (melyik determinisztikus
+  import-sablon ismeri a partnert; sablon nélkül „LLM"), a megbízás-szám
+  mostantól **átvisz a partner fuvarjaira** (`?partner=<id>` szűrő a
+  Megbízásokon), a nyitott panel alján pedig ott a **kapcsolattartók** (a
+  megbízásokból gyűjtve) és a **tanult rakodási idő** felrakóra/lerakóra
+  (a megállókon mért érkezés→távozás mediánja, min. 3 minta).
+- **Levelek (D10)**: a meglévő nézet már a vászon szerinti — típus-szűrők
+  darabszámmal, sorok feladóval, tárggyal, hivatkozással, csatolmánnyal,
+  állapottal —, ezen nem kellett változtatni.
+- **Teszt:** `typecheck`, `eslint`, teljes teszt-lánc **402/402**, `build`
+  rendben; Playwright 1440×900: Kimutatás és Partnerek 200.
+- **Kockázat:** az eredmény-sor addig optimista, amíg nincs HU-GO-import
+  (akkor útdíj nélkül számol) — a Források sor ezt kiírja. A napi 50 000 Ft
+  minden aktív napra terhelődik, a hétvégi mozgásra is.
+
 ## 2026-09-20 — Fuvarozás 2, E10c: Kalkulátor (D6) és Elszámolás (D5) a tervvászon szerint
 
 - **Kalkulátor**: HU-GO útdíj + **saját önköltség**, és abból három ajánlat-sáv.
