@@ -2,7 +2,7 @@ import { PageHeader } from "@/components/layout/page-header";
 import { requireSession } from "@/lib/auth/dal";
 import { getLevelek, getFigyeloAllapot } from "@/lib/fuvarozas2/levelek";
 import { TEENDO_OSZTALYOK } from "@/lib/fuvarozas2/level-osztalyozo";
-import { Fuvarozas2Fulek } from "@/components/fuvarozas2/kozos";
+import { Fuvarozas2Fulek } from "@/components/fuvarozas2/fulek";
 import { LevelekNezet } from "@/components/fuvarozas2/levelek";
 
 export const dynamic = "force-dynamic";

@@ -2,7 +2,8 @@ import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 import { getMegbizasok, type MegbizasSor } from "@/lib/fuvarozas2/megbizasok";
 import type { Allapot } from "@/lib/fuvarozas/allapot";
-import { Fuvarozas2Fulek, formatFt, formatIdo, formatNap } from "@/components/fuvarozas2/kozos";
+import { formatFt, formatIdo, formatNap} from "@/components/fuvarozas2/kozos";
+import { Fuvarozas2Fulek } from "@/components/fuvarozas2/fulek";
 
 export const dynamic = "force-dynamic";
 

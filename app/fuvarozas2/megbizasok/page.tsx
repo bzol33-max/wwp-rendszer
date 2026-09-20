@@ -2,7 +2,8 @@ import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 import { getMegbizasok } from "@/lib/fuvarozas2/megbizasok";
 import { ALLAPOTOK, type Allapot } from "@/lib/fuvarozas/allapot";
-import { Fuvarozas2Fulek, ALLAPOT_CIMKE } from "@/components/fuvarozas2/kozos";
+import { ALLAPOT_CIMKE} from "@/components/fuvarozas2/kozos";
+import { Fuvarozas2Fulek } from "@/components/fuvarozas2/fulek";
 import { MegbizasLista } from "@/components/fuvarozas2/megbizas-lista";
 import { cn } from "@/lib/utils";
 

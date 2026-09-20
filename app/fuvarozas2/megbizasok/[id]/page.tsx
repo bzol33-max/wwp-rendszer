@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/layout/page-header";
 import { requireSession } from "@/lib/auth/dal";
 import { getMegbizas } from "@/lib/fuvarozas2/megbizasok";
-import { Fuvarozas2Fulek } from "@/components/fuvarozas2/kozos";
+import { Fuvarozas2Fulek } from "@/components/fuvarozas2/fulek";
 import { MegbizasReszlet } from "@/components/fuvarozas2/megbizas-reszlet";
 
 export const dynamic = "force-dynamic";

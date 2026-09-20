@@ -1,5 +1,33 @@
 # PROGRESS
 
+## 2026-09-20 — Fuvarozás 2 átállás, E7e: Élő GPS, Kalkulátor, Rendszer-egészség; jogosultság-függő fülsor
+
+- **Probléma:** a fülsor hiányos volt (GPS-hez és Kalkulátorhoz a régi
+  modulba kellett átmenni), és nem volt egy hely, ahol látszik, megy-e
+  minden magától. Ráadásul a fülsor mindenkinek mindent mutatott — Szabina
+  (`elszamolas` hatókör) is látta volna a GPS-t és a kimutatást (S16).
+- **Módosítás:**
+  - `/fuvarozas2/gps` és `/fuvarozas2/kalkulator`: a MEGLÉVŐ, bevált
+    `GpsStatus` és `TollCalculator` komponenst keretezi — szándékosan nem
+    írtuk újra őket (a Kalkulátor HU-GO alapja változatlan).
+  - `lib/fuvarozas2/rendszer.ts` + `/fuvarozas2/rendszer`: 8 egészség-sor
+    (Drive-import, Gmail-figyelő, GPS-érintések, Számlázz.hu szinkron,
+    átállási kapuk, lejárt-nem-teljesített, elszámolási sor, migrációk),
+    mindegyik „rendben / figyelj / gond" állapottal, értékkel és utolsó
+    életjellel; csak olcsó count/max kérdésekből.
+  - `components/fuvarozas2/fulek.tsx`: a fülsor külön, szerver-oldali
+    komponens, ami a bejelentkezett jog szerint szűr — az `elszamolas`
+    hatókör csak a Ma, Megbízások, Levelek, Elszámolás és Partnerek fület
+    látja. A `kozos.tsx` maradt tiszta (kliens is importálja).
+- **Teszt:** typecheck, lint, build zöld; mind a 10 útvonal 200-zal tölt be
+  vezetőként (Ma · Megbízások · Levelek · Tervezés · Élő GPS · Kalkulátor ·
+  Elszámolás · Partnerek · Kimutatás · Rendszer), konzol-hiba nélkül; a
+  Rendszer-lap a helyi adaton helyesen jelzi a nyitott migrációs hibát és a
+  Gmail-figyelő kimaradását.
+- **Kockázat:** a Rendszer-lap az `elszamolas`-jogúaknak nem elérhető
+  (szándékos); az Élő GPS és a Kalkulátor a régi komponenseket használja, így
+  a régi modul törlésekor (7. kör) ezeket át kell emelni, nem törölni.
+
 ## 2026-09-20 — Fuvarozás 2 átállás, E7c: Tervezés (heti rács, üres slotok)
 
 - **Probléma:** nem látszott egy nézetben, hol és mikor áll üresen kocsi —

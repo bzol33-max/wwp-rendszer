@@ -2,7 +2,8 @@ import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getMaAdat } from "@/lib/fuvarozas2/ma";
-import { Fuvarozas2Fulek, ALLAPOT_CIMKE, AllapotBadge, formatNap } from "@/components/fuvarozas2/kozos";
+import { ALLAPOT_CIMKE, AllapotBadge, formatNap} from "@/components/fuvarozas2/kozos";
+import { Fuvarozas2Fulek } from "@/components/fuvarozas2/fulek";
 import { MegbizasLista } from "@/components/fuvarozas2/megbizas-lista";
 import type { Allapot } from "@/lib/fuvarozas/allapot";
 

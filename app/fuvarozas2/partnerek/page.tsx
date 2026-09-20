@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/layout/page-header";
 import { requireSession } from "@/lib/auth/dal";
 import { getPartnerek, getOsszevonasJavaslatok } from "@/lib/fuvarozas2/partnerek";
-import { Fuvarozas2Fulek } from "@/components/fuvarozas2/kozos";
+import { Fuvarozas2Fulek } from "@/components/fuvarozas2/fulek";
 import { PartnerekNezet } from "@/components/fuvarozas2/partnerek";
 
 export const dynamic = "force-dynamic";

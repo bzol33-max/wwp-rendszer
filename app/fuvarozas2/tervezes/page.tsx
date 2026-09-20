@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 import { getTervHet } from "@/lib/fuvarozas2/tervezes";
-import { Fuvarozas2Fulek, AllapotBadge, formatFt, formatNap } from "@/components/fuvarozas2/kozos";
+import { AllapotBadge, formatFt, formatNap} from "@/components/fuvarozas2/kozos";
+import { Fuvarozas2Fulek } from "@/components/fuvarozas2/fulek";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 

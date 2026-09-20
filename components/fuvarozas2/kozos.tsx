@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { Allapot } from "@/lib/fuvarozas/allapot";
@@ -59,36 +58,4 @@ export function formatNap(nap: string | null | undefined) {
   if (!nap) return "—";
   const [, m, d] = nap.split("-");
   return `${m}.${d}.`;
-}
-
-const FULEK = [
-  { href: "/fuvarozas2", label: "Ma" },
-  { href: "/fuvarozas2/megbizasok", label: "Megbízások" },
-  { href: "/fuvarozas2/levelek", label: "Levelek" },
-  { href: "/fuvarozas2/tervezes", label: "Tervezés" },
-  { href: "/fuvarozas2/elszamolas", label: "Elszámolás" },
-  { href: "/fuvarozas2/partnerek", label: "Partnerek" },
-  { href: "/fuvarozas2/kimutatas", label: "Kimutatás" },
-];
-
-export function Fuvarozas2Fulek({ aktiv }: { aktiv: string }) {
-  return (
-    <nav className="flex flex-wrap gap-1 border-b pb-2">
-      {FULEK.map((f) => (
-        <Link
-          key={f.href}
-          href={f.href}
-          className={cn(
-            "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
-            aktiv === f.href ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"
-          )}
-        >
-          {f.label}
-        </Link>
-      ))}
-      <Link href="/fuvarozas" className="ml-auto rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted">
-        régi Fuvarozás →
-      </Link>
-    </nav>
-  );
 }

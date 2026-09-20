@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
 import { getKimutatas, type KimutatasIdoszak } from "@/lib/fuvarozas2/kimutatas";
-import { Fuvarozas2Fulek, formatFt, formatNap } from "@/components/fuvarozas2/kozos";
+import { formatFt, formatNap} from "@/components/fuvarozas2/kozos";
+import { Fuvarozas2Fulek } from "@/components/fuvarozas2/fulek";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
