@@ -1,5 +1,48 @@
 # PROGRESS
 
+## 2026-09-20 — Fuvarozás 2, E9b: külső hívások sorosítása és tartós cache (T1/T3/T13/T16), térkép-csempe forrás (T12)
+
+- **Probléma:** a Kalkulátor, az idővonal-újraláncolás és a tervezés ugyanazokra
+  az útvonalakra kéri újra és újra az állami útdíjkalkulátort. A mai egy perces
+  folyamat-cache minden pipánál ürül, és több instance között amúgy sem közös —
+  az ellenőrzés becslése napi 10–15 ezer hívás egy kulcs nélküli,
+  dokumentálatlan, korlátozás nélküli külső végpontra. Ez előbb-utóbb kizárást
+  vagy hibát hoz, és akkor a fuvarszervezés áll. A Nominatim fordított geokód
+  ugyanígy: a feltétele 1 kérés/másodperc, eddig semmi nem tartotta be.
+- **Ok:** minden külső hívás közvetlenül, korlát, újrapróbálás és tartós
+  gyorsítótár nélkül ment ki.
+- **Módosítás:**
+  - Új `lib/fuvarozas/kulso-hivas.ts`: szolgáltatónkénti **sorosítás**
+    (egyszerre egy kérés, kötelező szünettel — HU-GO 300 ms, Nominatim 1100 ms),
+    **újrapróbálás** 429/5xx-re exponenciális várakozással (max 3), és
+    **tartós cache** az adatbázisban (`kulso_valasz_cache`, migráció 005),
+    ami közös a folyamatok és instance-ok közt, és túléli az újraindítást.
+  - `lib/fuvarozas/utdijkalkulacio.ts`: a címkeresés, a fordított geokód és az
+    útvonal/útdíj-számítás ezen keresztül megy. A cache-kulcs MINDEN
+    paramétert tartalmaz (jármű-kategória, euro, tömeg, geometria kérése,
+    megállók 4 tizedesre kerekítve), tehát két különböző kérés soha nem oszthat
+    egy soron. Élettartam: cím 30 nap, útvonal 3 nap. Hibát sosem cache-elünk,
+    és ha az adatbázis nem elérhető, a hívás ugyanúgy kimegy.
+  - `components/fuvarozas/route-map.tsx` (T12): a térkép-csempe forrása
+    `NEXT_PUBLIC_MAP_TILE_URL` / `NEXT_PUBLIC_MAP_TILE_ATTRIBUTION`
+    környezeti változóból állítható. Beállítás nélkül minden marad a mai
+    állapotban — a viselkedés nem változik.
+- **Teszt:** `scripts/teszt-kulso-hivas.ts` (14 eset) a `teszt` láncban:
+  nincs átfedő kérés, a szünet megvan, a hibás hívás nem akasztja meg a sort,
+  429/5xx újrapróbál és más hiba nem, a kulcs-kerekítés jó. Teljes lánc
+  **353/353**. `typecheck`, `eslint` (érintett fájlok 0 hiba), `build` rendben.
+  A cache oda-vissza ellenőrizve helyi adatbázison: második azonos kérés már
+  nem hív ki, más kulcs igen.
+- **Kockázat:** a konténerből az utdijkalkulacio.hu nem érhető el (kimenő
+  tűzfal), ezért a valódi HU-GO választ élesen kell egyszer ellenőrizni —
+  egy kalkulátor-számolás elég hozzá. A 3 napos útvonal-cache miatt egy
+  tarifaváltozás legfeljebb 3 napig régi összeget adhat; ha ez zavar, a
+  `CACHE_UTVONAL_PERC` egy sorban állítható.
+  A csempe-szolgáltató **döntést kíván**: az openstreetmap.org csempeszervere
+  üzleti/rendszeres használatra a Tile Usage Policy szerint nem való, és
+  bármikor kizárhat — ehhez egy ingyenes kulcsos szolgáltató (pl. MapTiler)
+  regisztrációja kell, utána csak a két env-változót kell beállítani.
+
 ## 2026-09-20 — Fuvarozás 2 átállás, E7g: vezetői mobil (Ma · Fuvar · Cég · Rendszer)
 
 - **Probléma:** a vezetői fiók (`vezeto`) mobilon még a sofőr-nézetet kapta;

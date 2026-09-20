@@ -3,7 +3,21 @@
 // oldal saját Vuex store-jából (routePlanner.routeParams / routeResult) lett
 // visszafejtve.
 
+import { cachelveHiv, kulcsKoordinata, UjrapobalhatoHiba } from "@/lib/fuvarozas/kulso-hivas";
+
 const BASE = "https://utdijkalkulacio.hu";
+
+// Meddig érvényes egy eltárolt válasz (perc). A címkeresés és a fordított
+// geokód gyakorlatilag állandó; az útdíj tarifa évente változik, de a
+// napokban mért élettartam bőven biztonságos, és pont ez veszi le a
+// percenkénti újraláncolás terhét a külső végpontról (T3).
+const CACHE_CIM_PERC = 60 * 24 * 30;
+const CACHE_UTVONAL_PERC = 60 * 24 * 3;
+
+/** 429 és 5xx: érdemes újrapróbálni; minden más azonnali hiba. */
+function ujraprobalhatoE(statusz: number): boolean {
+  return statusz === 429 || statusz >= 500;
+}
 
 export class TollCalcError extends Error {}
 
@@ -27,16 +41,19 @@ async function fuzzySearch(query: string): Promise<GeocodedAddress[]> {
   url.searchParams.set("query", query);
   url.searchParams.set("types", "hnum,road,cos,admin,poi");
 
-  const res = await fetch(url.toString(), { cache: "no-store" });
-  if (!res.ok) {
-    throw new TollCalcError(`Címkeresés sikertelen (HTTP ${res.status}).`);
-  }
-  const data = (await res.json()) as FuzzyResponse;
-  return (data.result?.features ?? []).map((f) => ({
-    label: f.properties.address,
-    lon: f.geometry.coordinates[0],
-    lat: f.geometry.coordinates[1],
-  }));
+  return cachelveHiv("hugo", ["fuzzy", query], CACHE_CIM_PERC, async () => {
+    const res = await fetch(url.toString(), { cache: "no-store" });
+    if (!res.ok) {
+      if (ujraprobalhatoE(res.status)) throw new UjrapobalhatoHiba(`Címkeresés sikertelen (HTTP ${res.status}).`, res.status);
+      throw new TollCalcError(`Címkeresés sikertelen (HTTP ${res.status}).`);
+    }
+    const data = (await res.json()) as FuzzyResponse;
+    return (data.result?.features ?? []).map((f) => ({
+      label: f.properties.address,
+      lon: f.geometry.coordinates[0],
+      lat: f.geometry.coordinates[1],
+    }));
+  });
 }
 
 /** Cím -> legjobb találat (koordináta + a kalkulátor által ismert cím-alak). */
@@ -82,34 +99,41 @@ type NominatimReverseResponse = {
  */
 export async function reverseGeocodeCoords(lat: number, lon: number): Promise<string | null> {
   try {
-    const url = new URL("https://nominatim.openstreetmap.org/reverse");
-    url.searchParams.set("format", "json");
-    url.searchParams.set("lat", String(lat));
-    url.searchParams.set("lon", String(lon));
-    url.searchParams.set("zoom", "18");
-    url.searchParams.set("addressdetails", "1");
-
-    const res = await fetch(url.toString(), {
-      cache: "no-store",
-      headers: {
-        // A Nominatim használati feltételei megkövetelik az azonosító
-        // User-Agentet (nem böngésző-alapértelmezettet).
-        "User-Agent": "wwp-system/1.0 (Well-Worn Pallet Kft. belso vallalatiranyitasi rendszer)",
-      },
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as NominatimReverseResponse;
-    const a = data.address;
-    if (a) {
-      const varos = a.city || a.town || a.village || "";
-      const utca = [a.road, a.house_number].filter(Boolean).join(" ");
-      const cim = [varos, utca].filter(Boolean).join(", ");
-      if (cim) return a.postcode ? `${a.postcode} ${cim}` : cim;
-    }
-    return data.display_name ?? null;
+    return await cachelveHiv("nominatim", ["reverse", kulcsKoordinata(lat, lon)], CACHE_CIM_PERC, () => reverseGeocodeNyers(lat, lon));
   } catch {
     return null;
   }
+}
+
+async function reverseGeocodeNyers(lat: number, lon: number): Promise<string | null> {
+  const url = new URL("https://nominatim.openstreetmap.org/reverse");
+  url.searchParams.set("format", "json");
+  url.searchParams.set("lat", String(lat));
+  url.searchParams.set("lon", String(lon));
+  url.searchParams.set("zoom", "18");
+  url.searchParams.set("addressdetails", "1");
+
+  const res = await fetch(url.toString(), {
+    cache: "no-store",
+    headers: {
+      // A Nominatim használati feltételei megkövetelik az azonosító
+      // User-Agentet (nem böngésző-alapértelmezettet).
+      "User-Agent": "wwp-system/1.0 (Well-Worn Pallet Kft. belso vallalatiranyitasi rendszer)",
+    },
+  });
+  if (!res.ok) {
+    if (ujraprobalhatoE(res.status)) throw new UjrapobalhatoHiba(`Nominatim HTTP ${res.status}`, res.status);
+    return null;
+  }
+  const data = (await res.json()) as NominatimReverseResponse;
+  const a = data.address;
+  if (a) {
+    const varos = a.city || a.town || a.village || "";
+    const utca = [a.road, a.house_number].filter(Boolean).join(" ");
+    const cim = [varos, utca].filter(Boolean).join(", ");
+    if (cim) return a.postcode ? `${a.postcode} ${cim}` : cim;
+  }
+  return data.display_name ?? null;
 }
 
 // A kalkulátor oldal saját enumjai (app.$store.state.app), a HT (nehéz
@@ -309,6 +333,22 @@ export async function calculateToll(params: TollCalcParams): Promise<TollRoute> 
     throw new TollCalcError("Legalább két cím szükséges az útvonalhoz.");
   }
 
+  return cachelveHiv(
+    "hugo",
+    [
+      "route-planner",
+      params.vehicleCategory,
+      params.euroCategory,
+      params.weight,
+      params.withGeometry ?? false,
+      params.points.map((p) => kulcsKoordinata(p.lat, p.lon)),
+    ],
+    CACHE_UTVONAL_PERC,
+    () => calculateTollNyers(params)
+  );
+}
+
+async function calculateTollNyers(params: TollCalcParams): Promise<TollRoute> {
   const res = await fetch(`${BASE}/route-planner`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -337,6 +377,7 @@ export async function calculateToll(params: TollCalcParams): Promise<TollRoute> 
   });
 
   if (!res.ok) {
+    if (ujraprobalhatoE(res.status)) throw new UjrapobalhatoHiba(`Az útdíjkalkulátor hibát adott (HTTP ${res.status}).`, res.status);
     throw new TollCalcError(`Az útdíjkalkulátor hibát adott (HTTP ${res.status}).`);
   }
 

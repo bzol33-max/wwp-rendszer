@@ -5,6 +5,19 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline } from "react-leaflet"
 import L, { type LatLngExpression, type LatLngBoundsExpression } from "leaflet";
 import "leaflet/dist/leaflet.css";
 
+// Térkép-csempe forrás (T12). Az openstreetmap.org csempeszervere a Tile
+// Usage Policy szerint nem használható rendszeres/üzleti célra — a szolgáltató
+// bármikor kizárhatja a hívót, és akkor a térkép üresen marad. A forrás ezért
+// környezeti változóból állítható: ha be van állítva egy saját kulcsú
+// szolgáltató (MapTiler, Thunderforest, Carto…), azt használjuk. Beállítás
+// nélkül marad a mai viselkedés, hogy a térkép ne romoljon el.
+const CSEMPE_URL =
+  process.env.NEXT_PUBLIC_MAP_TILE_URL || "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+const CSEMPE_FORRAS =
+  process.env.NEXT_PUBLIC_MAP_TILE_ATTRIBUTION ||
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> közreműködői';
+
+
 export type RouteMapStop = {
   /** pl. "Honnan", "Megálló 1", "Hová" — a toll-calculator stopLabel()-jéből. */
   role: string;
@@ -75,10 +88,7 @@ export function RouteMap({ routes }: { routes: RouteMapRoute[] }) {
         scrollWheelZoom
         className="h-72 w-full"
       >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> közreműködői'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+        <TileLayer attribution={CSEMPE_FORRAS} url={CSEMPE_URL} />
         {vonalak.map(
           (r) =>
             r.positions.length > 1 && (
