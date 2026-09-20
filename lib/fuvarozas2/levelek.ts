@@ -98,3 +98,39 @@ export async function kerCsatolmanyt(id: string): Promise<void> {
   await requireAnyEditPermission(["fuvarozas", "elszamolas"]);
   await query(`update fuvar_level set csatolmany_kell = true where id = $1 and csatolmany_megjott_at is null`, [id]);
 }
+
+/**
+ * Takarítás: a nyitott („új") levelek közül elveti azokat, amik NEM teendők —
+ * hírlevél, számla, Timocom-kiírás, egyéb. A megbízás / módosítás / adatkérés
+ * / okmánykérés / papírok osztályú leveleket nem bántja.
+ *
+ * Miért kell: a figyelő bekapcsolásakor (2026-09-20) egy kör még a teljes
+ * postafiókból dolgozott, és bekerült egy adag nem fuvaros levél. Ugyanez a
+ * gomb használható később is, ha felgyűlik a zaj.
+ *
+ * Nem töröl: az állapot `elvetve` lesz, a sor megmarad és a „Mind" nézetben
+ * visszakereshető.
+ */
+export async function takaritsLeveleket(): Promise<{ elvetve: number }> {
+  await requireAnyEditPermission(["fuvarozas", "elszamolas"]);
+  const session = await requireSession();
+  const sorok = await query<{ id: string }>(
+    `update fuvar_level set allapot = 'elvetve', allapot_by = $1, allapot_at = now(), csatolmany_kell = false
+     where allapot = 'uj'
+       and coalesce(kezi_osztaly, osztaly) not in ('megbizas', 'modositas', 'adatkeres', 'okmanykeres', 'papirok')
+     returning id`,
+    [`takarítás · ${session.name ?? session.username}`]
+  );
+  return { elvetve: sorok.length };
+}
+
+/** Hány levél esne a takarításnak (a gomb mellé). */
+export async function getTakarithatoDb(): Promise<number> {
+  await requireAnyViewPermission(["fuvarozas", "elszamolas"]);
+  const [r] = await query<{ n: number }>(
+    `select count(*)::int as n from fuvar_level
+     where allapot = 'uj'
+       and coalesce(kezi_osztaly, osztaly) not in ('megbizas', 'modositas', 'adatkeres', 'okmanykeres', 'papirok')`
+  );
+  return r?.n ?? 0;
+}

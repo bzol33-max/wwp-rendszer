@@ -1,5 +1,24 @@
 # PROGRESS
 
+## 2026-09-20 — Levelek: „Takarítás" gomb a nem teendős levelekre
+
+- **Probléma:** a Gmail-figyelő első köre még a teljes postafiókból dolgozott
+  (a címke-szűrés csak utána került be), így bekerült egy adag nem fuvaros
+  levél, ami ott ül a „Mind"/„Új" nézetben.
+- **Módosítás:** a Levelek fül szűrősora mellé **„Takarítás (N)"** gomb került
+  (csak szerkesztési joggal, és csak ha van mit takarítani). Rákérdez, majd a
+  nyitott levelek közül **elveti azokat, amik nem teendők** — vagyis amiknek az
+  osztálya nem megbízás / módosítás / adatkérés / okmánykérés / papírok.
+  Nem töröl: az állapot `elvetve` lesz, a sor a „Mind" nézetben megmarad, és a
+  napló megőrzi, ki takarított (`allapot_by`).
+  - `lib/fuvarozas2/levelek.ts`: `takaritsLeveleket()` és `getTakarithatoDb()`.
+- **Teszt:** `typecheck`, `eslint` (0 hiba az érintett fájlokon), teljes
+  teszt-lánc **402/402**, `build` rendben.
+- **Kockázat:** ha egy valódi megbízás rosszul lett osztályozva (pl. „egyéb"),
+  a takarítás azt is elveti. Ezért előbb a Teendő nézetben érdemes átsorolni,
+  amit kell — az elvetett levél viszont a Mind nézetből egy kattintással
+  visszahozható.
+
 ## 2026-09-20 — Gmail-figyelő élesítve, és CSAK a „Fuvarmegbízás" címkés levelekkel dolgozik
 
 - **Mi történt:** a `docs/gmail-fuvar-figyelo.gs` Apps Script telepítve Zoltán

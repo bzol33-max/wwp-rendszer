@@ -6,7 +6,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { setLevelOsztaly, setLevelAllapot, kerCsatolmanyt, type LevelSor, type FigyeloAllapot } from "@/lib/fuvarozas2/levelek";
+import { setLevelOsztaly, setLevelAllapot, kerCsatolmanyt, takaritsLeveleket, type LevelSor, type FigyeloAllapot } from "@/lib/fuvarozas2/levelek";
 import { OSZTALY_CIMKE, TEENDO_OSZTALYOK, type LevelOsztaly } from "@/lib/fuvarozas2/level-osztalyozo";
 import { formatIdo } from "@/components/fuvarozas2/kozos";
 import { cn } from "@/lib/utils";
@@ -21,10 +21,12 @@ const SZIN: Partial<Record<LevelOsztaly, string>> = {
 };
 
 export function LevelekNezet({
-  levelek, allapot, szerkeszthet, aktivSzuro,
+  levelek, allapot, szerkeszthet, aktivSzuro, takarithato,
 }: {
   levelek: LevelSor[]; allapot: FigyeloAllapot & { beallitva: boolean; osszesen: number; mai: number; eletjelPerce: number | null };
   szerkeszthet: boolean; aktivSzuro: string;
+  /** Hány nyitott levél nem teendő — ennyit vetne el a takarítás. */
+  takarithato: number;
 }) {
   // A percek a szerveren számolódnak (getFigyeloAllapot) — a render tiszta marad.
   const percek = allapot.eletjelPerce;
@@ -56,6 +58,7 @@ export function LevelekNezet({
             className={cn("rounded-md px-3 py-1 text-sm", aktivSzuro === f.k ? "bg-muted font-medium" : "text-muted-foreground hover:bg-muted/60")}>{f.c}</Link>
         ))}
         <span className="ml-auto text-xs text-muted-foreground">{levelek.length} levél</span>
+        {szerkeszthet && takarithato > 0 ? <TakaritasGomb darab={takarithato} /> : null}
       </div>
 
       {levelek.length === 0 ? <p className="py-8 text-center text-sm text-muted-foreground">Nincs levél ebben a nézetben.</p> : null}
@@ -120,5 +123,38 @@ function LevelKartya({ l, szerkeszthet }: { l: LevelSor; szerkeszthet: boolean }
         </div>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Takarítás: a nem teendős nyitott leveleket (hírlevél, számla, Timocom,
+ * egyéb) elveti — a fuvaros leveleket nem bántja, és nem töröl, csak
+ * „elvetve" állapotba teszi, tehát a Mind nézetben visszakereshető.
+ */
+function TakaritasGomb({ darab }: { darab: number }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [kerdez, setKerdez] = useState(false);
+  if (!kerdez) {
+    return (
+      <button type="button" onClick={() => setKerdez(true)}
+        className="rounded-md border border-foreground/15 px-3 py-1 text-xs font-medium hover:bg-muted">
+        Takarítás ({darab})
+      </button>
+    );
+  }
+  return (
+    <span className="flex items-center gap-1 rounded-md bg-[var(--f2-amb-l)] px-2 py-1 text-xs text-[var(--f2-amb)]">
+      {darab} nem teendős levél elvetése?
+      <Button size="xs" disabled={pending} onClick={() =>
+        start(async () => {
+          const r = await takaritsLeveleket();
+          toast.success(`${r.elvetve} levél elvetve`);
+          setKerdez(false);
+          router.refresh();
+        })
+      }>Igen</Button>
+      <Button size="xs" variant="ghost" onClick={() => setKerdez(false)}>Mégse</Button>
+    </span>
   );
 }
