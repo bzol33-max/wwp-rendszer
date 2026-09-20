@@ -75,15 +75,14 @@ export async function kertCsatolmanyok(): Promise<string[]> {
 }
 
 /**
- * Egy levél csatolmánya megérkezett. A megbízás-iratot a Drive figyelt
- * mappájába tesszük — onnan a meglévő drive-sync veszi fel a fuvart.
+ * A levél megkeresése és a csatolmány-igény ellenőrzése — a két
+ * csatolmány-út (Drive-azonosító, illetve tartalom) közös eleje.
  */
-export async function veszCsatolmanyt(
-  gmailMessageId: string,
-  fajl: { nev: string; mimeType: string; tartalom: Buffer }
-): Promise<{ ok: boolean; driveId?: string; hiba?: string }> {
-  const [level] = await query<{ id: string; osztaly: string; kezi_osztaly: string | null; targy: string | null }>(
-    `select id::text, osztaly, kezi_osztaly, targy from fuvar_level where gmail_message_id = $1`,
+async function csatolmanyCelLevel(
+  gmailMessageId: string
+): Promise<{ ok: true; levelId: string } | { ok: false; hiba: string }> {
+  const [level] = await query<{ id: string; osztaly: string; kezi_osztaly: string | null }>(
+    `select id::text, osztaly, kezi_osztaly from fuvar_level where gmail_message_id = $1`,
     [gmailMessageId]
   );
   if (!level) return { ok: false, hiba: "ismeretlen levél" };
@@ -92,11 +91,49 @@ export async function veszCsatolmanyt(
     await query(`update fuvar_level set csatolmany_kell = false where id = $1`, [level.id]);
     return { ok: false, hiba: "ehhez a levélhez nem kérünk csatolmányt" };
   }
-  const feltoltve = await feltoltMegbizasIratot(fajl.nev, fajl.mimeType || "application/pdf", fajl.tartalom);
+  return { ok: true, levelId: level.id };
+}
+
+async function rogzitCsatolmanyt(levelId: string, driveId: string, driveUrl: string): Promise<void> {
   await query(
     `update fuvar_level set csatolmany_megjott_at = now(), csatolmany_kell = false, drive_file_id = $2, drive_url = $3 where id = $1`,
-    [level.id, feltoltve.id, feltoltve.url]
+    [levelId, driveId, driveUrl]
   );
+}
+
+/**
+ * A figyelő MÁR feltöltötte a csatolmányt a Drive figyelt mappájába (a saját
+ * fiókja kvótájából) — itt csak rögzítjük. Ez az elsődleges út.
+ *
+ * MIÉRT: a mappa egy személyes Google-fiók My Drive-jában van, a szerver
+ * viszont service accounttal hitelesít, annak pedig nincs tárhelykvótája —
+ * `files.create` 403 `storageQuotaExceeded`-del elszáll (2026-09-20, éles
+ * 500-ak a /csatolmany végponton). Olvasni tud, ezért a drive-sync megy.
+ */
+export async function veszCsatolmanyDriveId(
+  gmailMessageId: string,
+  fajl: { driveFileId: string; driveUrl?: string | null }
+): Promise<{ ok: boolean; driveId?: string; hiba?: string }> {
+  const cel = await csatolmanyCelLevel(gmailMessageId);
+  if (!cel.ok) return { ok: false, hiba: cel.hiba };
+  const url = fajl.driveUrl?.trim() || `https://drive.google.com/file/d/${fajl.driveFileId}/view`;
+  await rogzitCsatolmanyt(cel.levelId, fajl.driveFileId, url);
+  return { ok: true, driveId: fajl.driveFileId };
+}
+
+/**
+ * Tartalék út: a figyelő a fájl tartalmát küldte (mert a saját Drive-
+ * feltöltése nem sikerült). A szerver tölti fel — ez a service account
+ * kvótája miatt ma elszállhat, ezért csak tartalék.
+ */
+export async function veszCsatolmanyt(
+  gmailMessageId: string,
+  fajl: { nev: string; mimeType: string; tartalom: Buffer }
+): Promise<{ ok: boolean; driveId?: string; hiba?: string }> {
+  const cel = await csatolmanyCelLevel(gmailMessageId);
+  if (!cel.ok) return { ok: false, hiba: cel.hiba };
+  const feltoltve = await feltoltMegbizasIratot(fajl.nev, fajl.mimeType || "application/pdf", fajl.tartalom);
+  await rogzitCsatolmanyt(cel.levelId, feltoltve.id, feltoltve.url);
   return { ok: true, driveId: feltoltve.id };
 }
 

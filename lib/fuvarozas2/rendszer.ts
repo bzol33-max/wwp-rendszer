@@ -79,6 +79,26 @@ export async function getRendszerEgeszseg(): Promise<RendszerEgeszseg> {
     utoljara: gmail?.ertek?.utolso_eletjel ?? null,
   });
 
+  // 2b. E-mail csatolmány: amit a figyelőtől KÉRTÜNK, de nem jött meg.
+  // Ez a H1 tünete (2026-09-20): a szerver nem tud a Drive-ba írni, ezért a
+  // megbízás-PDF sosem érkezett be — három hétig némán. A figyelő 5
+  // percenként fut, tehát 45 perc után már nem várakozás, hanem hiba.
+  const [csat] = await query<{ keslo: number; legregebbi: string | null }>(
+    `select count(*)::int as keslo, min(erkezett)::text as legregebbi
+     from fuvar_level
+     where csatolmany_kell and csatolmany_megjott_at is null and allapot <> 'elvetve'
+       and erkezett < now() - interval '45 minutes'`
+  );
+  const keslo = csat?.keslo ?? 0;
+  sorok.push({
+    kulcs: "csatolmany",
+    cim: "E-mail csatolmányok",
+    allapot: keslo === 0 ? "rendben" : keslo > 2 ? "gond" : "figyelmeztetes",
+    ertek: keslo === 0 ? "mind megjött" : `${keslo} kért csatolmány nem jött meg`,
+    reszlet: keslo === 0 ? null : `a legrégebbi levél ${kor(korPerc(csat?.legregebbi))}`,
+    utoljara: null,
+  });
+
   // 3. GPS (Ecofleet) — a megállókra írt utolsó érintés.
   const [gps] = await query<{ utolso: string | null }>(
     `select greatest(max(gps_erkezes), max(gps_tavozas))::text as utolso from fuvar_megallok`
@@ -124,6 +144,35 @@ export async function getRendszerEgeszseg(): Promise<RendszerEgeszseg> {
     allapot: hibaOssz === 0 ? "rendben" : "gond",
     ertek: hibaOssz === 0 ? "minden 0" : `${hibaOssz} nyitott`,
     reszlet: `állapot nélkül ${adat?.allapot_nelkul ?? 0} · migrációs hiba ${adat?.migracio_hiba ?? 0} · elszámolás nélkül ${adat?.elszamolas_nelkul ?? 0} · megálló nélkül ${adat?.megallo_nelkul ?? 0}`,
+    utoljara: null,
+  });
+
+  // Fuvarozás 2 adatmodell: van-e megálló és időablak az aktív fuvarokon.
+  // H3/H4 (2026-09-20): a megállókat eddig csak a kézi backfill írta, az
+  // időablakot csak a Duvenbeck-importőr — mindkettő csendben hiányzott.
+  const [modell] = await query<{ megallo_nelkul: number; ablak_nelkul: number }>(
+    `select
+       count(*) filter (where not exists (select 1 from fuvar_megallok m where m.megbizas_id = f.id))::int as megallo_nelkul,
+       count(*) filter (where f.felrakas_ablak_tol is null and f.lerakas_ablak_tol is null)::int as ablak_nelkul
+     from fuvar_megbizasok f
+     where f.torolt_at is null and f.allapot in ('ellenorzesre_var','tervezett','folyamatban')`
+  );
+  const megalloNelkul = modell?.megallo_nelkul ?? 0;
+  sorok.push({
+    kulcs: "megallok",
+    cim: "Megálló nélküli aktív fuvar",
+    allapot: megalloNelkul === 0 ? "rendben" : megalloNelkul > 2 ? "gond" : "figyelmeztetes",
+    ertek: megalloNelkul === 0 ? "mindnek van megállója" : `${megalloNelkul} fuvar`,
+    reszlet: megalloNelkul === 0 ? null : "nélkülük nincs ablak-eltérés, várakozás-figyelés és megállónkénti „kész”",
+    utoljara: null,
+  });
+  const ablakNelkul = modell?.ablak_nelkul ?? 0;
+  sorok.push({
+    kulcs: "ablakok",
+    cim: "Időablak nélküli aktív fuvar",
+    allapot: ablakNelkul === 0 ? "rendben" : "figyelmeztetes",
+    ertek: ablakNelkul === 0 ? "mindnek van ablaka" : `${ablakNelkul} fuvar`,
+    reszlet: ablakNelkul === 0 ? null : "ablak nélkül nincs késés-figyelmeztetés",
     utoljara: null,
   });
 

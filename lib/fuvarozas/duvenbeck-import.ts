@@ -9,6 +9,7 @@
 // keresztül engedélyezett (lásd lib/auth/require-permission.ts).
 
 import { query } from "@/lib/db";
+import { frissitsdFuvarozas2Modellt } from "@/lib/fuvarozas2/modell-szinkron";
 import { requireEditPermission } from "@/lib/auth/require-permission";
 import { parseDuvenbeck, megalloCimek, type DuvenbeckDok } from "@/lib/fuvarozas/duvenbeck";
 import { findJarmuByPlate, jarmuLabel } from "@/lib/fuvarozas/vehicles";
@@ -333,6 +334,10 @@ export async function mentDuvenbeckDokumentumot(
   if (!fuvarId) return null;
 
   await rogzitDokumentumot(fuvarId, file, dok);
+  // Fuvarozás 2 modell: megállók, partner, jármű, hivatkozás. Új sornál
+  // felveszi, összefűzésnél a most megjött időablakot/napot pótolja a már
+  // meglévő megállókon (a GPS-tényt és a sofőr jelölését nem bántja).
+  await frissitsdFuvarozas2Modellt(fuvarId);
 
   return {
     statusz,

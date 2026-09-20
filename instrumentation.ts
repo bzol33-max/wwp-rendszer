@@ -6,4 +6,6 @@ export async function register() {
     "@/lib/fuvarozas/teljesites-figyeles-scheduler"
   );
   inditTeljesitesFigyelesScheduler();
+  const { inditModellSzinkronScheduler } = await import("@/lib/fuvarozas2/modell-szinkron-scheduler");
+  inditModellSzinkronScheduler();
 }

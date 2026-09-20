@@ -1,6 +1,7 @@
 "use server";
 
 import { query } from "@/lib/db";
+import { frissitsdFuvarozas2Modellt } from "@/lib/fuvarozas2/modell-szinkron";
 import { requireAnyEditPermission, requireEditPermission } from "@/lib/auth/require-permission";
 import { PARTNEREK } from "@/lib/fuvarozas/import/partnerek";
 import { ceglNevKanonikusan, normalizaltCegKulcs, sajatCegunkE } from "@/lib/fuvarozas/fuvar-constants";
@@ -400,7 +401,12 @@ export async function addFuvar(input: AddFuvarInput): Promise<string | null> {
       input.postazasiCim || null,
     ]
   );
-  return sorok[0]?.id ?? null;
+  const id = sorok[0]?.id ?? null;
+  // A Fuvarozás 2 modell (megállók, partner, jármű, hivatkozás) utántöltése:
+  // enélkül az új fuvarnak nincs megállója, és a Ma-képernyő ablak-, várakozás-
+  // és „kész"-logikája vak rajta (2026-09-20).
+  if (id) await frissitsdFuvarozas2Modellt(id);
+  return id;
 }
 
 export async function updateFuvarStatus(id: string, statusz: FuvarStatusz) {

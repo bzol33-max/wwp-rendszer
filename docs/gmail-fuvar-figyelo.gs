@@ -30,8 +30,10 @@
  *        ALAP_URL = https://web-production-91051.up.railway.app
  *        TOKEN    = <ugyanaz, mint a Railway GMAIL_FIGYELO_SECRET>
  *        CIMKE    = <a figyelt Gmail-címke, ha nem „Fuvarmegbízás">
- *   3. Futtatás: `egyszeriProba` — a Google engedélyt kér (Gmail olvasás +
- *      külső kérés), engedélyezd. A napló megmutatja, mit küldött volna.
+ *        MAPPA    = <a Drive „Fuvarmegbizások" mappa azonosítója, ha változik>
+ *   3. Futtatás: `egyszeriProba` — a Google engedélyt kér (Gmail olvasás,
+ *      Drive-írás és külső kérés), engedélyezd. A Drive-jog azért kell, mert
+ *      a megbízás-iratot ez a script tölti fel a figyelt mappába. A napló megmutatja, mit küldött volna.
  *   4. Futtatás: `telepitIdozitot` — ettől 5 percenként magától fut.
  *      (Leállítás: `torolIdozitot`.)
  *
@@ -51,6 +53,18 @@ var KIZART_CIMKE = ['Magán', 'Privat', 'Private'];
 
 /** Csak az ezzel a címkével megjelölt leveleket dolgozzuk fel. */
 var ALAP_CIMKE = 'Fuvarmegbízás';
+
+/**
+ * A Drive „Fuvarmegbizások" mappája — IDE tölti fel a script a megbízás-
+ * iratot, a TE fiókod nevében és kvótájából. Script Property: MAPPA.
+ *
+ * MIÉRT A SCRIPT TÖLTI FEL: a mappa a te személyes My Drive-odban van, a
+ * szerver viszont service accounttal hitelesít, annak pedig nincs
+ * tárhelykvótája — a szerveroldali feltöltés 403 `storageQuotaExceeded`-del
+ * elszállt (éles 500-ak 2026-09-20-ig). Olvasni tud, ezért a drive-sync
+ * változatlanul importálja, amit ide feltöltünk.
+ */
+var ALAP_MAPPA = '1JNUvwN30It3_rooGkeTGTpkO4K9bix2n';
 /** Ennyi napra visszamenőleg nézzük a címkézett leveleket. */
 var VISSZA_NAP = 14;
 
@@ -114,16 +128,37 @@ function kertCsatolmanyokFeltoltese_() {
       var cs = csatolmanyok[j];
       if (cs.getSize() > MAX_CSATOLMANY_BYTE) continue;
       if (!/\.(pdf|docx?|xlsx?|jpe?g|png)$/i.test(cs.getName())) continue;
-      hivas_('/api/fuvarozas2/gmail/csatolmany', {
-        method: 'post',
-        contentType: 'application/json',
-        payload: JSON.stringify({
-          gmailMessageId: kert[i],
-          nev: cs.getName(),
-          mimeType: cs.getContentType(),
-          base64: Utilities.base64Encode(cs.getBytes()),
-        }),
-      });
+      // Feltöltés a SAJÁT fiókból a figyelt Drive-mappába, és csak az
+      // azonosítót küldjük. Ha ez nem megy (rossz mappa-azonosító, jogosultság),
+      // tartalékként a tartalmat küldjük — a szerver próbálja meg.
+      var driveFajl = null;
+      try {
+        driveFajl = DriveApp.getFolderById(mappaId_()).createFile(cs);
+      } catch (e) {
+        Logger.log('Drive-feltöltés nem sikerült (' + cs.getName() + '): ' + e);
+      }
+      if (driveFajl) {
+        hivas_('/api/fuvarozas2/gmail/csatolmany', {
+          method: 'post',
+          contentType: 'application/json',
+          payload: JSON.stringify({
+            gmailMessageId: kert[i],
+            driveFileId: driveFajl.getId(),
+            driveUrl: driveFajl.getUrl(),
+          }),
+        });
+      } else {
+        hivas_('/api/fuvarozas2/gmail/csatolmany', {
+          method: 'post',
+          contentType: 'application/json',
+          payload: JSON.stringify({
+            gmailMessageId: kert[i],
+            nev: cs.getName(),
+            mimeType: cs.getContentType(),
+            base64: Utilities.base64Encode(cs.getBytes()),
+          }),
+        });
+      }
       db++;
     }
   }
@@ -131,6 +166,11 @@ function kertCsatolmanyokFeltoltese_() {
 }
 
 /** 2. kör: az utolsó 3 nap leveleinek metaadata. */
+/** A Drive-mappa azonosítója (Script Property MAPPA, különben az alapértelmezett). */
+function mappaId_() {
+  return PropertiesService.getScriptProperties().getProperty('MAPPA') || ALAP_MAPPA;
+}
+
 /** A figyelt címke (Script Property CIMKE, különben az alapértelmezett). */
 function cimkeNeve_() {
   return PropertiesService.getScriptProperties().getProperty('CIMKE') || ALAP_CIMKE;
