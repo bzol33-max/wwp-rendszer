@@ -1,5 +1,35 @@
 # PROGRESS
 
+## 2026-09-20 — Fuvarozás 2, E10c: Kalkulátor (D6) és Elszámolás (D5) a tervvászon szerint
+
+- **Kalkulátor**: HU-GO útdíj + **saját önköltség**, és abból három ajánlat-sáv.
+  Amit a régi kalkulátor nem tudott: az **üres km** (telephely → felrakó és
+  lerakó → telephely, kapcsolóval, ha van visszfuvar), a **mért fogyasztás**
+  (Ecofleet 14 nap, kocsira vagy flottára), a NAV gázolajár, és a **napi
+  költség**. Utóbbi Zoltán száma (2026-09-20): **50 000 Ft/nap/kocsi, sofőr és
+  kocsi együtt** (`NAPI_KOLTSEG_FT` a `lib/fuvarozas2/kalkulator-alap.ts`-ben;
+  ha később bomlik sofőrre és fixre, csak ez a konstans változik). A lap
+  megmondja az önköltséget Ft/rakott km-ben, és minősíti az 500/600/700 Ft/km
+  sávokat, valamint a megbízó konkrét ajánlatát (veszteséges / határeset /
+  ajánlott). A régi, térképes kalkulátor lenyitva ottmarad.
+- **Elszámolás**: a vászon szerinti **folyamat-nézet** a kanban helyett —
+  Fotóra vár → Számlázható → Számlázva (e-mail) → E-mail elment (posta) →
+  Kintlévőség. Minden kártyán az ott következő gomb van (számlázható jelölés,
+  számlaszám rögzítése, e-mail elment, papír megjött, postázva), a fejlécben a
+  lejárt számlák és a várakozó piszkozatok száma. A **számla e-mail
+  piszkozata** (címzett a partner-törzsből, tárgy és törzs a terv sablonjával,
+  csatolmány-lista) elkészül és **kimásolható** — az automatikus Gmail-vázlat
+  az Apps Script lépéshez tartozik (S17), és a küldés akkor is kézi marad.
+- **Teszt:** `scripts/teszt-kalkulator.ts` (22 eset: önköltség-összetevők, az
+  üres km hatása, több napos fuvar, nulla rakott km, minősítési küszöbök,
+  sávok, napok a menetidőből) a `teszt` láncban — teljes lánc **402/402**.
+  `typecheck`, `eslint`, `build` rendben; Playwright 1440×900: mindkét oldal 200.
+- **Kockázat:** az önköltség két bemenete becslés, amíg nincs jobb: a
+  fogyasztás mért adat hiányában 30 l/100, a gázolajár a NAV havi ára (ha nem
+  érhető el, 650 Ft/l) — a felület mindkettőnél kiírja a forrást. A napi
+  50 000 Ft egy átlag: ha a két kocsi költsége eltér, kocsinkénti mezőt kell
+  csinálni belőle.
+
 ## 2026-09-20 — Fuvarozás 2, E10b: Élő GPS (D4) és Tervezés (D3) a tervvászon szerint
 
 - **Élő GPS**: kocsinként **24 órás sáv** — vezetés (menta), rakodás/várakozás
