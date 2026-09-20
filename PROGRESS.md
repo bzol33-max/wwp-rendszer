@@ -1295,3 +1295,33 @@ az import végén + idempotens backfill a deploy-láncban) → push.
 2. hullám J1b (OAuth refresh token az íráshoz) → J3 (ablak-kinyerés minden
 partnernél) → J5 (Rendszer-ellenőrzések) → J4 (duplikátumok nyugtázása).
 Kód ebben a körben nem változott — csak feltárás.
+
+### 1. javítási hullám (2026-09-20) — J1a, J1c, J2 kész
+
+- **J1a** `docs/gmail-fuvar-figyelo.gs`: a script `DriveApp`-pal feltölti a
+  csatolmányt a figyelt mappába (a felhasználó kvótájából), és
+  `{gmailMessageId, driveFileId, driveUrl}`-t POST-ol. Új Script Property:
+  `MAPPA` (alap: a Fuvarmegbizások mappa azonosítója). A Google-engedélyek közé
+  bekerül a Drive-írás → **a scriptet újra kell menteni és egyszer futtatni**.
+  A route új, elsődleges ága: `veszCsatolmanyDriveId` (levelek-core) csak
+  rögzíti az azonosítót; a base64-es út tartalékként megmarad.
+- **J1c** `console.error` a csatolmány-route mindkét hibaágán. Rendszer oldal:
+  „E-mail csatolmányok" (45 percnél régebben kért, meg nem jött csatolmány).
+  A tervezett Drive-írás-próba helyett DB-lekérdezéses tünet-ellenőrzés lett:
+  ugyanazt fogja meg, de nem hív Drive-ot minden oldalbetöltésnél (a
+  `getRendszerEgeszseg` szerződése, hogy minden kérdése olcsó).
+- **J2** `lib/fuvarozas2/modell-szinkron.ts` →
+  `frissitsdFuvarozas2Modellt(fuvarId)` + `potoldAHianyzoModelleket(korlat)`;
+  a megálló-terv tiszta fájlban (`lib/fuvarozas2/megallo-terv.ts`), hogy
+  tesztelhető legyen. Hívók: `addFuvar` (Drive-import és kézi felvitel) és a
+  Duvenbeck-import vége. Óránkénti utánpótlás:
+  `modell-szinkron-scheduler.ts` (instrumentation.ts). Rendszer oldal:
+  „Megálló nélküli aktív fuvar", „Időablak nélküli aktív fuvar".
+- Teszt: `npm run teszt` **425 eset** zöld (ebből 23 új:
+  `scripts/teszt-modell-szinkron.ts`), `npx tsc --noEmit` tiszta,
+  `npm run lint` változatlan (45 meglévő probléma, új nincs),
+  `npm run build` zöld (konténerben, linuxos node_modules-szal).
+- Hátra van a 2. hullámból: **J1b** (OAuth refresh token a Drive-íráshoz — a
+  sofőr fuvarlevél-fotója enélkül nem tölthető fel), **J3** (időablak-kinyerés
+  az általános PDF-importba), **J4** (duplikátum-nyugtázás), **J7**
+  (titokcsere), és a `git push`.
