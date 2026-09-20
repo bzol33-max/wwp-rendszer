@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, FileText, Receipt, Sun, UserRound } from "lucide-react";
+import { Activity, Building2, CalendarDays, FileText, Receipt, Sun, Truck, UserRound } from "lucide-react";
 
-const IKON = { nap: Sun, naptar: CalendarDays, papir: FileText, szamla: Receipt, profil: UserRound } as const;
+const IKON = { nap: Sun, naptar: CalendarDays, papir: FileText, szamla: Receipt, profil: UserRound, fuvar: Truck, ceg: Building2, rendszer: Activity } as const;
 export type MTab = { href: string; label: string; ikon: keyof typeof IKON };
 
 /** A sofőr és az iroda más füleket lát — a szerepet az app/m/layout.tsx dönti el. */
@@ -17,6 +17,13 @@ export const IRODA_TABOK: MTab[] = [
   { href: "/m/papir", label: "Papír", ikon: "papir" },
   { href: "/m/szamla", label: "Számla és posta", ikon: "szamla" },
   { href: "/m/profil", label: "Profil", ikon: "profil" },
+];
+/** Vezetői fiók (terv: 4 fül) — a Profil a Rendszer-fül alján van, nem külön fül. */
+export const VEZETO_TABOK: MTab[] = [
+  { href: "/m", label: "Ma", ikon: "nap" },
+  { href: "/m/fuvar", label: "Fuvar", ikon: "fuvar" },
+  { href: "/m/ceg", label: "Cég", ikon: "ceg" },
+  { href: "/m/rendszer", label: "Rendszer", ikon: "rendszer" },
 ];
 
 export function MTabbar({ tabok }: { tabok: MTab[] }) {

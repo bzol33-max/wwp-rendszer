@@ -1,5 +1,53 @@
 # PROGRESS
 
+## 2026-09-20 — Fuvarozás 2 átállás, E7g: vezetői mobil (Ma · Fuvar · Cég · Rendszer)
+
+- **Probléma:** a vezetői fiók (`vezeto`) mobilon még a sofőr-nézetet kapta;
+  a terv szerinti négy fül (Ma · Fuvar · Cég · Rendszer) nem létezett, így
+  telefonról nem lehetett sem jóváhagyni, sem a cég számait megnézni.
+- **Módosítás:** a `/m` keret harmadik szerepet kapott — sofőr → Ma · Holnap ·
+  Profil; **teljes Fuvarozás-jog → Ma · Fuvar · Cég · Rendszer**; csak
+  elszámolás (Szabina) → Papír · Számla és posta · Profil. A sorrend számít:
+  aki sofőr, annak a terepnézet jár akkor is, ha egyébként több joga van.
+  - **Ma** (`/m`): felül a jelzések (mi vár döntésre, súlyosság szerint
+    színezve, a számra kattintva a teljes listára visz), alatta kocsinként egy
+    sor a mai fuvarral és a holnapi darabszámmal, végül a „Kocsi nélkül" doboz.
+    A terv elve: nem a normál működést mutatja, hanem az eltéréseket.
+  - **Fuvar** (`/m/fuvar`): négy szegmens — **Holnap** (kocsinként a holnapi
+    fuvarok + holnapra kocsi nélküliek + link a heti tervezésre),
+    **Ellenőrzés** (az importból jött, még jóvá nem hagyott megbízások, a
+    hiánylistával és egy „Jóváhagyom ✓" gombbal — kocsi nélkül a gomb tiltott,
+    mert az átmenet úgyis elbukna), **Levelek** (a nyitott, teendős levelek:
+    elintézve / elvetve / csatolmányt kérek), **Napló** (az utolsó 60 esemény:
+    mi történt, ki csinálta, mikor).
+  - **Cég** (`/m/ceg`): a mai Áttekintés három füle egy helyen — Nyíregyháza
+    (kassza, mai felvásárlás típusonként, mai kiadás), Készlet (telephelyenként,
+    típusonként, úton lévő), Számlák (kintlévőség pénznemenként, lejárt
+    kiemelve, esedékesség szerinti lista). **Csak olvas** — rögzíteni a saját
+    modulban lehet, oda visz a lábjegyzet-link.
+  - **Rendszer** (`/m/rendszer`): a `getRendszerEgeszseg()` sorai (Drive, Gmail,
+    GPS, Számlázz.hu, átállási kapuk, lejárt fuvarok, elszámolási sor,
+    migrációk) zöld/sárga/piros jelzéssel, alatta a fiók és a kijelentkezés.
+- **Új fájlok:** `lib/fuvarozas2/naplo.ts` (`getNaplo`, csak olvas),
+  `components/m/vezeto.tsx` (Ma + Fuvar), `components/m/vezeto-ceg.tsx`,
+  `app/m/fuvar|ceg|rendszer/page.tsx`. A `components/m/tabbar.tsx`
+  `VEZETO_TABOK`-kal bővült.
+- **Jogosultság:** a Cég fül a meglévő Áttekintés-lekérdezéseket használja
+  (`lib/attekintes/actions.ts`), azok pedig `attekintes` nézetet kérnek —
+  a lekérdezéseket NEM duplikáltuk, helyette a `vezeto` fiók megkapja az
+  `attekintes` nézeti jogot (`grantAttekintesVezetonekOnce`, egyszeri lépés a
+  `scripts/migrate.mjs`-ben, `alkalmazott_javitasok` kóddal rögzítve).
+- **Teszt:** `typecheck` tiszta; `eslint app/m components/m lib/fuvarozas2/naplo.ts`
+  0 hiba; `npm run teszt` 339/339; `npm run build` rendben (mind a 6 `/m` útvonal).
+  Playwright 390×844-en `vezeto` fiókkal: mind a négy fül 200, a fülsor
+  Ma/Fuvar/Cég/Rendszer, a Fuvar és a Cég szegmensei váltanak. Regresszió:
+  Szabina (`/m` → `/m/papir`, Papír gomb ír) és Vadon Gergő (Ma · Holnap ·
+  Profil, „Kész" gomb ír) változatlanul jó.
+- **Kockázat:** a terv „cégiratok, műszaki lejárat" figyelmeztetései még nem
+  szerepelnek a Rendszer fülön — nincs hozzá adatforrás (a Járművek modulban
+  nincs lejárat-tábla). Amint lesz, ide kerül. A Cég fül számai ugyanonnan
+  jönnek, mint az Áttekintésé, tehát eltérés nem keletkezhet a kettő közt.
+
 ## 2026-09-20 — Fuvarozás 2 átállás, E7f: iroda (Szabina) mobil teendői
 
 - **Probléma:** Szabina mobilon nem látta, mihez nem jött még meg az eredeti

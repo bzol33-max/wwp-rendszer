@@ -1,19 +1,21 @@
 import Link from "next/link";
 import { requireSession } from "@/lib/auth/dal";
-import { MTabbar, SOFOR_TABOK, IRODA_TABOK } from "@/components/m/tabbar";
+import { MTabbar, SOFOR_TABOK, IRODA_TABOK, VEZETO_TABOK } from "@/components/m/tabbar";
 
-// Mobil nézet két szerepre, ugyanazzal a kerettel (terv: „Mobil" vászon):
+// Mobil nézet három szerepre, ugyanazzal a kerettel (terv: „Mobil" vászon):
 //   • sofőr (fuvarozas_sajat + alkalmazott): Ma · Holnap · Profil
+//   • vezető (teljes Fuvarozás-jog): Ma · Fuvar · Cég · Rendszer
 //   • iroda (elszamolas, Szabina): Papír · Számla és posta · Profil
-// A teljes Fuvarozás-jog (vezeto, admin) mindkettőt elérheti; alapból a
-// sofőr-nézetet kapja, mert az a terepen használt.
+// A sorrend fontos: aki sofőr, annak a terepen használt nézet jár akkor is,
+// ha egyébként több joga van; a vezetői nézet a teljes Fuvarozás-joghoz
+// tartozik (vezeto, admin), az irodai a csak-elszámolás joghoz.
 export default async function Layout({ children }: { children: React.ReactNode }) {
   const session = await requireSession();
   const sofor = session.can("fuvarozas_sajat").view && !!session.employeeId;
   const iroda = session.can("elszamolas").view;
   const teljes = session.can("fuvarozas").view;
   const ok = sofor || iroda || teljes;
-  const tabok = sofor || (teljes && !iroda) ? SOFOR_TABOK : IRODA_TABOK;
+  const tabok = sofor ? SOFOR_TABOK : teljes ? VEZETO_TABOK : IRODA_TABOK;
   return (
     <div className="sofor-m mx-auto flex min-h-dvh w-full max-w-md flex-col">
       <div className="flex-1 px-4 pb-24 pt-4">

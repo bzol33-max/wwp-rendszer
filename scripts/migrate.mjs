@@ -229,6 +229,7 @@ async function main() {
     },
   });
   await grantElszamolasSzabinanakOnce(pool);
+  await grantAttekintesVezetonekOnce(pool);
   // 2026-09-17: a két sofőr fiók a 09-13-i seed után törlődött (a lépés
   // rögzítve maradt, ezért a seed nem hozta újra létre). A dolgozói mobil
   // sofőr nézetéhez (lásd docs/sofor-mobil-terv.md) kell a fiók ÉS az
@@ -1312,6 +1313,25 @@ async function grantElolegekSajatOnce(pool) {
 // Fuvarozás 2 (2026-09-19, E3): Szabina hatóköre = elszámolás (díjjal,
 // GPS-részlet nélkül — átállás-ellenőrzés S16). A "posta" joga marad, amíg a
 // régi /posta nézet él; az új Elszámolás fül az "elszamolas" kulcsot nézi.
+async function grantAttekintesVezetonekOnce(pool) {
+  const JAVITAS_KOD = "fuvarozas2-attekintes-vezeto-2026-09-20";
+  const { rows } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (rows.length > 0) return;
+  // A vezetői mobil „Cég" füle (Nyíregyháza · Készlet · Számlák) a meglévő
+  // Áttekintés-lekérdezéseket használja (lib/attekintes/actions.ts), azok
+  // pedig az `attekintes` megtekintési jogot kérik. Nem duplikáljuk a
+  // lekérdezéseket egy új jog alatt — a vezetői fiók megkapja az
+  // `attekintes` nézetet. A seedUserOnce csak létrehozáskor ír jogot, ezért
+  // kell ez a külön lépés.
+  await pool.query(
+    `update users
+     set permissions = permissions || '{"attekintes": {"view": true, "edit": false}}'::jsonb
+     where username = 'vezeto'`
+  );
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1)`, [JAVITAS_KOD]);
+  console.log("[migrate] vezeto megkapta az attekintes nezet jogot (vezetoi mobil Ceg ful).");
+}
+
 async function grantElszamolasSzabinanakOnce(pool) {
   const JAVITAS_KOD = "fuvarozas2-elszamolas-szabina-2026-09-19";
   const { rows } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
