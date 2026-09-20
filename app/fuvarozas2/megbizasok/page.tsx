@@ -1,48 +1,60 @@
-import Link from "next/link";
 import { PageHeader } from "@/components/layout/page-header";
-import { getMegbizasok } from "@/lib/fuvarozas2/megbizasok";
+import { requireSession } from "@/lib/auth/dal";
+import { getMegbizas, getMegbizasokVaszon } from "@/lib/fuvarozas2/megbizasok";
 import { ALLAPOTOK, type Allapot } from "@/lib/fuvarozas/allapot";
-import { ALLAPOT_CIMKE} from "@/components/fuvarozas2/kozos";
 import { Fuvarozas2Fulek } from "@/components/fuvarozas2/fulek";
-import { MegbizasLista } from "@/components/fuvarozas2/megbizas-lista";
-import { cn } from "@/lib/utils";
+import { MegbizasSzuroSav, MegbizasTabla, type SzuroErtekek } from "@/components/fuvarozas2/megbizas-vaszon";
+import { MegbizasReszlet } from "@/components/fuvarozas2/megbizas-reszlet";
 
 export const dynamic = "force-dynamic";
 
-const CSOPORTOK: { kulcs: string; cimke: string; allapotok: Allapot[] }[] = [
-  { kulcs: "folyamatban", cimke: "Folyamatban", allapotok: ["tervezett", "folyamatban"] },
-  { kulcs: "ellenorzes", cimke: "Ellenőrzésre vár", allapotok: ["ellenorzesre_var"] },
-  { kulcs: "elszamolas", cimke: "Elszámolás alatt", allapotok: ["teljesitve", "szamlazhato", "szamlazva", "email_elment", "postazva"] },
-  { kulcs: "lezart", cimke: "Lezárt", allapotok: ["lezart"] },
-];
+// A régi „csoport" paraméter (Ma-képernyő linkjei) leképezése az új állapot-szűrőre.
+const CSOPORT_ALLAPOT: Record<string, Allapot> = {
+  ellenorzes: "ellenorzesre_var",
+  folyamatban: "folyamatban",
+  elszamolas: "szamlazhato",
+  lezart: "lezart",
+};
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ csoport?: string; allapot?: string; jelleg?: string }> }) {
+export default async function Page({ searchParams }: {
+  searchParams: Promise<{ jelleg?: string; allapot?: string; jarmu?: string; idoszak?: string; reszlet?: string; csoport?: string }>;
+}) {
   const sp = await searchParams;
-  const allapot = (ALLAPOTOK as readonly string[]).includes(sp.allapot ?? "") ? (sp.allapot as Allapot) : null;
-  const csoport = CSOPORTOK.find((c) => c.kulcs === sp.csoport) ?? (allapot ? null : CSOPORTOK[0]);
+  const allapotParam = sp.allapot ?? (sp.csoport ? CSOPORT_ALLAPOT[sp.csoport] : undefined);
+  const allapot = (ALLAPOTOK as readonly string[]).includes(allapotParam ?? "") ? (allapotParam as Allapot) : undefined;
   const jelleg = sp.jelleg === "ber" || sp.jelleg === "sajat" ? sp.jelleg : undefined;
-  const sorok = await getMegbizasok({ allapotok: allapot ? [allapot] : csoport?.allapotok, jelleg, limit: 300 });
-  const link = (q: Record<string, string | undefined>) => {
-    const p = new URLSearchParams();
-    for (const [k, v] of Object.entries(q)) if (v) p.set(k, v);
-    return `/fuvarozas2/megbizasok?${p.toString()}`;
-  };
+  const idoszak = ["ez_a_het", "mult_het", "regebbi"].includes(sp.idoszak ?? "") ? (sp.idoszak as "ez_a_het" | "mult_het" | "regebbi") : undefined;
+  const szuro: SzuroErtekek = { jelleg, allapot, jarmu: sp.jarmu, idoszak, reszlet: sp.reszlet };
+
+  const { sorok, ma, szamok } = await getMegbizasokVaszon({ jelleg, allapot, jarmu: sp.jarmu, idoszak });
+
+  const session = await requireSession();
+  const reszlet = sp.reszlet && /^\d+$/.test(sp.reszlet) ? await getMegbizas(sp.reszlet) : null;
+
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title="Fuvarozás 2 · Megbízások" subtitle="Egy lista, állapot-szűrővel. A sor a részletre visz: megállók, napló, elszámolás, műveletek." />
+      <PageHeader title="Megbízások" subtitle="Egy lista, állapot szerint szűrve — a régi hat alfül helyett. Az utolsó oszlop mondja meg, mi a következő teendő." />
       <Fuvarozas2Fulek aktiv="/fuvarozas2/megbizasok" />
-      <div className="flex flex-wrap items-center gap-1">
-        {CSOPORTOK.map((c) => (
-          <Link key={c.kulcs} href={link({ csoport: c.kulcs, jelleg })} className={cn("rounded-md px-3 py-1 text-sm", csoport?.kulcs === c.kulcs && !allapot ? "bg-muted font-medium" : "text-muted-foreground hover:bg-muted/60")}>{c.cimke}</Link>
-        ))}
-        {allapot ? <span className="rounded-md bg-muted px-3 py-1 text-sm font-medium">{ALLAPOT_CIMKE[allapot]}</span> : null}
-        <span className="mx-2 text-muted-foreground">|</span>
-        {[["", "mind"], ["ber", "bér"], ["sajat", "saját"]].map(([v, c]) => (
-          <Link key={v} href={link({ csoport: csoport?.kulcs, allapot: allapot ?? undefined, jelleg: v || undefined })} className={cn("rounded-md px-3 py-1 text-sm", (jelleg ?? "") === v ? "bg-muted font-medium" : "text-muted-foreground hover:bg-muted/60")}>{c}</Link>
-        ))}
-        <span className="ml-auto text-xs text-muted-foreground">{sorok.length} sor</span>
+
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+        <MegbizasSzuroSav szuro={szuro} szamok={szamok} />
+        <div className="flex min-w-0 flex-1 flex-col gap-4">
+          <MegbizasTabla sorok={sorok} ma={ma} szuro={szuro} />
+          {reszlet ? (
+            <div id="reszlet" className="scroll-mt-4">
+              <MegbizasReszlet
+                {...reszlet}
+                szerkeszthet={session.can("fuvarozas").edit || session.can("elszamolas").edit}
+                elszamolasJog={session.can("elszamolas").edit || session.can("fuvarozas").edit}
+              />
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-foreground/15 px-4 py-6 text-center text-sm text-muted-foreground">
+              Kattints egy megbízóra — a részletei (megállók, iratok, elszámolás, napló, műveletek) ide nyílnak.
+            </div>
+          )}
+        </div>
       </div>
-      <MegbizasLista sorok={sorok} />
     </div>
   );
 }

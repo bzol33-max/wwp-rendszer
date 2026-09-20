@@ -21,6 +21,7 @@ import {
   jelolMegallokat,
   kiegesziteloAllapottal,
   napiTavKm,
+  napiVezetettIdoSec,
   parseIdopontSzoveg,
   ratesziKeziJeloleseket,
   tervezettCimKozeleben,
@@ -271,6 +272,16 @@ export type JarmuIdovonalEredmeny = {
   fuvarok: FuvarBlokk[];
   /** A napon a GPS szerint megtett km (null, ha nincs GPS-adat). */
   napiKm: number | null;
+  /**
+   * 561/2006/EK vezetési idő BECSLÉSE a GPS-ből (nem tachográf-adat): ma
+   * vezetéssel töltött idő, a szolgálat kezdete (első mozgás) és az utolsó
+   * legalább 45 perces állás vége. A Ma-képernyő ebből mondja meg, mennyi
+   * vezetés van hátra a szünetig — a tényleges tachográf a sofőrnél van, ez
+   * csak előrejelzés, és a felület így is jelöli.
+   */
+  vezetesSec: number | null;
+  szolgalatKezdet: Date | null;
+  utolsoSzunetVege: Date | null;
   /**
    * A GPS szerint legalább NEM_TERVEZETT_ALLAS_PERC percig tartó állások,
    * amik NEM egy tervezett fel-/lerakó cím közelében voltak — a diszpécser
@@ -1132,6 +1143,9 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
           fuvarok: fuvarBlokkok(keziJelolesekkel(tervezettFuvarok, sajatSorok), napISO, null, csuszoIds, gondokByFuvar),
           napiKm: null,
           nemTervezettAllasok: [],
+          vezetesSec: null,
+          szolgalatKezdet: null,
+          utolsoSzunetVege: null,
         };
       }
       try {
@@ -1222,6 +1236,14 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
 
         // A nap GPS szerinti km-e és a tervezetlen állásai a táblázat feletti "Hol van most" sávhoz.
         const napiKm = Math.round(napiTavKm(szakaszok));
+        // Vezetési idő becslés (lásd JarmuIdovonalEredmeny.vezetesSec).
+        const vezetesSec = napiVezetettIdoSec(szakaszok);
+        const elsoMozgas = szakaszok.find((sz) => sz.tipus === "vezetes" || sz.tipus === "indulas");
+        const szolgalatKezdet = elsoMozgas ? (elsoMozgas.tipus === "indulas" ? elsoMozgas.idopont : elsoMozgas.kezdet) : null;
+        const szunetek = szakaszok.filter(
+          (sz): sz is Extract<IdovonalSzakasz, { tipus: "allas" }> => sz.tipus === "allas" && sz.idotartamSec >= 45 * 60
+        );
+        const utolsoSzunetVege = szunetek.length > 0 ? szunetek[szunetek.length - 1].veg : null;
         const nemTervezettAllasok = szakaszok
           .filter((sz): sz is Extract<IdovonalSzakasz, { tipus: "allas" }> => sz.tipus === "allas")
           .filter(
@@ -1260,6 +1282,9 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
           fuvarok,
           napiKm,
           nemTervezettAllasok,
+          vezetesSec,
+          szolgalatKezdet,
+          utolsoSzunetVege,
         };
       } catch (err) {
         const message = err instanceof EcofleetError ? err.message : "Nem sikerült lekérni az idővonalat.";
@@ -1272,6 +1297,9 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
           fuvarok: fuvarBlokkok(keziJelolesekkel(tervezettFuvarok, sajatSorok), napISO, null, csuszoIds, gondokByFuvar),
           napiKm: null,
           nemTervezettAllasok: [],
+          vezetesSec: null,
+          szolgalatKezdet: null,
+          utolsoSzunetVege: null,
         };
       }
     })

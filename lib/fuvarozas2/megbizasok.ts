@@ -53,6 +53,8 @@ export type MegbizasSor = {
   postazva_at: string | null;
   postazasi_cim: string | null;
   fizetesi_hatarido_nap: number | null;
+  /** A partner papír-beküldési határideje napban (a „Következő teendő" oszlophoz, D2). */
+  papir_hatarido_nap: number | null;
   foto_van: boolean;
   dokumentum_url: string | null;
   megjegyzes: string | null;
@@ -76,6 +78,7 @@ const SOR_SQL = `
     coalesce(e.postazva_at, case when m.postazva then m.postazva_at end)::text as postazva_at,
     coalesce(e.postazasi_cim, m.postazasi_cim, p.postazasi_cim) as postazasi_cim,
     coalesce(e.fizetesi_hatarido_nap, m.fizetesi_hatarido_nap, p.fizetesi_hatarido_nap) as fizetesi_hatarido_nap,
+    p.papir_bekuldesi_hatarido_nap as papir_hatarido_nap,
     exists (select 1 from fuvar_dokumentumok d where d.fuvar_id = m.id and d.tipus = 'fuvarlevel') as foto_van,
     m.dokumentum_url, m.megjegyzes
   from fuvar_megbizasok m
@@ -331,4 +334,69 @@ export async function setMegjegyzes(id: string, megjegyzes: string | null): Prom
   await query(`insert into fuvar_megbizas_esemeny (megbizas_id, esemeny, forras, ki, reszletek) values ($1, 'modositva', 'ember', $2, $3)`, [
     id, session.name ?? session.username, JSON.stringify({ mezo: "megjegyzes" }),
   ]);
+}
+
+/**
+ * A Megbízások képernyő (tervvászon D2) egy lekérdezésben: a szűrt lista és
+ * a bal oldali szűrősáv darabszámai. A számok MINDIG a teljes (nem szűrt)
+ * halmazból jönnek, hogy a sáv ne ürüljön ki, amint az ember rákattint egyre.
+ */
+export async function getMegbizasokVaszon(szuro: {
+  jelleg?: "ber" | "sajat";
+  allapot?: Allapot;
+  jarmu?: string;
+  idoszak?: "ez_a_het" | "mult_het" | "regebbi" | "mind";
+} = {}): Promise<{
+  sorok: MegbizasSor[];
+  ma: string;
+  szamok: {
+    jelleg: { ber: number; sajat: number };
+    allapot: Record<string, number>;
+    jarmu: { kod: string; cimke: string; n: number }[];
+    jarmuNelkul: number;
+    idoszak: Record<string, number>;
+    mind: number;
+  };
+}> {
+  await requireAnyViewPermission(["fuvarozas", "elszamolas"]);
+  const [{ ma }] = await query<{ ma: string }>(`select ((now() at time zone 'Europe/Budapest')::date)::text as ma`);
+  const mind = await query<MegbizasSor>(`${SOR_SQL} where m.allapot is not null and m.torolt_at is null order by coalesce(m.lerakas_datum, m.datum) desc, m.id desc limit 1000`);
+
+  const { idoszakVodor } = await import("@/lib/fuvarozas2/megbizas-szuro");
+  const allapot: Record<string, number> = {};
+  const idoszak: Record<string, number> = {};
+  const jarmuMap = new Map<string, { kod: string; cimke: string; n: number }>();
+  let ber = 0, sajat = 0, jarmuNelkul = 0;
+  for (const s of mind) {
+    allapot[s.allapot] = (allapot[s.allapot] ?? 0) + 1;
+    const v = idoszakVodor(s.lerakas_nap, ma);
+    idoszak[v] = (idoszak[v] ?? 0) + 1;
+    if (s.jelleg === "ber") ber++; else sajat++;
+    if (s.jarmu_kod) {
+      const e = jarmuMap.get(s.jarmu_kod) ?? { kod: s.jarmu_kod, cimke: s.jarmu_cimke ?? s.jarmu_kod, n: 0 };
+      e.n++;
+      jarmuMap.set(s.jarmu_kod, e);
+    } else jarmuNelkul++;
+  }
+
+  const sorok = mind.filter((s) => {
+    if (szuro.jelleg && s.jelleg !== szuro.jelleg) return false;
+    if (szuro.allapot && s.allapot !== szuro.allapot) return false;
+    if (szuro.jarmu === "nincs" && s.jarmu_kod) return false;
+    if (szuro.jarmu && szuro.jarmu !== "nincs" && s.jarmu_kod !== szuro.jarmu) return false;
+    if (szuro.idoszak && szuro.idoszak !== "mind" && idoszakVodor(s.lerakas_nap, ma) !== szuro.idoszak) return false;
+    return true;
+  });
+
+  return {
+    sorok, ma,
+    szamok: {
+      jelleg: { ber, sajat },
+      allapot,
+      jarmu: [...jarmuMap.values()].sort((a, b) => b.n - a.n),
+      jarmuNelkul,
+      idoszak,
+      mind: mind.length,
+    },
+  };
 }

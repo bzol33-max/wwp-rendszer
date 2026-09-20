@@ -1,5 +1,45 @@
 # PROGRESS
 
+## 2026-09-20 — Fuvarozás 2, E10a: az asztali Ma és Megbízások a tervvászon szerint
+
+- **Probléma:** a leszállított asztali képernyők a vászon (D1–D4) lecsupaszított
+  változatai voltak: a Ma csak darabszámokat mutatott, nem azt, MI nem megy
+  terv szerint; a Megbízások listán nem volt kocsi/időszak szűrő, „következő
+  teendő" oszlop, és a részlet külön oldalra vitt. Zoltán jelezte (09-20),
+  hogy a megbeszélt kinézetet és funkciókat kéri — jogosan.
+- **Ok:** az E1–E7 lépések a cutover biztonságáról és a funkció-paritásról
+  szóltak; a vászon döntési rétege (eltérés-motor, vezetési idő, teendő-oszlop,
+  master-detail) későbbre volt sorolva, és ez nem lett képernyőnként kimondva.
+- **Módosítás:**
+  - **Ma (D1)** — új `lib/fuvarozas2/ma-vaszon.ts` + `components/fuvarozas2/ma-vaszon.tsx`:
+    hat mérőszám-csempe (Úton · Eltérés · Ellenőrzésre vár · Papírra vár ·
+    Számlázandó · Kintlévőség), alatta **ELTÉRÉSEK** panel — nyitott várakozás
+    (45 perc felett pótdíj-jelzéssel), lejárt időablak, hiányos import, csúszó
+    fuvar, sofőr gondjelzése, nem tervezett állás —, majd kocsinként a nap
+    megállósorokkal (ablak, GPS/kézi kész, várakozás) és a **vezetési idő**
+    sorral (ma vezetés, mikor esedékes a 45 perces szünet, szolgálat kezdete),
+    jobb hasábon Teendők (iroda) · Holnap · Rendszer.
+  - **Vezetési idő becslés**: a meglévő GPS-idővonal szakaszaiból
+    (`napiVezetettIdoSec`), három új, additív mező a `JarmuIdovonalEredmeny`-ben
+    (`vezetesSec`, `szolgalatKezdet`, `utolsoSzunetVege`). Nem tachográf-adat —
+    a felület minden soron jelzi, hogy becslés.
+  - **Megbízások (D2)** — bal **szűrősáv darabszámokkal** (jelleg, mind a 9
+    állapot, kocsinként, időszak), 8 oszlopos lista **„Következő teendő"**
+    oszloppal (sürgős esetben pirossal), és a **részlet ugyanazon a képernyőn**
+    nyílik a lista alatt (`?reszlet=<id>`), a megállókkal, iratokkal,
+    elszámolással, naplóval és műveletekkel. A `/fuvarozas2/megbizasok/<id>`
+    külső hivatkozásként továbbra is működik.
+  - Új tiszta logika: `lib/fuvarozas2/megbizas-szuro.ts` (`kovetkezoTeendo`,
+    `papirHatraNap`, `idoszakVodor`) — adatbázis nélkül, ezért tesztelhető.
+- **Teszt:** `scripts/teszt-megbizas-szuro.ts` (27 eset: minden állapot
+  következő teendője, papír-határidő, időszak-vödrök) a `teszt` láncban —
+  teljes lánc **380/380**. `typecheck`, `eslint` (új fájlok 0 hiba), `build`
+  rendben. Playwright 1440×900-on `vezeto` fiókkal: mindkét képernyő 200, a
+  szűrősáv számai stimmelnek, a részlet a listán belül nyílik.
+- **Kockázat:** a helyi próbaadatban nincs GPS és időablak, ezért a vezetési
+  idő és az ablak-oszlop élesben nézendő meg először. A kintlévőség-csempe
+  csak annak jelenik meg, aki a Számlák modult is látja.
+
 ## 2026-09-20 — Fuvarozás 2, E9b: külső hívások sorosítása és tartós cache (T1/T3/T13/T16), térkép-csempe forrás (T12)
 
 - **Probléma:** a Kalkulátor, az idővonal-újraláncolás és a tervezés ugyanazokra

@@ -8,7 +8,7 @@
     "start": "node scripts/migrate.mjs && next start",
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
-    "teszt": "tsx scripts/teszt-import.mts && tsx scripts/teszt-duvenbeck.mts && tsx scripts/teszt-megrendelo.mts && tsx scripts/teszt-erintes.mts && tsx scripts/teszt-drive-guard.ts && tsx scripts/teszt-allapotgep.ts && tsx scripts/teszt-jogosultsag.ts && tsx scripts/teszt-backfill-allapot.ts && tsx scripts/teszt-level-osztalyozo.ts && tsx scripts/teszt-kulso-hivas.ts"
+    "teszt": "tsx scripts/teszt-import.mts && tsx scripts/teszt-duvenbeck.mts && tsx scripts/teszt-megrendelo.mts && tsx scripts/teszt-erintes.mts && tsx scripts/teszt-drive-guard.ts && tsx scripts/teszt-allapotgep.ts && tsx scripts/teszt-jogosultsag.ts && tsx scripts/teszt-backfill-allapot.ts && tsx scripts/teszt-level-osztalyozo.ts && tsx scripts/teszt-kulso-hivas.ts && tsx scripts/teszt-megbizas-szuro.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
