@@ -15,8 +15,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
     getLevelek(
       szuro === "teendo" ? { allapot: "uj", osztalyok: [...TEENDO_OSZTALYOK] }
       : szuro === "uj" ? { allapot: "uj" }
-      : szuro === "megbizas" ? { osztalyok: ["megbizas"] }
-      : {}
+      : szuro === "megbizas" ? { osztalyok: ["megbizas"], elvetettNelkul: true }
+      : szuro === "elvetett" ? { allapot: "elvetve" }
+      : { elvetettNelkul: true }
     ),
     getFigyeloAllapot(),
     getTakarithatoDb(),

@@ -1,5 +1,18 @@
 # PROGRESS
 
+## 2026-09-20 — Levelek: a „Mind" nézet nem mutatja az elvetett leveleket
+
+- **Probléma:** a takarítás után is ott maradtak a nem odavaló levelek a
+  képernyőn — mert a „Mind" szűrő mindent mutatott, az elvetetteket is. Így
+  úgy tűnt, mintha a takarítás nem csinált volna semmit (pedig a sorokon ott
+  volt: „elvetve · takarítás").
+- **Módosítás:** `getLevelek` új `elvetettNelkul` kapcsolót kapott; a „Mind"
+  és a „Megbízás" nézet ezzel megy, és új **„Elvetett"** szűrő került a sorba,
+  amivel a kitakarított levelek előhívhatók (és egy kattintással
+  visszahozhatók a teendők közé).
+- **Teszt:** `typecheck`, `eslint`, `build` rendben.
+- **Kockázat:** nincs — csak megjelenítés; adat nem változik.
+
 ## 2026-09-20 — Levelek: „Takarítás" gomb a nem teendős levelekre
 
 - **Probléma:** a Gmail-figyelő első köre még a teljes postafiókból dolgozott

@@ -53,6 +53,7 @@ export function LevelekNezet({
           { k: "uj", c: "Új" },
           { k: "megbizas", c: "Megbízás" },
           { k: "mind", c: "Mind" },
+          { k: "elvetett", c: "Elvetett" },
         ].map((f) => (
           <Link key={f.k} href={`/fuvarozas2/levelek?szuro=${f.k}`}
             className={cn("rounded-md px-3 py-1 text-sm", aktivSzuro === f.k ? "bg-muted font-medium" : "text-muted-foreground hover:bg-muted/60")}>{f.c}</Link>

@@ -32,12 +32,19 @@ export type LevelSor = {
   allapot_by: string | null;
 };
 
-export async function getLevelek(szuro: { allapot?: string; osztalyok?: string[]; limit?: number } = {}): Promise<LevelSor[]> {
+/**
+ * Levelek listája. `elvetettNelkul`: az elvetett (kitakarított) leveleket
+ * kihagyja — a „Mind" nézet ezzel megy, különben a takarítás után is ott
+ * maradnának a szemünk előtt a nem odavaló levelek. Az elvetettek külön
+ * szűrővel („Elvetett") előhívhatók.
+ */
+export async function getLevelek(szuro: { allapot?: string; osztalyok?: string[]; limit?: number; elvetettNelkul?: boolean } = {}): Promise<LevelSor[]> {
   await requireAnyViewPermission(["fuvarozas", "elszamolas"]);
   const felt: string[] = ["1=1"];
   const par: unknown[] = [];
   if (szuro.allapot) { par.push(szuro.allapot); felt.push(`l.allapot = $${par.length}`); }
   if (szuro.osztalyok?.length) { par.push(szuro.osztalyok); felt.push(`coalesce(l.kezi_osztaly, l.osztaly) = any($${par.length}::text[])`); }
+  if (szuro.elvetettNelkul) felt.push(`l.allapot <> 'elvetve'`);
   return query<LevelSor>(
     `select l.id::text, l.gmail_message_id, l.gmail_thread_id, l.felado, l.felado_nev, l.targy, l.snippet,
        l.erkezett::text, l.csatolmany_nevek, l.osztaly, l.kezi_osztaly, l.bizalom, l.indoklas,
