@@ -40,6 +40,22 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ h
         <span className="rounded-lg bg-[var(--f2-red-l)] px-3 py-1.5 text-[var(--f2-red)]">Üres munkanap: <b>{h.osszesites.ures}</b></span>
         <span className="rounded-lg bg-card px-3 py-1.5 ring-1 ring-foreground/10">Bér {h.osszesites.berDb} · saját {h.osszesites.sajatDb}</span>
         <span className="rounded-lg bg-card px-3 py-1.5 ring-1 ring-foreground/10">Heti bevétel (Ft-os): <b>{formatFt(h.osszesites.bevetel)}</b></span>
+        {h.osszesites.km != null ? (
+          <span className="rounded-lg bg-card px-3 py-1.5 ring-1 ring-foreground/10">
+            Rakott / üres km: <b>{h.osszesites.rakottKm} / {h.osszesites.uresKm}</b>
+            {h.osszesites.km > 0 ? <span className="text-muted-foreground"> ({Math.round(((h.osszesites.uresKm ?? 0) / h.osszesites.km) * 100)} % üres)</span> : null}
+          </span>
+        ) : null}
+        {h.osszesites.potencialFt != null && h.uresSlotok.length > 0 ? (
+          <span className="rounded-lg bg-[var(--f2-mint-l)] px-3 py-1.5 text-[var(--f2-mint)]">
+            Ha a {h.uresSlotok.length} üres slot megtelik: <b>+{formatFt(h.osszesites.potencialFt)}</b>
+          </span>
+        ) : null}
+        {h.soforKeret.map((s) => (
+          <span key={s.sofor} className={`rounded-lg px-3 py-1.5 ring-1 ring-foreground/10 ${s.ora > s.keret * 0.8 ? "bg-[var(--f2-amb-l)] text-[var(--f2-amb)]" : "bg-card"}`}>
+            {s.sofor}: <b>{s.ora}/{s.keret} ó</b>
+          </span>
+        ))}
       </div>
 
       <div className="overflow-x-auto rounded-xl bg-card ring-1 ring-foreground/10">
@@ -98,10 +114,11 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ h
                 <span className="text-muted-foreground">innen: {u.holVaros}{u.hazautKm != null ? (u.hazautKm <= 5 ? " · telephelyen áll" : ` · haza ~${u.hazautKm} km üresen`) : ""}</span>
                 <span className="ml-auto flex gap-1">
                   <a className="rounded-md bg-card px-2 py-1 text-xs ring-1 ring-foreground/10 hover:ring-foreground/30"
-                     href="https://my.timocom.com/freight-exchange" target="_blank" rel="noreferrer">Timocom</a>
+                     href="https://my.timocom.com/freight-exchange" target="_blank" rel="noreferrer">Timocom keresés ↗</a>
                   <Link className="rounded-md bg-card px-2 py-1 text-xs ring-1 ring-foreground/10 hover:ring-foreground/30"
-                        href={`/fuvarozas?tab=kalkulator`}>Kalkulátor</Link>
+                        href={u.kalkulatorUrl}>Kalkulátorba →</Link>
                 </span>
+                <div className="w-full text-xs text-muted-foreground">Keresés: {u.keresoSzoveg}</div>
               </div>
             ))}
             <p className="text-xs text-muted-foreground">A km légvonalból becsült (×1,3) — pontos km és útdíj a Kalkulátorból (HU-GO).</p>

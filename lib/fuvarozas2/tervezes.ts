@@ -14,6 +14,7 @@
 // tucatnyi külső hívást (T1).
 
 import { query } from "@/lib/db";
+import { getUtvonalJelentes, rendszamKulcs } from "@/lib/fuvarozas/ecofleet";
 import { requireAnyViewPermission } from "@/lib/auth/require-permission";
 import { geokodolCachelve } from "@/lib/fuvarozas/erintes-felismeres";
 import { SAJAT_TELEPHELYEK } from "@/lib/fuvarozas/telephelyek";
@@ -55,6 +56,10 @@ export type UresSlot = {
   hazautKm: number | null;
   /** Irányítószám-körzet a Timocom-kereséshez (az első két számjegy, ha ismert). */
   korzet: string | null;
+  /** Kimásolható keresési sor a Timocom-tőzsdéhez (nincs API, ezért szöveg). */
+  keresoSzoveg: string;
+  /** A Kalkulátor előre kitöltve: innen hazáig mennyibe kerül üresen. */
+  kalkulatorUrl: string;
 };
 
 export type TervHet = {
@@ -62,7 +67,15 @@ export type TervHet = {
   sorok: TervSor[];
   uresSlotok: UresSlot[];
   kocsiNelkul: TervMegbizas[];
-  osszesites: { munkanapok: number; foglalt: number; ures: number; berDb: number; sajatDb: number; bevetel: number };
+  osszesites: {
+    munkanapok: number; foglalt: number; ures: number; berDb: number; sajatDb: number; bevetel: number;
+    /** GPS-ből: a hét megtett km-e rakott/üres bontásban (napi szintű közelítés, mint a Kimutatásban). */
+    km: number | null; rakottKm: number | null; uresKm: number | null;
+    /** Mennyi bevételt hozna, ha az üres slotok megtelnének — a hét átlagos bér fuvardíjával számolva. */
+    potencialFt: number | null;
+  };
+  /** Sofőrönként a heti vezetett idő (GPS-becslés) és az 56 órás keret. */
+  soforKeret: { sofor: string; ora: number; keret: number }[];
   hetKezdet: string;
 };
 
@@ -173,9 +186,13 @@ export async function getTervHet(hetKezdet?: string): Promise<TervHet> {
         ures: munkanap ? { hol: hely, holVaros: varosNev(hely) ?? hely, hazautKm: hazaut, napokOtaUres: uresOta } : null,
       });
       if (munkanap) {
+        const varos = varosNev(hely) ?? hely;
+        const korzet = /\b(\d{4})\b/.exec(hely)?.[1]?.slice(0, 2) ?? null;
         uresSlotok.push({
-          jarmuKod: j.kod, jarmuCimke: j.cimke, nap, hol: hely, holVaros: varosNev(hely) ?? hely,
-          hazautKm: hazaut, korzet: /\b(\d{4})\b/.exec(hely)?.[1]?.slice(0, 2) ?? null,
+          jarmuKod: j.kod, jarmuCimke: j.cimke, nap, hol: hely, holVaros: varos,
+          hazautKm: hazaut, korzet,
+          keresoSzoveg: `Felrakás: ${varos}${korzet ? ` (HU ${korzet})` : ""} · ${nap} · lerakás: kelet-Magyarország (HU 40–45) · nyerges, 24 t`,
+          kalkulatorUrl: `/fuvarozas2/kalkulator?honnan=${encodeURIComponent(hely)}&hova=${encodeURIComponent(SAJAT_TELEPHELYEK[0].cim)}`,
         });
       }
     }
@@ -183,13 +200,55 @@ export async function getTervHet(hetKezdet?: string): Promise<TervHet> {
   }
 
   const hetiek = sorok.filter((s) => napok.some((n) => aznap(s, n)));
+  const berHetiek = hetiek.filter((s) => s.jelleg === "ber" && s.penznem === "Ft");
+  const bevetel = berHetiek.reduce((a, s) => a + (s.fuvardij ?? 0), 0);
+
+  // GPS: a hét km-e rakott/üres bontásban, és sofőrönként a vezetett idő.
+  // A bontás NAPI szintű közelítés (ugyanaz a szabály, mint a Kimutatásban):
+  // egy nap km-je rakott, ha aznap futott megbízás azon a kocsin.
+  let km: number | null = null, rakottKm: number | null = null, uresKm: number | null = null;
+  const soforKeret: { sofor: string; ora: number; keret: number }[] = [];
+  try {
+    const objectIds = await query<{ kod: string; ecofleet_object_id: string | null; vontato_rendszam: string | null; sofor: string | null }>(
+      `select j.kod, j.ecofleet_object_id, j.vontato_rendszam, a.name as sofor
+       from fuvar_jarmuvek j left join alkalmazottak a on a.id = j.sofor_id
+       where j.aktiv and j.ecofleet_object_id is not null order by j.id`
+    );
+    const utak = await getUtvonalJelentes(objectIds.map((o) => o.ecofleet_object_id!).filter(Boolean), kezdet, veg);
+    km = 0; rakottKm = 0; uresKm = 0;
+    for (const o of objectIds) {
+      const kulcs = rendszamKulcs(o.vontato_rendszam ?? o.kod);
+      const sajat = utak.filter((u) => u.rendszamKulcs === kulcs);
+      let percek = 0;
+      const napiKm = new Map<string, number>();
+      for (const u of sajat) {
+        napiKm.set(u.indulas.slice(0, 10), (napiKm.get(u.indulas.slice(0, 10)) ?? 0) + u.tavKm);
+        const i = new Date(u.indulas.replace(" ", "T"));
+        const e = new Date(u.erkezes.replace(" ", "T"));
+        if (!Number.isNaN(i.getTime()) && !Number.isNaN(e.getTime()) && e > i) percek += (e.getTime() - i.getTime()) / 60000;
+      }
+      for (const [nap, tav] of napiKm) {
+        km += tav;
+        const volt = sorok.some((s) => s.jarmu_kod === o.kod && aznap(s, nap));
+        if (volt) rakottKm += tav; else uresKm += tav;
+      }
+      if (o.sofor && percek > 0) soforKeret.push({ sofor: o.sofor, ora: Math.round(percek / 60), keret: 56 });
+    }
+    km = Math.round(km); rakottKm = Math.round(rakottKm); uresKm = Math.round(uresKm);
+  } catch {
+    km = null; rakottKm = null; uresKm = null;
+  }
+
+  const atlagDij = berHetiek.length > 0 ? Math.round(bevetel / berHetiek.length) : null;
   const osszesites = {
     munkanapok: jarmuvek.length * 5,
     foglalt,
     ures,
     berDb: hetiek.filter((s) => s.jelleg === "ber").length,
     sajatDb: hetiek.filter((s) => s.jelleg === "sajat").length,
-    bevetel: hetiek.filter((s) => s.jelleg === "ber" && s.penznem === "Ft").reduce((a, s) => a + (s.fuvardij ?? 0), 0),
+    bevetel,
+    km, rakottKm, uresKm,
+    potencialFt: atlagDij != null ? atlagDij * uresSlotok.length : null,
   };
 
   return {
@@ -198,6 +257,7 @@ export async function getTervHet(hetKezdet?: string): Promise<TervHet> {
     uresSlotok,
     kocsiNelkul: sorok.filter((s) => !s.jarmu_kod && napok.some((n) => aznap(s, n))),
     osszesites,
+    soforKeret,
     hetKezdet: kezdet,
   };
 }

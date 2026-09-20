@@ -282,6 +282,8 @@ export type JarmuIdovonalEredmeny = {
   vezetesSec: number | null;
   szolgalatKezdet: Date | null;
   utolsoSzunetVege: Date | null;
+  /** A nap GPS-szakaszai (vezetés / állás), a Fuvarozás 2 Élő GPS sávjához. */
+  szakaszok: IdovonalSzakasz[];
   /**
    * A GPS szerint legalább NEM_TERVEZETT_ALLAS_PERC percig tartó állások,
    * amik NEM egy tervezett fel-/lerakó cím közelében voltak — a diszpécser
@@ -1146,6 +1148,7 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
           vezetesSec: null,
           szolgalatKezdet: null,
           utolsoSzunetVege: null,
+          szakaszok: [],
         };
       }
       try {
@@ -1285,6 +1288,7 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
           vezetesSec,
           szolgalatKezdet,
           utolsoSzunetVege,
+          szakaszok,
         };
       } catch (err) {
         const message = err instanceof EcofleetError ? err.message : "Nem sikerült lekérni az idővonalat.";
@@ -1300,6 +1304,7 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
           vezetesSec: null,
           szolgalatKezdet: null,
           utolsoSzunetVege: null,
+          szakaszok: [],
         };
       }
     })

@@ -15,13 +15,14 @@ function eq(nev: string, kapott: unknown, vart: unknown) {
 }
 
 const MA = "2026-09-20";
-const alap = {
-  jarmu_kod: "AOPU-427", hianylista: [] as unknown[], hivatkozas: "26/3701", hivatkozas_nincs: false,
+const alap: Parameters<typeof kovetkezoTeendo>[0] = {
+  allapot: "tervezett", jarmu_kod: "AOPU-427", hianylista: [] as unknown[], hivatkozas: "26/3701", hivatkozas_nincs: false,
   foto_van: false, szamla_szam: null as string | null, papirok_beerkeztek_at: null as string | null,
-  papir_hatarido_nap: 7 as number | null, postazasi_cim: "Debrecen, Pf. 219", jelleg: "ber" as const,
+  papir_hatarido_nap: 7, postazasi_cim: "Debrecen, Pf. 219", jelleg: "ber",
   lerakas_nap: "2026-09-19",
 };
-const t = (extra: Partial<typeof alap> & { allapot: Allapot }) => kovetkezoTeendo({ ...alap, ...extra }, MA);
+const t = (extra: Partial<Parameters<typeof kovetkezoTeendo>[0]> & { allapot: Allapot }) =>
+  kovetkezoTeendo({ ...alap, ...extra }, MA);
 
 eq("hiányos import", t({ allapot: "ellenorzesre_var", hianylista: ["fuvardíj", "pozíciószám"] }), { szoveg: "fuvardíj, pozíciószám pótlása", surgos: true });
 eq("teljes import", t({ allapot: "ellenorzesre_var" }), { szoveg: "jóváhagyás", surgos: false });

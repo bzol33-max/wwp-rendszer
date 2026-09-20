@@ -1,5 +1,33 @@
 # PROGRESS
 
+## 2026-09-20 — Fuvarozás 2, E10b: Élő GPS (D4) és Tervezés (D3) a tervvászon szerint
+
+- **Élő GPS**: kocsinként **24 órás sáv** — vezetés (menta), rakodás/várakozás
+  (kék), szünet (borostyán), rövid állás (szürke); a szaggatott, halvány sáv a
+  becsült (élő pozícióból kiegészített) szakasz. Mellette a napi mutatók:
+  vezetés ma és mennyi van a 4,5 órás szünethatárig, a 9 órás napi keretből
+  mennyi maradt, az utolsó 45 perces szünet, a szolgálat kezdete és 13 órás
+  plafonja, a mai és 14 napos fogyasztás (Ecofleet útvonal-jelentés), megtett
+  km. Alul a **tanult rakodási idők** (a megállókon mért érkezés→távozás
+  mediánja, helyenként, min. 3 minta). A régi, részletes idővonal + térkép
+  lenyitható marad a lap alján.
+  - A sávhoz a meglévő GPS-idővonal szakaszai kellettek: egy additív
+    `szakaszok` mező a `JarmuIdovonalEredmeny`-ben.
+  - Az ETA-hiba (P50/P90) NEM szerepel: ahhoz a becsléseket az érkezés
+    pillanatában rögzíteni kellene, ez még nem gyűlik — a doboz ezt ki is írja.
+- **Tervezés**: a heti összesítő megkapta a vászon számait — **rakott/üres km
+  és üres arány** (GPS, napi szintű közelítés, mint a Kimutatásban), **„ha a N
+  üres slot megtelik: +X Ft"** (a hét átlagos bér fuvardíjával), és
+  **sofőrönként a heti vezetett óra az 56-os keretből** (80 % felett
+  borostyán). Az üres slot kártyája mostantól kiírja a **kész keresési sort**
+  (felrakás körzet + nap + cél-körzet), és a **Kalkulátorba** gomb a slot
+  helyével és a telephellyel előre kitöltve nyit.
+- **Teszt:** `typecheck`, `eslint` (érintett fájlok 0 hiba), teljes teszt-lánc
+  **380/380**, `build` rendben; Playwright 1440×900-on mindkét oldal 200.
+- **Kockázat:** a konténerben nincs Ecofleet-kulcs, ezért a sáv és a heti km
+  élesben nézendő meg először. A Timocom-nak nincs API-ja, ezért a „keresés"
+  egy kimásolható sor + link a tőzsdére — automatikus feladás nem lesz.
+
 ## 2026-09-20 — Fuvarozás 2, E10a: az asztali Ma és Megbízások a tervvászon szerint
 
 - **Probléma:** a leszállított asztali képernyők a vászon (D1–D4) lecsupaszított
