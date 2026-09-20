@@ -32,6 +32,7 @@ export function FeladatCommentsDialog({
   onChanged,
   showDoneToggle = false,
   canEdit = false,
+  paletta,
 }: {
   feladat: Feladat | null;
   open: boolean;
@@ -40,6 +41,12 @@ export function FeladatCommentsDialog({
   showDoneToggle?: boolean;
   /** Admin nézetben: megjelenít egy Törlés gombot is. */
   canEdit?: boolean;
+  /**
+   * A dialógus portálba renderel, tehát az oldal színséma-wrapper-én KÍVÜL
+   * keletkezik. Az admin oldal ezért átadja a modul palettáját ("jelenlet");
+   * a dolgozói mobil nem ad át semmit, ott a globális séma marad.
+   */
+  paletta?: string;
 }) {
   const [comments, setComments] = useState<FeladatComment[]>([]);
   const [loading, setLoading] = useState(false);
@@ -95,7 +102,7 @@ export function FeladatCommentsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent className={cn("sm:max-w-sm", paletta)}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 pr-6">
             <span

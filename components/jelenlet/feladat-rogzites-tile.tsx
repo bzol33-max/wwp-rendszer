@@ -28,7 +28,8 @@ export function UjFeladatGomb({
         Feladat rögzítése
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-sm">
+        {/* Portálba renderel, ezért külön kapja meg a modul palettáját. */}
+        <DialogContent className="jelenlet sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Új feladat</DialogTitle>
           </DialogHeader>

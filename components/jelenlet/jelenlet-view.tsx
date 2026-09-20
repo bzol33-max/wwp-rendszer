@@ -241,6 +241,7 @@ export function JelenletView() {
         onChanged={load}
         showDoneToggle
         canEdit={canEdit}
+        paletta="jelenlet"
       />
     </div>
   );

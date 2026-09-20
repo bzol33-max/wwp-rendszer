@@ -188,7 +188,9 @@ export function HaviNaploDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[88vh] overflow-y-auto sm:max-w-4xl">
+      {/* A dialógus portálba renderel, a lap .jelenlet wrapper-én kívül —
+          ezért kapja meg itt külön a modul palettáját. */}
+      <DialogContent className="jelenlet max-h-[88vh] overflow-y-auto sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between gap-3 pr-6">
             <span>
