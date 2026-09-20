@@ -25,6 +25,31 @@
 - **Kockázat:** a kocsi „hol áll" értéke az utolsó ismert lerakóból jön; ha
   egy fuvarhoz nincs kocsi rendelve, az a „Kocsi nélkül" panelen látszik, a
   rácsban nem.
+## 2026-09-20 — Fuvarozás 2 átállás, E7d: Kimutatás (km, bevétel, saját fuvar megtakarítás)
+
+- **Probléma:** nem látszott egy helyen, mennyi km ment egy kocsival nap/hét/
+  hó alatt, mennyi pénzt hozott, és mennyit ért, hogy a saját raklapot a
+  saját kocsink vitte (Budaházi Zoltán kérése, terv 8. fejezet).
+- **Módosítás:** `lib/fuvarozas2/kimutatas.ts` + `/fuvarozas2/kimutatas`:
+  nap/hét/hó váltó léptetéssel; felül 8 mérőszám (megtett km rakott/üres
+  bontással, bér bevétel, bér Ft/km, saját fuvar megtakarítás, üzemanyag,
+  útdíj, eredmény, kocsi nélküli megbízások), alatta kocsinkénti tábla és
+  napi km-oszlopdiagram (bér/saját/üres színnel).
+- **Mit mérünk, mit becslünk** (a felület is kiírja): km és liter az
+  Ecofleet útvonal-jelentésből — TÉNY; bevétel a bér megbízások díjából —
+  TÉNY, az EUR-os díjak külön, átváltás nélkül (nincs árfolyam-tábla);
+  **rakott/üres bontás v1-ben napi szintű** (a nap km-je a napon futó
+  megbízás jellegéhez tartozik, bér+saját napon felezve) — a megállónkénti
+  GPS-bontás akkor jön, ha a megállók GPS-adatai teljesek; saját fuvar
+  megtakarítás = saját km × bér Ft/km — BECSLÉS; útdíj csak importált HU-GO
+  tranzakcióból, nem becsüljük.
+- **Teszt:** typecheck, lint, build zöld; helyi adaton a nézet Ecofleet-kulcs
+  nélkül is betölt (sárga sáv a km hiányáról, a megbízás-adatok pontosak),
+  a gázolajár-lekérés él (667 Ft, 2026. szeptember), a kocsinkénti tábla és
+  a kocsi nélküli megbízások száma a várt.
+- **Kockázat:** a napi bontás durvább, mint a végső GPS-alapú; a felület
+  ezért mondja meg a szabályt. Ha egy megbízáshoz nincs kocsi, a km-je
+  sehol nem jelenik meg — ezt külön mérőszám mutatja.
 
 ## 2026-09-20 — Fuvarozás 2 átállás, E9a: Levelek (Gmail-figyelő Apps Script-tel, determinisztikus osztályozás)
 

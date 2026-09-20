@@ -68,6 +68,7 @@ const FULEK = [
   { href: "/fuvarozas2/tervezes", label: "Tervezés" },
   { href: "/fuvarozas2/elszamolas", label: "Elszámolás" },
   { href: "/fuvarozas2/partnerek", label: "Partnerek" },
+  { href: "/fuvarozas2/kimutatas", label: "Kimutatás" },
 ];
 
 export function Fuvarozas2Fulek({ aktiv }: { aktiv: string }) {
