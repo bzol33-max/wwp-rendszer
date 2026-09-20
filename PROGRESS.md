@@ -1,5 +1,27 @@
 # PROGRESS
 
+## 2026-09-20 — Fuvarozás 2 átállás, E7f: iroda (Szabina) mobil teendői
+
+- **Probléma:** Szabina mobilon nem látta, mihez nem jött még meg az eredeti
+  papír, mit kell kiszámlázni és mit lehet postázni (terv: mobil 07/08).
+- **Módosítás:** a `/m` mobil keret **szerep-függő** lett:
+  sofőr (`fuvarozas_sajat` + alkalmazott) → Ma · Holnap · Profil;
+  iroda (`elszamolas`) → **Papír · Számla és posta · Profil**, és a `/m`
+  irodai fióknál a Papír teendőkre irányít.
+  - `/m/papir`: a bér fuvarok, amiknél az EREDETI okmány még nem érkezett be
+    (fotó-jelzéssel, számlaszámmal, fizetési határidővel) — egy gomb: „Papír
+    megjött ✓" (B7: Szabina nyugtáz, a nyugtázó neve a naplóba kerül).
+  - `/m/szamla`: három szakasz — Számlázható (a számlára kért hivatkozási
+    szám, díj, határidő + számlaszám beírása egy lépésben), Számla e-mail
+    kimegy, Postázható (csak ahol a papír már megvan).
+  - A Profil a szerep szerint mást ír, és a teljes Elszámolás nézetre visz.
+- **Teszt:** typecheck, lint, build zöld; Playwright 390×844, `BudahaziSzabina`
+  fiókkal: `/m` → `/m/papir` átirányítás, mind a három lap 200, a „Papír
+  megjött" gomb a naplóba írta a nyugtázó nevét, a számlázható és postázható
+  szakaszok a várt sorokkal.
+- **Kockázat:** a vezetői (4 füles) mobil nézet még nincs meg — vezetőként a
+  `/m` a sofőr-nézetet adja; az asztali Fuvarozás 2 mobilon is használható.
+
 ## 2026-09-20 — Fuvarozás 2 átállás, E7e: Élő GPS, Kalkulátor, Rendszer-egészség; jogosultság-függő fülsor
 
 - **Probléma:** a fülsor hiányos volt (GPS-hez és Kalkulátorhoz a régi

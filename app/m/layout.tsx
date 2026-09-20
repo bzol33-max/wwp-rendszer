@@ -1,13 +1,19 @@
 import Link from "next/link";
 import { requireSession } from "@/lib/auth/dal";
-import { MTabbar } from "@/components/m/tabbar";
+import { MTabbar, SOFOR_TABOK, IRODA_TABOK } from "@/components/m/tabbar";
 
-// Sofőr mobil nézet — Ma · Holnap · Profil (döntés: nincs Jelenlét/Feladatok).
-// Jog: fuvarozas_sajat (sofőr, csak a saját kocsi — a szűrés a szerveren,
-// lib/fuvarozas/sofor.ts) vagy fuvarozas (diszpécser próbához).
+// Mobil nézet két szerepre, ugyanazzal a kerettel (terv: „Mobil" vászon):
+//   • sofőr (fuvarozas_sajat + alkalmazott): Ma · Holnap · Profil
+//   • iroda (elszamolas, Szabina): Papír · Számla és posta · Profil
+// A teljes Fuvarozás-jog (vezeto, admin) mindkettőt elérheti; alapból a
+// sofőr-nézetet kapja, mert az a terepen használt.
 export default async function Layout({ children }: { children: React.ReactNode }) {
   const session = await requireSession();
-  const ok = (session.can("fuvarozas_sajat").view || session.can("fuvarozas").view) && !!session.employeeId;
+  const sofor = session.can("fuvarozas_sajat").view && !!session.employeeId;
+  const iroda = session.can("elszamolas").view;
+  const teljes = session.can("fuvarozas").view;
+  const ok = sofor || iroda || teljes;
+  const tabok = sofor || (teljes && !iroda) ? SOFOR_TABOK : IRODA_TABOK;
   return (
     <div className="sofor-m mx-auto flex min-h-dvh w-full max-w-md flex-col">
       <div className="flex-1 px-4 pb-24 pt-4">
@@ -19,7 +25,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
           </div>
         )}
       </div>
-      <MTabbar />
+      <MTabbar tabok={tabok} />
     </div>
   );
 }
