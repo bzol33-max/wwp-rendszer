@@ -184,3 +184,11 @@
   background: var(--background);
   color: var(--foreground);
 }
+
+/* Sofőr mobil (/m) — a terv „Mobil” oldalának sötét menta-antracit témája
+   (vászon 03/04/06). Csak a /m útvonalakon. */
+.sofor-m {
+  --m-bg: #1e2325; --m-surf: #2a3134; --m-surf2: #333b3e; --m-txt: #ecf0ef; --m-muted: #a3aeae; --m-line: #3d4649;
+  --m-mint: #5fd3b3; --m-mint-d: #173a32; --m-amb: #e8b85a; --m-amb-d: #3f3320; --m-red: #e8776b; --m-red-d: #43292a; --m-blue: #7fb4e0;
+  background: var(--m-bg); color: var(--m-txt); min-height: 100dvh;
+}

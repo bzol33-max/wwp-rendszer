@@ -44,6 +44,9 @@ export function AppShell({
     pathname === "/mobil" ||
     pathname === "/posta" ||
     pathname === "/erkezes" ||
+    pathname === "/m" ||
+    pathname.startsWith("/m/") ||
+    pathname === "/m" ||
     pathname === "/felvasarlas" ||
     pathname.startsWith("/attekintes")
   ) {

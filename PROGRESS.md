@@ -1,5 +1,60 @@
 # PROGRESS
 
+## 2026-09-20 — Fuvarozás 2 átállás, E7b: sofőr mobil (`/m` Ma · Holnap · Profil) + megálló/fotó triggerek
+
+- **Probléma:** a sofőröknek nem volt a terv szerinti nézete (Ma · Holnap ·
+  Profil, sötét menta-antracit); a régi kód megálló- és fotó-írásai (sofőr
+  pipa, GPS-figyelő, fuvarlevél-fotó) nem jutottak el az új modellbe.
+- **Módosítás:**
+  - `db/migrations/003_fuvarozas2_megallo_foto_trigger.sql`: (1) új
+    megbízás → `fuvar_megallok` sorok a felrakó/lerakó szövegből (a
+    `bontsMegallokra` elsődleges elválasztói SQL-ben); cím/dátum változás →
+    újraépítés, ha még nincs tény a megállókon; (2) `fuvar_megallo_allapot`
+    insert/update → `fuvar_megallok` kész/GPS mezők (index → `megallo_id`);
+    (3) `fuvar_dokumentumok` 'fuvarlevel' → `foto_megerkezett` esemény, és
+    `teljesitve → szamlazhato` (11.1/7) naplózva.
+  - `/m` (app/m): `layout` (jog: `fuvarozas_sajat` vagy `fuvarozas` +
+    alkalmazott), `page` (Ma), `holnap`, `profil`; `components/m/sofor-nap.tsx`
+    a terv 03/04/06 vásznai szerint: „KÖVETKEZŐ” kártya (Navigáció ·
+    Megérkeztem · Várakozom · Felrakva/Lerakva ✓), megbízás-kártyák
+    megállókkal, ablak/kész/GPS, fuvarlevél-fotó (kamera) az utolsó lerakó
+    után, pozíciószám beírása, „Gond van”, Megbízás PDF. Adat és akciók a
+    meglévő `lib/fuvarozas/sofor.ts`-ből (a szerver a saját kocsira szűr).
+    Térerő nélkül: 5 újrapróbálkozás növekvő várakozással (a kliens-oldali
+    sor — T10 — az E8-ban). Téma: `.sofor-m` a `globals.css`-ben. Az
+    AppShell a `/m` útvonalakon nem rajzol oldalsávot.
+- **Teszt:** typecheck, lint, build zöld; helyi Postgres: 003 triggerek
+  (insert → 4 megálló; állapot-sor → megálló tény + `megallo_id`; fotó →
+  számlázható + 2 esemény); Playwright 390×844, `VadonGergo`: Ma/Holnap/
+  Profil 200, „Felrakva ✓” → a megálló kész, a `fuvar_megallok` sor is
+  frissült (trigger).
+- **Kockázat:** a 003 megálló-trigger a régi `addFuvar` minden új soránál
+  fut; a gondolatjeles városlista-bontást nem ismeri (cutover előtt a
+  backfill újrafuttatása pótolja). A fotó Drive-ba megy (régi út), a
+  `tartalom_hash` még nincs számolva (S10 az E9-ben).
+
+## 2026-09-19 — Fuvarozás 2 átállás, M1: sofőr mobil `/m` (Ma · Holnap · Profil)
+
+- **Probléma:** a sofőrök nézete az /erkezes hub Fuvarok csempéje mögött
+  volt (két koppintás), a „következő nap” gomb ma nem volt elérhető, és a
+  régi világos téma. Döntés (2026-09-19): sofőr mobil = Ma · Holnap ·
+  Profil, nincs Jelenlét/Feladatok fül; a terv sötét (antracit-menta)
+  palettája.
+- **Módosítás (minimális):** `app/m/page.tsx` + `components/m/sofor-m.tsx`:
+  három alsó fül, a Ma és a Holnap a MEGLÉVŐ `SoforFuvarNap` komponenst
+  mutatja (`rogzitettNap` új, opcionális prop: a fül dönti a napot, a
+  napváltó gombok rejtve — az /erkezes változatlan), Profil: név, kocsi,
+  link az /erkezes-re (jelenlét, előlegek, készlet), kijelentkezés.
+  `lib/m-theme.ts`: a terv sötét palettája ugyanazokon a `--mob-*` (és
+  shadcn) változókon, ezért a sofőr-komponens változtatás nélkül sötét.
+  `findJarmuByEmployeeName` a `sofor.ts`-ből a `vehicles.ts`-be került
+  (a "use server" fájl csak async függvényt exportálhat). AppShell: a `/m`
+  is oldalsáv nélküli. Jog: `fuvarozas_sajat` (a sofőr fiókoké).
+- **Teszt:** typecheck, lint, build zöld; a meglévő tesztek zöldek. Helyi
+  böngésző-próba sofőr fiókkal (lent).
+- **Kockázat:** csak új útvonal + egy opcionális prop; az /erkezes és a
+  régi nézetek nem változnak.
+
 ## 2026-09-19 — Fuvarozás 2 átállás, E7a: az új felület alapja (Ma · Megbízások · Elszámolás · Partnerek) + kettős írás mindkét irányba
 
 - **Probléma:** az új modell (állapot, megállók, elszámolás, napló) élesben
