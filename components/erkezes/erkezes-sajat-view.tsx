@@ -705,8 +705,11 @@ function KeszletScreen({
     };
   }, [load]);
 
-  const vegyesek = VEGYES_FORRASOK.filter((v) => v in stock);
-  const tobbi = Object.entries(stock).filter(([t]) => !VEGYES_FORRASOK.includes(t));
+  // A képernyőn csak az látszik, amiből van készlet — a telepen sok típus
+  // aktív, de a legtöbbje általában üres. A 0 darabos típusok a leltárban és
+  // a rögzítő űrlapon továbbra is elérhetők, így új típus is bevihető.
+  const vegyesek = VEGYES_FORRASOK.filter((v) => (stock[v] ?? 0) !== 0);
+  const tobbi = Object.entries(stock).filter(([t, q]) => !VEGYES_FORRASOK.includes(t) && q !== 0);
   // Szétválogatás céljai: a telepen aktív típusok — a Vegyes EUR csak a három
   // EUR-válogatásra bomlik, a Vegyes bármire, ami itt aktív.
   const celok = (forras: string) =>
@@ -774,17 +777,24 @@ function KeszletScreen({
             );
           })}
 
-          <div className="grid grid-cols-2 gap-2">
-            {tobbi.map(([t, q]) => (
-              <div
-                key={t}
-                className="rounded-xl border border-[var(--mob-border)] bg-[var(--mob-tile)] px-2.5 py-2"
-              >
-                <div className="text-[11px] leading-tight text-[var(--mob-muted)]">{t}</div>
-                <div className="text-xl font-bold tabular-nums">{q}</div>
-              </div>
-            ))}
-          </div>
+          {tobbi.length === 0 && vegyesek.length === 0 ? (
+            <p className="text-sm text-[var(--mob-muted)]">
+              Jelenleg nincs készlet ezen a telephelyen. Új típus a Beérkezés gombbal vagy a
+              leltárban vihető be.
+            </p>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              {tobbi.map(([t, q]) => (
+                <div
+                  key={t}
+                  className="rounded-xl border border-[var(--mob-border)] bg-[var(--mob-tile)] px-2.5 py-2"
+                >
+                  <div className="text-[11px] leading-tight text-[var(--mob-muted)]">{t}</div>
+                  <div className="text-xl font-bold tabular-nums">{q}</div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {canEdit && (
             <div className="sticky bottom-0 -mx-1 grid grid-cols-3 gap-2 rounded-xl border border-[var(--mob-border)] bg-[var(--mob-card)] p-2">
@@ -833,14 +843,18 @@ function KeszletScreen({
             />
           )}
 
-          <MobilLeltar
-            site={site}
-            types={types}
-            keszlet={stock}
-            open={inventoryOpen}
-            onOpenChange={setInventoryOpen}
-            onRecorded={load}
-          />
+          {/* Friss csatolás minden megnyitáskor: így a párbeszéd üres állapotról
+              indul, és nem kell effektben nullázni. */}
+          {inventoryOpen && (
+            <MobilLeltar
+              site={site}
+              types={types}
+              keszlet={stock}
+              open
+              onOpenChange={setInventoryOpen}
+              onRecorded={load}
+            />
+          )}
         </EditPermissionProvider>
       )}
     </Shell>

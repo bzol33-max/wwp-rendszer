@@ -113,12 +113,6 @@ export function MobilSzetvalogatas({
   const [ertekek, setErtekek] = useState<Record<string, number>>({});
   const [mentes, setMentes] = useState(false);
 
-  useEffect(() => {
-    if (!open) return;
-    setValasztott(null);
-    setErtekek({});
-  }, [open]);
-
   const osszes = Object.values(ertekek).reduce((s, q) => s + q, 0);
   const marad = keszlet - osszes;
   const beirt = valasztott ? String(ertekek[valasztott] ?? "") : "";
@@ -239,12 +233,10 @@ export function MobilLeltar({
   const [kesz, setKesz] = useState<string[]>([]);
   const [mentes, setMentes] = useState(false);
 
+  // A megnyitáskori készlet frissen, a szerverről: a szülő nézet adata azóta
+  // elavulhatott. A korrekciót ettől függetlenül a szerver számolja
+  // (recordInventoryCount) — ez csak azt javítja, amit a dolgozó lát.
   useEffect(() => {
-    if (!open) return;
-    setValasztott(null);
-    setSzamolt("");
-    setKesz([]);
-    setFriss(null);
     let mounted = true;
     getSiteSnapshot(site)
       .then((snap) => {
@@ -254,7 +246,7 @@ export function MobilLeltar({
     return () => {
       mounted = false;
     };
-  }, [open, site]);
+  }, [site]);
 
   const allomany = friss ?? keszlet;
   const nyilvantartott = valasztott ? (allomany[valasztott] ?? 0) : 0;
@@ -299,7 +291,8 @@ export function MobilLeltar({
           {valasztott === null ? (
             <>
               <p className="px-1 text-sm text-[var(--mob-muted)]">
-                Koppints arra a típusra, amit megszámoltál. Nem kell mindet végignézni.
+                Koppints arra a típusra, amit megszámoltál — nem kell mindet végignézni. Itt a
+                telep minden típusa szerepel, a 0 darabos is: ha olyanból érkezett, itt viheted be.
               </p>
               <div className="grid grid-cols-2 gap-2">
                 {types.map((t) => (
