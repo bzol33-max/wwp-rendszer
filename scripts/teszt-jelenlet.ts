@@ -6,6 +6,7 @@
 // elrontott nap csendben hamis egyenleget ad — nincs, ami jelezze.
 
 import {
+  honapHetei,
   kovetkezoEsedekesseg,
   marLathato,
   summarizeByDay,
@@ -127,6 +128,33 @@ eq("ma esedékes látszik", marLathato("2026-09-20", "2026-09-20"), true);
 eq("lejárt feladat látszik", marLathato("2026-09-10", "2026-09-20"), true);
 eq("3 nap múlva esedékes látszik", marLathato("2026-09-23", "2026-09-20"), true);
 eq("4 nap múlva esedékes még nem", marLathato("2026-09-24", "2026-09-20"), false);
+
+// --- Havi naptár: a megjelenített hetek ---
+
+// 2026. szeptember 1. kedd, 30. vasárnap — a rács az augusztus 31-i hétfőtől
+// az október 4-i vasárnapig tart, öt teljes héttel.
+const szept = honapHetei(2026, 9);
+eq("öt hét szeptemberben", szept.length, 5);
+eq("hétfővel kezd", szept[0][0], "2026-08-31");
+eq("vasárnappal zár", szept[4][6], "2026-10-04");
+eq("minden hét 7 napos", szept.every((h) => h.length === 7), true);
+eq("a hónap első napja a helyén", szept[0][1], "2026-09-01");
+eq("a hónap utolsó napja a helyén", szept[4][2], "2026-09-30");
+
+// Olyan hónap, ami épp hétfővel kezdődik: nem lóghat be fölösleges hét.
+// 2026. június 1. hétfő.
+const junius = honapHetei(2026, 6);
+eq("hétfővel kezdődő hónap első napja a rács eleje", junius[0][0], "2026-06-01");
+
+// Szökőév februárja (2028): 29 nap, a rács nem veszíthet napot.
+const februar = honapHetei(2028, 2);
+const osszesNap = februar.flat();
+eq("szökőnap benne van", osszesNap.includes("2028-02-29"), true);
+eq("márciusba lóg át", osszesNap.includes("2028-03-01"), true);
+
+// Évforduló: december rácsa átlóg a következő évbe.
+const december = honapHetei(2026, 12);
+eq("december átlóg januárba", december.flat().includes("2027-01-01"), true);
 
 console.log(`\nJelenlét teszt: ${ok} rendben, ${bad} hiba`);
 if (bad > 0) process.exit(1);

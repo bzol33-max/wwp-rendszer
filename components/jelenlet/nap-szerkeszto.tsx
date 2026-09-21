@@ -279,14 +279,20 @@ export function NapSzerkeszto({
   workDate,
   sessions,
   onReload,
+  egyOszlop = false,
 }: {
   employees: JelenletEmployee[];
   workDate: string;
   sessions: JelenletSession[];
   onReload: () => void | Promise<void>;
+  /**
+   * Egymás ALATT jelenjenek meg a dolgozók, ne egymás mellett. A havi
+   * naptár keskeny oldalsó paneljében nincs hely két hasábnak.
+   */
+  egyOszlop?: boolean;
 }) {
   return (
-    <div className="grid gap-2 sm:grid-cols-2">
+    <div className={cn("grid gap-2", !egyOszlop && "sm:grid-cols-2")}>
       {employees.map((e) => (
         <DolgozoNapja
           key={e.id}

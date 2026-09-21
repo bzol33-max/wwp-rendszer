@@ -649,3 +649,26 @@ export async function getMaiKeszSzamok(): Promise<Record<number, number>> {
   // A pg a count()-ot (bigint) szövegként adja vissza — lásd CLAUDE.md.
   return Object.fromEntries(rows.map((r) => [r.site_id, Number(r.db)]));
 }
+
+/**
+ * Egy tetszőleges időszak jelenlét-sorai, minden jelenlét-aktív dolgozóval.
+ * A havi naptár ezt használja: nem a naptári hónapot kéri le, hanem a
+ * megjelenített hetek teljes tartományát (a hónap elejét megelőző hétfőtől a
+ * hónap végét követő vasárnapig). Enélkül a hónap szélén álló hetek összege
+ * csonka lenne — a hét egy része a szomszédos hónapba lóg át.
+ */
+export async function getJelenletekIdoszak(
+  tolIso: string,
+  igIso: string
+): Promise<JelenletSession[]> {
+  await requireViewPermission("jelenlet");
+  return query<JelenletSession>(
+    `select ${SESSION_COLS}
+     from jelenletek j
+     where work_date >= $1::date and work_date <= $2::date
+       and exists (select 1 from alkalmazottak a
+                    where a.id = j.employee_id and a.jelenlet_aktiv and a.active)
+     order by work_date, employee_id, arrival_time nulls last, id`,
+    [tolIso, igIso]
+  );
+}

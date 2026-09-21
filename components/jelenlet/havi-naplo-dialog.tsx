@@ -4,8 +4,6 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { useCanEdit } from "@/components/auth/edit-permission-context";
 import { HU_MONTHS } from "@/lib/dolgozok/shared";
@@ -14,76 +12,93 @@ import {
   DAY_TYPE_STYLES,
   currentYearMonth,
   formatDiff,
+  honapHetei,
   summarizeByDay,
-  summarizeByWeek,
   todayIso,
   weekInfo,
   type DaySummary,
   type JelenletEmployee,
   type JelenletSession,
-  type WeekSummary,
 } from "@/lib/jelenlet/shared";
-import { getJelenletEmployees, getMonthJelenletekMind } from "@/lib/jelenlet/actions";
+import { getJelenletEmployees, getJelenletekIdoszak } from "@/lib/jelenlet/actions";
 import { NapSzerkeszto } from "@/components/jelenlet/nap-szerkeszto";
 
-const HU_NAP_ROVID = ["V", "H", "K", "Sze", "Cs", "P", "Szo"] as const;
+// A dolgozók megkülönböztetése a naptárban: a név nem fér ki a cellába, ezért
+// egy színes kezdőbetű jelöli őket. A sorrend a jelenlét-lista sorrendje.
+const JELOLO_SZINEK = ["bg-teal-600", "bg-indigo-600", "bg-rose-600", "bg-amber-600"];
+
+const HU_NAP_ROVID = ["H", "K", "Sze", "Cs", "P", "Szo", "V"] as const;
+
+function napSzama(iso: string): number {
+  return Number(iso.slice(8, 10));
+}
 
 function napFelirat(iso: string): string {
   const [ev, ho, nap] = iso.split("-").map(Number);
   const d = new Date(Date.UTC(ev, ho - 1, nap, 12));
-  return `${HU_MONTHS[ho - 1].slice(0, 4)}. ${nap}., ${HU_NAP_ROVID[d.getUTCDay()]}`;
+  const dow = (d.getUTCDay() + 6) % 7;
+  return `${HU_MONTHS[ho - 1]} ${nap}., ${["hétfő", "kedd", "szerda", "csütörtök", "péntek", "szombat", "vasárnap"][dow]}`;
 }
 
-/** Egy nap egy dolgozónál: az időpontok egymás után, vagy a távollét címkéje. */
-function NapCella({ nap }: { nap: DaySummary | undefined }) {
-  if (!nap) return <span className="text-muted-foreground">—</span>;
-  if (nap.dayType !== "munka") {
-    return (
+/** Egy dolgozó egy napja a naptárcellában: jelölő + eltérés vagy címke. */
+function NapiJeloles({
+  betu,
+  szin,
+  nap,
+}: {
+  betu: string;
+  szin: string;
+  nap: DaySummary | undefined;
+}) {
+  return (
+    <span className="flex items-center gap-1.5 text-[11px] leading-tight">
       <span
         className={cn(
-          "rounded-full border px-2 py-0.5 text-[11px] font-semibold",
-          DAY_TYPE_STYLES[nap.dayType]
+          "flex size-4 shrink-0 items-center justify-center rounded-[5px] text-[9px] font-extrabold text-white",
+          szin
         )}
       >
-        {DAY_TYPE_LABELS[nap.dayType]}
+        {betu}
       </span>
-    );
-  }
-  return (
-    <span className="tabular-nums">
-      {nap.sessions
-        .map((s) => `${s.arrival_time ?? "?"} – ${s.departure_time ?? "?"}`)
-        .join(" · ")}
-    </span>
-  );
-}
-
-function EltersCella({ nap }: { nap: DaySummary | undefined }) {
-  if (!nap) return <span className="text-muted-foreground">—</span>;
-  if (nap.nyitott) {
-    return (
-      <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-[11px] font-semibold text-destructive">
-        nyitva
-      </span>
-    );
-  }
-  if (nap.diffMinutes === null) return <span className="text-muted-foreground">—</span>;
-  return (
-    <span className={cn("font-semibold tabular-nums", nap.diffMinutes < 0 ? "text-destructive" : "text-success")}>
-      {formatDiff(nap.diffMinutes)}
+      {!nap ? (
+        <span className="text-muted-foreground">—</span>
+      ) : nap.nyitott ? (
+        <span className="rounded-full border border-destructive/40 bg-destructive/10 px-1.5 text-[9.5px] font-bold text-destructive">
+          nyitva
+        </span>
+      ) : nap.dayType !== "munka" ? (
+        <span
+          className={cn(
+            "rounded-full border px-1.5 text-[9.5px] font-bold",
+            DAY_TYPE_STYLES[nap.dayType]
+          )}
+        >
+          {nap.dayType === "szabadsag" ? "Szabi" : "Beteg"}
+        </span>
+      ) : (
+        <span
+          className={cn(
+            "font-bold tabular-nums",
+            (nap.diffMinutes ?? 0) < 0 ? "text-destructive" : "text-success"
+          )}
+        >
+          {formatDiff(nap.diffMinutes)}
+        </span>
+      )}
     </span>
   );
 }
 
 /**
- * A hónap naplója hetekre bontva: soronként egy nap, a dolgozók egymás
- * mellett, a hét végén részösszeggel, a hónap végén végösszeggel. Egy napra
- * koppintva ott helyben nyílik a szerkesztő (NapSzerkeszto) — a javítás nem
- * visz külön oldalra.
+ * A hónap naptárként, mellette állandó helyen a kiválasztott nap
+ * szerkesztője. A javítás és az utólagos pótlás ugyanott történik: egy
+ * napra kattintva a jobb oldali panel azonnal írható, semmi nem nyílik ki
+ * és nem csúszik el. A kitöltetlen hétköznap szaggatott kerettel látszik,
+ * arra kattintva lehet pótolni — külön dátumválasztó nem kell.
  *
- * A heti és havi összegbe csak a lezárt nap számít bele: a nyitva maradt
- * napot (nincs távozás) az admin zárja le, addig "nyitva" jelöléssel áll.
- * Szabadság és betegszabadság nem számít bele.
+ * A heti és a havi összegbe csak a lezárt nap számít bele: a nyitva maradt
+ * nap (nincs távozás) addig "nyitva", amíg az admin le nem zárja, a
+ * szabadság és a betegszabadság pedig egyáltalán nem számít bele.
  */
 export function HaviNaploDialog({
   open,
@@ -99,13 +114,18 @@ export function HaviNaploDialog({
   const [employees, setEmployees] = useState<JelenletEmployee[]>([]);
   const [sessions, setSessions] = useState<JelenletSession[]>([]);
   const [loading, setLoading] = useState(true);
-  const [nyitottNap, setNyitottNap] = useState<string | null>(null);
-  const [potolt, setPotolt] = useState("");
+  const [kivalasztott, setKivalasztott] = useState<string | null>(null);
+
+  const hetek = useMemo(() => honapHetei(ev, honap), [ev, honap]);
+  const honapElotag = `${ev}-${String(honap).padStart(2, "0")}`;
 
   const load = useCallback(async () => {
+    const napok = honapHetei(ev, honap);
+    const tol = napok[0][0];
+    const ig = napok[napok.length - 1][6];
     const [emp, rows] = await Promise.all([
       getJelenletEmployees(),
-      getMonthJelenletekMind(ev, honap),
+      getJelenletekIdoszak(tol, ig),
     ]);
     setEmployees(emp);
     setSessions(rows);
@@ -122,29 +142,27 @@ export function HaviNaploDialog({
     };
   }, [open, load]);
 
-  // Dolgozónként: nap -> napi összesítés, illetve hét -> heti összesítés.
-  const { napokSzerint, hetek, haviOsszeg } = useMemo(() => {
-    const napokSzerint = new Map<string, Map<string, DaySummary>>();
-    const hetiSzerint = new Map<string, Map<string, WeekSummary>>();
-    const haviOsszeg = new Map<string, { diff: number; nap: number; szabadsag: number; beteg: number; nyitott: number }>();
-    const hetLista = new Map<string, WeekSummary["week"]>();
-
+  // Dolgozónként: nap -> napi összesítés. Ebből olvas a naptár, a heti
+  // oszlop és a havi összeg is, hogy mindhárom ugyanazt a számot mondja.
+  const napokSzerint = useMemo(() => {
+    const terkep = new Map<string, Map<string, DaySummary>>();
     for (const e of employees) {
-      const sajat = sessions.filter((s) => s.employee_id === e.id);
-      const napok = summarizeByDay(sajat);
-      const napTerkep = new Map<string, DaySummary>();
-      for (const n of napok) napTerkep.set(n.date, n);
-      napokSzerint.set(e.id, napTerkep);
+      const sajat = summarizeByDay(sessions.filter((s) => s.employee_id === e.id));
+      terkep.set(e.id, new Map(sajat.map((n) => [n.date, n])));
+    }
+    return terkep;
+  }, [employees, sessions]);
 
-      const hetek = summarizeByWeek(napok);
-      const hetTerkep = new Map<string, WeekSummary>();
-      for (const h of hetek) {
-        hetTerkep.set(h.week.mondayIso, h);
-        hetLista.set(h.week.mondayIso, h.week);
-      }
-      hetiSzerint.set(e.id, hetTerkep);
-
-      haviOsszeg.set(e.id, {
+  const haviOsszeg = useMemo(() => {
+    const terkep = new Map<
+      string,
+      { diff: number; nap: number; szabadsag: number; beteg: number; nyitott: number }
+    >();
+    for (const e of employees) {
+      const napok = [...(napokSzerint.get(e.id)?.values() ?? [])].filter((n) =>
+        n.date.startsWith(honapElotag)
+      );
+      terkep.set(e.id, {
         diff: napok.reduce((sum, n) => sum + (n.diffMinutes ?? 0), 0),
         nap: napok.filter((n) => n.dayType === "munka" && !n.nyitott).length,
         szabadsag: napok.filter((n) => n.dayType === "szabadsag").length,
@@ -152,27 +170,8 @@ export function HaviNaploDialog({
         nyitott: napok.filter((n) => n.nyitott).length,
       });
     }
-
-    // A hetek időrendben, a hét napjaival együtt (minden dolgozó napjainak uniója).
-    const hetek = [...hetLista.entries()]
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([mondayIso, week]) => {
-        const datumok = new Set<string>();
-        for (const terkep of napokSzerint.values()) {
-          for (const datum of terkep.keys()) {
-            if (weekInfo(datum).mondayIso === mondayIso) datumok.add(datum);
-          }
-        }
-        return {
-          mondayIso,
-          week,
-          napok: [...datumok].sort(),
-          hetiSzerint,
-        };
-      });
-
-    return { napokSzerint, hetek, haviOsszeg };
-  }, [employees, sessions]);
+    return terkep;
+  }, [employees, napokSzerint, honapElotag]);
 
   const ma = todayIso();
 
@@ -180,196 +179,264 @@ export function HaviNaploDialog({
     const d = new Date(Date.UTC(ev, honap - 1 + delta, 1));
     setEv(d.getUTCFullYear());
     setHonap(d.getUTCMonth() + 1);
-    setNyitottNap(null);
+    setKivalasztott(null);
     setLoading(true);
   }
-
-  const potlasNap = potolt || null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* A dialógus portálba renderel, a lap .jelenlet wrapper-én kívül —
           ezért kapja meg itt külön a modul palettáját. */}
-      <DialogContent className="jelenlet max-h-[88vh] overflow-y-auto sm:max-w-4xl">
+      <DialogContent className="jelenlet max-h-[92vh] overflow-y-auto sm:max-w-6xl">
         <DialogHeader>
-          <DialogTitle className="flex items-center justify-between gap-3 pr-6">
+          <DialogTitle className="flex flex-wrap items-center justify-between gap-3 pr-6">
             <span>
               Jelenlét — {HU_MONTHS[honap - 1]} {ev}
             </span>
-            <span className="flex items-center gap-1">
-              <Button size="icon-xs" variant="outline" onClick={() => lepHonap(-1)}>
-                <ChevronLeft />
-              </Button>
-              <Button size="icon-xs" variant="outline" onClick={() => lepHonap(1)}>
-                <ChevronRight />
-              </Button>
+            <span className="flex items-center gap-3">
+              {employees.map((e, i) => {
+                const o = haviOsszeg.get(e.id);
+                return (
+                  <span key={e.id} className="flex items-center gap-1.5 text-sm font-normal">
+                    <span
+                      className={cn(
+                        "flex size-5 items-center justify-center rounded-[6px] text-[10px] font-extrabold text-white",
+                        JELOLO_SZINEK[i % JELOLO_SZINEK.length]
+                      )}
+                    >
+                      {e.name.slice(0, 1)}
+                    </span>
+                    <span
+                      className={cn(
+                        "font-bold tabular-nums",
+                        (o?.diff ?? 0) < 0 ? "text-destructive" : "text-success"
+                      )}
+                    >
+                      {formatDiff(o?.diff ?? 0)}
+                    </span>
+                  </span>
+                );
+              })}
+              <span className="flex items-center gap-1">
+                <Button size="icon-xs" variant="outline" onClick={() => lepHonap(-1)}>
+                  <ChevronLeft />
+                </Button>
+                <Button size="icon-xs" variant="outline" onClick={() => lepHonap(1)}>
+                  <ChevronRight />
+                </Button>
+              </span>
             </span>
           </DialogTitle>
         </DialogHeader>
-
-        <p className="text-xs text-muted-foreground">
-          Napi mérce 9 óra. A nyitva maradt nap és a távollét nem számít bele az összegekbe.
-          Egy napra kattintva ott helyben javíthatsz.
-        </p>
 
         {loading ? (
           <p className="text-sm text-muted-foreground">Betöltés…</p>
         ) : employees.length === 0 ? (
           <p className="text-sm text-muted-foreground">Nincs jelenlét-aktív dolgozó.</p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-xs">
-              <thead>
-                <tr className="border-b">
-                  <th className="px-2 py-1.5 text-left font-semibold text-muted-foreground">Nap</th>
-                  {employees.map((e) => (
-                    <th key={e.id} colSpan={2} className="px-2 py-1.5 text-left font-semibold">
-                      {e.name}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {hetek.length === 0 && (
-                  <tr>
-                    <td colSpan={1 + employees.length * 2} className="px-2 py-3 text-muted-foreground">
-                      Ebben a hónapban még nincs rögzített nap.
-                    </td>
-                  </tr>
-                )}
-                {hetek.map((h) => (
-                  <Fragment key={h.mondayIso}>
-                    <tr className="border-y bg-muted/50">
-                      <td className="px-2 py-1.5 font-semibold">{h.week.week}. hét</td>
-                      {employees.map((e) => {
-                        const heti = h.hetiSzerint.get(e.id)?.get(h.mondayIso);
-                        return (
-                          <td key={e.id} colSpan={2} className="px-2 py-1.5">
-                            <span className="text-muted-foreground">
-                              {heti ? `${heti.workedDays} nap` : "—"}
-                            </span>
-                            {heti && (
-                              <span
-                                className={cn(
-                                  "ml-2 font-semibold tabular-nums",
-                                  heti.diffMinutes < 0 ? "text-destructive" : "text-success"
-                                )}
-                              >
-                                {formatDiff(heti.diffMinutes)}
-                              </span>
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                    {h.napok.map((datum) => (
-                      <Fragment key={datum}>
-                        <tr
-                          onClick={() => canEdit && setNyitottNap(nyitottNap === datum ? null : datum)}
+          <div className="grid gap-4 lg:grid-cols-[1fr_330px]">
+            {/* --- naptár --- */}
+            <div>
+              <div className="grid grid-cols-[repeat(7,1fr)_92px] gap-1.5">
+                {HU_NAP_ROVID.map((n) => (
+                  <span
+                    key={n}
+                    className="py-1 text-center text-[10.5px] font-bold tracking-wide text-muted-foreground uppercase"
+                  >
+                    {n}
+                  </span>
+                ))}
+                <span className="py-1 text-center text-[10.5px] font-bold tracking-wide text-muted-foreground uppercase">
+                  Hét
+                </span>
+
+                {hetek.map((het) => (
+                  <Fragment key={het[0]}>
+                    {het.map((datum, idx) => {
+                      const ebbenAHonapban = datum.startsWith(honapElotag);
+                      const hetvege = idx >= 5;
+                      const napok = employees.map((e) => napokSzerint.get(e.id)?.get(datum));
+                      const vanBejegyzes = napok.some(Boolean);
+                      const vanNyitott = napok.some((n) => n?.nyitott);
+                      return (
+                        <button
+                          key={datum}
+                          type="button"
+                          disabled={!canEdit}
+                          onClick={() => setKivalasztott(datum)}
                           className={cn(
-                            "border-b",
-                            canEdit && "cursor-pointer hover:bg-muted/40",
-                            datum === ma && "bg-muted/30",
-                            nyitottNap === datum && "bg-muted/60"
+                            "flex min-h-[74px] flex-col gap-1 rounded-lg border p-1.5 text-left transition-colors",
+                            canEdit && "hover:border-foreground/30",
+                            !ebbenAHonapban && "opacity-45",
+                            hetvege && !vanBejegyzes ? "bg-muted/50" : "bg-card",
+                            !vanBejegyzes && !hetvege && "border-dashed",
+                            vanNyitott && "border-warning bg-warning/10",
+                            datum === ma && "border-foreground shadow-[0_0_0_2px_rgba(15,23,42,.12)]",
+                            kivalasztott === datum &&
+                              "border-foreground bg-accent shadow-[0_0_0_2px_rgba(15,23,42,.22)]"
                           )}
                         >
-                          <td className="px-2 py-1.5 whitespace-nowrap text-muted-foreground">
-                            {napFelirat(datum)}
-                            {datum === ma && <span className="ml-1 font-semibold text-foreground">ma</span>}
-                          </td>
-                          {employees.map((e) => {
-                            const nap = napokSzerint.get(e.id)?.get(datum);
-                            return (
-                              <Fragment key={e.id}>
-                                <td className="px-2 py-1.5">
-                                  <NapCella nap={nap} />
-                                </td>
-                                <td className="px-2 py-1.5 text-right">
-                                  <EltersCella nap={nap} />
-                                </td>
-                              </Fragment>
-                            );
-                          })}
-                        </tr>
-                        {nyitottNap === datum && canEdit && (
-                          <tr>
-                            <td colSpan={1 + employees.length * 2} className="bg-muted/30 px-2 py-2">
-                              <p className="mb-2 text-xs font-semibold">
-                                {napFelirat(datum)} — szerkesztés
-                              </p>
-                              <NapSzerkeszto
-                                employees={employees}
-                                workDate={datum}
-                                sessions={sessions}
-                                onReload={load}
-                              />
-                            </td>
-                          </tr>
-                        )}
-                      </Fragment>
-                    ))}
+                          <span className="flex items-center justify-between">
+                            <span className="text-xs font-bold">{napSzama(datum)}.</span>
+                            {datum === ma && (
+                              <span className="text-[9px] font-bold tracking-wide text-muted-foreground uppercase">
+                                ma
+                              </span>
+                            )}
+                          </span>
+                          {vanBejegyzes
+                            ? employees.map((e, i) => (
+                                <NapiJeloles
+                                  key={e.id}
+                                  betu={e.name.slice(0, 1)}
+                                  szin={JELOLO_SZINEK[i % JELOLO_SZINEK.length]}
+                                  nap={napokSzerint.get(e.id)?.get(datum)}
+                                />
+                              ))
+                            : ebbenAHonapban &&
+                              !hetvege && (
+                                <span className="text-[10px] text-muted-foreground">
+                                  nincs bejegyzés
+                                </span>
+                              )}
+                        </button>
+                      );
+                    })}
+
+                    {/* heti összeg — dolgozónként, a hét megjelenített napjaiból */}
+                    <div className="flex flex-col justify-center gap-1 rounded-lg border bg-muted/60 px-2 py-1.5">
+                      <span className="text-[9.5px] font-bold tracking-wide text-muted-foreground uppercase">
+                        {weekInfo(het[0]).week}. hét
+                      </span>
+                      {employees.map((e, i) => {
+                        const terkep = napokSzerint.get(e.id);
+                        const osszeg = het.reduce(
+                          (sum, d) => sum + (terkep?.get(d)?.diffMinutes ?? 0),
+                          0
+                        );
+                        const vanNap = het.some((d) => terkep?.get(d));
+                        return (
+                          <span key={e.id} className="flex items-center gap-1.5 text-[11px]">
+                            <span
+                              className={cn(
+                                "flex size-4 shrink-0 items-center justify-center rounded-[5px] text-[9px] font-extrabold text-white",
+                                JELOLO_SZINEK[i % JELOLO_SZINEK.length]
+                              )}
+                            >
+                              {e.name.slice(0, 1)}
+                            </span>
+                            {vanNap ? (
+                              <b
+                                className={cn(
+                                  "tabular-nums",
+                                  osszeg < 0 ? "text-destructive" : "text-success"
+                                )}
+                              >
+                                {formatDiff(osszeg)}
+                              </b>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </span>
+                        );
+                      })}
+                    </div>
                   </Fragment>
                 ))}
-                <tr className="bg-foreground text-background">
-                  <td className="px-2 py-2 font-bold">
-                    {HU_MONTHS[honap - 1]} összesen
-                  </td>
-                  {employees.map((e) => {
-                    const o = haviOsszeg.get(e.id);
-                    return (
-                      <td key={e.id} colSpan={2} className="px-2 py-2">
-                        <span className="opacity-80">
-                          {o ? `${o.nap} nap` : "—"}
-                          {o && o.szabadsag > 0 && ` · ${o.szabadsag} szabadság`}
-                          {o && o.beteg > 0 && ` · ${o.beteg} beteg`}
-                          {o && o.nyitott > 0 && ` · ${o.nyitott} nyitott`}
-                        </span>
-                        {o && (
-                          <span className="ml-2 font-bold tabular-nums">{formatDiff(o.diff)}</span>
-                        )}
-                      </td>
-                    );
-                  })}
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        )}
+              </div>
 
-        {canEdit && (
-          <div className="flex flex-wrap items-end gap-2 border-t pt-3">
-            <div className="space-y-1">
-              <Label className="text-[11px] text-muted-foreground">Nap pótlása</Label>
-              <Input
-                type="date"
-                value={potolt}
-                onChange={(e) => setPotolt(e.target.value)}
-                className="h-8 w-40"
-              />
+              <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+                {employees.map((e, i) => (
+                  <span key={e.id} className="inline-flex items-center gap-1.5">
+                    <span
+                      className={cn(
+                        "flex size-4 items-center justify-center rounded-[5px] text-[9px] font-extrabold text-white",
+                        JELOLO_SZINEK[i % JELOLO_SZINEK.length]
+                      )}
+                    >
+                      {e.name.slice(0, 1)}
+                    </span>
+                    {e.name}
+                  </span>
+                ))}
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-block h-3 w-4 rounded-[3px] border border-dashed" />
+                  nincs bejegyzés, pótolható
+                </span>
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-block h-3 w-4 rounded-[3px] border border-warning bg-warning/20" />
+                  nincs távozás, javításra vár
+                </span>
+              </div>
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={!potlasNap}
-              onClick={() => potlasNap && setNyitottNap(potlasNap)}
-            >
-              Megnyitom
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              Olyan napot is megnyithatsz, amelyen még egyetlen bejegyzés sincs.
-            </p>
+
+            {/* --- a kiválasztott nap szerkesztője, állandó helyen --- */}
+            <div className="rounded-xl border bg-card p-3">
+              {kivalasztott ? (
+                <>
+                  <div className="mb-2.5 flex items-center justify-between gap-2">
+                    <b className="text-sm">{napFelirat(kivalasztott)}</b>
+                    <Button size="xs" variant="ghost" onClick={() => setKivalasztott(null)}>
+                      Bezárom
+                    </Button>
+                  </div>
+                  <NapSzerkeszto
+                    employees={employees}
+                    workDate={kivalasztott}
+                    sessions={sessions}
+                    onReload={load}
+                    egyOszlop
+                  />
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    Mentés után a heti és a havi összeg azonnal újraszámolódik.
+                  </p>
+                </>
+              ) : (
+                <div className="flex h-full min-h-[160px] flex-col items-center justify-center gap-1 text-center">
+                  <p className="text-sm font-medium">Válassz egy napot</p>
+                  <p className="text-xs text-muted-foreground">
+                    {canEdit
+                      ? "A naptárban bármelyik napra kattintva itt javíthatod vagy pótolhatod a bejegyzéseket."
+                      : "A javításhoz szerkesztési jog kell."}
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
-        {nyitottNap && canEdit && !hetek.some((h) => h.napok.includes(nyitottNap)) && (
-          <div className="rounded-md border p-2">
-            <p className="mb-2 text-xs font-semibold">{napFelirat(nyitottNap)} — pótlás</p>
-            <NapSzerkeszto
-              employees={employees}
-              workDate={nyitottNap}
-              sessions={sessions}
-              onReload={load}
-            />
+        {!loading && employees.length > 0 && (
+          <div className="flex flex-wrap gap-2 border-t pt-3">
+            {employees.map((e, i) => {
+              const o = haviOsszeg.get(e.id);
+              return (
+                <div key={e.id} className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2">
+                  <span
+                    className={cn(
+                      "flex size-6 items-center justify-center rounded-[7px] text-[11px] font-extrabold text-white",
+                      JELOLO_SZINEK[i % JELOLO_SZINEK.length]
+                    )}
+                  >
+                    {e.name.slice(0, 1)}
+                  </span>
+                  <span className="text-sm font-medium">{e.name}</span>
+                  <span
+                    className={cn(
+                      "text-lg font-bold tabular-nums",
+                      (o?.diff ?? 0) < 0 ? "text-destructive" : "text-success"
+                    )}
+                  >
+                    {formatDiff(o?.diff ?? 0)}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {o?.nap ?? 0} nap
+                    {o && o.szabadsag > 0 && ` · ${o.szabadsag} szabadság`}
+                    {o && o.beteg > 0 && ` · ${o.beteg} beteg`}
+                    {o && o.nyitott > 0 && ` · ${o.nyitott} nyitott`}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         )}
       </DialogContent>

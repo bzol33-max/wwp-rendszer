@@ -373,3 +373,33 @@ export const DAY_TYPE_STYLES: Record<Exclude<DayType, "munka">, string> = {
   szabadsag: "border-blue-300 bg-blue-100 text-blue-700",
   beteg: "border-orange-300 bg-orange-100 text-orange-700",
 };
+
+/**
+ * A havi naptár megjelenítendő hetei: a hónap elejét megelőző hétfőtől a
+ * hónap végét követő vasárnapig, hetes csoportokban (hétfővel kezdve). A
+ * szomszédos hónapba lógó napok is benne vannak — nélkülük a hónap szélén
+ * álló hét összege csonka lenne, hiszen a hét egy része átlóg.
+ */
+export function honapHetei(ev: number, honap: number): string[][] {
+  const elso = new Date(Date.UTC(ev, honap - 1, 1));
+  const elsoDow = (elso.getUTCDay() + 6) % 7; // hétfő = 0
+  const kurzor = new Date(elso);
+  kurzor.setUTCDate(1 - elsoDow);
+
+  const utolsoNap = new Date(Date.UTC(ev, honap, 0)).getUTCDate();
+  const veg = new Date(Date.UTC(ev, honap - 1, utolsoNap));
+  const vegDow = (veg.getUTCDay() + 6) % 7;
+  const zaras = new Date(veg);
+  zaras.setUTCDate(utolsoNap + (6 - vegDow));
+
+  const hetek: string[][] = [];
+  while (kurzor <= zaras) {
+    const het: string[] = [];
+    for (let i = 0; i < 7; i++) {
+      het.push(kurzor.toISOString().slice(0, 10));
+      kurzor.setUTCDate(kurzor.getUTCDate() + 1);
+    }
+    hetek.push(het);
+  }
+  return hetek;
+}
