@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useTransition,
 } from "react";
@@ -23,7 +24,7 @@ import {
   Undo2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -94,11 +95,35 @@ function ElolegSav() {
 
 // Közös keret minden képernyőhöz: Menta-antracit színséma + lehúzásra
 // frissítés (ld. AGENTS.md "Mobil felület — kötelező konvenciók").
-function Shell({ children }: { children: React.ReactNode }) {
+function Shell({ children, onBack }: { children: React.ReactNode; onBack?: () => void }) {
+  // Visszalépés lapozással: a képernyő BAL SZÉLÉRŐL jobbra húzva ugyanaz
+  // történik, mint a fejléc nyilával — natív app-szerű mozdulat, kesztyűben
+  // is eltalálható. Csak a szélső sávból (48 px) indulhat, hogy a listák
+  // görgetését és a lehúzásra frissítést ne zavarja.
+  const huzasKezdet = useRef<{ x: number; y: number } | null>(null);
+
+  function touchStart(e: React.TouchEvent) {
+    const t = e.touches[0];
+    huzasKezdet.current = t && t.clientX <= 48 ? { x: t.clientX, y: t.clientY } : null;
+  }
+
+  function touchEnd(e: React.TouchEvent) {
+    const kezdet = huzasKezdet.current;
+    huzasKezdet.current = null;
+    if (!kezdet || !onBack) return;
+    const t = e.changedTouches[0];
+    if (!t) return;
+    const dx = t.clientX - kezdet.x;
+    const dy = Math.abs(t.clientY - kezdet.y);
+    if (dx > 70 && dy < 60) onBack();
+  }
+
   return (
     <div
       style={MOBIL_THEME}
       className="mx-auto flex h-dvh max-w-md flex-col overflow-hidden bg-[var(--mob-bg)] text-[var(--mob-text)]"
+      onTouchStart={onBack ? touchStart : undefined}
+      onTouchEnd={onBack ? touchEnd : undefined}
     >
       <PullToRefresh className="flex-1 overflow-y-auto">
         <div className="flex flex-col gap-4 px-4 py-4">
@@ -351,7 +376,7 @@ function JelenletiScreen({
   }
 
   return (
-    <Shell>
+    <Shell onBack={onBack}>
       <Header employeeName={employeeName} onBack={onBack} />
 
       {/* Állapotsor: eddig semmi nem mondta meg, hogy bent van-e, ezért
@@ -491,7 +516,7 @@ function FeladatokScreen({
   onBack: () => void;
 }) {
   return (
-    <Shell>
+    <Shell onBack={onBack}>
       <Header employeeName={employeeName} onBack={onBack} />
       <FeladatokMobilCsempe />
     </Shell>
@@ -559,7 +584,7 @@ function ProfilScreen({
   }
 
   return (
-    <Shell>
+    <Shell onBack={onBack}>
       <Header employeeName={employeeName} onBack={onBack} />
 
       {loading ? (
@@ -654,7 +679,7 @@ function FuvarokScreen({
   onBack: () => void;
 }) {
   return (
-    <Shell>
+    <Shell onBack={onBack}>
       <Header employeeName={employeeName} onBack={onBack} />
       <SoforFuvarNap employeeId={employeeId} />
     </Shell>
@@ -718,7 +743,7 @@ function KeszletScreen({
     );
 
   return (
-    <Shell>
+    <Shell onBack={onBack}>
       <Header employeeName={employeeName} onBack={onBack} />
 
       <div className="grid grid-cols-2 gap-2">
