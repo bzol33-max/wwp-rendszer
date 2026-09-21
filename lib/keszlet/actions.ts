@@ -1179,8 +1179,11 @@ export async function recordSzetvalogatas(input: {
   source?: string;
   items: { type: string; qty: number }[];
 }) {
-  await requireEditPermission("keszlet");
+  // A telepi (keszlet_sajat) jogú dolgozó is szétválogathat a saját telepén —
+  // ő pakolja szét a vegyes halmot, ld. recordInventoryCount.
+  const jog = await requireAnyEditPermission(["keszlet", "keszlet_sajat"]);
   const createdBy = await rogzitoNeve();
+  ellenorizdSajatKeszletHatokor(jog, input.site);
   ellenorizdTelephely(input.site);
   const source = input.source ?? "Vegyes EUR";
   if (!SZETVALOGATAS_FORRASOK.includes(source)) {

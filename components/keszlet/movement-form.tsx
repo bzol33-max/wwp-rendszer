@@ -49,6 +49,7 @@ export function MovementForm({
   onRecorded,
   allowTransfer = true,
   allowSale = false,
+  fixedDirection,
 }: {
   site: string;
   types: string[];
@@ -57,6 +58,13 @@ export function MovementForm({
   /** Korlátozott (mobil) nézeteken kikapcsolható, ha csak Be/Ki rögzítés kell. */
   allowTransfer?: boolean;
   /**
+   * Ha meg van adva, az irány rögzített és a választósáv eltűnik — a telepi
+   * mobil nézet külön "Beérkezés" és "Kiadás" gombbal nyitja meg az űrlapot,
+   * ott már eldőlt, melyikről van szó. A komponenst a hívó minden
+   * megnyitáskor újra csatolja, ezért elég a kezdőértéknek adni.
+   */
+  fixedDirection?: Direction;
+  /**
    * Eladás (helyben, készpénzért): a Kiszállítás / Eladás irányhoz soronként
    * Ft/db ár is megadható, és az ellenérték a kasszába kerül. Csak
    * Nyíregyházán van bekapcsolva — kassza is csak ott van.
@@ -64,7 +72,7 @@ export function MovementForm({
   allowSale?: boolean;
 }) {
   const canEdit = useCanEdit();
-  const [direction, setDirection] = useState<Direction>("be");
+  const [direction, setDirection] = useState<Direction>(fixedDirection ?? "be");
   const [sorok, setSorok] = useState<Sor[]>([ujSor(types[0] ?? "", otherSites[0] ?? "")]);
   const [partner, setPartner] = useState("");
   const [afa, setAfa] = useState(false);
@@ -179,9 +187,14 @@ export function MovementForm({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-sm">Mozgás rögzítése</CardTitle>
+        <CardTitle className="text-sm">
+          {fixedDirection
+            ? (DIRECTION_OPTIONS.find(([value]) => value === fixedDirection)?.[1] ?? "Mozgás rögzítése")
+            : "Mozgás rögzítése"}
+        </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {!fixedDirection && (
         <div className={cn("grid gap-2", allowTransfer ? "grid-cols-3" : "grid-cols-2")}>
           {DIRECTION_OPTIONS.filter(([value]) => allowTransfer || value !== "mozgatas").map(
             ([value, label]) => (
@@ -201,6 +214,7 @@ export function MovementForm({
             )
           )}
         </div>
+        )}
 
         <div className="space-y-2">
           {sorok.map((sor, i) => (

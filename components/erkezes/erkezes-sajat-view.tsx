@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   CalendarClock,
+  ChevronRight,
   ClipboardList,
   IdCard,
   LogOut,
@@ -23,6 +24,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { logout } from "@/lib/auth/actions";
@@ -46,8 +48,9 @@ import {
 import { FeladatokMobilCsempe } from "@/components/erkezes/feladatok-mobil-csempe";
 import { getSiteSnapshot, type IncomingRow } from "@/lib/keszlet/actions";
 import { MovementForm } from "@/components/keszlet/movement-form";
-import { InventoryDialog } from "@/components/keszlet/inventory-dialog";
 import { BejovoSzallitmanyok } from "@/components/keszlet/bejovo-szallitmanyok";
+import { MobilLeltar, MobilSzetvalogatas } from "@/components/erkezes/keszlet-mobil";
+import type { Direction } from "@/lib/keszlet/actions";
 import {
   acceptAdvance,
   getEmployeeElolegek,
@@ -658,12 +661,15 @@ function FuvarokScreen({
   );
 }
 
-// Leltár + Be/Ki mozgás rögzítés Szakolyra és Balkányra — a meglévő
-// MovementForm/InventoryDialog komponensek adják a logikát (allowTransfer
-// kikapcsolva, mert ezen a korlátozott mobil nézeten csak Be/Ki kell, nem
-// telephelyek közti mozgatás), a szerkesztési jogot a "keszlet_sajat" modul
-// dönti el. A MovementForm/InventoryDialog a desktop Készlet modullal közös
-// komponens, ezért a saját (globális) színeivel jelenik meg.
+// Telepi Készlet képernyő: a készlet típusonként csempékben (nagy számok,
+// egy pillantás), a műveletek pedig alul, mindig kéznél. A vegyes halom
+// (Vegyes EUR / Vegyes) csempéje kiemelve — rákoppintva nyílik a
+// szétválogatás, külön gomb nélkül. A leltár és a szétválogatás saját, ujjra
+// méretezett párbeszédet kap (keszlet-mobil.tsx); a Be/Ki rögzítés a desktop
+// Készlet modullal közös MovementForm, rögzített iránnyal.
+const VEGYES_FORRASOK = ["Vegyes EUR", "Vegyes"];
+const VEGYES_EUR_CELOK = ["EUR világos", "EUR szürke", "EUR törött"];
+
 function KeszletScreen({
   employeeName,
   canEdit,
@@ -679,6 +685,8 @@ function KeszletScreen({
   const [stock, setStock] = useState<Record<string, number>>({});
   const [incoming, setIncoming] = useState<IncomingRow[]>([]);
   const [inventoryOpen, setInventoryOpen] = useState(false);
+  const [szetvalogatas, setSzetvalogatas] = useState<string | null>(null);
+  const [rogzites, setRogzites] = useState<Direction | null>(null);
 
   const load = useCallback(async () => {
     const snap = await getSiteSnapshot(site);
@@ -696,6 +704,15 @@ function KeszletScreen({
       mounted = false;
     };
   }, [load]);
+
+  const vegyesek = VEGYES_FORRASOK.filter((v) => v in stock);
+  const tobbi = Object.entries(stock).filter(([t]) => !VEGYES_FORRASOK.includes(t));
+  // Szétválogatás céljai: a telepen aktív típusok — a Vegyes EUR csak a három
+  // EUR-válogatásra bomlik, a Vegyes bármire, ami itt aktív.
+  const celok = (forras: string) =>
+    types.filter(
+      (t) => !VEGYES_FORRASOK.includes(t) && (forras === "Vegyes" || VEGYES_EUR_CELOK.includes(t))
+    );
 
   return (
     <Shell>
@@ -725,34 +742,101 @@ function KeszletScreen({
         <EditPermissionProvider canEdit={canEdit}>
           <BejovoSzallitmanyok rows={incoming} onAccepted={load} />
 
-          <MovementForm site={site} types={types} otherSites={[]} onRecorded={load} allowTransfer={false} />
-
-          <Card className="border border-[var(--mob-border)] bg-[var(--mob-card)] ring-0">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-sm">Jelenlegi készlet — {site}</CardTitle>
-              {canEdit && (
-                <Button size="sm" variant="outline" onClick={() => setInventoryOpen(true)}>
-                  Leltár indítása
-                </Button>
-              )}
-            </CardHeader>
-            <CardContent className="flex flex-col gap-2">
-              {Object.entries(stock).map(([t, q]) => (
-                <div
-                  key={t}
-                  className="flex items-center justify-between rounded-md border border-[var(--mob-border)] bg-[var(--mob-tile)] px-3 py-2 text-sm"
-                >
-                  <span>{t}</span>
-                  <span className="font-semibold tabular-nums">{q}</span>
+          {vegyesek.map((forras) => {
+            const celLista = celok(forras);
+            const nyithato = canEdit && celLista.length > 0 && stock[forras] > 0;
+            return (
+              <button
+                key={forras}
+                type="button"
+                disabled={!nyithato}
+                onClick={() => setSzetvalogatas(forras)}
+                className={cn(
+                  "flex items-center justify-between rounded-xl border-2 px-3 py-2.5 text-left",
+                  nyithato
+                    ? "border-[var(--mob-accent)] bg-[var(--mob-card)]"
+                    : "border-[var(--mob-border)] bg-[var(--mob-card)]"
+                )}
+              >
+                <div>
+                  <div className="text-xs text-[var(--mob-muted)]">{forras}</div>
+                  <div className="text-2xl font-bold tabular-nums text-[var(--mob-positive)]">
+                    {stock[forras]} db
+                  </div>
                 </div>
-              ))}
-            </CardContent>
-          </Card>
+                {nyithato && (
+                  <span className="flex items-center gap-1 text-sm font-semibold text-[var(--mob-accent)]">
+                    Szétválogatás
+                    <ChevronRight className="h-4 w-4" />
+                  </span>
+                )}
+              </button>
+            );
+          })}
 
-          <InventoryDialog
+          <div className="grid grid-cols-2 gap-2">
+            {tobbi.map(([t, q]) => (
+              <div
+                key={t}
+                className="rounded-xl border border-[var(--mob-border)] bg-[var(--mob-tile)] px-2.5 py-2"
+              >
+                <div className="text-[11px] leading-tight text-[var(--mob-muted)]">{t}</div>
+                <div className="text-xl font-bold tabular-nums">{q}</div>
+              </div>
+            ))}
+          </div>
+
+          {canEdit && (
+            <div className="sticky bottom-0 -mx-1 grid grid-cols-3 gap-2 rounded-xl border border-[var(--mob-border)] bg-[var(--mob-card)] p-2">
+              <Button size="sm" onClick={() => setRogzites("be")}>
+                Beérkezés
+              </Button>
+              <Button size="sm" onClick={() => setRogzites("ki")}>
+                Kiadás
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setInventoryOpen(true)}>
+                Leltár
+              </Button>
+            </div>
+          )}
+
+          <Dialog open={rogzites !== null} onOpenChange={(nyitva) => !nyitva && setRogzites(null)}>
+            <DialogContent className="max-w-sm p-0">
+              <DialogHeader className="sr-only">
+                <DialogTitle>Mozgás rögzítése</DialogTitle>
+              </DialogHeader>
+              {rogzites && (
+                <MovementForm
+                  site={site}
+                  types={types}
+                  otherSites={[]}
+                  allowTransfer={false}
+                  fixedDirection={rogzites}
+                  onRecorded={async () => {
+                    await load();
+                    setRogzites(null);
+                  }}
+                />
+              )}
+            </DialogContent>
+          </Dialog>
+
+          {szetvalogatas && (
+            <MobilSzetvalogatas
+              site={site}
+              source={szetvalogatas}
+              keszlet={stock[szetvalogatas] ?? 0}
+              celok={celok(szetvalogatas)}
+              open
+              onOpenChange={(nyitva) => !nyitva && setSzetvalogatas(null)}
+              onRecorded={load}
+            />
+          )}
+
+          <MobilLeltar
             site={site}
             types={types}
-            currentStock={stock}
+            keszlet={stock}
             open={inventoryOpen}
             onOpenChange={setInventoryOpen}
             onRecorded={load}
