@@ -1164,7 +1164,9 @@ export async function getNyiregyhazaFoSnapshot() {
 // EUR-vegyes — abból világos/szürke/törött lesz. A "Vegyes" a mindenes
 // halom (Szakoly/Balkány): olyan szállítmány, amiben EUR-on kívül színes,
 // egyutas is van — ezért bármelyik, a telepen aktív típusra bontható.
-export const SZETVALOGATAS_FORRASOK = ["Vegyes EUR", "Vegyes"];
+// (Nem exportálható: a "use server" fájl csak async függvényeket adhat ki —
+// a kliensoldali párja a telephelyek-view VEGYES_FORRASOK listája.)
+const SZETVALOGATAS_FORRASOK = ["Vegyes EUR", "Vegyes"];
 
 /**
  * Szétválogatás: a forrás-típusból levont mennyiség a megadott típusokra
