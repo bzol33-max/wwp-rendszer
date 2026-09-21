@@ -41,7 +41,8 @@ insert into pallet_types (name, default_price) values
   ('H1 raklap', null),
   ('1000x1200-as körtalpas', null),
   ('BIG-BAG', null),
-  ('Vegyes EUR', 900)
+  ('Vegyes EUR', 900),
+  ('Vegyes', null)
   on conflict (name) do nothing;
 
 -- Egységes típussorrend mindenhol az alkalmazásban: EUR-család, Színes,
@@ -56,25 +57,26 @@ update pallet_types set sort_order = case name
   when 'EUR törött'                then 4
   when 'Csere'                     then 5
   when 'Vegyes EUR'                then 6
-  when 'Színes'                    then 7
-  when 'Egyutas 80-as'             then 8
-  when 'Egyutas 100-as'            then 9
-  when 'Egyutas gyenge'            then 10
-  when 'Gitterbox'                 then 11
-  when 'H1 raklap'                 then 12
-  when '800x1200 új'               then 13
-  when '800x1200 használt'         then 14
-  when '1000x1200 új'              then 15
-  when '1000x1200 használt'        then 16
-  when '1000x1200-as körtalpas'    then 17
-  when 'Raklap magasító'           then 18
-  when 'Emili raklap'              then 19
-  when '1600-as'                   then 20
-  when '1700-as'                   then 21
-  when '670-es'                    then 22
-  when '740-es'                    then 23
-  when 'IBC'                       then 24
-  when 'BIG-BAG'                   then 25
+  when 'Vegyes'                    then 7
+  when 'Színes'                    then 8
+  when 'Egyutas 80-as'             then 9
+  when 'Egyutas 100-as'            then 10
+  when 'Egyutas gyenge'            then 11
+  when 'Gitterbox'                 then 12
+  when 'H1 raklap'                 then 13
+  when '800x1200 új'               then 14
+  when '800x1200 használt'         then 15
+  when '1000x1200 új'              then 16
+  when '1000x1200 használt'        then 17
+  when '1000x1200-as körtalpas'    then 18
+  when 'Raklap magasító'           then 19
+  when 'Emili raklap'              then 20
+  when '1600-as'                   then 21
+  when '1700-as'                   then 22
+  when '670-es'                    then 23
+  when '740-es'                    then 24
+  when 'IBC'                       then 25
+  when 'BIG-BAG'                   then 26
   else 99
 end;
 

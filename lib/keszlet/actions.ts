@@ -80,6 +80,15 @@ function ellenorizdTelephely(site: unknown): string {
   return site;
 }
 
+// A típus létezését és telephelyi aktivitását a hívó ellenőrzi (a katalógus
+// a beállításokban bővíthető, ezért itt nincs rögzített névlista).
+function ellenorizdTipusNev(type: unknown): string {
+  if (typeof type !== "string" || type.trim() === "" || type.length > 60) {
+    throw new Error(`Érvénytelen típus: ${String(type)}`);
+  }
+  return type;
+}
+
 function ellenorizdAr(price: unknown): number {
   if (typeof price !== "number" || !Number.isInteger(price) || price < 0 || price > 10_000_000) {
     throw new Error(`Érvénytelen egységár: ${String(price)}`);
@@ -1151,43 +1160,94 @@ export async function getNyiregyhazaFoSnapshot() {
   return { stock, events, incoming };
 }
 
+// Szétválogatható ("vegyes") készlettételek. A "Vegyes EUR" a klasszikus
+// EUR-vegyes — abból világos/szürke/törött lesz. A "Vegyes" a mindenes
+// halom (Szakoly/Balkány): olyan szállítmány, amiben EUR-on kívül színes,
+// egyutas is van — ezért bármelyik, a telepen aktív típusra bontható.
+export const SZETVALOGATAS_FORRASOK = ["Vegyes EUR", "Vegyes"];
+
+/**
+ * Szétválogatás: a forrás-típusból levont mennyiség a megadott típusokra
+ * oszlik szét, ugyanazon a telephelyen. Egyensúlyban lévő átalakítás — a
+ * levonás pontosan annyi, amennyi a célokra kerül.
+ */
 export async function recordSzetvalogatas(input: {
   site: string;
-  vilagos: number;
-  szurke: number;
-  torott?: number;
+  /** Alapértelmezés a régi viselkedés szerint: "Vegyes EUR". */
+  source?: string;
+  items: { type: string; qty: number }[];
 }) {
   await requireEditPermission("keszlet");
   const createdBy = await rogzitoNeve();
   ellenorizdTelephely(input.site);
-  const torott = input.torott ?? 0;
-  ellenorizdDarabszam(input.vilagos, "világos", true);
-  ellenorizdDarabszam(input.szurke, "szürke", true);
-  ellenorizdDarabszam(torott, "törött", true);
-  const total = input.vilagos + input.szurke + torott;
+  const source = input.source ?? "Vegyes EUR";
+  if (!SZETVALOGATAS_FORRASOK.includes(source)) {
+    throw new Error(`Ebből a típusból nem lehet szétválogatni: ${source}`);
+  }
+  if (!Array.isArray(input.items)) throw new Error("Hiányzó szétválogatási tételek.");
+
+  // Ugyanaz a típus többször is jöhet (pl. összecsúszott sorok) — összevonjuk.
+  const darabok = new Map<string, number>();
+  for (const tetel of input.items) {
+    const type = ellenorizdTipusNev(tetel?.type);
+    const qty = ellenorizdDarabszam(tetel?.qty, `${type} darabszám`, true);
+    if (qty === 0) continue;
+    if (type === source) {
+      throw new Error("A szétválogatás célja nem lehet ugyanaz a típus.");
+    }
+    darabok.set(type, (darabok.get(type) ?? 0) + qty);
+  }
+  const total = Array.from(darabok.values()).reduce((s, q) => s + q, 0);
   if (total === 0) return;
+
+  // Csak a telepen aktív típusokra lehet szétválogatni — különben olyan
+  // készlet keletkezne, ami a telep listáiban meg sem jelenik.
+  const aktiv = await getActiveTypes(input.site);
+  for (const type of darabok.keys()) {
+    if (!aktiv.includes(type)) {
+      throw new Error(`Ez a típus nincs aktiválva ezen a telephelyen: ${type}`);
+    }
+  }
+
   // Közös movement_group: a szétválogatás egy kiegyensúlyozott átalakítás
-  // (vegyes −, világos/szürke +). A sorok a "Legutóbbi mozgások" listából
+  // (vegyes −, a célok +). A sorok a "Legutóbbi mozgások" listából
   // korábban egyenként voltak törölhetők, és egy féloldalas törlés elrontotta
   // az egyensúlyt — a csoport miatt most együtt vonódnak vissza (deleteMovement).
   const movementGroup = randomUUID();
   await withTransaction(async (q) => {
-    await addMovement(q, { site: input.site, type: "Vegyes EUR", direction: "ki", qty: total, partner: "Szétválogatás", createdBy: createdBy ?? undefined, movementGroup });
-    if (input.vilagos > 0) {
-      await addMovement(q, { site: input.site, type: "EUR világos", direction: "be", qty: input.vilagos, partner: "Szétválogatás", createdBy: createdBy ?? undefined, movementGroup });
+    // A forrásban lévő mennyiséget a szerver ellenőrzi, a tranzakción belüli
+    // friss állapotból: a kliensé a párbeszéd megnyitásakori kép lenne.
+    const keszlet = await q<{ qty: string }>(
+      `select coalesce(sum(case
+         when direction = 'be' then qty
+         when direction = 'mozgatas_be' and elfogadva_at is not null then qty
+         when direction in ('ki','mozgatas') then -qty
+         else 0
+       end), 0) as qty
+       from keszlet_movements
+       where site_id = (select id from sites where name = $1)
+         and type_id = (select id from pallet_types where name = $2)`,
+      [input.site, source]
+    );
+    const elerheto = Number(keszlet[0]?.qty ?? 0);
+    if (total > elerheto) {
+      throw new Error(`Csak ${elerheto} db ${source} van a telepen, ennyit nem lehet szétválogatni: ${total} db.`);
     }
-    if (input.szurke > 0) {
-      await addMovement(q, { site: input.site, type: "EUR szürke", direction: "be", qty: input.szurke, partner: "Szétválogatás", createdBy: createdBy ?? undefined, movementGroup });
+
+    await addMovement(q, { site: input.site, type: source, direction: "ki", qty: total, partner: "Szétválogatás", createdBy: createdBy ?? undefined, movementGroup });
+    for (const [type, qty] of darabok) {
+      await addMovement(q, { site: input.site, type, direction: "be", qty, partner: "Szétválogatás", createdBy: createdBy ?? undefined, movementGroup });
     }
     // A "Legutóbbi mozgások" görgetett esemény-feed egyelőre csak Nyíregyházán van —
     // a többi telepen a nyers mozgás-lista (getMovements) már mutatja ugyanezt.
     if (input.site === "Nyíregyháza") {
+      const reszletek = Array.from(darabok, ([type, qty]) => `${type} +${qty}`).join(" · ");
       await q(
         `insert into keszlet_events (site_id, kind, details, effect, created_by, movement_group)
          values ((select id from sites where name = 'Nyíregyháza'), 'szet', $1, $2, $3, $4)`,
         [
-          "Vegyes EUR → világos/szürke/törött",
-          `vegyes −${total} · világos +${input.vilagos} · szürke +${input.szurke} · törött +${torott}`,
+          `${source} szétválogatása`,
+          `${source} −${total} · ${reszletek}`,
           createdBy,
           movementGroup,
         ]

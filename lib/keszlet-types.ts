@@ -1,4 +1,5 @@
-// A teljes típuskatalógus a meglévő árlistából (24 tétel).
+// A teljes típuskatalógus a meglévő árlistából, plusz a szétválogatható
+// "Vegyes" halom (Szakoly/Balkány).
 // Telephelyenként külön állítható be, mely típusok aktívak ott.
 export const PALLET_TYPES = [
   "EUR világos",
@@ -26,6 +27,7 @@ export const PALLET_TYPES = [
   "1000x1200-as körtalpas",
   "BIG-BAG",
   "Vegyes EUR",
+  "Vegyes",
 ] as const;
 
 export type PalletType = (typeof PALLET_TYPES)[number];

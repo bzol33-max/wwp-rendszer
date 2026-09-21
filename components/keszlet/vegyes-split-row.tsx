@@ -4,41 +4,53 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
+export type SzetvalogatasTetel = { type: string; qty: number };
+
 /**
- * "Vegyes EUR" készletsor, amelyikre rákattintva egy kis inline ablak nyílik
- * Világos/Szürke mezőkkel — a beírt mennyiség levonódik a Vegyesből, és
- * hozzáadódik a megfelelő típushoz. Bármelyik telephelyen használható, ahol
- * aktív a Vegyes EUR típus.
+ * Szétválogatható ("vegyes") készletsor: rákattintva egy kis inline ablak
+ * nyílik, ahol a célokhoz darabszámot lehet írni. A beírt mennyiség levonódik
+ * a vegyes készletből, és hozzáadódik a megfelelő típushoz.
+ *
+ * Két forrása van: a "Vegyes EUR" (EUR világos / szürke / törött), és a
+ * "Vegyes" (bármelyik, a telepen aktív típus — pl. színes, egyutas), ahol a
+ * célokat a hívó adja meg a `celok` listában.
  */
 export function VegyesSplitRow({
+  source,
   qty,
+  celok,
   onSubmit,
 }: {
+  source: string;
   qty: number;
-  onSubmit: (vilagos: number, szurke: number) => Promise<void>;
+  celok: string[];
+  onSubmit: (tetelek: SzetvalogatasTetel[]) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
-  const [vilagos, setVilagos] = useState("");
-  const [szurke, setSzurke] = useState("");
+  const [ertekek, setErtekek] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
-  const total = (Number(vilagos) || 0) + (Number(szurke) || 0);
+  const beirt = celok.map((c) => ertekek[c] ?? "");
+  const total = beirt.reduce((s, v) => s + (Number(v) || 0), 0);
   const over = total > qty;
-  const nemEgesz = [vilagos, szurke].some(
-    (v) => v !== "" && !Number.isInteger(Number(v))
-  );
+  const nemEgesz = beirt.some((v) => v !== "" && !Number.isInteger(Number(v)));
+  const negativ = beirt.some((v) => v !== "" && Number(v) < 0);
+  const hibas = total <= 0 || over || nemEgesz || negativ;
 
   function close() {
     setOpen(false);
-    setVilagos("");
-    setSzurke("");
+    setErtekek({});
   }
 
   async function handleSubmit() {
-    if (total <= 0 || over || nemEgesz) return;
+    if (hibas) return;
     setSubmitting(true);
     try {
-      await onSubmit(Number(vilagos) || 0, Number(szurke) || 0);
+      await onSubmit(
+        celok
+          .map((c) => ({ type: c, qty: Number(ertekek[c]) || 0 }))
+          .filter((t) => t.qty > 0)
+      );
       close();
     } finally {
       setSubmitting(false);
@@ -52,48 +64,45 @@ export function VegyesSplitRow({
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center justify-between text-sm"
       >
-        <span>Vegyes EUR</span>
+        <span>{source}</span>
         <span className="font-semibold tabular-nums">{qty}</span>
       </button>
 
       {open && (
         <div className="mt-2 space-y-2 border-t pt-2">
           <div className="grid grid-cols-2 gap-2">
-            <div className="space-y-1">
-              <label className="text-[11px] text-muted-foreground">Világos</label>
-              <Input
-                type="number"
-                placeholder="db"
-                value={vilagos}
-                onChange={(e) => setVilagos(e.target.value)}
-                className="h-8"
-                autoFocus
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-[11px] text-muted-foreground">Szürke</label>
-              <Input
-                type="number"
-                placeholder="db"
-                value={szurke}
-                onChange={(e) => setSzurke(e.target.value)}
-                className="h-8"
-              />
-            </div>
+            {celok.map((cel, i) => (
+              <div key={cel} className="space-y-1">
+                <label className="text-[11px] text-muted-foreground">{cel}</label>
+                <Input
+                  type="number"
+                  min={0}
+                  placeholder="db"
+                  value={ertekek[cel] ?? ""}
+                  onChange={(e) => setErtekek((prev) => ({ ...prev, [cel]: e.target.value }))}
+                  className="h-8"
+                  autoFocus={i === 0}
+                />
+              </div>
+            ))}
+          </div>
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <span>Szétválogatva: {total} db</span>
+            <span>Marad: {Math.max(qty - total, 0)} db</span>
           </div>
           {over && (
             <p className="text-xs text-destructive">
-              A megadott összeg ({total}) meghaladja az elérhető Vegyes EUR mennyiséget.
+              A megadott összeg ({total}) meghaladja az elérhető {source} mennyiséget.
             </p>
           )}
-          {nemEgesz && (
-            <p className="text-xs text-destructive">Csak egész szám adható meg.</p>
+          {(nemEgesz || negativ) && (
+            <p className="text-xs text-destructive">Csak egész, nem negatív szám adható meg.</p>
           )}
           <div className="flex justify-end gap-2">
             <Button size="sm" variant="ghost" disabled={submitting} onClick={close}>
               Mégse
             </Button>
-            <Button size="sm" disabled={total <= 0 || over || nemEgesz || submitting} onClick={handleSubmit}>
+            <Button size="sm" disabled={hibas || submitting} onClick={handleSubmit}>
               {submitting ? "Mentés…" : "Szétválogatás"}
             </Button>
           </div>

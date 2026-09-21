@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import { InventoryDialog } from "@/components/keszlet/inventory-dialog";
 import { MovementForm } from "@/components/keszlet/movement-form";
-import { VegyesSplitRow } from "@/components/keszlet/vegyes-split-row";
+import { VegyesSplitRow, type SzetvalogatasTetel } from "@/components/keszlet/vegyes-split-row";
 import { BejovoSzallitmanyok } from "@/components/keszlet/bejovo-szallitmanyok";
 import { Package, X } from "lucide-react";
 import { toast } from "sonner";
@@ -66,6 +66,12 @@ function Tile({ name, qty }: { name: string; qty: number }) {
     </div>
   );
 }
+
+// Szétválogatható ("vegyes") készlettételek — ld. lib/keszlet/actions.ts
+// SZETVALOGATAS_FORRASOK. A "Vegyes EUR"-ból EUR-válogatás lesz, a
+// "Vegyes"-ből bármi, ami a telepen aktív (színes, egyutas, …).
+const VEGYES_FORRASOK = ["Vegyes EUR", "Vegyes"];
+const VEGYES_EUR_CELOK = ["EUR világos", "EUR szürke", "EUR törött"];
 
 const SITE_ORDER = ["Nyíregyháza", "Balkány", "Szakoly"];
 const SITE_OPACITY_CLASS = ["bg-foreground/55", "bg-foreground/30", "bg-foreground/15"];
@@ -149,17 +155,13 @@ export function TelephelyekView({ site: active }: { site: SiteKey }) {
     load().finally(() => setLoading(false));
   }, [load]);
 
-  async function handleVegyesSplit(vilagos: number, szurke: number) {
+  async function handleVegyesSplit(source: string, tetelek: SzetvalogatasTetel[]) {
     try {
-      await recordSzetvalogatas({
-        site: active,
-        vilagos,
-        szurke,
-      });
+      await recordSzetvalogatas({ site: active, source, items: tetelek });
       await load();
       toast.success("Szétválogatás rögzítve.");
-    } catch {
-      toast.error("Nem sikerült rögzíteni.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Nem sikerült rögzíteni.");
     }
   }
 
@@ -195,7 +197,8 @@ export function TelephelyekView({ site: active }: { site: SiteKey }) {
 
   const isSummary = active === "Összkészlet";
   const isNyiregyhaza = active === "Nyíregyháza";
-  const tileEntries = Object.entries(stock).filter(([t]) => t !== "Vegyes EUR");
+  // A vegyes tételek nem csempeként, hanem szétválogatható sorként jelennek meg.
+  const tileEntries = Object.entries(stock).filter(([t]) => !VEGYES_FORRASOK.includes(t));
 
   return (
     <div className="space-y-4">
@@ -334,15 +337,32 @@ export function TelephelyekView({ site: active }: { site: SiteKey }) {
                   <Tile key={type} name={type} qty={qty} />
                 ))}
               </div>
-              {"Vegyes EUR" in stock &&
-                (canEdit ? (
-                  <VegyesSplitRow qty={stock["Vegyes EUR"]} onSubmit={handleVegyesSplit} />
+              {VEGYES_FORRASOK.filter((forras) => forras in stock).map((forras) => {
+                // Célok: a telepen aktív típusok — a Vegyes EUR-t csak a három
+                // EUR-válogatásra bontjuk, a Vegyest bármire, ami itt aktív.
+                const celok = types.filter(
+                  (t) =>
+                    !VEGYES_FORRASOK.includes(t) &&
+                    (forras === "Vegyes" || VEGYES_EUR_CELOK.includes(t))
+                );
+                return canEdit && celok.length > 0 ? (
+                  <VegyesSplitRow
+                    key={forras}
+                    source={forras}
+                    qty={stock[forras]}
+                    celok={celok}
+                    onSubmit={(tetelek) => handleVegyesSplit(forras, tetelek)}
+                  />
                 ) : (
-                  <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm">
-                    <span>Vegyes EUR</span>
-                    <span className="font-semibold tabular-nums">{stock["Vegyes EUR"]}</span>
+                  <div
+                    key={forras}
+                    className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm"
+                  >
+                    <span>{forras}</span>
+                    <span className="font-semibold tabular-nums">{stock[forras]}</span>
                   </div>
-                ))}
+                );
+              })}
             </CardContent>
           </Card>
 
