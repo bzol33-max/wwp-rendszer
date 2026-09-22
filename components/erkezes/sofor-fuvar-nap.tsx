@@ -7,6 +7,9 @@
 // lerakó együtt, alatta a következő megbízás — az koppintásra kinyílik, hogy
 // indulás előtt látni lehessen, mire készüljön.
 //
+// Legalul egy halk "Holnap" csempe, fuvaronként egy sorral — ennyi kell
+// ahhoz, hogy este tudja, merre kell indulnia.
+//
 // Ami KIKERÜLT és nem véletlenül hiányzik: időpont és időablak, Út ID /
 // pozíciószám, áru és súly, a napváltó nyilak, a három napos előnézet. Ezek a
 // diszpécsernek kellenek, nem a sofőrnek — ő vezet, és két dolgot akar tudni:
@@ -60,6 +63,13 @@ function formatIdo(d: Date): string {
 }
 
 const TIPUS_CIMKE = { felrako: "Felrakó", lerako: "Lerakó" } as const;
+
+/** A megadott nap utáni nap ISO-ban, naptári léptetéssel (hónap-/évfordulón is jó). */
+function kovetkezoNapISO(napISO: string): string {
+  const [ev, ho, nap] = napISO.split("-").map(Number);
+  const d = new Date(Date.UTC(ev, ho - 1, nap + 1, 12));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
+}
 
 const DOK_CIMKE: Record<string, string> = {
   megbizas: "Megbízás",
@@ -485,19 +495,49 @@ function KovetkezoMegbizas({ blokk }: { blokk: SoforFuvarBlokk }) {
   );
 }
 
+/**
+ * "Holnap" — egyetlen halk csempe a nap alján, fuvaronként egy sorral
+ * (Budaházi Zoltán, 2026-09-22). Ennyi kell ahhoz, hogy a sofőr este tudja,
+ * mikor és merre kell indulnia; gomb és részletek nincsenek rajta, azokat
+ * holnap úgyis megkapja.
+ */
+function HolnapCsempe({ fuvarok }: { fuvarok: SoforFuvarBlokk[] }) {
+  if (fuvarok.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-1.5 rounded-xl border border-[var(--mob-border)] bg-[var(--mob-card)]/60 px-3 py-3">
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--mob-muted)]">Holnap</span>
+      {fuvarok.map((b) => {
+        const honnan = b.megallok.find((m) => m.tipus === "felrako")?.varos;
+        const hova = [...b.megallok].reverse().find((m) => m.tipus === "lerako")?.varos;
+        return (
+          <span key={b.fuvarId} className="text-sm">
+            {honnan && hova ? `${honnan} → ${hova}` : (b.megrendelo ?? "Fuvar")}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
   const napISO = budapestNapISO();
+  const holnapISO = kovetkezoNapISO(napISO);
   const [nap, setNap] = useState<SoforNap | null>(null);
+  const [holnap, setHolnap] = useState<SoforNap | null>(null);
   // Melyik napra van betöltött adat — ebből SZÁMOLJUK a "betöltés" állapotot,
   // nem külön setState-tel az effektben (react-hooks/set-state-in-effect).
   const [betoltottNap, setBetoltottNap] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const load = useCallback(async () => {
-    const eredmeny = await getSoforNap(employeeId, napISO);
-    setNap(eredmeny);
+    const [ma, holnapi] = await Promise.all([
+      getSoforNap(employeeId, napISO),
+      getSoforNap(employeeId, holnapISO),
+    ]);
+    setNap(ma);
+    setHolnap(holnapi);
     setBetoltottNap(napISO);
-  }, [employeeId, napISO]);
+  }, [employeeId, napISO, holnapISO]);
 
   // A lekérés async függvényben, await UTÁN állít state-et — így az effekt
   // teste nem hív setState-et szinkronban (react-hooks/set-state-in-effect).
@@ -505,9 +545,13 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
     let ervenyes = true;
     (async () => {
       try {
-        const eredmeny = await getSoforNap(employeeId, napISO);
+        const [ma, holnapi] = await Promise.all([
+          getSoforNap(employeeId, napISO),
+          getSoforNap(employeeId, holnapISO),
+        ]);
         if (!ervenyes) return;
-        setNap(eredmeny);
+        setNap(ma);
+        setHolnap(holnapi);
       } catch {
         if (ervenyes) toast.error("Nem sikerült betölteni a fuvarokat.");
       } finally {
@@ -517,7 +561,7 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
     return () => {
       ervenyes = false;
     };
-  }, [employeeId, napISO]);
+  }, [employeeId, napISO, holnapISO]);
 
   const loading = betoltottNap !== napISO;
 
@@ -602,6 +646,11 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
   const aktivBlokk = aktivIndex >= 0 ? blokkok[aktivIndex] : null;
   const kovetkezoBlokk = aktivIndex >= 0 ? blokkok[aktivIndex + 1] ?? null : null;
 
+  // A holnapi nap a le nem zárt MAI fuvarokat is tartalmazza (átcsúsznak), ezért
+  // azokat kiszűrjük — különben ugyanaz a fuvar kétszer szerepelne a képernyőn.
+  const maiIdk = new Set(blokkok.map((b) => b.fuvarId));
+  const holnapiFuvarok = (holnap?.fuvarok ?? []).filter((b) => !maiIdk.has(b.fuvarId));
+
   if (loading && !nap) {
     return <p className="text-sm text-[var(--mob-muted)]">Betöltés…</p>;
   }
@@ -643,6 +692,8 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
           {kovetkezoBlokk && <KovetkezoMegbizas blokk={kovetkezoBlokk} />}
         </>
       )}
+
+      <HolnapCsempe fuvarok={holnapiFuvarok} />
     </div>
   );
 }
