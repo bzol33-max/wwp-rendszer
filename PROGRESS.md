@@ -1707,3 +1707,9 @@ hierarchiát és a hiányzó adatokat tette hozzá.
   gombbal rögzíti a kocsi koordinátáját a címhez (`rogzitMegalloHelyet`), és
   a csupasz városnév ettől ugyanolyan felismerhető lesz, mint egy pontos cím.
   A gomb pontosan akkor jelenik meg, amikor kell (`helyBizonytalan`).
+- **Éles eredmény** (deploy 2026-09-22 19:40):
+  `[migrate] Vevő-telephelyek pontos címe beírva — Tuzsér: lerakó 0, felrakó 1 (#7).`
+  Egyetlen sor javult: a többi város (Ebes, Ózd, Nyíradony, Nyírgelse) csupasz
+  városnévként nincs a jelenlegi 112 megbízás között. A szótár haszna tehát
+  főként előre mutat — az ezután rögzített megbízásokra —, nem a meglévő
+  adat tömeges javítására.
