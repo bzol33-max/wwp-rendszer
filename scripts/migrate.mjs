@@ -263,6 +263,7 @@ async function main() {
   await javitsaMaradekSajatCegMegrendelotOnce(pool);
   await toroljeDuplikatumSorokatOnce(pool);
   await potoldMiskolciLerakotOnce(pool);
+  await javitsdTataiFelrakotOnce(pool);
   await vonjaVisszaKoraiTeljesitestOnce(pool);
   await vonjaVisszaKettosGpsTeljesitestOnce(pool);
   await vonjaVisszaKorokKoztiKettosGpsTeljesitestOnce(pool);
@@ -654,6 +655,61 @@ async function potoldMiskolciLerakotOnce(pool) {
   console.log(
     `[migrate] 26/3814 miskolci lerakó pótolva: ${rows.length} sor` +
       (rows.length ? ` (#${rows.map((r) => r.id).join(", #")})` : " — nem volt mit javítani.")
+  );
+}
+
+// Gergő 09-22-i fuvarján (#226) a felrakó csak "Tatabánya" volt, pedig a
+// valódi rakodóhely Tata, Agráripari telep — ezt a GPS is megerősítette: a
+// kocsi 14:20–15:13 között ott állt, 8 km-re a Tatabánya városközponttól,
+// ezért a felismerés nem tudta érkezésnek venni, és a felrakó nyitva maradt.
+//
+// Budaházi Zoltán megerősítette a címet, és kérte, hogy Gergő holnap
+// Tompaládonnyal induljon (2026-09-22). Két dolgot írunk:
+//   1. a felrakó valódi címét — így a cím "pontos" minősítésű lesz
+//      (cimPontossaga), tehát a GPS ezentúl fel tudja ismerni;
+//   2. a felrakó megállót (index 0) késznek, a tényleges 15:13-as
+//      elhagyással — így a sofőr telefonján a gombok rögtön a lerakónál
+//      (Tompaládony, index 1) lesznek.
+//
+// A megállók sorrendje: előbb a felrako mező darabjai, utána a lerakóé
+// (lib/fuvarozas/erintes-felismeres.ts), ezért a felrakó itt a 0. index.
+async function javitsdTataiFelrakotOnce(pool) {
+  const JAVITAS_KOD = "fuvar-226-tata-felrako-2026-09-22";
+  const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (mar.length > 0) return;
+
+  const FUVAR_ID = 226;
+  const VALODI_CIM = "2890 Tata, Agráripari telep";
+  // A GPS szerinti tényleges elhagyás; szeptemberben Magyarország CEST (+02).
+  const ELHAGYAS = "2026-09-22 15:13+02";
+
+  const { rows: cimSorok } = await pool.query(
+    `update fuvar_megbizasok
+        set felrako = $2
+      where id = $1
+        and statusz <> 'torolt'
+        and felrako ilike '%Tatabánya%'
+      returning id`,
+    [FUVAR_ID, VALODI_CIM]
+  );
+
+  let allapot = 0;
+  if (cimSorok.length > 0) {
+    const { rowCount } = await pool.query(
+      `insert into fuvar_megallo_allapot (fuvar_id, megallo_index, kesz, kesz_at, kesz_by)
+       values ($1, 0, true, $2::timestamptz, $3)
+       on conflict (fuvar_id, megallo_index)
+       do update set kesz = true, kesz_at = excluded.kesz_at, kesz_by = excluded.kesz_by`,
+      [FUVAR_ID, ELHAGYAS, "kézi javítás (2026-09-22)"]
+    );
+    allapot = rowCount ?? 0;
+  }
+
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1) on conflict (kod) do nothing`, [
+    JAVITAS_KOD,
+  ]);
+  console.log(
+    `[migrate] #${FUVAR_ID} tatai felrakó: cím javítva ${cimSorok.length} sor, felrakó lezárva ${allapot} sor.`
   );
 }
 

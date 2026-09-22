@@ -1564,3 +1564,22 @@ megmaradnak — a `/m` sofőr nézet és a GPS idővonal használja őket.
 - A „feljön a helyére" viselkedés változatlan: amint az aktuális megbízás
   minden megállója kész, ez lép a helyére teljes, gombos csempeként, és ide
   a rá következő kerül.
+
+## 2026-09-22 — #226: tatai felrakó valódi címe + lezárása
+
+- Gergő 09-22-i fuvarján a felrakó csak „Tatabánya" volt, pedig a valódi
+  rakodóhely **Tata, Agráripari telep** (Budaházi Zoltán megerősítette). A
+  GPS is ezt mutatta: a kocsi 14:20–15:13 között ott állt, 8 km-re a
+  tatabányai városközponttól — ezért a felismerés nem tudta érkezésnek
+  venni, és a felrakó nyitva maradt.
+- `javitsdTataiFelrakotOnce` (`scripts/migrate.mjs`) két dolgot ír:
+  1. a felrakó valódi címét (`2890 Tata, Agráripari telep`) — ellenőrizve:
+     `cimPontossaga` szerint **„pontos"** a korábbi „csak_varos" helyett,
+     tehát a GPS ezentúl fel tudja ismerni;
+  2. a felrakó megállót (**index 0**) késznek, a tényleges 15:13-as
+     elhagyással — így a sofőr telefonján a gombok rögtön a lerakónál
+     (Tompaládony, index 1) lesznek.
+- A megállók sorrendje: előbb a `felrako` mező darabjai, utána a `lerako`-é
+  (`erintes-felismeres.ts`), ezért a felrakó a 0. index.
+- Csak akkor ír, ha a felrakó még „Tatabánya" (kézi javítást nem ír felül),
+  és az állapotsort csak akkor, ha a cím-javítás megfogott.
