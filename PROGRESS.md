@@ -1713,3 +1713,31 @@ hierarchiát és a hiányzó adatokat tette hozzá.
   városnévként nincs a jelenlegi 112 megbízás között. A szótár haszna tehát
   főként előre mutat — az ezután rögzített megbízásokra —, nem a meglévő
   adat tömeges javítására.
+
+## 2026-09-22 — Áttekintés/Fuvar: összefoglaló első lap (2+7 D terv)
+
+- 15 látványterv után Budaházi Zoltán a **2+7 D — vízszintes mérő**-t
+  választotta: a 2-es terv sűrű listája a 7-es terv sebességmérőjével, de a
+  kört kiterítve skálás sávvá.
+- **A nap összképe külön lapra került.** Eddig a hét mutató a fülek fölött
+  ült, tehát minden kocsi lapján ott volt, és onnan vitte a helyet. Most a
+  lapozó **első lapja** az összefoglaló („Flotta" fül), utána jönnek a
+  kocsik. A kocsik lapjairól így lekerült a fejléc-sáv, több hely maradt a
+  megbízásoknak.
+- **Az összefoglaló lap:** kocsinként egy sor — színpont, név, rendszám, egy
+  0–90 km/h skálás mérősáv, mellette a szám, alatta a hely. A sorra
+  koppintva a lapozó az adott kocsi lapjára ugrik (ugyanaz, mint a fül).
+- **A mérő 90 km/h-ig megy** (`MERO_MAX_KMH`), mert a magyar tehergépkocsikat
+  a sebességhatároló ennyire fogja — a skála pont a valós tartományt fedi le.
+  Efölött a sáv telítődik, a szám viszont továbbra is a pontos értéket mutatja.
+- **Sebességet csak friss jelből mutatunk.** Ha nincs nyomkövető a kocsin
+  (Jani), nincs jel, vagy régi a jel (`jelRegi`), akkor „—" áll a szám
+  helyén, és a sáv szürke. Egy órája beragadt „78 km/h" rosszabb, mint a
+  bevallott hiány.
+- **A figyelmeztetések csak akkor jelennek meg, ha nem nullák.** A négy
+  alapszám (Fuvar ma, Kész, Folyamatban, Km ma) mindig látszik; a Csúszik,
+  a Nyitott gond és a GPS nélkül buborékként jön elő, ha van mit jelezni.
+  Korábban mind a hét szám ott volt akkor is, ha mind nulla volt.
+- `npm run lint` a módosított fájlra tiszta (a repó 42 egyéb problémája
+  korábbról van), `tsc --noEmit` tiszta, tesztek: teszt-erintes 67,
+  teszt-jogosultsag 28, teszt-allapotgep 44, teszt-lerako-telephely 34 — zöld.
