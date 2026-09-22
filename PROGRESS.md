@@ -1553,3 +1553,14 @@ kellenek, nem a sofőrnek.
 
 A `rogzitPozicioszamot` és a `getKovetkezoNapokElonezet` szerver-műveletek
 megmaradnak — a `/m` sofőr nézet és a GPS idővonal használja őket.
+
+## 2026-09-22 — a következő megbízás csempéje kinyitható
+
+- Az alsó („Ezután következik") csempe koppintásra kinyílik: a fuvar
+  megállói teljes címmel, alattuk megjegyzés, kapcsolattartó telefon és a
+  megbízás iratai. Így a sofőr még indulás előtt megnézheti, mire készüljön.
+- Gomb továbbra sincs rajta — amíg az aktuálissal nem végzett, azon nincs
+  dolga. A papíradat-blokk csak akkor jelenik meg, ha van mit mutatni.
+- A „feljön a helyére" viselkedés változatlan: amint az aktuális megbízás
+  minden megállója kész, ez lép a helyére teljes, gombos csempeként, és ide
+  a rá következő kerül.
