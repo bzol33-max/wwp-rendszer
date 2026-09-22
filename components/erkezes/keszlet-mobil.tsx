@@ -41,13 +41,13 @@ function Billentyuzet({
   }
 
   return (
-    <div className="grid grid-cols-3 gap-2">
+    <div className="grid grid-cols-3 gap-1.5">
       {["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"].map((n) => (
         <button
           key={n}
           type="button"
           onClick={() => nyom(n)}
-          className="rounded-xl border border-[var(--mob-border)] bg-[var(--mob-card)] py-3.5 text-xl font-semibold active:bg-[var(--mob-tile)]"
+          className="rounded-xl border border-[var(--mob-border)] bg-[var(--mob-card)] py-2.5 text-xl font-semibold active:bg-[var(--mob-tile)]"
         >
           {n}
         </button>
@@ -55,7 +55,7 @@ function Billentyuzet({
       <button
         type="button"
         onClick={() => nyom("torol")}
-        className="col-span-2 flex items-center justify-center rounded-xl border border-[var(--mob-border)] bg-[var(--mob-card)] py-3.5 active:bg-[var(--mob-tile)]"
+        className="col-span-2 flex items-center justify-center rounded-xl border border-[var(--mob-border)] bg-[var(--mob-card)] py-2.5 active:bg-[var(--mob-tile)]"
         aria-label="Törlés"
       >
         <Delete className="h-5 w-5" />
@@ -155,12 +155,12 @@ export function MobilSzetvalogatas({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="flex max-h-[92dvh] max-w-sm flex-col gap-3 overflow-hidden">
         <DialogHeader>
           <DialogTitle className="text-base">{source} szétválogatása</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-3">
+        <div className="flex-1 space-y-3 overflow-y-auto">
           <div className="flex items-center justify-between rounded-lg bg-[var(--mob-tile)] px-3 py-2 text-sm">
             <span className="text-[var(--mob-muted)]">Szétválogatva {osszes} db</span>
             <span className={cn("font-semibold tabular-nums", marad < 0 && "text-[var(--mob-negative)]")}>
@@ -180,6 +180,9 @@ export function MobilSzetvalogatas({
             ))}
           </div>
 
+        </div>
+
+        <div className="shrink-0 space-y-2 border-t border-[var(--mob-border)] pt-2">
           {valasztott ? (
             <>
               <div className="flex items-center justify-between px-1 text-sm">
@@ -290,12 +293,12 @@ export function MobilLeltar({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="flex max-h-[92dvh] max-w-sm flex-col gap-3 overflow-hidden">
         <DialogHeader>
           <DialogTitle className="text-base">Leltár — {site}</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-3">
+        <div className="flex flex-1 flex-col gap-3 overflow-y-auto">
           {valasztott === null ? (
             <>
               <p className="px-1 text-sm text-[var(--mob-muted)]">
@@ -445,12 +448,12 @@ export function MobilMozgatas({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
+      <DialogContent className="flex max-h-[92dvh] max-w-sm flex-col gap-3 overflow-hidden">
         <DialogHeader>
           <DialogTitle className="text-base">Mozgatás — {site}ról</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-3">
+        <div className="flex-1 space-y-3 overflow-y-auto">
           <div className="grid grid-cols-2 gap-2">
             {celok.map((c) => (
               <button
@@ -482,6 +485,9 @@ export function MobilMozgatas({
             ))}
           </div>
 
+        </div>
+
+        <div className="shrink-0 space-y-2 border-t border-[var(--mob-border)] pt-2">
           {valasztott ? (
             <>
               <div className="flex items-center justify-between px-1 text-sm">
