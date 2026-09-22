@@ -265,6 +265,7 @@ async function main() {
   await potoldMiskolciLerakotOnce(pool);
   await javitsdTataiFelrakotOnce(pool);
   await javitsdTompaladonyiCimetOnce(pool);
+  await irdBeVevoTelephelyCimeketOnce(pool);
   await vonjaVisszaKoraiTeljesitestOnce(pool);
   await vonjaVisszaKettosGpsTeljesitestOnce(pool);
   await vonjaVisszaKorokKoztiKettosGpsTeljesitestOnce(pool);
@@ -754,6 +755,75 @@ async function javitsdTompaladonyiCimetOnce(pool) {
     `[migrate] Tompaládony valódi címe beírva: lerakó ${lerakok.length} sor` +
       (lerakok.length ? ` (#${lerakok.map((r) => r.id).join(", #")})` : "") +
       `, felrakó ${felrakok.length} sor.`
+  );
+}
+
+// A visszatérő vevőink csupasz városnevei helyére a VALÓDI telephely-cím
+// (2026-09-22). A saját fuvarok lerakó mezőjébe évek óta csak a város kerül
+// — a sofőr fejből tudja, hová megy, a GPS-érintés-felismerés viszont
+// városközépre geokódol, több kilométeres tűréssel, így vagy nem ismeri fel
+// a megállást, vagy bármelyik városi megállás találatnak látszik. A Tata és
+// a Tompaládony címének beírása után élesben `~csak_varos` → `geo ✓`-ra
+// váltott a felismerés, a tűrés 4 km-ről 2 km-re esett.
+//
+// A címek forrása 200 Számlázz.hu-szállítólevél MEGJEGYZÉS-rovata (a
+// vevő-cím nem jó: az a cégjegyzékbeli székhely) — a teljes lista,
+// indoklással és a szándékosan kihagyott kétes esetekkel együtt:
+// lib/fuvarozas/lerako-telephelyek.ts. Ha ott változik egy cím, ITT IS
+// változtatni kell; a scripts/teszt-lerako-telephely.mts elhasal, ha a
+// kettő elcsúszik.
+//
+// CSAK `tipus = 'sajat'`: bér fuvarban ugyanaz a város másik céghez
+// tartozik (Nyíradonyba pl. a Bestpallethez is megyünk, nem csak a
+// Paulikhoz). És csak akkor cserél, ha a mező PONTOSAN a városnév — egy
+// már kiírt utcát nem ír felül.
+async function irdBeVevoTelephelyCimeketOnce(pool) {
+  const JAVITAS_KOD = "vevo-telephely-cimek-2026-09-22";
+  const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (mar.length > 0) return;
+
+  const HELYEK = [
+    ["Ebes", "4211 Ebes, Zsong-völgy 2."],
+    ["Ózd", "3600 Ózd, Kovács Hagyó Gyula út 7."],
+    ["Tuzsér", "4623 Tuzsér, Kálongatanya 0115/29 hrsz."],
+    ["Nyíradony", "4254 Nyíradony, Állomás utca 11."],
+    ["Nyírgelse", "4362 Nyírgelse, Debreceni u. 1."],
+    // Tompaládony (FABRIKA + 2000) már megvan: tompaladony-fabrika-cim-2026-09-22.
+  ];
+
+  const jelentes = [];
+  for (const [varos, cim] of HELYEK) {
+    const { rows: lerakok } = await pool.query(
+      `update fuvar_megbizasok
+          set lerako = $1
+        where tipus = 'sajat' and statusz <> 'torolt' and trim(lerako) ilike $2
+        returning id`,
+      [cim, varos]
+    );
+    const { rows: felrakok } = await pool.query(
+      `update fuvar_megbizasok
+          set felrako = $1
+        where tipus = 'sajat' and statusz <> 'torolt' and trim(felrako) ilike $2
+        returning id`,
+      [cim, varos]
+    );
+    if (lerakok.length || felrakok.length) {
+      jelentes.push(
+        `${varos}: lerakó ${lerakok.length}` +
+          (lerakok.length ? ` (#${lerakok.map((r) => r.id).join(", #")})` : "") +
+          `, felrakó ${felrakok.length}` +
+          (felrakok.length ? ` (#${felrakok.map((r) => r.id).join(", #")})` : "")
+      );
+    }
+  }
+
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1) on conflict (kod) do nothing`, [
+    JAVITAS_KOD,
+  ]);
+  console.log(
+    jelentes.length
+      ? `[migrate] Vevő-telephelyek pontos címe beírva — ${jelentes.join(" | ")}.`
+      : `[migrate] Vevő-telephelyek: nem volt csupasz városnevű saját megbízás.`
   );
 }
 
