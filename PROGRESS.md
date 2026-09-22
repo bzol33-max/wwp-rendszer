@@ -1414,3 +1414,27 @@ Kód ebben a körben nem változott — csak feltárás.
   „Csak az aktuális és a következő kettő" zárja vissza. A kinyitás a
   megjelenített naphoz kötődik, napváltáskor magától visszazárul.
 - A nagy „következő megálló" kártya és a 3 napos előnézet változatlan.
+
+## 2026-09-22 — sofőr megálló: Megérkeztem / Pakolás / Indulok (2-es terv)
+
+- A megálló három lépése mostantól három gomb, ugyanaz a felrakónál és a
+  lerakónál (Budaházi Zoltán választása öt terv közül — ld. a session
+  mockupjait). Új közös komponens: `LepesGombok`
+  (`components/erkezes/sofor-fuvar-nap.tsx`).
+- Mindhárom gomb végig látszik. A soron következő kiemelve, a többi
+  halványan, **de megnyomhatóan**: ha a sofőr csak induláskor veszi elő a
+  telefont, ne kelljen előtte két hamis időpontot végigkattintania. Ami
+  megvan, az zöld, órával jelölt sorrá alakul (ez a nyugtázás is).
+- Lezárt megállónál csak a ténylegesen rögzült lépések látszanak — a GPS-ből
+  késznek jelölt megállónál nem virít ott kiemelve a „Megérkeztem".
+- Megjelenik mindkét helyen: a nagy „következő megálló" kártyán (nagy
+  gombok) és minden megálló-soron a fuvar blokkjában (44 px-es gombok).
+- **Adat: migráció nélkül**, a `fuvar_megallo_allapot` meglévő mezőire:
+  Megérkeztem → `kezi_erkezes`, Pakolás → `varakozas_kezdete`, Indulok →
+  `varakozas_vege` + `kesz`/`kesz_at`. Az „Indulok" váltja a korábbi
+  FELRAKVA/LERAKVA gombot, ugyanazzal az írással.
+- A „Pakolás" tehát ugyanaz az állásidő, amit a diszpécser oldal
+  várakozásként mutat — egyben hagyva, külön oszlop nélkül. Ha később külön
+  kell, az egy migráció.
+- A régi külön „Várakozom / Várakozás vége" jelölő és az „Érkezés 13:24"
+  felirat kikerült: mindkettőt a három lépés sora mutatja.
