@@ -60,17 +60,31 @@ export default async function NyiregyhazaPage() {
             {penz.felvasarlasKeszpenz > 0 ? `−${formatFt(penz.felvasarlasKeszpenz)}` : formatFt(0)}
           </span>
         </div>
-        <div className="flex items-center justify-between py-1 text-sm">
-          <span className="text-[var(--at-muted)]">
-            Felvásárlás átutalással
-            {penz.atutalasDb > 0 && (
-              <span className="text-[var(--at-muted)]"> · {penz.atutalasDb} db</span>
-            )}
-          </span>
-          <span className="font-semibold tabular-nums text-[#185fa5] dark:text-[#85b7eb]">
-            {formatFt(penz.atutalasOsszeg)}
-            {penz.atutalasOsszeg > 0 && <span className="text-xs font-normal"> + ÁFA</span>}
-          </span>
+        <div className="py-1">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-[var(--at-muted)]">
+              Felvásárlás átutalással
+              {penz.atutalasDb > 0 && (
+                <span className="text-[var(--at-muted)]"> · {penz.atutalasDb} db</span>
+              )}
+            </span>
+            <span className="font-semibold tabular-nums text-[#185fa5] dark:text-[#85b7eb]">
+              {formatFt(penz.atutalasOsszeg)}
+              {penz.atutalasOsszeg > 0 && <span className="text-xs font-normal"> + ÁFA</span>}
+            </span>
+          </div>
+          {/* Melyik típus adja az összeget — enélkül csak egy szám lenne. */}
+          {penz.atutalasTipusok.map((t) => (
+            <div
+              key={t.tipus}
+              className="flex items-center justify-between pl-3 text-xs text-[#185fa5] dark:text-[#85b7eb]"
+            >
+              <span>
+                {t.tipus} · {t.qty} db
+              </span>
+              <span className="tabular-nums">{formatFt(t.osszeg)}</span>
+            </div>
+          ))}
         </div>
         <div className="flex items-center justify-between py-1 text-sm">
           <span className="text-[var(--at-muted)]">Egyéb kiadás</span>
@@ -95,12 +109,20 @@ export default async function NyiregyhazaPage() {
           <p className="text-sm text-[var(--at-muted)]">Ma még nem érkezett felvásárlás.</p>
         ) : (
           <div className="grid grid-cols-2 gap-2">
-            {osszefoglalo.tipusok.map((t) => (
-              <div key={t.tipus} className="rounded-lg bg-[var(--at-tile)] p-2.5">
-                <div className="text-[11px] text-[var(--at-muted)]">{t.tipus}</div>
-                <div className="text-xl font-bold tabular-nums text-[var(--at-positive)]">+{t.qty}</div>
-              </div>
-            ))}
+            {osszefoglalo.tipusok.map((t) => {
+              const atutalt = penz.atutalasTipusok.find((a) => a.tipus === t.tipus)?.qty ?? 0;
+              return (
+                <div key={t.tipus} className="rounded-lg bg-[var(--at-tile)] p-2.5">
+                  <div className="text-[11px] text-[var(--at-muted)]">{t.tipus}</div>
+                  <div className="text-xl font-bold tabular-nums text-[var(--at-positive)]">+{t.qty}</div>
+                  {atutalt > 0 && (
+                    <div className="text-[10px] font-medium text-[#185fa5] dark:text-[#85b7eb]">
+                      {atutalt === t.qty ? "átutalással" : `ebből ${atutalt} átutalással`}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

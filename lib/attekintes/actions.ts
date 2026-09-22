@@ -108,6 +108,8 @@ export type MaiPenzmozgas = {
   /** Ma átutalással vásárolt raklap nettó értéke és darabszáma — ez NEM a kasszából megy ki. */
   atutalasOsszeg: number;
   atutalasDb: number;
+  /** Mely típusok adják az átutalásos összeget (típusonként darab és nettó Ft). */
+  atutalasTipusok: { tipus: string; qty: number; osszeg: number }[];
 };
 
 /**
@@ -125,18 +127,26 @@ export async function getMaiPenzmozgas(): Promise<MaiPenzmozgas> {
        from kassza_movements
        where (created_at at time zone 'Europe/Budapest')::date = ${BUDAPEST_MA}`
     ),
-    query<{ osszeg: string; db: string }>(
-      `select coalesce(sum(total), 0) as osszeg, coalesce(sum(qty), 0) as db
-       from nyiregyhaza_purchases
-       where payment_method = 'atutalas'
-         and (created_at at time zone 'Europe/Budapest')::date = ${BUDAPEST_MA}`
+    query<{ type: string; osszeg: string; db: string }>(
+      `select t.name as type, sum(p.total) as osszeg, sum(p.qty) as db
+       from nyiregyhaza_purchases p
+       join pallet_types t on t.id = p.type_id
+       where p.payment_method = 'atutalas'
+         and (p.created_at at time zone 'Europe/Budapest')::date = ${BUDAPEST_MA}
+       group by t.name, t.sort_order
+       order by t.sort_order nulls last, t.name`
     ),
   ]);
   return {
     felvasarlasKeszpenz: Number(kassza[0]?.felvasarlas ?? 0),
     egyebKiadas: Number(kassza[0]?.egyeb ?? 0),
-    atutalasOsszeg: Number(atutalas[0]?.osszeg ?? 0),
-    atutalasDb: Number(atutalas[0]?.db ?? 0),
+    atutalasOsszeg: atutalas.reduce((sum, r) => sum + Number(r.osszeg), 0),
+    atutalasDb: atutalas.reduce((sum, r) => sum + Number(r.db), 0),
+    atutalasTipusok: atutalas.map((r) => ({
+      tipus: r.type,
+      qty: Number(r.db),
+      osszeg: Number(r.osszeg),
+    })),
   };
 }
 
