@@ -1769,3 +1769,46 @@ hová csak város, megbízó" + „azt is jelöld ha saját fuvar".
 - `npm run lint` az érintett fájlokra tiszta, `tsc --noEmit` tiszta, tesztek:
   teszt-erintes 67, teszt-jogosultsag 28, teszt-allapotgep 44,
   teszt-backfill-allapot 18, teszt-lerako-telephely 34 — zöld.
+
+## 2026-09-22 — Fordított tipus-elnevezés: hibajavítás + a minta Zoltán nézetén
+
+**Hiba, amit ugyanaznap ejtettünk és javítottunk.** A
+`fuvar_megbizasok.tipus` oszlop elnevezése történelmi okokból FORDÍTOTT a
+felülethez képest: `tipus='ber'` a „Saját fuvarok" fül, `tipus='sajat'` a
+„Bér fuvarok" fül (lásd `lib/fuvarozas/megbizasok.ts`
+getMaiValodiSajatFuvarok). Ezt a nyers oszlopot használtuk két helyen is:
+
+1. A sofőr „Saját fuvar" jelölése **pontosan fordítva** címkézett volna.
+   Javítva: a `SoforFuvarBlokk` már nem a nyers oszlopot adja tovább, hanem
+   egy eldöntött `sajatFuvar: boolean` mezőt.
+2. Az `irdBeVevoTelephelyCimeketOnce` `tipus = 'sajat'`-ra szűrt, tehát a
+   **bér** fuvarokon futott — a rossz halmazon. Új, helyes lépés:
+   `irdBeVevoTelephelyCimeketSajatraOnce` (kód
+   `vevo-telephely-cimek-sajat-2026-09-22`), `tipus = 'ber'`-re.
+   - A rossz lépés **egy sort** írt át (#7 tuzséri felrakó, egy bér fuvar).
+     Ezt gépből NEM vonjuk vissza: innen nem tudjuk megmondani, hogy az a
+     fuvar tényleg a Solinwest telepére ment-e. Budaházi Zoltán jelzést kapott.
+   - `SAJAT_FUVAR_DB_TIPUS = "ber"` konstans + teszteset rögzíti az irányt,
+     hogy ez ne fordulhasson elő újra.
+
+**A fuvardíj lekerült a sofőrökről.** Félreértés volt: a díj Budaházi
+Zoltán nézetére kellett, nem a sofőrökére. A sofőrök csempéin marad a két
+jelölés (Saját fuvar, Felpakolva), díj nélkül.
+
+**A minta átkerült Budaházi Zoltán mobil nézetére** (Áttekintés → Fuvar,
+kocsi-lapok): kocsinként a „Hol van most" után PONTOSAN KÉT megbízás — az
+aktuális és a következő. A csempén: megbízó, **honnan hová csak város**,
+fuvardíj, állapot-jelvény (Rakodik / Csúszik / Úton oda / Kész), és a két
+jelölés. Ha ma nincs több fuvar, a következő a legközelebbi jövőbeli.
+
+- Eddig az **összes** mai fuvar teljes háromoszlopos táblázata kint volt,
+  alatta a „Következő napok" listája — telefonon ez csak görgetnivaló.
+- A táblázat nem veszett el: a csempét kinyitva ugyanaz jön elő, a
+  hivatkozással és az áruval a tetején. A `FuvarFejsor` komponens kiesett,
+  a szerepét a csempe fejléce vette át.
+- A `JarmuMegbizasSor` megkapta a `fuvardij` + `fuvardijPenznem` mezőt, hogy
+  a jövőbeli megbízás csempéjén is ott legyen a díj.
+- Lint az érintett fájlokra tiszta, `tsc --noEmit` tiszta, tesztek:
+  teszt-erintes 67, teszt-import 101, teszt-jogosultsag 28,
+  teszt-allapotgep 44, teszt-backfill-allapot 18,
+  teszt-lerako-telephely 36 — zöld.

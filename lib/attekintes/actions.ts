@@ -16,7 +16,7 @@ import { getFuvarok } from "@/lib/fuvarozas/megbizasok";
 import { SAJAT_JARMUVEK, resolveJarmu, findJarmuByPlate, jarmuLabel, type SajatJarmu } from "@/lib/fuvarozas/vehicles";
 import { getSzamlaLista } from "@/lib/szamlak/actions";
 import type { SzamlaRow } from "@/lib/szamlak/szamla-constants";
-import type { FuvarRow } from "@/lib/fuvarozas/fuvar-constants";
+import type { FuvardijPenznem, FuvarRow } from "@/lib/fuvarozas/fuvar-constants";
 import { bontsMegallokra, varosNev } from "@/lib/fuvarozas/varos";
 
 // ---------------------------------------------------------------------------
@@ -258,6 +258,8 @@ export type JarmuMegbizasSor = {
   lerako: string;
   /** A felrakó + az összes lerakó állomás (több-megállós lerakónál szétbontva), útvonal-sorrendben. */
   megallok: JarmuMegbizasMegallo[];
+  fuvardij: number | null;
+  fuvardijPenznem: FuvardijPenznem;
   statusz: string;
 };
 
@@ -280,6 +282,8 @@ function megbizasSor(row: FuvarRow): JarmuMegbizasSor {
     felrako: row.felrako,
     lerako: row.lerako,
     megallok: megbizasMegallok(row.felrako, row.lerako),
+    fuvardij: row.fuvardij,
+    fuvardijPenznem: row.fuvardij_penznem,
     statusz: row.statusz,
   };
 }
