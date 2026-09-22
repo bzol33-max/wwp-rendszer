@@ -1388,3 +1388,15 @@ Kód ebben a körben nem változott — csak feltárás.
   sofőr fuvarlevél-fotója enélkül nem tölthető fel), **J3** (időablak-kinyerés
   az általános PDF-importba), **J4** (duplikátum-nyugtázás), **J7**
   (titokcsere), és a `git push`.
+
+## 2026-09-22 — sofőr mobil: csak Fuvarok és Profil csempe
+
+- A dolgozói mobil hubon (`/erkezes`,
+  `components/erkezes/erkezes-sajat-view.tsx`) a sofőr fiókok (Vadon Gergő,
+  Takács Micó — `role === "sofor"`) mostantól csak a **Fuvarok** és a
+  **Profil** csempét látják. A Jelenléti és a Feladatok csempe — és a hozzá
+  tartozó képernyő-útvonal — náluk elrejtve; a Készlet csempe eddig is a
+  `keszlet_sajat` jogtól függött, ami nekik nincs.
+- `ErkezesSajatView` visszakapta a `role` propot (`app/erkezes/page.tsx`
+  adja a `session.role`-t), ez dönti el a két csempét.
+- A többi dolgozói fiók nézete változatlan.
