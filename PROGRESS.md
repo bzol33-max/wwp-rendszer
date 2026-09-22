@@ -1643,3 +1643,20 @@ hierarchiát és a hiányzó adatokat tette hozzá.
   és fűtésnél más helyzet egy járó motorú álló kocsi, mint egy lekapcsolt.
 - A „Km óra" (`oraallasKm`) eddig is benne volt az adatban, csak nem látszott.
 - Az „Utolsó GPS-jel", „Következő" és a „Nem tervezett állás" változatlan.
+
+## 2026-09-22 — ÁB Speed és FABRIKA: egy telephely
+
+- Budaházi Zoltán: az ÁB Speed postázási címe (9662 Tompaládony, Ifjúság u.
+  20.) és a FABRIKA + 2000 Kft. telephelye (9662 Tompaládony, 0117/8 hrsz.)
+  **ugyanaz a fizikai hely**. A fuvarok lerakójába a FABRIKA hrsz-es címe
+  kerül, a postázásba az Ifjúság utcai — megjegyzésben rögzítve az ÁB Speed
+  partner-sablonjánál, hogy senki ne „javítsa" egyikre a másikat.
+- Az `S-WLLWR-2026-162` szállítólevél (Számlázz.hu PDF) megerősíti a címet:
+  „FABRIKA + 2000 Kft., 9662 Tompaládony, 0117/8 hrsz." — karakterre az,
+  amit a `javitsdTompaladonyiCimetOnce` beírt.
+- **A szállítólevél tartalmazza a rendszámot** („Rendszám: NMZ-492,XZV-926"),
+  a teljesítés dátumát és a mennyiséget (812 db használt EUR raklap) — tehát
+  elvileg alkalmas arra, hogy fuvarhoz párosítva magától kitöltse a saját
+  fuvarok hiányzó címeit. A Számlázz.hu-ból való lekérdezésük viszont még
+  nyitott kérdés (a `szamlazzhu-client.ts` csak számlát kérdez, `S-` előtagú
+  bizonylatot nem).

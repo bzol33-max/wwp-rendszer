@@ -104,6 +104,12 @@ export const PARTNEREK: readonly Partner[] = [
     ujjlenyomat: [/abspeed\.hu/i, /[ÁA]B\s*Speed/i],
     torzsVege: [/Lerakod[áa]st\s+k[öo]vet[őo]en/i],
     // Az iratukon kifejezetten szerepel: "Új postázási címűnk".
+    //
+    // FIGYELEM (Budaházi Zoltán, 2026-09-22): ez a cím és a FABRIKA + 2000
+    // Kft. telephelye (9662 Tompaládony, 0117/8 hrsz.) UGYANAZ a fizikai
+    // hely. A fuvarok lerakójába a FABRIKA hrsz-es címe kerül, a postázásba
+    // ez az Ifjúság utcai — a kettő nem ellentmondás, ne "javítsa" senki
+    // egyikre a másikat.
     postazasiCim: "9662 Tompaládony, Ifjúság u. 20.",
     fizetesiHataridoNap: 60,
     hivatkozasNeve: "Pozíciószám",
