@@ -50,7 +50,7 @@ import { FeladatokMobilCsempe } from "@/components/erkezes/feladatok-mobil-csemp
 import { getSiteSnapshot, type IncomingRow } from "@/lib/keszlet/actions";
 import { MovementForm } from "@/components/keszlet/movement-form";
 import { BejovoSzallitmanyok } from "@/components/keszlet/bejovo-szallitmanyok";
-import { MobilLeltar, MobilSzetvalogatas } from "@/components/erkezes/keszlet-mobil";
+import { MobilLeltar, MobilMozgatas, MobilSzetvalogatas } from "@/components/erkezes/keszlet-mobil";
 import type { Direction } from "@/lib/keszlet/actions";
 import {
   acceptAdvance,
@@ -720,6 +720,7 @@ function KeszletScreen({
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [szetvalogatas, setSzetvalogatas] = useState<string | null>(null);
   const [rogzites, setRogzites] = useState<Direction | null>(null);
+  const [mozgatasOpen, setMozgatasOpen] = useState(false);
 
   const load = useCallback(async () => {
     const snap = await getSiteSnapshot(site);
@@ -837,7 +838,7 @@ function KeszletScreen({
               <Button size="sm" onClick={() => setRogzites("ki")}>
                 Kiadás
               </Button>
-              <Button size="sm" variant="outline" onClick={() => setRogzites("mozgatas")}>
+              <Button size="sm" variant="outline" onClick={() => setMozgatasOpen(true)}>
                 Mozgatás másik telepre
               </Button>
               <Button size="sm" variant="outline" onClick={() => setInventoryOpen(true)}>
@@ -880,6 +881,19 @@ function KeszletScreen({
 
           {/* Friss csatolás minden megnyitáskor: így a párbeszéd üres állapotról
               indul, és nem kell effektben nullázni. */}
+          {/* Telephelyek közti mozgatás: telefonra szabott párbeszéd, nem a
+              desktop űrlap — ld. keszlet-mobil.tsx. */}
+          {mozgatasOpen && (
+            <MobilMozgatas
+              site={site}
+              celok={MOZGATAS_CELOK[site]}
+              keszlet={stock}
+              open
+              onOpenChange={setMozgatasOpen}
+              onRecorded={load}
+            />
+          )}
+
           {inventoryOpen && (
             <MobilLeltar
               site={site}

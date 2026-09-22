@@ -11,7 +11,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { getSiteSnapshot, recordInventoryCount, recordSzetvalogatas } from "@/lib/keszlet/actions";
+import {
+  getSiteSnapshot,
+  recordInventoryCount,
+  recordMovements,
+  recordSzetvalogatas,
+} from "@/lib/keszlet/actions";
 
 // A telepi mobil nézet saját, ujjra méretezett párbeszédei: nagy csempék és
 // számbillentyűzet, mert a raktárban (kesztyűben, egy kézzel) a rendszer
@@ -62,11 +67,13 @@ function Billentyuzet({
 function Csempe({
   cim,
   ertek,
+  also,
   aktiv,
   onClick,
 }: {
   cim: string;
   ertek?: number;
+  also?: string;
   aktiv: boolean;
   onClick: () => void;
 }) {
@@ -83,6 +90,7 @@ function Csempe({
     >
       <div className="text-[11px] leading-tight text-[var(--mob-muted)]">{cim}</div>
       <div className="text-lg font-bold tabular-nums">{ertek ? ertek : "–"}</div>
+      {also && <div className="text-[10px] leading-tight text-[var(--mob-muted)]">{also}</div>}
     </button>
   );
 }
@@ -365,6 +373,147 @@ export function MobilLeltar({
               </div>
             </>
           )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Telephelyek közti mozgatás telefonról: fent a cél telep, alatta a típusok
+ * csempéi (rajtuk a saját készlet), a kiválasztotthoz nagy billentyűzeten
+ * adható meg a darabszám. Ugyanaz a mozdulat, mint a szétválogatásnál.
+ *
+ * A mennyiség a forrás telep készletéből azonnal lejön; a cél telepen csak
+ * az ottani átvétel ("okézás") után kerül készletbe.
+ */
+export function MobilMozgatas({
+  site,
+  celok,
+  keszlet,
+  open,
+  onOpenChange,
+  onRecorded,
+}: {
+  site: string;
+  celok: string[];
+  keszlet: Record<string, number>;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onRecorded: () => void | Promise<void>;
+}) {
+  const [cel, setCel] = useState(celok[0] ?? "");
+  const [valasztott, setValasztott] = useState<string | null>(null);
+  const [ertekek, setErtekek] = useState<Record<string, number>>({});
+  const [mentes, setMentes] = useState(false);
+
+  // Csak abból lehet küldeni, amiből van készlet.
+  const tipusok = Object.entries(keszlet)
+    .filter(([, qty]) => qty > 0)
+    .map(([type]) => type);
+  const osszes = Object.values(ertekek).reduce((s, q) => s + q, 0);
+  const tullepes = tipusok.filter((t) => (ertekek[t] ?? 0) > (keszlet[t] ?? 0));
+  const beirt = valasztott ? String(ertekek[valasztott] ?? "") : "";
+
+  function billentyu(uj: string) {
+    if (!valasztott) return;
+    setErtekek((prev) => {
+      const kov = { ...prev };
+      if (uj === "") delete kov[valasztott];
+      else kov[valasztott] = Number(uj);
+      return kov;
+    });
+  }
+
+  async function mentsd() {
+    const items = Object.entries(ertekek)
+      .filter(([, qty]) => qty > 0)
+      .map(([type, qty]) => ({ type, qty, targetSite: cel }));
+    if (items.length === 0 || tullepes.length > 0 || !cel) return;
+    setMentes(true);
+    try {
+      await recordMovements({ site, direction: "mozgatas", items });
+      await onRecorded();
+      toast.success(`${osszes} db elindítva ${cel} felé — ott átvételre vár.`);
+      onOpenChange(false);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Nem sikerült rögzíteni.");
+    } finally {
+      setMentes(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="text-base">Mozgatás — {site}ról</DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-2">
+            {celok.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setCel(c)}
+                className={cn(
+                  "rounded-xl border-2 py-2.5 text-sm font-semibold",
+                  cel === c
+                    ? "border-[var(--mob-accent)] bg-[var(--mob-tile)]"
+                    : "border-[var(--mob-border)] bg-[var(--mob-card)] text-[var(--mob-muted)]"
+                )}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            {tipusok.map((t) => (
+              <Csempe
+                key={t}
+                cim={t}
+                ertek={ertekek[t]}
+                also={`készlet ${keszlet[t]}`}
+                aktiv={valasztott === t}
+                onClick={() => setValasztott(t)}
+              />
+            ))}
+          </div>
+
+          {valasztott ? (
+            <>
+              <div className="flex items-center justify-between px-1 text-sm">
+                <span className="font-medium">{valasztott}</span>
+                <span className="text-xl font-bold tabular-nums">{beirt || "0"}</span>
+              </div>
+              <Billentyuzet ertek={beirt} onChange={billentyu} />
+            </>
+          ) : (
+            <p className="px-1 text-sm text-[var(--mob-muted)]">
+              Koppints a típusra, amit viszel, aztán írd be a darabszámot.
+            </p>
+          )}
+
+          {tullepes.length > 0 && (
+            <p className="text-xs text-[var(--mob-negative)]">
+              Több van beírva, mint amennyi a telepen van: {tullepes.join(", ")}.
+            </p>
+          )}
+
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)} disabled={mentes}>
+              Mégse
+            </Button>
+            <Button
+              className="flex-1"
+              onClick={mentsd}
+              disabled={osszes === 0 || tullepes.length > 0 || mentes}
+            >
+              {mentes ? "Küldés…" : `Küldés — ${osszes} db`}
+            </Button>
+          </div>
         </div>
       </DialogContent>
     </Dialog>
