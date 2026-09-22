@@ -960,6 +960,12 @@ alter table alkalmazottak add column if not exists szabadsag_keret_datum date;
 -- sofőr saját jelölése, amiből a diszpécser látja, mikor számíthat rá, és
 -- amiből utólag kiderül, miért állt a kocsi.
 --
+-- FIGYELEM (2026-09-22, ugyanaznap): a telefonos felületet Budaházi Zoltán
+-- kérésére KIVETTÜK — egyelőre nem figyeljük a pihenőket —, így ez a tábla
+-- most üresen áll, és semmi nem ír bele. Szándékosan nem dobjuk el: a repó
+-- konvenciója szerint a visszavonás nem `drop` (ld. db/migrations/README.md),
+-- és ha a jelölés visszakerül, csak a felületet kell visszatenni.
+--
 -- A két pihenőnek kezdete és vége van (koppint, amikor leáll, és amikor
 -- továbbindul), a vezetés vége viszont egyetlen pillanat, ott a `vege`
 -- üresen marad. Naponta és típusonként egy sor lehet — a téves koppintás

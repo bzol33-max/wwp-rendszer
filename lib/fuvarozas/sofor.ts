@@ -287,23 +287,11 @@ export type SoforFuvarBlokk = {
   dokumentumok: SoforDokumentum[];
 };
 
-/** A nap két pihenője és a vezetés vége — a sofőr saját jelölése. */
-export type SoforMunkanapTipus = "piheno1" | "piheno2" | "vezetes_vege";
-
-export type SoforMunkanapBejegyzes = {
-  tipus: SoforMunkanapTipus;
-  kezdet: Date;
-  /** A két pihenőnél a továbbindulás; a vezetés végénél mindig null. */
-  vege: Date | null;
-};
-
 export type SoforNap = {
   napISO: string;
   sofor: string;
   jarmuLabel: string;
   fuvarok: SoforFuvarBlokk[];
-  /** A nap pihenői és a vezetés vége, típusonként legfeljebb egy sor. */
-  munkanap: SoforMunkanapBejegyzes[];
   /** A soron következő megálló — az első, ami még nincs kész. */
   kovetkezo: { fuvarId: string; megalloIndex: number } | null;
   /** Hibaszöveg, ha az élő GPS-lekérdezés nem sikerült (a megbízások ettől függetlenül látszanak). */
@@ -471,20 +459,11 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
 
   const kovetkezoMegallo = fuvarok.flatMap((f) => f.megallok).find((m) => !m.kesz);
 
-  const munkanapSorok = await query<{ tipus: SoforMunkanapTipus; kezdet: Date; vege: Date | null }>(
-    `select tipus, kezdet, vege
-       from sofor_munkanap
-      where alkalmazott_id = $1 and nap = $2::date
-      order by kezdet asc`,
-    [employeeId, nap]
-  );
-
   return {
     napISO: nap,
     sofor: jarmu.sofor,
     jarmuLabel: jarmu.label,
     fuvarok,
-    munkanap: munkanapSorok.map((r) => ({ tipus: r.tipus, kezdet: r.kezdet, vege: r.vege })),
     kovetkezo: kovetkezoMegallo
       ? { fuvarId: kovetkezoMegallo.fuvarId, megalloIndex: kovetkezoMegallo.megalloIndex }
       : null,
@@ -687,54 +666,6 @@ export async function rogzitPozicioszamot(fuvarId: string, szam: string): Promis
  * rakodóhelyi várakozás pótdíjas. Ez jelzés a diszpécsernek (GPS lap,
  * megbízás részletei), nem automatikus számlázás.
  */
-/**
- * A nap két pihenője és a vezetés vége (2026-09-22, Budaházi Zoltán kérése).
- *
- * Egy koppintás indít, a következő zár: a pihenőnél a `vege` mező kerül be,
- * így a diszpécser a hosszát is látja. A vezetés végének nincs hossza, ott a
- * második koppintás VISSZAVONJA a jelölést — a téves koppintást a sofőrnek a
- * telefonon kell tudnia javítani, nem telefonálással.
- *
- * A nap a megjelenített napból jön, nem a szerver órájából: éjfél után
- * visszanézve is a helyes naphoz kerül, és a nézet mindig azt írja, amit lát.
- */
-export async function jelolMunkanapot(
-  employeeId: string,
-  napISO: string,
-  tipus: SoforMunkanapTipus
-): Promise<void> {
-  await requireSajatVagyModulJog({
-    employeeId,
-    sajatModule: "fuvarozas_sajat",
-    modul: "fuvarozas",
-    kind: "edit",
-  });
-  const soforNev = (await requireSession()).name;
-
-  const meglevo = await query<{ id: string; vege: Date | null }>(
-    `select id::text, vege from sofor_munkanap
-      where alkalmazott_id = $1 and nap = $2::date and tipus = $3`,
-    [employeeId, napISO, tipus]
-  );
-  const sor = meglevo[0];
-
-  if (!sor) {
-    await query(
-      `insert into sofor_munkanap (alkalmazott_id, nap, tipus, kezdet, rogzitette)
-       values ($1, $2::date, $3, now(), $4)
-       on conflict (alkalmazott_id, nap, tipus) do nothing`,
-      [employeeId, napISO, tipus, soforNev]
-    );
-  } else if (tipus === "vezetes_vege" || sor.vege) {
-    // Már lezárt pihenő vagy a vezetés vége: a koppintás visszavonás.
-    await query(`delete from sofor_munkanap where id = $1`, [sor.id]);
-  } else {
-    await query(`update sofor_munkanap set vege = now() where id = $1`, [sor.id]);
-  }
-
-  revalidatePath("/erkezes");
-}
-
 export async function jelolVarakozast(fuvarId: string, megalloIndex: number, muvelet: "kezd" | "befejez"): Promise<void> {
   await requireAnyEditPermission(["fuvarozas", "fuvarozas_sajat"]);
   const soforNev = (await requireSession()).name;
