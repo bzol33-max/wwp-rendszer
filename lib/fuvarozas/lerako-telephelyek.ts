@@ -35,6 +35,21 @@
 // cím, ami NEM a Pauliké. Aki ezt a szótárt bekapcsolja valahová, a
 // `tipus = 'sajat'` szűrést NE hagyja el.
 //
+// AMI NINCS A SZÓTÁRBAN, DE A SZÁLLÍTÓLEVELEKEN OTT VAN: idegen rendszámok
+// (STH-666 14 bizonylaton, SNN-753/WGF-708, SNN-753/WEN-579,
+// ROD-985/WDY-633, RXF-098, WDY-632). Ezek NEM a mi kocsijaink és nem is
+// alvállalkozók: a vevő küldött kocsit az áruért (Budaházi Zoltán,
+// 2026-09-22). Ilyenkor nincs fuvarunk — se megbízás, se GPS, se megálló.
+// A `SAJAT_JARMUVEK` listába tehát nem valók, és ha valaha szállítólevelet
+// párosítunk fuvarhoz, ezekből NEM szabad fuvart csinálni. (Egy elgépelés
+// is van köztük: NMZ-497 a TREBOR SAMAT levelén, az Micó NMZ-492-je.)
+//
+// ZÁHONY SZÁNDÉKOSAN HIÁNYZIK, és nem is kell pótolni: a Solinwest ottani
+// telepének utcája sehonnan nem jött elő, de a sofőr a helyszínen az
+// „Itt vagyok" gombbal rögzíti a kocsi koordinátáját a címhez
+// (rogzitMegalloHelyet, lib/fuvarozas/sofor.ts) — a csupasz városnév ettől
+// ugyanolyan jól felismerhetővé válik, mint egy pontos cím.
+//
 // NEM "use server" fájl — sima adatmodul, tesztből is hívható.
 
 export type LerakoTelephely = {

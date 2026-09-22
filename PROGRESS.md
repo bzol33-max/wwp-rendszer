@@ -1699,3 +1699,11 @@ hierarchiát és a hiányzó adatokat tette hozzá.
   `SAJAT_JARMUVEK` listában: `STH-666` (14 db bizonylat), `SNN-753/WGF-708`,
   `SNN-753/WEN-579`, `ROD-985/WDY-633`, `RXF-098`, `WDY-632`. Egy elgépelés
   is: `NMZ-497` a `NMZ-492` helyett.
+- **Az idegen rendszámok magyarázata** (Budaházi Zoltán): ilyenkor a vevő
+  küldött kocsit az áruért, tehát nincs fuvarunk — se megbízás, se GPS. A
+  `SAJAT_JARMUVEK` listába nem valók, és szállítólevél-párosításnál sem
+  szabad belőlük fuvart csinálni. A modulban rögzítve.
+- **Záhony nem szorul pótlásra:** a sofőr a helyszínen az „Itt vagyok"
+  gombbal rögzíti a kocsi koordinátáját a címhez (`rogzitMegalloHelyet`), és
+  a csupasz városnév ettől ugyanolyan felismerhető lesz, mint egy pontos cím.
+  A gomb pontosan akkor jelenik meg, amikor kell (`helyBizonytalan`).
