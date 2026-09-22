@@ -12,7 +12,7 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Camera, Check, ChevronLeft, ChevronRight, Clock, Copy, FileText, Hash, LocateFixed, MapPin, MessageSquareWarning, Navigation, Phone } from "lucide-react";
+import { AlertTriangle, Camera, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Coffee, Copy, FileText, Hash, LocateFixed, MapPin, MessageSquareWarning, Moon, Navigation, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -21,12 +21,15 @@ import {
   getSoforNap,
   jelezGondot,
   jelolMegerkeztem,
+  jelolMunkanapot,
   jelolVarakozast,
   markMegalloKesz,
   rogzitMegalloHelyet,
   rogzitPozicioszamot,
   type SoforFuvarBlokk,
   type SoforMegalloSor,
+  type SoforMunkanapBejegyzes,
+  type SoforMunkanapTipus,
   type SoforNap,
 } from "@/lib/fuvarozas/sofor";
 import { getKovetkezoNapokElonezet, type KovetkezoNap } from "@/lib/fuvarozas/actions";
@@ -501,90 +504,18 @@ function FuvarBlokk({
 
 }) {
   const fotoInput = useRef<HTMLInputElement>(null);
-  const honnan = blokk.megallok.find((m) => m.tipus === "felrako")?.varos;
-  const hova = [...blokk.megallok].reverse().find((m) => m.tipus === "lerako")?.varos;
+  const [reszletekNyitva, setReszletekNyitva] = useState(false);
   const hivatkozas = blokk.reiseId ?? blokk.pozicioszam;
   let lerakoSorszam = 0;
 
+  // 4-es terv (Budaházi Zoltán, 2026-09-22): a MEGÁLLÓ van elöl a három
+  // gombbal, a megbízás adatai mögötte, egy csíkban, ami koppintásra nyílik.
+  // Az arány dönt: a megbízás adatait naponta kétszer nézi meg (induláskor és
+  // a kapuban), a megállót és a gombokat minden rakodásnál — így a gombok nem
+  // csúsznak le a képernyőről egy hosszú cím vagy megjegyzés miatt.
   return (
-    <div className="flex flex-col rounded-xl border border-[var(--mob-border)] bg-[var(--mob-card)]">
-      <div className="flex flex-col gap-1 px-3 pb-2 pt-3">
-        <div className="flex items-start justify-between gap-2">
-          <span className="truncate text-sm font-semibold">{blokk.megrendelo ?? "Ismeretlen megbízó"}</span>
-          {blokk.csuszo && (
-            <span className="shrink-0 rounded-full bg-[var(--mob-tile)] px-2 py-0.5 text-[10px] font-semibold text-[var(--mob-muted)]">
-              Korábbról csúszik
-            </span>
-          )}
-        </div>
-        {honnan && hova && (
-          <span className="text-xs text-[var(--mob-muted)]">
-            {honnan} – {hova}
-          </span>
-        )}
-        {!hivatkozas && (
-          <button
-            type="button"
-            disabled={pending}
-            onClick={() => onPozicioszam(blokk.fuvarId)}
-            className="flex w-fit items-center gap-1.5 rounded-md bg-[var(--mob-negative)]/10 px-2 py-1 text-xs font-medium text-[var(--mob-negative)]"
-            title="A megbízásról nem sikerült kiolvasni a pozíciószámot. Ha a kapuban megkapod, írd be — a számlára is ez kerül."
-          >
-            <Hash className="h-3.5 w-3.5" />
-            Nincs pozíciószám · beírom
-          </button>
-        )}
-        {hivatkozas && (
-          <button
-            type="button"
-            onClick={() => {
-              navigator.clipboard
-                ?.writeText(hivatkozas)
-                .then(() => toast.success("Másolva."))
-                .catch(() => toast.error("Nem sikerült másolni."));
-            }}
-            className="flex w-fit items-center gap-1.5 rounded-md bg-[var(--mob-tile)] px-2 py-1 text-sm font-semibold tabular-nums"
-            title="Koppints a vágólapra másoláshoz — a kapuban ezt a számot kérik"
-          >
-            {blokk.reiseId ? "Út ID" : "Poz"} {hivatkozas}
-            <Copy className="h-3.5 w-3.5 text-[var(--mob-muted)]" />
-          </button>
-        )}
-        {/* A megbízáson szereplő szabad szöveges időpont. Sok megbízáson csak
-            ez van, időablak nincs — enélkül hiányzott a "hánykor", amiért a
-            sofőrnek eddig át kellett küldeni az e-mailt. */}
-        {blokk.idopont && (
-          <span className="flex w-fit items-center gap-1.5 rounded-md bg-[var(--mob-tile)] px-2 py-1 text-xs font-medium">
-            <Clock className="h-3.5 w-3.5 text-[var(--mob-muted)]" />
-            {blokk.idopont}
-          </span>
-        )}
-        {(blokk.aru || blokk.mennyiseg || blokk.suly) && (
-          <span className="text-xs text-[var(--mob-muted)]">
-            {[blokk.mennyiseg, blokk.aru, blokk.suly].filter(Boolean).join(" · ")}
-          </span>
-        )}
-        {blokk.megjegyzes && <span className="text-xs text-[var(--mob-muted)]">{blokk.megjegyzes}</span>}
-        {/* Kapcsolattartó: koppintásra hív. A kapuban és gond esetén ezt a
-            számot kell tárcsázni — eddig ez is csak az e-mailben volt meg. */}
-        {blokk.kapcsolat && (
-          <a
-            href={`tel:${blokk.kapcsolat.telefon.replace(/\s+/g, "")}`}
-            className="flex w-fit items-center gap-1.5 rounded-md bg-[var(--mob-tile)] px-2 py-1 text-xs font-medium"
-          >
-            <Phone className="h-3.5 w-3.5 text-[var(--mob-muted)]" />
-            {[blokk.kapcsolat.nev, blokk.kapcsolat.telefon].filter(Boolean).join(" · ")}
-          </a>
-        )}
-        {blokk.masRendszam && (
-          <span className="flex items-center gap-1 text-xs font-medium text-[var(--mob-negative)]">
-            <AlertTriangle className="h-3.5 w-3.5" />
-            A megbízáson más rendszám áll: {blokk.masRendszam}
-          </span>
-        )}
-      </div>
-
-      <div className="flex flex-col">
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-col overflow-hidden rounded-xl border border-[var(--mob-border)] bg-[var(--mob-card)]">
         {blokk.megallok.map((m) => {
           if (m.tipus === "lerako") lerakoSorszam++;
           const sorszam =
@@ -608,51 +539,219 @@ function FuvarBlokk({
         })}
       </div>
 
-      {/* A Duvenbeckhez KETTŐ irat tartozik: a megbízás (TA…) az utasításokkal
-          és az időablakokkal, a rakománylista (FRALI…) a kapuban kért tiszta
-          címekkel és referenciákkal. Ezért nem egy "Dokumentum" gomb van. */}
-      <div className="flex flex-wrap gap-2 border-t border-[var(--mob-border)] px-3 py-2">
-        {/* Fuvarlevél fotó: a lerakásnál lefotózott CMR/fuvarlevél a Drive-ba
-            kerül és a fuvarhoz kötődik — a Számla/Posta oldal aznap látja. */}
-        <input
-          ref={fotoInput}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="hidden"
-          onChange={(e) => {
-            const fajl = e.target.files?.[0];
-            e.target.value = "";
-            if (fajl) onFoto(blokk.fuvarId, fajl);
-          }}
+      {/* Figyelmeztetések SOSEM kerülnek a csukott rész mögé. */}
+      {blokk.csuszo && (
+        <span className="w-fit rounded-full bg-[var(--mob-tile)] px-2 py-0.5 text-[11px] font-semibold text-[var(--mob-muted)]">
+          Korábbról csúszik
+        </span>
+      )}
+      {blokk.masRendszam && (
+        <span className="flex items-center gap-1 text-xs font-medium text-[var(--mob-negative)]">
+          <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+          A megbízáson más rendszám áll: {blokk.masRendszam}
+        </span>
+      )}
+      {!hivatkozas && (
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => onPozicioszam(blokk.fuvarId)}
+          className="flex w-fit items-center gap-1.5 rounded-md bg-[var(--mob-negative)]/10 px-2 py-1 text-xs font-medium text-[var(--mob-negative)]"
+          title="A megbízásról nem sikerült kiolvasni a pozíciószámot. Ha a kapuban megkapod, írd be — a számlára is ez kerül."
+        >
+          <Hash className="h-3.5 w-3.5" />
+          Nincs pozíciószám · beírom
+        </button>
+      )}
+
+      {/* A csukott csík. Az Út ID / pozíciószám itt is nagy betűs, mert a
+          kapuban ezt kérik — így oda sem kell kinyitni a részleteket. */}
+      <button
+        type="button"
+        onClick={() => setReszletekNyitva((v) => !v)}
+        className="flex items-center justify-between gap-2 rounded-xl border border-[var(--mob-border)] bg-[var(--mob-card)] px-3 py-2.5 text-left"
+      >
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate text-xs font-semibold">{blokk.megrendelo ?? "Ismeretlen megbízó"}</span>
+          {hivatkozas ? (
+            <span className="truncate text-lg font-bold tabular-nums leading-tight">{hivatkozas}</span>
+          ) : (
+            <span className="text-xs text-[var(--mob-muted)]">a megbízás adatai</span>
+          )}
+        </span>
+        <ChevronDown
+          className={cn(
+            "h-4 w-4 shrink-0 text-[var(--mob-muted)] transition-transform",
+            reszletekNyitva && "rotate-180"
+          )}
         />
-        <Button size="sm" variant="outline" disabled={pending} className="h-9 border-[var(--mob-border)]" onClick={() => fotoInput.current?.click()} title="Fuvarlevél / CMR lefotózása">
-          <Camera className="h-4 w-4" />
-          Fuvarlevél fotó
-        </Button>
-        <Button size="sm" variant="outline" disabled={pending} className="h-9 border-[var(--mob-border)]" onClick={() => onGond(blokk.fuvarId)} title="Gond van a fuvarral — üzenet a diszpécsernek">
-          <MessageSquareWarning className="h-4 w-4" />
-          Gond van
-        </Button>
-        {blokk.dokumentumok.length === 0 ? (
-          <span className="self-center text-xs text-[var(--mob-muted)]">Nincs irat a fuvarhoz.</span>
-        ) : (
-          blokk.dokumentumok.map((d) => (
-            <Button
-              key={d.id}
-              size="sm"
-              variant="outline"
-              className="h-9 border-[var(--mob-border)]"
-              onClick={() => window.open(`/api/fuvarozas/dokumentum/${d.id}`, "_blank", "noopener,noreferrer")}
-              title={d.fajlnev ?? undefined}
+      </button>
+
+      {reszletekNyitva && (
+        <div className="flex flex-col gap-2 rounded-xl border border-[var(--mob-border)] bg-[var(--mob-card)] p-3">
+          {hivatkozas && (
+            <button
+              type="button"
+              onClick={() => {
+                navigator.clipboard
+                  ?.writeText(hivatkozas)
+                  .then(() => toast.success("Másolva."))
+                  .catch(() => toast.error("Nem sikerült másolni."));
+              }}
+              className="flex w-fit items-center gap-1.5 rounded-md bg-[var(--mob-tile)] px-2 py-1 text-sm font-semibold tabular-nums"
+              title="Koppints a vágólapra másoláshoz — a kapuban ezt a számot kérik"
             >
-              <FileText className="h-4 w-4" />
-              {DOK_CIMKE[d.tipus ?? "egyeb"] ?? "Irat"}
-              {d.verzio !== null && ` v${d.verzio}`}
+              {blokk.reiseId ? "Út ID" : "Poz"} {hivatkozas}
+              <Copy className="h-3.5 w-3.5 text-[var(--mob-muted)]" />
+            </button>
+          )}
+          <AdatSor cimke="Megbízó" ertek={blokk.megrendelo} />
+          <AdatSor cimke="Időpont" ertek={blokk.idopont} />
+          <AdatSor
+            cimke="Áru"
+            ertek={[blokk.mennyiseg, blokk.aru, blokk.suly].filter(Boolean).join(" · ") || null}
+          />
+          <AdatSor cimke="Megjegyzés" ertek={blokk.megjegyzes} />
+          {blokk.kapcsolat && (
+            <div className="grid grid-cols-[76px_minmax(0,1fr)] gap-2 text-xs">
+              <span className="font-semibold uppercase tracking-wide text-[var(--mob-muted)]">Telefon</span>
+              <a
+                href={`tel:${blokk.kapcsolat.telefon.replace(/\s+/g, "")}`}
+                className="flex items-center gap-1.5 font-semibold text-[var(--mob-positive)]"
+              >
+                <Phone className="h-3.5 w-3.5 shrink-0" />
+                {[blokk.kapcsolat.nev, blokk.kapcsolat.telefon].filter(Boolean).join(" · ")}
+              </a>
+            </div>
+          )}
+
+          {/* A Duvenbeckhez KETTŐ irat tartozik: a megbízás (TA…) az
+              utasításokkal és az időablakokkal, a rakománylista (FRALI…) a
+              kapuban kért tiszta címekkel. Ezért nem egy "Dokumentum" gomb van. */}
+          <div className="flex flex-wrap gap-2 border-t border-[var(--mob-border)] pt-2">
+            <input
+              ref={fotoInput}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              onChange={(e) => {
+                const fajl = e.target.files?.[0];
+                e.target.value = "";
+                if (fajl) onFoto(blokk.fuvarId, fajl);
+              }}
+            />
+            <Button size="sm" variant="outline" disabled={pending} className="h-9 border-[var(--mob-border)]" onClick={() => fotoInput.current?.click()} title="Fuvarlevél / CMR lefotózása">
+              <Camera className="h-4 w-4" />
+              Fuvarlevél fotó
             </Button>
-          ))
-        )}
-      </div>
+            <Button size="sm" variant="outline" disabled={pending} className="h-9 border-[var(--mob-border)]" onClick={() => onGond(blokk.fuvarId)} title="Gond van a fuvarral — üzenet a diszpécsernek">
+              <MessageSquareWarning className="h-4 w-4" />
+              Gond van
+            </Button>
+            {blokk.dokumentumok.length === 0 ? (
+              <span className="self-center text-xs text-[var(--mob-muted)]">Nincs irat a fuvarhoz.</span>
+            ) : (
+              blokk.dokumentumok.map((d) => (
+                <Button
+                  key={d.id}
+                  size="sm"
+                  variant="outline"
+                  className="h-9 border-[var(--mob-border)]"
+                  onClick={() => window.open(`/api/fuvarozas/dokumentum/${d.id}`, "_blank", "noopener,noreferrer")}
+                  title={d.fajlnev ?? undefined}
+                >
+                  <FileText className="h-4 w-4" />
+                  {DOK_CIMKE[d.tipus ?? "egyeb"] ?? "Irat"}
+                  {d.verzio !== null && ` v${d.verzio}`}
+                </Button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Egy címke–érték sor a megbízás kinyitott adatlapján. Üres értéknél nem jelenik meg. */
+function AdatSor({ cimke, ertek }: { cimke: string; ertek: string | null | undefined }) {
+  if (!ertek?.trim()) return null;
+  return (
+    <div className="grid grid-cols-[76px_minmax(0,1fr)] gap-2 text-xs">
+      <span className="font-semibold uppercase tracking-wide text-[var(--mob-muted)]">{cimke}</span>
+      <span>{ertek}</span>
+    </div>
+  );
+}
+
+/**
+ * A nap fix gombjai: a két pihenő és a vezetés vége (Budaházi Zoltán,
+ * 2026-09-22). Szándékosan a fuvaroktól FÜGGETLEN — a pihenő nem egy
+ * megbízáshoz tartozik, hanem a naphoz, és akkor is jelölhető, ha éppen
+ * nincs aktív fuvar.
+ *
+ * A sáv a görgethető tartalom tetejére tapad, így vezetés közben sosem kell
+ * megkeresni. Egy koppintás indít, a következő zár; a vezetés végénél a
+ * második koppintás visszavon (téves koppintás javítása telefonálás nélkül).
+ */
+function MunkanapSav({
+  bejegyzesek,
+  pending,
+  onJelol,
+}: {
+  bejegyzesek: SoforMunkanapBejegyzes[];
+  pending: boolean;
+  onJelol: (tipus: SoforMunkanapTipus) => void;
+}) {
+  const gombok: { tipus: SoforMunkanapTipus; cimke: string; Ikon: typeof Coffee }[] = [
+    { tipus: "piheno1", cimke: "Pihenő 1", Ikon: Coffee },
+    { tipus: "piheno2", cimke: "Pihenő 2", Ikon: Coffee },
+    { tipus: "vezetes_vege", cimke: "Vezetés vége", Ikon: Moon },
+  ];
+
+  return (
+    <div className="sticky top-0 z-10 -mx-4 flex gap-1.5 border-b border-[var(--mob-border)] bg-[var(--mob-bg)] px-4 pb-2 pt-1">
+      {gombok.map(({ tipus, cimke, Ikon }) => {
+        const b = bejegyzesek.find((x) => x.tipus === tipus);
+        const fut = Boolean(b && !b.vege && tipus !== "vezetes_vege");
+        const lezart = Boolean(b && (b.vege || tipus === "vezetes_vege"));
+        const perc =
+          b?.vege ? Math.round((new Date(b.vege).getTime() - new Date(b.kezdet).getTime()) / 60000) : null;
+
+        return (
+          <button
+            key={tipus}
+            type="button"
+            disabled={pending}
+            onClick={() => onJelol(tipus)}
+            className={cn(
+              "flex h-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg border px-1 text-[10px] font-semibold leading-tight",
+              fut && "border-[var(--mob-accent)] bg-[var(--mob-accent)] text-white",
+              lezart && "border-[var(--mob-positive)]/30 bg-[var(--mob-positive)]/10 text-[var(--mob-positive)]",
+              !fut && !lezart && "border-[var(--mob-border)] bg-[var(--mob-card)] text-[var(--mob-muted)]"
+            )}
+            title={
+              fut
+                ? "Fut — koppints, ha továbbindulsz"
+                : lezart
+                  ? "Koppints a visszavonáshoz"
+                  : "Koppints, amikor leállsz"
+            }
+          >
+            <span className="flex items-center gap-1">
+              <Ikon className="h-3.5 w-3.5 shrink-0" />
+              {fut ? "Vége?" : cimke}
+            </span>
+            {b && (
+              <span className="tabular-nums">
+                {formatIdo(b.kezdet)}
+                {perc !== null && ` · ${perc}p`}
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -819,6 +918,17 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
     });
   }
 
+  function munkanap(tipus: SoforMunkanapTipus) {
+    startTransition(async () => {
+      try {
+        await jelolMunkanapot(employeeId, napISO, tipus);
+        await load();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Nem sikerült rögzíteni.");
+      }
+    });
+  }
+
   function hely(m: SoforMegalloSor) {
     if (!window.confirm(`A kocsi mostani helyét jegyezzük fel ehhez a címhez?\n\n${m.cim}\n\nCsak akkor koppints Igent, ha a rakodóhelyen állsz.`)) return;
     startTransition(async () => {
@@ -852,6 +962,7 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
 
   return (
     <div className="flex flex-col gap-3">
+      <MunkanapSav bejegyzesek={nap?.munkanap ?? []} pending={pending} onJelol={munkanap} />
       <div className="flex items-center justify-between">
         <div className="flex flex-col">
           <span className="text-sm font-semibold">
