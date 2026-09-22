@@ -12,7 +12,7 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Camera, Check, ChevronLeft, ChevronRight, Clock, Copy, FileText, Hash, LocateFixed, MapPin, MessageSquareWarning, Navigation } from "lucide-react";
+import { AlertTriangle, Camera, Check, ChevronLeft, ChevronRight, Clock, Copy, FileText, Hash, LocateFixed, MapPin, MessageSquareWarning, Navigation, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -79,13 +79,10 @@ const DOK_CIMKE: Record<string, string> = {
 /** A feltöltött kép leghosszabb oldala pixelben — a telefon 4000 px-es, 5-8 MB-os fotója így ~300-600 KB lesz. */
 const FOTO_MAX_OLDAL_PX = 1600;
 
-/**
- * Hány fuvar-csempe látszik alapból: az aktuális és a következő kettő
- * (Budaházi Zoltán kérése, 2026-09-22). A Duvenbeck-napokon egy kocsin 4-6
- * fuvar is van, ezek együtt görgethetetlenül hosszú listát adtak. A többi
- * fuvar nem vész el, egy gombbal előhívható.
- */
-const LATHATO_BLOKK = 3;
+// Alapból EGY megbízás látszik teljes kártyaként — az, amelyikben a soron
+// következő megálló van —, alatta pedig a rákövetkező megbízás előnézete
+// (Budaházi Zoltán, 2026-09-22). Amit befejezett, az eltűnik; a következő lép
+// a helyére. A nap többi fuvarja nem vész el: egy gombbal előhívható.
 const FOTO_JPEG_MINOSEG = 0.82;
 
 /**
@@ -435,6 +432,44 @@ function MegalloSor({
 }
 
 /**
+ * A KÖVETKEZŐ megbízás előnézete — csak annyi, hogy a sofőr tudja, mi jön:
+ * ki a megbízó, honnan hová, mikor. Gomb nincs rajta, mert amíg az aktuálisat
+ * be nem fejezte, nincs rajta dolga (Budaházi Zoltán, 2026-09-22). Amint az
+ * aktuális elkészül, ez a fuvar lép a helyére, teljes kártyaként.
+ */
+function KovetkezoFuvarElonezet({ blokk }: { blokk: SoforFuvarBlokk }) {
+  const honnan = blokk.megallok.find((m) => m.tipus === "felrako")?.varos;
+  const hova = [...blokk.megallok].reverse().find((m) => m.tipus === "lerako")?.varos;
+  const hivatkozas = blokk.reiseId ?? blokk.pozicioszam;
+  const elsoMegallo = blokk.megallok[0];
+
+  return (
+    <div className="flex flex-col gap-1 rounded-xl border border-dashed border-[var(--mob-border)] bg-[var(--mob-card)]/60 px-3 py-3">
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--mob-muted)]">
+        Ezután következik
+      </span>
+      <span className="truncate text-sm font-semibold">{blokk.megrendelo ?? "Ismeretlen megbízó"}</span>
+      {honnan && hova && (
+        <span className="text-sm">
+          {honnan} → {hova}
+        </span>
+      )}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--mob-muted)]">
+        {blokk.idopont && <span>{blokk.idopont}</span>}
+        {!blokk.idopont && elsoMegallo && !elsoMegallo.becslesElavult && (
+          <span className="tabular-nums">{formatIdoNappal(elsoMegallo.idopont, elsoMegallo.napElteres)}</span>
+        )}
+        {hivatkozas && (
+          <span className="tabular-nums">
+            {blokk.reiseId ? "Út ID" : "Poz"} {hivatkozas}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
  * Egy fuvar blokkja. A fejlécben a Reise ID (Duvenbeck Út ID) áll kiemelten:
  * a kapuban ezt kérik, és ez a számlázási kulcs is, ezért koppintásra
  * vágólapra másolható.
@@ -515,12 +550,32 @@ function FuvarBlokk({
             <Copy className="h-3.5 w-3.5 text-[var(--mob-muted)]" />
           </button>
         )}
+        {/* A megbízáson szereplő szabad szöveges időpont. Sok megbízáson csak
+            ez van, időablak nincs — enélkül hiányzott a "hánykor", amiért a
+            sofőrnek eddig át kellett küldeni az e-mailt. */}
+        {blokk.idopont && (
+          <span className="flex w-fit items-center gap-1.5 rounded-md bg-[var(--mob-tile)] px-2 py-1 text-xs font-medium">
+            <Clock className="h-3.5 w-3.5 text-[var(--mob-muted)]" />
+            {blokk.idopont}
+          </span>
+        )}
         {(blokk.aru || blokk.mennyiseg || blokk.suly) && (
           <span className="text-xs text-[var(--mob-muted)]">
             {[blokk.mennyiseg, blokk.aru, blokk.suly].filter(Boolean).join(" · ")}
           </span>
         )}
         {blokk.megjegyzes && <span className="text-xs text-[var(--mob-muted)]">{blokk.megjegyzes}</span>}
+        {/* Kapcsolattartó: koppintásra hív. A kapuban és gond esetén ezt a
+            számot kell tárcsázni — eddig ez is csak az e-mailben volt meg. */}
+        {blokk.kapcsolat && (
+          <a
+            href={`tel:${blokk.kapcsolat.telefon.replace(/\s+/g, "")}`}
+            className="flex w-fit items-center gap-1.5 rounded-md bg-[var(--mob-tile)] px-2 py-1 text-xs font-medium"
+          >
+            <Phone className="h-3.5 w-3.5 text-[var(--mob-muted)]" />
+            {[blokk.kapcsolat.nev, blokk.kapcsolat.telefon].filter(Boolean).join(" · ")}
+          </a>
+        )}
         {blokk.masRendszam && (
           <span className="flex items-center gap-1 text-xs font-medium text-[var(--mob-negative)]">
             <AlertTriangle className="h-3.5 w-3.5" />
@@ -784,18 +839,15 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
     : undefined;
   const kovetkezoMegallo = kovetkezoBlokk?.megallok.find((m) => m.megalloIndex === kovetkezoHivatkozas?.megalloIndex);
 
-  // Alapból csak az aktuális fuvar és az utána következő kettő látszik. Az
-  // "aktuális" az, amelyikben a soron következő (első nem kész) megálló van;
-  // ha a nap már végig kész, az utolsó fuvarokat mutatjuk, nem a reggelieket.
+  // Az "aktív" megbízás az, amelyikben a soron következő (első nem kész)
+  // megálló van. Ez kapja a teljes kártyát; ami elkészült, eltűnik a nézetből.
   const osszesLathato = osszesNyitvaNap === napISO;
-  const kovetkezoIndex = kovetkezoHivatkozas
+  const aktivIndex = kovetkezoHivatkozas
     ? blokkok.findIndex((b) => b.fuvarId === kovetkezoHivatkozas.fuvarId)
     : -1;
-  const elsoIndex =
-    kovetkezoIndex >= 0 ? kovetkezoIndex : Math.max(0, blokkok.length - LATHATO_BLOKK);
-  const lathatoBlokkok = osszesLathato
-    ? blokkok
-    : blokkok.slice(elsoIndex, elsoIndex + LATHATO_BLOKK);
+  const aktivBlokk = aktivIndex >= 0 ? blokkok[aktivIndex] : null;
+  const kovetkezoElonezet = aktivIndex >= 0 ? blokkok[aktivIndex + 1] ?? null : null;
+  const lathatoBlokkok = osszesLathato ? blokkok : aktivBlokk ? [aktivBlokk] : [];
   const rejtettBlokk = blokkok.length - lathatoBlokkok.length;
 
   return (
@@ -878,6 +930,15 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
                   onPozicioszam={pozicioszam}
                 />
               ))}
+              {/* Amint az aktívat befejezi, ez lép a helyére teljes kártyaként. */}
+              {!osszesLathato && kovetkezoElonezet && (
+                <KovetkezoFuvarElonezet blokk={kovetkezoElonezet} />
+              )}
+              {!osszesLathato && !aktivBlokk && (
+                <p className="rounded-xl border border-[var(--mob-border)] bg-[var(--mob-card)] px-3 py-4 text-sm text-[var(--mob-muted)]">
+                  Mára végeztél — minden megállót lezártál.
+                </p>
+              )}
               {(rejtettBlokk > 0 || osszesLathato) && (
                 <Button
                   variant="outline"
@@ -885,8 +946,8 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
                   onClick={() => setOsszesNyitvaNap(osszesLathato ? null : napISO)}
                 >
                   {osszesLathato
-                    ? "Csak az aktuális és a következő kettő"
-                    : `Mind a ${blokkok.length} fuvar mutatása`}
+                    ? "Csak az aktuális megbízás"
+                    : `A nap mind a ${blokkok.length} megbízása`}
                 </Button>
               )}
             </>

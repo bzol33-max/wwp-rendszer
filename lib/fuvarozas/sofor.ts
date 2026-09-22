@@ -21,7 +21,7 @@ import { toroljIdovonalCachet } from "@/lib/fuvarozas/idovonal-cache";
 import { getFleetLastPositions, parseEcofleetTimestamp } from "@/lib/fuvarozas/ecofleet";
 import { mozogE, toroljGeokodCachet } from "@/lib/fuvarozas/erintes-felismeres";
 import { feltoltFuvarlevelFotot } from "@/lib/fuvarozas/drive-sync-core";
-import type { FuvarRow } from "@/lib/fuvarozas/fuvar-constants";
+import { ceglNevKanonikusan, normalizaltCegKulcs, type FuvarRow } from "@/lib/fuvarozas/fuvar-constants";
 
 function jarmuMatch(jarmu: SajatJarmu, row: FuvarRow): boolean {
   if (row.jarmu && resolveJarmu(row.jarmu) === jarmu) return true;
@@ -249,6 +249,12 @@ export type SoforDokumentum = {
   fajlnev: string | null;
 };
 
+/** A megbízó kapcsolattartója — a kapuban és gond esetén ezt kell hívni. */
+export type SoforKapcsolat = {
+  nev: string | null;
+  telefon: string;
+};
+
 export type SoforFuvarBlokk = {
   fuvarId: string;
   megrendelo: string | null;
@@ -259,6 +265,15 @@ export type SoforFuvarBlokk = {
   mennyiseg: string | null;
   suly: string | null;
   megjegyzes: string | null;
+  /**
+   * A megbízáson szereplő szabad szöveges időpont. Nem ugyanaz, mint a
+   * felrakas/lerakas_ablak: azt csak a Duvenbeck-importőr tölti, ezt viszont
+   * minden megbízás hozza. A sofőrnek enélkül hiányzik az e-mailből az, hogy
+   * "hánykor".
+   */
+  idopont: string | null;
+  /** A megrendelő kapcsolattartója a fuvar_kapcsolatok törzsből, ha van. */
+  kapcsolat: SoforKapcsolat | null;
   /** Igaz, ha a fuvar korábbról csúszik át erre a napra. */
   csuszo: boolean;
   /**
@@ -286,6 +301,8 @@ export type SoforNap = {
 type FuvarExtraSor = {
   id: string;
   reise_id: string | null;
+  /** A megbízáson szereplő szabad szöveges időpont ("07:00-15:00", "de."). */
+  idopont: string | null;
   aru: string | null;
   mennyiseg: string | null;
   suly: string | null;
@@ -326,7 +343,7 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
   const [extraSorok, dokSorok] = fuvarIds.length
     ? await Promise.all([
         query<FuvarExtraSor>(
-          `select id::text, reise_id, aru, mennyiseg, suly, megjegyzes, jarmu,
+          `select id::text, reise_id, idopont, aru, mennyiseg, suly, megjegyzes, jarmu,
                   felrakas_ablak_tol, felrakas_ablak_ig, lerakas_ablak_tol, lerakas_ablak_ig
              from fuvar_megbizasok
             where id = any($1::bigint[])`,
@@ -360,6 +377,34 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
   const rogzitettHelyek = new Set(helyszinSorok.map((h) => h.cim_kulcs));
 
   const extraById = new Map(extraSorok.map((e) => [e.id, e]));
+
+  // Kapcsolattartó a megrendelő neve alapján. A fuvar_kapcsolatok "ceg"
+  // mezője szabad szöveg (más írásmód, Kft./KFT., ékezet), ezért ugyanazzal a
+  // kulccsal párosítunk, amivel a Megbízások oldal is dolgozik. Csak olyan sor
+  // érdekel, amin VAN telefonszám — a sofőrnek hívni kell tudnia.
+  const megrendeloKulcsok = [
+    ...new Set(
+      blokkok
+        .map((b) => b.megrendelo?.trim())
+        .filter((n): n is string => Boolean(n))
+        .map((n) => normalizaltCegKulcs(ceglNevKanonikusan(n)))
+        .filter(Boolean)
+    ),
+  ];
+  const kapcsolatSorok = megrendeloKulcsok.length
+    ? await query<{ ceg: string; kapcsolattarto: string | null; telefon: string }>(
+        `select ceg, kapcsolattarto, telefon
+           from fuvar_kapcsolatok
+          where coalesce(trim(telefon), '') <> ''
+          order by id asc`
+      )
+    : [];
+  const kapcsolatByKulcs = new Map<string, SoforKapcsolat>();
+  for (const k of kapcsolatSorok) {
+    const kulcs = normalizaltCegKulcs(ceglNevKanonikusan(k.ceg));
+    if (!kulcs || kapcsolatByKulcs.has(kulcs)) continue;
+    kapcsolatByKulcs.set(kulcs, { nev: k.kapcsolattarto, telefon: k.telefon });
+  }
   const dokByFuvar = new Map<string, SoforDokumentum[]>();
   for (const d of dokSorok) {
     const lista = dokByFuvar.get(d.fuvar_id) ?? [];
@@ -380,6 +425,10 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
       mennyiseg: extra?.mennyiseg ?? null,
       suly: extra?.suly ?? null,
       megjegyzes: extra?.megjegyzes ?? null,
+      idopont: extra?.idopont ?? null,
+      kapcsolat: b.megrendelo?.trim()
+        ? kapcsolatByKulcs.get(normalizaltCegKulcs(ceglNevKanonikusan(b.megrendelo))) ?? null
+        : null,
       csuszo: b.csuszo,
       masRendszam,
       dokumentumok: dokByFuvar.get(b.fuvarId) ?? [],
