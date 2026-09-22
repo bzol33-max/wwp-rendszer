@@ -1462,3 +1462,31 @@ minden ott legyen a telefonon.
     `normalizaltCegKulcs(ceglNevKanonikusan(...))` kulccsal megy, amivel a
     Megbízások oldal is dolgozik; csak telefonszámos sor érdekel.
 - Migráció nincs, mindkét mező meglévő oszlopból jön.
+
+## 2026-09-22 — sofőr: 4-es elrendezés + napi pihenő/vezetés vége gombok
+
+**4-es terv (megálló elöl, megbízás mögötte).** A `FuvarBlokk` sorrendje
+megfordult: legfelül a megállók a három gombbal, alattuk egy csík a megbízó
+nevével és NAGY betűs Út ID / pozíciószámmal, ami koppintásra kinyílik a
+teljes adatlappá (megbízó, időpont, áru, megjegyzés, telefon, iratok, fotó,
+gond jelzése). Indok: a megbízás adatait naponta kétszer nézi meg, a megállót
+és a gombokat minden rakodásnál — így a gombok nem csúsznak le a képernyőről
+egy hosszú cím vagy megjegyzés miatt. Az Út ID a csukott csíkon is nagy, mert
+a kapuban azt kérik (az 5-ös „kapu-sorrend" terv ötlete).
+A figyelmeztetések — „Korábbról csúszik", más rendszám, hiányzó pozíciószám —
+SOHA nem kerülnek a csukott rész mögé.
+
+**Fix gombok a nap két pihenőjére és a vezetés végére.**
+- Új tábla: `sofor_munkanap` (`db/schema.sql`) — alkalmazott, nap, tipus
+  (`piheno1` | `piheno2` | `vezetes_vege`), kezdet, vege. Naponta és
+  típusonként egy sor (unique), így a téves koppintás nem halmozódik.
+- Új művelet: `jelolMunkanapot(employeeId, napISO, tipus)`. Egy koppintás
+  indít, a következő zár (pihenőnél a `vege` mező). A vezetés végének nincs
+  hossza: ott a második koppintás VISSZAVONJA a jelölést — a téves koppintást
+  a sofőr a telefonon javítja, nem telefonálással.
+- A nap a megjelenített napból jön, nem a szerver órájából.
+- `MunkanapSav`: a görgethető tartalom tetejére tapadó sáv, három 44 px-es
+  gombbal. Szándékosan a fuvaroktól FÜGGETLEN — a pihenő a naphoz tartozik,
+  nem egy megbízáshoz, és akkor is jelölhető, ha nincs aktív fuvar.
+- A `sofor_munkanap` az indításkor lefutó `db/schema.sql`-ből jön létre,
+  külön migráció nem kell.

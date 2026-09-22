@@ -954,3 +954,24 @@ create index if not exists idx_feladatok_sorozat on feladatok (sorozat_id) where
 -- A betegszabadság NEM fogyaszt keretet.
 alter table alkalmazottak add column if not exists szabadsag_keret_nap integer;
 alter table alkalmazottak add column if not exists szabadsag_keret_datum date;
+
+-- Sofőr napi munkarendje a telefonról (2026-09-22): a nap két pihenője és a
+-- vezetés vége. Ez NEM tachográf-pótlék és nem munkaidő-nyilvántartás — a
+-- sofőr saját jelölése, amiből a diszpécser látja, mikor számíthat rá, és
+-- amiből utólag kiderül, miért állt a kocsi.
+--
+-- A két pihenőnek kezdete és vége van (koppint, amikor leáll, és amikor
+-- továbbindul), a vezetés vége viszont egyetlen pillanat, ott a `vege`
+-- üresen marad. Naponta és típusonként egy sor lehet — a téves koppintás
+-- visszavonható (a sor törlődik), nem halmozódik.
+create table if not exists sofor_munkanap (
+  id             bigserial primary key,
+  alkalmazott_id bigint not null references alkalmazottak(id) on delete cascade,
+  nap            date not null,
+  tipus          text not null check (tipus in ('piheno1', 'piheno2', 'vezetes_vege')),
+  kezdet         timestamptz not null default now(),
+  vege           timestamptz,
+  rogzitette     text,
+  unique (alkalmazott_id, nap, tipus)
+);
+create index if not exists idx_sofor_munkanap_nap on sofor_munkanap (nap, alkalmazott_id);
