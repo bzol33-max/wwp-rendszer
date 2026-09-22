@@ -1438,3 +1438,27 @@ Kód ebben a körben nem változott — csak feltárás.
   kell, az egy migráció.
 - A régi külön „Várakozom / Várakozás vége" jelölő és az „Érkezés 13:24"
   felirat kikerült: mindkettőt a három lépés sora mutatja.
+
+## 2026-09-22 — sofőr Fuvarok: aktív megbízás + következő, teljes adattal
+
+Cél (Budaházi Zoltán): a sofőrnek ne kelljen átküldeni a megbízás e-mailjét —
+minden ott legyen a telefonon.
+
+- **Egy aktív megbízás.** Alapból az a megbízás látszik teljes kártyaként,
+  amelyikben a soron következő (első nem kész) megálló van. Amit befejezett,
+  az eltűnik a nézetből, és a következő lép a helyére.
+- **Alatta a következő megbízás előnézete** (`KovetkezoFuvarElonezet`):
+  megbízó, honnan → hová, időpont, Út ID / pozíciószám. Gomb nincs rajta —
+  amíg az aktuálissal nem végzett, nincs rajta dolga.
+- Ha a nap végig kész: „Mára végeztél — minden megállót lezártál."
+- A nap többi fuvarja nem vész el: „A nap mind a N megbízása" gombbal
+  előhívható, „Csak az aktuális megbízás" zárja vissza.
+- **Két új adat a kártyán** (`lib/fuvarozas/sofor.ts`):
+  - `idopont` — a megbízás szabad szöveges időpontja („07:00-15:00", „de.").
+    Ez minden megbízáson megvan, míg a `felrakas/lerakas_ablak` mezőket csak
+    a Duvenbeck-importőr tölti. Enélkül hiányzott a „hánykor".
+  - `kapcsolat` — a megrendelő kapcsolattartója a `fuvar_kapcsolatok`
+    törzsből, név + telefon, koppintásra hív. A párosítás ugyanazzal a
+    `normalizaltCegKulcs(ceglNevKanonikusan(...))` kulccsal megy, amivel a
+    Megbízások oldal is dolgozik; csak telefonszámos sor érdekel.
+- Migráció nincs, mindkét mező meglévő oszlopból jön.
