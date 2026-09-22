@@ -1507,3 +1507,21 @@ Budaházi Zoltán kérése ugyanaznap, a kipróbálás után.
 - Az „Indulok" továbbra is lezár egy korábbi körből maradt nyitott
   várakozást, ha van — újat már nem indítunk, de a meglévő sorok ne
   maradjanak félbe.
+
+## 2026-09-22 — 26/3814: a hiányzó miskolci lerakó pótolva
+
+- Az ÁB Speed 26/3814-es megbízásáról (Sopron → …, felrakás 09-23,
+  NMZ-492) hiányzott az **első** lerakóhely. A PDF-en két lerakó van:
+  1. Reál Alfi Ker Kft, 3527 Miskolc, Besenyői u. 8. (09-24)
+  2. Coop, 4030 Debrecen, Diószegi u. 22/C (09-24)
+  A behúzott sorba csak a debreceni került be, így a sofőr telefonján
+  Miskolc meg sem jelent volna.
+- Javítás: `potoldMiskolciLerakotOnce` (`scripts/migrate.mjs`) — a `lerako`
+  mezőbe a két megálló a `bontsMegallokra` elsődleges elválasztójával
+  (` + `) kerül, a PDF sorrendjében. Csak akkor ír, ha tényleg a hiányos
+  változat van bent (`lerako not ilike '%Miskolc%'`), így kézi javítást nem
+  ír felül, és ismételt futáskor nem csinál semmit.
+- Ellenőrizve: a beírt szöveg `bontsMegallokra`-val két megállóra bomlik,
+  „Miskolc" és „Debrecen" városnévvel.
+- A PDF-olvasó maga NINCS javítva — miért vesztette el az első lerakót, az
+  külön kör. Ez a lépés csak ezt az egy sort rendezi.
