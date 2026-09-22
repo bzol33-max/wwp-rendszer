@@ -252,12 +252,17 @@ export type IdovonalNap = {
 export type JarmuIdovonalEredmeny = {
   sofor: string;
   szin: JarmuSzin;
-  /** Élő GPS-pozíció a jármű-csempe infó-dobozához (cím, sebesség, utolsó adat ideje, óraállás) — csak a mai napra. */
+  /** Élő GPS-pozíció a jármű-csempe infó-dobozához (cím, sebesség, utolsó adat ideje, óraállás, motorállapot) — csak a mai napra. */
   eloPozicio: {
     cim: string | null;
     sebesseg: number;
     utolsoAdat: Date;
     oraallasKm: number | null;
+    /**
+     * Jár-e a motor. Állva is számít: a hűtős rakomány és a fűtés miatt egy
+     * álló, de járó motorú kocsi más helyzet, mint egy lekapcsolt.
+     */
+    motorJar: boolean;
   } | null;
   /**
    * Élő GPS-pozícióból becsült érkezés a legközelebbi, még el nem hagyott
@@ -1193,6 +1198,7 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
               sebesseg: livePos.speed,
               utolsoAdat: parsedTs,
               oraallasKm: livePos.odometerKm,
+              motorJar: livePos.engineOn,
             };
           }
         }

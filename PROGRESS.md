@@ -1624,3 +1624,22 @@ megmaradnak — a `/m` sofőr nézet és a GPS idővonal használja őket.
   így a kettő nem tud egymástól elcsúszni.
 - Gomb továbbra sincs rajtuk: amíg az aktuálissal nem végzett, azokon nincs
   dolga.
+
+## 2026-09-22 — Áttekintés/Fuvar: élő pozíció-fejléc (2-es terv)
+
+A lapozás kocsik között **már megvolt** (`FuvarTablazatMobil`, scroll-snap +
+fülek), a „Hol van most" doboz is. Ez a kör a 2-es látványterv szerinti
+hierarchiát és a hiányzó adatokat tette hozzá.
+
+- **Nagy sebesség-szám** a doboz tetején, mellette színes állapot-jelző:
+  „Áll 3 ó 51 p" (borostyán) vagy „Megy 48 p" (zöld). A tartam a nap utolsó,
+  még élő GPS-szakaszából jön (`szakaszok`, `mostaniSzakaszKezdet`) — az
+  Ecofleet a folyamatban lévő szakaszt nem zárja le, az idővonal `elo`
+  jelzéssel hosszabbítja a jelenig.
+- Alatta a hely (visszafordított geokódolás vagy saját telephely neve).
+- **Három új csempe:** Motor (jár/áll), Km óra, Ma megtett.
+- **Új adat:** `eloPozicio.motorJar` (`lib/fuvarozas/actions.ts`), a már
+  meglévő `EcofleetPosition.engineOn`-ból. Állva is számít: hűtős rakománynál
+  és fűtésnél más helyzet egy járó motorú álló kocsi, mint egy lekapcsolt.
+- A „Km óra" (`oraallasKm`) eddig is benne volt az adatban, csak nem látszott.
+- Az „Utolsó GPS-jel", „Következő" és a „Nem tervezett állás" változatlan.
