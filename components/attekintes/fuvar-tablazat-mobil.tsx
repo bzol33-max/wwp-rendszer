@@ -52,6 +52,29 @@ function Mezo({ cimke, ertek, szeles }: { cimke: string; ertek: ReactNode; szele
   );
 }
 
+/**
+ * Mióta tart a mostani állapot — a nap utolsó, még élő GPS-szakaszából.
+ * Az Ecofleet a folyamatban lévő szakaszt nem zárja le, ezért az idővonal
+ * `elo` jelzéssel hosszabbítja a jelenig; ennek a kezdete a keresett időpont.
+ */
+function mostaniSzakaszKezdet(eredmeny: JarmuIdovonalEredmeny | undefined): { kezdet: Date; all: boolean } | null {
+  const szakaszok = eredmeny?.szakaszok ?? [];
+  for (let i = szakaszok.length - 1; i >= 0; i--) {
+    const sz = szakaszok[i];
+    if (sz.tipus === "allas" || sz.tipus === "vezetes") {
+      return { kezdet: sz.kezdet, all: sz.tipus === "allas" };
+    }
+  }
+  return null;
+}
+
+/** "3 ó 51 p" / "48 p" — a nagy állapot-jelzőbe, ahol a másodperc nem érdekes. */
+function formatTartam(kezdet: Date, most: number): string {
+  const perc = Math.max(0, Math.round((most - new Date(kezdet).getTime()) / 60000));
+  if (perc < 60) return `${perc} p`;
+  return `${Math.floor(perc / 60)} ó ${perc % 60} p`;
+}
+
 function HolVanMost({ eredmeny, most, jarmuNincsGps }: { eredmeny: JarmuIdovonalEredmeny | undefined; most: number; jarmuNincsGps: boolean }) {
   if (jarmuNincsGps) {
     return (
@@ -67,30 +90,64 @@ function HolVanMost({ eredmeny, most, jarmuNincsGps }: { eredmeny: JarmuIdovonal
   const regi = pos ? jelRegi(pos, most) : false;
   const kovetkezo = kovetkezoMegallo(eredmeny?.fuvarok ?? []);
   const allasok = allasokSzoveg(eredmeny?.nemTervezettAllasok ?? []);
+  const szakasz = mostaniSzakaszKezdet(eredmeny);
+
+  // A sebesség a legfontosabb szám ezen a dobozon — ezért nagy, és mellette
+  // egy színes jelző mondja meg, hogy áll-e vagy megy, és mióta.
   return (
-    <div className="grid grid-cols-2 gap-x-3 gap-y-2 rounded-lg bg-[var(--at-tile)] px-3 py-2.5">
-      <Mezo cimke="Hol van most" ertek={<span className="font-semibold">{pos ? (pos.cim ?? "ismeretlen hely") : "nincs élő pozíció"}</span>} szeles />
-      <Mezo cimke="Sebesség" ertek={pos ? (pos.sebesseg > 0 ? `${pos.sebesseg} km/h` : "áll") : "—"} />
-      <Mezo
-        cimke="Utolsó GPS-jel"
-        ertek={
-          pos ? (
-            regi ? (
-              <span className="flex items-center gap-1 font-medium text-amber-700">
-                <AlertTriangle className="h-3.5 w-3.5" />
-                {formatIdo(pos.utolsoAdat)} ({formatEltelt(pos.utolsoAdat, most)})
-              </span>
+    <div className="flex flex-col gap-2.5 rounded-lg bg-[var(--at-tile)] px-3 py-2.5">
+      <div className="flex items-baseline gap-2">
+        <span className="text-3xl font-bold leading-none tabular-nums">{pos ? pos.sebesseg : "—"}</span>
+        <span className="text-xs font-semibold text-[var(--at-muted)]">km/h</span>
+        <span className="flex-1" />
+        {szakasz && (
+          <span
+            className={`rounded-md px-2 py-1 text-xs font-bold ${
+              szakasz.all ? "bg-amber-100 text-amber-800" : "bg-[var(--at-positive)]/15 text-[var(--at-positive)]"
+            }`}
+          >
+            {szakasz.all ? "Áll" : "Megy"} {formatTartam(szakasz.kezdet, most)}
+          </span>
+        )}
+      </div>
+
+      <div className="text-sm font-semibold">{pos ? (pos.cim ?? "ismeretlen hely") : "nincs élő pozíció"}</div>
+
+      <div className="grid grid-cols-3 gap-1.5">
+        {[
+          { c: "Motor", e: pos ? (pos.motorJar ? "Jár" : "Áll") : "—" },
+          { c: "Km óra", e: pos?.oraallasKm != null ? formatSzam(pos.oraallasKm) : "—" },
+          { c: "Ma megtett", e: eredmeny?.napiKm != null ? `${formatSzam(eredmeny.napiKm)} km` : "—" },
+        ].map((x) => (
+          <div key={x.c} className="rounded-md bg-[var(--at-card)] px-2 py-1.5">
+            <div className="text-[9px] font-bold uppercase tracking-wide text-[var(--at-muted)]">{x.c}</div>
+            <div className="text-sm font-bold tabular-nums">{x.e}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+        <Mezo
+          cimke="Utolsó GPS-jel"
+          ertek={
+            pos ? (
+              regi ? (
+                <span className="flex items-center gap-1 font-medium text-amber-700">
+                  <AlertTriangle className="h-3.5 w-3.5" />
+                  {formatIdo(pos.utolsoAdat)} ({formatEltelt(pos.utolsoAdat, most)})
+                </span>
+              ) : (
+                formatIdo(pos.utolsoAdat)
+              )
             ) : (
-              formatIdo(pos.utolsoAdat)
+              "—"
             )
-          ) : (
-            "—"
-          )
-        }
-      />
-      <Mezo cimke="Ma megtett" ertek={eredmeny?.napiKm !== null && eredmeny?.napiKm !== undefined ? `${formatSzam(eredmeny.napiKm)} km` : "—"} />
-      <Mezo cimke="Következő" ertek={kovetkezoSzoveg(kovetkezo, eredmeny?.eloEta ?? null, allValahol(eredmeny?.fuvarok ?? []))} szeles />
-      {allasok && <Mezo cimke="Nem tervezett állás ma" ertek={allasok} szeles />}
+          }
+          szeles
+        />
+        <Mezo cimke="Következő" ertek={kovetkezoSzoveg(kovetkezo, eredmeny?.eloEta ?? null, allValahol(eredmeny?.fuvarok ?? []))} szeles />
+        {allasok && <Mezo cimke="Nem tervezett állás ma" ertek={allasok} szeles />}
+      </div>
     </div>
   );
 }
