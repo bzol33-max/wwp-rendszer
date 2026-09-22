@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { recordMovements, type Direction } from "@/lib/keszlet/actions";
+import { getPartnerJavaslatok, recordMovements, type Direction } from "@/lib/keszlet/actions";
 import { useCanEdit } from "@/components/auth/edit-permission-context";
 
 type Sor = { key: number; type: string; qty: string; targetSite: string; unitPrice: string };
@@ -75,8 +75,25 @@ export function MovementForm({
   const [direction, setDirection] = useState<Direction>(fixedDirection ?? "be");
   const [sorok, setSorok] = useState<Sor[]>([ujSor(types[0] ?? "", otherSites[0] ?? "")]);
   const [partner, setPartner] = useState("");
+  // Partnernév-javaslatok: a lista egyszer töltődik le (számlák vevői +
+  // korábban beírt partnerek), a szűrés gépelés közben itt történik.
+  const [partnerek, setPartnerek] = useState<string[]>([]);
+  const [javaslatNyitva, setJavaslatNyitva] = useState(false);
   const [afa, setAfa] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Legfeljebb 8 találat: a névvel kezdődők előre, utána a névben bárhol
+  // egyezők. Két karaktertől ajánlunk, hogy ne az egész lista ugorjon fel.
+  const javaslatok = (() => {
+    const keresett = partner.trim().toLowerCase();
+    if (keresett.length < 2) return [];
+    if (partnerek.some((n) => n.toLowerCase() === keresett)) return [];
+    const eleje = partnerek.filter((n) => n.toLowerCase().startsWith(keresett));
+    const benne = partnerek.filter(
+      (n) => !n.toLowerCase().startsWith(keresett) && n.toLowerCase().includes(keresett)
+    );
+    return [...eleje, ...benne].slice(0, 8);
+  })();
 
   // Az árak csak a Kiszállítás / Eladás irányban jelennek meg.
   const eladasLehet = allowSale && direction === "ki";
@@ -84,6 +101,18 @@ export function MovementForm({
     ? sorok.reduce((sum, s) => sum + (Number(s.qty) || 0) * (Number(s.unitPrice) || 0), 0)
     : 0;
   const brutto = afa ? Math.round(netto * (1 + AFA_KULCS)) : netto;
+
+  useEffect(() => {
+    let mounted = true;
+    getPartnerJavaslatok()
+      .then((nevek) => {
+        if (mounted) setPartnerek(nevek);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   useEffect(() => {
     setSorok((prev) =>
@@ -348,11 +377,39 @@ export function MovementForm({
         {direction !== "mozgatas" && (
           <div className="space-y-1.5">
             <Label>{eladasLehet ? "Partner / vevő" : "Partner"}</Label>
-            <Input
-              placeholder={eladasLehet ? "Kinek adtuk el" : "Partner neve"}
-              value={partner}
-              onChange={(e) => setPartner(e.target.value)}
-            />
+            <div className="relative">
+              <Input
+                placeholder={eladasLehet ? "Kinek adtuk el" : "Partner neve"}
+                value={partner}
+                autoComplete="off"
+                onChange={(e) => {
+                  setPartner(e.target.value);
+                  setJavaslatNyitva(true);
+                }}
+                onFocus={() => setJavaslatNyitva(true)}
+                // Koppintásnál a blur előbb fut, mint a kattintás — kis
+                // késleltetés nélkül a javaslat eltűnne a választás előtt.
+                onBlur={() => window.setTimeout(() => setJavaslatNyitva(false), 150)}
+              />
+              {javaslatNyitva && javaslatok.length > 0 && (
+                <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-md border bg-popover p-1 shadow-md">
+                  {javaslatok.map((nev) => (
+                    <li key={nev}>
+                      <button
+                        type="button"
+                        className="w-full rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent"
+                        onClick={() => {
+                          setPartner(nev);
+                          setJavaslatNyitva(false);
+                        }}
+                      >
+                        {nev}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
         )}
 

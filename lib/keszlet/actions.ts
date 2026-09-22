@@ -378,6 +378,49 @@ export async function recordMovements(input: {
 
 // --- Telephelyek közti mozgatás átvétele a cél telepen ---
 
+/**
+ * Partnernév-javaslatok a Mozgás rögzítése űrlap Partner mezőjéhez.
+ *
+ * Két forrásból: a Számlázz.hu-ból behúzott számlák vevőnevei (a `szamla`
+ * táblából — a Számlázz.hu API-t továbbra is csak a Számlák modul kérdezi,
+ * ld. CLAUDE.md), és a korábban kézzel beírt partnerek a készletmozgásokból.
+ * A lista egyszer töltődik le, a szűrés gépelés közben a kliensen történik.
+ * Nem törzsadat: a mezőbe bármilyen név beírható, ami itt nem szerepel.
+ */
+export async function getPartnerJavaslatok(): Promise<string[]> {
+  await requireAnyViewPermission(["keszlet", "keszlet_sajat"]);
+  const rows = await query<{ nev: string }>(
+    `with nevek as (
+       select vevo_nev as nev, count(*)::int as db
+       from szamla
+       where coalesce(btrim(vevo_nev), '') <> ''
+       group by vevo_nev
+       union all
+       select partner as nev, count(*)::int as db
+       from keszlet_movements
+       where coalesce(btrim(partner), '') <> ''
+         and partner <> 'Szétválogatás'
+       group by partner
+     ),
+     -- Kis-/nagybetű és a széli szóközök ne csináljanak külön bejegyzést:
+     -- a gyakoribb írásmód nyer, a darabszámok összeadódnak.
+     osszesitve as (
+       select lower(btrim(nev)) as kulcs, sum(db) as db
+       from nevek group by 1
+     ),
+     irasmod as (
+       select distinct on (lower(btrim(nev))) lower(btrim(nev)) as kulcs, btrim(nev) as nev
+       from nevek order by lower(btrim(nev)), db desc, nev
+     )
+     select i.nev
+     from irasmod i
+     join osszesitve o on o.kulcs = i.kulcs
+     order by o.db desc, i.nev
+     limit 500`
+  );
+  return rows.map((r) => r.nev);
+}
+
 export type IncomingRow = {
   id: string;
   date: string;
