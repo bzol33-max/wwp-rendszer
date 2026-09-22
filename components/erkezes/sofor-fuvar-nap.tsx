@@ -223,7 +223,11 @@ function MegalloSor({
             {TIPUS_CIMKE[m.tipus]}
           </span>
           <span className={cn("font-bold leading-tight", aktiv ? "text-xl" : "text-base")}>{m.varos}</span>
-          <span className="text-xs text-[var(--mob-muted)]">{m.cim}</span>
+          {/* Teljes cím csak azon a megállón, ahová ÉPPEN megy — máshol csak
+              a város, hogy a csempe egy pillantással átfogható maradjon
+              (Budaházi Zoltán, 2026-09-22). A navigációhoz a cím ettől
+              függetlenül megvan. */}
+          {aktiv && <span className="text-xs text-[var(--mob-muted)]">{m.cim}</span>}
         </div>
         {m.kesz && (
           <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-[var(--mob-positive)]">
@@ -251,6 +255,41 @@ function MegalloSor({
         </>
       )}
     </div>
+  );
+}
+
+/** A fuvardíj a csempén — ezres tagolással, forintban. */
+function formatFt(n: number | null | undefined): string | null {
+  if (n === null || n === undefined) return null;
+  return `${n.toLocaleString("hu-HU")} Ft`;
+}
+
+/**
+ * A csempe fejlécének két jelölése (Budaházi Zoltán, 2026-09-22):
+ *
+ *  - "Saját fuvar": a saját raklapunkat visszük. Más munka, mint a bér
+ *    fuvar — nincs külső megbízó, akinek a kapuban szólni kell.
+ *  - "Felpakolva": minden felrakó megállója kész. A sofőr így a csempe
+ *    tetejéről látja, hol tart, anélkül hogy végigolvasná a megállókat.
+ */
+function Jelolok({ blokk }: { blokk: SoforFuvarBlokk }) {
+  const felrakok = blokk.megallok.filter((m) => m.tipus === "felrako");
+  const felpakolt = felrakok.length > 0 && felrakok.every((m) => m.kesz);
+  if (blokk.tipus !== "sajat" && !felpakolt) return null;
+  return (
+    <span className="flex flex-wrap items-center gap-1.5">
+      {blokk.tipus === "sajat" && (
+        <span className="rounded-full bg-[var(--mob-tile)] px-2 py-0.5 text-[11px] font-semibold">
+          Saját fuvar
+        </span>
+      )}
+      {felpakolt && (
+        <span className="flex items-center gap-1 rounded-full bg-[var(--mob-positive)]/15 px-2 py-0.5 text-[11px] font-semibold text-[var(--mob-positive)]">
+          <Check className="h-3 w-3" />
+          Felpakolva
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -297,13 +336,25 @@ function AktualisMegbizas({
 
   return (
     <div className="flex flex-col overflow-hidden rounded-xl border-2 border-[var(--mob-accent)] bg-[var(--mob-card)]">
-      <div className="flex items-center justify-between gap-2 px-3 pb-1 pt-2.5">
-        <span className="truncate text-sm font-semibold">{blokk.megrendelo ?? "Megbízás"}</span>
-        {blokk.masRendszam && (
-          <span className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-[var(--mob-negative)]">
-            <AlertTriangle className="h-3.5 w-3.5" />
-            {blokk.masRendszam}
+      <div className="flex flex-col gap-1.5 px-3 pb-2 pt-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate text-sm font-semibold">
+            {blokk.megrendelo ?? (blokk.tipus === "sajat" ? "Saját fuvar" : "Megbízás")}
           </span>
+          {blokk.masRendszam && (
+            <span className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-[var(--mob-negative)]">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              {blokk.masRendszam}
+            </span>
+          )}
+        </div>
+        {(blokk.tipus === "sajat" || blokk.fuvardij !== null || blokk.megallok.some((m) => m.tipus === "felrako" && m.kesz)) && (
+          <div className="flex items-center justify-between gap-2">
+            <Jelolok blokk={blokk} />
+            {blokk.fuvardij !== null && (
+              <span className="shrink-0 text-sm font-bold tabular-nums">{formatFt(blokk.fuvardij)}</span>
+            )}
+          </div>
         )}
       </div>
 
@@ -428,12 +479,20 @@ function MegbizasElonezet({ blokk, cimke }: { blokk: SoforFuvarBlokk; cimke: str
           <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--mob-muted)]">
             {cimke}
           </span>
-          <span className="truncate text-sm font-semibold">{blokk.megrendelo ?? "Megbízás"}</span>
+          <span className="truncate text-sm font-semibold">
+            {blokk.megrendelo ?? (blokk.tipus === "sajat" ? "Saját fuvar" : "Megbízás")}
+          </span>
           {honnan && hova && (
             <span className="text-base">
               {honnan} → {hova}
             </span>
           )}
+          <span className="flex flex-wrap items-center gap-2">
+            <Jelolok blokk={blokk} />
+            {blokk.fuvardij !== null && (
+              <span className="text-sm font-bold tabular-nums">{formatFt(blokk.fuvardij)}</span>
+            )}
+          </span>
         </span>
         <ChevronDown
           className={cn(
@@ -623,12 +682,19 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
   const kovetkezo = nap?.kovetkezo ?? null;
   const aktivIndex = kovetkezo ? blokkok.findIndex((b) => b.fuvarId === kovetkezo.fuvarId) : -1;
   const aktivBlokk = aktivIndex >= 0 ? blokkok[aktivIndex] : null;
-  const kovetkezoBlokk = aktivIndex >= 0 ? blokkok[aktivIndex + 1] ?? null : null;
 
-  // A holnapi nap a le nem zárt MAI fuvarokat is tartalmazza (átcsúsznak), ezért
-  // azokat kiszűrjük — különben ugyanaz a fuvar kétszer szerepelne a képernyőn.
+  // A képernyőn PONTOSAN KÉT megbízás van: az aktuális és a következő
+  // (Budaházi Zoltán, 2026-09-22). A következő elsősorban a mai sorban utána
+  // álló fuvar; ha ma nincs több, akkor a holnapi első. Így a sofőr mindig
+  // lát egy lépést előre, de sosem kap listát.
+  //
+  // A holnapi nap a le nem zárt MAI fuvarokat is tartalmazza (átcsúsznak),
+  // ezért azokat kiszűrjük — különben ugyanaz a fuvar kétszer szerepelne.
   const maiIdk = new Set(blokkok.map((b) => b.fuvarId));
-  const holnapiFuvarok = (holnap?.fuvarok ?? []).filter((b) => !maiIdk.has(b.fuvarId));
+  const holnapElso = (holnap?.fuvarok ?? []).find((b) => !maiIdk.has(b.fuvarId)) ?? null;
+  const maiKovetkezo = aktivIndex >= 0 ? blokkok[aktivIndex + 1] ?? null : null;
+  const kovetkezoBlokk = maiKovetkezo ?? holnapElso;
+  const kovetkezoCimke = maiKovetkezo ? "Ezután következik" : "Holnap";
 
   if (loading && !nap) {
     return <p className="text-sm text-[var(--mob-muted)]">Betöltés…</p>;
@@ -668,14 +734,10 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
             onFoto={foto}
             onGond={gond}
           />
-          {kovetkezoBlokk && <MegbizasElonezet blokk={kovetkezoBlokk} cimke="Ezután következik" />}
         </>
       )}
 
-      {/* Holnap — ugyanaz a csempe, ugyanúgy kinyitható. */}
-      {holnapiFuvarok.map((b) => (
-        <MegbizasElonezet key={b.fuvarId} blokk={b} cimke="Holnap" />
-      ))}
+      {kovetkezoBlokk && <MegbizasElonezet blokk={kovetkezoBlokk} cimke={kovetkezoCimke} />}
     </div>
   );
 }
