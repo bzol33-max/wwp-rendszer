@@ -1400,3 +1400,17 @@ Kód ebben a körben nem változott — csak feltárás.
 - `ErkezesSajatView` visszakapta a `role` propot (`app/erkezes/page.tsx`
   adja a `session.role`-t), ez dönti el a két csempét.
 - A többi dolgozói fiók nézete változatlan.
+
+## 2026-09-22 — sofőr Fuvarok: csak az aktuális és a következő két fuvar
+
+- A sofőr napi nézete (`components/erkezes/sofor-fuvar-nap.tsx`) eddig a nap
+  ÖSSZES fuvar-blokkját kirakta egymás alá. A Duvenbeck-napokon ez 4-6
+  csempe, telefonon átláthatatlan. Mostantól alapból három látszik: az
+  **aktuális** (amelyikben a soron következő, első nem kész megálló van) és
+  az utána következő kettő.
+- Ha a nap már végig kész (`nap.kovetkezo === null`), az utolsó három
+  fuvar látszik, nem a reggeliek.
+- A többi fuvar nem vész el: „Mind a N fuvar mutatása" gomb nyitja ki,
+  „Csak az aktuális és a következő kettő" zárja vissza. A kinyitás a
+  megjelenített naphoz kötődik, napváltáskor magától visszazárul.
+- A nagy „következő megálló" kártya és a 3 napos előnézet változatlan.

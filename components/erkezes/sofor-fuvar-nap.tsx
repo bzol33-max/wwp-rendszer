@@ -78,6 +78,14 @@ const DOK_CIMKE: Record<string, string> = {
 
 /** A feltöltött kép leghosszabb oldala pixelben — a telefon 4000 px-es, 5-8 MB-os fotója így ~300-600 KB lesz. */
 const FOTO_MAX_OLDAL_PX = 1600;
+
+/**
+ * Hány fuvar-csempe látszik alapból: az aktuális és a következő kettő
+ * (Budaházi Zoltán kérése, 2026-09-22). A Duvenbeck-napokon egy kocsin 4-6
+ * fuvar is van, ezek együtt görgethetetlenül hosszú listát adtak. A többi
+ * fuvar nem vész el, egy gombbal előhívható.
+ */
+const LATHATO_BLOKK = 3;
 const FOTO_JPEG_MINOSEG = 0.82;
 
 /**
@@ -585,6 +593,10 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
   // renderben ne kelljen Date.now()-t hívni (react-hooks/purity).
   const [most, setMost] = useState(() => Date.now());
   const [pending, startTransition] = useTransition();
+  // Melyik napra kérte a sofőr az ÖSSZES fuvart (a napot tároljuk, nem egy
+  // igaz/hamis jelzőt: így a nap váltásakor magától visszazárul, effekt és
+  // setState nélkül).
+  const [osszesNyitvaNap, setOsszesNyitvaNap] = useState<string | null>(null);
   const maiNap = napISO === maiNapISO;
 
   const load = useCallback(async () => {
@@ -724,6 +736,20 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
     : undefined;
   const kovetkezoMegallo = kovetkezoBlokk?.megallok.find((m) => m.megalloIndex === kovetkezoHivatkozas?.megalloIndex);
 
+  // Alapból csak az aktuális fuvar és az utána következő kettő látszik. Az
+  // "aktuális" az, amelyikben a soron következő (első nem kész) megálló van;
+  // ha a nap már végig kész, az utolsó fuvarokat mutatjuk, nem a reggelieket.
+  const osszesLathato = osszesNyitvaNap === napISO;
+  const kovetkezoIndex = kovetkezoHivatkozas
+    ? blokkok.findIndex((b) => b.fuvarId === kovetkezoHivatkozas.fuvarId)
+    : -1;
+  const elsoIndex =
+    kovetkezoIndex >= 0 ? kovetkezoIndex : Math.max(0, blokkok.length - LATHATO_BLOKK);
+  const lathatoBlokkok = osszesLathato
+    ? blokkok
+    : blokkok.slice(elsoIndex, elsoIndex + LATHATO_BLOKK);
+  const rejtettBlokk = blokkok.length - lathatoBlokkok.length;
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
@@ -788,7 +814,7 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
                   onVarakozas={(muvelet) => varakozas(kovetkezoMegallo.fuvarId, kovetkezoMegallo.megalloIndex, muvelet)}
                 />
               )}
-              {blokkok.map((b) => (
+              {lathatoBlokkok.map((b) => (
                 <FuvarBlokk
                   key={b.fuvarId}
                   blokk={b}
@@ -804,6 +830,17 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
                   onVarakozas={varakozas}
                 />
               ))}
+              {(rejtettBlokk > 0 || osszesLathato) && (
+                <Button
+                  variant="outline"
+                  className="h-11 border-[var(--mob-border)] text-sm"
+                  onClick={() => setOsszesNyitvaNap(osszesLathato ? null : napISO)}
+                >
+                  {osszesLathato
+                    ? "Csak az aktuális és a következő kettő"
+                    : `Mind a ${blokkok.length} fuvar mutatása`}
+                </Button>
+              )}
             </>
           )}
 
