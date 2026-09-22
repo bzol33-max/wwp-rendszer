@@ -100,6 +100,46 @@ export async function getHaviKasszaOsszesito(): Promise<HaviKasszaOsszesito> {
   };
 }
 
+export type MaiPenzmozgas = {
+  /** Ma a kasszából felvásárlásra kifizetett készpénz (pozitív szám). */
+  felvasarlasKeszpenz: number;
+  /** Ma a kasszából egyéb címen kifizetett készpénz (pozitív szám). */
+  egyebKiadas: number;
+  /** Ma átutalással vásárolt raklap nettó értéke és darabszáma — ez NEM a kasszából megy ki. */
+  atutalasOsszeg: number;
+  atutalasDb: number;
+};
+
+/**
+ * A "Nyíregyháza" fül Mai pénzmozgás kártyája: mi ment ki ma készpénzben
+ * (felvásárlás, egyéb), és mennyit vettünk átutalással. Az átutalásos vétel
+ * a készletet ugyanúgy növeli, de a kasszát nem érinti, ezért külön sor.
+ */
+export async function getMaiPenzmozgas(): Promise<MaiPenzmozgas> {
+  await requireViewPermission("attekintes");
+  const [kassza, atutalas] = await Promise.all([
+    query<{ felvasarlas: string; egyeb: string }>(
+      `select
+         coalesce(-sum(amount) filter (where category = 'felvasarlas' and amount < 0), 0) as felvasarlas,
+         coalesce(-sum(amount) filter (where coalesce(category, 'egyeb') <> 'felvasarlas' and amount < 0), 0) as egyeb
+       from kassza_movements
+       where (created_at at time zone 'Europe/Budapest')::date = ${BUDAPEST_MA}`
+    ),
+    query<{ osszeg: string; db: string }>(
+      `select coalesce(sum(total), 0) as osszeg, coalesce(sum(qty), 0) as db
+       from nyiregyhaza_purchases
+       where payment_method = 'atutalas'
+         and (created_at at time zone 'Europe/Budapest')::date = ${BUDAPEST_MA}`
+    ),
+  ]);
+  return {
+    felvasarlasKeszpenz: Number(kassza[0]?.felvasarlas ?? 0),
+    egyebKiadas: Number(kassza[0]?.egyeb ?? 0),
+    atutalasOsszeg: Number(atutalas[0]?.osszeg ?? 0),
+    atutalasDb: Number(atutalas[0]?.db ?? 0),
+  };
+}
+
 export type KasszaKiadasTetel = {
   id: string;
   description: string;

@@ -3,6 +3,7 @@ import {
   getHaviFelvasarlasOsszefoglalo,
   getHaviKasszaOsszesito,
   getMaiKiadasok,
+  getMaiPenzmozgas,
 } from "@/lib/attekintes/actions";
 import { HaviFelvasarlasButton } from "@/components/attekintes/havi-felvasarlas-modal";
 import { KasszaEgyenlegCard } from "@/components/attekintes/kassza-egyenleg-card";
@@ -30,11 +31,12 @@ function formatMaiDatum() {
 }
 
 export default async function NyiregyhazaPage() {
-  const [osszefoglalo, kiadasok, havi, haviTipusok] = await Promise.all([
+  const [osszefoglalo, kiadasok, havi, haviTipusok, penz] = await Promise.all([
     getFelvasarlasOsszefoglalo(),
     getMaiKiadasok(),
     getHaviKasszaOsszesito(),
     getHaviFelvasarlasOsszefoglalo(),
+    getMaiPenzmozgas(),
   ]);
   const kiadasOsszeg = kiadasok.reduce((sum, k) => sum + k.amount, 0);
 
@@ -47,11 +49,41 @@ export default async function NyiregyhazaPage() {
 
       <KasszaEgyenlegCard egyenleg={osszefoglalo.kassza} havi={havi} />
 
-      <div className="flex items-center justify-between rounded-xl border border-[var(--at-border)] bg-[var(--at-card)] p-4">
-        <span className="text-xs text-[var(--at-muted)]">Mai kiadás</span>
-        <span className="text-2xl font-bold tabular-nums text-[var(--at-negative)]">
-          {formatFt(kiadasOsszeg)}
-        </span>
+      {/* Mai pénzmozgás: a nap pénzoldala egy kártyán. Az átutalásos vétel
+          külön sor, mert a készletet növeli, de a kasszát nem érinti — az
+          összeg nettó, a számlán ehhez jön még az ÁFA. */}
+      <div className="rounded-xl border border-[var(--at-border)] bg-[var(--at-card)] p-4">
+        <div className="mb-2 text-sm font-semibold">Mai pénzmozgás</div>
+        <div className="flex items-center justify-between py-1 text-sm">
+          <span className="text-[var(--at-muted)]">Felvásárlás készpénzből</span>
+          <span className="font-semibold tabular-nums text-[var(--at-negative)]">
+            {penz.felvasarlasKeszpenz > 0 ? `−${formatFt(penz.felvasarlasKeszpenz)}` : formatFt(0)}
+          </span>
+        </div>
+        <div className="flex items-center justify-between py-1 text-sm">
+          <span className="text-[var(--at-muted)]">
+            Felvásárlás átutalással
+            {penz.atutalasDb > 0 && (
+              <span className="text-[var(--at-muted)]"> · {penz.atutalasDb} db</span>
+            )}
+          </span>
+          <span className="font-semibold tabular-nums text-[#185fa5] dark:text-[#85b7eb]">
+            {formatFt(penz.atutalasOsszeg)}
+            {penz.atutalasOsszeg > 0 && <span className="text-xs font-normal"> + ÁFA</span>}
+          </span>
+        </div>
+        <div className="flex items-center justify-between py-1 text-sm">
+          <span className="text-[var(--at-muted)]">Egyéb kiadás</span>
+          <span className="font-semibold tabular-nums text-[var(--at-negative)]">
+            {penz.egyebKiadas > 0 ? `−${formatFt(penz.egyebKiadas)}` : formatFt(0)}
+          </span>
+        </div>
+        <div className="mt-2 flex items-center justify-between border-t border-[var(--at-border)] pt-2">
+          <span className="text-sm font-medium">Ma készpénzből összesen</span>
+          <span className="text-xl font-bold tabular-nums text-[var(--at-negative)]">
+            {formatFt(kiadasOsszeg)}
+          </span>
+        </div>
       </div>
 
       <div>
