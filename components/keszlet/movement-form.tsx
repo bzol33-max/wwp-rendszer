@@ -28,6 +28,10 @@ const DIRECTION_OPTIONS: readonly [Direction, string][] = [
 
 const AFA_KULCS = 0.27;
 
+// Gyorsgomb a Partner mezőhöz: a névtelen, alkalmi vétel/kiadás mindig
+// ugyanazzal a megnevezéssel kerüljön be, hogy később összeszámolható legyen.
+const ESETI_PARTNER = "Eseti felvásárlás";
+
 let nextKey = 1;
 function ujSor(type: string, targetSite: string): Sor {
   return { key: nextKey++, type, qty: "", targetSite, unitPrice: "" };
@@ -87,9 +91,13 @@ export function MovementForm({
   const javaslatok = (() => {
     const keresett = partner.trim().toLowerCase();
     if (keresett.length < 2) return [];
-    if (partnerek.some((n) => n.toLowerCase() === keresett)) return [];
-    const eleje = partnerek.filter((n) => n.toLowerCase().startsWith(keresett));
-    const benne = partnerek.filter(
+    // Az eseti felvásárlás akkor is ajánlható, ha még nincs ilyen tétel.
+    const nevek = partnerek.some((n) => n.toLowerCase() === ESETI_PARTNER.toLowerCase())
+      ? partnerek
+      : [ESETI_PARTNER, ...partnerek];
+    if (nevek.some((n) => n.toLowerCase() === keresett)) return [];
+    const eleje = nevek.filter((n) => n.toLowerCase().startsWith(keresett));
+    const benne = nevek.filter(
       (n) => !n.toLowerCase().startsWith(keresett) && n.toLowerCase().includes(keresett)
     );
     return [...eleje, ...benne].slice(0, 8);
@@ -376,7 +384,20 @@ export function MovementForm({
 
         {direction !== "mozgatas" && (
           <div className="space-y-1.5">
-            <Label>{eladasLehet ? "Partner / vevő" : "Partner"}</Label>
+            <div className="flex items-center justify-between gap-2">
+              <Label>{eladasLehet ? "Partner / vevő" : "Partner"}</Label>
+              {/* Egy koppintás a névtelen, alkalmi vételhez — nem kell begépelni. */}
+              <button
+                type="button"
+                onClick={() => {
+                  setPartner(ESETI_PARTNER);
+                  setJavaslatNyitva(false);
+                }}
+                className="rounded-full border px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-muted max-md:min-h-9"
+              >
+                {ESETI_PARTNER}
+              </button>
+            </div>
             <div className="relative">
               <Input
                 placeholder={eladasLehet ? "Kinek adtuk el" : "Partner neve"}
