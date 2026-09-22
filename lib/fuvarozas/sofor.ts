@@ -272,6 +272,18 @@ export type SoforFuvarBlokk = {
    * "hánykor".
    */
   idopont: string | null;
+  /**
+   * A fuvar díja forintban. Budaházi Zoltán kérte a sofőrök csempéire
+   * (2026-09-22) — addig szándékosan nem volt kint.
+   */
+  fuvardij: number | null;
+  /**
+   * 'sajat': a saját raklapunkat visszük (mi vagyunk a megbízó is).
+   * 'ber': másnak fuvarozunk. A sofőrnek ez a kettő MÁS munka — a sajátnál
+   * nincs kinek szólni a kapuban, a bérnél a megbízó a gazda —, ezért a
+   * csempén jelölve van (Budaházi Zoltán, 2026-09-22).
+   */
+  tipus: "sajat" | "ber";
   /** A megrendelő kapcsolattartója a fuvar_kapcsolatok törzsből, ha van. */
   kapcsolat: SoforKapcsolat | null;
   /** Igaz, ha a fuvar korábbról csúszik át erre a napra. */
@@ -308,6 +320,8 @@ type FuvarExtraSor = {
   suly: string | null;
   megjegyzes: string | null;
   jarmu: string | null;
+  fuvardij: number | null;
+  tipus: "sajat" | "ber";
   felrakas_ablak_tol: Date | null;
   felrakas_ablak_ig: Date | null;
   lerakas_ablak_tol: Date | null;
@@ -343,7 +357,7 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
   const [extraSorok, dokSorok] = fuvarIds.length
     ? await Promise.all([
         query<FuvarExtraSor>(
-          `select id::text, reise_id, idopont, aru, mennyiseg, suly, megjegyzes, jarmu,
+          `select id::text, reise_id, idopont, aru, mennyiseg, suly, megjegyzes, jarmu, fuvardij, tipus,
                   felrakas_ablak_tol, felrakas_ablak_ig, lerakas_ablak_tol, lerakas_ablak_ig
              from fuvar_megbizasok
             where id = any($1::bigint[])`,
@@ -426,6 +440,8 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
       suly: extra?.suly ?? null,
       megjegyzes: extra?.megjegyzes ?? null,
       idopont: extra?.idopont ?? null,
+      fuvardij: extra?.fuvardij ?? null,
+      tipus: extra?.tipus ?? "ber",
       kapcsolat: b.megrendelo?.trim()
         ? kapcsolatByKulcs.get(normalizaltCegKulcs(ceglNevKanonikusan(b.megrendelo))) ?? null
         : null,

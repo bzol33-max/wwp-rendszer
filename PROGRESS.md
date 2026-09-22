@@ -1741,3 +1741,31 @@ hierarchiát és a hiányzó adatokat tette hozzá.
 - `npm run lint` a módosított fájlra tiszta (a repó 42 egyéb problémája
   korábbról van), `tsc --noEmit` tiszta, tesztek: teszt-erintes 67,
   teszt-jogosultsag 28, teszt-allapotgep 44, teszt-lerako-telephely 34 — zöld.
+
+## 2026-09-22 — Sofőr: két csempe, jelölésekkel és fuvardíjjal
+
+Budaházi Zoltán kérése: „csak az aktuális és következő megbízás legyen,
+aktuálisnál jelölve ha pl. már felpakolt, minimális adat, fuvardíj, honnan
+hová csak város, megbízó" + „azt is jelöld ha saját fuvar".
+
+- **Pontosan két csempe.** Eddig az aktuális + a mai következő + a holnapi
+  fuvarok *mindegyike* kint volt, tehát rossz napon négy-öt csempe. Most
+  kettő: az aktuális, és utána a következő — ami elsősorban a mai sorban
+  utána álló fuvar, és csak ha ma nincs több, akkor a holnapi első. Így a
+  sofőr mindig lát egy lépést előre, de sosem kap listát.
+- **Két új jelölés a csempe fejlécén** (`Jelolok`):
+  - „Saját fuvar" — a saját raklapunkat visszük. Más munka, mint a bér
+    fuvar: nincs külső megbízó, akinek a kapuban szólni kell.
+  - „Felpakolva" — minden felrakó megállója kész. A csempe tetejéről
+    látszik, hol tart, anélkül hogy végigolvasná a megállókat.
+- **Fuvardíj a csempén.** Új mező a sofőr-adatokban (`fuvardij`), a
+  `fuvar_megbizasok.fuvardij`-ból; ezres tagolással, forintban. Eddig
+  szándékosan nem volt kint a sofőröknél.
+- **Teljes cím csak a soron következő megállón.** A többi megállónál csak a
+  város látszik — a csempe így egy pillantással átfogható. A navigációhoz a
+  cím ettől függetlenül megvan, és a „Részletek" alatt is elérhető.
+- **Új adatmező:** `SoforFuvarBlokk.tipus` ('sajat' | 'ber') és `fuvardij`,
+  mindkettő a meglévő `FuvarExtraSor` lekérdezésbe került — nincs új kör.
+- `npm run lint` az érintett fájlokra tiszta, `tsc --noEmit` tiszta, tesztek:
+  teszt-erintes 67, teszt-jogosultsag 28, teszt-allapotgep 44,
+  teszt-backfill-allapot 18, teszt-lerako-telephely 34 — zöld.
