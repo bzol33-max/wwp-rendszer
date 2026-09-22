@@ -1490,3 +1490,20 @@ SOHA nem kerülnek a csukott rész mögé.
   nem egy megbízáshoz, és akkor is jelölhető, ha nincs aktív fuvar.
 - A `sofor_munkanap` az indításkor lefutó `db/schema.sql`-ből jön létre,
   külön migráció nem kell.
+
+## 2026-09-22 — sofőr: pihenő-sáv és Pakolás gomb kivéve
+
+Budaházi Zoltán kérése ugyanaznap, a kipróbálás után.
+
+- **Pihenő-sáv kivéve.** A `MunkanapSav` (Pihenő 1 · Pihenő 2 · Vezetés vége),
+  a `jelolMunkanapot` művelet és a `SoforNap.munkanap` mező törölve —
+  egyelőre nem figyeljük ezeket.
+  A `sofor_munkanap` tábla SZÁNDÉKOSAN a sémában marad, üresen: a repó
+  konvenciója szerint a visszavonás nem `drop`, és ha a jelölés visszakerül,
+  csak a felületet kell visszatenni.
+- **Pakolás gomb kivéve.** A megálló két lépése maradt: **Megérkeztem** és
+  **Indulok**. A rakodás ideje a kettő különbségéből úgyis kijön, a sofőrnek
+  meg eggyel kevesebbet kell nyomnia.
+- Az „Indulok" továbbra is lezár egy korábbi körből maradt nyitott
+  várakozást, ha van — újat már nem indítunk, de a meglévő sorok ne
+  maradjanak félbe.

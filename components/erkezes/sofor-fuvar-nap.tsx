@@ -12,7 +12,7 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Camera, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Coffee, Copy, FileText, Hash, LocateFixed, MapPin, MessageSquareWarning, Moon, Navigation, Phone } from "lucide-react";
+import { AlertTriangle, Camera, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Copy, FileText, Hash, LocateFixed, MapPin, MessageSquareWarning, Navigation, Phone } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
@@ -21,15 +21,12 @@ import {
   getSoforNap,
   jelezGondot,
   jelolMegerkeztem,
-  jelolMunkanapot,
   jelolVarakozast,
   markMegalloKesz,
   rogzitMegalloHelyet,
   rogzitPozicioszamot,
   type SoforFuvarBlokk,
   type SoforMegalloSor,
-  type SoforMunkanapBejegyzes,
-  type SoforMunkanapTipus,
   type SoforNap,
 } from "@/lib/fuvarozas/sofor";
 import { getKovetkezoNapokElonezet, type KovetkezoNap } from "@/lib/fuvarozas/actions";
@@ -155,8 +152,12 @@ function navigacioUrl(cim: string): string {
  * diszpécser a GPS lapon és a megbízás részletein látja.
  */
 /**
- * A megálló három lépése — ugyanaz a felrakónál és a lerakónál (Budaházi
- * Zoltán kérése, 2026-09-22, "2-es terv").
+ * A megálló két lépése — ugyanaz a felrakónál és a lerakónál (Budaházi
+ * Zoltán, 2026-09-22).
+ *
+ * Eredetileg három lépés volt (Megérkeztem · Pakolás · Indulok), de a
+ * pakolás jelölését kivettük: a rakodás ideje a megérkezés és az indulás
+ * között úgyis kiszámolható, a sofőrnek meg eggyel kevesebbet kell nyomnia.
  *
  * Mindhárom gomb végig látszik: a soron következő kiemelve, a többi halványan,
  * de MEGNYOMHATÓAN. A sofőr a valóságban nem mindig sorrendben ér rá koppintani
@@ -164,31 +165,22 @@ function navigacioUrl(cim: string): string {
  * időpontot végigkattintania. Ami megvan, az zöld, órával jelölt sorrá alakul:
  * az a nyugtázás is.
  *
- * Adat: a három gomb a fuvar_megallo_allapot meglévő mezőit írja
- * (kezi_erkezes / varakozas_kezdete / varakozas_vege + kesz), migráció nélkül.
- * A "Pakolás" tehát ugyanaz az állásidő, amit a diszpécser oldal várakozásként
- * mutat — ezt Budaházi Zoltánnal egyben hagytuk.
+ * Adat: a két gomb a fuvar_megallo_allapot meglévő mezőit írja
+ * (kezi_erkezes, illetve kesz + kesz_at), migráció nélkül.
  */
 function LepesGombok({
   m,
   pending,
   meret,
   onErkezes,
-  onPakolas,
   onIndulok,
 }: {
   m: SoforMegalloSor;
   pending: boolean;
   meret: "nagy" | "kicsi";
   onErkezes: () => void;
-  onPakolas: () => void;
   onIndulok: () => void;
 }) {
-  const pakolasPerc =
-    m.varakozasKezdete && m.varakozasVege
-      ? Math.round((new Date(m.varakozasVege).getTime() - new Date(m.varakozasKezdete).getTime()) / 60000)
-      : null;
-
   const lepesek = [
     {
       kulcs: "erkezes",
@@ -197,14 +189,6 @@ function LepesGombok({
       ido: m.keziErkezes,
       extra: null as string | null,
       onClick: onErkezes,
-    },
-    {
-      kulcs: "pakolas",
-      cimke: "Pakolás",
-      kesz: Boolean(m.varakozasKezdete),
-      ido: m.varakozasKezdete,
-      extra: pakolasPerc !== null ? `${pakolasPerc} perc` : null,
-      onClick: onPakolas,
     },
     {
       kulcs: "indulas",
@@ -304,7 +288,6 @@ function KovetkezoKartya({
   most,
   pending,
   onErkezes,
-  onPakolas,
   onIndulok,
   onHely,
 }: {
@@ -313,7 +296,6 @@ function KovetkezoKartya({
   most: number;
   pending: boolean;
   onErkezes: () => void;
-  onPakolas: () => void;
   onIndulok: () => void;
   onHely: () => void;
 }) {
@@ -337,7 +319,6 @@ function KovetkezoKartya({
             pending={pending}
             meret="nagy"
             onErkezes={onErkezes}
-            onPakolas={onPakolas}
             onIndulok={onIndulok}
           />
         </div>
@@ -361,7 +342,6 @@ function MegalloSor({
   most,
   pending,
   onErkezes,
-  onPakolas,
   onIndulok,
   onHely,
 }: {
@@ -371,7 +351,6 @@ function MegalloSor({
   most: number;
   pending: boolean;
   onErkezes: () => void;
-  onPakolas: () => void;
   onIndulok: () => void;
   onHely: () => void;
 }) {
@@ -426,7 +405,6 @@ function MegalloSor({
           pending={pending}
           meret="kicsi"
           onErkezes={onErkezes}
-          onPakolas={onPakolas}
           onIndulok={onIndulok}
         />
       </div>
@@ -483,7 +461,6 @@ function FuvarBlokk({
   most,
   pending,
   onErkezes,
-  onPakolas,
   onIndulok,
   onHely,
   onFoto,
@@ -495,7 +472,6 @@ function FuvarBlokk({
   most: number;
   pending: boolean;
   onErkezes: (fuvarId: string, megalloIndex: number) => void;
-  onPakolas: (fuvarId: string, megalloIndex: number) => void;
   onIndulok: (m: SoforMegalloSor) => void;
   onHely: (m: SoforMegalloSor) => void;
   onFoto: (fuvarId: string, fajl: File) => void;
@@ -531,7 +507,6 @@ function FuvarBlokk({
               most={most}
               pending={pending}
               onErkezes={() => onErkezes(m.fuvarId, m.megalloIndex)}
-              onPakolas={() => onPakolas(m.fuvarId, m.megalloIndex)}
               onIndulok={() => onIndulok(m)}
               onHely={() => onHely(m)}
             />
@@ -685,77 +660,6 @@ function AdatSor({ cimke, ertek }: { cimke: string; ertek: string | null | undef
   );
 }
 
-/**
- * A nap fix gombjai: a két pihenő és a vezetés vége (Budaházi Zoltán,
- * 2026-09-22). Szándékosan a fuvaroktól FÜGGETLEN — a pihenő nem egy
- * megbízáshoz tartozik, hanem a naphoz, és akkor is jelölhető, ha éppen
- * nincs aktív fuvar.
- *
- * A sáv a görgethető tartalom tetejére tapad, így vezetés közben sosem kell
- * megkeresni. Egy koppintás indít, a következő zár; a vezetés végénél a
- * második koppintás visszavon (téves koppintás javítása telefonálás nélkül).
- */
-function MunkanapSav({
-  bejegyzesek,
-  pending,
-  onJelol,
-}: {
-  bejegyzesek: SoforMunkanapBejegyzes[];
-  pending: boolean;
-  onJelol: (tipus: SoforMunkanapTipus) => void;
-}) {
-  const gombok: { tipus: SoforMunkanapTipus; cimke: string; Ikon: typeof Coffee }[] = [
-    { tipus: "piheno1", cimke: "Pihenő 1", Ikon: Coffee },
-    { tipus: "piheno2", cimke: "Pihenő 2", Ikon: Coffee },
-    { tipus: "vezetes_vege", cimke: "Vezetés vége", Ikon: Moon },
-  ];
-
-  return (
-    <div className="sticky top-0 z-10 -mx-4 flex gap-1.5 border-b border-[var(--mob-border)] bg-[var(--mob-bg)] px-4 pb-2 pt-1">
-      {gombok.map(({ tipus, cimke, Ikon }) => {
-        const b = bejegyzesek.find((x) => x.tipus === tipus);
-        const fut = Boolean(b && !b.vege && tipus !== "vezetes_vege");
-        const lezart = Boolean(b && (b.vege || tipus === "vezetes_vege"));
-        const perc =
-          b?.vege ? Math.round((new Date(b.vege).getTime() - new Date(b.kezdet).getTime()) / 60000) : null;
-
-        return (
-          <button
-            key={tipus}
-            type="button"
-            disabled={pending}
-            onClick={() => onJelol(tipus)}
-            className={cn(
-              "flex h-11 flex-1 flex-col items-center justify-center gap-0.5 rounded-lg border px-1 text-[10px] font-semibold leading-tight",
-              fut && "border-[var(--mob-accent)] bg-[var(--mob-accent)] text-white",
-              lezart && "border-[var(--mob-positive)]/30 bg-[var(--mob-positive)]/10 text-[var(--mob-positive)]",
-              !fut && !lezart && "border-[var(--mob-border)] bg-[var(--mob-card)] text-[var(--mob-muted)]"
-            )}
-            title={
-              fut
-                ? "Fut — koppints, ha továbbindulsz"
-                : lezart
-                  ? "Koppints a visszavonáshoz"
-                  : "Koppints, amikor leállsz"
-            }
-          >
-            <span className="flex items-center gap-1">
-              <Ikon className="h-3.5 w-3.5 shrink-0" />
-              {fut ? "Vége?" : cimke}
-            </span>
-            {b && (
-              <span className="tabular-nums">
-                {formatIdo(b.kezdet)}
-                {perc !== null && ` · ${perc}p`}
-              </span>
-            )}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
 function KovetkezoNapokDoboz({ napok }: { napok: KovetkezoNap[] }) {
   const nemUresek = napok.filter((n) => n.megallok.length > 0);
   if (nemUresek.length === 0) return null;
@@ -834,21 +738,10 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
       .catch(() => setKovetkezoNapok([]));
   }, [nap?.sofor]);
 
-  function pakolas(fuvarId: string, megalloIndex: number) {
-    startTransition(async () => {
-      try {
-        await jelolVarakozast(fuvarId, megalloIndex, "kezd");
-        await load();
-        toast.success("Pakolás kezdete rögzítve.");
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Nem sikerült rögzíteni.");
-      }
-    });
-  }
-
-  // Az "Indulok" zárja le a megállót: ha fut a pakolás órája, azt is leállítja,
-  // majd késznek jelöli a megállót (ez az a jelölés, amit a GPS lap és a
-  // diszpécser idővonala is mutat). Kettőt ír, de a sofőrnek egy koppintás.
+  // Az "Indulok" zárja le a megállót: késznek jelöli (ez az a jelölés, amit a
+  // GPS lap és a diszpécser idővonala is mutat). Ha egy korábbi körből maradt
+  // nyitott várakozás ezen a megállón, azt is lezárja — a Pakolás gomb kivétele
+  // óta újat már nem indítunk, de a meglévő sorok ne maradjanak félbe.
   function indulok(m: SoforMegalloSor) {
     startTransition(async () => {
       try {
@@ -918,17 +811,6 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
     });
   }
 
-  function munkanap(tipus: SoforMunkanapTipus) {
-    startTransition(async () => {
-      try {
-        await jelolMunkanapot(employeeId, napISO, tipus);
-        await load();
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Nem sikerült rögzíteni.");
-      }
-    });
-  }
-
   function hely(m: SoforMegalloSor) {
     if (!window.confirm(`A kocsi mostani helyét jegyezzük fel ehhez a címhez?\n\n${m.cim}\n\nCsak akkor koppints Igent, ha a rakodóhelyen állsz.`)) return;
     startTransition(async () => {
@@ -962,7 +844,6 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <MunkanapSav bejegyzesek={nap?.munkanap ?? []} pending={pending} onJelol={munkanap} />
       <div className="flex items-center justify-between">
         <div className="flex flex-col">
           <span className="text-sm font-semibold">
@@ -1020,7 +901,6 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
                   most={most}
                   pending={pending}
                   onErkezes={() => erkezes(kovetkezoMegallo.fuvarId, kovetkezoMegallo.megalloIndex)}
-                  onPakolas={() => pakolas(kovetkezoMegallo.fuvarId, kovetkezoMegallo.megalloIndex)}
                   onIndulok={() => indulok(kovetkezoMegallo)}
                   onHely={() => hely(kovetkezoMegallo)}
                 />
@@ -1033,7 +913,6 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
                   most={most}
                   pending={pending}
                   onErkezes={erkezes}
-                  onPakolas={pakolas}
                   onIndulok={indulok}
                   onHely={hely}
                   onFoto={foto}
