@@ -976,21 +976,25 @@ async function alapar(q: Querier, type: string): Promise<number> {
 export async function addPendingPurchases(input: {
   seller: string;
   date: string;
-  items: { type: string; qty: number }[];
+  /** unitPrice: egyedi ár Ft/db — ha nincs megadva, a típus irányára. */
+  items: { type: string; qty: number; unitPrice?: number }[];
 }) {
   await requireEditPermission("keszlet");
   const createdBy = await rogzitoNeve();
   const seller = input.seller.trim();
   if (!seller) throw new Error("A név megadása kötelező.");
   ellenorizdDatum(input.date);
-  for (const item of input.items) ellenorizdDarabszam(item.qty, item.type);
+  for (const item of input.items) {
+    ellenorizdDarabszam(item.qty, item.type);
+    if (item.unitPrice !== undefined) ellenorizdAr(item.unitPrice);
+  }
   if (input.items.length === 0) return;
   await withTransaction(async (q) => {
     for (const item of input.items) {
       await rogzitsFelvasarlast(q, {
         type: item.type,
         qty: item.qty,
-        unitPrice: await alapar(q, item.type),
+        unitPrice: item.unitPrice ?? (await alapar(q, item.type)),
         seller,
         pending: true,
         method: "keszpenz",

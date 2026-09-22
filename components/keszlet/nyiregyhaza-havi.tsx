@@ -119,6 +119,9 @@ export function NyiregyhazaHaviTab() {
   const [pendingSeller, setPendingSeller] = useState("");
   const [pendingDate, setPendingDate] = useState(todayDateInputValue());
   const [pendingQtyMap, setPendingQtyMap] = useState<Record<string, string>>({});
+  // Típusonkénti egyedi ár a kifizetésre váró felvételnél — csak ott jelenik
+  // meg, ahol már van darabszám, és az irányárral indul.
+  const [pendingPriceMap, setPendingPriceMap] = useState<Record<string, string>>({});
   const [pendingSubmitting, setPendingSubmitting] = useState(false);
   const [pendingListOpen, setPendingListOpen] = useState(false);
   const [pendingSellerLocked, setPendingSellerLocked] = useState(false);
@@ -282,18 +285,31 @@ export function NyiregyhazaHaviTab() {
     return Object.entries(pendingQtyMap).filter(([, v]) => Number(v) > 0);
   }
 
+  // Az adott típusnál érvényes ár: amit beírtak, egyébként az irányár.
+  const pendingUnitPrice = useCallback(
+    (type: string) => {
+      const beirt = pendingPriceMap[type];
+      if (beirt !== undefined && beirt !== "" && Number.isFinite(Number(beirt))) {
+        return Number(beirt);
+      }
+      return prices[type] ?? 0;
+    },
+    [pendingPriceMap, prices]
+  );
+
   const pendingAddTotal = useMemo(() => {
     return Object.entries(pendingQtyMap).reduce((sum, [type, qtyStr]) => {
       const qty = Number(qtyStr) || 0;
-      return sum + qty * (prices[type] ?? 0);
+      return sum + qty * pendingUnitPrice(type);
     }, 0);
-  }, [pendingQtyMap, prices]);
+  }, [pendingQtyMap, pendingUnitPrice]);
 
   function openPendingAdd() {
     setPendingSeller("");
     setPendingSellerLocked(false);
     setPendingDate(todayDateInputValue());
     setPendingQtyMap({});
+    setPendingPriceMap({});
     setPendingAddOpen(true);
   }
 
@@ -317,7 +333,11 @@ export function NyiregyhazaHaviTab() {
       await addPendingPurchases({
         seller: pendingSeller.trim(),
         date: pendingDate,
-        items: entries.map(([type, qtyStr]) => ({ type, qty: Number(qtyStr) })),
+        items: entries.map(([type, qtyStr]) => ({
+          type,
+          qty: Number(qtyStr),
+          unitPrice: pendingUnitPrice(type),
+        })),
       });
       setPendingAddOpen(false);
       await load();
@@ -983,21 +1003,43 @@ export function NyiregyhazaHaviTab() {
             <div className="space-y-1.5">
               <Label className="text-xs">Típusok és darabszámok</Label>
               <div className="grid grid-cols-2 gap-3">
-                {Object.keys(prices).map((t) => (
-                  <div key={t} className="space-y-1">
-                    <Label className="text-[11px] text-muted-foreground">{t}</Label>
-                    <Input
-                      type="number"
-                      placeholder="db"
-                      value={pendingQtyMap[t] ?? ""}
-                      onChange={(e) =>
-                        setPendingQtyMap((prev) => ({ ...prev, [t]: e.target.value }))
-                      }
-                      data-kbnav-item
-                      onKeyDown={kbNav}
-                    />
-                  </div>
-                ))}
+                {Object.keys(prices).map((t) => {
+                  const vanDarab = Number(pendingQtyMap[t]) > 0;
+                  const ar = pendingPriceMap[t] ?? String(prices[t] ?? "");
+                  const eltero = Number(ar) !== (prices[t] ?? 0);
+                  return (
+                    <div key={t} className="space-y-1">
+                      <Label className="text-[11px] text-muted-foreground">{t}</Label>
+                      <Input
+                        type="number"
+                        placeholder="db"
+                        value={pendingQtyMap[t] ?? ""}
+                        onChange={(e) =>
+                          setPendingQtyMap((prev) => ({ ...prev, [t]: e.target.value }))
+                        }
+                        data-kbnav-item
+                        onKeyDown={kbNav}
+                      />
+                      {/* Ár csak ott, ahol tényleg rögzítünk valamit — az
+                          irányárral indul, és bármikor átírható. */}
+                      {vanDarab && (
+                        <div className="flex items-center gap-1.5">
+                          <Input
+                            type="number"
+                            value={ar}
+                            onChange={(e) =>
+                              setPendingPriceMap((prev) => ({ ...prev, [t]: e.target.value }))
+                            }
+                            className={`h-8 ${eltero ? "border-warning text-warning" : ""}`}
+                            data-kbnav-item
+                            onKeyDown={kbNav}
+                          />
+                          <span className="text-[11px] text-muted-foreground">Ft/db</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
             <div className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm">
