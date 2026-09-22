@@ -176,12 +176,16 @@ function Header({ employeeName, onBack }: { employeeName: string; onBack?: () =>
 
 function HomeScreen({
   employeeName,
+  showJelenlet,
+  showFeladatok,
   showKeszlet,
   showFuvarok,
   showProfil,
   onSelect,
 }: {
   employeeName: string;
+  showJelenlet: boolean;
+  showFeladatok: boolean;
   showKeszlet: boolean;
   showFuvarok: boolean;
   showProfil: boolean;
@@ -201,22 +205,26 @@ function HomeScreen({
             <span className="text-base font-semibold">Fuvarok</span>
           </button>
         )}
-        <button
-          type="button"
-          onClick={() => onSelect("jelenlet")}
-          className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-[var(--mob-border)] bg-[var(--mob-card)] py-10 transition-colors active:bg-[var(--mob-tile)]"
-        >
-          <CalendarClock className="h-7 w-7" />
-          <span className="text-base font-semibold">Jelenléti</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => onSelect("feladatok")}
-          className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-[var(--mob-border)] bg-[var(--mob-card)] py-10 transition-colors active:bg-[var(--mob-tile)]"
-        >
-          <ClipboardList className="h-7 w-7" />
-          <span className="text-base font-semibold">Feladatok</span>
-        </button>
+        {showJelenlet && (
+          <button
+            type="button"
+            onClick={() => onSelect("jelenlet")}
+            className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-[var(--mob-border)] bg-[var(--mob-card)] py-10 transition-colors active:bg-[var(--mob-tile)]"
+          >
+            <CalendarClock className="h-7 w-7" />
+            <span className="text-base font-semibold">Jelenléti</span>
+          </button>
+        )}
+        {showFeladatok && (
+          <button
+            type="button"
+            onClick={() => onSelect("feladatok")}
+            className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-[var(--mob-border)] bg-[var(--mob-card)] py-10 transition-colors active:bg-[var(--mob-tile)]"
+          >
+            <ClipboardList className="h-7 w-7" />
+            <span className="text-base font-semibold">Feladatok</span>
+          </button>
+        )}
         {showKeszlet && (
           <button
             type="button"
@@ -913,17 +921,23 @@ function KeszletScreen({
 export function ErkezesSajatView({
   employeeId,
   employeeName,
+  role,
   keszletPermission,
   fuvarozasPermission,
   elolegekPermission,
 }: {
   employeeId: string;
   employeeName: string;
+  role: string;
   keszletPermission: ModulePermission;
   fuvarozasPermission: ModulePermission;
   elolegekPermission: ModulePermission;
 }) {
   const [screen, setScreen] = useState<Screen>("home");
+  // Sofőr fiók (Vadon Gergő, Takács Micó) csak a Fuvarok és a Profil
+  // csempét kapja — Budaházi Zoltán kérése (2026-09-22). A jelenlétet és a
+  // feladatokat nem a telefonon intézik, vezetés közben csak zaj volt.
+  const sofor = role === "sofor";
   const [elolegek, setElolegek] = useState<EmployeeElolegekOsszesito | null>(null);
   const [keret, setKeret] = useState<SzabadsagKeret | null>(null);
   const [profilLoading, setProfilLoading] = useState(true);
@@ -962,7 +976,7 @@ export function ErkezesSajatView({
   );
 
   let tartalom: React.ReactNode;
-  if (screen === "jelenlet") {
+  if (screen === "jelenlet" && !sofor) {
     tartalom = (
       <JelenletiScreen
         employeeId={employeeId}
@@ -970,7 +984,7 @@ export function ErkezesSajatView({
         onBack={() => setScreen("home")}
       />
     );
-  } else if (screen === "feladatok") {
+  } else if (screen === "feladatok" && !sofor) {
     tartalom = <FeladatokScreen employeeName={employeeName} onBack={() => setScreen("home")} />;
   } else if (screen === "keszlet" && keszletPermission.view) {
     tartalom = (
@@ -1004,7 +1018,9 @@ export function ErkezesSajatView({
     tartalom = (
       <HomeScreen
         employeeName={employeeName}
-        showKeszlet={keszletPermission.view}
+        showJelenlet={!sofor}
+        showFeladatok={!sofor}
+        showKeszlet={!sofor && keszletPermission.view}
         showFuvarok={fuvarozasPermission.view}
         showProfil
         onSelect={setScreen}
