@@ -273,17 +273,19 @@ export type SoforFuvarBlokk = {
    */
   idopont: string | null;
   /**
-   * A fuvar díja forintban. Budaházi Zoltán kérte a sofőrök csempéire
-   * (2026-09-22) — addig szándékosan nem volt kint.
+   * Igaz, ha a SAJÁT raklapunkat visszük (a felületen "Saját fuvar"), hamis,
+   * ha másnak fuvarozunk ("Bér fuvar"). A sofőrnek ez két más munka: a
+   * sajátnál nincs külső megbízó, akinek a kapuban szólni kell.
+   *
+   * FIGYELEM, EZ A FÁJL SZÁNDÉKOSAN NEM ADJA TOVÁBB A NYERS `tipus`
+   * OSZLOPOT: a `fuvar_megbizasok.tipus` elnevezése történelmi okokból
+   * FORDÍTOTT a felülethez képest — `tipus='ber'` a "Saját fuvarok" fül,
+   * `tipus='sajat'` a "Bér fuvarok" fül (lásd lib/fuvarozas/megbizasok.ts
+   * getMaiValodiSajatFuvarok). A nyers oszlopot továbbadva a csempe
+   * pontosan fordítva címkézte a fuvarokat (2026-09-22), ezért itt már
+   * eldöntött logikai érték megy tovább.
    */
-  fuvardij: number | null;
-  /**
-   * 'sajat': a saját raklapunkat visszük (mi vagyunk a megbízó is).
-   * 'ber': másnak fuvarozunk. A sofőrnek ez a kettő MÁS munka — a sajátnál
-   * nincs kinek szólni a kapuban, a bérnél a megbízó a gazda —, ezért a
-   * csempén jelölve van (Budaházi Zoltán, 2026-09-22).
-   */
-  tipus: "sajat" | "ber";
+  sajatFuvar: boolean;
   /** A megrendelő kapcsolattartója a fuvar_kapcsolatok törzsből, ha van. */
   kapcsolat: SoforKapcsolat | null;
   /** Igaz, ha a fuvar korábbról csúszik át erre a napra. */
@@ -320,7 +322,6 @@ type FuvarExtraSor = {
   suly: string | null;
   megjegyzes: string | null;
   jarmu: string | null;
-  fuvardij: number | null;
   tipus: "sajat" | "ber";
   felrakas_ablak_tol: Date | null;
   felrakas_ablak_ig: Date | null;
@@ -357,7 +358,7 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
   const [extraSorok, dokSorok] = fuvarIds.length
     ? await Promise.all([
         query<FuvarExtraSor>(
-          `select id::text, reise_id, idopont, aru, mennyiseg, suly, megjegyzes, jarmu, fuvardij, tipus,
+          `select id::text, reise_id, idopont, aru, mennyiseg, suly, megjegyzes, jarmu, tipus,
                   felrakas_ablak_tol, felrakas_ablak_ig, lerakas_ablak_tol, lerakas_ablak_ig
              from fuvar_megbizasok
             where id = any($1::bigint[])`,
@@ -440,8 +441,8 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
       suly: extra?.suly ?? null,
       megjegyzes: extra?.megjegyzes ?? null,
       idopont: extra?.idopont ?? null,
-      fuvardij: extra?.fuvardij ?? null,
-      tipus: extra?.tipus ?? "ber",
+      // tipus='ber' = "Saját fuvar" a felületen — lásd a mező leírását.
+      sajatFuvar: extra?.tipus === "ber",
       kapcsolat: b.megrendelo?.trim()
         ? kapcsolatByKulcs.get(normalizaltCegKulcs(ceglNevKanonikusan(b.megrendelo))) ?? null
         : null,

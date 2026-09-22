@@ -9,7 +9,12 @@
 // maradjon, mint előtte (a `varosNev` ezt adja), különben a fuvarlisták
 // írásmódja egyik napról a másikra megváltozna.
 
-import { KETSEGES_CIMEK, LERAKO_TELEPHELYEK, lerakoTelephelyCime } from "@/lib/fuvarozas/lerako-telephelyek";
+import {
+  KETSEGES_CIMEK,
+  LERAKO_TELEPHELYEK,
+  SAJAT_FUVAR_DB_TIPUS,
+  lerakoTelephelyCime,
+} from "@/lib/fuvarozas/lerako-telephelyek";
 import { SAJAT_TELEPHELYEK } from "@/lib/fuvarozas/telephelyek";
 import { bontsMegallokra, cimPontossaga, varosNev } from "@/lib/fuvarozas/varos";
 import { readFileSync } from "node:fs";
@@ -78,6 +83,21 @@ for (const h of LERAKO_TELEPHELYEK) {
   const migrate = readFileSync(new URL("./migrate.mjs", import.meta.url), "utf8");
   const hianyzo = LERAKO_TELEPHELYEK.filter((h) => !migrate.includes(h.cim)).map((h) => h.cim);
   eq("minden cím szerepel a migrate.mjs-ben is", hianyzo, []);
+}
+
+// 10) A FORDÍTOTT ELNEVEZÉS ŐRE. A `fuvar_megbizasok.tipus` oszlop neve
+//     történelmi okokból fordított a felülethez képest: 'ber' a "Saját
+//     fuvarok" fül, 'sajat' a "Bér fuvarok" fül. Az első nekifutás pont
+//     ezen bukott el — a javítás a rossz halmazon futott. Ez az eset
+//     rögzíti a helyes irányt, és azt, hogy a migrate.mjs is így szűr.
+{
+  eq("saját fuvar DB-tipusa 'ber'", SAJAT_FUVAR_DB_TIPUS, "ber");
+  const migrate = readFileSync(new URL("./migrate.mjs", import.meta.url), "utf8");
+  eq(
+    "a migrate a saját fuvarokra szűr",
+    migrate.includes('const SAJAT_TIPUS = "ber"'),
+    true
+  );
 }
 
 console.log(`\n${ok} rendben, ${bad} hiba`);

@@ -32,8 +32,16 @@
 // A VÁROSNÉV-KULCS CSAK SAJÁT FUVARRA ÉRVÉNYES. Bér fuvarban ugyanaz a
 // város másik céghez tartozik — a scripts/teszt-erintes.mts-ben szereplő
 // "Bestpallet Kft. HU-4254 Nyíradony Patak utca 1" épp egy olyan nyíradonyi
-// cím, ami NEM a Pauliké. Aki ezt a szótárt bekapcsolja valahová, a
-// `tipus = 'sajat'` szűrést NE hagyja el.
+// cím, ami NEM a Pauliké. Aki ezt a szótárt bekapcsolja valahová, a saját
+// fuvarra szűrést NE hagyja el — és a SAJAT_FUVAR_DB_TIPUS konstanst
+// használja, ne írjon oda kézzel 'sajat'-ot.
+//
+// AZ ELSŐ NEKIFUTÁS PONT EZEN BUKOTT EL (2026-09-22): a `tipus = 'sajat'`
+// szűrés kézenfekvőnek látszott, de a `fuvar_megbizasok.tipus` elnevezése
+// történelmi okokból FORDÍTOTT a felülethez képest — `tipus='ber'` a
+// "Saját fuvarok" fül, `tipus='sajat'` a "Bér fuvarok" fül (lásd
+// lib/fuvarozas/megbizasok.ts getMaiValodiSajatFuvarok). Az első javítás
+// így a BÉR fuvarokon futott, azaz pont a rossz halmazon.
 //
 // AMI NINCS A SZÓTÁRBAN, DE A SZÁLLÍTÓLEVELEKEN OTT VAN: idegen rendszámok
 // (STH-666 14 bizonylaton, SNN-753/WGF-708, SNN-753/WEN-579,
@@ -124,6 +132,14 @@ export const KETSEGES_CIMEK: readonly { hely: string; ok: string }[] = [
   { hely: "Christeyns, Bököny, Kossuth utca 158.", ok: "irányítószám nélkül jegyezték föl" },
   { hely: "SOLINWEST, Záhony", ok: "a pontos utca se a szállítóleveleken, se a neten nincs meg" },
 ];
+
+/**
+ * A `fuvar_megbizasok.tipus` értéke, ami a felületen "Saját fuvar" — azaz a
+ * saját raklapunkat visszük. Igen, 'ber': az oszlop elnevezése fordított,
+ * lásd a fájl fejlécét. Ez a konstans azért van, hogy ne kelljen fejben
+ * tartani.
+ */
+export const SAJAT_FUVAR_DB_TIPUS = "ber";
 
 /** A városnévhez tartozó teljes cím, ha a város egyértelműen egy telephelyet jelent. */
 export function lerakoTelephelyCime(varos: string | null | undefined): string | null {

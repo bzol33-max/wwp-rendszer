@@ -266,6 +266,7 @@ async function main() {
   await javitsdTataiFelrakotOnce(pool);
   await javitsdTompaladonyiCimetOnce(pool);
   await irdBeVevoTelephelyCimeketOnce(pool);
+  await irdBeVevoTelephelyCimeketSajatraOnce(pool);
   await vonjaVisszaKoraiTeljesitestOnce(pool);
   await vonjaVisszaKettosGpsTeljesitestOnce(pool);
   await vonjaVisszaKorokKoztiKettosGpsTeljesitestOnce(pool);
@@ -824,6 +825,72 @@ async function irdBeVevoTelephelyCimeketOnce(pool) {
     jelentes.length
       ? `[migrate] Vevő-telephelyek pontos címe beírva — ${jelentes.join(" | ")}.`
       : `[migrate] Vevő-telephelyek: nem volt csupasz városnevű saját megbízás.`
+  );
+}
+
+// JAVÍTÁS az előző lépéshez (2026-09-22, ugyanaznap): az
+// irdBeVevoTelephelyCimeketOnce `tipus = 'sajat'`-ra szűrt, mert az látszott
+// kézenfekvőnek. A `fuvar_megbizasok.tipus` elnevezése viszont történelmi
+// okokból FORDÍTOTT a felülethez képest — `tipus='ber'` a "Saját fuvarok"
+// fül, `tipus='sajat'` a "Bér fuvarok" fül (lásd lib/fuvarozas/megbizasok.ts
+// getMaiValodiSajatFuvarok). Az előző lépés tehát a BÉR fuvarokon futott,
+// azaz a rossz halmazon; ez itt a helyesen, a SAJÁT fuvarokon.
+//
+// Az előző lépés egyetlen sort írt át (#7 tatai... pontosabban tuzséri
+// felrakó) — azt NEM vonjuk vissza gépből: nem tudjuk innen megmondani,
+// hogy az a bér fuvar tényleg a Solinwest telepére ment-e. Budaházi Zoltán
+// kapott róla jelzést.
+async function irdBeVevoTelephelyCimeketSajatraOnce(pool) {
+  const JAVITAS_KOD = "vevo-telephely-cimek-sajat-2026-09-22";
+  const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (mar.length > 0) return;
+
+  // A felületen "Saját fuvar" = tipus 'ber'. Lásd a fenti megjegyzést és
+  // lib/fuvarozas/lerako-telephelyek.ts SAJAT_FUVAR_DB_TIPUS.
+  const SAJAT_TIPUS = "ber";
+
+  const HELYEK = [
+    ["Tompaládony", "9662 Tompaládony, 0117/8 hrsz."],
+    ["Ebes", "4211 Ebes, Zsong-völgy 2."],
+    ["Ózd", "3600 Ózd, Kovács Hagyó Gyula út 7."],
+    ["Tuzsér", "4623 Tuzsér, Kálongatanya 0115/29 hrsz."],
+    ["Nyíradony", "4254 Nyíradony, Állomás utca 11."],
+    ["Nyírgelse", "4362 Nyírgelse, Debreceni u. 1."],
+  ];
+
+  const jelentes = [];
+  for (const [varos, cim] of HELYEK) {
+    const { rows: lerakok } = await pool.query(
+      `update fuvar_megbizasok
+          set lerako = $1
+        where tipus = $3 and statusz <> 'torolt' and trim(lerako) ilike $2
+        returning id`,
+      [cim, varos, SAJAT_TIPUS]
+    );
+    const { rows: felrakok } = await pool.query(
+      `update fuvar_megbizasok
+          set felrako = $1
+        where tipus = $3 and statusz <> 'torolt' and trim(felrako) ilike $2
+        returning id`,
+      [cim, varos, SAJAT_TIPUS]
+    );
+    if (lerakok.length || felrakok.length) {
+      jelentes.push(
+        `${varos}: lerakó ${lerakok.length}` +
+          (lerakok.length ? ` (#${lerakok.map((r) => r.id).join(", #")})` : "") +
+          `, felrakó ${felrakok.length}` +
+          (felrakok.length ? ` (#${felrakok.map((r) => r.id).join(", #")})` : "")
+      );
+    }
+  }
+
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1) on conflict (kod) do nothing`, [
+    JAVITAS_KOD,
+  ]);
+  console.log(
+    jelentes.length
+      ? `[migrate] Vevő-telephelyek (SAJÁT fuvarok, tipus='ber') — ${jelentes.join(" | ")}.`
+      : `[migrate] Vevő-telephelyek (SAJÁT fuvarok): nem volt csupasz városnevű sor.`
   );
 }
 

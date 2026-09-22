@@ -258,12 +258,6 @@ function MegalloSor({
   );
 }
 
-/** A fuvardíj a csempén — ezres tagolással, forintban. */
-function formatFt(n: number | null | undefined): string | null {
-  if (n === null || n === undefined) return null;
-  return `${n.toLocaleString("hu-HU")} Ft`;
-}
-
 /**
  * A csempe fejlécének két jelölése (Budaházi Zoltán, 2026-09-22):
  *
@@ -275,10 +269,10 @@ function formatFt(n: number | null | undefined): string | null {
 function Jelolok({ blokk }: { blokk: SoforFuvarBlokk }) {
   const felrakok = blokk.megallok.filter((m) => m.tipus === "felrako");
   const felpakolt = felrakok.length > 0 && felrakok.every((m) => m.kesz);
-  if (blokk.tipus !== "sajat" && !felpakolt) return null;
+  if (!blokk.sajatFuvar && !felpakolt) return null;
   return (
     <span className="flex flex-wrap items-center gap-1.5">
-      {blokk.tipus === "sajat" && (
+      {blokk.sajatFuvar && (
         <span className="rounded-full bg-[var(--mob-tile)] px-2 py-0.5 text-[11px] font-semibold">
           Saját fuvar
         </span>
@@ -339,7 +333,7 @@ function AktualisMegbizas({
       <div className="flex flex-col gap-1.5 px-3 pb-2 pt-2.5">
         <div className="flex items-center justify-between gap-2">
           <span className="truncate text-sm font-semibold">
-            {blokk.megrendelo ?? (blokk.tipus === "sajat" ? "Saját fuvar" : "Megbízás")}
+            {blokk.megrendelo ?? (blokk.sajatFuvar ? "Saját fuvar" : "Megbízás")}
           </span>
           {blokk.masRendszam && (
             <span className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-[var(--mob-negative)]">
@@ -348,14 +342,7 @@ function AktualisMegbizas({
             </span>
           )}
         </div>
-        {(blokk.tipus === "sajat" || blokk.fuvardij !== null || blokk.megallok.some((m) => m.tipus === "felrako" && m.kesz)) && (
-          <div className="flex items-center justify-between gap-2">
-            <Jelolok blokk={blokk} />
-            {blokk.fuvardij !== null && (
-              <span className="shrink-0 text-sm font-bold tabular-nums">{formatFt(blokk.fuvardij)}</span>
-            )}
-          </div>
-        )}
+        <Jelolok blokk={blokk} />
       </div>
 
       {blokk.megallok.map((m) => (
@@ -480,19 +467,14 @@ function MegbizasElonezet({ blokk, cimke }: { blokk: SoforFuvarBlokk; cimke: str
             {cimke}
           </span>
           <span className="truncate text-sm font-semibold">
-            {blokk.megrendelo ?? (blokk.tipus === "sajat" ? "Saját fuvar" : "Megbízás")}
+            {blokk.megrendelo ?? (blokk.sajatFuvar ? "Saját fuvar" : "Megbízás")}
           </span>
           {honnan && hova && (
             <span className="text-base">
               {honnan} → {hova}
             </span>
           )}
-          <span className="flex flex-wrap items-center gap-2">
-            <Jelolok blokk={blokk} />
-            {blokk.fuvardij !== null && (
-              <span className="text-sm font-bold tabular-nums">{formatFt(blokk.fuvardij)}</span>
-            )}
-          </span>
+          <Jelolok blokk={blokk} />
         </span>
         <ChevronDown
           className={cn(

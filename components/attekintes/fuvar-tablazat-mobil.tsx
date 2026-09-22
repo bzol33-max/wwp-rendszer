@@ -1,9 +1,10 @@
 "use client";
 
 import { useRef, useState, type ReactNode } from "react";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown } from "lucide-react";
 import { JARMU_SZIN_DOT_CLASS, SAJAT_JARMUVEK } from "@/lib/fuvarozas/vehicles";
 import type { FuvarBlokk, JarmuIdovonalEredmeny, MegalloBejegyzes } from "@/lib/fuvarozas/actions";
+import { varosNev } from "@/lib/fuvarozas/varos";
 import type { JarmuFuvarCsoport } from "@/lib/attekintes/actions";
 import {
   allValahol,
@@ -12,6 +13,7 @@ import {
   formatEltelt,
   formatIdo,
   formatSzam,
+  formatOsszeg,
   fuvarKesz,
   fuvarReszletek,
   jelRegi,
@@ -22,7 +24,6 @@ import {
   type Allapot,
   type SorAdat,
 } from "@/lib/fuvarozas/gps-sorok";
-import { MegbizasReszlet } from "@/components/attekintes/jarmu-kartya";
 
 // Az Áttekintés mobil "Fuvar" füle — a GPS lap táblázatos napja telefonra
 // szabva (M4 látványterv): fent a nap összképe, alatta a három kocsi füle,
@@ -161,34 +162,6 @@ function fuvarAllapot(f: FuvarBlokk, kovetkezo: MegalloBejegyzes | null, mozog: 
   return "Terv";
 }
 
-/**
- * A fuvar kártyájának fejléce: sorszám a kocsi napján belül, megbízó,
- * hivatkozás, áru, díj és a fuvar egészének állapota. Külön, színezett
- * sáv, hogy két egymás utáni megbízás (élesben Micó: Ebes→Balkány, majd
- * Nyírjákó→Mosonmagyaróvár) ne olvadjon egyetlen megállólistává.
- */
-function FuvarFejsor({ f, sorszam, osszes, allapot }: { f: FuvarBlokk; sorszam: number; osszes: number; allapot: Allapot }) {
-  const r = fuvarReszletek(f);
-  return (
-    <div className="flex items-start justify-between gap-2 rounded-t-xl border-b border-[var(--at-border)] bg-[var(--at-tile)] px-3 py-2">
-      <div className="min-w-0">
-        <div className={CIMKE}>
-          {sorszam}. fuvar / {osszes}
-        </div>
-        <div className="truncate text-sm font-bold">{r.megrendelo}</div>
-        <div className="text-xs text-[var(--at-muted)]">
-          {r.hivatkozas}
-          {r.aru && ` · ${r.aru}`}
-        </div>
-      </div>
-      <div className="flex shrink-0 flex-col items-end gap-1">
-        <span className={`inline-block rounded-md px-2 py-0.5 text-xs font-semibold ${ALLAPOT_CLASS[allapot]}`}>{allapot}</span>
-        {r.dij && <span className="text-sm font-bold">{r.dij}</span>}
-      </div>
-    </div>
-  );
-}
-
 function MegalloSorok({ b, s, utolso }: { b: MegalloBejegyzes; s: SorAdat; utolso: boolean }) {
   const TD = "px-2 py-2 align-top text-sm";
   const vanReszlet = s.rakodas !== "—" || s.sofor.length > 0 || s.gondok.length > 0;
@@ -237,11 +210,172 @@ function MegalloSorok({ b, s, utolso }: { b: MegalloBejegyzes; s: SorAdat; utols
   );
 }
 
+/** A megállók háromoszlopos táblázata — a csempe kinyitva ezt mutatja. */
+// A `utolsoLerako` soronként dől el, ezért a csempe szintjén még nincs benne.
+function MegalloTabla({ f, ctx }: { f: FuvarBlokk; ctx: Omit<Parameters<typeof sorAdatok>[2], "utolsoLerako"> }) {
+  const r = fuvarReszletek(f);
+  return (
+    <>
+    <div className="px-3 py-2 text-xs text-[var(--at-muted)]">
+      {r.hivatkozas}
+      {r.aru && ` · ${r.aru}`}
+    </div>
+    <table className="w-full border-collapse">
+      <thead>
+        <tr>
+          {["Megálló", "Érkezés", "Távozás"].map((c) => (
+            <th key={c} className={`border-b border-[var(--at-border)] px-2 py-1.5 text-left ${CIMKE}`}>
+              {c}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {f.megallok.map((b, j) => (
+          <MegalloSorok
+            key={`${b.fuvarId}-${b.megalloIndex}`}
+            b={b}
+            s={sorAdatok(b, f, { ...ctx, utolsoLerako: j === f.megallok.length - 1 })}
+            utolso={j === f.megallok.length - 1}
+          />
+        ))}
+      </tbody>
+    </table>
+    </>
+  );
+}
+
+/**
+ * Egy megbízás csempéje Budaházi Zoltán telefonján (2026-09-22): megbízó,
+ * honnan hová CSAK VÁROS, a fuvardíj, és két jelölés — "Saját fuvar", és
+ * hogy "Felpakolva"-e már. Ennyi kell a telefonon; a megállók pontos
+ * idejét a csempét kinyitva adja.
+ *
+ * A "Saját fuvar" a `fuvarTipus === "ber"`-ből jön, és ez NEM elírás: a
+ * `fuvar_megbizasok.tipus` elnevezése történelmi okokból fordított a
+ * felülethez képest (tipus='ber' → "Saját fuvarok" fül). Lásd
+ * lib/fuvarozas/megbizasok.ts getMaiValodiSajatFuvarok.
+ */
+function MegbizasCsempe({
+  cimke,
+  megrendelo,
+  honnan,
+  hova,
+  dij,
+  sajat,
+  felpakolva,
+  allapot,
+  kiemelt,
+  reszletek,
+}: {
+  cimke: string;
+  megrendelo: string | null;
+  honnan: string | null;
+  hova: string | null;
+  dij: string | null;
+  sajat: boolean;
+  felpakolva: boolean;
+  allapot?: Allapot;
+  kiemelt?: boolean;
+  reszletek?: ReactNode;
+}) {
+  const [nyitva, setNyitva] = useState(false);
+  const fej = (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex min-w-0 items-center gap-2">
+          <span className={`${CIMKE} text-[10px]`}>{cimke}</span>
+          {allapot && (
+            <span className={`inline-block rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${ALLAPOT_CLASS[allapot]}`}>
+              {allapot}
+            </span>
+          )}
+        </span>
+        {dij && <span className="shrink-0 text-sm font-bold tabular-nums">{dij}</span>}
+      </div>
+      <span className="truncate text-sm font-semibold">
+        {megrendelo ?? (sajat ? "Saját fuvar" : "Megbízás")}
+      </span>
+      {honnan && hova && (
+        <span className="text-base font-bold leading-tight">
+          {honnan} → {hova}
+        </span>
+      )}
+      {(sajat || felpakolva) && (
+        <span className="flex flex-wrap items-center gap-1.5">
+          {sajat && (
+            <span className="rounded-full bg-[var(--at-tile)] px-2 py-0.5 text-[11px] font-semibold">
+              Saját fuvar
+            </span>
+          )}
+          {felpakolva && (
+            <span className="flex items-center gap-1 rounded-full bg-[var(--at-positive)]/15 px-2 py-0.5 text-[11px] font-semibold text-[var(--at-positive)]">
+              <Check className="h-3 w-3" />
+              Felpakolva
+            </span>
+          )}
+        </span>
+      )}
+    </>
+  );
+
+  return (
+    <div
+      className={`flex flex-col overflow-hidden rounded-xl bg-[var(--at-card)] ${
+        kiemelt ? "border-2 border-[var(--at-accent)]" : "border border-[var(--at-border)]"
+      }`}
+    >
+      {reszletek ? (
+        <button
+          type="button"
+          onClick={() => setNyitva((v) => !v)}
+          className="flex items-start gap-2 px-3 py-2.5 text-left"
+        >
+          <span className="flex min-w-0 flex-1 flex-col gap-1">{fej}</span>
+          <ChevronDown
+            className={`mt-1 h-4 w-4 shrink-0 text-[var(--at-muted)] transition-transform ${nyitva ? "rotate-180" : ""}`}
+          />
+        </button>
+      ) : (
+        <div className="flex flex-col gap-1 px-3 py-2.5">{fej}</div>
+      )}
+      {reszletek && nyitva && <div className="border-t border-[var(--at-border)]">{reszletek}</div>}
+    </div>
+  );
+}
+
+/** Egy fuvar honnan-hová városa — a megállók teljes címéből kivágva. */
+function honnanHova(f: FuvarBlokk): { honnan: string | null; hova: string | null } {
+  const fel = f.megallok.find((m) => m.tipus === "felrako");
+  const le = [...f.megallok].reverse().find((m) => m.tipus === "lerako");
+  return { honnan: fel ? varosNev(fel.cim) : null, hova: le ? varosNev(le.cim) : null };
+}
+
+/** Igaz, ha a fuvar minden felrakó megállóját elhagyta már a kocsi. */
+function felpakoltE(f: FuvarBlokk): boolean {
+  const felrakok = f.megallok.filter((m) => m.tipus === "felrako");
+  return felrakok.length > 0 && felrakok.every((m) => m.elhagyva);
+}
+
+/**
+ * Egy kocsi lapja: hol van most, majd PONTOSAN KÉT megbízás — az aktuális és
+ * a következő (Budaházi Zoltán, 2026-09-22). A következő elsősorban a mai
+ * sorban utána álló fuvar; ha ma nincs több, akkor a legközelebbi jövőbeli.
+ *
+ * Korábban az összes mai fuvar teljes táblázata kint volt, alatta a
+ * "Következő napok" listája — telefonon ez görgetnivaló. A táblázat nem
+ * veszett el: a csempét kinyitva ugyanaz jön elő.
+ */
 function KocsiLap({ jarmu, eredmeny, csoport, most }: { jarmu: (typeof SAJAT_JARMUVEK)[number]; eredmeny: JarmuIdovonalEredmeny | undefined; csoport: JarmuFuvarCsoport | undefined; most: number }) {
   const fuvarok = eredmeny?.fuvarok ?? [];
   const kovetkezo = kovetkezoMegallo(fuvarok);
   const ctx = { maiNap: true, eloVan: !!eredmeny?.eloPozicio, kovetkezo, allValahol: allValahol(fuvarok), mozog: eloMozog(eredmeny), most };
-  const kovetkezok = csoport?.kovetkezok ?? [];
+
+  const aktivIndex = kovetkezo ? fuvarok.findIndex((f) => f.fuvarId === kovetkezo.fuvarId) : -1;
+  const aktiv = aktivIndex >= 0 ? fuvarok[aktivIndex] : null;
+  const maiKovetkezo = aktivIndex >= 0 ? (fuvarok[aktivIndex + 1] ?? null) : null;
+  const jovobeli = maiKovetkezo ? null : ((csoport?.kovetkezok ?? [])[0] ?? null);
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
@@ -250,50 +384,55 @@ function KocsiLap({ jarmu, eredmeny, csoport, most }: { jarmu: (typeof SAJAT_JAR
         <span className="text-sm text-[var(--at-muted)]">{jarmu.label}</span>
       </div>
       <HolVanMost eredmeny={eredmeny} most={most} jarmuNincsGps={jarmu.ecofleetObjectId === null} />
-      {fuvarok.length === 0 ? (
+
+      {fuvarok.length === 0 && !jovobeli ? (
         <div className="rounded-xl border border-[var(--at-border)] bg-[var(--at-card)] px-3 py-2">
           <p className="text-sm text-[var(--at-muted)]">Mára nincs fuvar ezen a kocsin.</p>
         </div>
-      ) : (
-        fuvarok.map((f, i) => (
-          <div key={f.fuvarId} className="rounded-xl border border-[var(--at-border)] bg-[var(--at-card)]">
-            <FuvarFejsor f={f} sorszam={i + 1} osszes={fuvarok.length} allapot={fuvarAllapot(f, kovetkezo, ctx.mozog)} />
-            <table className="w-full border-collapse">
-              <thead>
-                <tr>
-                  {["Megálló", "Érkezés", "Távozás"].map((c) => (
-                    <th key={c} className={`border-b border-[var(--at-border)] px-2 py-1.5 text-left ${CIMKE}`}>
-                      {c}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {f.megallok.map((b, j) => (
-                  <MegalloSorok
-                    key={`${b.fuvarId}-${b.megalloIndex}`}
-                    b={b}
-                    s={sorAdatok(b, f, { ...ctx, utolsoLerako: j === f.megallok.length - 1 })}
-                    utolso={j === f.megallok.length - 1}
-                  />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ))
+      ) : !aktiv && fuvarok.length > 0 ? (
+        <div className="rounded-xl border border-[var(--at-border)] bg-[var(--at-card)] px-3 py-2">
+          <p className="text-sm text-[var(--at-muted)]">Mai fuvarok kész.</p>
+        </div>
+      ) : null}
+
+      {aktiv && (
+        <MegbizasCsempe
+          kiemelt
+          cimke="Most"
+          megrendelo={aktiv.megrendelo}
+          {...honnanHova(aktiv)}
+          dij={fuvarReszletek(aktiv).dij}
+          sajat={aktiv.fuvarTipus === "ber"}
+          felpakolva={felpakoltE(aktiv)}
+          allapot={fuvarAllapot(aktiv, kovetkezo, ctx.mozog)}
+          reszletek={<MegalloTabla f={aktiv} ctx={ctx} />}
+        />
       )}
-      <div>
-        <h3 className="mb-2 text-sm font-semibold">Következő napok</h3>
-        {kovetkezok.length === 0 ? (
-          <p className="text-sm text-[var(--at-muted)]">Nincs későbbre beütemezett megbízás.</p>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {kovetkezok.map((m) => (
-              <MegbizasReszlet key={m.id} m={m} />
-            ))}
-          </div>
-        )}
-      </div>
+
+      {maiKovetkezo && (
+        <MegbizasCsempe
+          cimke="Ezután"
+          megrendelo={maiKovetkezo.megrendelo}
+          {...honnanHova(maiKovetkezo)}
+          dij={fuvarReszletek(maiKovetkezo).dij}
+          sajat={maiKovetkezo.fuvarTipus === "ber"}
+          felpakolva={felpakoltE(maiKovetkezo)}
+          allapot={fuvarAllapot(maiKovetkezo, kovetkezo, ctx.mozog)}
+          reszletek={<MegalloTabla f={maiKovetkezo} ctx={ctx} />}
+        />
+      )}
+
+      {jovobeli && (
+        <MegbizasCsempe
+          cimke={jovobeli.date}
+          megrendelo={jovobeli.megrendelo}
+          honnan={jovobeli.megallok.find((m) => m.tipus === "felrako")?.varos ?? null}
+          hova={[...jovobeli.megallok].reverse().find((m) => m.tipus === "lerako")?.varos ?? null}
+          dij={jovobeli.fuvardij !== null ? formatOsszeg(jovobeli.fuvardij, jovobeli.fuvardijPenznem) : null}
+          sajat={jovobeli.cimke === "Saját"}
+          felpakolva={false}
+        />
+      )}
     </div>
   );
 }
