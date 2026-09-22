@@ -1600,3 +1600,15 @@ megmaradnak — a `/m` sofőr nézet és a GPS idővonal használja őket.
   „FABRIKA + 2000 Kft." név KETTÉVÁGNÁ a címet két hamis megállóra —
   ellenőrizve, 2 megállót ad, „FABRIKA + Kft." városnévvel.
   Ez általános kockázat minden olyan partnernél, akinek `+` van a nevében.
+
+## 2026-09-22 — „Holnap" csempe a sofőr nézeten
+
+- A nap alján egy halk csempe, fuvaronként **egy sorral**
+  (`Sopron → Miskolc`). Ennyi kell ahhoz, hogy a sofőr este tudja, merre
+  kell indulnia; gomb és részletek nincsenek rajta.
+- A holnapi napot a `getSoforNap(employeeId, holnapISO)` adja, a maival
+  párhuzamosan (`Promise.all`).
+- **A le nem zárt mai fuvarokat kiszűrjük** a holnapi listából: azok
+  átcsúsznak a következő napra, tehát enélkül ugyanaz a fuvar kétszer
+  szerepelne a képernyőn (fent aktuálisként, lent holnapiként).
+- A csempe akkor is megjelenik, ha ma nincs fuvar, vagy ha ma már végzett.
