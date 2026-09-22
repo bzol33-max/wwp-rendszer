@@ -1660,3 +1660,42 @@ hierarchiát és a hiányzó adatokat tette hozzá.
   fuvarok hiányzó címeit. A Számlázz.hu-ból való lekérdezésük viszont még
   nyitott kérdés (a `szamlazzhu-client.ts` csak számlát kérdez, `S-` előtagú
   bizonylatot nem).
+
+## 2026-09-22 — Vevő-telephelyek: 200 szállítólevél megjegyzéséből
+
+- **A székhely nem a telephely.** A 200 Számlázz.hu-szállítólevél VEVŐ-rovata
+  a cégjegyzékbeli székhelyet adja, nem azt, ahová megyünk. A SOLINWEST
+  székhelye Csomád (Pest vármegye), a raklap viszont **Záhonyba és Tuzsérra**
+  megy — 300 km-rel odébb. Budaházi Zoltán szólt, mielőtt ezt beírtuk volna.
+- A valódi címek a szállítólevél **megjegyzés-rovatában** vannak
+  („Szállítási cím: …”). Mind a 200 PDF megjegyzését kiolvastuk.
+- **Új adatmodul:** `lib/fuvarozas/lerako-telephelyek.ts` — 6 város, ahol a
+  csupasz városnév egyértelműen egy telephelyet jelent (Tompaládony, Ebes,
+  Ózd, Tuzsér, Nyíradony, Nyírgelse), bejegyzésenként a forrással. Mellette a
+  `KETSEGES_CIMEK` lista: 9 ismert cím, amit **szándékosan nem** teszünk a
+  szótárba, mert a városnév nem azonosítja (Nyíregyházán három vevőnk van,
+  Tatabányán kettő, Balkányban a saját telephelyünk is ott van).
+- **Két vevőnél nincs fix cím, és ez nem hiányosság:** a KETER (55 fuvar)
+  rendszerint a saját vevőihez küldeti a raklapot (Dunapack, Ehisz, DS Smith),
+  a „MEGA-FRUIT" (12 fuvar) pedig mind a 12 alkalommal tanyára. Náluk a
+  címnek a megbízáson kell lennie — szótárból nem pótolható. A KETER csak
+  akkor Ebes, ha a megjegyzésben nincs partner (Budaházi Zoltán).
+- **Egyszer futó javítás** (`irdBeVevoTelephelyCimeketOnce`, kód
+  `vevo-telephely-cimek-2026-09-22`): a csupasz városnevet lecseréli a teljes
+  címre. Kizárólag `tipus = 'sajat'` sorokon, és csak ha a mező PONTOSAN a
+  városnév — bér fuvarban ugyanaz a város másik céghez tartozik (Nyíradonyba
+  a Bestpallethez is megyünk, nem csak a Paulikhoz).
+- **Teszt:** `scripts/teszt-lerako-telephely.mts` (34 eset). Azt védi, hogy
+  minden szótárbeli cím `cimPontossaga` szerint **pontos** legyen (különben a
+  csere semmit nem old meg, csak átírja az adatot), hogy a `varosNev` utána
+  ugyanazt a várost adja (különben a fuvarlisták írásmódja megváltozna), hogy
+  egy cím se essen két megállóvá a „+" mentén, és hogy a `migrate.mjs`-ben
+  duplikált lista ne csússzon el ettől a modultól.
+- **Ami nyitva maradt:** a SOLINWEST **záhonyi** telepének pontos utcája se a
+  szállítóleveleken, se a neten nincs meg. A magyar cégadatbázisokat
+  (Nemzeti Cégtár, Opten, Aranyoldalak) és a solinwest.hu-t a hálózati proxy
+  blokkolja innen.
+- Menet közben a szállítóleveleken előkerült néhány rendszám, ami nincs a
+  `SAJAT_JARMUVEK` listában: `STH-666` (14 db bizonylat), `SNN-753/WGF-708`,
+  `SNN-753/WEN-579`, `ROD-985/WDY-633`, `RXF-098`, `WDY-632`. Egy elgépelés
+  is: `NMZ-497` a `NMZ-492` helyett.
