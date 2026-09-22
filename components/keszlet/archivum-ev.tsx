@@ -129,18 +129,24 @@ export function ArchivumEv({
       monthKey: string;
       befizetes: number;
       felvasarlas: number;
+      atutalas: number;
       egyenleg: number;
       halmozott: number;
     }[] = [];
     for (const mk of honapok) {
       const befizetes = kimutatas?.befizetes.find((b) => b.monthKey === mk)?.osszeg ?? 0;
       const felvasarlas = adat.havi.find((h) => h.monthKey === mk)?.total ?? 0;
+      // Az átutalásos vétel benne van a felvásárlási összegben, de a
+      // kasszából nem ment ki — itt csak jelezzük, az egyenleget nem írjuk át.
+      const atutalas = kimutatas?.atutalas.find((a) => a.monthKey === mk)?.osszeg ?? 0;
       const egyenleg = befizetes - felvasarlas;
       const elozo = sorok[sorok.length - 1]?.halmozott ?? 0;
-      sorok.push({ monthKey: mk, befizetes, felvasarlas, egyenleg, halmozott: elozo + egyenleg });
+      sorok.push({ monthKey: mk, befizetes, felvasarlas, atutalas, egyenleg, halmozott: elozo + egyenleg });
     }
     return sorok;
   }, [honapok, kimutatas, adat.havi]);
+
+  const evAtutalas = penz.reduce((sum, p) => sum + p.atutalas, 0);
 
   const evLegjobbNap = kimutatas?.napok.reduce(
     (best, n) => (n.legjobbDb > (best?.legjobbDb ?? -1) ? n : best),
@@ -239,7 +245,14 @@ export function ArchivumEv({
                     <TableRow key={p.monthKey}>
                       <TableCell className="font-medium">{honapRovid(p.monthKey)}</TableCell>
                       <TableCell className="text-right tabular-nums">{ezerFt(p.befizetes)}</TableCell>
-                      <TableCell className="text-right tabular-nums">{ezerFt(p.felvasarlas)}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {ezerFt(p.felvasarlas)}
+                        {p.atutalas > 0 && (
+                          <div className="text-[11px] font-normal text-blue-600 dark:text-blue-400">
+                            ebből átutalás {ezerFt(p.atutalas)}
+                          </div>
+                        )}
+                      </TableCell>
                       <TableCell
                         className={cn(
                           "text-right font-medium tabular-nums",
@@ -261,6 +274,14 @@ export function ArchivumEv({
               Befizetés = a telepre bevitt készpénz. Szeptembertől az élő kassza bevételei, a
               nyitóegyenleg és az eladások nélkül. Negatív egyenleg: a hónapban több ment ki
               felvásárlásra, mint amennyi befizetés jött.
+              {evAtutalas > 0 && (
+                <>
+                  {" "}
+                  A felvásárlás oszlopban az átutalással fizetett vétel is benne van — ebből az
+                  évben <span className="font-medium text-blue-600 dark:text-blue-400">{ezerFt(evAtutalas)}</span>{" "}
+                  nem a kasszából ment ki, tehát ennyivel jobb a tényleges készpénz-egyenleg.
+                </>
+              )}
             </p>
           </CardContent>
         </Card>

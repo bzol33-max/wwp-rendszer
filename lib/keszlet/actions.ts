@@ -1654,6 +1654,13 @@ export type ArchivumEvKimutatas = {
     legjobbNap: string;
     legjobbDb: number;
   }[];
+  /**
+   * Havonta az átutalással fizetett felvásárlás — ez benne van a havi
+   * felvásárlási összegben, de a kasszából NEM ment ki (banki átutalás),
+   * ezért a készpénz-kimutatásban külön is megjelenik. A régi rendszerből
+   * átvett hónapokban nincs ilyen bontás, ott 0.
+   */
+  atutalas: { monthKey: string; osszeg: number; db: number }[];
 };
 
 export async function getArchivumEvKimutatas(year: number): Promise<ArchivumEvKimutatas> {
@@ -1708,11 +1715,26 @@ export async function getArchivumEvKimutatas(year: number): Promise<ArchivumEvKi
     [year]
   );
 
+  const atutalas = await query<{ month_key: string; osszeg: number; db: number }>(
+    `select to_char((created_at at time zone 'Europe/Budapest')::date, 'YYYY-MM') as month_key,
+       sum(total)::int as osszeg, sum(qty)::int as db
+     from nyiregyhaza_purchases
+     where payment_method = 'atutalas'
+       and extract(year from (created_at at time zone 'Europe/Budapest')) = $1
+     group by 1 order by 1`,
+    [year]
+  );
+
   return {
     befizetes: befizetes.map((r) => ({
       monthKey: r.month_key,
       osszeg: Number(r.osszeg),
       alkalom: Number(r.alkalom),
+    })),
+    atutalas: atutalas.map((r) => ({
+      monthKey: r.month_key,
+      osszeg: Number(r.osszeg),
+      db: Number(r.db),
     })),
     napok: napok.map((r) => ({
       monthKey: r.month_key,

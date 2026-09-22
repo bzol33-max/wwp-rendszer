@@ -429,23 +429,31 @@ export function NyiregyhazaHaviTab() {
   const todayPurchases = purchases.filter((p) => p.day_key === todayKey);
   const pastPurchases = purchases.filter((p) => p.day_key !== todayKey);
 
+  // A csempe egy nap egy típusának ÖSSZES tételét összevonja. Az átutalással
+  // fizetett darab/összeg külön is számolódik: az a pénz nem a kasszából ment
+  // ki, és a napi tételsorok (ahol a kék címke látszik) itt már nincsenek meg.
   const pastGroups: {
     dayKey: string;
-    lines: { type: string; qty: number; ids: string[] }[];
+    atutalasFt: number;
+    lines: { type: string; qty: number; atutalasQty: number; ids: string[] }[];
   }[] = [];
   for (const p of pastPurchases) {
     let group = pastGroups.find((g) => g.dayKey === p.day_key);
     if (!group) {
-      group = { dayKey: p.day_key, lines: [] };
+      group = { dayKey: p.day_key, atutalasFt: 0, lines: [] };
       pastGroups.push(group);
     }
     let line = group.lines.find((l) => l.type === p.type);
     if (!line) {
-      line = { type: p.type, qty: 0, ids: [] };
+      line = { type: p.type, qty: 0, atutalasQty: 0, ids: [] };
       group.lines.push(line);
     }
     line.qty += p.qty;
     line.ids.push(p.id);
+    if (p.payment_method === "atutalas") {
+      line.atutalasQty += p.qty;
+      group.atutalasFt += p.total;
+    }
   }
 
   const pendingGroups: { seller: string; entries: PurchaseRow[]; total: number }[] = [];
@@ -650,8 +658,15 @@ export function NyiregyhazaHaviTab() {
                   tételét visszavonja (megerősítés után). */}
               {pastGroups.map((g) => (
                 <div key={g.dayKey} className="space-y-1.5">
-                  <div className={`text-xs font-semibold ${PAST_TILE_COLOR.text}`}>
-                    {dayGroupLabel(g.dayKey)}
+                  <div className="flex flex-wrap items-baseline gap-2">
+                    <span className={`text-xs font-semibold ${PAST_TILE_COLOR.text}`}>
+                      {dayGroupLabel(g.dayKey)}
+                    </span>
+                    {g.atutalasFt > 0 && (
+                      <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
+                        ebből átutalással {g.atutalasFt.toLocaleString("hu-HU")} Ft
+                      </span>
+                    )}
                   </div>
                   <div className="grid grid-cols-[repeat(auto-fill,minmax(5.5rem,1fr))] gap-1.5">
                     {g.lines.map((l) => (
@@ -665,6 +680,11 @@ export function NyiregyhazaHaviTab() {
                         <div className={`text-lg font-bold tabular-nums ${PAST_TILE_COLOR.text}`}>
                           {l.qty}
                         </div>
+                        {l.atutalasQty > 0 && (
+                          <div className="text-[10px] font-medium leading-tight text-blue-600 dark:text-blue-400">
+                            {l.atutalasQty === l.qty ? "átutalással" : `ebből ${l.atutalasQty} átutalással`}
+                          </div>
+                        )}
                         {canEdit && (
                           <button
                             type="button"
