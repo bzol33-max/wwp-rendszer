@@ -262,6 +262,7 @@ async function main() {
   await javitsaSajatCegMegrendelotSzamlabol(pool);
   await javitsaMaradekSajatCegMegrendelotOnce(pool);
   await toroljeDuplikatumSorokatOnce(pool);
+  await potoldMiskolciLerakotOnce(pool);
   await vonjaVisszaKoraiTeljesitestOnce(pool);
   await vonjaVisszaKettosGpsTeljesitestOnce(pool);
   await vonjaVisszaKorokKoztiKettosGpsTeljesitestOnce(pool);
@@ -619,6 +620,43 @@ async function toroljeDuplikatumSorokatOnce(pool) {
 // számlázatlan, nem postázott sorokon; a sor a besorolás szerint vissza-
 // kerül a folyamatban-listára (vagy elmúlt lerakásnál a Számla/Postára,
 // ahol a javított GPS-figyelés újra megnézi).
+// A 26/3814-es ÁB Speed megbízásról (Sopron → …, felrakás 2026-09-23)
+// hiányzott az ELSŐ lerakóhely: a PDF-en "Lerakóhely 1. Reál Alfi Ker Kft
+// 3527 Miskolc, Besenyői u. 8." és "Lerakóhely 2. Coop 4030 Debrecen,
+// Diószegi u. 22/C" áll, a behúzott sorba viszont csak a debreceni került be.
+// Enélkül a sofőr telefonján Miskolc meg sem jelenik, és kihagyná.
+//
+// Budaházi Zoltán kérésére írjuk be (2026-09-22). A két megállót a
+// bontsMegallokra elsődleges elválasztója (" + ") köti össze — ugyanaz a
+// formátum, amit a többsoros lerakók használnak. Csak akkor nyúlunk a
+// sorhoz, ha tényleg a hiányos változat van benne, így a kézi javítást nem
+// írjuk felül, és ismételt futáskor sem csinál semmit.
+async function potoldMiskolciLerakotOnce(pool) {
+  const JAVITAS_KOD = "abspeed-26-3814-miskolci-lerako-2026-09-22";
+  const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (mar.length > 0) return;
+
+  const TELJES =
+    "Reál Alfi Ker Kft 3527 Miskolc, Besenyői u. 8. + Coop 4030 Debrecen, Diószegi u. 22/C";
+
+  const { rows } = await pool.query(
+    `update fuvar_megbizasok
+        set lerako = $1
+      where pozicioszam = '26/3814'
+        and statusz <> 'torolt'
+        and lerako not ilike '%Miskolc%'
+      returning id, felrako, lerako`,
+    [TELJES]
+  );
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1) on conflict (kod) do nothing`, [
+    JAVITAS_KOD,
+  ]);
+  console.log(
+    `[migrate] 26/3814 miskolci lerakó pótolva: ${rows.length} sor` +
+      (rows.length ? ` (#${rows.map((r) => r.id).join(", #")})` : " — nem volt mit javítani.")
+  );
+}
+
 async function vonjaVisszaKoraiTeljesitestOnce(pool) {
   const JAVITAS_KOD = "korai-gps-teljesites-visszavonas-2026-09-16";
   const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
