@@ -1525,3 +1525,31 @@ Budaházi Zoltán kérése ugyanaznap, a kipróbálás után.
   „Miskolc" és „Debrecen" városnévvel.
 - A PDF-olvasó maga NINCS javítva — miért vesztette el az első lerakót, az
   külön kör. Ez a lépés csak ezt az egy sort rendezi.
+
+## 2026-09-22 — sofőr Fuvarok: két csempe, semmi több
+
+Budaházi Zoltán kérése: „nem kell semmi sallang sem időpont a sofőröknek, az
+csak nekem kell". A `components/erkezes/sofor-fuvar-nap.tsx` újraírva
+(~800 → ~450 sor).
+
+**Ami van:**
+- **Aktuális megbízás** egy csempén: a megbízó neve, alatta a fuvar
+  megállói — felrakó ÉS lerakó ugyanabban a csempében —, teljes címmel.
+- A **gombok mindig csak a soron következő megállón**: előbb a felrakónál
+  (Megérkeztem · Indulok), és amint ott indulást jelölt, átkerülnek a
+  lerakóhoz. Ha az utolsó megálló is kész, a csempe helyére a következő
+  megbízás lép, alá pedig az azutáni.
+- Az aktív megállónál Navigáció gomb és — bizonytalan címnél — „Itt vagyok".
+- **Következő megbízás** egy csempén: megbízó, honnan → hová. Gomb nincs.
+- A papíradatok (megbízó, megjegyzés, kapcsolattartó telefon, iratok,
+  fuvarlevél fotó, gond jelzése) egy alapból CSUKOTT „Részletek" sor mögött.
+
+**Ami kikerült, és nem véletlenül hiányzik:** időpont és időablak (chipek,
+`AblakSor`, `ablakAllapot`), Út ID / pozíciószám és a beírása, áru ·
+mennyiség · súly, a „Korábbról csúszik" jelölés, a napváltó nyilak, a 3 napos
+előnézet (`KovetkezoNapokDoboz`), a külön nagy „következő megálló" kártya
+(`KovetkezoKartya`), és a „mind a N megbízás" gomb. Ezek a diszpécsernek
+kellenek, nem a sofőrnek.
+
+A `rogzitPozicioszamot` és a `getKovetkezoNapokElonezet` szerver-műveletek
+megmaradnak — a `/m` sofőr nézet és a GPS idővonal használja őket.
