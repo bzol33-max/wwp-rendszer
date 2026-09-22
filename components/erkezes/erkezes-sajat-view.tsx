@@ -693,6 +693,14 @@ function FuvarokScreen({
 // méretezett párbeszédet kap (keszlet-mobil.tsx); a Be/Ki rögzítés a desktop
 // Készlet modullal közös MovementForm, rögzített iránnyal.
 const VEGYES_FORRASOK = ["Vegyes EUR", "Vegyes"];
+
+// Telephelyek közti mozgatás célja a telepi nézetről: a másik két telep,
+// Nyíregyházát is beleértve. A forrás mindig a kiválasztott saját telep — a
+// cél telepen a mennyiség csak az átvétel után kerül készletbe.
+const MOZGATAS_CELOK: Record<KeszletSite, string[]> = {
+  Szakoly: ["Balkány", "Nyíregyháza"],
+  Balkány: ["Szakoly", "Nyíregyháza"],
+};
 const VEGYES_EUR_CELOK = ["EUR világos", "EUR szürke", "EUR törött"];
 
 function KeszletScreen({
@@ -822,12 +830,15 @@ function KeszletScreen({
           )}
 
           {canEdit && (
-            <div className="sticky bottom-0 -mx-1 grid grid-cols-3 gap-2 rounded-xl border border-[var(--mob-border)] bg-[var(--mob-card)] p-2">
+            <div className="sticky bottom-0 -mx-1 grid grid-cols-2 gap-2 rounded-xl border border-[var(--mob-border)] bg-[var(--mob-card)] p-2">
               <Button size="sm" onClick={() => setRogzites("be")}>
                 Beérkezés
               </Button>
               <Button size="sm" onClick={() => setRogzites("ki")}>
                 Kiadás
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setRogzites("mozgatas")}>
+                Mozgatás másik telepre
               </Button>
               <Button size="sm" variant="outline" onClick={() => setInventoryOpen(true)}>
                 Leltár
@@ -844,8 +855,7 @@ function KeszletScreen({
                 <MovementForm
                   site={site}
                   types={types}
-                  otherSites={[]}
-                  allowTransfer={false}
+                  otherSites={MOZGATAS_CELOK[site]}
                   fixedDirection={rogzites}
                   onRecorded={async () => {
                     await load();

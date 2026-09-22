@@ -60,6 +60,19 @@ function ellenorizdSajatKeszletHatokor(jog: ModuleKey, ...sites: (string | undef
   }
 }
 
+// Telephelyek közti mozgatás CÉLJA a saját készlet jogosultsággal is lehet
+// bármelyik telep (pl. Szakoly → Nyíregyháza): a mozgatás a forrás telep
+// készletét csökkenti — ami itt a jogosultság hatókörében van —, a célnál
+// pedig csak az átvétel után ír jóvá, amit az ottani dolgozó okéz le. A
+// forrás telepre továbbra is az ellenorizdSajatKeszletHatokor vonatkozik.
+function ellenorizdMozgatasCel(site: unknown, forras: string) {
+  const cel = ellenorizdTelephely(site);
+  if (cel === forras) {
+    throw new Error("A mozgatás cél telephelye nem lehet ugyanaz, mint a forrás.");
+  }
+  return cel;
+}
+
 // Szerver oldali bemenet-ellenőrzés. A kliens is ellenőriz, de a szerver-akció
 // közvetlenül is hívható, és egy hibás érték (pl. tört darabszám) különben
 // csak a DB-nél, félig lefutott mentés közben derülne ki.
@@ -259,11 +272,9 @@ export async function recordMovements(input: {
 }) {
   const jog = await requireAnyEditPermission(["keszlet", "keszlet_sajat"]);
   const createdBy = await rogzitoNeve();
-  ellenorizdSajatKeszletHatokor(
-    jog,
-    input.site,
-    ...input.items.map((i) => i.targetSite)
-  );
+  // A cél telepet szándékosan nem szűkítjük a jogosultság hatókörére — ld.
+  // ellenorizdMozgatasCel.
+  ellenorizdSajatKeszletHatokor(jog, input.site);
   ellenorizdTelephely(input.site);
   // A "mozgatas_be" csak a rendszer által generált cél oldali pár lehet.
   if (!["be", "ki", "mozgatas"].includes(input.direction)) {
@@ -273,10 +284,7 @@ export async function recordMovements(input: {
     ellenorizdDarabszam(item.qty, item.type);
     if (item.unitPrice !== undefined) ellenorizdAr(item.unitPrice);
     if (input.direction === "mozgatas") {
-      ellenorizdTelephely(item.targetSite);
-      if (item.targetSite === input.site) {
-        throw new Error("A mozgatás cél telephelye nem lehet ugyanaz, mint a forrás.");
-      }
+      ellenorizdMozgatasCel(item.targetSite, input.site);
     }
   }
   const eladottTetelek = input.items.filter((i) => (i.unitPrice ?? 0) > 0);
