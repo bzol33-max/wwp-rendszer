@@ -1583,3 +1583,20 @@ megmaradnak — a `/m` sofőr nézet és a GPS idővonal használja őket.
   (`erintes-felismeres.ts`), ezért a felrakó a 0. index.
 - Csak akkor ír, ha a felrakó még „Tatabánya" (kézi javítást nem ír felül),
   és az állapotsort csak akkor, ha a cím-javítás megfogott.
+
+## 2026-09-22 — Tompaládony valódi címe (FABRIKA + 2000 Kft.)
+
+- Korábban tévesen azt írtam, hogy a Tompaládony az ÁB Speed postázási címe
+  és hibásan került a lerakóba. **Nem így van:** a faluban van a
+  **FABRIKA + 2000 Kft.** telephelye (9662 Tompaládony, 0117/8 hrsz.), és a
+  fuvarok oda mennek. Budaházi Zoltán megerősítette; a Számlázz.hu
+  partnertörzse ugyanezt a címet adja, a FABRIKA pedig a második legtöbb
+  számlát kapó vevő (118 számla).
+- `javitsdTompaladonyiCimetOnce` (`scripts/migrate.mjs`): ahol a felrakó vagy
+  a lerakó pontosan „Tompaládony", oda a teljes cím kerül. Ellenőrizve:
+  `csak_varos` → **`pontos`**, tehát a GPS ezentúl felismeri.
+- **A cégnév szándékosan nem kerül a címbe.** A `" + "` a megállók
+  elsődleges elválasztója (`ELSODLEGES_ELVALASZTO`), ezért a
+  „FABRIKA + 2000 Kft." név KETTÉVÁGNÁ a címet két hamis megállóra —
+  ellenőrizve, 2 megállót ad, „FABRIKA + Kft." városnévvel.
+  Ez általános kockázat minden olyan partnernél, akinek `+` van a nevében.

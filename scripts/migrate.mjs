@@ -264,6 +264,7 @@ async function main() {
   await toroljeDuplikatumSorokatOnce(pool);
   await potoldMiskolciLerakotOnce(pool);
   await javitsdTataiFelrakotOnce(pool);
+  await javitsdTompaladonyiCimetOnce(pool);
   await vonjaVisszaKoraiTeljesitestOnce(pool);
   await vonjaVisszaKettosGpsTeljesitestOnce(pool);
   await vonjaVisszaKorokKoztiKettosGpsTeljesitestOnce(pool);
@@ -710,6 +711,49 @@ async function javitsdTataiFelrakotOnce(pool) {
   ]);
   console.log(
     `[migrate] #${FUVAR_ID} tatai felrakó: cím javítva ${cimSorok.length} sor, felrakó lezárva ${allapot} sor.`
+  );
+}
+
+// A tompaládonyi fuvarok lerakója csak "Tompaládony" volt, ami csak_varos
+// minősítésű cím: a GPS elvileg sem tudta felismerni az érkezést. A valódi
+// hely a FABRIKA + 2000 Kft. telephelye, 9662 Tompaládony, 0117/8 hrsz.
+// (Budaházi Zoltán erősítette meg, 2026-09-22; a Számlázz.hu partnertörzse
+// ugyanezt a címet adja, és a FABRIKA a második legtöbb számlát kapó vevő).
+//
+// FIGYELEM: a cégnév SZÁNDÉKOSAN nem kerül a címbe. A " + " a megállók
+// elsődleges elválasztója (lib/fuvarozas/varos.ts ELSODLEGES_ELVALASZTO),
+// ezért a "FABRIKA + 2000 Kft." név KETTÉVÁGNÁ a címet két hamis megállóra.
+// Ellenőrizve: a lenti cím egy megállóra bomlik, városa "Tompaládony", és a
+// cimPontossaga szerint "pontos" — tehát a GPS ezentúl felismeri.
+async function javitsdTompaladonyiCimetOnce(pool) {
+  const JAVITAS_KOD = "tompaladony-fabrika-cim-2026-09-22";
+  const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (mar.length > 0) return;
+
+  const VALODI_CIM = "9662 Tompaládony, 0117/8 hrsz.";
+
+  const { rows: lerakok } = await pool.query(
+    `update fuvar_megbizasok
+        set lerako = $1
+      where statusz <> 'torolt' and trim(lerako) = 'Tompaládony'
+      returning id`,
+    [VALODI_CIM]
+  );
+  const { rows: felrakok } = await pool.query(
+    `update fuvar_megbizasok
+        set felrako = $1
+      where statusz <> 'torolt' and trim(felrako) = 'Tompaládony'
+      returning id`,
+    [VALODI_CIM]
+  );
+
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1) on conflict (kod) do nothing`, [
+    JAVITAS_KOD,
+  ]);
+  console.log(
+    `[migrate] Tompaládony valódi címe beírva: lerakó ${lerakok.length} sor` +
+      (lerakok.length ? ` (#${lerakok.map((r) => r.id).join(", #")})` : "") +
+      `, felrakó ${felrakok.length} sor.`
   );
 }
 
