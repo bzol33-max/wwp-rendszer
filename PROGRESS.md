@@ -1612,3 +1612,15 @@ megmaradnak — a `/m` sofőr nézet és a GPS idővonal használja őket.
   átcsúsznak a következő napra, tehát enélkül ugyanaz a fuvar kétszer
   szerepelne a képernyőn (fent aktuálisként, lent holnapiként).
 - A csempe akkor is megjelenik, ha ma nincs fuvar, vagy ha ma már végzett.
+
+## 2026-09-22 — a holnapi fuvar is kinyitható
+
+- A „Holnap" csempe eddig csak egy sor volt (honnan → hová). Most ugyanaz a
+  komponens szolgálja ki, mint a „Ezután következik" sort: koppintásra
+  kinyílik a megállókkal (teljes cím), megjegyzéssel, kapcsolattartó
+  telefonnal és a megbízás irataival.
+- A `KovetkezoMegbizas` → **`MegbizasElonezet`** néven általánosítva, `cimke`
+  proppal; a külön `HolnapCsempe` törölve. Egy komponens, két helyen —
+  így a kettő nem tud egymástól elcsúszni.
+- Gomb továbbra sincs rajtuk: amíg az aktuálissal nem végzett, azokon nincs
+  dolga.

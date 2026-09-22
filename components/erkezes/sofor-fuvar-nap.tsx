@@ -7,8 +7,9 @@
 // lerakó együtt, alatta a következő megbízás — az koppintásra kinyílik, hogy
 // indulás előtt látni lehessen, mire készüljön.
 //
-// Legalul egy halk "Holnap" csempe, fuvaronként egy sorral — ennyi kell
-// ahhoz, hogy este tudja, merre kell indulnia.
+// Legalul a holnapi fuvarok, ugyanabban a csempében, mint a "Ezután
+// következik" — csukva egy sor (honnan → hová), koppintásra kinyílik a
+// megállókkal és a papíradatokkal.
 //
 // Ami KIKERÜLT és nem véletlenül hiányzik: időpont és időablak, Út ID /
 // pozíciószám, áru és súly, a napváltó nyilak, a három napos előnézet. Ezek a
@@ -400,16 +401,18 @@ function AktualisMegbizas({
 }
 
 /**
- * A KÖVETKEZŐ megbízás csempéje. Csukva annyit mutat, hogy a sofőr tudja, mi
- * jön: ki a megbízó, és honnan hová. Rákoppintva kinyílik — megállók teljes
- * címmel, megjegyzés, kapcsolattartó, iratok —, hogy még indulás előtt
- * megnézhesse, mire készüljön (Budaházi Zoltán, 2026-09-22).
+ * Egy MÉG NEM AKTUÁLIS megbízás csempéje — ugyanez szolgálja ki a "Ezután
+ * következik" és a "Holnap" sorokat is, mert a sofőrnek mindkettőnél
+ * ugyanaz kell. Csukva annyit mutat, hogy tudja, mi jön: ki a megbízó, és
+ * honnan hová. Rákoppintva kinyílik — megállók teljes címmel, megjegyzés,
+ * kapcsolattartó, iratok —, hogy még indulás előtt megnézhesse, mire
+ * készüljön (Budaházi Zoltán, 2026-09-22).
  *
  * Gomb sosincs rajta: amíg az aktuálissal nem végzett, ezen nincs dolga.
- * Amint az aktuális megbízás minden megállója kész, EZ lép a helyére teljes,
- * gombos csempeként, és ide a rá következő kerül.
+ * Amint az aktuális megbízás minden megállója kész, a soron következő lép a
+ * helyére teljes, gombos csempeként.
  */
-function KovetkezoMegbizas({ blokk }: { blokk: SoforFuvarBlokk }) {
+function MegbizasElonezet({ blokk, cimke }: { blokk: SoforFuvarBlokk; cimke: string }) {
   const [nyitva, setNyitva] = useState(false);
   const honnan = blokk.megallok.find((m) => m.tipus === "felrako")?.varos;
   const hova = [...blokk.megallok].reverse().find((m) => m.tipus === "lerako")?.varos;
@@ -423,7 +426,7 @@ function KovetkezoMegbizas({ blokk }: { blokk: SoforFuvarBlokk }) {
       >
         <span className="flex min-w-0 flex-col gap-1">
           <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--mob-muted)]">
-            Ezután következik
+            {cimke}
           </span>
           <span className="truncate text-sm font-semibold">{blokk.megrendelo ?? "Megbízás"}</span>
           {honnan && hova && (
@@ -491,30 +494,6 @@ function KovetkezoMegbizas({ blokk }: { blokk: SoforFuvarBlokk }) {
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-/**
- * "Holnap" — egyetlen halk csempe a nap alján, fuvaronként egy sorral
- * (Budaházi Zoltán, 2026-09-22). Ennyi kell ahhoz, hogy a sofőr este tudja,
- * mikor és merre kell indulnia; gomb és részletek nincsenek rajta, azokat
- * holnap úgyis megkapja.
- */
-function HolnapCsempe({ fuvarok }: { fuvarok: SoforFuvarBlokk[] }) {
-  if (fuvarok.length === 0) return null;
-  return (
-    <div className="flex flex-col gap-1.5 rounded-xl border border-[var(--mob-border)] bg-[var(--mob-card)]/60 px-3 py-3">
-      <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--mob-muted)]">Holnap</span>
-      {fuvarok.map((b) => {
-        const honnan = b.megallok.find((m) => m.tipus === "felrako")?.varos;
-        const hova = [...b.megallok].reverse().find((m) => m.tipus === "lerako")?.varos;
-        return (
-          <span key={b.fuvarId} className="text-sm">
-            {honnan && hova ? `${honnan} → ${hova}` : (b.megrendelo ?? "Fuvar")}
-          </span>
-        );
-      })}
     </div>
   );
 }
@@ -689,11 +668,14 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
             onFoto={foto}
             onGond={gond}
           />
-          {kovetkezoBlokk && <KovetkezoMegbizas blokk={kovetkezoBlokk} />}
+          {kovetkezoBlokk && <MegbizasElonezet blokk={kovetkezoBlokk} cimke="Ezután következik" />}
         </>
       )}
 
-      <HolnapCsempe fuvarok={holnapiFuvarok} />
+      {/* Holnap — ugyanaz a csempe, ugyanúgy kinyitható. */}
+      {holnapiFuvarok.map((b) => (
+        <MegbizasElonezet key={b.fuvarId} blokk={b} cimke="Holnap" />
+      ))}
     </div>
   );
 }
