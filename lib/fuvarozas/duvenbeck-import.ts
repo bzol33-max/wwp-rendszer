@@ -265,6 +265,12 @@ export async function mentDuvenbeckDokumentumot(
     if (beszurt) {
       fuvarId = beszurt.id;
       statusz = "uj";
+      // A Duvenbecktől elvileg nem jön több fuvar, ezért a sofőrnek szóló
+      // BMW-adatok (ZF kapuidő, dokk, tárolószám) nincsenek beépítve — ha
+      // mégis jön, a naplóban és az Áttekintés/Fuvar lapon is látszódjon.
+      console.warn(
+        `[duvenbeck] FIGYELEM: új Duvenbeck-megbízás #${beszurt.id} (Reise ID ${kulcs ?? "?"}) — a ZF kapuidő és a dokk nem jut el a sofőr telefonjára.`
+      );
     } else {
       meglevo = await keresMeglevot();
       if (!meglevo) return null;
