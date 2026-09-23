@@ -13,6 +13,23 @@ export default async function FuvarPage() {
     <div className="flex flex-col gap-4 py-4">
       <h1 className="text-base font-semibold">Fuvarozás — kocsinként</h1>
 
+      {adatok.duvenbeck.length > 0 && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900">
+          <div className="text-sm font-bold">Duvenbeck-megbízás jött · {adatok.duvenbeck.length}</div>
+          <p className="mt-0.5 text-xs text-amber-800">
+            A sofőr telefonja nem mutatja a BMW-kapu időpontját (ZF), a dokkot és a tárolók számát — ezek csak a
+            FRALI-iraton vannak, külön kell szólni a sofőrnek.
+          </p>
+          <div className="mt-2 flex flex-col gap-0.5 text-xs">
+            {adatok.duvenbeck.map((d) => (
+              <span key={d.id}>
+                #{d.id} · {d.datum} · {d.utvonal}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
       {adatok.kocsiNelkul.length > 0 && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-amber-900">
           <div className="text-sm font-bold">Kocsi nélkül · {adatok.kocsiNelkul.length}</div>

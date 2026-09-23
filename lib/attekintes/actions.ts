@@ -347,6 +347,14 @@ export type FuvarFulAdatok = {
   jarmuvek: JarmuFuvarCsoport[];
   /** Folyamatban lévő megbízások, amelyekhez egyik saját kocsi sincs hozzárendelve — ezek döntést várnak. */
   kocsiNelkul: JarmuMegbizasSor[];
+  /**
+   * Folyamatban lévő Duvenbeck-megbízások. A Duvenbecktől elvileg nem jön
+   * több fuvar, ezért a sofőrnek szóló BMW-adatok (ZF kapuidő, ZF-ID, dokk,
+   * tárolószám, göngyöleg-felvételi hely — lásd lib/fuvarozas/duvenbeck.ts)
+   * NINCSENEK beépítve; ha mégis jön, a felület figyelmeztet, hogy ezeket
+   * külön kell a sofőrnek átadni.
+   */
+  duvenbeck: { id: string; datum: string; utvonal: string }[];
   /** Az adatok összeállításának pillanata (ms) — a felület ehhez méri az élő jel korát és a folyó rakodás idejét. */
   betoltve: number;
 };
@@ -510,7 +518,17 @@ export async function getFuvarFulAdatok(): Promise<FuvarFulAdatok> {
     )
     .map(megbizasSor);
 
-  return { jarmuvek, kocsiNelkul, betoltve: most };
+  const duvenbeck = aktivak
+    .filter((r) => /duvenbeck/i.test(r.megrendelo ?? ""))
+    .map((r) => ({
+      id: r.id,
+      datum: r.date,
+      utvonal: [varosNev(bontsMegallokra(r.felrako)[0]), varosNev(bontsMegallokra(r.lerako).at(-1))]
+        .filter(Boolean)
+        .join(" → "),
+    }));
+
+  return { jarmuvek, kocsiNelkul, duvenbeck, betoltve: most };
 }
 
 // ---------------------------------------------------------------------------

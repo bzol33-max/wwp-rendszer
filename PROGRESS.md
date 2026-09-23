@@ -1812,3 +1812,27 @@ jelölés. Ha ma nincs több fuvar, a következő a legközelebbi jövőbeli.
   teszt-erintes 67, teszt-import 101, teszt-jogosultsag 28,
   teszt-allapotgep 44, teszt-backfill-allapot 18,
   teszt-lerako-telephely 36 — zöld.
+
+## 2026-09-23 — 8 megbízás átvizsgálása, Duvenbeck-figyelmeztetés
+
+Budaházi Zoltán kérésére 8 különböző megbízó friss megbízását néztem át
+(Duvenbeck, ÁB Speed, RBT Europe, Lösung Trans, Logo Trek, Hajdúspedíció,
+ÁJ-Trans, BB-Logistic), hogy mi kell belőlük a sofőrnek. Döntése:
+
+- A megbízók szabad szöveges utasításait („Logo Trek néven rakodj”, „ne
+  mondd meg, hol rakod le”, „1 órán belül szólj”) **nem** visszük ki a
+  sofőr telefonjára.
+- **A Duvenbecktől elvileg nem jön több fuvar**, ezért a sofőrnek szóló
+  BMW-adatokat NEM építettük be. Ezek csak a FRALI-iraton vannak, és a
+  `lib/fuvarozas/duvenbeck.ts` olvasó ma nem szedi ki őket: ZF kapuidő
+  (pl. `ZF: 16.09.2026 17:10`, a PV–PB ablak BMW-nél 00:00–23:59, tehát a
+  ZF a valódi határidő), ZF-ID, lerakó dokk (`H80F1`, `H80F2`, `DEB01`),
+  ORDER-referencia, tárolószám (a hiányért a megbízás szerint mi
+  felelünk), BMW-nél a göngyöleg felvételi helye („Assembly VZ2 Building
+  80.0 Empties Area”). Ha mégis jön Duvenbeck és ráérünk, innen kell
+  folytatni.
+- Helyette **figyelmeztetés**: az Áttekintés → Fuvar lapon sárga doboz
+  jelenik meg, amíg van folyamatban lévő Duvenbeck-megbízás
+  (`getFuvarFulAdatok().duvenbeck`), és az importőr új Duvenbeck-sornál
+  `[duvenbeck] FIGYELEM` sort ír a deploy-naplóba.
+- `tsc --noEmit` és lint az érintett fájlokra tiszta.
