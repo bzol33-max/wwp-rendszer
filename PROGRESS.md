@@ -1917,3 +1917,21 @@ Budaházi Zoltán 10 + 10 + 1 látványtervből választott (Flotta-tervek vász
 - `tsc`, lint tiszta; tesztek zöldek (a `teszt-megbizas-szuro` 2 dátumfüggő
   hibája a main-en is fennáll). Próba-renderelés a minta-helyzettel
   (Tailwind-dal lefordítva, képernyőképen ellenőrizve).
+
+## 2026-09-23 — Flotta lap: a kamion a sávon a valós helyén áll, pihenő közben is
+
+Budaházi Zoltán jelezte: Gergő megállósávja „alapon” állt (üres vonal
+Sárvártól Debrecenig), pedig már Nagyfügednél járt hazafelé. Az adat jó
+volt (#223: Sárvár kész 09:41, Debrecen holnap), a sáv viszont csak az
+elért megállóig töltött ki, a ▶ pedig csak MENET közben jelent meg —
+pihenőn állva semmi nem mutatta, hogy az út nagyobb része megvolt.
+
+- A kamion helye a két megálló között a légvonalbeli távolságok arányából
+  (`utkozbenHelye`: előző kész → GPS-pont → következő), állva is; menet
+  közben ▶, útközbeni állásnál ❚❚. Ehhez új mezők: `eloPozicio.lat/lon`,
+  `MegalloBejegyzes.lat/lon` (a meglévő geokódolásból).
+- A mondatban a hátralévő táv: „Debrecen következik (~113 km)”; a Tükör
+  lapon „Áll útközben · Debrecen felé … · még ~113 km légvonalban · most:
+  <hely>”.
+- Próba-renderelés Gergő valós adataival (Sárvár 47.2475,16.9101 →
+  Debrecen 47.5442,21.5664, kocsi 47.7044,20.0733): a jel az út ~70%-ánál.
