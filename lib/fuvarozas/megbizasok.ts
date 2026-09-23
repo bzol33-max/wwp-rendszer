@@ -208,7 +208,7 @@ export async function getMaiSajatFuvarok(nap?: string, csuszokIs = false): Promi
        id::text, megrendelo, felrako, lerako, idopont,
        to_char(datum, 'YYYY-MM-DD') as datum,
        to_char(lerakas_datum, 'YYYY-MM-DD') as lerakas_datum,
-       jarmu, sofor, pozicioszam,
+       jarmu, sofor, pozicioszam, referencia,
        aru, mennyiseg, suly, fuvardij, fuvardij_penznem,
        (select count(*) from fuvar_dokumentumok d where d.fuvar_id = fuvar_megbizasok.id and d.tipus = 'fuvarlevel')::int as fuvarlevel_foto_db,
        to_char(felrakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as felrakas_ablak_tol,

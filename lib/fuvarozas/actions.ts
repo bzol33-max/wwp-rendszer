@@ -211,6 +211,8 @@ export type FuvarBlokk = {
   fuvardijPenznem: FuvardijPenznem;
   /** A sofőr által feltöltött fuvarlevél-fotók száma. */
   fuvarlevelFotoDb: number;
+  /** A felrakón / kapuban kért szám, ha más, mint a pozíciószám (sofor-adatok.ts). */
+  referencia: string | null;
   /** A sofőr gondjelzései ehhez a fuvarhoz (nyitottak és a nap folyamán lezártak). */
   gondok: GondJelzes[];
 };
@@ -753,6 +755,7 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus, kali
     fuvardij: row.fuvardij,
     fuvardijPenznem: row.fuvardij_penznem,
     fuvarlevelFotoDb: row.fuvarlevel_foto_db,
+    referencia: row.referencia ?? null,
     honnan: row.felrako ? varosNev(row.felrako) : null,
     hova: varosNev(row.lerako) || row.lerako,
     megallok,
@@ -945,6 +948,7 @@ function fuvarBlokkok(
           fuvardij: f.fuvardij,
           fuvardijPenznem: f.fuvardijPenznem,
           fuvarlevelFotoDb: f.fuvarlevelFotoDb,
+          referencia: f.referencia,
           gondok: gondokByFuvar.get(f.id) ?? [],
         },
         napVegen: napVegereSorolt(f, napISO),

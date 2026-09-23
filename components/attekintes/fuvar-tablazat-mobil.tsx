@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, type ReactNode } from "react";
-import { AlertTriangle, Check, ChevronDown } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, Truck } from "lucide-react";
 import { JARMU_SZIN_DOT_CLASS, SAJAT_JARMUVEK } from "@/lib/fuvarozas/vehicles";
 import type { FuvarBlokk, JarmuIdovonalEredmeny, MegalloBejegyzes } from "@/lib/fuvarozas/actions";
 import { varosNev } from "@/lib/fuvarozas/varos";
@@ -25,14 +25,16 @@ import {
   type SorAdat,
 } from "@/lib/fuvarozas/gps-sorok";
 
-// Az Áttekintés mobil "Fuvar" füle — a GPS lap táblázatos napja telefonra
-// szabva (M4 látványterv): fent a nap összképe, alatta a három kocsi füle,
-// a lapok között balra-jobbra húzással (scroll-snap) vagy a fülre koppintva
-// lehet váltani. Kocsinként a "Hol van most" doboz, majd a háromoszlopos
-// táblázat (Megálló, Érkezés, Távozás), a rakodás, a sofőr jelzése és a
-// gond a sor alatt. A cellák tartalma ugyanabból a sorAdatok függvényből
-// jön, mint a /fuvarozas GPS fülön, csak az Áttekintés saját (--at-*)
-// színsémájával rajzolva.
+// Az Áttekintés mobil "Fuvar" füle. A lapozó ELSŐ lapja a Flotta
+// ("műszerfal, megbízás-állással" — F10+ terv, Budaházi Zoltán 2026-09-23):
+// a nap számai, kocsinként állapot-csík, sebesség, hely, a mostani megbízás
+// díja és megállósávja egy mondattal, a 7 napos átlagfogyasztás. A kocsik
+// lapjai a "Tükör" (Z8 terv): ugyanaz a menetjegy, amit a sofőr lát, a
+// díjjal és a sofőr jelzéseivel (GPS-idővel mellette), alatta a következő
+// megbízás és a kocsi részletei. A lapok között balra-jobbra húzással
+// (scroll-snap) vagy a fülre koppintva lehet váltani. A megállók
+// részletes táblázata ugyanabból a sorAdatok függvényből jön, mint a
+// /fuvarozas GPS fülön, csak az Áttekintés saját (--at-*) színsémájával.
 
 const CIMKE = "text-[11px] font-semibold uppercase tracking-wide text-[var(--at-muted)]";
 
@@ -357,24 +359,516 @@ function felpakoltE(f: FuvarBlokk): boolean {
   return felrakok.length > 0 && felrakok.every((m) => m.elhagyva);
 }
 
+/** A jármű színe hexában — a JARMU_SZIN_DOT_CLASS (Tailwind 500-as árnyalat) megfelelője, a sávokhoz és karikákhoz. */
+const JARMU_SZIN_HEX: Record<(typeof SAJAT_JARMUVEK)[number]["szin"], string> = {
+  blue: "#3b82f6",
+  yellow: "#eab308",
+  green: "#22c55e",
+};
+
 /**
- * Egy kocsi lapja: hol van most, majd PONTOSAN KÉT megbízás — az aktuális és
- * a következő (Budaházi Zoltán, 2026-09-22). A következő elsősorban a mai
- * sorban utána álló fuvar; ha ma nincs több, akkor a legközelebbi jövőbeli.
- *
- * Korábban az összes mai fuvar teljes táblázata kint volt, alatta a
- * "Következő napok" listája — telefonon ez görgetnivaló. A táblázat nem
- * veszett el: a csempét kinyitva ugyanaz jön elő.
+ * A kocsi AKTUÁLIS megbízása: amelyiknek egyik megállóján éppen áll (GPS)
+ * vagy a sofőr jelezte, hogy megérkezett; ha ilyen nincs, az első még nem
+ * kész fuvar. (A kovetkezoMegallo az éppen-itt megállót kihagyja, ezért
+ * lerakás közben a KÖVETKEZŐ fuvart adná — itt épp a mostani kell.)
+ */
+function aktivFuvar(fuvarok: FuvarBlokk[]): FuvarBlokk | null {
+  return (
+    fuvarok.find((f) => f.megallok.some((m) => !m.elhagyva && (m.eppenItt || m.keziErkezes))) ??
+    fuvarok.find((f) => !fuvarKesz(f)) ??
+    null
+  );
+}
+
+type MegalloAllas = "kesz" | "itt" | "kov" | "terv";
+
+/** Megállónként: kész, itt áll most (GPS vagy a sofőr "Megérkeztem"-je), a soron következő, vagy későbbi terv. */
+function megalloAllasok(f: FuvarBlokk): MegalloAllas[] {
+  let kovMegvan = false;
+  return f.megallok.map((m) => {
+    if (m.elhagyva) return "kesz";
+    if (!kovMegvan && (m.eppenItt || m.keziErkezes)) {
+      kovMegvan = true;
+      return "itt";
+    }
+    if (!kovMegvan) {
+      kovMegvan = true;
+      return "kov";
+    }
+    return "terv";
+  });
+}
+
+function napSzo(napElteres: number): string | null {
+  if (napElteres === 0) return null;
+  if (napElteres === 1) return "holnap";
+  if (napElteres === -1) return "tegnap";
+  return napElteres > 0 ? `+${napElteres} nap` : `${napElteres} nap`;
+}
+
+/** A megálló alatti kis felirat: "✓ 08:05", "itt 09:38 óta", "~17:30 · holnap". */
+function megalloIdoFelirat(m: MegalloBejegyzes, allas: MegalloAllas): string {
+  const nap = napSzo(m.napElteres);
+  if (allas === "kesz") {
+    const ido = m.tenylegesTavozas ?? m.keszAt ?? m.idopont;
+    return `✓ ${nap ? `${nap} ` : ""}${formatIdo(ido)}`;
+  }
+  if (allas === "itt") {
+    return m.eppenItt ? `itt ${formatIdo(m.idopont)} óta` : `itt ${formatIdo(m.keziErkezes!)} (sofőr)`;
+  }
+  if (allas === "kov") {
+    if (m.becslesElavult) return nap ?? "ma";
+    return `~${formatIdo(m.idopont)}${nap ? ` · ${nap}` : ""}`;
+  }
+  return nap ?? "ma";
+}
+
+/** Egy mondat a megbízás állásáról: "Felpakolva · Miskolc következik · lerakás holnap". */
+function allasMondat(f: FuvarBlokk, allasok: MegalloAllas[], most: number): string {
+  if (allasok.every((a) => a === "kesz")) return "Kész — minden megálló megvolt";
+  const felrakok = f.megallok.map((m, i) => ({ m, i })).filter((x) => x.m.tipus === "felrako");
+  const felpakolva = felrakok.length > 0 && felrakok.every((x) => allasok[x.i] === "kesz");
+  const reszek: string[] = [felpakolva ? "Felpakolva" : "Még nincs felpakolva"];
+  const itt = allasok.indexOf("itt");
+  if (itt >= 0) {
+    const m = f.megallok[itt];
+    reszek.push(m.tipus === "felrako" ? "a felrakón" : "a lerakón");
+    if (m.varakozasKezdete && !m.varakozasVege) reszek.push(`vár ${formatTartam(m.varakozasKezdete, most)}`);
+  } else {
+    const kov = allasok.indexOf("kov");
+    if (kov >= 0) {
+      const m = f.megallok[kov];
+      reszek.push(`${m.cim} következik`);
+      const nap = napSzo(m.napElteres);
+      if (nap) reszek.push(`${m.tipus === "felrako" ? "felrakás" : "lerakás"} ${nap}`);
+    }
+  }
+  if (f.fuvarlevelFotoDb > 0) reszek.push("fuvarlevél fotó ✓");
+  return reszek.join(" · ");
+}
+
+/**
+ * A megbízás megállósávja (F10+ terv, Budaházi Zoltán 2026-09-23): ✓ kész,
+ * ● itt áll most, ○ következő, ▶ a kocsi úton két megálló között.
+ */
+function AllasSav({ f, allasok, szin, mozog }: { f: FuvarBlokk; allasok: MegalloAllas[]; szin: string; mozog: boolean }) {
+  const n = f.megallok.length;
+  if (n === 0) return null;
+  const poz = (i: number) => (n === 1 ? 50 : (i / (n - 1)) * 100);
+  const utolsoMegvolt = allasok.reduce((acc, a, i) => (a === "kesz" || a === "itt" ? i : acc), -1);
+  const kov = allasok.indexOf("kov");
+  const kamion = mozog && !allasok.includes("itt") && kov > 0 && utolsoMegvolt >= 0 ? (poz(utolsoMegvolt) + poz(kov)) / 2 : null;
+  const kitoltes = kamion ?? (utolsoMegvolt >= 0 ? poz(utolsoMegvolt) : 0);
+  return (
+    <div className="relative mx-[7px] mt-1.5 h-[46px]">
+      <span className="absolute inset-x-0 top-[6px] h-[3px] bg-[var(--at-tile)]" />
+      <span className="absolute left-0 top-[6px] h-[3px]" style={{ width: `${kitoltes}%`, background: szin }} />
+      {f.megallok.map((m, i) => {
+        const a = allasok[i];
+        const elso = i === 0;
+        const utolso = i === n - 1 && n > 1;
+        return (
+          <span key={m.megalloIndex}>
+            <span
+              className="absolute top-0 flex h-[14px] w-[14px] -translate-x-1/2 items-center justify-center rounded-full"
+              style={{
+                left: `${poz(i)}%`,
+                background: a === "kesz" ? szin : "#fff",
+                border: a === "itt" ? `4px solid ${szin}` : `2px solid ${a === "terv" ? "var(--at-border)" : szin}`,
+                boxShadow: a === "itt" ? `0 0 0 3px ${szin}33` : undefined,
+              }}
+            >
+              {a === "kesz" && <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />}
+            </span>
+            <span
+              className={`absolute top-[19px] whitespace-nowrap leading-tight ${
+                elso ? "text-left" : utolso ? "-translate-x-full text-right" : "-translate-x-1/2 text-center"
+              }`}
+              style={{ left: `${poz(i)}%` }}
+            >
+              <span className={`block text-[11px] font-semibold ${a === "itt" || a === "kov" ? "" : "text-[var(--at-muted)]"}`}>
+                {m.cim}
+              </span>
+              <span className="block text-[10px] text-[var(--at-muted)]">{megalloIdoFelirat(m, a)}</span>
+            </span>
+          </span>
+        );
+      })}
+      {kamion !== null && (
+        <span
+          className="absolute -top-px -translate-x-1/2 rounded px-[3px] text-[9px] font-bold leading-4 text-white"
+          style={{ left: `${kamion}%`, background: szin }}
+          aria-label="a kocsi itt jár"
+        >
+          ▶
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** "660e" — a fej rövid összege; a pontos érték a title-ben. */
+function rovidFt(osszeg: number): string {
+  if (osszeg >= 1_000_000) return `${(osszeg / 1_000_000).toLocaleString("hu-HU", { maximumFractionDigits: 1 })}M`;
+  if (osszeg >= 1000) return `${Math.round(osszeg / 1000)}e`;
+  return String(osszeg);
+}
+
+function fogyasztasFelirat(l100: number | null | undefined): string {
+  return l100 == null ? "nincs mérés" : `${l100.toLocaleString("hu-HU", { maximumFractionDigits: 1 })} l/100 km`;
+}
+
+/**
+ * A lapozó ELSŐ lapja — "műszerfal, megbízás-állással" (F10+ terv, Budaházi
+ * Zoltán 2026-09-23). Fent sötét sávban a nap négy száma (fuvar, km, mai
+ * fuvardíj, a flotta 7 napos átlagfogyasztása). Alatta kocsinként: bal
+ * szélen színes állapot-csík (áll / úton / nincs GPS), sebesség, hely,
+ * a mostani megbízás megbízója és díja, a megbízás megállósávja egy
+ * mondattal ("Felpakolva · Miskolc következik · lerakás holnap"), a nyitott
+ * gond, és a kocsi 7 napos átlagfogyasztása. Alul a figyelmeztetések
+ * (csúszás, gond, GPS nélküli kocsi) csak akkor, ha nem nullák.
+ */
+function OsszefoglaloLap({
+  jarmuvek,
+  most,
+  fogyasztas,
+  flottaFogyasztas,
+  onValaszt,
+}: {
+  jarmuvek: JarmuIdovonalEredmeny[];
+  most: number;
+  fogyasztas: Record<string, number | null>;
+  flottaFogyasztas: number | null;
+  onValaszt: (jarmuIndex: number) => void;
+}) {
+  const o = osszkep(jarmuvek, true, most);
+  const fuvarok = jarmuvek.flatMap((a) => a.fuvarok);
+  const dijFt = fuvarok.reduce((s, f) => s + (f.fuvardijPenznem === "Ft" ? (f.fuvardij ?? 0) : 0), 0);
+  const dijEur = fuvarok.reduce((s, f) => s + (f.fuvardijPenznem === "EUR" ? (f.fuvardij ?? 0) : 0), 0);
+  const figyelmeztetesek = [
+    o.csuszik > 0 ? { kulcs: "csuszik", szoveg: `Csúszik ${o.csuszik}`, piros: false } : null,
+    o.nyitottGond > 0 ? { kulcs: "gond", szoveg: `Nyitott gond ${o.nyitottGond}`, piros: true } : null,
+    o.gpsNelkul.length > 0
+      ? { kulcs: "gps", szoveg: `GPS nélkül ${o.gpsNelkul.length} · ${o.gpsNelkul.join(", ")}`, piros: false }
+      : null,
+  ].filter((x): x is NonNullable<typeof x> => x !== null);
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="grid grid-cols-4 gap-2 rounded-xl bg-[var(--at-text)] px-3.5 py-3 text-[var(--at-card)]">
+        {[
+          { c: "Fuvar", v: String(o.fuvar), t: undefined },
+          { c: "Km", v: formatSzam(o.km), t: undefined },
+          {
+            c: "Díj ma",
+            v: rovidFt(dijFt) + (dijEur > 0 ? "+€" : ""),
+            t: [formatOsszeg(dijFt, "Ft"), dijEur > 0 ? formatOsszeg(dijEur, "EUR") : null].filter(Boolean).join(" + "),
+          },
+          { c: "⌀ l/100", v: flottaFogyasztas == null ? "—" : flottaFogyasztas.toLocaleString("hu-HU", { maximumFractionDigits: 1 }), t: "A flotta 7 napos átlagfogyasztása (Ecofleet)" },
+        ].map((x) => (
+          <div key={x.c} className="flex flex-col gap-0.5" title={x.t}>
+            <span className="text-[10px] font-semibold uppercase tracking-wide opacity-70">{x.c}</span>
+            <span className="text-xl font-bold leading-none tabular-nums">{x.v}</span>
+          </div>
+        ))}
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-[var(--at-border)] bg-[var(--at-card)]">
+        {SAJAT_JARMUVEK.map((j, i) => (
+          <FlottaSor
+            key={j.sofor}
+            jarmu={j}
+            eredmeny={jarmuvek.find((a) => a.sofor === j.sofor)}
+            most={most}
+            fogyasztas={fogyasztas[j.sofor] ?? null}
+            onValaszt={() => onValaszt(i)}
+          />
+        ))}
+      </div>
+
+      {figyelmeztetesek.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {figyelmeztetesek.map((f) => (
+            <span
+              key={f.kulcs}
+              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                f.piros ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"
+              }`}
+            >
+              <AlertTriangle className="h-3.5 w-3.5" />
+              {f.szoveg}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Egy kocsi sora a Flotta lapon (F10+). Koppintásra a lapozó a kocsi lapjára ugrik. */
+function FlottaSor({
+  jarmu,
+  eredmeny,
+  most,
+  fogyasztas,
+  onValaszt,
+}: {
+  jarmu: (typeof SAJAT_JARMUVEK)[number];
+  eredmeny: JarmuIdovonalEredmeny | undefined;
+  most: number;
+  fogyasztas: number | null;
+  onValaszt: () => void;
+}) {
+  const pos = eredmeny?.eloPozicio ?? null;
+  const nincsNyomkoveto = jarmu.ecofleetObjectId === null;
+  const regiJel = pos ? jelRegi(pos, most) : false;
+  // Sebességet csak friss jelből: egy órája beragadt "78 km/h" rosszabb, mint a bevallott hiány.
+  const sebesseg = !pos || nincsNyomkoveto || regiJel ? null : Math.round(pos.sebesseg);
+  const szakasz = mostaniSzakaszKezdet(eredmeny);
+  const allapot =
+    sebesseg === null
+      ? { szoveg: nincsNyomkoveto ? "Nincs GPS" : "Régi jel", szin: "var(--at-muted)" }
+      : sebesseg > 3
+        ? { szoveg: "Úton", szin: "var(--at-accent)" }
+        : { szoveg: szakasz?.all ? `Áll ${formatIdo(szakasz.kezdet)} óta` : "Áll", szin: "#b45309" };
+  const hely = nincsNyomkoveto
+    ? "Nincs nyomkövető a kocsin"
+    : !pos
+      ? "Nincs GPS-jel"
+      : regiJel
+        ? `Régi jel · ${pos.cim ?? "ismeretlen hely"} · ${formatEltelt(new Date(pos.utolsoAdat), most)}`
+        : (pos.cim ?? "ismeretlen hely");
+
+  const f = aktivFuvar(eredmeny?.fuvarok ?? []);
+  const allasok = f ? megalloAllasok(f) : [];
+  const nyitottGond = f?.gondok.filter((g) => g.nyitott).at(-1) ?? null;
+  const szin = JARMU_SZIN_HEX[jarmu.szin];
+
+  return (
+    <button type="button" onClick={onValaszt} className="flex w-full border-b border-[var(--at-border)] text-left last:border-b-0">
+      <span className="w-[5px] shrink-0" style={{ background: allapot.szin }} />
+      <span className="flex min-w-0 flex-1 flex-col gap-1 px-3.5 py-2.5">
+        <span className="flex items-center gap-2">
+          <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${JARMU_SZIN_DOT_CLASS[jarmu.szin]}`} />
+          <span className="text-[15px] font-bold">{jarmu.sofor}</span>
+          <span className="text-[11px] font-semibold" style={{ color: allapot.szin }}>
+            {allapot.szoveg}
+          </span>
+          <span className="ml-auto flex items-baseline gap-1">
+            <span className="text-lg font-bold leading-none tabular-nums">{sebesseg ?? "—"}</span>
+            <span className="text-[11px] text-[var(--at-muted)]">km/h</span>
+          </span>
+        </span>
+        <span className="truncate text-xs text-[var(--at-muted)]">{hely}</span>
+        {f ? (
+          <>
+            <span className="flex items-baseline gap-2">
+              <span className="truncate text-xs text-[var(--at-muted)]">
+                {f.megrendelo ?? (f.fuvarTipus === "ber" ? "Saját fuvar" : "Megbízás")}
+              </span>
+              {f.fuvardij !== null && (
+                <span className="ml-auto shrink-0 text-sm font-bold tabular-nums">{formatOsszeg(f.fuvardij, f.fuvardijPenznem)}</span>
+              )}
+            </span>
+            <AllasSav f={f} allasok={allasok} szin={szin} mozog={sebesseg !== null && sebesseg > 3} />
+            <span className="flex flex-wrap items-center gap-1.5">
+              <span className="text-xs font-bold">{allasMondat(f, allasok, most)}</span>
+              {nyitottGond && (
+                <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-800">
+                  Gond {formatIdo(nyitottGond.mikor)}
+                </span>
+              )}
+            </span>
+          </>
+        ) : (
+          <span className="text-xs text-[var(--at-muted)]">
+            {(eredmeny?.fuvarok.length ?? 0) > 0 ? "Mai fuvarok kész." : "Mára nincs fuvar ezen a kocsin."}
+          </span>
+        )}
+        <span className="text-right text-[11px] text-[var(--at-muted)]">⌀ {fogyasztasFelirat(fogyasztas)}</span>
+      </span>
+    </button>
+  );
+}
+
+type Jelzes = { mikor: Date | null; forras: "sofor" | "gps"; szoveg: string; gpsIdo?: Date | null; piros?: boolean; nap?: string | null };
+
+/**
+ * A mostani megbízás eseményei időrendben: a sofőr jelzései (Megérkeztem,
+ * Várakozom, Indulok, Gond van, fuvarlevél fotó), mellettük a GPS szerinti
+ * idővel, ha a GPS is látta. Ahol a sofőr nem jelzett, a GPS eseménye áll.
+ */
+function megbizasJelzesei(f: FuvarBlokk): Jelzes[] {
+  const lista: Jelzes[] = [];
+  for (const m of f.megallok) {
+    const nap = napSzo(m.napElteres);
+    const gpsLatta = m.tenylegesTavozas !== null || m.eppenItt || m.keszForras === "gps";
+    const gpsErkezes = gpsLatta ? m.idopont : null;
+    if (m.keziErkezes) lista.push({ mikor: m.keziErkezes, forras: "sofor", szoveg: `Megérkeztem — ${m.cim}`, gpsIdo: gpsErkezes, nap });
+    else if (gpsErkezes) lista.push({ mikor: gpsErkezes, forras: "gps", szoveg: `Beállt — ${m.cim}`, nap });
+    if (m.varakozasKezdete) {
+      const perc = m.varakozasVege ? Math.round((new Date(m.varakozasVege).getTime() - new Date(m.varakozasKezdete).getTime()) / 60000) : null;
+      lista.push({ mikor: m.varakozasKezdete, forras: "sofor", szoveg: `Várakozom — ${m.cim}${perc !== null ? ` (${perc} perc)` : ""}`, nap });
+    }
+    if (m.keszForras === "kezi" && m.keszAt) lista.push({ mikor: m.keszAt, forras: "sofor", szoveg: `Indulok — ${m.cim}`, gpsIdo: m.tenylegesTavozas, nap });
+    else if (m.tenylegesTavozas) lista.push({ mikor: m.tenylegesTavozas, forras: "gps", szoveg: `Elindult — ${m.cim}`, nap });
+  }
+  for (const g of f.gondok) lista.push({ mikor: g.mikor, forras: "sofor", szoveg: `Gond: „${g.szoveg}”${g.nyitott ? "" : " (lezárva)"}`, piros: g.nyitott });
+  lista.sort((a, b) => new Date(a.mikor ?? 0).getTime() - new Date(b.mikor ?? 0).getTime());
+  if (f.fuvarlevelFotoDb > 0)
+    lista.push({ mikor: null, forras: "sofor", szoveg: f.fuvarlevelFotoDb === 1 ? "Fuvarlevél fotó feltöltve" : `Fuvarlevél fotó feltöltve (${f.fuvarlevelFotoDb})` });
+  return lista;
+}
+
+function ForrasJel({ forras }: { forras: "sofor" | "gps" }) {
+  return forras === "gps" ? (
+    <span className="shrink-0 rounded-full bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-800">GPS</span>
+  ) : (
+    <span className="shrink-0 rounded-full bg-[var(--at-positive)]/15 px-1.5 py-0.5 text-[10px] font-bold text-[var(--at-positive)]">Sofőr</span>
+  );
+}
+
+/**
+ * "Tükör" (Z8 terv, Budaházi Zoltán 2026-09-23): ugyanaz a menetjegy, amit
+ * a sofőr a telefonján lát (components/erkezes/sofor-fuvar-nap.tsx), a díjjal
+ * kiegészítve, alatta a sofőr jelzései a GPS-idővel. Így telefonon
+ * ugyanarról a papírról beszéltek.
+ */
+function MegbizasTukor({ f, sofor, mozog, ctx }: { f: FuvarBlokk; sofor: string; mozog: boolean; ctx: Omit<Parameters<typeof sorAdatok>[2], "utolsoLerako"> }) {
+  const [tablaNyitva, setTablaNyitva] = useState(false);
+  const allasok = megalloAllasok(f);
+  const felrakoIdx = f.megallok.findIndex((m) => m.tipus === "felrako");
+  const lerakoIdx = f.megallok.map((m) => m.tipus).lastIndexOf("lerako");
+  const honnan = felrakoIdx >= 0 ? f.megallok[felrakoIdx] : null;
+  const hova = lerakoIdx >= 0 ? f.megallok[lerakoIdx] : null;
+  const utvonal = f.megallok.filter((m, i, t) => i === 0 || t[i - 1].cim !== m.cim);
+  const jelzesek = megbizasJelzesei(f);
+  const kov = allasok.indexOf("kov");
+  const utonOda = mozog && !allasok.includes("itt") && kov >= 0 ? f.megallok[kov] : null;
+
+  return (
+    <div className="flex flex-col overflow-hidden rounded-2xl border-2 border-[var(--at-accent)] bg-[var(--at-card)]">
+      <div className="flex flex-col gap-2 px-3.5 pb-2.5 pt-3">
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate text-sm font-bold">{f.megrendelo ?? (f.fuvarTipus === "ber" ? "Saját fuvar" : "Megbízás")}</span>
+          {f.fuvardij !== null && <span className="shrink-0 text-sm font-bold tabular-nums">{formatOsszeg(f.fuvardij, f.fuvardijPenznem)}</span>}
+        </div>
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-1.5">
+          <div className="flex min-w-0 flex-col">
+            <span className={CIMKE}>Honnan</span>
+            <span className={`truncate text-xl font-bold leading-tight ${honnan && allasok[felrakoIdx] === "kesz" ? "text-[var(--at-muted)]" : ""}`}>
+              {honnan?.cim ?? "—"}
+            </span>
+            {honnan && (
+              <span className={`text-[11px] font-semibold ${allasok[felrakoIdx] === "kesz" ? "text-[var(--at-positive)]" : "text-[var(--at-muted)]"}`}>
+                {allasok[felrakoIdx] === "kesz" ? `✓ indult ${napSzo(honnan.napElteres) ? `${napSzo(honnan.napElteres)} ` : ""}${formatIdo(honnan.tenylegesTavozas ?? honnan.keszAt ?? honnan.idopont)}` : megalloIdoFelirat(honnan, allasok[felrakoIdx])}
+              </span>
+            )}
+          </div>
+          <Truck className="mb-4 h-5 w-5 text-[var(--at-accent)]" />
+          <div className="flex min-w-0 flex-col items-end text-right">
+            <span className={CIMKE}>Hová</span>
+            <span className="truncate text-xl font-bold leading-tight">{hova?.cim ?? "—"}</span>
+            {hova && <span className="text-[11px] font-semibold text-amber-800">{megalloIdoFelirat(hova, allasok[lerakoIdx])}</span>}
+          </div>
+        </div>
+        {utvonal.length > 2 && (
+          <div className="flex flex-wrap items-center gap-x-1 text-xs">
+            {utvonal.map((m, i) => {
+              const a = allasok[f.megallok.indexOf(m)];
+              return (
+                <span key={m.megalloIndex} className="flex items-center gap-1">
+                  {i > 0 && <span className="text-[var(--at-muted)]">→</span>}
+                  <span className={a === "kesz" ? "text-[var(--at-muted)]" : a === "itt" || a === "kov" ? "font-bold" : ""}>
+                    {m.cim}
+                    {a === "kesz" && " ✓"}
+                  </span>
+                </span>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {(f.pozicioszam || f.referencia) && (
+        <>
+          <div className="mx-3 border-t-2 border-dashed border-[var(--at-border)]" />
+          <div className="grid grid-cols-2 gap-2 px-3.5 py-2.5">
+            {f.pozicioszam && (
+              <div className="flex min-w-0 flex-col">
+                <span className={CIMKE}>Pozíciószám</span>
+                <span className="break-words font-mono text-sm font-bold">{f.pozicioszam}</span>
+              </div>
+            )}
+            {f.referencia && (
+              <div className="flex min-w-0 flex-col">
+                <span className={CIMKE}>Referencia</span>
+                <span className="break-words font-mono text-sm font-bold">{f.referencia}</span>
+              </div>
+            )}
+          </div>
+        </>
+      )}
+
+      <div className="flex flex-col gap-1.5 border-t border-[var(--at-border)] bg-[var(--at-tile)]/40 px-3.5 py-2.5">
+        <span className={CIMKE}>Amit {sofor} jelzett</span>
+        {jelzesek.length === 0 && !utonOda && <span className="text-xs text-[var(--at-muted)]">Még nincs jelzés ehhez a megbízáshoz.</span>}
+        {jelzesek.map((j, i) => (
+          <span key={i} className={`flex items-start gap-1.5 text-xs ${j.piros ? "font-semibold text-red-800" : ""}`}>
+            <ForrasJel forras={j.forras} />
+            <span className="min-w-0">
+              {j.szoveg}
+              {j.mikor && <span className="tabular-nums"> {j.nap ? `${j.nap} ` : ""}{formatIdo(j.mikor)}</span>}
+              {j.gpsIdo && <span className="tabular-nums text-[var(--at-muted)]"> · GPS {formatIdo(j.gpsIdo)}</span>}
+            </span>
+          </span>
+        ))}
+        {utonOda && (
+          <span className="flex items-start gap-1.5 text-xs">
+            <ForrasJel forras="gps" />
+            <span>
+              Úton · {utonOda.cim} {megalloIdoFelirat(utonOda, "kov")}
+            </span>
+          </span>
+        )}
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setTablaNyitva((v) => !v)}
+        className="flex items-center justify-between border-t border-[var(--at-border)] px-3.5 py-2.5 text-left text-xs font-medium text-[var(--at-muted)]"
+      >
+        Megállók részletesen
+        <ChevronDown className={`h-4 w-4 transition-transform ${tablaNyitva ? "rotate-180" : ""}`} />
+      </button>
+      {tablaNyitva && (
+        <div className="border-t border-[var(--at-border)]">
+          <MegalloTabla f={f} ctx={ctx} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Egy kocsi lapja (Z8 "Tükör" terv, Budaházi Zoltán 2026-09-23): fejléc a
+ * sebességgel, a mostani megbízás menetjegye a sofőr jelzéseivel, alatta a
+ * következő megbízás csempéje, legalul a kocsi részletei (hol van, motor,
+ * km óra, utolsó jel, nem tervezett állások).
  */
 function KocsiLap({ jarmu, eredmeny, csoport, most }: { jarmu: (typeof SAJAT_JARMUVEK)[number]; eredmeny: JarmuIdovonalEredmeny | undefined; csoport: JarmuFuvarCsoport | undefined; most: number }) {
   const fuvarok = eredmeny?.fuvarok ?? [];
   const kovetkezo = kovetkezoMegallo(fuvarok);
   const ctx = { maiNap: true, eloVan: !!eredmeny?.eloPozicio, kovetkezo, allValahol: allValahol(fuvarok), mozog: eloMozog(eredmeny), most };
 
-  const aktivIndex = kovetkezo ? fuvarok.findIndex((f) => f.fuvarId === kovetkezo.fuvarId) : -1;
-  const aktiv = aktivIndex >= 0 ? fuvarok[aktivIndex] : null;
+  const aktiv = aktivFuvar(fuvarok);
+  const aktivIndex = aktiv ? fuvarok.indexOf(aktiv) : -1;
   const maiKovetkezo = aktivIndex >= 0 ? (fuvarok[aktivIndex + 1] ?? null) : null;
   const jovobeli = maiKovetkezo ? null : ((csoport?.kovetkezok ?? [])[0] ?? null);
+
+  const pos = eredmeny?.eloPozicio ?? null;
+  const nincsNyomkoveto = jarmu.ecofleetObjectId === null;
+  const sebesseg = !pos || nincsNyomkoveto || jelRegi(pos, most) ? null : Math.round(pos.sebesseg);
 
   return (
     <div className="flex flex-col gap-3">
@@ -382,31 +876,25 @@ function KocsiLap({ jarmu, eredmeny, csoport, most }: { jarmu: (typeof SAJAT_JAR
         <span className={`h-3 w-3 shrink-0 rounded-full ${JARMU_SZIN_DOT_CLASS[jarmu.szin]}`} />
         <span className="text-base font-bold">{jarmu.sofor}</span>
         <span className="text-sm text-[var(--at-muted)]">{jarmu.label}</span>
+        <span
+          className={`ml-auto rounded-full px-2.5 py-1 text-xs font-semibold ${
+            sebesseg === null
+              ? "bg-[var(--at-tile)] text-[var(--at-muted)]"
+              : sebesseg > 3
+                ? "bg-[var(--at-positive)]/15 text-[var(--at-positive)]"
+                : "bg-amber-100 text-amber-800"
+          }`}
+        >
+          {sebesseg === null ? (nincsNyomkoveto ? "Nincs GPS" : "Nincs friss jel") : sebesseg > 3 ? `${sebesseg} km/h` : "Áll"}
+        </span>
       </div>
-      <HolVanMost eredmeny={eredmeny} most={most} jarmuNincsGps={jarmu.ecofleetObjectId === null} />
 
-      {fuvarok.length === 0 && !jovobeli ? (
+      {aktiv ? (
+        <MegbizasTukor f={aktiv} sofor={jarmu.sofor} mozog={sebesseg !== null && sebesseg > 3} ctx={ctx} />
+      ) : (
         <div className="rounded-xl border border-[var(--at-border)] bg-[var(--at-card)] px-3 py-2">
-          <p className="text-sm text-[var(--at-muted)]">Mára nincs fuvar ezen a kocsin.</p>
+          <p className="text-sm text-[var(--at-muted)]">{fuvarok.length > 0 ? "Mai fuvarok kész." : "Mára nincs fuvar ezen a kocsin."}</p>
         </div>
-      ) : !aktiv && fuvarok.length > 0 ? (
-        <div className="rounded-xl border border-[var(--at-border)] bg-[var(--at-card)] px-3 py-2">
-          <p className="text-sm text-[var(--at-muted)]">Mai fuvarok kész.</p>
-        </div>
-      ) : null}
-
-      {aktiv && (
-        <MegbizasCsempe
-          kiemelt
-          cimke="Most"
-          megrendelo={aktiv.megrendelo}
-          {...honnanHova(aktiv)}
-          dij={fuvarReszletek(aktiv).dij}
-          sajat={aktiv.fuvarTipus === "ber"}
-          felpakolva={felpakoltE(aktiv)}
-          allapot={fuvarAllapot(aktiv, kovetkezo, ctx.mozog)}
-          reszletek={<MegalloTabla f={aktiv} ctx={ctx} />}
-        />
       )}
 
       {maiKovetkezo && (
@@ -433,173 +921,29 @@ function KocsiLap({ jarmu, eredmeny, csoport, most }: { jarmu: (typeof SAJAT_JAR
           felpakolva={false}
         />
       )}
-    </div>
-  );
-}
 
-/**
- * A sebességmérő sáv felső határa. A magyar tehergépkocsikat a beépített
- * sebességhatároló 90 km/h-ra fogja, tehát a skála pont a valós tartományt
- * fedi le — efölött a sáv telítődik, a szám viszont továbbra is a pontos
- * értéket mutatja. Ha egyszer nagyobb értékek is előfordulnak, ezt az egy
- * számot kell átírni, de akkor a városi 40 km/h rövidebb sávot kap.
- */
-const MERO_MAX_KMH = 90;
-
-/** Kiterített sebességmérő: skálás sáv 0-tól MERO_MAX_KMH-ig. */
-function MeroSav({ sebesseg, savSzin }: { sebesseg: number | null; savSzin: string }) {
-  const arany = sebesseg === null ? 0 : Math.min(Math.max(sebesseg, 0) / MERO_MAX_KMH, 1);
-  return (
-    <div className="w-[148px] shrink-0">
-      <div className="h-2.5 overflow-hidden rounded-full bg-[var(--at-tile)]">
-        <div className={`h-full rounded-full ${savSzin}`} style={{ width: `${arany * 100}%` }} />
-      </div>
-      <div className="mt-1 flex justify-between" aria-hidden="true">
-        {[0, 1, 2, 3].map((i) => (
-          <span key={i} className="h-[5px] w-px bg-[var(--at-border)]" />
-        ))}
-      </div>
-      <div className="flex justify-between text-[9px] tabular-nums text-[var(--at-muted)]">
-        <span>0</span>
-        <span>30</span>
-        <span>60</span>
-        <span>{MERO_MAX_KMH}</span>
+      <div className="flex flex-col gap-1.5">
+        <span className={CIMKE}>A kocsi</span>
+        <HolVanMost eredmeny={eredmeny} most={most} jarmuNincsGps={nincsNyomkoveto} />
       </div>
     </div>
   );
 }
 
-/**
- * Egy kocsi sora az összefoglaló lapon. Koppintásra a lapozó az adott kocsi
- * lapjára ugrik — ugyanaz, mintha a fülére koppintanál.
- */
-function KocsiMeroSor({
-  jarmu,
-  eredmeny,
-  most,
-  onValaszt,
-}: {
-  jarmu: (typeof SAJAT_JARMUVEK)[number];
-  eredmeny: JarmuIdovonalEredmeny | undefined;
-  most: number;
-  onValaszt: () => void;
-}) {
-  const pos = eredmeny?.eloPozicio ?? null;
-  const nincsNyomkoveto = jarmu.ecofleetObjectId === null;
-  const regiJel = pos ? jelRegi(pos, most) : false;
-  // Sebességet csak friss jelből mutatunk: egy órája beragadt "78 km/h"
-  // rosszabb, mint a bevallott hiány.
-  const sebesseg = !pos || nincsNyomkoveto || regiJel ? null : Math.round(pos.sebesseg);
-  const mozog = sebesseg !== null && sebesseg > 0;
-  const savSzin = mozog
-    ? "bg-[var(--at-accent)]"
-    : sebesseg === null
-      ? "bg-[var(--at-border)]"
-      : "bg-[var(--at-muted)]";
-  const hely = nincsNyomkoveto
-    ? "Nincs nyomkövető a kocsin"
-    : !pos
-      ? "Nincs GPS-jel"
-      : regiJel
-        ? `Régi jel · ${pos.cim ?? "ismeretlen hely"} · ${formatEltelt(new Date(pos.utolsoAdat), most)}`
-        : (pos.cim ?? "ismeretlen hely");
-
-  return (
-    <button
-      type="button"
-      onClick={onValaszt}
-      className="block w-full border-b border-[var(--at-border)] px-3 py-3 text-left last:border-b-0"
-    >
-      <div className="flex items-center gap-2">
-        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${JARMU_SZIN_DOT_CLASS[jarmu.szin]}`} />
-        <span className="text-[15px] font-semibold">{jarmu.sofor}</span>
-        <span className="ml-auto text-[11px] tabular-nums text-[var(--at-muted)]">{jarmu.label}</span>
-      </div>
-      <div className="mt-2.5 flex items-start gap-3.5">
-        <MeroSav sebesseg={sebesseg} savSzin={savSzin} />
-        <span className="flex items-baseline gap-1">
-          <span className="text-2xl font-bold leading-none tabular-nums">{sebesseg ?? "—"}</span>
-          <span className="text-[11px] text-[var(--at-muted)]">km/h</span>
-        </span>
-      </div>
-      <div className="mt-2 truncate text-[13px] text-[var(--at-muted)]">{hely}</div>
-    </button>
-  );
-}
-
-/**
- * A lapozó ELSŐ lapja: három kocsi egy-egy mérősorral, alatta a nap
- * összképe. A négy alapszám mindig látszik; a figyelmeztetések (csúszás,
- * nyitott gond, GPS nélküli kocsi) csak akkor, ha nem nullák — nyugodt
- * napon ne legyen mit átfutni.
- */
-function OsszefoglaloLap({
+export function FuvarTablazatMobil({
   jarmuvek,
+  csoportok,
   most,
-  onValaszt,
+  fogyasztas,
+  flottaFogyasztas,
 }: {
   jarmuvek: JarmuIdovonalEredmeny[];
+  csoportok: JarmuFuvarCsoport[];
   most: number;
-  onValaszt: (jarmuIndex: number) => void;
+  /** Kocsinként (sofőr neve szerint) a 7 napos átlagfogyasztás, l/100 km; null, ha nincs mérés. */
+  fogyasztas: Record<string, number | null>;
+  flottaFogyasztas: number | null;
 }) {
-  const o = osszkep(jarmuvek, true, most);
-  const figyelmeztetesek = [
-    o.csuszik > 0 ? { kulcs: "csuszik", szoveg: `Csúszik ${o.csuszik}`, piros: false } : null,
-    o.nyitottGond > 0 ? { kulcs: "gond", szoveg: `Nyitott gond ${o.nyitottGond}`, piros: true } : null,
-    o.gpsNelkul.length > 0
-      ? { kulcs: "gps", szoveg: `GPS nélkül ${o.gpsNelkul.length} · ${o.gpsNelkul.join(", ")}`, piros: false }
-      : null,
-  ].filter((x): x is NonNullable<typeof x> => x !== null);
-
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="overflow-hidden rounded-xl border border-[var(--at-border)] bg-[var(--at-card)]">
-        {SAJAT_JARMUVEK.map((j, i) => (
-          <KocsiMeroSor
-            key={j.sofor}
-            jarmu={j}
-            eredmeny={jarmuvek.find((a) => a.sofor === j.sofor)}
-            most={most}
-            onValaszt={() => onValaszt(i)}
-          />
-        ))}
-      </div>
-
-      <div>
-        <div className="flex gap-5">
-          {[
-            { c: "Fuvar ma", v: String(o.fuvar) },
-            { c: "Kész", v: String(o.kesz), sz: "text-[var(--at-positive)]" },
-            { c: "Folyamatban", v: String(o.folyamatban), sz: "text-[var(--at-accent)]" },
-            { c: "Km ma", v: formatSzam(o.km) },
-          ].map((x) => (
-            <div key={x.c} className="flex flex-col gap-1">
-              <span className={`${CIMKE} text-[10px]`}>{x.c}</span>
-              <span className={`text-2xl font-bold leading-none tabular-nums ${x.sz ?? ""}`}>{x.v}</span>
-            </div>
-          ))}
-        </div>
-        {figyelmeztetesek.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {figyelmeztetesek.map((f) => (
-              <span
-                key={f.kulcs}
-                className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
-                  f.piros ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"
-                }`}
-              >
-                <AlertTriangle className="h-3.5 w-3.5" />
-                {f.szoveg}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-export function FuvarTablazatMobil({ jarmuvek, csoportok, most }: { jarmuvek: JarmuIdovonalEredmeny[]; csoportok: JarmuFuvarCsoport[]; most: number }) {
   const [aktiv, setAktiv] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -649,7 +993,7 @@ export function FuvarTablazatMobil({ jarmuvek, csoportok, most }: { jarmuvek: Ja
         className="-mx-4 flex snap-x snap-mandatory overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         <div className="w-full shrink-0 snap-center px-4">
-          <OsszefoglaloLap jarmuvek={jarmuvek} most={most} onValaszt={(i) => ugras(i + 1)} />
+          <OsszefoglaloLap jarmuvek={jarmuvek} most={most} fogyasztas={fogyasztas} flottaFogyasztas={flottaFogyasztas} onValaszt={(i) => ugras(i + 1)} />
         </div>
         {SAJAT_JARMUVEK.map((j) => (
           <div key={j.sofor} className="w-full shrink-0 snap-center px-4">
