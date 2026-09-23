@@ -1886,3 +1886,34 @@ került (Micó ÁB Speed 26/3814-e ilyen volt). Javítás:
 - `sofor.ts getSoforNap`: a sofőr fuvarjainál idempotensen pótolja a
   hiányzó csatolást (`on conflict do nothing`, kivéve ha az irat egy törölt
   sorhoz volt kötve — akkor átkerül).
+
+## 2026-09-23 — Áttekintés/Fuvar: Flotta lap F10+, kocsilapok „Tükör” (Z8)
+
+Budaházi Zoltán 10 + 10 + 1 látványtervből választott (Flotta-tervek vászon):
+
+- **Flotta (első) lap — F10+ „műszerfal, megbízás-állással”**: sötét fej a
+  nap négy számával (fuvar, km, mai fuvardíj, a flotta 7 napos
+  átlagfogyasztása). Kocsinként: bal szélen állapot-csík (áll HH:MM óta /
+  úton / nincs GPS), sebesség, hely, a mostani megbízás megbízója és díja,
+  **megállósáv** (✓ kész + idő, ● itt áll most, ○ következő ~ETA, ▶ a kocsi
+  két megálló között), alatta egy mondat („Felpakolva · Miskolc következik ·
+  lerakás holnap”), nyitott gond jelvény, 7 napos átlagfogyasztás.
+- **Kocsilapok — Z8 „Tükör”**: ugyanaz a menetjegy, amit a sofőr lát
+  (honnan → hová, útvonal, pozíciószám, referencia) a díjjal, alatta
+  „Amit X jelzett”: a sofőr jelzései (Megérkeztem, Várakozom, Indulok, Gond,
+  fuvarlevél fotó) időrendben, mellettük a GPS-idő; ahol nem jelzett, a GPS
+  eseménye. A megállók részletes táblázata lenyitható; alatta a következő
+  megbízás, legalul a kocsi részletei (a korábbi „Hol van most” doboz).
+- „Aktuális megbízás” = amelyiknek megállóján a kocsi áll (GPS) VAGY a
+  sofőr „Megérkeztem”-et nyomott (Jani GPS nélkül); a korábbi
+  kovetkezoMegallo-alapú választás lerakás közben a KÖVETKEZŐ fuvart adta.
+- Adat: `FuvarBlokk.referencia` (új, a `fuvar_megbizasok.referencia`
+  oszlopból, `getMaiSajatFuvarok` → `TervezettFuvarSzakasz` → `FuvarBlokk`);
+  a fogyasztás az `app/attekintes/fuvar/page.tsx`-ben a meglévő
+  `getFogyasztas()`-ból (Ecofleet, 10 perc cache), 7 napos l/100 km, a nem
+  mérő kocsi „nincs mérés”, és kimarad a flotta-átlagból.
+- A régi első lap (vízszintes sebességmérő sorok, `KocsiMeroSor`,
+  `MeroSav`) kikerült — a sebesség szám maradt.
+- `tsc`, lint tiszta; tesztek zöldek (a `teszt-megbizas-szuro` 2 dátumfüggő
+  hibája a main-en is fennáll). Próba-renderelés a minta-helyzettel
+  (Tailwind-dal lefordítva, képernyőképen ellenőrizve).

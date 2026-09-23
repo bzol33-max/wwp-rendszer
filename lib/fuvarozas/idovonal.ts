@@ -244,6 +244,8 @@ export type TervezettFuvarSzakasz = {
   fuvardijPenznem: FuvardijPenznem;
   /** A sofőr által feltöltött fuvarlevél-fotók száma. */
   fuvarlevelFotoDb: number;
+  /** A felrakón / kapuban kért szám, ha más, mint a pozíciószám. */
+  referencia: string | null;
   honnan: string | null;
   hova: string;
   /**

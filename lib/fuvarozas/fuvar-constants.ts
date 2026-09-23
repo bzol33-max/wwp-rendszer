@@ -137,6 +137,8 @@ export type MaiFuvarSor = {
   fuvardij_penznem: FuvardijPenznem;
   /** A sofőr által feltöltött fuvarlevél-fotók száma (fuvar_dokumentumok, tipus 'fuvarlevel'). */
   fuvarlevel_foto_db: number;
+  /** A felrakón / kapuban kért szám, ha más, mint a pozíciószám (lib/fuvarozas/sofor-adatok.ts). */
+  referencia: string | null;
 };
 
 /**

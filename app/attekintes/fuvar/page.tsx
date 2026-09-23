@@ -1,5 +1,6 @@
 import { getFuvarFulAdatok } from "@/lib/attekintes/actions";
 import { getIdovonalak } from "@/lib/fuvarozas/actions";
+import { getFogyasztas } from "@/lib/fuvarozas/fogyasztas";
 import { budapestNapISO } from "@/lib/fuvarozas/idozona";
 import { MegbizasReszlet } from "@/components/attekintes/jarmu-kartya";
 import { FuvarTablazatMobil } from "@/components/attekintes/fuvar-tablazat-mobil";
@@ -7,7 +8,22 @@ import { FuvarTablazatMobil } from "@/components/attekintes/fuvar-tablazat-mobil
 export default async function FuvarPage() {
   // Az idővonal a GPS lap gyorsítótárából jön (getIdovonalak, 1 perc a mai
   // napra) — a getFuvarFulAdatok ugyanezt kéri, tehát nem fut kétszer.
-  const [idovonal, adatok] = await Promise.all([getIdovonalak(budapestNapISO()), getFuvarFulAdatok()]);
+  // A fogyasztás az Ecofleet útvonal-jelentéséből (10 percig gyorsítótárazva,
+  // hibát nem dob — ilyenkor minden kocsinál "nincs mérés" áll).
+  const [idovonal, adatok, fogy] = await Promise.all([getIdovonalak(budapestNapISO()), getFuvarFulAdatok(), getFogyasztas()]);
+  // 7 napos átlag, l/100 km; a nem mérő kocsi (Jani) kimarad a flotta-átlagból is.
+  const fogyasztas: Record<string, number | null> = {};
+  let flottaKm = 0;
+  let flottaLiter = 0;
+  for (const j of fogy.jarmuvek) {
+    const ok = j.merve && j.hetNap.km > 0 && j.hetNap.liter > 0;
+    fogyasztas[j.sofor] = ok ? (j.hetNap.liter / j.hetNap.km) * 100 : null;
+    if (ok) {
+      flottaKm += j.hetNap.km;
+      flottaLiter += j.hetNap.liter;
+    }
+  }
+  const flottaFogyasztas = flottaKm > 0 ? (flottaLiter / flottaKm) * 100 : null;
 
   return (
     <div className="flex flex-col gap-4 py-4">
@@ -44,7 +60,13 @@ export default async function FuvarPage() {
         </div>
       )}
 
-      <FuvarTablazatMobil jarmuvek={idovonal.jarmuvek} csoportok={adatok.jarmuvek} most={adatok.betoltve} />
+      <FuvarTablazatMobil
+        jarmuvek={idovonal.jarmuvek}
+        csoportok={adatok.jarmuvek}
+        most={adatok.betoltve}
+        fogyasztas={fogyasztas}
+        flottaFogyasztas={flottaFogyasztas}
+      />
     </div>
   );
 }
