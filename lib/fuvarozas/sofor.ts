@@ -375,6 +375,23 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
   const blokkok = sajat?.fuvarok ?? [];
 
   const fuvarIds = blokkok.map((b) => b.fuvarId);
+  // A megbízás eredeti irata legyen a fuvar_dokumentumok között is — a
+  // "Megbízás PDF" gomb onnan nyitja (api/fuvarozas/dokumentum). A beolvasás
+  // korábban csak a fuvar_megbizasok.drive_file_id-ba írta, így a PDF-gomb
+  // csak a véletlenül kétszer feltöltött iratoknál jelent meg (Micó ÁB Speed
+  // megbízásánál igen, Gergőnél nem — 2026-09-23). Idempotens: ha az irat
+  // már csatolva van, nem történik semmi; egy TÖRÖLT sorról átkerül ide.
+  if (fuvarIds.length) {
+    await query(
+      `insert into fuvar_dokumentumok (fuvar_id, drive_file_id, dokumentum_url, tipus, fajlnev)
+       select f.id, f.drive_file_id, f.dokumentum_url, 'megbizas', null
+         from fuvar_megbizasok f
+        where f.id = any($1::bigint[]) and f.drive_file_id is not null
+       on conflict (drive_file_id) do update set fuvar_id = excluded.fuvar_id
+        where (select m.statusz from fuvar_megbizasok m where m.id = fuvar_dokumentumok.fuvar_id) = 'torolt'`,
+      [fuvarIds]
+    ).catch((err) => console.error("[sofor] megbízás-irat csatolása:", err));
+  }
   const [extraSorok, dokSorok] = fuvarIds.length
     ? await Promise.all([
         query<FuvarExtraSor>(
