@@ -1874,3 +1874,15 @@ papír-teendők, értesítési kötelezettségek, szabad szöveges utasítások.
 - Teszt: `scripts/teszt-sofor-adatok.mts` 32 eset (felvéve a `teszt`
   scriptbe). `tsc`, lint tiszta. A `teszt-megbizas-szuro` 2 hibája a main-en
   is fennáll (dátumfüggő), nem ehhez tartozik.
+
+## 2026-09-23 — Sofőr: „Megbízás PDF” gomb minden beolvasott megbízáson
+
+Budaházi Zoltán jelezte: Micónál volt PDF-gomb, Gergőnél a mostani
+megbízáson nem. Ok: a gomb a `fuvar_dokumentumok` táblából dolgozik, a
+beolvasás viszont a megbízás iratát csak a `fuvar_megbizasok.drive_file_id`
+mezőbe írta — a táblába csak a kétszer feltöltött irat második példánya
+került (Micó ÁB Speed 26/3814-e ilyen volt). Javítás:
+- `drive-sync-core.ts`: új sornál az irat `megbizas` típussal csatolódik.
+- `sofor.ts getSoforNap`: a sofőr fuvarjainál idempotensen pótolja a
+  hiányzó csatolást (`on conflict do nothing`, kivéve ha az irat egy törölt
+  sorhoz volt kötve — akkor átkerül).

@@ -643,6 +643,10 @@ async function ujFajlokFeldolgozasa(
       });
       if (fuvarId) {
         ujFuvarok++;
+        // Az irat a fuvar iratai közé is — a sofőr "Megbízás PDF" gombja onnan nyitja.
+        await csatolIratotFuvarhoz(fuvarId, { id: file.id, name: file.name, url }, "megbizas").catch((err) => {
+          hibak.push(`${file.name}: az irat csatolása nem sikerült — ${err instanceof Error ? err.message : "ismeretlen hiba"}`);
+        });
         await mentsSoforAdatokat(fuvarId, soforAdatok).catch((err) => {
           // A sofőr-adat kiegészítés — a felvett megbízást nem buktathatja el.
           hibak.push(`${file.name}: a sofőr-adatok mentése nem sikerült — ${err instanceof Error ? err.message : "ismeretlen hiba"}`);
