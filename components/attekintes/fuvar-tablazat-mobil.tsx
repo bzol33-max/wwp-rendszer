@@ -424,7 +424,7 @@ function megalloIdoFelirat(m: MegalloBejegyzes, allas: MegalloAllas): string {
 }
 
 /** Egy mondat a megbízás állásáról: "Felpakolva · Miskolc következik · lerakás holnap". */
-function allasMondat(f: FuvarBlokk, allasok: MegalloAllas[], most: number): string {
+function allasMondat(f: FuvarBlokk, allasok: MegalloAllas[], most: number, pos: Pont | null = null): string {
   if (allasok.every((a) => a === "kesz")) return "Kész — minden megálló megvolt";
   const felrakok = f.megallok.map((m, i) => ({ m, i })).filter((x) => x.m.tipus === "felrako");
   const felpakolva = felrakok.length > 0 && felrakok.every((x) => allasok[x.i] === "kesz");
@@ -438,7 +438,8 @@ function allasMondat(f: FuvarBlokk, allasok: MegalloAllas[], most: number): stri
     const kov = allasok.indexOf("kov");
     if (kov >= 0) {
       const m = f.megallok[kov];
-      reszek.push(`${m.cim} következik`);
+      const hatra = utkozbenHelye(f, allasok, pos)?.hatraKm ?? null;
+      reszek.push(`${m.cim} következik${hatra !== null ? ` (~${hatra} km)` : ""}`);
       const nap = napSzo(m.napElteres);
       if (nap) reszek.push(`${m.tipus === "felrako" ? "felrakás" : "lerakás"} ${nap}`);
     }
@@ -447,17 +448,56 @@ function allasMondat(f: FuvarBlokk, allasok: MegalloAllas[], most: number): stri
   return reszek.join(" · ");
 }
 
+type Pont = { lat: number; lon: number };
+
+/** Légvonalbeli távolság km-ben (haversine). */
+function tavKm(a: Pont, b: Pont): number {
+  const r = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * r;
+  const dLon = (b.lon - a.lon) * r;
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLon / 2) ** 2;
+  return 12742 * Math.asin(Math.sqrt(h));
+}
+
+/**
+ * Hol jár a kocsi két megálló között: az utolsó kész és a soron következő
+ * megálló közti út aránya (0–1) a légvonalbeli távolságokból, és a
+ * következő megállóig hátralévő km. Akkor is számol, ha a kocsi éppen áll
+ * (pihenő) — Gergő Nagyfügednél pihenve a sávon Sárvár mellett "állt",
+ * pedig az út nagyobb része megvolt (Budaházi Zoltán, 2026-09-23).
+ * Null, ha a kocsi egy megállóban áll, még egyik megálló sincs kész, vagy
+ * nincs friss pozíció.
+ */
+function utkozbenHelye(f: FuvarBlokk, allasok: MegalloAllas[], pos: Pont | null): { elozo: number; kov: number; arany: number; hatraKm: number | null } | null {
+  if (!pos || allasok.includes("itt")) return null;
+  const kov = allasok.indexOf("kov");
+  if (kov <= 0) return null;
+  const a = f.megallok[kov - 1];
+  const b = f.megallok[kov];
+  if (a.lat === null || a.lon === null || b.lat === null || b.lon === null) return { elozo: kov - 1, kov, arany: 0.5, hatraKm: null };
+  const da = tavKm({ lat: a.lat, lon: a.lon }, pos);
+  const db = tavKm(pos, { lat: b.lat, lon: b.lon });
+  const arany = da + db > 0 ? da / (da + db) : 0.5;
+  return { elozo: kov - 1, kov, arany: Math.min(Math.max(arany, 0.08), 0.92), hatraKm: Math.round(db) };
+}
+
 /**
  * A megbízás megállósávja (F10+ terv, Budaházi Zoltán 2026-09-23): ✓ kész,
  * ● itt áll most, ○ következő, ▶ a kocsi úton két megálló között.
  */
-function AllasSav({ f, allasok, szin, mozog }: { f: FuvarBlokk; allasok: MegalloAllas[]; szin: string; mozog: boolean }) {
+function AllasSav({ f, allasok, szin, mozog, pos }: { f: FuvarBlokk; allasok: MegalloAllas[]; szin: string; mozog: boolean; pos: Pont | null }) {
   const n = f.megallok.length;
   if (n === 0) return null;
   const poz = (i: number) => (n === 1 ? 50 : (i / (n - 1)) * 100);
   const utolsoMegvolt = allasok.reduce((acc, a, i) => (a === "kesz" || a === "itt" ? i : acc), -1);
+  const ut = utkozbenHelye(f, allasok, pos);
+  // Pozíció nélkül (nincs nyomkövető / régi jel) menet közben félútra tesszük, állva nem mutatjuk.
   const kov = allasok.indexOf("kov");
-  const kamion = mozog && !allasok.includes("itt") && kov > 0 && utolsoMegvolt >= 0 ? (poz(utolsoMegvolt) + poz(kov)) / 2 : null;
+  const kamion = ut
+    ? poz(ut.elozo) + (poz(ut.kov) - poz(ut.elozo)) * ut.arany
+    : mozog && !allasok.includes("itt") && kov > 0 && utolsoMegvolt >= 0
+      ? (poz(utolsoMegvolt) + poz(kov)) / 2
+      : null;
   const kitoltes = kamion ?? (utolsoMegvolt >= 0 ? poz(utolsoMegvolt) : 0);
   return (
     <div className="relative mx-[7px] mt-1.5 h-[46px]">
@@ -498,9 +538,10 @@ function AllasSav({ f, allasok, szin, mozog }: { f: FuvarBlokk; allasok: Megallo
         <span
           className="absolute -top-px -translate-x-1/2 rounded px-[3px] text-[9px] font-bold leading-4 text-white"
           style={{ left: `${kamion}%`, background: szin }}
-          aria-label="a kocsi itt jár"
+          aria-label={mozog ? "a kocsi itt jár" : "a kocsi itt áll útközben"}
+          title={mozog ? "Úton" : "Áll útközben"}
         >
-          ▶
+          {mozog ? "▶" : "❚❚"}
         </span>
       )}
     </div>
@@ -641,6 +682,7 @@ function FlottaSor({
 
   const f = aktivFuvar(eredmeny?.fuvarok ?? []);
   const allasok = f ? megalloAllasok(f) : [];
+  const frissPont = pos && sebesseg !== null ? { lat: pos.lat, lon: pos.lon } : null;
   const nyitottGond = f?.gondok.filter((g) => g.nyitott).at(-1) ?? null;
   const szin = JARMU_SZIN_HEX[jarmu.szin];
 
@@ -670,9 +712,9 @@ function FlottaSor({
                 <span className="ml-auto shrink-0 text-sm font-bold tabular-nums">{formatOsszeg(f.fuvardij, f.fuvardijPenznem)}</span>
               )}
             </span>
-            <AllasSav f={f} allasok={allasok} szin={szin} mozog={sebesseg !== null && sebesseg > 3} />
+            <AllasSav f={f} allasok={allasok} szin={szin} mozog={sebesseg !== null && sebesseg > 3} pos={frissPont} />
             <span className="flex flex-wrap items-center gap-1.5">
-              <span className="text-xs font-bold">{allasMondat(f, allasok, most)}</span>
+              <span className="text-xs font-bold">{allasMondat(f, allasok, most, frissPont)}</span>
               {nyitottGond && (
                 <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-semibold text-red-800">
                   Gond {formatIdo(nyitottGond.mikor)}
@@ -734,7 +776,22 @@ function ForrasJel({ forras }: { forras: "sofor" | "gps" }) {
  * kiegészítve, alatta a sofőr jelzései a GPS-idővel. Így telefonon
  * ugyanarról a papírról beszéltek.
  */
-function MegbizasTukor({ f, sofor, mozog, ctx }: { f: FuvarBlokk; sofor: string; mozog: boolean; ctx: Omit<Parameters<typeof sorAdatok>[2], "utolsoLerako"> }) {
+function MegbizasTukor({
+  f,
+  sofor,
+  mozog,
+  pos,
+  helyCim,
+  ctx,
+}: {
+  f: FuvarBlokk;
+  sofor: string;
+  mozog: boolean;
+  /** Friss GPS-pont (null, ha nincs nyomkövető vagy régi a jel). */
+  pos: Pont | null;
+  helyCim: string | null;
+  ctx: Omit<Parameters<typeof sorAdatok>[2], "utolsoLerako">;
+}) {
   const [tablaNyitva, setTablaNyitva] = useState(false);
   const allasok = megalloAllasok(f);
   const felrakoIdx = f.megallok.findIndex((m) => m.tipus === "felrako");
@@ -744,7 +801,8 @@ function MegbizasTukor({ f, sofor, mozog, ctx }: { f: FuvarBlokk; sofor: string;
   const utvonal = f.megallok.filter((m, i, t) => i === 0 || t[i - 1].cim !== m.cim);
   const jelzesek = megbizasJelzesei(f);
   const kov = allasok.indexOf("kov");
-  const utonOda = mozog && !allasok.includes("itt") && kov >= 0 ? f.megallok[kov] : null;
+  const ut = utkozbenHelye(f, allasok, pos);
+  const utonOda = (ut || (mozog && !allasok.includes("itt"))) && kov >= 0 ? f.megallok[kov] : null;
 
   return (
     <div className="flex flex-col overflow-hidden rounded-2xl border-2 border-[var(--at-accent)] bg-[var(--at-card)]">
@@ -827,7 +885,9 @@ function MegbizasTukor({ f, sofor, mozog, ctx }: { f: FuvarBlokk; sofor: string;
           <span className="flex items-start gap-1.5 text-xs">
             <ForrasJel forras="gps" />
             <span>
-              Úton · {utonOda.cim} {megalloIdoFelirat(utonOda, "kov")}
+              {mozog ? "Úton" : "Áll útközben"} · {utonOda.cim} felé {megalloIdoFelirat(utonOda, "kov")}
+              {ut?.hatraKm != null && ` · még ~${ut.hatraKm} km légvonalban`}
+              {!mozog && helyCim && <span className="text-[var(--at-muted)]"> · most: {helyCim}</span>}
             </span>
           </span>
         )}
@@ -890,7 +950,14 @@ function KocsiLap({ jarmu, eredmeny, csoport, most }: { jarmu: (typeof SAJAT_JAR
       </div>
 
       {aktiv ? (
-        <MegbizasTukor f={aktiv} sofor={jarmu.sofor} mozog={sebesseg !== null && sebesseg > 3} ctx={ctx} />
+        <MegbizasTukor
+          f={aktiv}
+          sofor={jarmu.sofor}
+          mozog={sebesseg !== null && sebesseg > 3}
+          pos={pos && sebesseg !== null ? { lat: pos.lat, lon: pos.lon } : null}
+          helyCim={pos?.cim ?? null}
+          ctx={ctx}
+        />
       ) : (
         <div className="rounded-xl border border-[var(--at-border)] bg-[var(--at-card)] px-3 py-2">
           <p className="text-sm text-[var(--at-muted)]">{fuvarok.length > 0 ? "Mai fuvarok kész." : "Mára nincs fuvar ezen a kocsin."}</p>

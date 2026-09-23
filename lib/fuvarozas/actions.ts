@@ -173,6 +173,9 @@ export type MegalloBejegyzes = {
   keziErkezes: Date | null;
   /** Kézi készre jelölés ideje (sofőr mobil, GPS lap pipa), ha volt. */
   keszAt: Date | null;
+  /** A megálló geokódolt koordinátája (null, ha a cím nem geokódolható). */
+  lat: number | null;
+  lon: number | null;
 };
 
 /** A sofőr gondjelzése egy fuvarhoz (feladatok tábla, lásd lib/fuvarozas/sofor.ts jelezGondot). */
@@ -257,6 +260,9 @@ export type JarmuIdovonalEredmeny = {
   /** Élő GPS-pozíció a jármű-csempe infó-dobozához (cím, sebesség, utolsó adat ideje, óraállás, motorállapot) — csak a mai napra. */
   eloPozicio: {
     cim: string | null;
+    /** A kocsi GPS-koordinátája — a Flotta lap megállósávján ebből áll a kamion a két megálló között. */
+    lat: number;
+    lon: number;
     sebesseg: number;
     utolsoAdat: Date;
     oraallasKm: number | null;
@@ -931,6 +937,8 @@ function fuvarBlokkok(
             tenylegesTavozas: m.tenylegesTavozas,
             keziErkezes: m.keziErkezes ?? null,
             keszAt: m.keszAt ?? null,
+            lat: m.lat,
+            lon: m.lon,
           };
         });
       return {
@@ -1199,6 +1207,8 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
             szakaszok = kiegesziteloAllapottal(szakaszok, elo, veg, tervezettCimek, elozmeny);
             eloPozicioEredmeny = {
               cim,
+              lat: livePos.latitude,
+              lon: livePos.longitude,
               sebesseg: livePos.speed,
               utolsoAdat: parsedTs,
               oraallasKm: livePos.odometerKm,
