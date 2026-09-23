@@ -3,18 +3,19 @@
 // A sofőr napi fuvar-nézete a dolgozói mobilon (/erkezes → Fuvarok).
 //
 // Budaházi Zoltán 2026-09-22-i kérése szerint ez a nézet SZÁNDÉKOSAN kopár:
-// két csempe, semmi több. Az aktuális megbízás csempéjén a felrakó és a
-// lerakó együtt, alatta a következő megbízás — az koppintásra kinyílik, hogy
-// indulás előtt látni lehessen, mire készüljön.
+// két csempe, semmi több — az aktuális megbízás és a következő.
 //
-// Legalul a holnapi fuvarok, ugyanabban a csempében, mint a "Ezután
-// következik" — csukva egy sor (honnan → hová), koppintásra kinyílik a
-// megállókkal és a papíradatokkal.
+// 2026-09-23 óta a sofőr NEM kapja meg e-mailben a teljes megbízást: ami
+// kell belőle, az itt van. Budaházi Zoltán 8 megbízás átnézése után
+// választotta ki: időpont/időablak, az összes lerakó, a rakodóhely cégneve,
+// dátum, pozíciószám, referencia, helyszíni kontakt, áru, jármű-előírás és
+// a megbízás PDF. Az aktuális csempe ezért "menetjegy" (az S4 terv):
+// honnan → hová, perforáció, kódok, a jegy talpán a soros megálló a
+// gombokkal. Az adatok forrása: lib/fuvarozas/sofor-adatok.ts.
 //
-// Ami KIKERÜLT és nem véletlenül hiányzik: időpont és időablak, Út ID /
-// pozíciószám, áru és súly, a napváltó nyilak, a három napos előnézet. Ezek a
-// diszpécsernek kellenek, nem a sofőrnek — ő vezet, és két dolgot akar tudni:
-// hova menjen, és mit kell ott megnyomnia.
+// Ami szándékosan NEM jelenik meg: az ügyintéző, a raklapcsere, a
+// papír-teendők, az értesítési kötelezettségek, a megbízók szabad szöveges
+// utasításai, és a pénz (fuvardíj, költség, számla).
 //
 // A gombok mindig CSAK a soron következő megállón vannak: előbb a felrakónál,
 // és amint ott indulást jelölt, átkerülnek a lerakóhoz. Ha a megbízás utolsó
@@ -36,6 +37,7 @@ import {
   MessageSquareWarning,
   Navigation,
   Phone,
+  Truck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -52,6 +54,7 @@ import {
   type SoforNap,
 } from "@/lib/fuvarozas/sofor";
 import { budapestNapISO } from "@/lib/fuvarozas/idozona";
+import { kontaktNev, kontaktTelefon } from "@/lib/fuvarozas/sofor-adatok";
 
 const IDO_OPCIOK: Intl.DateTimeFormatOptions = {
   timeZone: "Europe/Budapest",
@@ -191,74 +194,6 @@ function LepesGombok({
 }
 
 /**
- * Egy megálló az aktuális megbízás csempéjén. A gombokat CSAK az `aktiv`
- * megálló kapja meg — a többi csak azt mutatja, hova kell majd menni, illetve
- * hogy már megvolt.
- */
-function MegalloSor({
-  m,
-  aktiv,
-  pending,
-  onErkezes,
-  onIndulok,
-  onHely,
-}: {
-  m: SoforMegalloSor;
-  aktiv: boolean;
-  pending: boolean;
-  onErkezes: () => void;
-  onIndulok: () => void;
-  onHely: () => void;
-}) {
-  return (
-    <div
-      className={cn(
-        "flex flex-col gap-2 border-t border-[var(--mob-border)] px-3 py-3 first:border-t-0",
-        aktiv && "bg-[var(--mob-tile)]/50"
-      )}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex min-w-0 flex-col">
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--mob-muted)]">
-            {TIPUS_CIMKE[m.tipus]}
-          </span>
-          <span className={cn("font-bold leading-tight", aktiv ? "text-xl" : "text-base")}>{m.varos}</span>
-          {/* Teljes cím csak azon a megállón, ahová ÉPPEN megy — máshol csak
-              a város, hogy a csempe egy pillantással átfogható maradjon
-              (Budaházi Zoltán, 2026-09-22). A navigációhoz a cím ettől
-              függetlenül megvan. */}
-          {aktiv && <span className="text-xs text-[var(--mob-muted)]">{m.cim}</span>}
-        </div>
-        {m.kesz && (
-          <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-[var(--mob-positive)]">
-            <Check className="h-4 w-4" />
-            Kész
-          </span>
-        )}
-      </div>
-
-      {aktiv && (
-        <>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 border-[var(--mob-border)]"
-              onClick={() => window.open(navigacioUrl(m.cim), "_blank", "noopener,noreferrer")}
-            >
-              <Navigation className="h-4 w-4" />
-              Navigáció
-            </Button>
-            <HelyGomb m={m} pending={pending} onHely={onHely} />
-          </div>
-          <LepesGombok m={m} pending={pending} onErkezes={onErkezes} onIndulok={onIndulok} />
-        </>
-      )}
-    </div>
-  );
-}
-
-/**
  * A csempe fejlécének két jelölése (Budaházi Zoltán, 2026-09-22):
  *
  *  - "Saját fuvar": a saját raklapunkat visszük. Más munka, mint a bér
@@ -287,24 +222,58 @@ function Jelolok({ blokk }: { blokk: SoforFuvarBlokk }) {
   );
 }
 
-/** Egy címke–érték sor a megbízás részletei közt. Üres értéknél nem jelenik meg. */
-function AdatSor({ cimke, ertek }: { cimke: string; ertek: string | null | undefined }) {
+/** ISO nap → "szept. 24." */
+function napFelirat(nap: string | null): string | null {
+  if (!nap) return null;
+  const d = new Date(`${nap}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("hu-HU", { month: "short", day: "numeric", timeZone: "Europe/Budapest" });
+}
+
+/** "szept. 24. · 8:00–15:00" — ami megvan belőle. */
+function mikor(m: SoforMegalloSor): string | null {
+  return [napFelirat(m.nap), m.ido].filter(Boolean).join(" · ") || null;
+}
+
+/** A megbízás PDF-je: a "megbizas" típusú irat, ha van, különben az első irat. */
+function megbizasPdf(blokk: SoforFuvarBlokk) {
+  return blokk.dokumentumok.find((d) => d.tipus === "megbizas") ?? blokk.dokumentumok.find((d) => d.tipus !== "fuvarlevel") ?? null;
+}
+
+function iratMegnyitasa(id: string) {
+  window.open(`/api/fuvarozas/dokumentum/${id}`, "_blank", "noopener,noreferrer");
+}
+
+/** A megállók városai sorban, az egymás utáni ismétlődés nélkül ("Sopron → Miskolc → Debrecen"). */
+function utvonalVarosok(blokk: SoforFuvarBlokk): SoforMegalloSor[] {
+  return blokk.megallok.filter((m, i, t) => i === 0 || t[i - 1].varos !== m.varos);
+}
+
+/** Egy kód a menetjegy rácsában. Üres értéknél nem jelenik meg. */
+function JegyAdat({ cimke, ertek, mono }: { cimke: string; ertek: string | null | undefined; mono?: boolean }) {
   if (!ertek?.trim()) return null;
   return (
-    <div className="grid grid-cols-[72px_minmax(0,1fr)] gap-2 text-xs">
-      <span className="font-semibold uppercase tracking-wide text-[var(--mob-muted)]">{cimke}</span>
-      <span>{ertek}</span>
+    <div className="flex min-w-0 flex-col">
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--mob-muted)]">{cimke}</span>
+      <span className={cn("break-words", mono ? "font-mono text-[15px] font-bold" : "text-xs")}>{ertek}</span>
     </div>
   );
 }
 
 /**
- * Az AKTUÁLIS megbízás csempéje: a megbízó neve, alatta a fuvar megállói
- * (felrakó és lerakó egy csempében), a gombokkal a soron következőn.
+ * Az AKTUÁLIS megbízás csempéje — "menetjegy" (Budaházi Zoltán választása,
+ * 2026-09-23, S4 terv). Budaházi Zoltán eddig e-mailben küldte el a
+ * sofőrnek a teljes megbízást; ez a csempe váltja ki. Csak az van rajta,
+ * amit ő kiválasztott:
  *
- * A megbízás papíradatai — kapcsolattartó, iratok, fuvarlevél fotó, gond
- * jelzése — egy alapból CSUKOTT "Részletek" sor mögött vannak: a nap 95%-ában
- * nincs rájuk szükség, de amikor kell, ne kelljen telefonálni értük.
+ *  - fent HONNAN → HOVÁ nagyban, napokkal és időablakkal; több lerakónál
+ *    alatta a teljes útvonal, a kész megálló pipával;
+ *  - a perforáció alatt a kódok: pozíciószám, referencia, áru, jármű;
+ *  - a jegy talpán a SOROS megálló: a rakodóhely cége, címe, a helyszíni
+ *    kontakt, a Navigáció és a Megbízás PDF gomb, és a lépésgombok.
+ *
+ * A papír-teendők (fuvarlevél fotó, gond jelzése) és a többi irat egy
+ * alapból csukott "Részletek" sor mögött maradnak.
  */
 function AktualisMegbizas({
   blokk,
@@ -328,110 +297,199 @@ function AktualisMegbizas({
   const fotoInput = useRef<HTMLInputElement>(null);
   const [reszletekNyitva, setReszletekNyitva] = useState(false);
 
+  const honnan = blokk.megallok.find((m) => m.tipus === "felrako") ?? null;
+  const hova = [...blokk.megallok].reverse().find((m) => m.tipus === "lerako") ?? null;
+  const aktiv = blokk.megallok.find((m) => m.megalloIndex === aktivMegalloIndex) ?? null;
+  const utvonal = utvonalVarosok(blokk);
+  const pdf = megbizasPdf(blokk);
+  const telefon = kontaktTelefon(aktiv?.kontakt);
+  const tobbiIrat = blokk.dokumentumok.filter((d) => d.id !== pdf?.id);
+
   return (
-    <div className="flex flex-col overflow-hidden rounded-xl border-2 border-[var(--mob-accent)] bg-[var(--mob-card)]">
-      <div className="flex flex-col gap-1.5 px-3 pb-2 pt-2.5">
+    <div className="flex flex-col overflow-hidden rounded-2xl border-2 border-[var(--mob-accent)] bg-[var(--mob-card)]">
+      <div className="flex flex-col gap-3 px-4 pb-3 pt-3">
         <div className="flex items-center justify-between gap-2">
           <span className="truncate text-sm font-semibold">
             {blokk.megrendelo ?? (blokk.sajatFuvar ? "Saját fuvar" : "Megbízás")}
           </span>
-          {blokk.masRendszam && (
-            <span className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-[var(--mob-negative)]">
-              <AlertTriangle className="h-3.5 w-3.5" />
-              {blokk.masRendszam}
-            </span>
-          )}
+          <Jelolok blokk={blokk} />
         </div>
-        <Jelolok blokk={blokk} />
+        {blokk.masRendszam && (
+          <span className="flex items-center gap-1 text-[11px] font-medium text-[var(--mob-negative)]">
+            <AlertTriangle className="h-3.5 w-3.5" />
+            A megbízáson más rendszám áll: {blokk.masRendszam}
+          </span>
+        )}
+
+        <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-2">
+          <div className="flex min-w-0 flex-col">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--mob-muted)]">Honnan</span>
+            <span className={cn("truncate text-[22px] font-bold leading-tight", honnan?.kesz && "text-[var(--mob-muted)]")}>
+              {honnan?.varos ?? "—"}
+            </span>
+            {honnan && mikor(honnan) && <span className="text-[11px] text-[var(--mob-muted)]">{mikor(honnan)}</span>}
+          </div>
+          <Truck className="mb-5 h-6 w-6 text-[var(--mob-accent)]" />
+          <div className="flex min-w-0 flex-col items-end text-right">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--mob-muted)]">Hová</span>
+            <span className="truncate text-[22px] font-bold leading-tight">{hova?.varos ?? "—"}</span>
+            {hova && mikor(hova) && (
+              <span className="text-[11px] font-semibold text-amber-800">{mikor(hova)}</span>
+            )}
+          </div>
+        </div>
+
+        {utvonal.length > 2 && (
+          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
+            {utvonal.map((m, i) => (
+              <span key={m.megalloIndex} className="flex items-center gap-1.5">
+                {i > 0 && <span className="text-[var(--mob-muted)]">→</span>}
+                <span
+                  className={cn(
+                    "flex items-center gap-0.5",
+                    m.kesz && "text-[var(--mob-muted)]",
+                    m.megalloIndex === aktivMegalloIndex && "font-bold"
+                  )}
+                >
+                  {m.kesz && <Check className="h-3 w-3 text-[var(--mob-positive)]" />}
+                  {m.varos}
+                </span>
+              </span>
+            ))}
+          </div>
+        )}
       </div>
 
-      {blokk.megallok.map((m) => (
-        <MegalloSor
-          key={m.megalloIndex}
-          m={m}
-          aktiv={m.megalloIndex === aktivMegalloIndex}
-          pending={pending}
-          onErkezes={() => onErkezes(m.fuvarId, m.megalloIndex)}
-          onIndulok={() => onIndulok(m)}
-          onHely={() => onHely(m)}
-        />
-      ))}
+      {/* Perforáció: a jegy kódjai innen lefelé. */}
+      <div className="relative mx-3.5 border-t-2 border-dashed border-[var(--mob-border)]">
+        <span className="absolute -left-[26px] -top-[11px] h-5 w-5 rounded-full bg-[var(--mob-bg)]" />
+        <span className="absolute -right-[26px] -top-[11px] h-5 w-5 rounded-full bg-[var(--mob-bg)]" />
+      </div>
+
+      {(blokk.pozicioszam || blokk.referencia || blokk.aru || blokk.jarmuEloiras) && (
+        <div className="grid grid-cols-2 gap-x-3 gap-y-2.5 px-4 py-3">
+          <JegyAdat cimke="Pozíciószám" ertek={blokk.pozicioszam} mono />
+          <JegyAdat cimke="Referencia" ertek={blokk.referencia} mono />
+          <JegyAdat cimke="Áru" ertek={blokk.aru} />
+          <JegyAdat cimke="Jármű" ertek={blokk.jarmuEloiras} />
+        </div>
+      )}
+
+      {aktiv && (
+        <div className="flex flex-col gap-2 border-t border-[var(--mob-border)] bg-[var(--mob-tile)]/40 px-4 py-3">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--mob-muted)]">
+            {[TIPUS_CIMKE[aktiv.tipus], mikor(aktiv)].filter(Boolean).join(" · ")}
+          </span>
+          <div className="flex flex-col">
+            {aktiv.ceg && <span className="text-sm font-semibold">{aktiv.ceg}</span>}
+            <span className={cn(aktiv.ceg ? "text-xs text-[var(--mob-muted)]" : "text-sm font-semibold")}>{aktiv.cim}</span>
+          </div>
+          {aktiv.kontakt &&
+            (telefon ? (
+              <a
+                href={`tel:${telefon}`}
+                className="flex w-fit items-center gap-1.5 text-sm font-semibold text-[var(--mob-positive)]"
+              >
+                <Phone className="h-4 w-4 shrink-0" />
+                {[kontaktNev(aktiv.kontakt), telefon].filter(Boolean).join(" · ")}
+              </a>
+            ) : (
+              <span className="flex items-center gap-1.5 text-sm">
+                <Phone className="h-4 w-4 shrink-0 text-[var(--mob-muted)]" />
+                {aktiv.kontakt}
+              </span>
+            ))}
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-10 border-[var(--mob-border)] bg-[var(--mob-card)]"
+              onClick={() => window.open(navigacioUrl(aktiv.cim), "_blank", "noopener,noreferrer")}
+            >
+              <Navigation className="h-4 w-4" />
+              Navigáció
+            </Button>
+            {pdf && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-10 border-[var(--mob-border)] bg-[var(--mob-card)]"
+                onClick={() => iratMegnyitasa(pdf.id)}
+                title={pdf.fajlnev ?? undefined}
+              >
+                <FileText className="h-4 w-4" />
+                Megbízás PDF
+              </Button>
+            )}
+            <HelyGomb m={aktiv} pending={pending} onHely={() => onHely(aktiv)} />
+          </div>
+          <LepesGombok
+            m={aktiv}
+            pending={pending}
+            onErkezes={() => onErkezes(aktiv.fuvarId, aktiv.megalloIndex)}
+            onIndulok={() => onIndulok(aktiv)}
+          />
+        </div>
+      )}
 
       <button
         type="button"
         onClick={() => setReszletekNyitva((v) => !v)}
-        className="flex items-center justify-between gap-2 border-t border-[var(--mob-border)] px-3 py-2.5 text-left text-xs font-medium text-[var(--mob-muted)]"
+        className="flex items-center justify-between gap-2 border-t border-[var(--mob-border)] px-4 py-2.5 text-left text-xs font-medium text-[var(--mob-muted)]"
       >
-        Részletek
+        Fuvarlevél fotó, gond jelzése, iratok
         <ChevronDown className={cn("h-4 w-4 transition-transform", reszletekNyitva && "rotate-180")} />
       </button>
 
       {reszletekNyitva && (
-        <div className="flex flex-col gap-2 border-t border-[var(--mob-border)] px-3 py-3">
-          <AdatSor cimke="Megbízó" ertek={blokk.megrendelo} />
-          <AdatSor cimke="Megjegyzés" ertek={blokk.megjegyzes} />
-          {blokk.kapcsolat && (
-            <div className="grid grid-cols-[72px_minmax(0,1fr)] gap-2 text-xs">
-              <span className="font-semibold uppercase tracking-wide text-[var(--mob-muted)]">Telefon</span>
-              <a
-                href={`tel:${blokk.kapcsolat.telefon.replace(/\s+/g, "")}`}
-                className="flex items-center gap-1.5 font-semibold text-[var(--mob-positive)]"
-              >
-                <Phone className="h-3.5 w-3.5 shrink-0" />
-                {[blokk.kapcsolat.nev, blokk.kapcsolat.telefon].filter(Boolean).join(" · ")}
-              </a>
-            </div>
-          )}
-
-          <div className="flex flex-wrap gap-2 pt-1">
-            <input
-              ref={fotoInput}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={(e) => {
-                const fajl = e.target.files?.[0];
-                e.target.value = "";
-                if (fajl) onFoto(blokk.fuvarId, fajl);
-              }}
-            />
+        <div className="flex flex-wrap gap-2 border-t border-[var(--mob-border)] px-4 py-3">
+          <input
+            ref={fotoInput}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              const fajl = e.target.files?.[0];
+              e.target.value = "";
+              if (fajl) onFoto(blokk.fuvarId, fajl);
+            }}
+          />
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={pending}
+            className="h-9 border-[var(--mob-border)]"
+            onClick={() => fotoInput.current?.click()}
+            title="Fuvarlevél / CMR lefotózása"
+          >
+            <Camera className="h-4 w-4" />
+            Fuvarlevél fotó
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={pending}
+            className="h-9 border-[var(--mob-border)]"
+            onClick={() => onGond(blokk.fuvarId)}
+            title="Gond van a fuvarral — üzenet a diszpécsernek"
+          >
+            <MessageSquareWarning className="h-4 w-4" />
+            Gond van
+          </Button>
+          {tobbiIrat.map((d) => (
             <Button
+              key={d.id}
               size="sm"
               variant="outline"
-              disabled={pending}
               className="h-9 border-[var(--mob-border)]"
-              onClick={() => fotoInput.current?.click()}
-              title="Fuvarlevél / CMR lefotózása"
+              onClick={() => iratMegnyitasa(d.id)}
+              title={d.fajlnev ?? undefined}
             >
-              <Camera className="h-4 w-4" />
-              Fuvarlevél fotó
+              <FileText className="h-4 w-4" />
+              {DOK_CIMKE[d.tipus ?? "egyeb"] ?? "Irat"}
             </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={pending}
-              className="h-9 border-[var(--mob-border)]"
-              onClick={() => onGond(blokk.fuvarId)}
-              title="Gond van a fuvarral — üzenet a diszpécsernek"
-            >
-              <MessageSquareWarning className="h-4 w-4" />
-              Gond van
-            </Button>
-            {blokk.dokumentumok.map((d) => (
-              <Button
-                key={d.id}
-                size="sm"
-                variant="outline"
-                className="h-9 border-[var(--mob-border)]"
-                onClick={() => window.open(`/api/fuvarozas/dokumentum/${d.id}`, "_blank", "noopener,noreferrer")}
-                title={d.fajlnev ?? undefined}
-              >
-                <FileText className="h-4 w-4" />
-                {DOK_CIMKE[d.tipus ?? "egyeb"] ?? "Irat"}
-              </Button>
-            ))}
-          </div>
+          ))}
         </div>
       )}
     </div>
@@ -440,20 +498,21 @@ function AktualisMegbizas({
 
 /**
  * Egy MÉG NEM AKTUÁLIS megbízás csempéje — ugyanez szolgálja ki a "Ezután
- * következik" és a "Holnap" sorokat is, mert a sofőrnek mindkettőnél
- * ugyanaz kell. Csukva annyit mutat, hogy tudja, mi jön: ki a megbízó, és
- * honnan hová. Rákoppintva kinyílik — megállók teljes címmel, megjegyzés,
- * kapcsolattartó, iratok —, hogy még indulás előtt megnézhesse, mire
- * készüljön (Budaházi Zoltán, 2026-09-22).
+ * következik" és a "Holnap" sorokat is. Csukva: megbízó, a teljes útvonal
+ * városai, a lerakók száma és a pozíciószám. Rákoppintva kinyílik —
+ * megállók a rakodóhely cégével, címével, időablakával, és a kódok —, hogy
+ * még indulás előtt megnézhesse, mire készüljön.
  *
  * Gomb sosincs rajta: amíg az aktuálissal nem végzett, ezen nincs dolga.
- * Amint az aktuális megbízás minden megállója kész, a soron következő lép a
- * helyére teljes, gombos csempeként.
  */
 function MegbizasElonezet({ blokk, cimke }: { blokk: SoforFuvarBlokk; cimke: string }) {
   const [nyitva, setNyitva] = useState(false);
-  const honnan = blokk.megallok.find((m) => m.tipus === "felrako")?.varos;
-  const hova = [...blokk.megallok].reverse().find((m) => m.tipus === "lerako")?.varos;
+  const utvonal = utvonalVarosok(blokk);
+  const lerakoDarab = blokk.megallok.filter((m) => m.tipus === "lerako").length;
+  const pdf = megbizasPdf(blokk);
+  const alsoSor = [lerakoDarab > 1 ? `${lerakoDarab} lerakó` : null, blokk.pozicioszam ? `Poz. ${blokk.pozicioszam}` : null]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <div className="flex flex-col overflow-hidden rounded-xl border border-dashed border-[var(--mob-border)] bg-[var(--mob-card)]/60">
@@ -469,11 +528,8 @@ function MegbizasElonezet({ blokk, cimke }: { blokk: SoforFuvarBlokk; cimke: str
           <span className="truncate text-sm font-semibold">
             {blokk.megrendelo ?? (blokk.sajatFuvar ? "Saját fuvar" : "Megbízás")}
           </span>
-          {honnan && hova && (
-            <span className="text-base">
-              {honnan} → {hova}
-            </span>
-          )}
+          {utvonal.length > 1 && <span className="text-base">{utvonal.map((m) => m.varos).join(" → ")}</span>}
+          {alsoSor && <span className="text-[11px] text-[var(--mob-muted)]">{alsoSor}</span>}
           <Jelolok blokk={blokk} />
         </span>
         <ChevronDown
@@ -492,44 +548,33 @@ function MegbizasElonezet({ blokk, cimke }: { blokk: SoforFuvarBlokk; cimke: str
               className="flex flex-col border-b border-[var(--mob-border)] px-3 py-2.5 last:border-b-0"
             >
               <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--mob-muted)]">
-                {TIPUS_CIMKE[m.tipus]}
+                {[TIPUS_CIMKE[m.tipus], mikor(m)].filter(Boolean).join(" · ")}
               </span>
               <span className="text-base font-bold leading-tight">{m.varos}</span>
+              {m.ceg && <span className="text-sm font-semibold">{m.ceg}</span>}
               <span className="text-xs text-[var(--mob-muted)]">{m.cim}</span>
+              {m.kontakt && <span className="text-xs">{m.kontakt}</span>}
             </div>
           ))}
 
-          {(blokk.megjegyzes || blokk.kapcsolat || blokk.dokumentumok.length > 0) && (
-            <div className="flex flex-col gap-2 border-t border-[var(--mob-border)] px-3 py-3">
-              <AdatSor cimke="Megjegyzés" ertek={blokk.megjegyzes} />
-              {blokk.kapcsolat && (
-                <div className="grid grid-cols-[72px_minmax(0,1fr)] gap-2 text-xs">
-                  <span className="font-semibold uppercase tracking-wide text-[var(--mob-muted)]">Telefon</span>
-                  <a
-                    href={`tel:${blokk.kapcsolat.telefon.replace(/\s+/g, "")}`}
-                    className="flex items-center gap-1.5 font-semibold text-[var(--mob-positive)]"
-                  >
-                    <Phone className="h-3.5 w-3.5 shrink-0" />
-                    {[blokk.kapcsolat.nev, blokk.kapcsolat.telefon].filter(Boolean).join(" · ")}
-                  </a>
-                </div>
-              )}
-              {blokk.dokumentumok.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {blokk.dokumentumok.map((d) => (
-                    <Button
-                      key={d.id}
-                      size="sm"
-                      variant="outline"
-                      className="h-9 border-[var(--mob-border)]"
-                      onClick={() => window.open(`/api/fuvarozas/dokumentum/${d.id}`, "_blank", "noopener,noreferrer")}
-                      title={d.fajlnev ?? undefined}
-                    >
-                      <FileText className="h-4 w-4" />
-                      {DOK_CIMKE[d.tipus ?? "egyeb"] ?? "Irat"}
-                    </Button>
-                  ))}
-                </div>
+          {(blokk.referencia || blokk.aru || blokk.jarmuEloiras || pdf) && (
+            <div className="flex flex-col gap-2.5 border-t border-[var(--mob-border)] px-3 py-3">
+              <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                <JegyAdat cimke="Referencia" ertek={blokk.referencia} mono />
+                <JegyAdat cimke="Áru" ertek={blokk.aru} />
+                <JegyAdat cimke="Jármű" ertek={blokk.jarmuEloiras} />
+              </div>
+              {pdf && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="h-9 w-fit border-[var(--mob-border)]"
+                  onClick={() => iratMegnyitasa(pdf.id)}
+                  title={pdf.fajlnev ?? undefined}
+                >
+                  <FileText className="h-4 w-4" />
+                  Megbízás PDF
+                </Button>
               )}
             </div>
           )}

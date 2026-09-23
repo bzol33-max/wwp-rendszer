@@ -1836,3 +1836,41 @@ Budaházi Zoltán kérésére 8 különböző megbízó friss megbízását néz
   (`getFuvarFulAdatok().duvenbeck`), és az importőr új Duvenbeck-sornál
   `[duvenbeck] FIGYELEM` sort ír a deploy-naplóba.
 - `tsc --noEmit` és lint az érintett fájlokra tiszta.
+
+## 2026-09-23 — Sofőr: a megbízás e-mail helyett a telefonon („menetjegy”, S4)
+
+Budaházi Zoltán eddig e-mailben küldte át a sofőröknek a teljes megbízást;
+mostantól csak az app. 8 megbízó 8 megbízásából ő választotta ki, mi kell
+a sofőrnek: **időpont/időablak, összes lerakó, rakodóhely cégneve, dátum,
+pozíciószám, referencia/rakodási szám, helyszíni kontakt, áru,
+jármű-előírás, megbízás PDF**. Ami NEM: ügyintéző, raklapcsere,
+papír-teendők, értesítési kötelezettségek, szabad szöveges utasítások.
+7 látványtervből az **S4 „Menetjegy”** lett (Flotta-tervek vászon, 4. sor).
+
+- **Kiolvasás** (`drive-sync-core.ts` LLM-utasítás): új mezők — `megallok`
+  (minden fel- és lerakó: cég, tiszta cím, nap, időablak, helyszíni
+  kontakt), `referencia`, `jarmuEloiras`. Tisztítás és párosítás:
+  `lib/fuvarozas/sofor-adatok.ts` (tiszta függvények).
+- **Több lerakó:** a modell eddig csak az UTOLSÓ lerakót adta (ÁB Speed
+  Sopron → Miskolc → Debrecen-ből Sopron → Debrecen lett). Új iratnál most
+  mind bekerül a `lerako` mezőbe `; `-vel — kivéve, ha a lerakót a partner
+  determinisztikus olvasója adta.
+- **A cégnév NEM a címbe kerül:** abból geokódolunk és abból képződik a
+  helyszín-szótár kulcsa. Új oszlopok (`db/schema.sql`):
+  `megallo_reszletek jsonb`, `referencia`, `jarmu_eloiras`, `sofor_adatok_at`.
+- **Futó fuvarok pótlása** (`soforAdatokPotlasa`): a napló nyers
+  szövegéből, Drive-letöltés nélkül, szinkron-körönként 5 sor, soronként
+  egyszer. A felrako/lerako mezőhöz NEM nyúl (a sofőr jelölései a megálló
+  sorszámához kötődnek); a részleteket a megjelenítés város szerint
+  párosítja (`megalloReszlete`).
+- **Felület** (`components/erkezes/sofor-fuvar-nap.tsx`): az aktuális csempe
+  menetjegy — Honnan → Hová nappal és időablakkal, több lerakónál a teljes
+  útvonal, perforáció, kódok (Poz., Ref., Áru, Jármű), a talpán a soros
+  megálló cége, címe, kontaktja (hívható), Navigáció + Megbízás PDF, a
+  lépésgombok. A fuvarlevél fotó / gond / többi irat csukott sor mögött.
+  A „Következő” csempe: teljes útvonal, lerakószám, pozíciószám; kinyitva
+  a megállók cégekkel és időablakkal. Kikerült: megjegyzés és a megrendelő
+  telefonja (nem kérte).
+- Teszt: `scripts/teszt-sofor-adatok.mts` 32 eset (felvéve a `teszt`
+  scriptbe). `tsc`, lint tiszta. A `teszt-megbizas-szuro` 2 hibája a main-en
+  is fennáll (dátumfüggő), nem ehhez tartozik.

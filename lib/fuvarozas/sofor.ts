@@ -22,6 +22,7 @@ import { getFleetLastPositions, parseEcofleetTimestamp } from "@/lib/fuvarozas/e
 import { mozogE, toroljGeokodCachet } from "@/lib/fuvarozas/erintes-felismeres";
 import { feltoltFuvarlevelFotot } from "@/lib/fuvarozas/drive-sync-core";
 import { ceglNevKanonikusan, normalizaltCegKulcs, type FuvarRow } from "@/lib/fuvarozas/fuvar-constants";
+import { megalloReszlete, type MegalloReszlet } from "@/lib/fuvarozas/sofor-adatok";
 
 function jarmuMatch(jarmu: SajatJarmu, row: FuvarRow): boolean {
   if (row.jarmu && resolveJarmu(row.jarmu) === jarmu) return true;
@@ -239,6 +240,15 @@ export type SoforMegalloSor = {
   /** A sofőr Várakozom / Várakozás vége koppintásai. */
   varakozasKezdete: Date | null;
   varakozasVege: Date | null;
+  /**
+   * A megbízásból kiolvasott megálló-részletek (lib/fuvarozas/sofor-adatok.ts):
+   * a rakodóhely cége, időablaka, napja (ISO) és helyszíni kontaktja. Régi,
+   * még ki nem olvasott soron null.
+   */
+  ceg: string | null;
+  ido: string | null;
+  nap: string | null;
+  kontakt: string | null;
 };
 
 export type SoforDokumentum = {
@@ -286,6 +296,10 @@ export type SoforFuvarBlokk = {
    * eldöntött logikai érték megy tovább.
    */
   sajatFuvar: boolean;
+  /** A felrakón / kapuban kért szám, ha más, mint a pozíciószám (sofor-adatok.ts). */
+  referencia: string | null;
+  /** A járműre vonatkozó előírás ("Mega autó", "spanifer kell"). */
+  jarmuEloiras: string | null;
   /** A megrendelő kapcsolattartója a fuvar_kapcsolatok törzsből, ha van. */
   kapcsolat: SoforKapcsolat | null;
   /** Igaz, ha a fuvar korábbról csúszik át erre a napra. */
@@ -327,6 +341,12 @@ type FuvarExtraSor = {
   felrakas_ablak_ig: Date | null;
   lerakas_ablak_tol: Date | null;
   lerakas_ablak_ig: Date | null;
+  /** A felrakás és a lerakás napja, ISO — ha a megálló-részlet nem ad saját napot. */
+  datum_iso: string | null;
+  lerakas_datum_iso: string | null;
+  megallo_reszletek: MegalloReszlet[] | null;
+  referencia: string | null;
+  jarmu_eloiras: string | null;
 };
 
 /**
@@ -359,7 +379,9 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
     ? await Promise.all([
         query<FuvarExtraSor>(
           `select id::text, reise_id, idopont, aru, mennyiseg, suly, megjegyzes, jarmu, tipus,
-                  felrakas_ablak_tol, felrakas_ablak_ig, lerakas_ablak_tol, lerakas_ablak_ig
+                  felrakas_ablak_tol, felrakas_ablak_ig, lerakas_ablak_tol, lerakas_ablak_ig,
+                  to_char(datum, 'YYYY-MM-DD') as datum_iso, to_char(lerakas_datum, 'YYYY-MM-DD') as lerakas_datum_iso,
+                  megallo_reszletek, referencia, jarmu_eloiras
              from fuvar_megbizasok
             where id = any($1::bigint[])`,
           [fuvarIds]
@@ -429,6 +451,14 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
 
   const fuvarok: SoforFuvarBlokk[] = blokkok.map((b) => {
     const extra = extraById.get(b.fuvarId);
+    // A megálló-részleteket típuson belül, város szerint párosítjuk (lásd
+    // sofor-adatok.ts megalloReszlete) — ehhez kell a típuson belüli sorszám.
+    const tipusDarab = { felrako: 0, lerako: 0 };
+    for (const m of b.megallok) tipusDarab[m.tipus]++;
+    const tipusSzamlalo = { felrako: 0, lerako: 0 };
+    const reszletek = b.megallok.map((m) =>
+      megalloReszlete(extra?.megallo_reszletek, m.tipus, tipusSzamlalo[m.tipus]++, tipusDarab[m.tipus], m.nyersCim)
+    );
     const masRendszam =
       extra?.jarmu && resolveJarmu(extra.jarmu) !== jarmu ? extra.jarmu : null;
     return {
@@ -443,13 +473,15 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
       idopont: extra?.idopont ?? null,
       // tipus='ber' = "Saját fuvar" a felületen — lásd a mező leírását.
       sajatFuvar: extra?.tipus === "ber",
+      referencia: extra?.referencia ?? null,
+      jarmuEloiras: extra?.jarmu_eloiras ?? null,
       kapcsolat: b.megrendelo?.trim()
         ? kapcsolatByKulcs.get(normalizaltCegKulcs(ceglNevKanonikusan(b.megrendelo))) ?? null
         : null,
       csuszo: b.csuszo,
       masRendszam,
       dokumentumok: dokByFuvar.get(b.fuvarId) ?? [],
-      megallok: b.megallok.map((m) => ({
+      megallok: b.megallok.map((m, i) => ({
         fuvarId: m.fuvarId,
         megalloIndex: m.megalloIndex,
         tipus: m.tipus,
@@ -470,6 +502,13 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
           !rogzitettHelyek.has(cimKulcs(m.nyersCim)) && (m.bizonytalanFelismeres || cimPontossaga(m.nyersCim) !== "pontos"),
         varakozasKezdete: m.varakozasKezdete,
         varakozasVege: m.varakozasVege,
+        ceg: reszletek[i]?.ceg ?? null,
+        ido: reszletek[i]?.ido ?? null,
+        nap:
+          reszletek[i]?.nap ??
+          (m.tipus === "felrako" ? extra?.datum_iso : extra?.lerakas_datum_iso ?? extra?.datum_iso) ??
+          null,
+        kontakt: reszletek[i]?.kontakt ?? null,
       })),
     };
   });

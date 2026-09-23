@@ -981,3 +981,21 @@ create table if not exists sofor_munkanap (
   unique (alkalmazott_id, nap, tipus)
 );
 create index if not exists idx_sofor_munkanap_nap on sofor_munkanap (nap, alkalmazott_id);
+
+-- A SOFŐRNEK szóló megbízás-adatok (2026-09-23, lib/fuvarozas/sofor-adatok.ts).
+-- Budaházi Zoltán eddig e-mailben küldte át a sofőröknek a teljes megbízást;
+-- helyette a telefonon, a Fuvarok csempén jelenik meg, ami a sofőrnek kell.
+--
+-- megallo_reszletek: megállónként a rakodóhely cége, időablaka, napja és
+--   helyszíni kontaktja, útvonal-sorrendben: [{tipus, cim, ceg, nap, ido,
+--   kontakt}]. SZÁNDÉKOSAN nem a felrako/lerako szövegbe kerül a cégnév:
+--   abból geokódolunk, és a helyszín-szótár kulcsa is abból képződik.
+-- referencia: a felrakón / kapuban kért szám, ha más, mint a pozíciószám
+--   (Lösung "Ref.: 80066185", ÁB Speed "Transporeon 1153460").
+-- jarmu_eloiras: "Mega autó", "13,6 m ponyvás", "spanifer kell".
+-- sofor_adatok_at: mikor olvastuk ki — a már beolvasott sorok pótlása
+--   (drive-sync-core.ts soforAdatokPotlasa) ez alapján egyszer fut soronként.
+alter table fuvar_megbizasok add column if not exists megallo_reszletek jsonb;
+alter table fuvar_megbizasok add column if not exists referencia text;
+alter table fuvar_megbizasok add column if not exists jarmu_eloiras text;
+alter table fuvar_megbizasok add column if not exists sofor_adatok_at timestamptz;

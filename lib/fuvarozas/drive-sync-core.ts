@@ -44,6 +44,7 @@ import { normalizaltSzoveg, torzsSzoveg } from "@/lib/fuvarozas/import/normaliza
 import { pdfSzovegElemek } from "@/lib/fuvarozas/import/pdf-elemek";
 import { felismerPartner } from "@/lib/fuvarozas/import/partnerek";
 import { ellenorizKivontFuvart, type KivontFuvar } from "@/lib/fuvarozas/import/ellenorzes";
+import { osszesLerakoCime, soforAdatokKivonatbol, vanSoforAdat, type SoforAdatok } from "@/lib/fuvarozas/sofor-adatok";
 import {
   rogzitNaplot,
   nyersSzoveggelNaplozottFileIdk,
@@ -273,7 +274,14 @@ function fileIdFromViewUrl(url: string): string | null {
  * eldöntése. A közös alakot a determinisztikus olvasók is ezt adják vissza,
  * így az ellenőrzés mindkét úton ugyanaz.
  */
-type LlmValasz = KivontFuvar & { isFuvarmegbizas: boolean };
+type LlmValasz = KivontFuvar & {
+  isFuvarmegbizas: boolean;
+  // A sofőrnek szóló mezők (lib/fuvarozas/sofor-adatok.ts) — nyersen, a
+  // soforAdatokKivonatbol tisztítja meg őket.
+  megallok?: unknown;
+  referencia?: unknown;
+  jarmuEloiras?: unknown;
+};
 
 const KIVONATOLASI_UTASITAS = `Egy fuvarmegbízás-dokumentum szövege következik. A szöveget már megtisztítottuk: a nyomtatási ismétléseket összevontuk, és a szerződéses kisbetűs részt levágtuk. Olvasd ki belőle ALAPOSAN az alábbi mezőket, és VÁLASZOLJ KIZÁRÓLAG egyetlen, érvényes JSON objektummal (ne írj mást, ne használj markdown code fence-t):
 
@@ -292,7 +300,19 @@ const KIVONATOLASI_UTASITAS = `Egy fuvarmegbízás-dokumentum szövege következ
   "fizetesiHataridoNap": number|null, // fizetési határidő NAPOKBAN (pl. "60 napos átutalás" -> 60), ne dátum
   "postazasiCim": string|null, // ahová az EREDETI papírokat postázni kell — elsőbbség: kifejezett postázási cím > számlázási cím > székhely
   "pozicioszam": string|null, // a megbízó hivatkozási/pozíció száma
-  "megjegyzes": string|null // bármi egyéb fontos infó egy rövid mondatban, vagy null
+  "megjegyzes": string|null, // bármi egyéb fontos infó egy rövid mondatban, vagy null
+  "megallok": [ // MINDEN felrakó és lerakó, útvonal-sorrendben (több lerakónál MIND, nem csak az utolsó)
+    {
+      "tipus": "felrako"|"lerako",
+      "ceg": string|null, // a rakodóhely cégneve (pl. "Huncargo Raktár", "SZERIP Zrt.") — NEM a megbízó, és NEM mi
+      "cim": string|null, // irányítószám, város, utca házszám — cégnév NÉLKÜL (pl. "3527 Miskolc, Besenyői u. 8.")
+      "nap": string|null, // ISO dátum ÉÉÉÉ-HH-NN, ha erre a megállóra meg van adva
+      "ido": string|null, // időpont vagy időablak röviden, szó szerint (pl. "8:00-20:00", "15:00-ig", "15 órás időkapu")
+      "kontakt": string|null // a HELYSZÍNEN hívható személy neve és telefonszáma, ha meg van adva — NEM a megbízó ügyintézője
+    }
+  ],
+  "referencia": string|null, // a felrakón/kapuban kért szám, ha KÜLÖNBÖZIK a pozíciószámtól (pl. "Ref.: 80066185", "Transporeon 1153460", rakodási szám, ORDER) — egyébként null
+  "jarmuEloiras": string|null // a járműre vonatkozó előírás röviden (pl. "Mega autó", "13,6 m ponyvás", "spanifer kell") — egyébként null
 }
 
 HÁROM DOLOG, AMIT EZEK A SABLONOK RENDRE ELRONTANAK — figyelj rájuk:
@@ -590,10 +610,16 @@ async function ujFajlokFeldolgozasa(
         continue;
       }
 
+      // A sofőrnek szóló adatok (sofor-adatok.ts). Több lerakónál MIND a
+      // lerakó bekerül a lerako mezőbe — de csak ha a lerakót nem a partner
+      // determinisztikus olvasója adta, mert az megbízhatóbb a modellnél.
+      const soforAdatok = soforAdatokKivonatbol(llm);
+      const lerakoMezo = (determinisztikus.lerako ? null : osszesLerakoCime(soforAdatok)) ?? kivont.lerako!;
+
       const fuvarId = await addFuvar({
         tipus: "sajat",
         datum: kivont.felrakasDatum!,
-        lerako: kivont.lerako!,
+        lerako: lerakoMezo,
         felrako: kivont.felrako || undefined,
         megrendelo: kivont.megrendelo || undefined,
         aru: kivont.aru || undefined,
@@ -615,7 +641,13 @@ async function ujFajlokFeldolgozasa(
         forras: "pdf_import",
         ellenorzott: false,
       });
-      if (fuvarId) ujFuvarok++;
+      if (fuvarId) {
+        ujFuvarok++;
+        await mentsSoforAdatokat(fuvarId, soforAdatok).catch((err) => {
+          // A sofőr-adat kiegészítés — a felvett megbízást nem buktathatja el.
+          hibak.push(`${file.name}: a sofőr-adatok mentése nem sikerült — ${err instanceof Error ? err.message : "ismeretlen hiba"}`);
+        });
+      }
       await rogzitNaplot({
         ...naploAlap,
         olvaso: "llm",
@@ -744,6 +776,74 @@ async function hianyokPotlasa(drive: ReturnType<typeof driveClient>, hibak: stri
   return potoltSorok;
 }
 
+/** A sofőrnek szóló adatok mentése egy megbízás-sorra (lásd sofor-adatok.ts). */
+async function mentsSoforAdatokat(fuvarId: string, adatok: SoforAdatok): Promise<void> {
+  const van = vanSoforAdat(adatok);
+  await query(
+    `update fuvar_megbizasok
+        set megallo_reszletek = $2::jsonb,
+            referencia = $3,
+            jarmu_eloiras = $4,
+            sofor_adatok_at = now()
+      where id = $1`,
+    [fuvarId, van ? JSON.stringify(adatok.megallok) : null, adatok.referencia, adatok.jarmuEloiras]
+  );
+}
+
+/** Ennyi régi sort pótolunk egy szinkron-körben — a nyelvi modell hívása nem ingyenes. */
+const MAX_SOFOR_POTLAS_KORONKENT = 5;
+
+/**
+ * A MÁR BEOLVASOTT, még le nem zárt megbízások sofőr-adatainak pótlása
+ * (időablak, rakodóhely cége, helyszíni kontakt, referencia,
+ * jármű-előírás). Budaházi Zoltán 2026-09-23-tól nem küldi el e-mailben a
+ * megbízást a sofőröknek, ezért a futó fuvaroknál is kellenek ezek az
+ * adatok, nem csak az ezután érkezőknél.
+ *
+ * A napló őrzi minden irat nyers szövegét, így Drive-letöltés nem kell,
+ * csak egy nyelvimodell-hívás soronként. A felrako/lerako mezőhöz NEM nyúl:
+ * egy futó fuvar megállóinak sorszámához kötődik a sofőr "Megérkeztem" /
+ * "Indulok" jelölése — ha menet közben egy új lerakó ékelődne be, a
+ * jelölések elcsúsznának. A részleteket a megjelenítés város szerint
+ * párosítja a meglévő megállókhoz (sofor-adatok.ts megalloReszlete).
+ *
+ * Soronként egyszer fut (sofor_adatok_at), akkor is, ha nem talált semmit.
+ */
+async function soforAdatokPotlasa(hibak: string[]): Promise<number> {
+  const sorok = await query<{ id: string; nyers_szoveg: string | null }>(
+    `select f.id::text,
+            (select n.nyers_szoveg from fuvar_import_naplo n
+              where n.fuvar_id = f.id and n.nyers_szoveg is not null
+              order by n.frissitve_at desc limit 1) as nyers_szoveg
+       from fuvar_megbizasok f
+      where f.sofor_adatok_at is null
+        and f.forras = 'pdf_import'
+        and f.reise_id is null
+        and f.statusz not in ('torolt', 'lezarva', 'szamlazva')
+        and coalesce(f.lerakas_datum, f.datum) >= current_date - 1
+      order by f.datum, f.id
+      limit ${MAX_SOFOR_POTLAS_KORONKENT}`
+  );
+  let potolt = 0;
+  for (const sor of sorok) {
+    try {
+      if (!sor.nyers_szoveg) {
+        await query(`update fuvar_megbizasok set sofor_adatok_at = now() where id = $1`, [sor.id]);
+        continue;
+      }
+      const normalizalt = normalizaltSzoveg(sor.nyers_szoveg);
+      const partner = felismerPartner(normalizalt);
+      const llm = await kivonatolFuvarAdatot(torzsSzoveg(normalizalt, partner?.torzsVege ?? []));
+      await mentsSoforAdatokat(sor.id, soforAdatokKivonatbol(llm));
+      potolt++;
+    } catch (err) {
+      hibak.push(`sofőr-adatok pótlása (${sor.id}): ${err instanceof Error ? err.message : "ismeretlen hiba"}`);
+    }
+  }
+  if (potolt > 0) console.log(`[drive-sync] sofőr-adatok pótolva ${potolt} futó megbízásnál.`);
+  return potolt;
+}
+
 /**
  * A MÁR BEOLVASOTT sorok megrendelőjének helyesbítése a partner-sablonból.
  *
@@ -834,6 +934,7 @@ export async function vegrehajtDriveSync(): Promise<DriveSyncEredmeny> {
   // Az új iratok után, hogy a most felvett sorok naplója már megvan.
   const figyelmeztetesek = [...uj.figyelmeztetesek];
   const helyesbitettMegrendelok = await megrendelokHelyesbitese(hibak, figyelmeztetesek);
+  await soforAdatokPotlasa(hibak);
   return {
     ujFuvarok: uj.ujFuvarok,
     vizsgaltFajlok: uj.vizsgaltFajlok,
