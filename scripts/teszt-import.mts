@@ -138,7 +138,18 @@ egyenlo(
 egyenlo(
   felismerPartner("Transorg Software / Ver:2.6001 / HAPP kft Adószám")?.kod,
   "happ",
-  "HAPP felismerése a sablongeneráló szoftver nevéből"
+  "HAPP felismerése a láblécben álló cégnévből"
+);
+egyenlo(
+  felismerPartner("Transorg Software / 2026.09.24. 15:03:32 / Ver:2.6003 / 7 / Huncargo Forwarding Kft. / Lenthár-Kugler Edina")?.kod,
+  "huncargo",
+  "Huncargo felismerése — ugyanaz a Transorg-sablon, mint a HAPP-é (0000065055)"
+);
+egyenlo(felismerPartner("Transorg Software / Ver:2.6003"), null, "a szoftvernév egymagában nem partner");
+egyenlo(
+  felismerPartner("Felrakóhely: Huncargo - Dunaharaszti raktár. Megbízó adatai: ÁB Speed Szállítmányozási Kft. transport@abspeed.hu")?.kod,
+  "ab-speed",
+  "a Huncargo mint felrakóhely nem teszi Huncargo-irattá"
 );
 egyenlo(
   felismerPartner("A dokumentum az Innomedio Kft. InnoManagement szoftverével készült.")?.kod,
