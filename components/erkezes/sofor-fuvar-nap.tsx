@@ -222,6 +222,102 @@ function Jelolok({ blokk }: { blokk: SoforFuvarBlokk }) {
   );
 }
 
+/** A "Nem kaptam papírt" jelölések (fuvar-azonosítók) a telefonon — csak kényelmi, nem üzleti adat. */
+const PAPIR_NEM_KELL_KULCS = "sofor-papir-nem-kaptam";
+
+function papirNemKellOlvas(): string[] {
+  try {
+    const v = JSON.parse(window.localStorage.getItem(PAPIR_NEM_KELL_KULCS) ?? "[]");
+    return Array.isArray(v) ? v.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
+function papirNemKellIr(idk: string[]) {
+  try {
+    window.localStorage.setItem(PAPIR_NEM_KELL_KULCS, JSON.stringify(idk.slice(-50)));
+  } catch {
+    // privát mód / tiltott tároló — a kártya legfeljebb újra megjelenik
+  }
+}
+
+/** Minden megállója kész, de még nincs róla papír-fotó. */
+function papirraVar(blokk: SoforFuvarBlokk): boolean {
+  return (
+    blokk.megallok.length > 0 &&
+    blokk.megallok.every((m) => m.kesz) &&
+    !blokk.dokumentumok.some((d) => d.tipus === "fuvarlevel")
+  );
+}
+
+/**
+ * Lerakás után a papír lefotózása — eddig egy csukott "Részletek" sor mögött
+ * volt, és semmi nem kérte (Budaházi Zoltán, 2026-09-24):
+ *  - bér fuvar: az aláírt fuvarlevél / CMR — enélkül nem számlázunk;
+ *  - saját fuvar: a BEFELÉ kapott szállítólevél. A kifelé menőt a
+ *    Számlázz.hu állítja ki, ott nincs mit fotózni — erre való a
+ *    "Nem kaptam" gomb.
+ */
+function PapirKeres({
+  blokk,
+  pending,
+  onFoto,
+  onNemKaptam,
+}: {
+  blokk: SoforFuvarBlokk;
+  pending: boolean;
+  onFoto: (fuvarId: string, fajl: File) => void;
+  onNemKaptam: (fuvarId: string) => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const utvonal = utvonalVarosok(blokk).map((m) => m.varos).join(" → ");
+  return (
+    <div className="flex flex-col gap-2 rounded-2xl border-2 border-amber-500 bg-amber-50 px-4 py-3 text-amber-950">
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-800">
+        Lerakva · {blokk.megrendelo ?? (blokk.sajatFuvar ? "Saját fuvar" : "Megbízás")}
+      </span>
+      <span className="text-sm">{utvonal}</span>
+      <span className="text-base font-bold leading-tight">
+        {blokk.sajatFuvar ? "Kaptál szállítólevelet? Fotózd le." : "Fotózd le az aláírt fuvarlevelet (CMR)."}
+      </span>
+      {!blokk.sajatFuvar && <span className="text-xs">Enélkül nem tudjuk kiszámlázni a fuvart.</span>}
+      <input
+        ref={input}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={(e) => {
+          const fajl = e.target.files?.[0];
+          e.target.value = "";
+          if (fajl) onFoto(blokk.fuvarId, fajl);
+        }}
+      />
+      <div className="flex flex-wrap gap-2">
+        <Button
+          disabled={pending}
+          onClick={() => input.current?.click()}
+          className="h-12 flex-1 justify-center bg-amber-600 text-base font-semibold text-white hover:bg-amber-600/90"
+        >
+          <Camera className="h-5 w-5" />
+          {blokk.sajatFuvar ? "Szállítólevél fotó" : "Fuvarlevél fotó"}
+        </Button>
+        {blokk.sajatFuvar && (
+          <Button
+            variant="outline"
+            disabled={pending}
+            onClick={() => onNemKaptam(blokk.fuvarId)}
+            className="h-12 border-amber-400 bg-transparent text-amber-900"
+          >
+            Nem kaptam
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** ISO nap → "szept. 24." */
 function napFelirat(nap: string | null): string | null {
   if (!nap) return null;
@@ -593,6 +689,11 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
   // nem külön setState-tel az effektben (react-hooks/set-state-in-effect).
   const [betoltottNap, setBetoltottNap] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  // Csak kliensen olvasható; a lista a betöltés UTÁN jelenik meg, így a
+  // szerveres első képpel nem ütközik.
+  const [nemKaptam, setNemKaptam] = useState<string[]>(() =>
+    typeof window === "undefined" ? [] : papirNemKellOlvas()
+  );
 
   const load = useCallback(async () => {
     const [ma, holnapi] = await Promise.all([
@@ -652,9 +753,9 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
         if (m.varakozasKezdete && !m.varakozasVege) {
           await jelolVarakozast(m.fuvarId, m.megalloIndex, "befejez");
         }
-        await markMegalloKesz(m.fuvarId, m.megalloIndex);
+        const { fuvarLezarva } = await markMegalloKesz(m.fuvarId, m.megalloIndex);
         await load();
-        toast.success("Indulás rögzítve.");
+        toast.success(fuvarLezarva ? "Fuvar lezárva. Fotózd le a papírt." : "Indulás rögzítve.");
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Nem sikerült rögzíteni.");
       }
@@ -682,7 +783,7 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
         form.append("foto", kicsi, "fuvarlevel.jpg");
         await feltoltFuvarlevelFoto(fuvarId, form);
         await load();
-        toast.success("Fuvarlevél feltöltve.");
+        toast.success("Fotó feltöltve.");
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Nem sikerült feltölteni a fotót.");
       }
@@ -702,7 +803,18 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
     });
   }
 
+  function papirNemKaptam(fuvarId: string) {
+    const uj = [...nemKaptam.filter((id) => id !== fuvarId), fuvarId];
+    setNemKaptam(uj);
+    papirNemKellIr(uj);
+  }
+
   const blokkok = nap?.fuvarok ?? [];
+  // A lerakott, de még papír-fotó nélküli fuvarok — a lista tetején, amíg
+  // le nem fotózza (saját fuvarnál: vagy a "Nem kaptam"-ot nem nyomja).
+  const papirKeresek = blokkok.filter(
+    (b) => papirraVar(b) && !(b.sajatFuvar && nemKaptam.includes(b.fuvarId))
+  );
   // Az aktív megbízás az, amelyikben a soron következő (első nem kész) megálló
   // van; a soron következő megálló kapja a gombokat. Amit befejezett, az
   // eltűnik: a következő megbízás lép a helyére, és utána a rá következő.
@@ -742,6 +854,10 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
           {nap.hiba}
         </span>
       )}
+
+      {papirKeresek.map((b) => (
+        <PapirKeres key={b.fuvarId} blokk={b} pending={pending} onFoto={foto} onNemKaptam={papirNemKaptam} />
+      ))}
 
       {blokkok.length === 0 ? (
         <p className="text-sm text-[var(--mob-muted)]">Mára nincs fuvarod.</p>

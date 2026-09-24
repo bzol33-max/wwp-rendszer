@@ -171,7 +171,7 @@ export async function getSoforAktualisTura(employeeId: string): Promise<SoforTur
  * kézi, időbélyeges megerősítés. A jelölő nevét a MUNKAMENETBŐL vesszük, nem
  * a kliens által küldött szövegből, hogy a napló ne legyen hamisítható.
  */
-export async function markMegalloKesz(fuvarId: string, megalloIndex: number) {
+export async function markMegalloKesz(fuvarId: string, megalloIndex: number): Promise<{ fuvarLezarva: boolean }> {
   await requireAnyEditPermission(["fuvarozas", "fuvarozas_sajat"]);
   const soforNev = (await requireSession()).name;
   await query(
@@ -180,9 +180,27 @@ export async function markMegalloKesz(fuvarId: string, megalloIndex: number) {
      on conflict (fuvar_id, megallo_index) do update set kesz = true, kesz_at = now(), kesz_by = $3`,
     [fuvarId, megalloIndex, soforNev]
   );
+  // Az UTOLSÓ megálló "Indulok"-ja a fuvart is lezárja — ugyanúgy, mint a
+  // GPS lap pipája (megbizasok.ts setMegalloKesz). Eddig csak a GPS vagy az
+  // iroda zárta le, így a sofőr hiába jelezte, a fuvar "folyamatban" maradt
+  // (Budaházi Zoltán, 2026-09-24).
+  const [sor] = await query<{ felrako: string | null; lerako: string; teljesitve: boolean }>(
+    `select felrako, lerako, teljesitve from fuvar_megbizasok where id = $1 and statusz <> 'torolt'`,
+    [fuvarId]
+  );
+  let fuvarLezarva = false;
+  if (sor && !sor.teljesitve) {
+    const utolsoIndex = bontsMegallokra(sor.felrako).length + bontsMegallokra(sor.lerako).length - 1;
+    if (megalloIndex === utolsoIndex) {
+      await query(`update fuvar_megbizasok set teljesitve = true, teljesitve_at = now() where id = $1`, [fuvarId]);
+      fuvarLezarva = true;
+      console.log(`[sofor] fuvar #${fuvarId} lezárva a sofőr utolsó "Indulok" jelölésével (${soforNev}).`);
+    }
+  }
   // A GPS lap is ezt a jelölést mutatja (kézi kész) — a gyorsítótárazott idővonal frissüljön.
   toroljIdovonalCachet();
   revalidatePath("/erkezes");
+  return { fuvarLezarva };
 }
 
 // ---------------------------------------------------------------------------
@@ -667,6 +685,10 @@ export async function feltoltFuvarlevelFoto(fuvarId: string, form: FormData): Pr
      returning id::text`,
     [fuvarId, feltoltve.id, feltoltve.url, nev]
   );
+  // Saját fuvarnál ez a BEFELÉ kapott szállítólevél fotója (a kifelé menőt a
+  // Számlázz.hu állítja ki) — ugyanaz a 'fuvarlevel' irat-típus, mert a
+  // fuvar_dokumentumok CHECK-je csak ezt ismeri, és a saját fuvar állapotát a
+  // fotó amúgy sem mozdítja (003 trigger: csak jelleg='ber').
   console.log(`[sofor] fuvarlevél-fotó feltöltve: fuvar #${fuvarId}, ${nev}, ${Math.round(tartalom.length / 1024)} KB (${session.name})`);
   revalidatePath("/erkezes");
   revalidatePath("/fuvarozas");
