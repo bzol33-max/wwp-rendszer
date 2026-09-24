@@ -9,7 +9,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { toast } from "sonner";
 import type { ElszamolasVaszon, ElszamolasSor, Piszkozat } from "@/lib/fuvarozas2/elszamolas";
-import { setSzamlaSzam, valtAllapot, setPapirBeerkezett } from "@/lib/fuvarozas2/megbizasok";
+import { setSzamlaSzam, valtAllapot } from "@/lib/fuvarozas2/megbizasok";
 
 const ft = (n: number | null | undefined, p = "Ft") => (n == null ? "—" : `${new Intl.NumberFormat("hu-HU").format(n)} ${p}`);
 const nap = (d: string | null | undefined) => (d ? d.slice(5).replace("-", ".") + "." : "—");
@@ -133,23 +133,20 @@ export function ElszamolasVaszonNezet({ adat }: { adat: ElszamolasVaszon }) {
         ))}
       </Szakasz>
 
-      <Szakasz cim="E-mail elment → posta" szam={String(adat.postazando.length)} also="az eredeti papír a postázás feltétele (Szabina nyugtáz)">
+      <Szakasz cim="E-mail elment → posta" szam={String(adat.postazando.length)} also="Szabina adja fel a postán, és jelöli: Postázva ✓">
         {adat.postazando.length === 0 ? <Ures /> : adat.postazando.map((s) => (
           <Kartya key={s.id} s={s} jobb={<div className="font-semibold">{s.szamla_szam ?? "—"}</div>}>
             <div className="text-xs">
-              {s.papirok_beerkeztek_at
-                ? <span className="text-[var(--f2-mint)]">eredeti papír beérkezett ✓</span>
-                : <span className={s.papirHatra != null && s.papirHatra <= 2 ? "text-[var(--f2-red)]" : "text-[var(--f2-amb)]"}>
-                    eredeti papír még nincs{s.papirHatra != null ? ` · határidő ${s.papirHatra} nap` : ""}
-                  </span>}
-              {" · "}
+              {s.papirHatra != null ? (
+                <>
+                  <span className={s.papirHatra <= 2 ? "text-[var(--f2-red)]" : "text-[var(--f2-amb)]"}>postázási határidő {s.papirHatra} nap</span>
+                  {" · "}
+                </>
+              ) : null}
               {s.postazasi_cim ?? <span className="text-[var(--f2-amb)]">nincs postázási cím a törzsben</span>}
             </div>
             <div className="flex flex-wrap gap-2">
-              {!s.papirok_beerkeztek_at ? (
-                <button type="button" disabled={pending} className={gomb2} onClick={() => fut("Papír beérkezett", () => setPapirBeerkezett(s.id, true))}>Papír megjött ✓</button>
-              ) : null}
-              <button type="button" disabled={pending || !s.papirok_beerkeztek_at} className={gomb}
+              <button type="button" disabled={pending} className={gomb}
                 onClick={() => fut("Postázva", () => valtAllapot(s.id, "postazva"))}>Postázva ✓</button>
             </div>
           </Kartya>

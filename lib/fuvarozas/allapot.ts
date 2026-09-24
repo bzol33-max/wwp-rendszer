@@ -79,12 +79,14 @@ export const ATMENETEK: readonly Atmenet[] = [
   },
   { szam: 9, honnan: "szamlazva", hova: "email_elment", kivalto: "a piszkozat elküldve (SENT szál) vagy kézi jelölés", forrasok: ["rendszer", "ember", "migracio"] },
   {
-    szam: 10, honnan: "email_elment", hova: "postazva", kivalto: "Postázva ✓", forrasok: ["ember", "migracio"],
-    feltetel: (k) => kell(k.papirBeerkezett, "az eredeti papír még nem érkezett be"),
+    // A külön „Papír megjött” lépés megszűnt (Budaházi Zoltán, 2026-09-24):
+    // Szabina viszi postára a papírt, a „Postázva ✓” maga jelenti, hogy a
+    // papír a kezében volt — a papír dátumát a valtAllapot beírja.
+    szam: 10, honnan: "email_elment", hova: "postazva", kivalto: "Postázva ✓ (Szabina feladta)", forrasok: ["ember", "migracio"],
   },
   {
     szam: 11, honnan: "postazva", hova: "lezart", kivalto: "mind a négy feltétel áll (S1)", forrasok: ["rendszer", "ember", "migracio"],
-    feltetel: (k) => kell(k.szamlaVan && k.emailElment && k.postazva && k.papirBeerkezett, "lezáráshoz kell: számla + e-mail + postázva + papír beérkezett"),
+    feltetel: (k) => kell(k.szamlaVan && k.emailElment && k.postazva, "lezáráshoz kell: számla + e-mail + postázva"),
   },
   {
     szam: 12, honnan: "teljesitve", hova: "lezart", kivalto: "saját fuvar: szállítólevél párosítva (rövid út)", forrasok: ["rendszer", "ember", "migracio"],

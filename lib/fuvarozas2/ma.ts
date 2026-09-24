@@ -51,8 +51,8 @@ export async function getMaAdat(): Promise<MaAdat> {
      where m.torolt_at is null and m.allapot = 'szamlazva' and not coalesce(p.szamla_email_nem_kell, false)`
   );
   const [{ postazando }] = await query<{ postazando: number }>(
-    `select count(*)::int as postazando from fuvar_megbizasok m join fuvar_elszamolas e on e.megbizas_id = m.id
-     where m.torolt_at is null and m.allapot = 'email_elment' and e.papirok_beerkeztek_at is not null`
+    `select count(*)::int as postazando from fuvar_megbizasok m
+     where m.torolt_at is null and m.allapot = 'email_elment'`
   );
   const jelzesek: Jelzes[] = ([
     { kulcs: "ellenorzes", szoveg: "ellenőrzésre vár", darab: n("ellenorzesre_var"), sulyossag: "figyelmeztetes", href: "/fuvarozas2/megbizasok?csoport=ellenorzes" },

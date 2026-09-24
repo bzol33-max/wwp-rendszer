@@ -51,11 +51,10 @@ export function kovetkezoTeendo(s: {
     case "szamlazva":
       return { szoveg: s.szamla_szam ? "számla e-mail a partnernek" : "számla párosítása", surgos: false };
     case "email_elment": {
-      const napok = papirHatraNap(s.lerakas_nap, s.papir_hatarido_nap);
-      if (!s.papirok_beerkeztek_at) {
-        return { szoveg: napok == null ? "eredeti papír beérkezése" : `papír határidő ${napok} nap`, surgos: napok != null && napok <= 2 };
-      }
-      return { szoveg: s.postazasi_cim ? "postázás" : "postázási cím hiányzik", surgos: !s.postazasi_cim };
+      // A megadott "ma" napjához mérve (nem a gép órájához), hogy a lista és a teszt ugyanazt számolja.
+      const napok = papirHatraNap(s.lerakas_nap, s.papir_hatarido_nap, new Date(`${ma}T12:00:00Z`));
+      if (!s.postazasi_cim) return { szoveg: "postázási cím hiányzik", surgos: true };
+      return { szoveg: napok == null ? "postázás" : `postázás · határidő ${napok} nap`, surgos: napok != null && napok <= 2 };
     }
     case "postazva":
       return { szoveg: "lezárás", surgos: false };

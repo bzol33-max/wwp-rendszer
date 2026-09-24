@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { valtAllapot, setPapirBeerkezett, setSzamlaSzam, setMegjegyzes } from "@/lib/fuvarozas2/megbizasok";
+import { valtAllapot, setSzamlaSzam, setMegjegyzes } from "@/lib/fuvarozas2/megbizasok";
 import type { MegbizasSor, Megallo, Esemeny, Dokumentum } from "@/lib/fuvarozas2/megbizasok";
 import type { Allapot } from "@/lib/fuvarozas/allapot";
 import { ALLAPOT_CIMKE, AllapotBadge, JellegBadge, formatFt, formatIdo, formatNap } from "@/components/fuvarozas2/kozos";
@@ -129,7 +129,7 @@ export function MegbizasReszlet({
               <Button key={c} size="sm" variant="outline" disabled={pending} onClick={() => valt(c)}>{VISSZA[`${sor.allapot}>${c}`]}</Button>
             ))}
             {szerkeszthet && elore.length === 0 && vissza.length === 0 && !keziSzamlazhato && !keziLezaras ? (
-              <p className="text-xs text-muted-foreground">Innen nincs engedett lépés — {sor.allapot === "email_elment" && !sor.papirok_beerkeztek_at ? "a postázáshoz előbb a papír beérkezése kell." : sor.allapot === "szamlazhato" ? "számlaszám kell a továbblépéshez." : "nézd a naplót."}</p>
+              <p className="text-xs text-muted-foreground">Innen nincs engedett lépés — {sor.allapot === "szamlazhato" ? "számlaszám kell a továbblépéshez." : "nézd a naplót."}</p>
             ) : null}
           </CardContent>
         </Card>
@@ -141,15 +141,6 @@ export function MegbizasReszlet({
               <div className="flex items-center justify-between gap-2">
                 <span>Fuvarlevél-fotó</span>
                 <span className={sor.foto_van ? "font-medium text-[var(--f2-mint)]" : "text-muted-foreground"}>{sor.foto_van ? "megvan" : "nincs"}</span>
-              </div>
-              <div className="flex items-center justify-between gap-2">
-                <span>Eredeti papír (Szabina)</span>
-                {elszamolasJog ? (
-                  <Button size="xs" variant={sor.papirok_beerkeztek_at ? "outline" : "default"} disabled={pending}
-                    onClick={() => start(async () => { await setPapirBeerkezett(sor.id, !sor.papirok_beerkeztek_at); router.refresh(); })}>
-                    {sor.papirok_beerkeztek_at ? `beérkezett ${formatIdo(sor.papirok_beerkeztek_at)} · visszavon` : "Papír beérkezett"}
-                  </Button>
-                ) : <span className="text-muted-foreground">{sor.papirok_beerkeztek_at ? formatIdo(sor.papirok_beerkeztek_at) : "még nem"}</span>}
               </div>
               <div className="flex flex-col gap-1">
                 <span>Számlaszám</span>

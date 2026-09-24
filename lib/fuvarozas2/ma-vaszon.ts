@@ -293,7 +293,6 @@ export async function getMaVaszon(): Promise<MaVaszon> {
      left join fuvar_elszamolas e on e.megbizas_id = m.id
      where m.torolt_at is null and m.jelleg = 'ber'
        and m.allapot in ('teljesitve','szamlazhato','szamlazva','email_elment')
-       and coalesce(e.papirok_beerkeztek_at, m.papirok_beerkeztek_at) is null
      order by coalesce(m.lerakas_datum, m.datum)`
   );
   const papirHatra = (r: { hatarido_nap: number | null; lerakas: string | null }) => {
@@ -324,7 +323,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
       szin: ellenorzesre.length > 0 ? "amber" : "normal", href: "/fuvarozas2/megbizasok?csoport=ellenorzes",
     },
     {
-      kulcs: "papir", cimke: "Papírra vár", ertek: String(papir.length),
+      kulcs: "papir", cimke: "Postára vár", ertek: String(papir.length),
       also: papirSurgos.length > 0 ? `${papirSurgos.length} sürgős (${papirSurgos[0].partner ?? "—"})` : "nincs sürgős",
       szin: papirSurgos.length > 0 ? "red" : "normal", href: "/fuvarozas2/elszamolas",
     },
@@ -411,7 +410,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
   // ---------------------------------------------------------------- teendők, holnap, rendszer
   const teendok = [
     {
-      cimke: "Papír beérkezett", ertek: `${papir.length}`,
+      cimke: "Postára vár", ertek: `${papir.length}`,
       also: papirSurgos.length > 0 ? `${papirSurgos[0].partner ?? ""} ${papirSurgos[0].hivatkozas ?? ""} · ${papirHatra(papirSurgos[0])} nap`.trim() : null,
       href: "/fuvarozas2/elszamolas",
     },

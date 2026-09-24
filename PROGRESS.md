@@ -1996,3 +1996,27 @@ pihenőn állva semmi nem mutatta, hogy az út nagyobb része megvolt.
     telefonon jegyződik meg, kifelé menő fuvarhoz).
   - A fotó irat-típusa mindkettőnél `fuvarlevel` (a `fuvar_dokumentumok`
     CHECK-je csak ezt ismeri; saját fuvar állapotát a fotó nem mozdítja).
+
+## 2026-09-24 — A „Papír megjött” lépés megszűnt; Szabina „Posta” füle
+
+- **Döntés (Budaházi Zoltán):** a külön papír-nyugtázás nem kell. A számla a
+  sofőr fotója alapján készül; az eredetit Szabina viszi postára, és ő
+  jelöli, hogy fel van adva.
+- **Hiba, ami ezzel megszűnt:** a „Papír megjött ✓” az „e-mail elment”
+  fuvart visszaléptette „számlázva” állapotba (a 002 trigger újraszámolt).
+- **Módosítás:**
+  - Állapotgép: a 10. él (postázva) és a 11. él (lezárás) nem kéri a
+    papír-jelölést. `valtAllapot('postazva')` beírja a papír dátumát is.
+  - Szabina mobil: a „Papír” fül helyett **„Posta”** (`/m/posta`): az
+    e-mail-elment fuvarok postacímmel, „Feladva ✓” gombbal. A régi
+    `/m/papir` ide irányít; a „Számla és posta” fül neve „Számla”.
+  - Fuvarozás 2 Elszámolás és részlet: a „Papír megjött/beérkezett” gomb
+    kikerült, a „Postázva ✓” feltétel nélkül nyomható.
+  - Régi Számla/Posta fül: a csoportok a fotó szerint („Fotóra vár” →
+    „Számlázható” → „Postázandó”), a papír-nyugtázó sáv és a „megjött”
+    gomb kikerült; a „Papír” oszlop „Fotó” lett.
+  - Ma lap és „Következő teendő”: „papír határidő” helyett postázási
+    határidő (a partner papír-beküldési napja, amíg nincs feladva).
+- **Teszt:** `teszt-allapotgep` 43/0, `teszt-megbizas-szuro` 27/0 (a
+  határidőt most a megadott naphoz méri, nem a gép órájához — ezzel a két
+  régi, dátumfüggő hiba is megszűnt), `teszt-backfill-allapot` 18/0.

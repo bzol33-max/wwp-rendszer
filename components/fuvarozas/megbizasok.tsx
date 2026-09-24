@@ -50,7 +50,6 @@ import {
   setFuvarFuvardij,
   setFuvarPostazasiCim,
   setFuvarPostazva,
-  setFuvarokPapirokBeerkeztek,
   setFuvarSzamlaSzam,
   setFuvarTeljesitve,
   szinkronizalSzamlaSzamokat,
@@ -59,8 +58,6 @@ import {
 import {
   calculateTollForAddresses,
   getGazolajAr,
-  getPapirNyugtazasJavaslat,
-  type PapirNyugtazasJavaslat,
 } from "@/lib/fuvarozas/actions";
 import { frissitsDriveBol } from "@/lib/fuvarozas/drive-sync";
 import {
@@ -1881,96 +1878,12 @@ function BerFuvarLista({ refreshKey }: { refreshKey: number }) {
  * postára lett adva).
  */
 /**
- * A Számla/Posta fül tetején megjelenő sáv: ha egy kocsi éppen saját
- * telephelyen áll ÉS van nála papírra váró fuvar, itt lehet listából
- * kipipálni, melyikhez érkezett meg a CMR és a fuvarlevél.
- *
- * Azért listás és nem fuvaronkénti, mert a sofőr egy fordulóból több megbízás
- * papírját hozza be egyszerre. És azért kézi, mert a kamion behajthat a
- * telephelyre anélkül is, hogy a papír vele jönne — a GPS csak szól, nem dönt.
+ * A Számla/Posta fül három szakasza — a fuvar a sofőr fuvarlevél-fotója és a
+ * számla megléte szerint kerül az egyikbe. A külön „papír beérkezett”
+ * jelölés megszűnt (Budaházi Zoltán, 2026-09-24): a számla a fotó alapján
+ * készül, az eredetit Szabina adja fel postán („Postázva”). A régi
+ * papir­ok_beerkeztek_at érték a már jelölt sorokon a fotóval egyenértékű.
  */
-function PapirNyugtazoSav({ onNyugtazva }: { onNyugtazva: () => void }) {
-  const [javaslatok, setJavaslatok] = useState<PapirNyugtazasJavaslat[]>([]);
-  const [kivalasztott, setKivalasztott] = useState<Set<string>>(new Set());
-  const [mentes, setMentes] = useState(false);
-
-  const load = useCallback(async () => {
-    try {
-      setJavaslatok(await getPapirNyugtazasJavaslat());
-    } catch {
-      setJavaslatok([]);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-    const idozito = setInterval(load, 5 * 60 * 1000);
-    return () => clearInterval(idozito);
-  }, [load]);
-
-  if (javaslatok.length === 0) return null;
-
-  function toggle(id: string) {
-    setKivalasztott((elozo) => {
-      const uj = new Set(elozo);
-      if (uj.has(id)) uj.delete(id);
-      else uj.add(id);
-      return uj;
-    });
-  }
-
-  async function handleNyugtaz() {
-    const ids = [...kivalasztott];
-    if (ids.length === 0) return;
-    setMentes(true);
-    try {
-      await setFuvarokPapirokBeerkeztek(ids, true);
-      toast.success(
-        ids.length === 1 ? "A fuvar papírja beérkezettnek jelölve." : `${ids.length} fuvar papírja beérkezettnek jelölve.`
-      );
-      setKivalasztott(new Set());
-      await load();
-      onNyugtazva();
-    } catch {
-      toast.error("Nem sikerült rögzíteni a papírok beérkezését.");
-    } finally {
-      setMentes(false);
-    }
-  }
-
-  return (
-    <Card className="border-primary/40 bg-primary/5">
-      <CardContent className="flex flex-col gap-4 py-4">
-        {javaslatok.map((j) => (
-          <div key={j.sofor} className="flex flex-col gap-2">
-            <p className="text-sm font-medium">
-              {j.sofor} beért ide: {j.telephely}. Megjött a papír ezekhez?
-            </p>
-            <div className="flex flex-col gap-1.5">
-              {j.fuvarok.map((f) => (
-                <label key={f.id} className="flex cursor-pointer flex-wrap items-center gap-2 text-sm">
-                  <Checkbox checked={kivalasztott.has(f.id)} onCheckedChange={() => toggle(f.id)} />
-                  <span className="tabular-nums text-muted-foreground">{f.datum}</span>
-                  <span className="font-medium">{f.megrendelo ?? "—"}</span>
-                  <span className="text-muted-foreground">
-                    {f.felrako ? `${varosNev(f.felrako)} → ${varosNev(f.lerako)}` : varosNev(f.lerako)}
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
-        ))}
-        <div>
-          <Button size="sm" disabled={kivalasztott.size === 0 || mentes} onClick={handleNyugtaz}>
-            {mentes ? "Mentés…" : `Papír megjött (${kivalasztott.size})`}
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-/** A Számla/Posta fül három szakasza — a fuvar a papír és a számla megléte szerint kerül az egyikbe. */
 /**
  * Ennyi nap után szólunk, ha a papír (CMR, fuvarlevél) még nem érkezett be a
  * lerakás óta. Budaházi Zoltán adta meg: a papír több napot is csúszhat, mert
@@ -1993,13 +1906,18 @@ function napokLerakasOta(row: FuvarRow): number | null {
   return Math.floor((Date.now() - mikor.getTime()) / 86400000);
 }
 
-/** Figyelmeztetés, ha a papír a türelmi időn túl sem érkezett be. */
+/** Van-e a fuvarnak papírja: a sofőr fotója, vagy (régi sorokon) a kézi „papír beérkezett” jelölés. */
+function vanPapirja(r: FuvarRow): boolean {
+  return r.fuvarlevel_foto_db > 0 || !!r.papirok_beerkeztek_at;
+}
+
+/** Figyelmeztetés, ha a fuvarlevél-fotó a türelmi időn túl sem érkezett meg. */
 function PapirKesesJelzo({ row }: { row: FuvarRow }) {
   const napok = napokLerakasOta(row);
   if (napok === null || napok <= PAPIR_TURELMI_IDO_NAP) return null;
   return (
     <span
-      title={`A lerakás óta ${napok} nap telt el, a papír még nincs meg. ${PAPIR_TURELMI_IDO_NAP} nap után érdemes utánajárni.`}
+      title={`A lerakás óta ${napok} nap telt el, a fuvarlevél-fotó még nincs meg. ${PAPIR_TURELMI_IDO_NAP} nap után érdemes utánajárni.`}
       className="flex items-center gap-0.5 whitespace-nowrap text-[10px] font-medium text-destructive"
     >
       <AlertTriangle className="h-2.5 w-2.5 shrink-0" />
@@ -2010,24 +1928,24 @@ function PapirKesesJelzo({ row }: { row: FuvarRow }) {
 
 const SZAMLA_POSTA_CSOPORTOK = [
   {
-    kulcs: "papirra-var",
-    cim: "Papírra vár",
-    leiras: `A CMR és a fuvarlevél még nem érkezett be a telephelyre — számla csak ezek birtokában állítható ki. ${PAPIR_TURELMI_IDO_NAP} napnál régebbi lerakásnál külön jelzés kerül a sorra.`,
-    ide: (r: FuvarRow) => !r.papirok_beerkeztek_at,
+    kulcs: "fotora-var",
+    cim: "Fotóra vár",
+    leiras: `A sofőr még nem fotózta le a fuvarlevelet (CMR) — a számla a fotó alapján készül. ${PAPIR_TURELMI_IDO_NAP} napnál régebbi lerakásnál külön jelzés kerül a sorra.`,
+    ide: (r: FuvarRow) => !r.szamla_szam && !vanPapirja(r),
     /** A csoportfejlécben külön kiírjuk, hány sor lépte túl a türelmi időt. */
     keses: (r: FuvarRow) => (napokLerakasOta(r) ?? 0) > PAPIR_TURELMI_IDO_NAP,
   },
   {
     kulcs: "szamlazhato",
     cim: "Számlázható",
-    leiras: "A papír megvan, a számla még nincs kiállítva.",
-    ide: (r: FuvarRow) => !!r.papirok_beerkeztek_at && !r.szamla_szam,
+    leiras: "A fuvarlevél-fotó megvan, a számla még nincs kiállítva.",
+    ide: (r: FuvarRow) => !r.szamla_szam && vanPapirja(r),
   },
   {
     kulcs: "postazando",
     cim: "Postázandó",
-    leiras: "A számla kiállt. Postázás után 5 perccel a fuvar az Archívba kerül.",
-    ide: (r: FuvarRow) => !!r.papirok_beerkeztek_at && !!r.szamla_szam,
+    leiras: "A számla kiállt, Szabina adja fel postán. Postázás után 5 perccel a fuvar az Archívba kerül.",
+    ide: (r: FuvarRow) => !!r.szamla_szam,
   },
 ] as const;
 
@@ -2073,12 +1991,6 @@ function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
     toast.success("Fuvar törölve.");
   }
 
-  async function handlePapirBeerkezett(id: string, ertek: boolean) {
-    await setFuvarokPapirokBeerkeztek([id], ertek);
-    await load();
-    toast.success(ertek ? "Papír beérkezettnek jelölve." : "A papír-beérkezés visszavonva.");
-  }
-
   async function handlePostazva(id: string, ertek: boolean) {
     await setFuvarPostazva(id, ertek);
     await load();
@@ -2101,7 +2013,6 @@ function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <PapirNyugtazoSav onNyugtazva={load} />
       <Card>
       <CardHeader>
         <CardTitle className="text-sm">Bér fuvarok — Számla/Posta</CardTitle>
@@ -2122,9 +2033,9 @@ function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
                 <TableHead>Postázási cím</TableHead>
                 <TableHead
                   className="text-center"
-                  title="Beérkeztek-e a fuvar eredeti papírjai (CMR, fuvarlevél) a telephelyre. Számlát csak ezek birtokában állítunk ki."
+                  title="A sofőr lefotózta-e a fuvarlevelet (CMR) a lerakásnál — a számla ez alapján készül."
                 >
-                  Papír
+                  Fotó
                 </TableHead>
                 <TableHead
                   className="text-center"
@@ -2250,36 +2161,21 @@ function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
                     />
                   </TableCell>
                   <TableCell className="align-top text-center">
-                    {row.papirok_beerkeztek_at ? (
-                      <button
-                        type="button"
-                        title="A papír beérkezett — kattintás a visszavonáshoz"
-                        onClick={() => handlePapirBeerkezett(row.id, false)}
-                        className="text-success hover:opacity-60"
+                    {row.fuvarlevel_foto_db > 0 && row.fuvarlevel_foto_id ? (
+                      <a
+                        href={`/api/fuvarozas/dokumentum/${row.fuvarlevel_foto_id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title="A sofőr lefotózta a fuvarlevelet a lerakásnál"
+                        className="text-[11px] text-primary underline-offset-2 hover:underline"
                       >
-                        <Check className="mx-auto h-3.5 w-3.5" />
-                      </button>
+                        fotó ({row.fuvarlevel_foto_db})
+                      </a>
+                    ) : row.papirok_beerkeztek_at ? (
+                      <Check className="mx-auto h-3.5 w-3.5 text-success" aria-label="A papír korábban beérkezettnek jelölve" />
                     ) : (
                       <div className="flex flex-col items-center gap-0.5">
-                        {row.fuvarlevel_foto_db > 0 && row.fuvarlevel_foto_id && (
-                          <a
-                            href={`/api/fuvarozas/dokumentum/${row.fuvarlevel_foto_id}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            title="A sofőr lefotózta a fuvarlevelet a lerakásnál — a papír létezik, a fizikai beérkezést ez nem váltja ki"
-                            className="text-[11px] text-primary underline-offset-2 hover:underline"
-                          >
-                            fotó ({row.fuvarlevel_foto_db})
-                          </a>
-                        )}
-                        <button
-                          type="button"
-                          title="A CMR és a fuvarlevél beérkezett a telephelyre"
-                          onClick={() => handlePapirBeerkezett(row.id, true)}
-                          className="rounded border px-1.5 py-0.5 text-[11px] text-muted-foreground hover:border-success hover:text-success"
-                        >
-                          megjött
-                        </button>
+                        <span className="text-[11px] text-muted-foreground">—</span>
                         <PapirKesesJelzo row={row} />
                       </div>
                     )}
