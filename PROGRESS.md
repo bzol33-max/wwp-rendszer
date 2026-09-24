@@ -1979,3 +1979,20 @@ pihenőn állva semmi nem mutatta, hogy az út nagyobb része megvolt.
 - **Teszt:** helyi Postgres-en a teljes migrate + a pótló kör + jóváhagyás-
   szimuláció: partner Huncargo, kocsi AOPU-427, majd kocsicsere NMZ-492-re
   átvezetve; második kör 0 érintett (nem pörög).
+
+## 2026-09-24 — Sofőr: az utolsó „Indulok” lezárja a fuvart, és kéri a papír fotóját
+
+- **Probléma:** a sofőr utolsó „Indulok” jelölése csak a megállót zárta, a
+  fuvart nem (csak a GPS vagy az iroda). A fuvarlevél-fotó gombja egy
+  csukott „Részletek” sor mögött volt, és semmi nem kérte.
+- **Döntés (Budaházi Zoltán):** saját fuvarnál a kifelé menő szállítólevél a
+  Számlázz.hu-ból jön; a befelé kapott papírt a sofőr fotózza le.
+- **Módosítás:**
+  - `markMegalloKesz`: az UTOLSÓ megállónál `teljesitve = true` (ugyanaz a
+    szabály, mint a GPS lap pipájánál), visszaadja, hogy lezárta-e.
+  - Sofőr képernyő: minden mai, lerakott, fotó nélküli fuvarhoz sárga kártya
+    a lista tetején. Bér fuvar: „Fotózd le az aláírt fuvarlevelet (CMR)”.
+    Saját fuvar: „Kaptál szállítólevelet? Fotózd le.” + „Nem kaptam” (ez a
+    telefonon jegyződik meg, kifelé menő fuvarhoz).
+  - A fotó irat-típusa mindkettőnél `fuvarlevel` (a `fuvar_dokumentumok`
+    CHECK-je csak ezt ismeri; saját fuvar állapotát a fotó nem mozdítja).
