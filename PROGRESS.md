@@ -1955,3 +1955,27 @@ pihenőn állva semmi nem mutatta, hogy az út nagyobb része megvolt.
   figyelmeztetést ír róla. Számlázott sorhoz nem nyúl.
 - **Teszt:** `teszt-import.mts` +3 eset (Huncargo-lábléc, a szoftvernév
   egymagában nem partner, Huncargo mint felrakóhely nem Huncargo-irat).
+
+## 2026-09-24 — Fuvarozás 2: partner és kocsi a jóváhagyás után is frissül
+
+- **Probléma (Budaházi Zoltán: „maradt happ, miért nincs kocsihoz rendelve?”):**
+  a Fuvarozás 2 lista a partnert a `partner_id`-ből, a kocsit a `jarmu_id`-ből
+  írja ki, és mindkettőt CSAK a beolvasáskor tölti ki a `frissitsdFuvarozas2Modellt`.
+  - A megrendelő-helyesbítés (#216) csak a `megrendelo` szöveget írta át, a
+    `partner_id` a HAPP-on maradt.
+  - A kocsit jóváhagyáskor (`approveFuvar`) kapta Gergő, de a `jarmu_id` üres
+    maradt → „kocsi nélkül”, miközben a GPS már Gergő fuvarjaként követte.
+- **Módosítás:**
+  - `approveFuvar`: ha a megrendelő / kocsi / sofőr MÁS lesz, a régi kulcsot
+    eldobja, és utána a szövegből újratölti.
+  - `megrendelokHelyesbitese`: ugyanez a partnerre.
+  - `frissitsdFuvarozas2Modellt`: üres Kocsi mezőnél a Sofőr a tartalék (a GPS
+    `driverMatchesRow` szabálya).
+  - `potoldAHianyzoModelleket` (óránként + indulás után 1 perccel): a 14
+    napnál nem régebbi, kulcs nélküli (partner/kocsi) sorokat is pótolja.
+  - `migrate.mjs` egyszeri javítás: a 26S009326/1 sor megrendelője
+    Huncargo Forwarding Kft., postacím Sopron, 30 nap; `partner_id` nullázva
+    (az ütemező újratölti).
+- **Teszt:** helyi Postgres-en a teljes migrate + a pótló kör + jóváhagyás-
+  szimuláció: partner Huncargo, kocsi AOPU-427, majd kocsicsere NMZ-492-re
+  átvezetve; második kör 0 érintett (nem pörög).

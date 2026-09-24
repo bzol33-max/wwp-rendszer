@@ -43,6 +43,7 @@ import {
 import { normalizaltSzoveg, torzsSzoveg } from "@/lib/fuvarozas/import/normalizalas";
 import { pdfSzovegElemek } from "@/lib/fuvarozas/import/pdf-elemek";
 import { felismerPartner, partnerKodSzerint } from "@/lib/fuvarozas/import/partnerek";
+import { frissitsdFuvarozas2Modellt } from "@/lib/fuvarozas2/modell-szinkron";
 import { ellenorizKivontFuvart, type KivontFuvar } from "@/lib/fuvarozas/import/ellenorzes";
 import { osszesLerakoCime, soforAdatokKivonatbol, vanSoforAdat, type SoforAdatok } from "@/lib/fuvarozas/sofor-adatok";
 import {
@@ -902,6 +903,10 @@ async function megrendelokHelyesbitese(hibak: string[], figyelmeztetesek: string
       await query(
         `update fuvar_megbizasok
             set megrendelo = $2,
+                -- A Fuvarozás 2 lap a partner_id-ből írja ki a partnert — a
+                -- régi (rossz) partner kulcsát is el kell dobni, lent újra
+                -- kitöltjük az új névből.
+                partner_id = case when megrendelo is distinct from $2 then null else partner_id end,
                 fizetesi_hatarido_nap = case when fizetesi_hatarido_nap is null or fizetesi_hatarido_nap = $6
                                              then $3 else fizetesi_hatarido_nap end,
                 postazasi_cim = case when coalesce(trim(postazasi_cim), '') = '' or trim(postazasi_cim) = $7
@@ -918,6 +923,7 @@ async function megrendelokHelyesbitese(hibak: string[], figyelmeztetesek: string
           elozo?.postazasiCim ?? null,
         ]
       );
+      await frissitsdFuvarozas2Modellt(sor.id);
       await query(`update fuvar_import_naplo set partner_kod = $2, frissitve_at = now() where drive_file_id = $1`, [
         sor.drive_file_id,
         partner.kod,
