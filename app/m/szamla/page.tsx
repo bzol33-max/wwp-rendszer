@@ -13,7 +13,6 @@ export default async function Page() {
     <SzamlaPostaLista
       szamlazhato={sorok.filter((s) => s.allapot === "szamlazhato")}
       emailre={sorok.filter((s) => s.allapot === "szamlazva")}
-      postazando={sorok.filter((s) => s.allapot === "email_elment" && !!s.papirok_beerkeztek_at)}
     />
   );
 }

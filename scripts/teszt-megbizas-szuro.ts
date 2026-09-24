@@ -39,9 +39,9 @@ eq("számlázva, van számlaszám", t({ allapot: "szamlazva", szamla_szam: "WWP-
 eq("számlázva, nincs számlaszám", t({ allapot: "szamlazva" }), { szoveg: "számla párosítása", surgos: false });
 
 // E-mail elment: a papír a postázás kapuja (B7).
-eq("e-mail elment, papír még nincs (bőven van idő)", t({ allapot: "email_elment", lerakas_nap: "2026-09-19", papir_hatarido_nap: 7 }), { szoveg: "papír határidő 6 nap", surgos: false });
-eq("e-mail elment, papír-határidő szorít", t({ allapot: "email_elment", lerakas_nap: "2026-09-15", papir_hatarido_nap: 7 }), { szoveg: "papír határidő 2 nap", surgos: true });
-eq("e-mail elment, papír megvan", t({ allapot: "email_elment", papirok_beerkeztek_at: "2026-09-19 10:00:00+00" }), { szoveg: "postázás", surgos: false });
+eq("e-mail elment, postázási határidő bőven (a külön papír-jelölés megszűnt)", t({ allapot: "email_elment", lerakas_nap: "2026-09-19", papir_hatarido_nap: 7 }), { szoveg: "postázás · határidő 6 nap", surgos: false });
+eq("e-mail elment, postázási határidő szorít", t({ allapot: "email_elment", lerakas_nap: "2026-09-15", papir_hatarido_nap: 7 }), { szoveg: "postázás · határidő 2 nap", surgos: true });
+eq("e-mail elment, ismeretlen lerakási nap", t({ allapot: "email_elment", lerakas_nap: null }), { szoveg: "postázás", surgos: false });
 eq("e-mail elment, papír megvan, nincs cím", t({ allapot: "email_elment", papirok_beerkeztek_at: "2026-09-19 10:00:00+00", postazasi_cim: null }), { szoveg: "postázási cím hiányzik", surgos: true });
 eq("postázva", t({ allapot: "postazva" }), { szoveg: "lezárás", surgos: false });
 eq("lezárt", t({ allapot: "lezart" }), { szoveg: "—", surgos: false });

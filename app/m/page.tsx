@@ -14,8 +14,8 @@ export default async function Page() {
     const nap = session.employeeId ? await getSoforNap(session.employeeId) : null;
     return <SoforNapNezet nap={nap} ma />;
   }
-  // Vezetői fiók: eltérések + kocsik. Irodai (csak elszámolás) fiók a Papírral kezd.
+  // Vezetői fiók: eltérések + kocsik. Irodai (csak elszámolás) fiók a Postával kezd.
   if (session.can("fuvarozas").view) return <VezetoiMa adat={await getMaAdat()} />;
-  if (session.can("elszamolas").view) redirect("/m/papir");
+  if (session.can("elszamolas").view) redirect("/m/posta");
   return null;
 }

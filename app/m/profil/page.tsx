@@ -19,12 +19,12 @@ export default async function Page() {
       <div className="rounded-xl bg-[var(--m-surf)] p-4 text-sm text-[var(--m-muted)]">
         {sofor ? (
           <>
-            <p>A fotó a diszpécsernek szól; számlázni az eredeti papírral lehet — azt hozd haza, Szabina nyugtázza.</p>
+            <p>Lerakás után fotózd le a papírt — ebből számlázunk. Az eredetit hozd haza, Szabina adja fel postán.</p>
             <p className="mt-2">Térerő nélkül a gombok újrapróbálják magukat, amíg el nem mennek.</p>
           </>
         ) : (
           <>
-            <p>A „Papír megjött” gomb az eredeti okmány beérkezését jelenti — ez a postázás feltétele.</p>
+            <p>A „Feladva ✓” gomb azt jelenti, hogy a papírt postára adtad — ezzel zárul a fuvar postai lépése.</p>
             <p className="mt-2">Számlázni a sofőr fotója alapján is lehet; a teljes nézet a Fuvarozás 2 → Elszámolás fülön van.</p>
           </>
         )}

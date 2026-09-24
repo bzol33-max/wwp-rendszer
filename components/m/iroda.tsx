@@ -1,16 +1,15 @@
 "use client";
 
 // Iroda (Szabina) mobil teendői — a terv 07/08 vászna.
-//   Papír: melyik fuvarhoz nem jött még meg az EREDETI okmány (ez a postázás
-//     kapuja, B7: Szabina nyugtázza).
-//   Számla és posta: mit kell kiszámlázni, melyik számla e-mailje megy ki, és
-//     mit lehet ma postázni.
+//   Posta: melyik fuvar papírját kell feladni — Szabina viszi postára és
+//     jelöli „Feladva ✓” (a korábbi külön „Papír megjött” lépés megszűnt).
+//   Számla: mit kell kiszámlázni, és melyik számla e-mailje megy ki.
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { MegbizasSor } from "@/lib/fuvarozas2/megbizasok";
-import { setPapirBeerkezett, setSzamlaSzam, valtAllapot } from "@/lib/fuvarozas2/megbizasok";
+import { setSzamlaSzam, valtAllapot } from "@/lib/fuvarozas2/megbizasok";
 
 function ora(t: string | null | undefined) {
   if (!t) return "";
@@ -47,7 +46,12 @@ function Fej({ s, jobb }: { s: MegbizasSor; jobb?: string }) {
   );
 }
 
-export function PapirLista({ sorok }: { sorok: MegbizasSor[] }) {
+/**
+ * Posta (Szabina): a számla e-mailje kiment, a papírt postára kell adni. A
+ * „Feladva ✓” zárja a lépést — külön „Papír megjött” jelölés nincs
+ * (Budaházi Zoltán, 2026-09-24): a feladott papír a kézben volt.
+ */
+export function PostaLista({ sorok }: { sorok: MegbizasSor[] }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const fut = (nev: string, fn: () => Promise<unknown>) =>
@@ -55,25 +59,22 @@ export function PapirLista({ sorok }: { sorok: MegbizasSor[] }) {
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <h1 className="text-xl font-bold">Papír</h1>
-        <div className="text-sm text-[var(--m-muted)]">{sorok.length} fuvarhoz nem jött még meg az eredeti okmány</div>
+        <h1 className="text-xl font-bold">Posta</h1>
+        <div className="text-sm text-[var(--m-muted)]">{sorok.length} fuvar papírját kell feladni</div>
       </div>
-      {sorok.length === 0 ? <div className="rounded-xl bg-[var(--m-surf)] p-4 text-sm text-[var(--m-muted)]">Minden papír megvan.</div> : null}
+      {sorok.length === 0 ? <div className="rounded-xl bg-[var(--m-surf)] p-4 text-sm text-[var(--m-muted)]">Nincs feladandó papír.</div> : null}
       {sorok.map((s) => (
         <div key={s.id} className="flex flex-col gap-2 rounded-2xl bg-[var(--m-surf)] p-4">
-          <Fej s={s} jobb={s.foto_van ? "fotó ✓" : undefined} />
-          <div className="text-xs text-[var(--m-muted)]">
-            {s.szamla_szam ? `számla: ${s.szamla_szam}` : "még nincs számla"}
-            {s.fizetesi_hatarido_nap != null ? ` · fizetés ${s.fizetesi_hatarido_nap} nap` : ""}
-          </div>
-          <Gomb primary disabled={pending} onClick={() => fut("Papír beérkezett", () => setPapirBeerkezett(s.id, true))}>Papír megjött ✓</Gomb>
+          <Fej s={s} jobb={s.szamla_szam ?? undefined} />
+          <div className="text-xs text-[var(--m-muted)]">{s.postazasi_cim ?? "nincs postázási cím a törzsben"}</div>
+          <Gomb primary disabled={pending} onClick={() => fut("Feladva", () => valtAllapot(s.id, "postazva"))}>Feladva ✓</Gomb>
         </div>
       ))}
     </div>
   );
 }
 
-export function SzamlaPostaLista({ szamlazhato, emailre, postazando }: { szamlazhato: MegbizasSor[]; emailre: MegbizasSor[]; postazando: MegbizasSor[] }) {
+export function SzamlaPostaLista({ szamlazhato, emailre }: { szamlazhato: MegbizasSor[]; emailre: MegbizasSor[] }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [szamok, setSzamok] = useState<Record<string, string>>({});
@@ -82,8 +83,8 @@ export function SzamlaPostaLista({ szamlazhato, emailre, postazando }: { szamlaz
   return (
     <div className="flex flex-col gap-4">
       <div>
-        <h1 className="text-xl font-bold">Számla és posta</h1>
-        <div className="text-sm text-[var(--m-muted)]">{szamlazhato.length} számlázható · {emailre.length} e-mail · {postazando.length} postázható</div>
+        <h1 className="text-xl font-bold">Számla</h1>
+        <div className="text-sm text-[var(--m-muted)]">{szamlazhato.length} számlázható · {emailre.length} e-mail</div>
       </div>
 
       <Szakasz cim="Számlázható" ures="Nincs számlázható fuvar.">
@@ -105,18 +106,7 @@ export function SzamlaPostaLista({ szamlazhato, emailre, postazando }: { szamlaz
         {emailre.map((s) => (
           <div key={s.id} className="flex flex-col gap-2 rounded-2xl bg-[var(--m-surf)] p-4">
             <Fej s={s} jobb={s.szamla_szam ?? undefined} />
-            <div className="text-xs text-[var(--m-muted)]">{s.papirok_beerkeztek_at ? "papír megvan" : "papír még nincs"}</div>
             <Gomb disabled={pending} onClick={() => fut("E-mail elment", () => valtAllapot(s.id, "email_elment"))}>E-mail elment ✓</Gomb>
-          </div>
-        ))}
-      </Szakasz>
-
-      <Szakasz cim="Postázható" ures="Nincs postázható küldemény.">
-        {postazando.map((s) => (
-          <div key={s.id} className="flex flex-col gap-2 rounded-2xl bg-[var(--m-surf)] p-4">
-            <Fej s={s} jobb={s.szamla_szam ?? undefined} />
-            <div className="text-xs text-[var(--m-muted)]">{s.postazasi_cim ?? "nincs postázási cím a törzsben"}</div>
-            <Gomb primary disabled={pending} onClick={() => fut("Postázva", () => valtAllapot(s.id, "postazva"))}>Postázva ✓</Gomb>
           </div>
         ))}
       </Szakasz>

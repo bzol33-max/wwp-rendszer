@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, Building2, CalendarDays, FileText, Receipt, Sun, Truck, UserRound } from "lucide-react";
+import { Activity, Building2, CalendarDays, Mail, Receipt, Sun, Truck, UserRound } from "lucide-react";
 
-const IKON = { nap: Sun, naptar: CalendarDays, papir: FileText, szamla: Receipt, profil: UserRound, fuvar: Truck, ceg: Building2, rendszer: Activity } as const;
+const IKON = { nap: Sun, naptar: CalendarDays, posta: Mail, szamla: Receipt, profil: UserRound, fuvar: Truck, ceg: Building2, rendszer: Activity } as const;
 export type MTab = { href: string; label: string; ikon: keyof typeof IKON };
 
 /** A sofőr és az iroda más füleket lát — a szerepet az app/m/layout.tsx dönti el. */
@@ -14,8 +14,8 @@ export const SOFOR_TABOK: MTab[] = [
   { href: "/m/profil", label: "Profil", ikon: "profil" },
 ];
 export const IRODA_TABOK: MTab[] = [
-  { href: "/m/papir", label: "Papír", ikon: "papir" },
-  { href: "/m/szamla", label: "Számla és posta", ikon: "szamla" },
+  { href: "/m/posta", label: "Posta", ikon: "posta" },
+  { href: "/m/szamla", label: "Számla", ikon: "szamla" },
   { href: "/m/profil", label: "Profil", ikon: "profil" },
 ];
 /** Vezetői fiók (terv: 4 fül) — a Profil a Rendszer-fül alján van, nem külön fül. */
