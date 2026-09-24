@@ -1935,3 +1935,23 @@ pihenőn állva semmi nem mutatta, hogy az út nagyobb része megvolt.
   <hely>”.
 - Próba-renderelés Gergő valós adataival (Sárvár 47.2475,16.9101 →
   Debrecen 47.5442,21.5664, kocsi 47.7044,20.0733): a jel az út ~70%-ánál.
+
+## 2026-09-24 — Import: a Huncargo-megbízás nem HAPP-é
+
+- **Probléma:** a Huncargo Forwarding Kft. 0000065055-ös megbízását (Dunaharaszti →
+  Nagykálló, 150 000 Ft) HAPP Kft. megrendelővel vette fel az import. A HAPP
+  ujjlenyomatai között ott volt a „Transorg Software” — a megbízás-készítő
+  program neve, amit a Huncargo is használ. Ez pont az, amit a partnerek.ts
+  fejléce tilt (szoftvernév nem ujjlenyomat).
+- **Módosítás:** a „Transorg Software” kikerült a HAPP mintái közül (a HAPP
+  láblécében a cégnév ott áll, azt felismeri); új partner a
+  `huncargo` (`@hcf.hu`, „Huncargo Forwarding” — NEM a puszta „Huncargo”,
+  mert az más megbízók iratain felrakóhely), postacím Sopron, Szappanfőző
+  krt. 14., 30 nap. A `megrendelokHelyesbitese` eddig csak az üres
+  postacímet/határidőt pótolta; ha a sort korábban MÁS partnernek néztük,
+  annak tartalék-címét/napját is cseréli.
+- **Éles hatás:** a meglévő sort a következő Drive-szinkron (óránként vagy a
+  „Frissítés” gomb) a mentett nyers szövegből Huncargóra javítja, és
+  figyelmeztetést ír róla. Számlázott sorhoz nem nyúl.
+- **Teszt:** `teszt-import.mts` +3 eset (Huncargo-lábléc, a szoftvernév
+  egymagában nem partner, Huncargo mint felrakóhely nem Huncargo-irat).

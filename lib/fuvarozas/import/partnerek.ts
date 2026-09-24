@@ -117,10 +117,27 @@ export const PARTNEREK: readonly Partner[] = [
   {
     kod: "happ",
     nev: "HAPP Kft.",
-    ujjlenyomat: [/@happ\.eu/i, /\bHAPP\s*kft\b/i, /Transorg Software/i],
+    // A "Transorg Software" NEM ujjlenyomat: a Huncargo Forwarding is azzal
+    // készíti a megbízásait, és a 0000065055-ös Huncargo-iratot HAPP-ként
+    // vettük fel (2026-09-24). A lábléc a kibocsátó cégnevét is tartalmazza.
+    ujjlenyomat: [/@happ\.eu/i, /\bHAPP\s*kft\b/i],
     torzsVege: [/Mely tartalmazza a fuvaroz[áa]s sor[áa]n felmer[üu]l[őo]/i],
     postazasiCim: "8441 Márkó, Iparos utca 10.",
     fizetesiHataridoNap: 60,
+    hivatkozasNeve: "Jelünk / Pozíció",
+  },
+  {
+    kod: "huncargo",
+    nev: "Huncargo Forwarding Kft.",
+    // NEM a puszta "Huncargo": az a felrakóhely neve is ("Huncargo Raktár",
+    // "Huncargo - Dunaharaszti raktár") más megbízók iratain. Transorg-
+    // sablon, mint a HAPP-é (0000065055, 2026-09-24).
+    ujjlenyomat: [/@hcf\.hu/i, /Huncargo\s+Forwarding/i],
+    torzsVege: [/Az [áa]ltalunk kiadott fuvarfeladat nem adhat[óo] ki/i],
+    // Az iratukon: "Levelezési cím: HU-9400 Sopron, Szappanfőző körút 14."
+    postazasiCim: "9400 Sopron, Szappanfőző körút 14.",
+    // "Beérkezés dátuma + 30 Naptári nap".
+    fizetesiHataridoNap: 30,
     hivatkozasNeve: "Jelünk / Pozíció",
   },
   {

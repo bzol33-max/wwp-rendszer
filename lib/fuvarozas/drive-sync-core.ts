@@ -42,7 +42,7 @@ import {
 } from "@/lib/fuvarozas/duvenbeck-import";
 import { normalizaltSzoveg, torzsSzoveg } from "@/lib/fuvarozas/import/normalizalas";
 import { pdfSzovegElemek } from "@/lib/fuvarozas/import/pdf-elemek";
-import { felismerPartner } from "@/lib/fuvarozas/import/partnerek";
+import { felismerPartner, partnerKodSzerint } from "@/lib/fuvarozas/import/partnerek";
 import { ellenorizKivontFuvart, type KivontFuvar } from "@/lib/fuvarozas/import/ellenorzes";
 import { osszesLerakoCime, soforAdatokKivonatbol, vanSoforAdat, type SoforAdatok } from "@/lib/fuvarozas/sofor-adatok";
 import {
@@ -895,14 +895,28 @@ async function megrendelokHelyesbitese(hibak: string[], figyelmeztetesek: string
       if (!partner || partner.kod === sor.partner_kod) continue;
       const regi = sor.megrendelo ?? "";
       const nevValtozik = normalizaltCegKulcs(regi) !== normalizaltCegKulcs(partner.nev);
+      // Ha korábban MÁS partnernek néztük, annak tartalék-postacíme és
+      // -határideje is rákerülhetett a sorra (a Huncargo 0000065055 a HAPP
+      // márkói címét kapta, 2026-09-24) — az ilyen értéket is cseréljük.
+      const elozo = partnerKodSzerint(sor.partner_kod);
       await query(
         `update fuvar_megbizasok
             set megrendelo = $2,
-                fizetesi_hatarido_nap = coalesce(fizetesi_hatarido_nap, $3),
-                postazasi_cim = case when coalesce(trim(postazasi_cim), '') = '' then $4 else postazasi_cim end,
+                fizetesi_hatarido_nap = case when fizetesi_hatarido_nap is null or fizetesi_hatarido_nap = $6
+                                             then $3 else fizetesi_hatarido_nap end,
+                postazasi_cim = case when coalesce(trim(postazasi_cim), '') = '' or trim(postazasi_cim) = $7
+                                     then $4 else postazasi_cim end,
                 pozicioszam_nincs = pozicioszam_nincs or (pozicioszam is null and $5)
           where id = $1`,
-        [sor.id, partner.nev, partner.fizetesiHataridoNap ?? null, partner.postazasiCim ?? null, !!partner.nincsHivatkozas]
+        [
+          sor.id,
+          partner.nev,
+          partner.fizetesiHataridoNap ?? null,
+          partner.postazasiCim ?? null,
+          !!partner.nincsHivatkozas,
+          elozo?.fizetesiHataridoNap ?? null,
+          elozo?.postazasiCim ?? null,
+        ]
       );
       await query(`update fuvar_import_naplo set partner_kod = $2, frissitve_at = now() where drive_file_id = $1`, [
         sor.drive_file_id,
