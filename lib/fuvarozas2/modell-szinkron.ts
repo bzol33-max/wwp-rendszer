@@ -29,6 +29,7 @@ type Sor = {
   id: string;
   megrendelo: string | null;
   jarmu: string | null;
+  sofor: string | null;
   felrako: string | null;
   lerako: string | null;
   datum_iso: string | null;
@@ -61,7 +62,7 @@ export async function frissitsdFuvarozas2Modellt(fuvarId: string): Promise<Model
   const ures: ModellSzinkronEredmeny = { megallo: 0, partner: false, jarmu: false, hivatkozas: false };
   try {
     const [sor] = await query<Sor>(
-      `select f.id::text, f.megrendelo, f.jarmu, f.felrako, f.lerako,
+      `select f.id::text, f.megrendelo, f.jarmu, f.sofor, f.felrako, f.lerako,
          to_char(f.datum, 'YYYY-MM-DD') as datum_iso,
          to_char(f.lerakas_datum, 'YYYY-MM-DD') as lerakas_datum_iso,
          f.felrakas_ablak_tol::text, f.felrakas_ablak_ig::text,
@@ -88,10 +89,13 @@ export async function frissitsdFuvarozas2Modellt(fuvarId: string): Promise<Model
       eredmeny.partner = !!partnerId;
     }
 
-    // 2. Jármű a szövegből (pontos/ismert alak).
+    // 2. Jármű a szövegből (pontos/ismert alak). A "Kocsi" mező a hiteles
+    // jelölő; a "Sofőr" csak ha az üres — ugyanaz a szabály, mint a GPS
+    // idővonalon (lib/fuvarozas/actions.ts driverMatchesRow).
     let jarmuId: string | null = sor.jarmu_id;
-    if (!jarmuId && sor.jarmu?.trim()) {
-      const jarmu = resolveJarmu(sor.jarmu);
+    const jarmuSzoveg = sor.jarmu?.trim() || sor.sofor?.trim();
+    if (!jarmuId && jarmuSzoveg) {
+      const jarmu = resolveJarmu(jarmuSzoveg);
       const kod = jarmu?.rendszamok[0] ?? null;
       if (kod) {
         const [j] = await query<{ id: string }>(`select id::text from fuvar_jarmuvek where kod = $1`, [kod]);
@@ -156,15 +160,22 @@ export async function frissitsdFuvarozas2Modellt(fuvarId: string): Promise<Model
 }
 
 /**
- * Utánpótlás: minden olyan NEM törölt megbízás, amelynek nincs megállója.
- * A deploy-lánc és az éjszakai kör hívja, hogy a lemaradt sorok is beérjenek
- * (a fenti függvény csak az importáltakat fogja meg).
+ * Utánpótlás: minden olyan NEM törölt megbízás, amelynek nincs megállója,
+ * valamint a friss (2 hétnél nem régebbi) sorok, amelyeknél a megrendelő
+ * vagy a kocsi szövege megvan, de a Fuvarozás 2 kulcsa (partner_id /
+ * jarmu_id) nincs — pl. a kocsit utólag, jóváhagyáskor kapta a fuvar. A
+ * deploy-lánc és az óránkénti kör hívja, hogy a lemaradt sorok is
+ * beérjenek (a fenti függvény csak az importáltakat fogja meg). Egy fel nem
+ * oldható kocsi-szöveg (alvállalkozó neve) óránként egy olcsó próbát jelent.
  */
 export async function potoldAHianyzoModelleket(korlat = 200): Promise<{ erintett: number; megallo: number }> {
   const sorok = await query<{ id: string }>(
     `select f.id::text from fuvar_megbizasok f
      where f.torolt_at is null
-       and not exists (select 1 from fuvar_megallok m where m.megbizas_id = f.id)
+       and (not exists (select 1 from fuvar_megallok m where m.megbizas_id = f.id)
+            or (coalesce(f.lerakas_datum, f.datum) >= current_date - 14
+                and ((f.partner_id is null and coalesce(trim(f.megrendelo), '') <> '')
+                     or (f.jarmu_id is null and coalesce(nullif(trim(f.jarmu), ''), nullif(trim(f.sofor), '')) is not null))))
      order by f.datum desc nulls last
      limit $1`,
     [korlat]

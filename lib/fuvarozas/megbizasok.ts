@@ -925,6 +925,14 @@ export async function approveFuvar(input: ApproveFuvarInput) {
        pozicioszam = $17, pozicioszam_nincs = $18,
        postazasi_cim = $19, fuvardij_penznem = $20,
        lerakas_datum = $21,
+       -- A Fuvarozás 2 kulcsai (partner_id, jarmu_id) a szövegből épülnek, de
+       -- csak a beolvasáskor: ha itt MÁS lesz a megrendelő vagy a kocsi, a
+       -- régi kulcsot eldobjuk, és lent a szövegből újra kitöltjük. Enélkül
+       -- a jóváhagyáskor kiosztott kocsi a Fuvarozás 2 listán "kocsi
+       -- nélkül" maradt (Huncargo 26S009326/1, Gergő, 2026-09-24). Az
+       -- UPDATE jobb oldalán a megrendelo/jarmu még a RÉGI érték.
+       partner_id = case when megrendelo is distinct from $7 then null else partner_id end,
+       jarmu_id = case when jarmu is distinct from $11 or sofor is distinct from $12 then null else jarmu_id end,
        ellenorzott = true
      where id = $1`,
     [
@@ -951,4 +959,5 @@ export async function approveFuvar(input: ApproveFuvarInput) {
       input.lerakasDatum || null,
     ]
   );
+  await frissitsdFuvarozas2Modellt(input.id);
 }

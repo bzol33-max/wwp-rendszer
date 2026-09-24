@@ -277,6 +277,7 @@ async function main() {
   await szabaditsaFelTorortBbLogisticMegbizastOnce(pool);
   await toroljeMasodpeldanyokatOnce(pool);
   await toroljeMasodpeldanyokat2Once(pool);
+  await javitsaHuncargoMegrendelotOnce(pool);
   await naplozFuvarHelyEllenorzest(pool);
   await ellenorizSoforFiokokat(pool);
 
@@ -1159,6 +1160,42 @@ async function szabaditsaFelTorortRbtMegbizastOnce(pool) {
   ]);
   console.log(
     `[migrate] RBT poz 3003 dokumentuma újraimportálásra felszabadítva: ${rows.length} sor${rows.length ? " (#" + rows.map((r) => r.id).join(", #") + ")" : ""}.`
+  );
+}
+
+// Egyszeri javítás (2026-09-24, Budaházi Zoltán jelezte: "ezt HAPP kft-nek
+// rakta be"): a Huncargo Forwarding 0000065055-ös megbízása (poz.
+// 26S009326/1, Dunaharaszti → Nagykálló) HAPP Kft. megrendelővel került be,
+// mert a HAPP ujjlenyomata a közös "Transorg Software" szoftvernév volt
+// (javítva: lib/fuvarozas/import/partnerek.ts). A Fuvarozás 2 lap a
+// partner_id-ből írja ki a partnert — azt nullázzuk, és a modell-szinkron
+// ütemező (indulás után 1 perccel) az új névből tölti újra. A HAPP
+// tartalék-postacíme és 60 napos határideje helyett a Huncargo-irat adatai.
+// Számlázott sorhoz nem nyúl.
+async function javitsaHuncargoMegrendelotOnce(pool) {
+  const JAVITAS_KOD = "huncargo-0000065055-megrendelo-2026-09-24";
+  const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (mar.length > 0) return;
+  const { rows } = await pool.query(
+    `update fuvar_megbizasok f
+        set megrendelo = 'Huncargo Forwarding Kft.',
+            partner_id = null,
+            postazasi_cim = case when coalesce(trim(f.postazasi_cim), '') in ('', '8441 Márkó, Iparos utca 10.')
+                                 then '9400 Sopron, Szappanfőző körút 14.' else f.postazasi_cim end,
+            fizetesi_hatarido_nap = case when f.fizetesi_hatarido_nap is null or f.fizetesi_hatarido_nap = 60
+                                         then 30 else f.fizetesi_hatarido_nap end
+       from fuvar_megbizasok regi
+      where f.id = regi.id
+        and f.pozicioszam = '26S009326/1'
+        and f.statusz <> 'torolt'
+        and coalesce(f.szamla_szam, '') = ''
+      returning f.id, regi.megrendelo as regi_megrendelo, f.jarmu, f.sofor, f.jarmu_id`
+  );
+  await pool.query(`update fuvar_import_naplo set partner_kod = 'huncargo' where fajlnev = 'Fuvarmegbízás_0000065055.pdf'`);
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1) on conflict (kod) do nothing`, [JAVITAS_KOD]);
+  console.log(
+    `[migrate] Huncargo 26S009326/1 megrendelője javítva: ${rows.length} sor` +
+      rows.map((r) => ` | #${r.id} (volt: ${r.regi_megrendelo ?? "-"}; kocsi: ${r.jarmu ?? "-"}; sofőr: ${r.sofor ?? "-"}; jarmu_id: ${r.jarmu_id ?? "-"})`).join("")
   );
 }
 
