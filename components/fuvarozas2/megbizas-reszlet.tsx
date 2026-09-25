@@ -148,6 +148,9 @@ export function MegbizasReszlet({
                     Ment
                   </Button>
                 </div>
+                {sor.kieg_szamla_szamok?.length ? (
+                  <span className="text-xs text-muted-foreground">+ kiegészítő: {sor.kieg_szamla_szamok.join(", ")}</span>
+                ) : null}
               </div>
               {sor.email_elment_at ? <div className="flex items-center justify-between gap-2"><span>E-mail elment</span><span className="text-muted-foreground">{formatIdo(sor.email_elment_at)}</span></div> : null}
               <div className="flex items-center justify-between gap-2"><span>Postázva</span><span className="text-muted-foreground">{sor.postazva_at ? formatIdo(sor.postazva_at) : "—"}</span></div>

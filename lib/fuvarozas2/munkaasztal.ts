@@ -72,6 +72,7 @@ export type KeresettSor = {
   jarmu_cimke: string | null;
   sofor: string | null;
   szamla_szam: string | null;
+  kieg_szamla_szamok?: string[];
   szallitolevel?: string | null;
   aru: string | null;
   felrakas_nap: string | null;
@@ -85,14 +86,26 @@ export type KeresettSor = {
  * („2026”) a fuvar napjára szűr.
  */
 export function keresEgyezik(s: KeresettSor, kereses: string): boolean {
+  return keresSzovegEgyezik(keresSzoveg(s), keresNapok(s), kereses);
+}
+
+/** A sor kereshető szövege (normalizálva) — a böngészős javaslatokhoz egyszer számoljuk ki. */
+export function keresSzoveg(s: KeresettSor): string {
+  return normal(
+    [s.partner_nev, s.hivatkozas, s.felrako, s.lerako, s.jarmu_kod, s.jarmu_cimke, s.sofor, s.szamla_szam, ...(s.kieg_szamla_szamok ?? []), s.szallitolevel, s.aru]
+      .filter(Boolean)
+      .join(" ")
+  );
+}
+
+export function keresNapok(s: Pick<KeresettSor, "felrakas_nap" | "lerakas_nap">): string[] {
+  return [s.felrakas_nap, s.lerakas_nap].filter((x): x is string => !!x);
+}
+
+export function keresSzovegEgyezik(szoveg: string, napok: string[], kereses: string): boolean {
   const szavak = kereses.split(/\s+/).map((x) => x.trim()).filter(Boolean);
   if (szavak.length === 0) return true;
-  const mezok = [s.partner_nev, s.hivatkozas, s.felrako, s.lerako, s.jarmu_kod, s.jarmu_cimke, s.sofor, s.szamla_szam, s.szallitolevel, s.aru]
-    .filter(Boolean)
-    .join(" ");
-  const szoveg = normal(mezok);
   const tomor = szoveg.replace(/[^a-z0-9]/g, "");
-  const napok = [s.felrakas_nap, s.lerakas_nap].filter((x): x is string => !!x);
   return szavak.every((szo) => {
     const honap = honapKeresoszo(szo);
     if (honap !== null && napok.some((n) => Number(n.slice(5, 7)) === honap)) return true;
@@ -102,4 +115,48 @@ export function keresEgyezik(s: KeresettSor, kereses: string): boolean {
     const t = n.replace(/[^a-z0-9]/g, "");
     return t.length >= 3 && tomor.includes(t);
   });
+}
+
+// --- Javaslatok gépelés közben (Budaházi Zoltán, 2026-09-25: „ahogy írok,
+// adja a javaslatokat”). A szerver egyszer összerakja az indexet, a böngésző
+// minden leütésre ebből válogat — hálózati kérés nélkül.
+
+export type KeresoFuvar = { id: string; cim: string; ut: string; nap: string | null; szakasz: Szakasz; szoveg: string; napok: string[] };
+export type KeresoIndex = {
+  fuvarok: KeresoFuvar[];
+  cegek: string[];
+  varosok: string[];
+  kocsik: { kod: string; cimke: string }[];
+  /** Számla-, kiegészítő számla-, szállítólevél- és hivatkozási számok. */
+  szamok: string[];
+};
+export type JavaslatCsoport = { cim: string; elemek: { cimke: string; q: string }[] };
+
+const HONAP_CIMKE = ["január", "február", "március", "április", "május", "június", "július", "augusztus", "szeptember", "október", "november", "december"];
+
+export function javaslatok(index: KeresoIndex, kereses: string): { fuvarok: KeresoFuvar[]; csoportok: JavaslatCsoport[] } {
+  const q = kereses.trim();
+  if (q.length < 2) return { fuvarok: [], csoportok: [] };
+  const n = normal(q);
+  const t = n.replace(/[^a-z0-9]/g, "");
+  const tartalmaz = (x: string) => normal(x).includes(n) || (t.length >= 3 && normal(x).replace(/[^a-z0-9]/g, "").includes(t));
+  // Elöl az, ami a beírttal kezdődik.
+  const rendez = (xs: string[]) => [...xs].sort((a, b) => Number(!normal(a).startsWith(n)) - Number(!normal(b).startsWith(n)) || a.localeCompare(b, "hu"));
+  const csoportok: JavaslatCsoport[] = [];
+  const cegek = rendez(index.cegek.filter(tartalmaz)).slice(0, 4);
+  if (cegek.length) csoportok.push({ cim: "Cég", elemek: cegek.map((c) => ({ cimke: c, q: c })) });
+  const varosok = rendez(index.varosok.filter(tartalmaz)).slice(0, 4);
+  if (varosok.length) csoportok.push({ cim: "Város", elemek: varosok.map((v) => ({ cimke: v, q: v })) });
+  const kocsik = index.kocsik.filter((k) => tartalmaz(`${k.cimke} ${k.kod}`)).slice(0, 3);
+  if (kocsik.length) csoportok.push({ cim: "Kocsi", elemek: kocsik.map((k) => ({ cimke: k.cimke, q: k.kod })) });
+  const szamok = t.length >= 2 ? rendez(index.szamok.filter(tartalmaz)).slice(0, 4) : [];
+  if (szamok.length) csoportok.push({ cim: "Szám", elemek: szamok.map((x) => ({ cimke: x, q: x })) });
+  const utolso = q.split(/\s+/).pop() ?? "";
+  const honap = honapKeresoszo(utolso);
+  if (honap !== null) {
+    const elotte = q.slice(0, q.length - utolso.length).trim();
+    csoportok.push({ cim: "Hónap", elemek: [{ cimke: HONAP_CIMKE[honap - 1], q: [elotte, HONAPOK[honap - 1].slice(0, 4)].filter(Boolean).join(" ") }] });
+  }
+  const fuvarok = index.fuvarok.filter((f) => keresSzovegEgyezik(f.szoveg, f.napok, q)).slice(0, 6);
+  return { fuvarok, csoportok };
 }

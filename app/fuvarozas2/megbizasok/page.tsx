@@ -68,7 +68,7 @@ export default async function Page({ searchParams }: {
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)_380px] lg:items-start">
-        <Oldalsav szuro={szuro} szamok={asztal.szamok} />
+        <Oldalsav szuro={szuro} szamok={asztal.szamok} kereso={asztal.kereso} />
         <MunkaLista sorok={asztal.sorok} ma={asztal.ma} szuro={szuro} cim={listaCim} />
         <aside className="order-first flex flex-col gap-3 lg:order-none lg:sticky lg:top-4" aria-label={reszlet ? "A kiválasztott megbízás" : "A kocsi most"}>
           {segedlet && (uj || elokeszitett) ? (

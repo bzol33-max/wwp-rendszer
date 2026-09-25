@@ -9,7 +9,7 @@
 //     megbízáson pozíciószámként a megbízás sorszáma (2026/01201).
 //   Hajdúspedíció — a megbízáson nincs szám: tartalék-kör.
 
-import { parositSzamlakat, partnerEgyezik, szamKulcs, utvonalEgyezik, type ParositasFuvar, type ParositasSzamla } from "@/lib/fuvarozas/szamla-parositas";
+import { kiegAlap, parositKiegSzamlakat, parositSzamlakat, partnerEgyezik, szamKulcs, utvonalEgyezik, type ParositasFuvar, type ParositasSzamla } from "@/lib/fuvarozas/szamla-parositas";
 
 let ok = 0, bad = 0;
 function eq(nev: string, kapott: unknown, vart: unknown) {
@@ -89,6 +89,24 @@ eq("van útvonal, de más: nem", parositSzamlakat([hajdu], [{ ...sz315, tetelekS
 
 // --- irat-szöveg más partnernél nem számít
 eq("irat-szöveg: más vevő", parositSzamlakat([fuvarok[2]], [{ ...szamlak[2], vevoNev: "LOGO TREK Kft." }]).length, 0);
+
+// --- kiegészítő számla: WLLWR-2026-316 (Ghibli, „N26/22824 kieg.”, +250 € kiállási díj),
+//     a fuvar a #135, fő számlája a WLLWR-2026-310.
+eq("kiegAlap: kieg.", kiegAlap("N26/22824 kieg."), "N26/22824");
+eq("kiegAlap: kiegészítő elöl", kiegAlap("kiegészítő 2026/01201"), "2026/01201");
+eq("kiegAlap: pótdíj", kiegAlap("26/3814 pótdíj"), "26/3814");
+eq("kiegAlap: sima szám", kiegAlap("N26/22824"), null);
+eq("kiegAlap: üres", kiegAlap(null), null);
+eq("kiegAlap: csak a szó", kiegAlap("kieg."), null);
+const ghibli = { id: "135", partnerNevek: ["Ghibli Szállítmányozás"], szamok: ["N26/22824", null] };
+const masik = { id: "134", partnerNevek: ["Ghibli Szállítmányozás"], szamok: ["N26/22795", null] };
+const kiegSzamla = { szamlaszam: "WLLWR-2026-316", vevoNev: "GHIBLI KFT.", rendelesszam: "N26/22824 kieg." };
+eq("kieg: a #135-höz", parositKiegSzamlakat([masik, ghibli], [kiegSzamla]), [{ fuvarId: "135", szamlaszam: "WLLWR-2026-316" }]);
+eq("kieg: más vevő nem", parositKiegSzamlakat([ghibli], [{ ...kiegSzamla, vevoNev: "ÁB SPEED Kft." }]).length, 0);
+eq("kieg: nem kieg. számla nem", parositKiegSzamlakat([ghibli], [{ ...kiegSzamla, rendelesszam: "N26/22824" }]).length, 0);
+eq("kieg: két fuvaron ugyanaz a szám → nem egyértelmű", parositKiegSzamlakat([ghibli, { ...ghibli, id: "999" }], [kiegSzamla]).length, 0);
+// A „kieg.” számla a fő párosításba nem kerül be (a hívó kiszűri) — de ha be is kerülne, a szám-kör nem venné:
+eq("kieg: szám-kör kulcsa eltér", szamKulcs("N26/22824 kieg.") === szamKulcs("N26/22824"), false);
 
 console.log(`\nSzámla-párosítás teszt: ${ok} rendben, ${bad} hiba`);
 if (bad > 0) process.exit(1);

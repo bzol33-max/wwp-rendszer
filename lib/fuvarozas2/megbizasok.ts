@@ -23,7 +23,8 @@ import {
   type AtmenetForras,
   type AtmenetKontextus,
 } from "@/lib/fuvarozas/allapot";
-import { keresEgyezik, szakaszSorbol, type Szakasz } from "@/lib/fuvarozas2/munkaasztal";
+import { keresEgyezik, keresNapok, keresSzoveg, szakaszSorbol, type KeresoIndex, type Szakasz } from "@/lib/fuvarozas2/munkaasztal";
+import { varosNev } from "@/lib/fuvarozas/varos";
 import { megalloReszlete, type MegalloReszlet } from "@/lib/fuvarozas/sofor-adatok";
 import { findJarmuByPlate } from "@/lib/fuvarozas/vehicles";
 
@@ -54,6 +55,8 @@ export type MegbizasSor = {
   // elszámolás (coalesce új/régi)
   papirok_beerkeztek_at: string | null;
   szamla_szam: string | null;
+  /** Kiegészítő számlák (pl. kiállási díj, „… kieg.”) — lib/fuvarozas/szamla-parositas.ts parositKiegSzamlakat. */
+  kieg_szamla_szamok: string[];
   email_elment_at: string | null;
   postazva_at: string | null;
   postazasi_cim: string | null;
@@ -84,7 +87,7 @@ const SOR_SQL = `
     m.fuvardij, m.fuvardij_penznem, m.aru, m.mennyiseg, m.hianylista, m.forras,
     (m.torolt_at is not null) as torolt,
     coalesce(e.papirok_beerkeztek_at, m.papirok_beerkeztek_at)::text as papirok_beerkeztek_at,
-    coalesce(e.szamla_szam, m.szamla_szam) as szamla_szam,
+    coalesce(e.szamla_szam, m.szamla_szam) as szamla_szam, m.kieg_szamla_szamok,
     e.email_elment_at::text,
     coalesce(e.postazva_at, case when m.postazva then m.postazva_at end)::text as postazva_at,
     coalesce(e.postazasi_cim, m.postazasi_cim, p.postazasi_cim) as postazasi_cim,
@@ -472,6 +475,7 @@ export async function getMunkaasztal(szuro: {
     kocsiNelkul: number;
     jelleg: { ber: number; sajat: number };
   };
+  kereso: KeresoIndex;
 }> {
   await requireAnyViewPermission(["fuvarozas", "elszamolas"]);
   const [{ ma }] = await query<{ ma: string }>(`select ((now() at time zone 'Europe/Budapest')::date)::text as ma`);
@@ -512,6 +516,7 @@ export async function getMunkaasztal(szuro: {
   return {
     sorok: sorok.slice(0, 300),
     ma,
+    kereso: keresoIndex(osszes.filter((s) => !szuro.jelleg || s.jelleg === szuro.jelleg), jarmuvek, soforKod),
     szamok: {
       szakasz: szakaszDb,
       kocsik: jarmuvek
@@ -520,6 +525,49 @@ export async function getMunkaasztal(szuro: {
       kocsiNelkul,
       jelleg: { ber, sajat },
     },
+  };
+}
+
+/** A kereső javaslataihoz: a sorok kereshető szövege és a választható cégek, városok, kocsik, számok. */
+function keresoIndex(
+  sorok: (MegbizasSor & { szakasz: Szakasz })[],
+  jarmuvek: { kod: string; sofor: string | null }[],
+  soforKod: Map<string, string | null>
+): KeresoIndex {
+  const reszek = (cim: string | null) => (cim ?? "").split(/;|\s\+\s/).map((x) => x.trim()).filter(Boolean);
+  const rovid = (cim: string | null) => {
+    const v = varosNev(cim ?? "").trim();
+    return v && v.length <= 32 ? v : (cim ?? "—").slice(0, 32);
+  };
+  const egyedi = (xs: (string | null | undefined)[]) => {
+    const latott = new Map<string, string>();
+    for (const x of xs) {
+      const v = x?.trim();
+      if (v && !latott.has(v.toLowerCase())) latott.set(v.toLowerCase(), v);
+    }
+    return [...latott.values()];
+  };
+  return {
+    fuvarok: sorok.slice(0, 1500).map((s) => {
+      const f = reszek(s.felrako);
+      const l = reszek(s.lerako);
+      return {
+        id: s.id,
+        cim: s.partner_nev ?? (s.jelleg === "sajat" ? "Saját fuvar" : "(nincs megbízó)"),
+        ut: `${rovid(f[0] ?? null)} → ${rovid(l[l.length - 1] ?? null)}`,
+        nap: s.felrakas_nap,
+        szakasz: s.szakasz,
+        szoveg: keresSzoveg({ ...s, sofor: [s.sofor, s.jarmu_kod ? soforKod.get(s.jarmu_kod) : null].filter(Boolean).join(" ") }),
+        napok: keresNapok(s),
+      };
+    }),
+    cegek: egyedi(sorok.map((s) => s.partner_nev)),
+    varosok: egyedi(sorok.flatMap((s) => [...reszek(s.felrako), ...reszek(s.lerako)].map((c) => varosNev(c))))
+      // Ha a címből nem jön ki városnév, a varosNev a teljes szöveget adja
+      // („BMW HU Plant Debrecen”) — az nem város.
+      .filter((v) => v.length >= 2 && v.length <= 32 && v.split(/\s+/).length <= 2),
+    kocsik: jarmuvek.map((j) => ({ kod: j.kod, cimke: j.sofor ? `${j.sofor} · ${j.kod}` : j.kod })),
+    szamok: egyedi(sorok.flatMap((s) => [s.szamla_szam, ...(s.kieg_szamla_szamok ?? []), s.szallitolevel, s.hivatkozas])),
   };
 }
 
