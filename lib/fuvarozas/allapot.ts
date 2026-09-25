@@ -171,8 +171,10 @@ export const ELSZAMOLAS_ALLAPOTOK: readonly Allapot[] = ["teljesitve", "szamlazh
  * és a részleten látszik.
  */
 export const LEPESEK = [
-  { kulcs: "beerkezett", cimke: "Beérkezett", allapotok: ["ellenorzesre_var", "tervezett"] },
-  { kulcs: "uton", cimke: "Úton", allapotok: ["folyamatban"] },
+  // A tervezett fuvar már kocsin van (jóváhagyva / kocsira adva) — a
+  // munkaasztal is a Folyamatban szakaszba teszi (2026-09-25).
+  { kulcs: "beerkezett", cimke: "Beérkezett", allapotok: ["ellenorzesre_var"] },
+  { kulcs: "uton", cimke: "Folyamatban", allapotok: ["tervezett", "folyamatban"] },
   { kulcs: "szamlazando", cimke: "Visszaért — számlázni", allapotok: ["teljesitve", "szamlazhato"] },
   { kulcs: "postara", cimke: "Számlázva — postára", allapotok: ["szamlazva", "email_elment"] },
   { kulcs: "kesz", cimke: "Kész", allapotok: ["postazva", "lezart"] },

@@ -17,6 +17,8 @@ eq("saját teljesítve → archív", szakaszSorbol({ jelleg: "sajat", allapot: "
 eq("számlázva → postára", szakaszSorbol({ jelleg: "ber", allapot: "szamlazva" }), "postara");
 eq("régi e-mail elment → postára", szakaszSorbol({ jelleg: "ber", allapot: "email_elment" }), "postara");
 eq("postázva → archív", szakaszSorbol({ jelleg: "ber", allapot: "postazva" }), "archiv");
+eq("előkészítés az állapottól függetlenül", szakaszSorbol({ jelleg: "sajat", allapot: "folyamatban", elokeszites: true }), "elokeszites");
+eq("kocsira adott saját → folyamatban", szakaszSorbol({ jelleg: "sajat", allapot: "tervezett", elokeszites: false }), "folyamatban");
 
 // Hónapnevek
 eq("szept", honapKeresoszo("szept"), 9);

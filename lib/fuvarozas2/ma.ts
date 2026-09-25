@@ -33,7 +33,8 @@ export async function getMaAdat(): Promise<MaAdat> {
     ma: nyitott.filter((s) => s.jarmu_kod === k.kod && aznap(s, ma)),
     holnap: nyitott.filter((s) => s.jarmu_kod === k.kod && aznap(s, holnap)),
   }));
-  const kocsiNelkul = nyitott.filter((s) => !s.jarmu_kod && (s.felrakas_nap ?? "") <= holnap);
+  // Az előkészítés alatti saját fuvarnak szándékosan nincs még kocsija.
+  const kocsiNelkul = nyitott.filter((s) => !s.jarmu_kod && !s.elokeszites && (s.felrakas_nap ?? "") <= holnap);
 
   const allapotSzamok = await query<{ allapot: string; n: number }>(
     `select allapot, count(*)::int as n from fuvar_megbizasok where torolt_at is null and allapot is not null and allapot <> 'lezart' group by allapot`

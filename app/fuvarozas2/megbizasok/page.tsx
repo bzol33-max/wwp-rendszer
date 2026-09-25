@@ -7,6 +7,8 @@ import { Fuvarozas2Fulek } from "@/components/fuvarozas2/fulek";
 import { MegbizasReszlet } from "@/components/fuvarozas2/megbizas-reszlet";
 import { KocsiMostPanel, MunkaLista, Oldalsav, munkaasztalLink, type MunkaasztalSzuro } from "@/components/fuvarozas2/munkaasztal";
 import { formatFt } from "@/components/fuvarozas2/kozos";
+import { SajatFuvarUrlap, VisszaveszemGomb } from "@/components/fuvarozas2/sajat-fuvar-urlap";
+import { getSajatFuvarSegedlet } from "@/lib/fuvarozas2/sajat-fuvar";
 
 export const dynamic = "force-dynamic";
 
@@ -21,22 +23,30 @@ const REGI_SZAKASZ: Record<string, Szakasz> = {
 };
 
 export default async function Page({ searchParams }: {
-  searchParams: Promise<{ szakasz?: string; jelleg?: string; kocsi?: string; q?: string; reszlet?: string; km?: string; csoport?: string; allapot?: string; lepes?: string }>;
+  searchParams: Promise<{ szakasz?: string; jelleg?: string; kocsi?: string; q?: string; reszlet?: string; km?: string; uj?: string; csoport?: string; allapot?: string; lepes?: string }>;
 }) {
   const sp = await searchParams;
   const szakaszParam = sp.szakasz ?? sp.csoport ?? sp.allapot ?? sp.lepes;
   const szakasz = SZAKASZOK.some((s) => s.kulcs === szakaszParam) ? (szakaszParam as Szakasz) : szakaszParam ? REGI_SZAKASZ[szakaszParam] : undefined;
   const jelleg = sp.jelleg === "ber" || sp.jelleg === "sajat" ? sp.jelleg : undefined;
   const reszletId = sp.reszlet && /^\d+$/.test(sp.reszlet) ? sp.reszlet : undefined;
-  const szuro: MunkaasztalSzuro = { szakasz, jelleg, kocsi: sp.kocsi, q: sp.q?.trim() || undefined, reszlet: reszletId, kocsiMost: sp.km };
+  const uj = sp.uj === "1";
+  const szuro: MunkaasztalSzuro = { szakasz, jelleg, kocsi: sp.kocsi, q: sp.q?.trim() || undefined, reszlet: reszletId, kocsiMost: sp.km, uj };
 
   const session = await requireSession();
+  const szerkeszthet = session.can("fuvarozas").edit;
   const [asztal, kocsiMost, reszlet, parositatlan] = await Promise.all([
     getMunkaasztal({ szakasz, jelleg, kocsi: sp.kocsi, q: szuro.q }),
     getKocsiMost(sp.km),
     reszletId ? getMegbizas(reszletId) : Promise.resolve(null),
     getParositatlanFuvarszamlak(60).catch(() => []),
   ]);
+  const elokeszitett = reszlet?.sor.elokeszites ? reszlet.sor : null;
+  const segedlet = szerkeszthet && (uj || elokeszitett) ? await getSajatFuvarSegedlet() : null;
+  const visszaveheto =
+    szerkeszthet && reszlet && reszlet.sor.jelleg === "sajat" && !reszlet.sor.elokeszites &&
+    (reszlet.sor.allapot === "tervezett" || reszlet.sor.allapot === "folyamatban") &&
+    !reszlet.megallok.some((m) => m.gps_erkezes || m.sofor_kesz_at);
 
   const aktiv = SZAKASZOK.find((s) => s.kulcs === (szakasz ?? "folyamatban"))!;
   const kocsiCim = sp.kocsi === "nincs" ? " · kocsi nélkül" : sp.kocsi ? ` · ${sp.kocsi}` : "";
@@ -61,11 +71,34 @@ export default async function Page({ searchParams }: {
         <Oldalsav szuro={szuro} szamok={asztal.szamok} />
         <MunkaLista sorok={asztal.sorok} ma={asztal.ma} szuro={szuro} cim={listaCim} />
         <aside className="order-first flex flex-col gap-3 lg:order-none lg:sticky lg:top-4" aria-label={reszlet ? "A kiválasztott megbízás" : "A kocsi most"}>
-          {reszlet ? (
+          {segedlet && (uj || elokeszitett) ? (
+            <>
+              <Link href={munkaasztalLink(szuro, { reszlet: undefined, uj: false })} className="text-sm font-semibold text-[var(--f2-blue)] hover:underline">
+                ← vissza a kocsihoz
+              </Link>
+              <SajatFuvarUrlap
+                key={elokeszitett?.id ?? "uj"}
+                id={elokeszitett?.id ?? null}
+                kezdo={{
+                  datum: elokeszitett?.felrakas_nap ?? "",
+                  jarmuKod: elokeszitett?.elokeszites_jarmu ?? null,
+                  honnan: elokeszitett?.felrako ?? "",
+                  hova: elokeszitett?.lerako ?? "",
+                  kinek: elokeszitett?.partner_nev ?? null,
+                  megjegyzes: elokeszitett?.megjegyzes ?? null,
+                }}
+                segedlet={segedlet}
+                listaHref={munkaasztalLink({ jelleg }, { szakasz: "elokeszites" })}
+                reszletHref="/fuvarozas2/megbizasok?szakasz=elokeszites&reszlet={id}"
+                kocsiraHref="/fuvarozas2/megbizasok?szakasz=folyamatban&reszlet={id}"
+              />
+            </>
+          ) : reszlet ? (
             <>
               <Link href={munkaasztalLink(szuro, { reszlet: undefined })} className="text-sm font-semibold text-[var(--f2-blue)] hover:underline">
                 ← vissza a kocsihoz
               </Link>
+              {visszaveheto ? <VisszaveszemGomb id={reszlet.sor.id} /> : null}
               <MegbizasReszlet
                 {...reszlet}
                 egyOszlop
