@@ -24,6 +24,7 @@ import { decodeEntities, lekerdezSzamla, SzamlazzHuError, type SzamlazzHuSzamla 
 import { kategorizalSzamla, alkategorizalRaklap } from "./categorize";
 import { frissitSztornoJelolest } from "./sztorno";
 import { szinkronizalSzamlaSzamokat } from "@/lib/fuvarozas/megbizasok";
+import { szinkronizalSzallitoleveleket } from "@/lib/fuvarozas2/szallitolevel";
 
 /** A cég ismert Számlázz.hu számlatömb-előtagjai — mindegyik saját, független sorszám-keresőt kap. */
 const ELOTAGOK = ["WLLWR", "WNYH"];
@@ -105,6 +106,9 @@ async function torolPendingbol(szamlaszam: string) {
 
 export type PollEredmeny = {
   ujMegtalalt: number;
+  /** Új Számlázz.hu-s szállítólevél (S-WLLWR-…), és hány saját fuvarhoz párosult. */
+  szallitolevelUj?: number;
+  szallitolevelParositva?: number;
   pendingMegoldva: number;
   hibak: string[];
   sztornoDarab?: number;
@@ -112,6 +116,69 @@ export type PollEredmeny = {
   rendelesszamJavitva?: number;
   kifizetesJelolve?: number;
 };
+
+/**
+ * A Számlázz.hu-s szállítólevelek (2026-09-25, Budaházi Zoltán): saját
+ * sorszámozásuk van („S-WLLWR-2026-162”), és a saját fuvarhoz párosulnak
+ * (vevő + rendszám + a fuvar dátuma). NEM a `szamla` táblába kerülnek — az a
+ * számlák és a kintlévőség forrása —, hanem a `szallitolevel_import`-ba.
+ * A rendszám a megjegyzésben áll: „Rendszám:NMZ-492,XZV-926”.
+ */
+const SZALLITOLEVEL_ELOTAG = "S-WLLWR";
+/**
+ * Az első indulás kezdőpontja: 2026 szeptemberében a 162-es körül jártak,
+ * a régebbiekhez nincs párosítandó saját fuvar — nem kérdezzük le mindet.
+ */
+const SZALLITOLEVEL_KEZDO_SORSZAM: Record<number, number> = { 2026: 150 };
+const MAX_SZALLITOLEVEL_KORONKENT = 20;
+
+function rendszamAMegjegyzesbol(megjegyzes: string | null): string | null {
+  const m = /Rendsz[áa]m\s*:?\s*([^\n;<]+)/i.exec(megjegyzes ?? "");
+  return m ? m[1].trim().slice(0, 60) : null;
+}
+
+async function szallitolevelekKeresese(agentKulcs: string, ev: number, eredmeny: PollEredmeny): Promise<void> {
+  const [allapot] = await query<{ ev: number; utolso_sorszam: number }>(
+    `select ev, utolso_sorszam from szamlak_poll_allapot where elotag = $1`,
+    [SZALLITOLEVEL_ELOTAG]
+  );
+  let utolso = allapot?.ev === ev ? allapot.utolso_sorszam : (SZALLITOLEVEL_KEZDO_SORSZAM[ev] ?? 0);
+  let proba = utolso;
+  let hiany = 0;
+  let uj = 0;
+  for (let i = 0; i < MAX_SZALLITOLEVEL_KORONKENT && hiany < MAX_EGYMASUTANI_HIANY; i++) {
+    proba++;
+    const szam = `${SZALLITOLEVEL_ELOTAG}-${ev}-${proba}`;
+    try {
+      const t = await lekerdezSzamla(szam, agentKulcs);
+      if (!t) { hiany++; continue; }
+      hiany = 0;
+      utolso = proba;
+      const raklapDb = t.tetelek
+        .filter((x) => x.mennyiseg !== null && (!x.egyseg || /db|darab/i.test(x.egyseg)))
+        .reduce((a, x) => a + (x.mennyiseg ?? 0), 0);
+      await query(
+        `insert into szallitolevel_import (bizonylatszam, kelt, vevo, rendszam, tetelek, raklap_db, forras_fajl)
+         values ($1, $2, $3, $4, $5::jsonb, $6, 'szamlazzhu')
+         on conflict (bizonylatszam) do update set kelt = excluded.kelt, vevo = excluded.vevo, rendszam = excluded.rendszam,
+           tetelek = excluded.tetelek, raklap_db = excluded.raklap_db
+         where szallitolevel_import.parositas_allapot <> 'parositva'`,
+        [t.szamlaszam, t.teljesitesDatum ?? t.kiallitasDatum, t.vevoNev, rendszamAMegjegyzesbol(t.megjegyzes) ?? rendszamAMegjegyzesbol(t.rawXml), JSON.stringify(t.tetelek), raklapDb || null]
+      );
+      uj++;
+    } catch (err) {
+      eredmeny.hibak.push(`${szam}: ${err instanceof SzamlazzHuError ? err.message : "ismeretlen hiba"}`);
+      break;
+    }
+  }
+  await query(
+    `insert into szamlak_poll_allapot (elotag, ev, utolso_sorszam, utolso_futas_at)
+     values ($1, $2, $3, now())
+     on conflict (elotag) do update set ev = $2, utolso_sorszam = $3, utolso_futas_at = now()`,
+    [SZALLITOLEVEL_ELOTAG, ev, utolso]
+  );
+  eredmeny.szallitolevelUj = uj;
+}
 
 /**
  * Egy körben legfeljebb ennyi, korábban null rendelésszámmal mentett
@@ -408,6 +475,15 @@ async function futtatSzamlaSzinkronKor(): Promise<PollEredmeny> {
     eredmeny.hibak.push(
       `Kifizetés-jelölés: ${err instanceof Error ? err.message : "ismeretlen hiba"}`
     );
+  }
+
+  // 4c) Számlázz.hu-s szállítólevelek (S-WLLWR-…) behúzása, és párosításuk a
+  // saját fuvarokhoz (a párosítás a `szallitolevel_import` táblából dolgozik).
+  try {
+    await szallitolevelekKeresese(agentKulcs, ev, eredmeny);
+    eredmeny.szallitolevelParositva = await szinkronizalSzallitoleveleket();
+  } catch (err) {
+    eredmeny.hibak.push(`Szállítólevelek: ${err instanceof Error ? err.message : "ismeretlen hiba"}`);
   }
 
   // 5) A Fuvarozás — Számla/Posta fülön a bér fuvarok "Számla szám" mezőjének

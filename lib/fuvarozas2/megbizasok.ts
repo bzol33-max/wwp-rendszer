@@ -67,6 +67,8 @@ export type MegbizasSor = {
   elokeszites: boolean;
   /** Az előkészítésben kiválasztott kocsi kódja (a `jarmu` csak a „Kocsira adom”-mal kap értéket). */
   elokeszites_jarmu: string | null;
+  /** Saját fuvarhoz párosított Számlázz.hu-s szállítólevél (S-WLLWR-…) — lib/fuvarozas2/szallitolevel.ts. */
+  szallitolevel: string | null;
 };
 
 const SOR_SQL = `
@@ -89,7 +91,8 @@ const SOR_SQL = `
     coalesce(e.fizetesi_hatarido_nap, m.fizetesi_hatarido_nap, p.fizetesi_hatarido_nap) as fizetesi_hatarido_nap,
     p.papir_bekuldesi_hatarido_nap as papir_hatarido_nap,
     exists (select 1 from fuvar_dokumentumok d where d.fuvar_id = m.id and d.tipus = 'fuvarlevel') as foto_van,
-    m.dokumentum_url, m.megjegyzes, m.elokeszites, m.elokeszites_jarmu
+    m.dokumentum_url, m.megjegyzes, m.elokeszites, m.elokeszites_jarmu,
+    (select s.bizonylatszam from szallitolevel_import s where s.megbizas_id = m.id and s.parositas_allapot = 'parositva' order by s.kelt desc limit 1) as szallitolevel
   from fuvar_megbizasok m
   left join fuvar_partnerek p on p.id = m.partner_id
   left join fuvar_jarmuvek j on j.id = m.jarmu_id

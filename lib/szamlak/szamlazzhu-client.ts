@@ -54,6 +54,10 @@ export type SzamlazzHuSzamla = {
   brutto: number;
   /** A tételek megnevezése összefűzve — a kategorizáláshoz. */
   tetelekSzoveg: string;
+  /** Tételenként a név és a mennyiség (a szállítólevél darabszámához). */
+  tetelek: { nev: string; mennyiseg: number | null; egyseg: string | null }[];
+  /** A bizonylat megjegyzése (a szállítólevélen itt áll a rendszám: „Rendszám:NMZ-492,XZV-926”). */
+  megjegyzes: string | null;
   rawXml: string;
 };
 
@@ -215,6 +219,12 @@ export async function lekerdezSzamla(
     afa: toNumber(totalossz["afa"]),
     brutto: toNumber(totalossz["brutto"]) ?? 0,
     tetelekSzoveg,
+    tetelek: tetelSorok.map((t) => ({
+      nev: decodeEntities(String(t["nev"] ?? "").trim()),
+      mennyiseg: toNumber(t["mennyiseg"]),
+      egyseg: t["mennyisegiEgyseg"] ? decodeEntities(String(t["mennyisegiEgyseg"]).trim()) : null,
+    })),
+    megjegyzes: alap["megjegyzes"] ? decodeEntities(String(alap["megjegyzes"])).trim() || null : null,
     rawXml: bodyText,
   };
 }
