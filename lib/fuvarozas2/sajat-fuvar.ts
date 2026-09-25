@@ -82,8 +82,13 @@ export async function mentSajatFuvart(id: string | null, nyers: SajatFuvarAdat):
     await naplo(sor.id, "letrehozva", { elokeszites: true });
     return { ok: true, id: sor.id };
   }
+  // A háttér-szinkron a „kinek” szövegéből partnert köt a fuvarhoz, és a
+  // felület a partner nevét mutatja. Ha a „kinek” változik, a régi kötést
+  // eldobjuk (a szinkron az újból köt újra), különben a régi név tér vissza.
+  // Az UPDATE jobb oldalán a megrendelo még a RÉGI érték.
   const frissitve = await query<{ id: string }>(
-    `update fuvar_megbizasok set datum = $2, felrako = $3, lerako = $4, megrendelo = $5, megjegyzes = $6, elokeszites_jarmu = $7
+    `update fuvar_megbizasok set datum = $2, felrako = $3, lerako = $4, megrendelo = $5, megjegyzes = $6, elokeszites_jarmu = $7,
+       partner_id = case when megrendelo is distinct from $5 then null else partner_id end
      where id = $1 and elokeszites and tipus = 'ber' and torolt_at is null returning id::text`,
     [id, a.datum, a.honnan, a.hova, a.kinek, a.megjegyzes, a.jarmuKod]
   );
