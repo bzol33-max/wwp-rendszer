@@ -4,7 +4,13 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Check, ChevronDown, RotateCcw, Search, X } from "lucide-react";
 import { jeloltFizetve, visszavonFizetve } from "@/lib/szamlak/actions";
-import { ALKATEGORIA_LABEL, KATEGORIA_LABEL, type SzamlaRow } from "@/lib/szamlak/szamla-constants";
+import {
+  ALKATEGORIA_LABEL,
+  KATEGORIA_LABEL,
+  reszbenFizetve,
+  szamlaHatralek,
+  type SzamlaRow,
+} from "@/lib/szamlak/szamla-constants";
 
 // Az Áttekintés "Számlák" füle (mobil) — "Áttekintő mátrix" elrendezés:
 // felül egy összecsukható táblázat (sorok: mappák, oszlopok: állapotok),
@@ -39,6 +45,8 @@ const MAPPA_CIM: Record<Mappa, string> = {
 const SZIN_LEJART = "var(--at-negative)";
 const SZIN_HET = "#9a6700";
 const SZIN_FIZETVE = "#1f7a5c";
+/** Részben fizetett (banki részfizetés érkezett rá) — a hátralék még nyitott. */
+const SZIN_RESZ = "#2563eb";
 const ALLAPOT_SZIN: Record<Allapot, string> = {
   lejart: SZIN_LEJART,
   het: SZIN_HET,
@@ -58,9 +66,14 @@ function formatOsszeg(n: number | string, penznem: string) {
   return `${Number(n).toLocaleString("hu-HU", { maximumFractionDigits: 2 })} ${penznem}`;
 }
 
+/** Amennyi a soron megjelenik: nyitottnál a hátralék (részfizetés levonva), fizetettnél a teljes összeg. */
+function sorOsszeg(row: SzamlaRow): number {
+  return row.fizetve ? Number(row.brutto) : szamlaHatralek(row);
+}
+
 function osszegSzoveg(rows: SzamlaRow[]): string {
   const map = new Map<string, number>();
-  for (const r of rows) map.set(r.penznem, (map.get(r.penznem) ?? 0) + Number(r.brutto));
+  for (const r of rows) map.set(r.penznem, (map.get(r.penznem) ?? 0) + sorOsszeg(r));
   const ft = (map.get("Ft") ?? 0) + (map.get("HUF") ?? 0);
   map.delete("Ft");
   map.delete("HUF");
@@ -120,7 +133,7 @@ function SzamlaSor({
           <span className="truncate font-semibold" title={row.vevo_nev}>
             {row.vevo_nev}
           </span>
-          <span className="shrink-0 font-semibold tabular-nums">{formatOsszeg(row.brutto, row.penznem)}</span>
+          <span className="shrink-0 font-semibold tabular-nums">{formatOsszeg(sorOsszeg(row), row.penznem)}</span>
         </div>
         <div className="mt-0.5 flex items-center justify-between gap-2 text-[11px]">
           <span style={{ color: allapot.szin }}>{allapot.szoveg}</span>
@@ -128,6 +141,23 @@ function SzamlaSor({
             {row.szamlaszam} · {kategoria}
           </span>
         </div>
+        {reszbenFizetve(row) && (
+          <>
+            <div className="mt-0.5 text-[11px]" style={{ color: SZIN_RESZ }}>
+              részben fizetve · {formatOsszeg(row.fizetett_osszeg, row.penznem)} /{" "}
+              {formatOsszeg(row.brutto, row.penznem)}
+            </div>
+            <div className="mt-1 h-1 overflow-hidden rounded-full bg-[var(--at-border)]">
+              <div
+                className="h-full"
+                style={{
+                  width: `${Math.min(100, Math.round((Number(row.fizetett_osszeg) / Number(row.brutto)) * 100))}%`,
+                  background: SZIN_RESZ,
+                }}
+              />
+            </div>
+          </>
+        )}
       </div>
       {row.fizetve && !mostFizetett ? (
         <span

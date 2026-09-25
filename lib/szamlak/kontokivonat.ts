@@ -13,6 +13,11 @@
 // fizetettre állítja, a már fizetetteknél a fizetés dátumát az utalás
 // értéknapjára pontosítja, és a banki utalást felírja a kontokivonat_konyvelt
 // táblába (egy újrafeltöltött kivonat így nem könyvel duplán).
+//
+// Részfizetés: ha egy utalás egyetlen számlára jön, de kevesebb a hátralékánál,
+// csak a szamla.fizetett_osszeg nő — a számla nyitott marad, és a következő
+// utalás zárja le. A kerekítés/banki költség miatti pár forintos maradékot a
+// REST_TOLERANCIA nyeli el.
 
 import { query } from "@/lib/db";
 import { requireEditPermission } from "@/lib/auth/require-permission";
@@ -20,10 +25,20 @@ import { requireSession } from "@/lib/auth/dal";
 import { olvasKivonatot, parositKivonatot, type ParositasSzamla } from "./kontokivonat-parositas";
 import type {
   KivonatBeolvasottFajl,
+  KivonatKonyvelesEredmeny,
   KivonatKonyvelesTetel,
   KivonatParositas,
   KivonatTranzakcio,
 } from "./kontokivonat-constants";
+
+/**
+ * Ennyi maradékot tekintünk kiegyenlítettnek: az utolsó részlet a banki
+ * költség vagy kerekítés miatt lehet pár forinttal kevesebb, ettől ne maradjon
+ * nyitva a számla. Forintnál 100 Ft, devizánál 1 egység (pl. 1 EUR).
+ */
+function restTolerancia(penznem: string): number {
+  return ["FT", "HUF"].includes(penznem.trim().toUpperCase()) ? 100 : 1;
+}
 
 /** Egy (a böngészőből base64-ként érkező) kivonatfájl beolvasása — nem ír az adatbázisba. */
 export async function olvasKivonatFajlt(base64: string, fajlNev: string): Promise<KivonatBeolvasottFajl> {
@@ -54,7 +69,7 @@ export async function parositKivonatTranzakciokat(tranzakciok: KivonatTranzakcio
             (s.brutto + s.helyesbites_osszeg)::float8 as brutto, s.penznem,
             to_char(s.kiallitas_datum, 'YYYY-MM-DD') as "kiallitasDatum",
             to_char(s.fizetesi_hatarido, 'YYYY-MM-DD') as "fizetesiHatarido",
-            s.fizetve,
+            s.fizetve, s.fizetett_osszeg::float8 as "fizetettOsszeg",
             to_char(s.fizetve_datum at time zone 'Europe/Budapest', 'YYYY-MM-DD') as "fizetveDatum",
             exists (select 1 from kontokivonat_konyvelt k where s.id = any(k.szamla_idk)) as "bankIgazolt"
      from szamla s
@@ -74,14 +89,17 @@ export async function parositKivonatTranzakciokat(tranzakciok: KivonatTranzakcio
  * felírt kulcsot kihagy); a hozzárendelt nyitott számlák "Fizetve" jelölése, a
  * már fizetetteknél a fizetés dátumának pontosítása — mindkettő az utalás
  * értéknapjával. Egy másik utalással már igazolt számla dátumát nem írja felül.
+ * Ha az utalás egyetlen nyitott számlára jön, de a hátralékát nem fedezi, akkor
+ * részfizetésként csak a fizetett_osszeg nő, a számla nyitott marad.
  */
 export async function fogadjaElParositasokat(
   tetelek: KivonatKonyvelesTetel[]
-): Promise<{ sikeres: number; datumFrissitve: number; marKonyvelt: number }> {
+): Promise<KivonatKonyvelesEredmeny> {
   await requireEditPermission("szamlak");
   const session = await requireSession();
   let sikeres = 0;
   let datumFrissitve = 0;
+  let reszfizetes = 0;
   let marKonyvelt = 0;
 
   for (const { tranzakcio: t, szamlaIdk } of tetelek) {
@@ -96,6 +114,26 @@ export async function fogadjaElParositasokat(
     if (felirva.length === 0) {
       marKonyvelt++;
       continue;
+    }
+
+    // Részfizetés — egyetlen nyitott számla, amelynek hátralékát ez az utalás
+    // nem futja (a pár forintos maradékot a tolerancia elnyeli: az ilyen
+    // utalás már a teljes kiegyenlítésnek számít, lentebb).
+    if (szamlaIdk.length === 1) {
+      const nyitott = await query<{ hatralek: number }>(
+        `select (brutto + helyesbites_osszeg - fizetett_osszeg)::float8 as hatralek
+         from szamla
+         where id = $1::bigint and not fizetve`,
+        [szamlaIdk[0]]
+      );
+      if (nyitott.length > 0 && t.osszeg < nyitott[0].hatralek - restTolerancia(t.penznem)) {
+        await query(
+          `update szamla set fizetett_osszeg = fizetett_osszeg + $2 where id = $1::bigint`,
+          [szamlaIdk[0], t.osszeg]
+        );
+        reszfizetes++;
+        continue;
+      }
     }
 
     const ujFizetve = await query<{ id: string }>(
@@ -124,5 +162,5 @@ export async function fogadjaElParositasokat(
     datumFrissitve += frissitett.length;
   }
 
-  return { sikeres, datumFrissitve, marKonyvelt };
+  return { sikeres, datumFrissitve, reszfizetes, marKonyvelt };
 }

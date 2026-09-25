@@ -11,7 +11,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { FelvasarlasTipusSor, HaviKasszaOsszesito, KasszaKiadasTetel, KeszletFulAdatok } from "@/lib/attekintes/actions";
-import type { SzamlaRow } from "@/lib/szamlak/szamla-constants";
+import { szamlaHatralek, type SzamlaRow } from "@/lib/szamlak/szamla-constants";
 
 type Szakasz = "nyiregyhaza" | "keszlet" | "szamlak";
 
@@ -52,7 +52,7 @@ export function VezetoiCeg({
     return d != null && d < ma;
   });
   const penznemenkent = new Map<string, number>();
-  for (const s of szamlak) penznemenkent.set(s.penznem, (penznemenkent.get(s.penznem) ?? 0) + s.brutto);
+  for (const s of szamlak) penznemenkent.set(s.penznem, (penznemenkent.get(s.penznem) ?? 0) + szamlaHatralek(s));
   const kovetkezo = [...szamlak]
     .sort((a, b) => (isoDatum(a.fizetesi_hatarido) ?? "9999").localeCompare(isoDatum(b.fizetesi_hatarido) ?? "9999"))
     .slice(0, 12);
@@ -164,7 +164,7 @@ export function VezetoiCeg({
             </div>
             {lejart.length > 0 ? (
               <div className="rounded-xl bg-[var(--m-red-d)] px-3 py-2 text-sm font-semibold text-[var(--m-red)]">
-                {lejart.length} lejárt · {ft(lejart.reduce((a, s) => a + (s.penznem === "Ft" ? s.brutto : 0), 0))}
+                {lejart.length} lejárt · {ft(lejart.reduce((a, s) => a + (s.penznem === "Ft" ? szamlaHatralek(s) : 0), 0))}
               </div>
             ) : null}
           </Doboz>
@@ -179,7 +179,7 @@ export function VezetoiCeg({
                       <div className="truncate font-semibold">{s.vevo_nev}</div>
                       <div className="truncate text-xs text-[var(--m-muted)]">{s.szamlaszam} · {s.fizetesi_hatarido ?? "—"}</div>
                     </div>
-                    <span className={`shrink-0 font-semibold ${kesik ? "text-[var(--m-red)]" : ""}`}>{ft(s.brutto, s.penznem)}</span>
+                    <span className={`shrink-0 font-semibold ${kesik ? "text-[var(--m-red)]" : ""}`}>{ft(szamlaHatralek(s), s.penznem)}</span>
                   </div>
                 );
               })}

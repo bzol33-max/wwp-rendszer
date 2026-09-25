@@ -14,6 +14,7 @@ import { query } from "@/lib/db";
 import { requireAnyViewPermission } from "@/lib/auth/require-permission";
 import { getMegbizasok, type MegbizasSor } from "@/lib/fuvarozas2/megbizasok";
 import { getSzamlaLista } from "@/lib/szamlak/actions";
+import { szamlaHatralek } from "@/lib/szamlak/szamla-constants";
 import { varosNev } from "@/lib/fuvarozas/varos";
 import { papirHatraNap } from "@/lib/fuvarozas2/megbizas-szuro";
 import { getParositatlanFuvarszamlak } from "@/lib/fuvarozas/megbizasok";
@@ -75,7 +76,7 @@ export async function getElszamolasVaszon(): Promise<ElszamolasVaszon> {
       .map((sz) => {
         const m = /^(\d{4})\.(\d{2})\.(\d{2})/.exec(sz.fizetesi_hatarido ?? "");
         const iso = m ? `${m[1]}-${m[2]}-${m[3]}` : null;
-        return { szamlaszam: sz.szamlaszam, vevo: sz.vevo_nev, esedekes: sz.fizetesi_hatarido, brutto: sz.brutto, penznem: sz.penznem, lejart: iso != null && iso < ma };
+        return { szamlaszam: sz.szamlaszam, vevo: sz.vevo_nev, esedekes: sz.fizetesi_hatarido, brutto: szamlaHatralek(sz), penznem: sz.penznem, lejart: iso != null && iso < ma };
       })
       .sort((a, b) => Number(b.lejart) - Number(a.lejart));
   } catch {

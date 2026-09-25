@@ -30,6 +30,8 @@ export type KivonatForras = "unicredit-xlsx" | "cib-pdf";
 /**
  * - auto: a közleményben szereplő nyitott számlák összege pontosan kiadja az
  *   utalást (vagy egyetlen, egyértelmű összeg-egyezés) — egy kattintással könyvelhető.
+ * - resz: az utalás kisebb, mint a közleményben szereplő számla hátraléka —
+ *   részfizetés: könyveléskor csak a hátralék csökken, a számla nyitva marad.
  * - review: van javaslat, de kézzel kell jóváhagyni (pl. összeg-eltérés).
  * - datum: a hozzá tartozó számla már fizetettként szerepel, de banki utalással
  *   még nem volt igazolva (pl. régi tömeges importból) — a fizetés dátuma az
@@ -37,12 +39,20 @@ export type KivonatForras = "unicredit-xlsx" | "cib-pdf";
  * - konyvelt: ez az utalás (vagy a közleményben szereplő számla) már le van könyvelve.
  * - egyeb: nem vevői befizetésnek tűnik (nincs hozzá illő vevő / számla).
  */
-export type KivonatAllapot = "auto" | "review" | "datum" | "konyvelt" | "egyeb";
+export type KivonatAllapot = "auto" | "resz" | "review" | "datum" | "konyvelt" | "egyeb";
 
 export type KivonatSzamlaJelolt = {
   id: string;
   szamlaszam: string;
   brutto: number;
+  /**
+   * Amennyit ez az utalás még fedezhet a számlából: nyitottnál a hátralék (a
+   * korábbi részfizetések levonva), már fizetettnél — ahol az utalás csak a
+   * fizetés dátumát igazolja — a teljes bruttó.
+   */
+  hatralek: number;
+  /** A korábbi részfizetésekből már beérkezett összeg — 0, ha nincs ilyen. */
+  fizetettOsszeg: number;
   fizetesiHatarido: string | null;
   /** Ha már fizetett: a jelenlegi fizetési dátum ("YYYY-MM-DD"). */
   fizetveDatum: string | null;
@@ -75,6 +85,15 @@ export type KivonatFajl = {
 
 /** Egy fájl beolvasásának eredménye (a párosítás külön lépés, több fájlra együtt). */
 export type KivonatBeolvasottFajl = KivonatFajl & { tranzakciok: KivonatTranzakcio[] };
+
+/** A könyvelés eredménye a visszajelzéshez. */
+export type KivonatKonyvelesEredmeny = {
+  sikeres: number;
+  datumFrissitve: number;
+  /** Ennyi számlára részfizetés íródott (a számla nyitott maradt). */
+  reszfizetes: number;
+  marKonyvelt: number;
+};
 
 /** A könyveléshez a kliens által visszaküldött tétel. */
 export type KivonatKonyvelesTetel = {

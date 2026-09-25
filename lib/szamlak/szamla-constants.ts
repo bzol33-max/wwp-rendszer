@@ -35,8 +35,25 @@ export type SzamlaRow = {
   tetelek_szoveg: string | null;
   fizetve: boolean;
   fizetve_datum: string | null;
+  /** A banki utalásokból eddig igazolt, beérkezett rész (részfizetés) — 0, ha nincs ilyen. */
+  fizetett_osszeg: number;
   lekerdezve_at: string;
 };
+
+/**
+ * A számlából még ki nem fizetett rész. Részfizetésnél (egy számlát két-három
+ * utalásban rendeznek) a nyitott listák és összesítők ezzel számolnak, nem a
+ * teljes bruttóval. A pg a numeric oszlopokat stringként adja — innen a Number().
+ */
+export function szamlaHatralek(row: Pick<SzamlaRow, "brutto" | "fizetve" | "fizetett_osszeg">): number {
+  if (row.fizetve) return 0;
+  return Number(row.brutto) - Number(row.fizetett_osszeg ?? 0);
+}
+
+/** Részben fizetett: jött rá banki utalás, de még nem futotta a teljes összeget. */
+export function reszbenFizetve(row: Pick<SzamlaRow, "fizetve" | "fizetett_osszeg">): boolean {
+  return !row.fizetve && Number(row.fizetett_osszeg ?? 0) > 0;
+}
 
 export type SzamlaOsszesitoSor = {
   kategoria: SzamlaKategoria;

@@ -19,7 +19,9 @@
 //    számlát jelölnénk fizetettnek).
 //  - Automatikus (egy kattintásos) könyvelés csak akkor, ha az összeg
 //    fillérre kijön; minden más javaslat kézi jóváhagyásra vár.
-//  - Egy számla egy feltöltésen belül csak egy utaláshoz kerülhet.
+//  - Egy számla hátralékát egy feltöltésen belül csak egyszer lehet lefedni,
+//    de ha egy utalás csak részben fedezi (részfizetés), a maradékra ugyanabban
+//    a feltöltésben egy későbbi utalás is jöhet.
 
 import ExcelJS from "exceljs";
 import type {
@@ -41,6 +43,8 @@ export type ParositasSzamla = {
   fizetve: boolean;
   /** "YYYY-MM-DD", ha fizetett. */
   fizetveDatum: string | null;
+  /** Korábbi részfizetésekből már beérkezett összeg (szamla.fizetett_osszeg). */
+  fizetettOsszeg: number;
   /** Van-e már hozzá lekönyvelt banki utalás (kontokivonat_konyvelt) — ha nincs, a fizetés dátuma pontosítható. */
   bankIgazolt: boolean;
 };
@@ -270,8 +274,13 @@ function centben(osszeg: number): number {
   return Math.round(osszeg * 100);
 }
 
-function osszegCent(szamlak: ParositasSzamla[]): number {
-  return szamlak.reduce((s, sz) => s + centben(sz.brutto), 0);
+/**
+ * Amennyit egy utalás még fedezhet a számlából: nyitottnál a hátralék (a
+ * korábbi részfizetések levonva), már fizetettnél a teljes bruttó — ott az
+ * utalás nem fizet, csak a fizetés dátumát igazolja.
+ */
+function fedezetCent(sz: ParositasSzamla): number {
+  return sz.fizetve ? centben(sz.brutto) : centben(sz.brutto) - centben(sz.fizetettOsszeg);
 }
 
 function esedekesseg(a: ParositasSzamla, b: ParositasSzamla): number {
@@ -281,11 +290,13 @@ function esedekesseg(a: ParositasSzamla, b: ParositasSzamla): number {
   return a.szamlaszam.localeCompare(b.szamlaszam, "hu", { numeric: true });
 }
 
-function jelolt(sz: ParositasSzamla): KivonatSzamlaJelolt {
+function jelolt(sz: ParositasSzamla, hatralekCent: number): KivonatSzamlaJelolt {
   return {
     id: sz.id,
     szamlaszam: sz.szamlaszam,
     brutto: sz.brutto,
+    hatralek: hatralekCent / 100,
+    fizetettOsszeg: sz.fizetettOsszeg,
     fizetesiHatarido: sz.fizetesiHatarido,
     fizetveDatum: sz.fizetve ? sz.fizetveDatum : null,
   };
@@ -371,12 +382,17 @@ function feloldHivatkozasokat(tranz: KivonatTranzakcio, szamlak: ParositasSzamla
 }
 
 /** A legrégebben esedékes nyitott számlák olyan (legrövidebb) sora, aminek összege pontosan kiadja a célt — és tartalmazza a kötelezőket. */
-function legregebbiElotag(nyitottak: ParositasSzamla[], celCent: number, kotelezo: ParositasSzamla[] = []): ParositasSzamla[] | null {
+function legregebbiElotag(
+  nyitottak: ParositasSzamla[],
+  celCent: number,
+  szabadCent: (sz: ParositasSzamla) => number,
+  kotelezo: ParositasSzamla[] = []
+): ParositasSzamla[] | null {
   let osszeg = 0;
   const elotag: ParositasSzamla[] = [];
   for (const sz of nyitottak) {
     elotag.push(sz);
-    osszeg += centben(sz.brutto);
+    osszeg += szabadCent(sz);
     if (osszeg === celCent) {
       return kotelezo.every((k) => elotag.some((e) => e.id === k.id)) ? elotag : null;
     }
@@ -386,9 +402,13 @@ function legregebbiElotag(nyitottak: ParositasSzamla[], celCent: number, kotelez
 }
 
 /** Legfeljebb 3 számla kombinációja, ami pontosan kiadja a célt (a legrégebbiek előnyben). */
-function osszegKombinacio(nyitottak: ParositasSzamla[], celCent: number): ParositasSzamla[] | null {
+function osszegKombinacio(
+  nyitottak: ParositasSzamla[],
+  celCent: number,
+  szabadCent: (sz: ParositasSzamla) => number
+): ParositasSzamla[] | null {
   const n = Math.min(nyitottak.length, 15);
-  const c = nyitottak.map((sz) => centben(sz.brutto));
+  const c = nyitottak.map(szabadCent);
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
       if (c[i] + c[j] === celCent) return [nyitottak[i], nyitottak[j]];
@@ -413,7 +433,14 @@ export function parositKivonatot(
   szamlak: ParositasSzamla[],
   konyveltKulcsok: Set<string>
 ): KivonatParositas[] {
-  const foglalt = new Set<string>();
+  // Egy számla hátralékából egy feltöltésen belül több utalás is lefedhet
+  // egy-egy részt (részfizetés) — itt tartjuk nyilván, mennyit kötöttek már le.
+  const lekotottCent = new Map<string, number>();
+  const szamlaAzonosito = new Map(szamlak.map((sz) => [sz.id, sz]));
+  const szabadCent = (sz: ParositasSzamla) => fedezetCent(sz) - (lekotottCent.get(sz.id) ?? 0);
+  const szabad = (sz: ParositasSzamla) => szabadCent(sz) > 0;
+  const szabadOsszegCent = (lista: ParositasSzamla[]) => lista.reduce((o, sz) => o + szabadCent(sz), 0);
+  const jeloltek = (lista: ParositasSzamla[]) => lista.map((sz) => jelolt(sz, szabadCent(sz)));
   const sorrend = [...tranzakciok].sort((a, b) => (a.datum < b.datum ? -1 : a.datum > b.datum ? 1 : 0));
   const eredmeny = new Map<string, KivonatParositas>();
 
@@ -421,7 +448,16 @@ export function parositKivonatot(
     const cel = centben(tranz.osszeg);
     const penznem = penznemKod(tranz.penznem);
     const kesz = (p: Omit<KivonatParositas, "tranzakcio">) => {
-      p.kivalasztottIdk.forEach((id) => foglalt.add(id));
+      // A bejelölt számlákból ennyit köt le ez az utalás — részfizetésnél csak
+      // az utalás összegét, így a számla maradéka egy későbbi utalásnak megmarad.
+      let marad = cel;
+      for (const id of p.kivalasztottIdk) {
+        const sz = szamlaAzonosito.get(id);
+        if (!sz) continue;
+        const resz = Math.min(szabadCent(sz), Math.max(marad, 0));
+        lekotottCent.set(id, (lekotottCent.get(id) ?? 0) + resz);
+        marad -= resz;
+      }
       eredmeny.set(tranz.kulcs, { tranzakcio: tranz, ...p });
     };
 
@@ -438,7 +474,7 @@ export function parositKivonatot(
       .filter(
         (sz) =>
           !sz.fizetve &&
-          !foglalt.has(sz.id) &&
+          szabad(sz) &&
           sz.kiallitasDatum <= tranz.datum &&
           nevEgyezik(tranz.partnerNev, sz.vevoNev)
       )
@@ -446,28 +482,28 @@ export function parositKivonatot(
 
     const hivatkozott = feloldHivatkozasokat(tranz, azonosPenznem).sort(esedekesseg);
     if (hivatkozott.length > 0) {
-      const nyitottHiv = hivatkozott.filter((sz) => !sz.fizetve && !foglalt.has(sz.id));
+      const nyitottHiv = hivatkozott.filter((sz) => !sz.fizetve && szabad(sz));
       const fizetettHiv = hivatkozott.filter((sz) => sz.fizetve);
-      const igazolatlanHiv = fizetettHiv.filter((sz) => !sz.bankIgazolt && !foglalt.has(sz.id));
+      const igazolatlanHiv = fizetettHiv.filter((sz) => !sz.bankIgazolt && szabad(sz));
       const lista = hivatkozott.map((sz) => sz.szamlaszam).join(", ");
 
       if (nyitottHiv.length === 0 && igazolatlanHiv.length > 0) {
         // Már fizetettként szereplő, de banki utalással még nem igazolt számlák
         // (pl. régi tömeges import) — a fizetés dátuma pontosítható.
-        if (osszegCent(igazolatlanHiv) === cel) {
+        if (szabadOsszegCent(igazolatlanHiv) === cel) {
           kesz({
-            allapot: "datum", mod: "memo", szamlak: igazolatlanHiv.map(jelolt), kivalasztottIdk: igazolatlanHiv.map((sz) => sz.id),
+            allapot: "datum", mod: "memo", szamlak: jeloltek(igazolatlanHiv), kivalasztottIdk: igazolatlanHiv.map((sz) => sz.id),
             megjegyzes: `Közlemény alapján — már fizetettként szerepel, a fizetés dátuma ${tranz.datum} lesz.`,
           });
           continue;
         }
         const igazolatlanVevo = azonosPenznem
-          .filter((sz) => sz.fizetve && !sz.bankIgazolt && !foglalt.has(sz.id) && sz.kiallitasDatum <= tranz.datum && nevEgyezik(tranz.partnerNev, sz.vevoNev))
+          .filter((sz) => sz.fizetve && !sz.bankIgazolt && szabad(sz) && sz.kiallitasDatum <= tranz.datum && nevEgyezik(tranz.partnerNev, sz.vevoNev))
           .sort(esedekesseg);
-        const elotagFiz = legregebbiElotag(igazolatlanVevo, cel, igazolatlanHiv);
+        const elotagFiz = legregebbiElotag(igazolatlanVevo, cel, szabadCent, igazolatlanHiv);
         if (elotagFiz) {
           kesz({
-            allapot: "datum", mod: "legregebbi", szamlak: elotagFiz.map(jelolt), kivalasztottIdk: elotagFiz.map((sz) => sz.id),
+            allapot: "datum", mod: "legregebbi", szamlak: jeloltek(elotagFiz), kivalasztottIdk: elotagFiz.map((sz) => sz.id),
             megjegyzes: `A közlemény ${lista} számlát említi, az összeg a vevő ${elotagFiz.length} legrégebbi, már fizetettként szereplő számlájával egyezik — ellenőrizd.`,
           });
           continue;
@@ -476,7 +512,7 @@ export function parositKivonatot(
 
       if (nyitottHiv.length === 0) {
         eredmeny.set(tranz.kulcs, {
-          tranzakcio: tranz, allapot: "konyvelt", mod: "memo", szamlak: hivatkozott.map(jelolt), kivalasztottIdk: [],
+          tranzakcio: tranz, allapot: "konyvelt", mod: "memo", szamlak: jeloltek(hivatkozott), kivalasztottIdk: [],
           megjegyzes: fizetettHiv.length > 0
             ? `A közleményben szereplő számla már fizetve (${lista}).`
             : `A közleményben szereplő számlát ebben a feltöltésben egy másik utalás már lefedi (${lista}).`,
@@ -484,9 +520,9 @@ export function parositKivonatot(
         continue;
       }
 
-      if (osszegCent(nyitottHiv) === cel) {
+      if (szabadOsszegCent(nyitottHiv) === cel) {
         kesz({
-          allapot: "auto", mod: "memo", szamlak: nyitottHiv.map(jelolt), kivalasztottIdk: nyitottHiv.map((sz) => sz.id),
+          allapot: "auto", mod: "memo", szamlak: jeloltek(nyitottHiv), kivalasztottIdk: nyitottHiv.map((sz) => sz.id),
           megjegyzes: fizetettHiv.length > 0
             ? `közlemény alapján; ${fizetettHiv.map((sz) => sz.szamlaszam).join(", ")} már fizetve`
             : nyitottHiv.length > 1 ? `közlemény alapján, ${nyitottHiv.length} számla` : "közlemény alapján",
@@ -494,19 +530,33 @@ export function parositKivonatot(
         continue;
       }
 
-      if (igazolatlanHiv.length > 0 && osszegCent(nyitottHiv) + osszegCent(igazolatlanHiv) === cel) {
+      if (igazolatlanHiv.length > 0 && szabadOsszegCent(nyitottHiv) + szabadOsszegCent(igazolatlanHiv) === cel) {
         const mind = [...nyitottHiv, ...igazolatlanHiv];
         kesz({
-          allapot: "auto", mod: "memo", szamlak: mind.map(jelolt), kivalasztottIdk: mind.map((sz) => sz.id),
+          allapot: "auto", mod: "memo", szamlak: jeloltek(mind), kivalasztottIdk: mind.map((sz) => sz.id),
           megjegyzes: `közlemény alapján; ${igazolatlanHiv.map((sz) => sz.szamlaszam).join(", ")} már fizetve — a dátuma pontosítva`,
         });
         continue;
       }
 
-      const elotag = legregebbiElotag(nyitottVevo, cel, nyitottHiv);
+      // Részfizetés: a közlemény egyetlen nyitott számlára hivatkozik, és az
+      // utalás kevesebb, mint annak hátraléka — a számla nyitva marad, csak a
+      // hátralék csökken; a következő utalás (akár ugyanebben a feltöltésben)
+      // zárja majd le. Több számla közti részleges megosztást nem találgatunk.
+      if (nyitottHiv.length === 1 && cel < szabadCent(nyitottHiv[0])) {
+        const sz = nyitottHiv[0];
+        const marad = szabadCent(sz) - cel;
+        kesz({
+          allapot: "resz", mod: "memo", szamlak: jeloltek([sz]), kivalasztottIdk: [sz.id],
+          megjegyzes: `Részfizetés a(z) ${sz.szamlaszam} számlára: a hátralék ${formatFt(szabadCent(sz), tranz.penznem)}, ebből most ${formatFt(cel, tranz.penznem)} érkezett — könyvelés után marad ${formatFt(marad, tranz.penznem)}, a számla nyitott marad.`,
+        });
+        continue;
+      }
+
+      const elotag = legregebbiElotag(nyitottVevo, cel, szabadCent, nyitottHiv);
       if (elotag) {
         kesz({
-          allapot: "review", mod: "legregebbi", szamlak: elotag.map(jelolt), kivalasztottIdk: elotag.map((sz) => sz.id),
+          allapot: "review", mod: "legregebbi", szamlak: jeloltek(elotag), kivalasztottIdk: elotag.map((sz) => sz.id),
           megjegyzes: `A közlemény ${lista} számlát említi, de az összeg a vevő legrégebbi ${elotag.length} nyitott számlájával egyezik pontosan.`,
         });
         continue;
@@ -514,8 +564,8 @@ export function parositKivonatot(
 
       const tobbi = nyitottVevo.filter((sz) => !nyitottHiv.some((h) => h.id === sz.id)).slice(0, 8);
       kesz({
-        allapot: "review", mod: "memo", szamlak: [...nyitottHiv, ...tobbi].map(jelolt), kivalasztottIdk: nyitottHiv.map((sz) => sz.id),
-        megjegyzes: `Összeg-eltérés: az utalás ${formatFt(cel, tranz.penznem)}, a közleményben szereplő nyitott számlák összesen ${formatFt(osszegCent(nyitottHiv), tranz.penznem)}.`,
+        allapot: "review", mod: "memo", szamlak: jeloltek([...nyitottHiv, ...tobbi]), kivalasztottIdk: nyitottHiv.map((sz) => sz.id),
+        megjegyzes: `Összeg-eltérés: az utalás ${formatFt(cel, tranz.penznem)}, a közleményben szereplő nyitott számlák összesen ${formatFt(szabadOsszegCent(nyitottHiv), tranz.penznem)}.`,
       });
       continue;
     }
@@ -524,13 +574,13 @@ export function parositKivonatot(
       // Nincs nyitott számla: talán egy már fizetettként szereplő, de banki
       // utalással még nem igazolt számla befizetése (régi, közlemény nélküli utalás).
       const igazolatlanVevo = azonosPenznem
-        .filter((sz) => sz.fizetve && !sz.bankIgazolt && !foglalt.has(sz.id) && sz.kiallitasDatum <= tranz.datum && nevEgyezik(tranz.partnerNev, sz.vevoNev))
+        .filter((sz) => sz.fizetve && !sz.bankIgazolt && szabad(sz) && sz.kiallitasDatum <= tranz.datum && nevEgyezik(tranz.partnerNev, sz.vevoNev))
         .sort(esedekesseg);
-      const egyezoFiz = igazolatlanVevo.filter((sz) => centben(sz.brutto) === cel);
-      const elotagFiz = egyezoFiz.length > 0 ? [egyezoFiz[0]] : legregebbiElotag(igazolatlanVevo, cel);
+      const egyezoFiz = igazolatlanVevo.filter((sz) => szabadCent(sz) === cel);
+      const elotagFiz = egyezoFiz.length > 0 ? [egyezoFiz[0]] : legregebbiElotag(igazolatlanVevo, cel, szabadCent);
       if (elotagFiz) {
         kesz({
-          allapot: "datum", mod: egyezoFiz.length > 0 ? "osszeg" : "legregebbi", szamlak: elotagFiz.map(jelolt), kivalasztottIdk: elotagFiz.map((sz) => sz.id),
+          allapot: "datum", mod: egyezoFiz.length > 0 ? "osszeg" : "legregebbi", szamlak: jeloltek(elotagFiz), kivalasztottIdk: elotagFiz.map((sz) => sz.id),
           megjegyzes: egyezoFiz.length > 0
             ? `Nincs számlaszám a közleményben — azonos összegű, már fizetettként szereplő számla${egyezoFiz.length > 1 ? ` (${egyezoFiz.length} közül a legrégebbi)` : ""}; ellenőrizd.`
             : `Nincs számlaszám a közleményben — a vevő ${elotagFiz.length} legrégebbi, már fizetettként szereplő számlájának összege kiadja; ellenőrizd.`,
@@ -544,17 +594,17 @@ export function parositKivonatot(
       continue;
     }
 
-    const egyezok = nyitottVevo.filter((sz) => centben(sz.brutto) === cel);
+    const egyezok = nyitottVevo.filter((sz) => szabadCent(sz) === cel);
     if (egyezok.length === 1 && !vanHivatkozasMinta(tranz)) {
       kesz({
-        allapot: "auto", mod: "osszeg", szamlak: [jelolt(egyezok[0])], kivalasztottIdk: [egyezok[0].id],
+        allapot: "auto", mod: "osszeg", szamlak: jeloltek([egyezok[0]]), kivalasztottIdk: [egyezok[0].id],
         megjegyzes: "összeg-egyezés (egyetlen ilyen összegű nyitott számla)",
       });
       continue;
     }
     if (egyezok.length >= 1) {
       kesz({
-        allapot: "review", mod: "legregebbi", szamlak: egyezok.slice(0, 8).map(jelolt), kivalasztottIdk: [egyezok[0].id],
+        allapot: "review", mod: "legregebbi", szamlak: jeloltek(egyezok.slice(0, 8)), kivalasztottIdk: [egyezok[0].id],
         megjegyzes: egyezok.length > 1
           ? `${egyezok.length} azonos összegű nyitott számla — a legrégebben esedékes van bejelölve.`
           : `A közleményben szereplő számlaszámot nem sikerült azonosítani ("${tranz.memo}") — azonos összegű nyitott számla bejelölve.`,
@@ -562,26 +612,26 @@ export function parositKivonatot(
       continue;
     }
 
-    const elotag = legregebbiElotag(nyitottVevo, cel);
+    const elotag = legregebbiElotag(nyitottVevo, cel, szabadCent);
     if (elotag) {
       kesz({
-        allapot: "review", mod: "legregebbi", szamlak: elotag.map(jelolt), kivalasztottIdk: elotag.map((sz) => sz.id),
+        allapot: "review", mod: "legregebbi", szamlak: jeloltek(elotag), kivalasztottIdk: elotag.map((sz) => sz.id),
         megjegyzes: `Nincs számlaszám a közleményben — a vevő legrégebbi ${elotag.length} nyitott számlájának összege pontosan kiadja.`,
       });
       continue;
     }
 
-    const kombinacio = osszegKombinacio(nyitottVevo, cel);
+    const kombinacio = osszegKombinacio(nyitottVevo, cel, szabadCent);
     if (kombinacio) {
       kesz({
-        allapot: "review", mod: "osszeg", szamlak: kombinacio.map(jelolt), kivalasztottIdk: kombinacio.map((sz) => sz.id),
+        allapot: "review", mod: "osszeg", szamlak: jeloltek(kombinacio), kivalasztottIdk: kombinacio.map((sz) => sz.id),
         megjegyzes: `Nincs számlaszám a közleményben — ${kombinacio.length} számla összege pontosan kiadja.`,
       });
       continue;
     }
 
     eredmeny.set(tranz.kulcs, {
-      tranzakcio: tranz, allapot: "review", mod: null, szamlak: nyitottVevo.slice(0, 8).map(jelolt), kivalasztottIdk: [],
+      tranzakcio: tranz, allapot: "review", mod: null, szamlak: jeloltek(nyitottVevo.slice(0, 8)), kivalasztottIdk: [],
       megjegyzes: "Nincs pontos összeg-egyezés — jelöld be kézzel, melyik számlát fedezi.",
     });
   }
