@@ -2046,3 +2046,39 @@ pihenőn állva semmi nem mutatta, hogy az út nagyobb része megvolt.
   a kintlévőség. A Ma és a Rendszer számlálói ugyanígy számolnak.
 - **Tesztek:** teszt-allapotgep 51/0, teszt-megbizas-szuro 26/0; tsc, eslint
   és next build tiszta.
+
+## 2026-09-25 — Számla ↔ megbízás párosítás: nem bukhat el írásmódon
+
+- **Probléma (valós számlákból):** a WLLWR-2026-320 (ÁB Speed, 26/3814)
+  párosult, a többi nem:
+  - **WLLWR-2026-313, ÁJ-TRANS:** a rendelésszám („ÁJ/2026/09/1279”)
+    betűre egyezett a pozíciószámmal. A Számlázz.hu az Á-t `&#193;`-ként
+    küldi, és a rendelésszámot nem dekódoltuk (a vevő nevét és a tételeket
+    igen).
+  - **WLLWR-2026-319, FLOTT-TRANS:** a számlára a Járatszám került
+    (260923XX01), a kiolvasás a megbízás sorszámát (2026/01201) vette
+    pozíciószámnak.
+  - **Hajdúspedíció:** a megbízáson nincs hivatkozási szám.
+- **Javítás (Budaházi Zoltán döntése szerint):**
+  1. A rendelésszám dekódolva kerül a `szamla` táblába. A korábban
+     dekódolatlanul mentetteket a szinkron helyben javítja, újralekérdezés
+     nélkül.
+  2. A párosítás (`lib/fuvarozas/szamla-parositas.ts`, tiszta modul) a
+     megbízás minden számát nézi: pozíciószám, kanonikus hivatkozás, Reise
+     ID, referencia. Ékezet, kis-nagybetű, szóköz, perjel és kötőjel nem
+     számít. Ha ezek egyike sem egyezik, a megbízás irat-szövegét is nézi,
+     ugyanannál a partnernél és csak egyértelmű találatnál.
+  3. Tartalék, ha nincs egyező szám: partner + nettó összeg + dátum
+     (felrakás −1 nap … lerakás +14 nap) + útvonal (a tétel első és utolsó
+     városa a felrakó, illetve a lerakó címében). Mind a négynek egyeznie
+     kell, és csak egy-az-egyhez találatot párosít.
+  4. Minden párosítás naplózva: `fuvar_megbizas_esemeny` 'szamla_parositva',
+     a módjával együtt, és a szerver-naplóban is. A számla-szinkron
+     naplósora kiírja a párosítások számát. Az Elszámolás fülön külön
+     szakasz mutatja az egyik fuvarhoz sem párosított fuvarszámlákat
+     (60 nap).
+- **Ellenőrzés:**
+  - `scripts/teszt-szamla-parositas.ts`: 16/0, a négy valós esettel.
+  - Helyi Postgres-próba: mind a négy fuvar párosult és „Számlázva” lett; a
+    második kör 0; a LOGO TREK számla a párosítatlanok között maradt.
+  - tsc és next build tiszta.

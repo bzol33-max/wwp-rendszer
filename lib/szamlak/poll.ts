@@ -20,7 +20,7 @@
 // attól, hogy a fő kereső időközben már jóval előrébb jár.
 
 import { query } from "@/lib/db";
-import { lekerdezSzamla, SzamlazzHuError, type SzamlazzHuSzamla } from "./szamlazzhu-client";
+import { decodeEntities, lekerdezSzamla, SzamlazzHuError, type SzamlazzHuSzamla } from "./szamlazzhu-client";
 import { kategorizalSzamla, alkategorizalRaklap } from "./categorize";
 import { frissitSztornoJelolest } from "./sztorno";
 import { szinkronizalSzamlaSzamokat } from "@/lib/fuvarozas/megbizasok";
@@ -130,6 +130,25 @@ const MAX_RENDELESSZAM_JAVITAS_KORONKENT = 30;
  * elmentett számlák rendelesszam-ja emiatt még null a szamla táblában — ezt
  * itt, korlátozott ütemben, újralekérdezéssel pótoljuk.
  */
+/**
+ * A dekódolatlanul elmentett rendelésszámok (pl. „&#193;J/2026/09/1279”)
+ * helyben javítása — újralekérdezés nélkül, a kliens dekóderével.
+ */
+async function dekodoljRendelesszamokat(): Promise<number> {
+  const sorok = await query<{ id: string; rendelesszam: string }>(
+    `select id::text, rendelesszam from szamla where rendelesszam like '%&%;%'`
+  );
+  let javitva = 0;
+  for (const r of sorok) {
+    const uj = decodeEntities(r.rendelesszam).trim();
+    if (uj && uj !== r.rendelesszam) {
+      await query(`update szamla set rendelesszam = $2 where id = $1`, [r.id, uj]);
+      javitva++;
+    }
+  }
+  return javitva;
+}
+
 async function javitRendelesszamHianyokat(agentKulcs: string): Promise<number> {
   const hianyosak = await query<{ szamlaszam: string }>(
     `select szamlaszam from szamla
@@ -367,7 +386,7 @@ async function futtatSzamlaSzinkronKor(): Promise<PollEredmeny> {
   // fuvarszámlák pótlólagos, korlátozott ütemű újralekérdezése — lásd
   // javitRendelesszamHianyokat.
   try {
-    eredmeny.rendelesszamJavitva = await javitRendelesszamHianyokat(agentKulcs);
+    eredmeny.rendelesszamJavitva = (await dekodoljRendelesszamokat()) + (await javitRendelesszamHianyokat(agentKulcs));
   } catch (err) {
     eredmeny.hibak.push(
       `Rendelésszám-javítás: ${err instanceof Error ? err.message : "ismeretlen hiba"}`

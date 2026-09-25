@@ -132,6 +132,26 @@ export function ElszamolasVaszonNezet({ adat }: { adat: ElszamolasVaszon }) {
         ))}
       </Szakasz>
 
+      {adat.parositatlan.length > 0 ? (
+        <Szakasz cim="Párosítatlan fuvarszámla" szam={String(adat.parositatlan.length)} also="kiment, de a rendszer egyik fuvarhoz sem tudta tenni — írd be a számlaszámot a fuvarnál">
+          <div className="overflow-x-auto rounded-2xl border border-[var(--f2-amb)]/30 bg-card">
+            <table className="w-full text-sm">
+              <tbody>
+                {adat.parositatlan.map((p) => (
+                  <tr key={p.szamlaszam} className="border-b border-foreground/5 last:border-0">
+                    <td className="px-3 py-2 font-medium">{p.szamlaszam}</td>
+                    <td className="px-3 py-2">{p.vevo_nev}</td>
+                    <td className="px-3 py-2 text-muted-foreground">rendelésszám: {p.rendelesszam ?? "—"}</td>
+                    <td className="px-3 py-2 text-muted-foreground">{nap(p.kiallitas_nap)}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">{ft(p.netto)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Szakasz>
+      ) : null}
+
       <Szakasz cim="Kintlévőség" szam={`${adat.kintlevoseg.length}`} also="Számlázz.hu-szinkronból">
         {adat.kintlevoseg.length === 0 ? <Ures /> : (
           <div className="overflow-x-auto rounded-2xl border border-foreground/10 bg-card">
