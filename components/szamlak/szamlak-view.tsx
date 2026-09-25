@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CheckIcon, InfoIcon } from "lucide-react";
 import { useCanEdit } from "@/components/auth/edit-permission-context";
 import { PageHeader } from "@/components/layout/page-header";
@@ -8,13 +8,6 @@ import { KontokivonatDialog } from "@/components/szamlak/kontokivonat-dialog";
 import { SzamlaBevetelDiagram } from "@/components/szamlak/szamla-bevetel-diagram";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -220,29 +213,29 @@ function FizetveCella({
   );
 }
 
-/** Egy csempére kattintva megnyíló, teljes (szűrt) számlalista — "csoportos" módban vevőnként csoportosítva. */
-function SzamlaListaDialog({
+/**
+ * A lapon belül megjelenő, szűrt számlalista (a bal oldali sáv nézetéhez) —
+ * "csoportos" módban vevőnként csoportosítva. Korábban dialógusban nyílt; a
+ * B-elrendezésben (2026-09-25) a jobb hasáb tartalma, dialógus nélkül.
+ */
+function SzamlaLista({
   cim,
   szuro,
   csoportos,
-  onOpenChange,
   onChanged,
 }: {
-  cim: string | null;
-  szuro: SzamlaListaSzuro | null;
+  cim: string;
+  szuro: SzamlaListaSzuro;
   csoportos: boolean;
-  onOpenChange: (nyitva: boolean) => void;
   onChanged: () => void;
 }) {
   const [rows, setRows] = useState<SzamlaRow[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
-    if (!szuro) return;
     setLoading(true);
     try {
-      const data = await getSzamlaLista(szuro);
-      setRows(data);
+      setRows(await getSzamlaLista(szuro));
     } finally {
       setLoading(false);
     }
@@ -250,8 +243,7 @@ function SzamlaListaDialog({
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [szuro]);
+  }, [load]);
 
   const { fizetve, visszavon } = useFizetveJeloles(
     (id, f, d) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, fizetve: f, fizetve_datum: d } : r))),
@@ -282,6 +274,10 @@ function SzamlaListaDialog({
     const nyitottOsszeg = (c: (typeof csoportok)[number]) => c.nyitott.reduce((s, o) => s + o.osszeg, 0);
     csoportok.sort((a, b) => nyitottOsszeg(b) - nyitottOsszeg(a));
   }
+
+  const osszegSor = osszegLista(
+    rows.filter((r) => !r.fizetve).map((r) => ({ penznem: r.penznem, osszeg: szamlaHatralek(r) }))
+  );
 
   function sor(row: SzamlaRow) {
     const lejart = !row.fizetve && !!row.fizetesi_hatarido && row.fizetesi_hatarido < ma;
@@ -315,159 +311,217 @@ function SzamlaListaDialog({
   }
 
   return (
-    <Dialog open={szuro !== null} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-4xl">
-        <DialogHeader>
-          <DialogTitle>{cim}</DialogTitle>
-        </DialogHeader>
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Sorszám</TableHead>
-                <TableHead>Vevő</TableHead>
-                {vanRendelesszam && <TableHead>Hiv. szám</TableHead>}
-                <TableHead>Kiállítás</TableHead>
-                <TableHead>Fizetési határidő</TableHead>
-                <TableHead className="text-right">Összeg</TableHead>
-                <TableHead className="w-28">Állapot</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {!loading && (csoportos ? csoportok.length === 0 : rows.length === 0) && (
-                <TableRow>
-                  <TableCell colSpan={oszlopSzam} className="text-center text-muted-foreground">
-                    Nincs ilyen számla.
-                  </TableCell>
-                </TableRow>
-              )}
-              {csoportos
-                ? csoportok.map((c) => [
-                    <TableRow key={`cs-${c.vevoNev}`} className="bg-muted/40 hover:bg-muted/40">
-                      <TableCell colSpan={oszlopSzam} className="text-xs font-semibold">
-                        {c.vevoNev}
-                        <span className="ml-2 font-normal text-muted-foreground">
-                          {c.nyitott.length > 0
-                            ? `${c.nyitott.length} nyitott · ${osszegLista(c.nyitott)
-                                .map((o) => formatOsszeg(o.osszeg, o.penznem))
-                                .join(" + ")}`
-                            : "nincs nyitott"}
-                        </span>
-                      </TableCell>
-                    </TableRow>,
-                    ...c.sorok.map(sor),
-                  ])
-                : rows.map(sor)}
-            </TableBody>
-          </Table>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-/** Egy csempe összeg-sorai: az első (forint) nagyban, a többi pénznem alatta kisebben. */
-function Osszegek({ lista, szin }: { lista: Osszeg[]; szin?: string }) {
-  return (
-    <>
-      <div className={`text-lg font-bold tabular-nums sm:text-xl ${szin ?? ""}`}>
-        {formatOsszeg(lista[0].osszeg, lista[0].penznem)}
+    <div className="flex min-w-0 flex-col gap-2 rounded-xl border bg-card p-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <span className="text-sm font-semibold">
+          {cim} <span className="font-normal text-muted-foreground">({rows.length})</span>
+        </span>
+        {!szuro.csakFizetve && (
+          <span className="text-xs text-muted-foreground">
+            hátralék{" "}
+            <span className="font-semibold tabular-nums text-foreground">
+              {osszegSor.map((o) => formatOsszeg(o.osszeg, o.penznem)).join(" + ")}
+            </span>
+          </span>
+        )}
       </div>
-      {lista.slice(1).map((o) => (
-        <div key={o.penznem} className={`text-sm font-semibold tabular-nums ${szin ?? ""}`}>
-          + {formatOsszeg(o.osszeg, o.penznem)}
-        </div>
-      ))}
-    </>
-  );
-}
-
-/** A felső 3 szám: Nyitott / Lejárt / 7 napon belül esedékes — pénznemenként soronként. */
-function FejlecSzamok({
-  fejlec,
-  statisztika,
-  onMegnyit,
-}: {
-  fejlec: SzamlaFejlecSor[];
-  statisztika: SzamlaKiemeltStatisztika;
-  onMegnyit: (cim: string, szuro: SzamlaListaSzuro) => void;
-}) {
-  const nyitott = osszegLista(fejlec.map((f) => ({ penznem: f.penznem, osszeg: f.nyitott_osszeg })));
-  const lejart = osszegLista(fejlec.map((f) => ({ penznem: f.penznem, osszeg: f.lejart_osszeg })));
-  const het = osszegLista(fejlec.map((f) => ({ penznem: f.penznem, osszeg: f.het_osszeg })));
-  const darab = (mezo: "nyitott_darab" | "lejart_darab" | "het_darab") =>
-    fejlec.reduce((s, f) => s + Number(f[mezo]), 0);
-
-  return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-      <Card
-        size="sm"
-        className="cursor-pointer transition-colors hover:bg-muted/50"
-        onClick={() => onMegnyit(`Nyitott számlák (${darab("nyitott_darab")})`, { csakNyitott: true })}
-      >
-        <CardContent className="flex min-w-0 flex-col gap-0.5 py-1">
-          <div className="text-xs text-muted-foreground">Nyitott ({darab("nyitott_darab")} számla)</div>
-          <Osszegek lista={nyitott} />
-          {statisztika.legnagyobbNyitottVevo && (
-            <div className="truncate text-xs text-muted-foreground" title={statisztika.legnagyobbNyitottVevo}>
-              Legnagyobb: {statisztika.legnagyobbNyitottVevo} ·{" "}
-              {formatOsszeg(statisztika.legnagyobbNyitottVevoOsszegHuf, "Ft")}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-      <Card
-        size="sm"
-        className="cursor-pointer border-destructive/40 bg-destructive/5 transition-colors hover:bg-destructive/10"
-        onClick={() => onMegnyit(`Lejárt számlák (${darab("lejart_darab")})`, { csakNyitott: true, hatarido: "lejart" })}
-      >
-        <CardContent className="flex min-w-0 flex-col gap-0.5 py-1">
-          <div className="text-xs text-destructive">Lejárt ({darab("lejart_darab")} számla)</div>
-          <Osszegek lista={lejart} szin="text-destructive" />
-        </CardContent>
-      </Card>
-      <Card
-        size="sm"
-        className="cursor-pointer border-warning/40 bg-warning/5 transition-colors hover:bg-warning/10"
-        onClick={() =>
-          onMegnyit(`7 napon belül esedékes (${darab("het_darab")})`, { csakNyitott: true, hatarido: "het" })
-        }
-      >
-        <CardContent className="flex min-w-0 flex-col gap-0.5 py-1">
-          <div className="text-xs text-muted-foreground">7 napon belül esedékes ({darab("het_darab")} számla)</div>
-          <Osszegek lista={het} />
-        </CardContent>
-      </Card>
+      <div className="overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Sorszám</TableHead>
+              <TableHead>Vevő</TableHead>
+              {vanRendelesszam && <TableHead>Hiv. szám</TableHead>}
+              <TableHead>Kiállítás</TableHead>
+              <TableHead>Fizetési határidő</TableHead>
+              <TableHead className="text-right">Összeg</TableHead>
+              <TableHead className="w-28">Állapot</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {!loading && (csoportos ? csoportok.length === 0 : rows.length === 0) && (
+              <TableRow>
+                <TableCell colSpan={oszlopSzam} className="text-center text-muted-foreground">
+                  Nincs ilyen számla.
+                </TableCell>
+              </TableRow>
+            )}
+            {csoportos
+              ? csoportok.map((c) => [
+                  <TableRow key={`cs-${c.vevoNev}`} className="bg-muted/40 hover:bg-muted/40">
+                    <TableCell colSpan={oszlopSzam} className="text-xs font-semibold">
+                      {c.vevoNev}
+                      <span className="ml-2 font-normal text-muted-foreground">
+                        {c.nyitott.length > 0
+                          ? `${c.nyitott.length} nyitott · ${osszegLista(c.nyitott)
+                              .map((o) => formatOsszeg(o.osszeg, o.penznem))
+                              .join(" + ")}`
+                          : "nincs nyitott"}
+                      </span>
+                    </TableCell>
+                  </TableRow>,
+                  ...c.sorok.map(sor),
+                ])
+              : rows.map(sor)}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }
 
-type KategoriaCsempeDef = {
+/** A jobb hasáb tetején futó számcsík egy mezője. */
+function CsikMezo({
+  cimke,
+  darab,
+  osszegek,
+  szin,
+  aktiv,
+  onClick,
+}: {
+  cimke: string;
+  darab: number;
+  osszegek: Osszeg[];
+  szin?: string;
+  aktiv: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={aktiv}
+      className={`flex min-w-0 flex-col gap-0.5 px-3 py-2 text-left transition-colors hover:bg-muted/50 ${aktiv ? "bg-muted/60" : ""}`}
+    >
+      <span className={`text-xs ${szin ?? "text-muted-foreground"}`}>
+        {cimke} <span className="text-muted-foreground">· {darab}</span>
+      </span>
+      <span className={`truncate text-base font-bold tabular-nums ${szin ?? ""}`}>
+        {formatOsszeg(osszegek[0].osszeg, osszegek[0].penznem)}
+      </span>
+      {osszegek.slice(1).map((o) => (
+        <span key={o.penznem} className={`truncate text-xs font-semibold tabular-nums ${szin ?? ""}`}>
+          + {formatOsszeg(o.osszeg, o.penznem)}
+        </span>
+      ))}
+    </button>
+  );
+}
+
+/**
+ * A jobb hasáb fejléce: Nyitott / Lejárt / 7 napon belül — egy csíkban, a
+ * pénznemenkénti összegekkel. Kattintásra a lista nézetre vált a megfelelő
+ * szűrővel (a korábbi csempék funkciója).
+ */
+function SzamCsik({
+  fejlec,
+  hatarido,
+  aktivLista,
+  onValaszt,
+}: {
+  fejlec: SzamlaFejlecSor[];
+  hatarido: "lejart" | "het" | null;
+  aktivLista: boolean;
+  onValaszt: (hatarido: "lejart" | "het" | null) => void;
+}) {
+  const osszeg = (mezo: "nyitott_osszeg" | "lejart_osszeg" | "het_osszeg") =>
+    osszegLista(fejlec.map((f) => ({ penznem: f.penznem, osszeg: f[mezo] })));
+  const darab = (mezo: "nyitott_darab" | "lejart_darab" | "het_darab") =>
+    fejlec.reduce((n, f) => n + Number(f[mezo]), 0);
+
+  return (
+    <div className="grid grid-cols-1 divide-y overflow-hidden rounded-xl border bg-card sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+      <CsikMezo
+        cimke="Nyitott"
+        darab={darab("nyitott_darab")}
+        osszegek={osszeg("nyitott_osszeg")}
+        aktiv={aktivLista && hatarido === null}
+        onClick={() => onValaszt(null)}
+      />
+      <CsikMezo
+        cimke="Lejárt"
+        darab={darab("lejart_darab")}
+        osszegek={osszeg("lejart_osszeg")}
+        szin="text-destructive"
+        aktiv={aktivLista && hatarido === "lejart"}
+        onClick={() => onValaszt("lejart")}
+      />
+      <CsikMezo
+        cimke="7 napon belül"
+        darab={darab("het_darab")}
+        osszegek={osszeg("het_osszeg")}
+        szin="text-warning"
+        aktiv={aktivLista && hatarido === "het"}
+        onClick={() => onValaszt("het")}
+      />
+    </div>
+  );
+}
+
+type MappaDef = {
   kulcs: string;
   cim: string;
-  felirat: string;
   kategoria: SzamlaKategoria;
   alkategoria: SzamlaAlkategoria | null;
   /** Az Egyéb sok kis vevőt fog össze — a listája vevőnként csoportosítva nyílik. */
   csoportos: boolean;
 };
 
-const KATEGORIA_CSEMPEK: KategoriaCsempeDef[] = [
-  { kulcs: "fuvar", cim: "Fuvar", felirat: "Fuvar", kategoria: "fuvar", alkategoria: null, csoportos: false },
-  { kulcs: "fabrika", cim: "Fabrika", felirat: "Raklap", kategoria: "raklap", alkategoria: "fabrika", csoportos: false },
-  { kulcs: "keter", cim: "Keter", felirat: "Raklap", kategoria: "raklap", alkategoria: "keter", csoportos: false },
-  { kulcs: "egyeb", cim: "Egyéb", felirat: "Raklap · vevőnként", kategoria: "raklap", alkategoria: "egyeb", csoportos: true },
+const MAPPAK: MappaDef[] = [
+  { kulcs: "fuvar", cim: "Fuvar", kategoria: "fuvar", alkategoria: null, csoportos: false },
+  { kulcs: "fabrika", cim: "Fabrika", kategoria: "raklap", alkategoria: "fabrika", csoportos: false },
+  { kulcs: "keter", cim: "Keter", kategoria: "raklap", alkategoria: "keter", csoportos: false },
+  { kulcs: "egyeb", cim: "Egyéb", kategoria: "raklap", alkategoria: "egyeb", csoportos: true },
 ];
 
-/** 4 kategória-csempe (Fuvar / Fabrika / Keter / Egyéb), pénznemek egy csempén belül; nyitott tétel nélkül nem jelenik meg. */
-function KategoriaCsempek({
+type Nezet = "teendok" | "lista" | "vevok" | "kifizetve" | "bevetel";
+
+const NEZET_CIM: Record<Nezet, string> = {
+  teendok: "Teendők",
+  lista: "Minden számla",
+  vevok: "Vevők",
+  kifizetve: "Kifizetve",
+  bevetel: "Bevétel",
+};
+
+function SavGomb({ aktiv, onClick, children }: { aktiv: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={aktiv}
+      className={`flex min-h-8 w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors ${
+        aktiv ? "bg-accent font-medium text-accent-foreground" : "hover:bg-muted"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/**
+ * Bal oldali sáv: fent a nézetek, alatta a mappák a kintlévőségükkel — a
+ * korábbi kategória-csempék funkciója. Egy mappára kattintva a lista nézet
+ * nyílik az adott mappára szűrve (az Egyéb vevőnként csoportosítva).
+ */
+function OldalSav({
+  nezet,
+  mappa,
   osszesito,
-  onMegnyit,
+  kifizetettDarab,
+  statisztika,
+  onNezet,
+  onMappa,
 }: {
+  nezet: Nezet;
+  mappa: MappaDef | null;
   osszesito: SzamlaOsszesitoSor[];
-  onMegnyit: (def: KategoriaCsempeDef) => void;
+  kifizetettDarab: number;
+  statisztika: SzamlaKiemeltStatisztika;
+  onNezet: (nezet: Nezet) => void;
+  onMappa: (mappa: MappaDef | null) => void;
 }) {
-  const csempek = KATEGORIA_CSEMPEK.map((def) => {
+  const mappaSorok = MAPPAK.map((def) => {
     const sorok = osszesito.filter((s) => s.kategoria === def.kategoria && (s.alkategoria ?? null) === def.alkategoria);
     return {
       def,
@@ -475,36 +529,55 @@ function KategoriaCsempek({
       nyitottDarab: sorok.reduce((n, s) => n + Number(s.nyitott_darab), 0),
       lejartDarab: sorok.reduce((n, s) => n + Number(s.lejart_darab), 0),
     };
-  }).filter((c) => c.nyitottDarab > 0);
-
-  if (csempek.length === 0) return null;
+  }).filter((m) => m.nyitottDarab > 0);
 
   return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      {csempek.map(({ def, nyitott, nyitottDarab, lejartDarab }) => (
-        <Card
-          key={def.kulcs}
-          size="sm"
-          className={`cursor-pointer border-l-2 transition-colors hover:bg-muted/50 ${def.kategoria === "fuvar" ? "border-l-primary" : ""}`}
-          style={def.kategoria === "raklap" ? { borderLeftColor: "#f97316" } : undefined}
-          onClick={() => onMegnyit(def)}
-        >
-          <CardContent className="flex min-w-0 flex-col gap-0.5 py-1">
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{def.felirat}</div>
-            <div className="text-sm font-semibold">{def.cim}</div>
-            {nyitott.map((o) => (
-              <div key={o.penznem} className="text-base font-bold tabular-nums">
-                {formatOsszeg(o.osszeg, o.penznem)}
-              </div>
+    <nav className="flex flex-col gap-2 rounded-xl border bg-card p-2 lg:sticky lg:top-4 lg:self-start">
+      <div className="flex flex-wrap gap-1 lg:flex-col">
+        {(["teendok", "lista", "vevok", "kifizetve", "bevetel"] as Nezet[]).map((n) => (
+          <span key={n} className="min-w-[8rem] flex-1 lg:min-w-0">
+            <SavGomb aktiv={nezet === n} onClick={() => onNezet(n)}>
+              <span className={n === "kifizetve" ? "text-success" : ""}>{NEZET_CIM[n]}</span>
+              {n === "kifizetve" && <span className="text-xs tabular-nums text-success">{kifizetettDarab}</span>}
+            </SavGomb>
+          </span>
+        ))}
+      </div>
+
+      {mappaSorok.length > 0 && (
+        <>
+          <div className="border-t pt-1.5 text-[11px] uppercase tracking-wide text-muted-foreground lg:px-2">Mappa</div>
+          <div className="flex flex-wrap gap-1 lg:flex-col">
+            <span className="min-w-[6rem] flex-1 lg:min-w-0">
+              <SavGomb aktiv={mappa === null} onClick={() => onMappa(null)}>
+                Mind
+              </SavGomb>
+            </span>
+            {mappaSorok.map(({ def, nyitott, lejartDarab }) => (
+              <span key={def.kulcs} className="min-w-[8rem] flex-1 lg:min-w-0">
+                <SavGomb aktiv={mappa?.kulcs === def.kulcs} onClick={() => onMappa(def)}>
+                  <span className="truncate">
+                    {def.cim}
+                    {lejartDarab > 0 && <span className="ml-1 text-xs text-destructive">· {lejartDarab} lejárt</span>}
+                  </span>
+                  <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
+                    {formatOsszeg(nyitott[0].osszeg, nyitott[0].penznem)}
+                  </span>
+                </SavGomb>
+              </span>
             ))}
-            <div className="text-xs text-muted-foreground">
-              {nyitottDarab} nyitott
-              {lejartDarab > 0 && <span className="font-medium text-destructive"> · {lejartDarab} lejárt</span>}
-            </div>
-          </CardContent>
-        </Card>
-      ))}
-    </div>
+          </div>
+        </>
+      )}
+
+      {statisztika.legnagyobbNyitottVevo && (
+        <div className="border-t px-2 pt-1.5 text-[11px] leading-snug text-muted-foreground">
+          Legnagyobb tartozó:{" "}
+          <span className="font-medium text-foreground">{statisztika.legnagyobbNyitottVevo}</span> ·{" "}
+          {formatOsszeg(statisztika.legnagyobbNyitottVevoOsszegHuf, "Ft")}
+        </div>
+      )}
+    </nav>
   );
 }
 
@@ -675,9 +748,11 @@ export function SzamlakView() {
   const [kifizetettOsszesito, setKifizetettOsszesito] = useState<SzamlaKifizetettOsszesitoSor[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
   const [frissitve, setFrissitve] = useState(false);
-  const [listaCim, setListaCim] = useState<string | null>(null);
-  const [listaSzuro, setListaSzuro] = useState<SzamlaListaSzuro | null>(null);
-  const [listaCsoportos, setListaCsoportos] = useState(false);
+  // B-elrendezés (2026-09-25): bal oldali sáv a nézetekkel és a mappákkal,
+  // jobbra a számcsík és a kiválasztott nézet. A lap a Teendőkön nyílik.
+  const [nezet, setNezet] = useState<Nezet>("teendok");
+  const [mappa, setMappa] = useState<MappaDef | null>(null);
+  const [hatarido, setHatarido] = useState<"lejart" | "het" | null>(null);
   const canEdit = useCanEdit();
 
   const loadOsszesito = useCallback(async () => {
@@ -720,13 +795,31 @@ export function SzamlakView() {
     }
   }
 
-  function megnyitLista(cim: string, szuro: SzamlaListaSzuro, csoportos = false) {
-    setListaCim(cim);
-    setListaCsoportos(csoportos);
-    setListaSzuro(szuro);
-  }
-
   const kifizetettDarab = kifizetettOsszesito.reduce((sum, k) => sum + k.darab, 0);
+
+  // A lista nézet szűrője — a hivatkozása stabil, különben a SzamlaLista
+  // minden újrarajzolásnál újratöltene.
+  const listaSzuro: SzamlaListaSzuro = useMemo(
+    () => ({
+      kategoria: mappa?.kategoria,
+      alkategoria: mappa ? mappa.alkategoria : undefined,
+      ...(nezet === "kifizetve"
+        ? { csakFizetve: true, fizetveIdei: true, limit: 5000 }
+        : { csakNyitott: true, hatarido: nezet === "lista" && hatarido ? hatarido : undefined }),
+    }),
+    [mappa, nezet, hatarido]
+  );
+
+  // Vevőnkénti bontás: a "Vevők" nézetben mindig, a mappák közül az Egyébnél
+  // (sok kis vevő) a lista nézetben is.
+  const csoportos = nezet === "vevok" || (nezet === "lista" && !!mappa?.csoportos);
+
+  const listaCim =
+    nezet === "kifizetve"
+      ? `Kifizetve (idén)${mappa ? ` · ${mappa.cim}` : ""}`
+      : nezet === "vevok"
+        ? `Vevők${mappa ? ` · ${mappa.cim}` : ""}`
+        : `${hatarido === "lejart" ? "Lejárt" : hatarido === "het" ? "7 napon belül esedékes" : "Nyitott számlák"}${mappa ? ` · ${mappa.cim}` : ""}`;
 
   const infoSzoveg = [
     "A számlákat a cég a Számlázz.hu-ban állítja ki — ez a nézet onnan automatikusan behúzott kintlévőség-követő, nem számlázó felület.",
@@ -749,15 +842,6 @@ export function SzamlakView() {
         actions={
           <>
             <SzinkronInfoGomb szoveg={infoSzoveg} />
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-success"
-              title={kifizetettOsszesito.map((k) => formatOsszeg(k.osszeg, k.penznem)).join(" · ")}
-              onClick={() => megnyitLista(`Kifizetve (${kifizetettDarab})`, { csakFizetve: true })}
-            >
-              <CheckIcon className="h-4 w-4" /> Kifizetve ({kifizetettDarab})
-            </Button>
             {canEdit && (
               <>
                 {/* A refreshKey az összesítőt ÉS a Teendők listát is újratölti. */}
@@ -771,36 +855,51 @@ export function SzamlakView() {
         }
       />
 
-      <FejlecSzamok fejlec={fejlec} statisztika={statisztika} onMegnyit={(cim, szuro) => megnyitLista(cim, szuro)} />
+      <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[13rem_minmax(0,1fr)]">
+        <OldalSav
+          nezet={nezet}
+          mappa={mappa}
+          osszesito={osszesito}
+          kifizetettDarab={kifizetettDarab}
+          statisztika={statisztika}
+          onNezet={(n) => {
+            setNezet(n);
+            if (n !== "lista") setHatarido(null);
+          }}
+          onMappa={(m) => {
+            setMappa(m);
+            // A Teendők és a Bevétel nézet nem mappa-függő — mappára kattintva a listát mutatjuk.
+            if (nezet === "teendok" || nezet === "bevetel") setNezet("lista");
+          }}
+        />
 
-      <KategoriaCsempek
-        osszesito={osszesito}
-        onMegnyit={(def) =>
-          megnyitLista(
-            def.kategoria === "fuvar" ? "Fuvar" : `Raklap — ${def.cim}`,
-            { kategoria: def.kategoria, alkategoria: def.alkategoria },
-            def.csoportos
-          )
-        }
-      />
+        <div className="flex min-w-0 flex-col gap-4">
+          <SzamCsik
+            fejlec={fejlec}
+            hatarido={hatarido}
+            aktivLista={nezet === "lista"}
+            onValaszt={(h) => {
+              setHatarido(h);
+              setNezet("lista");
+            }}
+          />
 
-      <TeendokLista refreshKey={refreshKey} onChanged={loadOsszesito} />
+          {nezet === "teendok" && <TeendokLista refreshKey={refreshKey} onChanged={loadOsszesito} />}
 
-      <SzamlaBevetelDiagram havi={havi} statisztika={statisztika} />
+          {(nezet === "lista" || nezet === "vevok" || nezet === "kifizetve") && (
+            <SzamlaLista
+              // A nézet/mappa váltás friss listát töltsön, ne a korábbi sorokat mutassa.
+              key={`${nezet}-${mappa?.kulcs ?? "mind"}-${hatarido ?? "nyitott"}-${refreshKey}`}
+              cim={listaCim}
+              szuro={listaSzuro}
+              csoportos={csoportos}
+              onChanged={loadOsszesito}
+            />
+          )}
 
-      <SzamlaListaDialog
-        cim={listaCim}
-        szuro={listaSzuro}
-        csoportos={listaCsoportos}
-        onOpenChange={(nyitva) => {
-          if (!nyitva) {
-            setListaSzuro(null);
-            // A listában tett "Fizetve" jelölések a Teendők listában is látszódjanak.
-            setRefreshKey((k) => k + 1);
-          }
-        }}
-        onChanged={loadOsszesito}
-      />
+          {nezet === "bevetel" && <SzamlaBevetelDiagram havi={havi} statisztika={statisztika} />}
+        </div>
+      </div>
     </div>
   );
 }

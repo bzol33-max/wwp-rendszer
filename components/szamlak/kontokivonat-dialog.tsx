@@ -256,6 +256,197 @@ function Szakasz({
   );
 }
 
+/** Pénznemenkénti összeg egy sorban (a forint elöl) — vegyes devizás kivonatnál is pontos. */
+function osszegekSzovege(tetelek: KivonatParositas[]): string {
+  const map = new Map<string, number>();
+  for (const p of tetelek) {
+    const penznem = ["FT", "HUF"].includes(p.tranzakcio.penznem.trim().toUpperCase()) ? "Ft" : p.tranzakcio.penznem;
+    map.set(penznem, (map.get(penznem) ?? 0) + p.tranzakcio.osszeg);
+  }
+  const lista = [...map.entries()].sort((a, b) => (a[0] === "Ft" ? -1 : b[0] === "Ft" ? 1 : 0));
+  return lista.length > 0 ? lista.map(([penznem, osszeg]) => formatOsszeg(osszeg, penznem)).join(" + ") : "—";
+}
+
+/** Egy szám a összefoglaló négyes dobozból. */
+function OsszefoglaloDoboz({
+  cimke,
+  darab,
+  also,
+  szinOsztaly,
+}: {
+  cimke: string;
+  darab: number;
+  also?: string;
+  szinOsztaly: string;
+}) {
+  return (
+    <div className={`flex flex-col gap-0.5 rounded-lg px-3 py-2 ${szinOsztaly}`}>
+      <span className="text-xs">{cimke}</span>
+      <span className="text-lg font-semibold tabular-nums">{darab}</span>
+      {also && <span className="text-[11px] tabular-nums opacity-80">{also}</span>}
+    </div>
+  );
+}
+
+/** Egy sor a jóváhagyó listában: mi történik ezzel az utalással. */
+function OsszefoglaloSor({
+  parositas,
+  jelolt,
+  onToggle,
+}: {
+  parositas: KivonatParositas;
+  jelolt: boolean;
+  onToggle: () => void;
+}) {
+  const { tranzakcio: t, allapot, szamlak, kivalasztottIdk } = parositas;
+  const erintett = szamlak.filter((sz) => kivalasztottIdk.includes(sz.id));
+  const szamlaszamok = erintett.map((sz) => sz.szamlaszam).join(", ");
+  const marad = allapot === "resz" && erintett[0] ? erintett[0].hatralek - t.osszeg : 0;
+  const muvelet =
+    allapot === "auto"
+      ? { szoveg: "fizetve lesz", osztaly: "text-success" }
+      : allapot === "resz"
+        ? { szoveg: `részfizetés, marad ${formatOsszeg(marad, t.penznem)}`, osztaly: "text-warning" }
+        : { szoveg: `fizetési dátum ${t.datum}`, osztaly: "text-primary" };
+
+  return (
+    <label className="flex cursor-pointer items-start gap-2 px-3 py-2 hover:bg-muted/40">
+      <input type="checkbox" className="mt-1 h-3.5 w-3.5 shrink-0" checked={jelolt} onChange={onToggle} />
+      <span className="min-w-0 flex-1">
+        <span className="flex items-baseline justify-between gap-2">
+          <span className="truncate text-sm font-medium" title={t.partnerNev}>
+            {t.partnerNev || "—"}
+          </span>
+          <span className="shrink-0 text-sm tabular-nums">{formatOsszeg(t.osszeg, t.penznem)}</span>
+        </span>
+        <span className={`block truncate text-[11px] ${muvelet.osztaly}`}>
+          {rovidDatum(t.datum)} · {szamlaszamok || "—"} → {muvelet.szoveg}
+        </span>
+      </span>
+    </label>
+  );
+}
+
+/**
+ * A feltöltés utáni jóváhagyó képernyő: felül a számok, alatta tételesen, mi
+ * mivel párosult, és egyetlen gomb, ami az összes jelöltet lekönyveli. Amit
+ * kiveszel a jelölésből, az érintetlen marad; a kézi ellenőrzést kérő tételek
+ * alább, kártyánként intézhetők.
+ */
+function JovahagyoOsszefoglalo({
+  fajlok,
+  osszesTetel,
+  konyvelheto,
+  reviewDarab,
+  marKonyveltDarab,
+  egyebDarab,
+  onKonyvelve,
+}: {
+  fajlok: KivonatFajl[];
+  osszesTetel: number;
+  konyvelheto: KivonatParositas[];
+  reviewDarab: number;
+  marKonyveltDarab: number;
+  egyebDarab: number;
+  onKonyvelve: (kulcsok: string[]) => void;
+}) {
+  const [kihagyott, setKihagyott] = useState<Set<string>>(new Set());
+  const [folyamatban, setFolyamatban] = useState(false);
+
+  const jeloltek = konyvelheto.filter((p) => !kihagyott.has(p.tranzakcio.kulcs));
+  const auto = konyvelheto.filter((p) => p.allapot === "auto");
+  const resz = konyvelheto.filter((p) => p.allapot === "resz");
+  const datum = konyvelheto.filter((p) => p.allapot === "datum");
+  const datumok = fajlok.flatMap((f) => [f.datumtol, f.datumig]).filter((d): d is string => !!d).sort();
+
+  async function konyvel() {
+    if (jeloltek.length === 0) return;
+    setFolyamatban(true);
+    try {
+      const res = await fogadjaElParositasokat(
+        jeloltek.map((p) => ({ tranzakcio: p.tranzakcio, szamlaIdk: p.kivalasztottIdk }))
+      );
+      toast.success(eredmenyUzenet(res));
+      onKonyvelve(jeloltek.map((p) => p.tranzakcio.kulcs));
+    } catch {
+      toast.error("Nem sikerült könyvelni.");
+    } finally {
+      setFolyamatban(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border bg-card p-3">
+      <div className="text-xs text-muted-foreground">
+        {fajlok.length} fájl · {osszesTetel} bevételi tétel
+        {datumok.length > 0 && ` · ${datumok[0]} – ${datumok[datumok.length - 1]}`}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <OsszefoglaloDoboz
+          cimke="Fizetve lesz"
+          darab={auto.length}
+          also={osszegekSzovege(auto)}
+          szinOsztaly="bg-success/10 text-success"
+        />
+        <OsszefoglaloDoboz
+          cimke="Részfizetés"
+          darab={resz.length}
+          also={osszegekSzovege(resz)}
+          szinOsztaly="bg-warning/10 text-warning"
+        />
+        <OsszefoglaloDoboz
+          cimke="Dátum pontosítva"
+          darab={datum.length}
+          also={osszegekSzovege(datum)}
+          szinOsztaly="bg-primary/10 text-primary"
+        />
+        <OsszefoglaloDoboz
+          cimke="Kézi / kimarad"
+          darab={reviewDarab + egyebDarab}
+          also={marKonyveltDarab > 0 ? `${marKonyveltDarab} már könyvelve` : undefined}
+          szinOsztaly="bg-muted text-muted-foreground"
+        />
+      </div>
+
+      {konyvelheto.length === 0 ? (
+        <div className="py-2 text-center text-sm text-muted-foreground">
+          Nincs több könyvelendő tétel ebből a kivonatból.
+        </div>
+      ) : (
+        <>
+          <div className="text-xs text-muted-foreground">
+            A jelölt tételek könyvelődnek. Amit kiveszel, az érintetlen marad.
+          </div>
+          <div className="max-h-64 divide-y overflow-y-auto rounded-lg border">
+            {konyvelheto.map((p) => (
+              <OsszefoglaloSor
+                key={p.tranzakcio.kulcs}
+                parositas={p}
+                jelolt={!kihagyott.has(p.tranzakcio.kulcs)}
+                onToggle={() =>
+                  setKihagyott((prev) => {
+                    const uj = new Set(prev);
+                    if (uj.has(p.tranzakcio.kulcs)) uj.delete(p.tranzakcio.kulcs);
+                    else uj.add(p.tranzakcio.kulcs);
+                    return uj;
+                  })
+                }
+              />
+            ))}
+          </div>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-muted-foreground">{jeloltek.length} tétel jelölve</span>
+            <Button disabled={folyamatban || jeloltek.length === 0} onClick={konyvel}>
+              {folyamatban ? "Könyvelés…" : `Rendben, könyvelés (${jeloltek.length})`}
+            </Button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 const FORRAS_CIM: Record<KivonatFajl["forras"], string> = {
   "unicredit-xlsx": "UniCredit",
   "cib-pdf": "CIB",
@@ -334,7 +525,8 @@ export function KontokivonatDialog({ onChanged }: { onChanged: () => void }) {
       </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
+        {/* A dialógus portálba renderel, a lap wrapper-én kívül — a modul színeit (.szamlak) itt külön meg kell kapnia. */}
+        <DialogContent className="szamlak max-h-[85vh] overflow-y-auto bg-background sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>Kontókivonat párosítás</DialogTitle>
           </DialogHeader>
@@ -343,100 +535,80 @@ export function KontokivonatDialog({ onChanged }: { onChanged: () => void }) {
 
           {!allapotSzoveg && parositasok && (
             <div className="flex flex-col gap-5">
-              <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
-                <div className="mb-1 font-medium text-foreground">
-                  {fajlok.length} fájl · {osszes.length} bevételi tétel
-                </div>
-                {fajlok.map((f) => (
-                  <div key={f.fajlNev} className="flex flex-wrap gap-x-2">
-                    <span className="font-medium text-foreground">{f.fajlNev}</span>
-                    <span>
-                      {FORRAS_CIM[f.forras]} · {f.datumtol && f.datumig ? `${f.datumtol} – ${f.datumig}` : "nincs bevétel"} ·{" "}
-                      {f.bevetelSzam} bevétel ({f.kihagyottKiadas} kiadás, {f.kihagyottKartya} kártyás, {f.kihagyottSajat} saját
-                      átvezetés kihagyva)
-                    </span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
-                  Automatikusan párosítva
-                  <Badge className="bg-success/15 text-success hover:bg-success/15">{autoLista.length}</Badge>
-                </div>
-                {autoLista.length === 0 && (
-                  <div className="text-sm text-muted-foreground">Nincs automatikusan párosítható tétel.</div>
-                )}
-                {autoLista.map((p) => (
-                  <ParositasKartya
-                    key={p.tranzakcio.kulcs}
-                    parositas={p}
-                    onKonyvelve={() => markKonyvelve([p.tranzakcio.kulcs])}
-                  />
-                ))}
-              </div>
-
-              <Szakasz
-                cim="Részfizetés"
-                badgeClass="bg-warning/15 text-warning hover:bg-warning/15"
-                lista={reszLista}
+              {/* Jóváhagyó összefoglaló: mi mivel párosult, és egy gomb az egészre. */}
+              <JovahagyoOsszefoglalo
+                fajlok={fajlok}
+                osszesTetel={osszes.length}
+                konyvelheto={[...autoLista, ...reszLista, ...datumLista]}
+                reviewDarab={reviewLista.length}
+                marKonyveltDarab={marKonyveltLista.length}
+                egyebDarab={egyebLista.length}
                 onKonyvelve={markKonyvelve}
-                leiras="Az utalás kisebb, mint a közleményben szereplő számla hátraléka. Könyveléskor csak a hátralék csökken, a számla nyitott marad — a következő utalás zárja majd le."
               />
-              <Szakasz
-                cim="Fizetés dátumának pontosítása"
-                badgeClass="bg-primary/15 text-primary hover:bg-primary/15"
-                lista={datumLista}
-                onKonyvelve={markKonyvelve}
-                leiras="Ezek a számlák már fizetettként szerepelnek, de banki utalással még nem voltak igazolva. A fizetés dátuma az utalás értéknapja lesz. A közlemény alapján biztos tételek egyszerre frissíthetők; a többinél ellenőrizd a bejelölt számlát."
-                tomeges={{
-                  cimke: "Közleményes tételek frissítése",
-                  tetelek: datumLista.filter((p) => p.mod === "memo"),
-                }}
-              />
+
               <Szakasz
                 cim="Kézi ellenőrzés szükséges"
                 badgeClass="bg-warning/15 text-warning hover:bg-warning/15"
                 lista={reviewLista}
                 onKonyvelve={markKonyvelve}
-              />
-              <Szakasz
-                cim="Már könyvelve"
-                badgeClass="bg-muted text-muted-foreground hover:bg-muted"
-                lista={marKonyveltLista}
-                onKonyvelve={markKonyvelve}
-                osszecsukott
-              />
-              <Szakasz
-                cim="Nem vevői befizetés / nincs hozzá számla"
-                badgeClass="bg-muted text-muted-foreground hover:bg-muted"
-                lista={egyebLista}
-                onKonyvelve={markKonyvelve}
-                osszecsukott
+                leiras="Ezeknél az összeg vagy a közlemény nem egyértelmű — jelöld be, melyik számlát fedezi az utalás."
               />
 
-              {autoLista.length > 0 && (
-                <div className="sticky bottom-0 flex items-center justify-between border-t bg-background pt-3">
-                  <div className="text-xs text-muted-foreground">
-                    {autoLista.length} automatikus párosítás kész elfogadásra
+              <details className="flex flex-col gap-2">
+                <summary className="cursor-pointer list-none text-sm font-semibold text-muted-foreground">
+                  Részletek tételenként
+                </summary>
+                <div className="mt-2 flex flex-col gap-5">
+                  <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground">
+                    {fajlok.map((f) => (
+                      <div key={f.fajlNev} className="flex flex-wrap gap-x-2">
+                        <span className="font-medium text-foreground">{f.fajlNev}</span>
+                        <span>
+                          {FORRAS_CIM[f.forras]} ·{" "}
+                          {f.datumtol && f.datumig ? `${f.datumtol} – ${f.datumig}` : "nincs bevétel"} · {f.bevetelSzam}{" "}
+                          bevétel ({f.kihagyottKiadas} kiadás, {f.kihagyottKartya} kártyás, {f.kihagyottSajat} saját
+                          átvezetés kihagyva)
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                  <Button
-                    onClick={async () => {
-                      try {
-                        const res = await fogadjaElParositasokat(
-                          autoLista.map((p) => ({ tranzakcio: p.tranzakcio, szamlaIdk: p.kivalasztottIdk }))
-                        );
-                        toast.success(eredmenyUzenet(res));
-                        markKonyvelve(autoLista.map((p) => p.tranzakcio.kulcs));
-                      } catch {
-                        toast.error("Nem sikerült könyvelni.");
-                      }
-                    }}
-                  >
-                    Mind elfogadása ({autoLista.length})
-                  </Button>
+
+                  <Szakasz
+                    cim="Automatikusan párosítva"
+                    badgeClass="bg-success/15 text-success hover:bg-success/15"
+                    lista={autoLista}
+                    onKonyvelve={markKonyvelve}
+                  />
+                  <Szakasz
+                    cim="Részfizetés"
+                    badgeClass="bg-warning/15 text-warning hover:bg-warning/15"
+                    lista={reszLista}
+                    onKonyvelve={markKonyvelve}
+                    leiras="Az utalás kisebb, mint a közleményben szereplő számla hátraléka. Könyveléskor csak a hátralék csökken, a számla nyitott marad — a következő utalás zárja majd le."
+                  />
+                  <Szakasz
+                    cim="Fizetés dátumának pontosítása"
+                    badgeClass="bg-primary/15 text-primary hover:bg-primary/15"
+                    lista={datumLista}
+                    onKonyvelve={markKonyvelve}
+                    leiras="Ezek a számlák már fizetettként szerepelnek, de banki utalással még nem voltak igazolva. A fizetés dátuma az utalás értéknapja lesz."
+                  />
+                  <Szakasz
+                    cim="Már könyvelve"
+                    badgeClass="bg-muted text-muted-foreground hover:bg-muted"
+                    lista={marKonyveltLista}
+                    onKonyvelve={markKonyvelve}
+                    osszecsukott
+                  />
+                  <Szakasz
+                    cim="Nem vevői befizetés / nincs hozzá számla"
+                    badgeClass="bg-muted text-muted-foreground hover:bg-muted"
+                    lista={egyebLista}
+                    onKonyvelve={markKonyvelve}
+                    osszecsukott
+                  />
                 </div>
-              )}
+              </details>
             </div>
           )}
         </DialogContent>

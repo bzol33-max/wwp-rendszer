@@ -152,8 +152,15 @@
    figyelmeztetés, tégla-vörös hiba, acélkék információ. Csak a /fuvarozas2
    útvonalakon (app/fuvarozas2/layout.tsx), a régi modulok érintetlenek.
    Döntés: 2026-09-19 (Budaházi Zoltán) — az új felület nem alkalmazkodik a
-   régi barna témához. */
-.fuvarozas2 {
+   régi barna témához.
+
+   A Számlák modul (.szamlak, app/szamlak/layout.tsx) ugyanezt a palettát
+   kapta — döntés: 2026-09-25 (Budaházi Zoltán). FONTOS: a dialógusok portálba
+   renderelnek, a lap wrapper-én kívül, ezért a modul dialógusai külön megkapják
+   a .szamlak osztályt (kontókivonat-párosítás) — enélkül a felugró ablak a régi
+   témában maradna. */
+.fuvarozas2,
+.szamlak {
   --background: #f3f4f1;
   --foreground: #1e2325;
   --card: #ffffff;
