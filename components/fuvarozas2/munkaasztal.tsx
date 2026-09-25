@@ -2,7 +2,8 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { varosNev } from "@/lib/fuvarozas/varos";
 import { formatFt, formatIdo, formatNap } from "@/components/fuvarozas2/kozos";
-import { SZAKASZOK, utSzakaszai, type Szakasz } from "@/lib/fuvarozas2/munkaasztal";
+import { SZAKASZOK, utSzakaszai, type KeresoIndex, type Szakasz } from "@/lib/fuvarozas2/munkaasztal";
+import { KeresoJavaslatok } from "@/components/fuvarozas2/kereso-javaslatok";
 import { kovetkezoTeendo } from "@/lib/fuvarozas2/megbizas-szuro";
 import type { KocsiMost, MunkaasztalSor } from "@/lib/fuvarozas2/megbizasok";
 
@@ -51,7 +52,7 @@ function SavSor({ href, cimke, n, aktiv, al, piros }: { href: string; cimke: str
   );
 }
 
-export function Oldalsav({ szuro, szamok }: { szuro: MunkaasztalSzuro; szamok: Szamok }) {
+export function Oldalsav({ szuro, szamok, kereso }: { szuro: MunkaasztalSzuro; szamok: Szamok; kereso: KeresoIndex }) {
   const aktivSzakasz = szuro.q ? undefined : szuro.szakasz ?? "folyamatban";
   const csoportok = [...new Set(SZAKASZOK.map((s) => s.csoport))];
   const jellegek: { kulcs?: "ber" | "sajat"; cimke: string; n: number }[] = [
@@ -67,18 +68,7 @@ export function Oldalsav({ szuro, szamok }: { szuro: MunkaasztalSzuro; szamok: S
       >
         + Új saját fuvar
       </Link>
-      <form action="/fuvarozas2/megbizasok" className="flex flex-col gap-1">
-        <input
-          type="search"
-          name="q"
-          defaultValue={szuro.q ?? ""}
-          placeholder="Keresés mindenben…"
-          aria-label="Keresés: cég, város, rendszám, sofőr, hivatkozás, számlaszám, hónap"
-          className="w-full rounded-lg border border-foreground/15 bg-background px-3 py-2 text-sm"
-        />
-        {szuro.jelleg ? <input type="hidden" name="jelleg" value={szuro.jelleg} /> : null}
-        <span className="px-1 text-[11px] text-muted-foreground">cég · város · rendszám · sofőr · hivatkozás · számlaszám · hónap</span>
-      </form>
+      <KeresoJavaslatok key={szuro.q ?? ""} index={kereso} kezdo={szuro.q ?? ""} jelleg={szuro.jelleg} />
       {szuro.q ? <SavSor href={munkaasztalLink({ jelleg: szuro.jelleg }, {})} cimke="× keresés törlése" /> : null}
 
       <div className="mt-1 flex gap-1 rounded-lg bg-muted p-1">
@@ -209,6 +199,7 @@ export function MunkaLista({ sorok, ma, szuro, cim }: { sorok: MunkaasztalSor[];
                       s.jarmu_kod ?? (s.elokeszites ? s.elokeszites_jarmu ?? "—" : "kocsi nélkül"),
                       db > 2 ? `${db} megálló` : null,
                       s.szamla_szam && s.szakasz !== "szamlazasra" ? s.szamla_szam : null,
+                      s.kieg_szamla_szamok?.length ? `+ kieg. ${s.kieg_szamla_szamok.join(", ")}` : null,
                       s.szallitolevel ? `szállító ${s.szallitolevel}` : null,
                       s.szakasz === "archiv" && s.postazva_at ? `feladva ${formatIdo(s.postazva_at).slice(0, 6)}` : null,
                       s.szakasz !== "archiv" ? t.szoveg : null,

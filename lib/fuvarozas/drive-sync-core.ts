@@ -545,9 +545,12 @@ async function ujFajlokFeldolgozasa(
         if (duvenbeck.statusz === "uj") ujFuvarok++;
         else if (duvenbeck.statusz === "osszefuzve") osszefuzottDokumentumok++;
         levaltottRegiSorok += duvenbeck.levaltottSorok;
-        const kifogasok = duvenbeck.szamlazottRegiSorok.map(
-          (szamla) => `Ehhez a fuvarhoz már van kiállított számla (${szamla}) — nem vettük fel újra, nézd át kézzel.`
-        );
+        const kifogasok = [
+          ...duvenbeck.szamlazottRegiSorok.map(
+            (szamla) => `Ehhez a fuvarhoz már van kiállított számla (${szamla}) — nem vettük fel újra, nézd át kézzel.`
+          ),
+          ...duvenbeck.kifogasok,
+        ];
         for (const kifogas of kifogasok) figyelmeztetesek.push(`${file.name}: ${kifogas}`);
         const duvenbeckNaplo = {
           ...naploAlap,

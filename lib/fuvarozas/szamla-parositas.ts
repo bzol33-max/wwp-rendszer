@@ -227,3 +227,41 @@ export function parositSzamlakat(fuvarok: ParositasFuvar[], szamlak: ParositasSz
 
   return eredmeny;
 }
+
+// --- Kiegészítő számla (Budaházi Zoltán, 2026-09-25) ---
+//
+// Egy már kiszámlázott fuvarhoz utólag is mehet számla — pl. kiállási díj:
+// a Ghibli N26/22824-es fuvarának fő számlája a WLLWR-2026-310, a +250 €
+// kiállási díjé a WLLWR-2026-316, rendelésszáma „N26/22824 kieg.”. Az ilyen
+// számla a fuvar kiegészítő számlája lesz, nem a fő számlája.
+
+const KIEG_SZO = /(^|[^a-z0-9áéíóöőúüű])(kieg|p[oó]tl[aá]s|p[oó]td[ií]j)[^\s\d]*/i;
+const KIEG_SZO_G = new RegExp(KIEG_SZO.source, "gi");
+
+/** Ha a rendelésszám kiegészítő számlát jelöl („N26/22824 kieg.”), a mögötte álló szám („N26/22824”); egyébként null. */
+export function kiegAlap(rendelesszam: string | null | undefined): string | null {
+  if (!rendelesszam || !KIEG_SZO.test(rendelesszam)) return null;
+  const alap = rendelesszam.replace(KIEG_SZO_G, "$1").replace(/[\s.,;:/-]+$/, "").trim();
+  return ertelmesSzam(szamKulcs(alap)) ? alap : null;
+}
+
+export type KiegFuvar = { id: string; partnerNevek: string[]; szamok: (string | null)[] };
+export type KiegSzamla = { szamlaszam: string; vevoNev: string; rendelesszam: string | null };
+
+/**
+ * Kiegészítő számla → fuvar: a „kieg.” előtti szám a fuvar valamelyik
+ * számával egyezik, és a vevő a megbízó. Egy fuvarnak több kiegészítő
+ * számlája is lehet, de egy számla csak egyetlen fuvarra illhet.
+ */
+export function parositKiegSzamlakat(fuvarok: KiegFuvar[], szamlak: KiegSzamla[]): { fuvarId: string; szamlaszam: string }[] {
+  const kulcsok = fuvarok.map((f) => ({ f, k: new Set(f.szamok.map(szamKulcs).filter(ertelmesSzam)) }));
+  const ki: { fuvarId: string; szamlaszam: string }[] = [];
+  for (const sz of szamlak) {
+    const alap = kiegAlap(sz.rendelesszam);
+    if (!alap) continue;
+    const k = szamKulcs(alap);
+    const talalat = kulcsok.filter(({ f, k: fk }) => fk.has(k) && partnerEgyezik(sz.vevoNev, f.partnerNevek));
+    if (talalat.length === 1) ki.push({ fuvarId: talalat[0].f.id, szamlaszam: sz.szamlaszam });
+  }
+  return ki;
+}

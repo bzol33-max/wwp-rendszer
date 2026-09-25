@@ -2241,3 +2241,45 @@ pihenőn állva semmi nem mutatta, hogy az út nagyobb része megvolt.
   - Helyi Postgres: mentés (ismételve is), párosítás, a második kör 0, a
     fuvar árut és darabszámot kap.
   - tsc, eslint és next build tiszta.
+
+## 2026-09-25 — Saját fuvar: a „kinek” átírása megmarad
+
+- A háttér-szinkron a „kinek” szövegéből partnert köt a fuvarhoz, a felület a
+  partner nevét mutatja; a mentés csak a szöveget írta át, így a régi név
+  (MTS) visszajött. Ha a „kinek” változik, a mentés eldobja a régi kötést
+  (`lib/fuvarozas2/sajat-fuvar.ts`).
+
+## 2026-09-25 — Duvenbeck: fantomsor-hurok, kiegészítő számla, kereső javaslatokkal
+
+- **Duvenbeck-átvilágítás (e-mailek + éles napló):** a 6 Duvenbeck-fuvar
+  (Út ID 23235330, 23271836, 23279022, 23288892, 23288876, 23283034) mind
+  kiszámlázva (292, 303, 302, 307, 308, 309), a Duvenbeck mindet könyvelte
+  (09-22-i „Egyeztetés” levél). A rendszerben viszont a #280 számlázatlan
+  Duvenbeck-fuvarként állt: a #79 (23235330, WLLWR-2026-292) duplikátuma.
+- **Ok:** a 23235330-as Út ID-t egy törölt sor fogta. A Duvenbeck-olvasó a
+  keresésnél kihagyja a törölt sort, a beszúrás viszont az egyedi indexen
+  elakadt → `null` → az irat (FRALI1980577_V1.pdf) a nyelvi modellhez ment,
+  ami új sort csinált, a következő kör leváltotta — kétóránként, 09-21 és
+  09-24 között (#173 … #280).
+- **Javítás (`lib/fuvarozas/duvenbeck-import.ts`, `megvanMar`):** ha az Út ID-t
+  törölt sor fogja, vagy egy régi, Út ID nélküli sor hordozza a számot
+  (pozíciószám/hivatkozás), nem lesz új sor, és a nyelvi modell sem kapja
+  meg: az irat a meglévő sorhoz kötődik, a napló kifogást ír. Az
+  „Újraolvasás” gomb (`felszabaditFuvarDokumentumot`) elengedi az Út ID-t.
+  A sablont fel nem ismerő Duvenbeck-irat továbbra is a nyelvi modellhez megy
+  (sablonváltás esetére).
+- **Nyitott:** a #280 törlése az élő adatbázisban — kézzel, a felületről.
+- **Kiegészítő számla:** `fuvar_megbizasok.kieg_szamla_szamok` (010-es
+  migráció). A „… kieg.” / „pótdíj” / „pótlás” rendelésszámú számla a „kieg.”
+  előtti szám + a vevő szerint a már kiszámlázott fuvarhoz kerül
+  (`parositKiegSzamlakat`), a fő párosításba nem. Valós eset: WLLWR-2026-316
+  (Ghibli, N26/22824, +250 € kiállási díj) → #135 (fő számla WLLWR-2026-310).
+  Lista, részlet, kereső mutatja; a párosítatlan sávból lekerül.
+- **Kereső javaslatokkal** (`components/fuvarozas2/kereso-javaslatok.tsx`):
+  gépelés közben fuvarok (kattintásra megnyílik), cégek, városok, kocsik,
+  számok és hónap; nyilakkal és Enterrel is. A szerver egyszer adja az
+  indexet (`getMunkaasztal` → `kereso`), a böngésző ebből válogat.
+- Tesztek: teszt-szamla-parositas 31/0, teszt-munkaasztal 33/0; helyi
+  Postgres: a Duvenbeck-hurok a régi kóddal előáll, az újjal nem; a
+  kiegészítő számla párosul, a második kör 0. Böngészőben (asztal + mobil) a
+  javaslatok, a kiválasztás és az Enter működik.

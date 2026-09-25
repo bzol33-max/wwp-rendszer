@@ -37,6 +37,8 @@ export type DuvenbeckMentes = {
   levaltottSorok: number;
   /** Régi sor, amit NEM váltottunk le, mert már van rá kiállított számla — emberi döntés kell hozzá. */
   szamlazottRegiSorok: string[];
+  /** Miért nem lett új sor, bár a fuvar még nem volt meg Út ID-vel (lásd megvanMar) — a naplóba kerül. */
+  kifogasok: string[];
 };
 
 type MeglevoSor = {
@@ -167,6 +169,7 @@ export async function mentDuvenbeckDokumentumot(
       reiseId: dok.reiseId,
       levaltottSorok: levaltott.length,
       szamlazottRegiSorok: szamlazottRegi.map((r) => r.szamla_szam),
+      kifogasok: [],
     };
   }
 
@@ -216,11 +219,50 @@ export async function mentDuvenbeckDokumentumot(
     return sor;
   }
 
+  /**
+   * A fuvar megvan, csak nem élő, Út ID-s sorként: vagy törölték (a törölt
+   * sor fogja az Út ID-t — a „Újraolvasás” gomb elengedi), vagy egy régi,
+   * még Út ID nélkül felvett sor hordozza a számát (pozíciószám/hivatkozás).
+   * Ilyenkor NEM veszünk fel új sort, és a nyelvi modellnek sem adjuk az
+   * iratot: az iratot a meglévő sorhoz kötjük, és ember nézi át.
+   *
+   * Enélkül a törölt Út ID miatt a beszúrás csendben elmaradt, az irat a
+   * nyelvi modellhez került, az új (hibás) sort a következő kör leváltotta —
+   * és ez kétóránként ismétlődött (FRALI1980577, Út ID 23235330, #173–#280,
+   * 2026-09-21–24; a fuvar a #79, kiszámlázva: WLLWR-2026-292).
+   */
+  const megvanMar = async (): Promise<DuvenbeckMentes | null> => {
+    const [sor] = await query<{ id: string; torolt: boolean; szamla_szam: string | null }>(
+      `select id::text, statusz = 'torolt' as torolt, szamla_szam from fuvar_megbizasok
+       where reise_id = $1
+          or (reise_id is null and statusz <> 'torolt'
+              and $1 in (pozicioszam, hivatkozas_kanonikus, hivatkozas_masodlagos))
+       order by (statusz <> 'torolt') desc, id
+       limit 1`,
+      [kulcs]
+    );
+    if (!sor) return null;
+    await rogzitDokumentumot(sor.id, file, dok);
+    const kifogas = sor.torolt
+      ? `Ezt a fuvart (Út ID ${kulcs}, #${sor.id}) korábban törölték — nem vettük fel újra. Ha mégis kell, a törölt sor „Újraolvasás” gombjával.`
+      : `Ez a fuvar már megvan (#${sor.id}${sor.szamla_szam ? `, számla: ${sor.szamla_szam}` : ""}) — az iratot hozzá csatoltuk, új sor nem lett.`;
+    return {
+      statusz: "valtozatlan",
+      fuvarId: sor.id,
+      reiseId: dok.reiseId,
+      levaltottSorok: levaltott.length,
+      szamlazottRegiSorok: [],
+      kifogasok: [kifogas],
+    };
+  };
+
   let meglevo = await keresMeglevot();
   let fuvarId: string | null = null;
   let statusz: DuvenbeckMentes["statusz"] = "uj";
 
   if (!meglevo) {
+    const mar = await megvanMar();
+    if (mar) return mar;
     // A felrakó/lerakó NOT NULL — ha egyik iratból sem jött ki cím, inkább
     // ne hozzunk létre féllábú sort, hagyjuk az általános feldolgozásra.
     if (!uj.felrako || !uj.lerako || !uj.datum) return null;
@@ -273,7 +315,7 @@ export async function mentDuvenbeckDokumentumot(
       );
     } else {
       meglevo = await keresMeglevot();
-      if (!meglevo) return null;
+      if (!meglevo) return await megvanMar();
     }
   }
 
@@ -351,6 +393,7 @@ export async function mentDuvenbeckDokumentumot(
     reiseId: dok.reiseId,
     levaltottSorok: levaltott.length,
     szamlazottRegiSorok: szamlazottRegi.map((r) => r.szamla_szam),
+    kifogasok: [],
   };
 }
 

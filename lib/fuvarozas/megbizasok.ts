@@ -8,7 +8,7 @@ import { ceglNevKanonikusan, normalizaltCegKulcs, sajatCegunkE } from "@/lib/fuv
 import { FUVAR_HELY_SQL, FUVAR_MA_SQL, type FuvarHely } from "@/lib/fuvarozas/fuvar-hely";
 import { toroljIdovonalCachet } from "@/lib/fuvarozas/idovonal-cache";
 import { bontsMegallokra } from "@/lib/fuvarozas/varos";
-import { parositSzamlakat } from "@/lib/fuvarozas/szamla-parositas";
+import { kiegAlap, parositKiegSzamlakat, parositSzamlakat } from "@/lib/fuvarozas/szamla-parositas";
 import { requireSession } from "@/lib/auth/dal";
 import type {
   FuvarTipus,
@@ -445,7 +445,10 @@ export async function felszabaditFuvarDokumentumot(id: string): Promise<void> {
          megjegyzes = coalesce(megjegyzes || ' | ', '') ||
            'Újraolvasásra felszabadítva, eredeti dokumentum: ' || coalesce(dokumentum_url, '-'),
          dokumentum_url = null,
-         drive_file_id = null
+         drive_file_id = null,
+         -- A Duvenbeck-olvasó a törölt sor Út ID-jét „már megvan”-nak veszi
+         -- (lib/fuvarozas/duvenbeck-import.ts, megvanMar) — itt elengedjük.
+         reise_id = null
      where id = $1`,
     [id]
   );
@@ -858,7 +861,8 @@ export async function szinkronizalSzamlaSzamokat(): Promise<number> {
        and coalesce(m.szamla_szam, '') = ''
        and coalesce(m.lerakas_datum, m.datum) >= current_date - 180`
   );
-  if (fuvarSorok.length === 0) return 0;
+  const kieg = await szinkronizalKiegSzamlakat();
+  if (fuvarSorok.length === 0) return kieg;
 
   const szamlaSorok = await query<{
     szamlaszam: string; vevo_nev: string; rendelesszam: string | null; netto: string | null; penznem: string | null;
@@ -870,9 +874,10 @@ export async function szinkronizalSzamlaSzamokat(): Promise<number> {
        exists (select 1 from fuvar_megbizasok m where m.szamla_szam = sz.szamlaszam)
          or exists (select 1 from fuvar_elszamolas e where e.szamla_szam = sz.szamlaszam) as hasznalt
      from szamla sz
-     where sz.kategoria = 'fuvar' and not sz.sztorno and not sz.sztornozva`
+     where sz.kategoria = 'fuvar' and not sz.sztorno and not sz.sztornozva
+       and not exists (select 1 from fuvar_megbizasok m where sz.szamlaszam = any(m.kieg_szamla_szamok))`
   );
-  if (szamlaSorok.length === 0) return 0;
+  if (szamlaSorok.length === 0) return kieg;
 
   const parok = parositSzamlakat(
     fuvarSorok.map((f) => ({
@@ -884,7 +889,9 @@ export async function szinkronizalSzamlaSzamokat(): Promise<number> {
       penznem: f.fuvardij_penznem,
       felrakasNap: f.felrakas_nap, lerakasNap: f.lerakas_nap, felrako: f.felrako, lerako: f.lerako,
     })),
-    szamlaSorok.map((sz) => ({
+    // A kiegészítő számla („… kieg.”) sosem fő számla — azt lent a
+    // szinkronizalKiegSzamlakat köti a már kiszámlázott fuvarhoz.
+    szamlaSorok.filter((sz) => !kiegAlap(sz.rendelesszam)).map((sz) => ({
       szamlaszam: sz.szamlaszam, vevoNev: sz.vevo_nev, rendelesszam: sz.rendelesszam,
       netto: sz.netto == null ? null : Number(sz.netto), penznem: sz.penznem,
       teljesitesNap: sz.teljesites_nap, kiallitasNap: sz.kiallitas_nap, tetelekSzoveg: sz.tetelek_szoveg, hasznalt: sz.hasznalt,
@@ -905,7 +912,58 @@ export async function szinkronizalSzamlaSzamokat(): Promise<number> {
     );
     console.log(`[szamla-parositas] #${p.fuvarId} ← ${p.szamlaszam} (${p.mod})`);
   }
-  return talalatDarab;
+  return talalatDarab + kieg;
+}
+
+/**
+ * Kiegészítő számlák (rendelésszám „… kieg.”) a már kiszámlázott fuvarhoz —
+ * a döntés: parositKiegSzamlakat (lib/fuvarozas/szamla-parositas.ts).
+ */
+async function szinkronizalKiegSzamlakat(): Promise<number> {
+  const szamlak = await query<{ szamlaszam: string; vevo_nev: string; rendelesszam: string | null }>(
+    `select sz.szamlaszam, sz.vevo_nev, sz.rendelesszam
+     from szamla sz
+     where sz.kategoria = 'fuvar' and not sz.sztorno and not sz.sztornozva
+       and sz.kiallitas_datum >= current_date - 180
+       and sz.rendelesszam ~* '(kieg|p[oó]tl[aá]s|p[oó]td[ií]j)'
+       and not exists (select 1 from fuvar_megbizasok m where m.szamla_szam = sz.szamlaszam or sz.szamlaszam = any(m.kieg_szamla_szamok))
+       and not exists (select 1 from fuvar_elszamolas e where e.szamla_szam = sz.szamlaszam)`
+  );
+  if (szamlak.length === 0) return 0;
+  const fuvarok = await query<{
+    id: string; partner_nev: string | null; megrendelo: string | null;
+    pozicioszam: string | null; hivatkozas_kanonikus: string | null; reise_id: string | null; referencia: string | null;
+  }>(
+    `select m.id::text, p.nev as partner_nev, m.megrendelo, m.pozicioszam, m.hivatkozas_kanonikus, m.reise_id, m.referencia
+     from fuvar_megbizasok m
+     left join fuvar_partnerek p on p.id = m.partner_id
+     where m.tipus = 'sajat' and m.statusz <> 'torolt' and m.torolt_at is null
+       and coalesce(m.lerakas_datum, m.datum) >= current_date - 240`
+  );
+  const parok = parositKiegSzamlakat(
+    fuvarok.map((f) => ({
+      id: f.id,
+      partnerNevek: [f.partner_nev, f.megrendelo].filter((x): x is string => !!x),
+      szamok: [f.pozicioszam, f.hivatkozas_kanonikus, f.reise_id, f.referencia],
+    })),
+    szamlak.map((sz) => ({ szamlaszam: sz.szamlaszam, vevoNev: sz.vevo_nev, rendelesszam: sz.rendelesszam }))
+  );
+  let db = 0;
+  for (const p of parok) {
+    const frissitve = await query<{ id: string }>(
+      `update fuvar_megbizasok set kieg_szamla_szamok = array_append(kieg_szamla_szamok, $2)
+       where id = $1 and not ($2 = any(kieg_szamla_szamok)) returning id::text`,
+      [p.fuvarId, p.szamlaszam]
+    );
+    if (frissitve.length === 0) continue;
+    db++;
+    await query(
+      `insert into fuvar_megbizas_esemeny (megbizas_id, esemeny, forras, reszletek) values ($1, 'szamla_parositva', 'szamla_szinkron', $2)`,
+      [p.fuvarId, JSON.stringify({ kieg_szamla_szam: p.szamlaszam })]
+    );
+    console.log(`[szamla-parositas] #${p.fuvarId} ← ${p.szamlaszam} (kiegészítő)`);
+  }
+  return db;
 }
 
 /** A Számlák modulban lévő, egyik fuvarhoz sem párosított fuvarszámlák (az utolsó N napból). */
@@ -918,7 +976,7 @@ export async function getParositatlanFuvarszamlak(napok = 60): Promise<{
      from szamla sz
      where sz.kategoria = 'fuvar' and not sz.sztorno and not sz.sztornozva
        and sz.kiallitas_datum >= current_date - $1::int
-       and not exists (select 1 from fuvar_megbizasok m where m.szamla_szam = sz.szamlaszam)
+       and not exists (select 1 from fuvar_megbizasok m where m.szamla_szam = sz.szamlaszam or sz.szamlaszam = any(m.kieg_szamla_szamok))
        and not exists (select 1 from fuvar_elszamolas e where e.szamla_szam = sz.szamlaszam)
      order by sz.kiallitas_datum desc, sz.szamlaszam desc`,
     [napok]
