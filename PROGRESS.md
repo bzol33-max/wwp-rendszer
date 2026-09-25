@@ -2020,3 +2020,29 @@ pihenőn állva semmi nem mutatta, hogy az út nagyobb része megvolt.
 - **Teszt:** `teszt-allapotgep` 43/0, `teszt-megbizas-szuro` 27/0 (a
   határidőt most a megadott naphoz méri, nem a gép órájához — ezzel a két
   régi, dátumfüggő hiba is megszűnt), `teszt-backfill-allapot` 18/0.
+
+## 2026-09-25 — Fuvarozás 2 megbízások: öt lépés, két gomb
+
+- **Kérés (Budaházi Zoltán):** megérkezik (Gmail „Fuvarmegbízás” címke) →
+  megkapja a sofőr → látom → visszaér → számlázás → számlaszám → postázás,
+  amit Szabina a mobilján leokéz. A régi út kilenc állapot volt, három
+  felesleges kattintással.
+- **Kivett kattintások:**
+  - „Számlázható (kézi)”: a fotó magától léptet, fotó nélkül pedig a
+    számlaszám közvetlenül visz tovább (új él: teljesítve → számlázva).
+  - „E-mail elment”: a számlát a Számlázz.hu küldi ki. A 9. él csak a
+    régi sorok miatt maradt, gomb nincs hozzá. A kísérő e-mail piszkozata a
+    posta-kártyán kibontható, ha egy partner kéri.
+  - „Lezárás”: a „Postázva ✓” ugyanabban a tranzakcióban le is zárja a
+    fuvart (11. él, feltétel: számla + postázva).
+- **Öt lépés** (`LEPESEK`, `lib/fuvarozas/allapot.ts`): Beérkezett, Úton,
+  Visszaért — számlázni, Számlázva — postára, Kész. A megbízás-lista
+  szűrősávja és jelvénye ezt mutatja; a részleten a pontos állapot a jelvény
+  súgójában és a naplóban látszik.
+- **Szabina mobil:** a Számla fül a visszaért fuvarokat mutatja (fotóval vagy
+  anélkül), számlaszám-mezővel. A Posta fül a számlázottakat mutatja,
+  „Feladva ✓” gombbal, és ezzel a fuvar kész.
+- **Asztali Elszámolás:** két szakasz maradt, Számlázni és Postára; mellette
+  a kintlévőség. A Ma és a Rendszer számlálói ugyanígy számolnak.
+- **Tesztek:** teszt-allapotgep 51/0, teszt-megbizas-szuro 26/0; tsc, eslint
+  és next build tiszta.

@@ -11,7 +11,7 @@ export default async function Page() {
     <div className="flex flex-col gap-5">
       <PageHeader
         title="Elszámolás"
-        subtitle="Bér fuvarok a teljesítéstől a lezárásig: a fotó a számlázhatóság jele, az eredeti papír a postázásé."
+        subtitle="Bér fuvarok: visszaért → számlaszám → Postázva ✓ (kész)."
       />
       <Fuvarozas2Fulek aktiv="/fuvarozas2/elszamolas" />
       <ElszamolasVaszonNezet adat={adat} />

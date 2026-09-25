@@ -43,13 +43,13 @@ export function kovetkezoTeendo(s: {
       if (!s.jarmu_kod) return { szoveg: "kocsi hozzárendelése", surgos: true };
       return { szoveg: lejart ? "lejárt — teljesítés jelölése" : "lerakás", surgos: lejart };
     }
+    // Visszaért: számlázni kell — a fotó csak jelzés, nem feltétel (2026-09-25).
     case "teljesitve":
-      return { szoveg: s.foto_van ? "fotó ellenőrzése" : "sofőr fuvarlevél-fotója", surgos: false };
     case "szamlazhato":
       if (!s.hivatkozas && !s.hivatkozas_nincs) return { szoveg: "hivatkozási szám a számlához", surgos: true };
-      return { szoveg: "számlázás a Számlázz.hu-ban", surgos: false };
+      return { szoveg: s.foto_van || s.allapot === "szamlazhato" ? "számlázás a Számlázz.hu-ban" : "számlázás · fotó még nincs", surgos: false };
+    // Számlázva: postára kell adni (külön e-mail-lépés nincs).
     case "szamlazva":
-      return { szoveg: s.szamla_szam ? "számla e-mail a partnernek" : "számla párosítása", surgos: false };
     case "email_elment": {
       // A megadott "ma" napjához mérve (nem a gép órájához), hogy a lista és a teszt ugyanazt számolja.
       const napok = papirHatraNap(s.lerakas_nap, s.papir_hatarido_nap, new Date(`${ma}T12:00:00Z`));
@@ -57,7 +57,7 @@ export function kovetkezoTeendo(s: {
       return { szoveg: napok == null ? "postázás" : `postázás · határidő ${napok} nap`, surgos: napok != null && napok <= 2 };
     }
     case "postazva":
-      return { szoveg: "lezárás", surgos: false };
+      return { szoveg: "—", surgos: false };
     case "lezart":
       return { szoveg: "—", surgos: false };
   }

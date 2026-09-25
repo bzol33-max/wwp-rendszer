@@ -3,12 +3,12 @@
 // Fuvarozás 2 — Elszámolás a tervvászon (D5) szerint: a bér fuvar útja a
 // teljesítéstől a lezárásig, szakaszonként, a soron következő gombbal.
 //
-//   Fotóra vár → Számlázható → Számlázva (e-mail) → E-mail elment (posta) → Lezárt
+//   Számlázni (teljesítve, fotóval vagy anélkül) → Postára (számlázva) → Kész
 //
-// A számla e-mail PISZKOZATA itt készül el szövegként (címzett, tárgy,
-// törzs) — a Gmail-vázlat automatikus létrehozása a Gmail-figyelő Apps
-// Scripthez tartozik (S17), addig a szöveg kimásolható. Automatikus küldés
-// nincs és nem is lesz: minden kimenő levél vázlat marad.
+// Két lépés, két gomb (Budaházi Zoltán, 2026-09-25): számlaszám, majd
+// „Postázva ✓”. Külön „E-mail elment” lépés nincs — a számlát a Számlázz.hu
+// küldi ki. A kísérő e-mail PISZKOZATA (címzett, tárgy, törzs) a posta-
+// kártyán kibontható marad, ha egy partnernek mégis kell.
 
 import { query } from "@/lib/db";
 import { requireAnyViewPermission } from "@/lib/auth/require-permission";
@@ -27,11 +27,9 @@ export type ElszamolasSor = MegbizasSor & {
 export type Piszkozat = { cimzett: string | null; targy: string; szoveg: string; csatolmanyok: string[] };
 
 export type ElszamolasVaszon = {
-  fejlec: { lejartDb: number; lejartFt: number; piszkozatDb: number };
-  fotoraVar: ElszamolasSor[];
-  szamlazhato: ElszamolasSor[];
-  emailre: (ElszamolasSor & { piszkozat: Piszkozat })[];
-  postazando: ElszamolasSor[];
+  fejlec: { lejartDb: number; lejartFt: number };
+  szamlazando: ElszamolasSor[];
+  postazando: (ElszamolasSor & { piszkozat: Piszkozat })[];
   kintlevoseg: { szamlaszam: string; vevo: string; esedekes: string | null; brutto: number; penznem: string; lejart: boolean }[];
   osszegek: { szamlazhatoFt: number; postazandoDb: number };
 };
@@ -62,12 +60,10 @@ export async function getElszamolasVaszon(): Promise<ElszamolasVaszon> {
   };
 
   const bovitett = sorok.map(bovit);
-  const fotoraVar = bovitett.filter((s) => s.allapot === "teljesitve");
-  const szamlazhato = bovitett.filter((s) => s.allapot === "szamlazhato");
-  const szamlazva = bovitett.filter((s) => s.allapot === "szamlazva");
-  const postazando = bovitett.filter((s) => s.allapot === "email_elment");
-
-  const emailre = szamlazva.map((s) => ({ ...s, piszkozat: piszkozatSzoveg(s) }));
+  const szamlazando = bovitett.filter((s) => s.allapot === "teljesitve" || s.allapot === "szamlazhato");
+  const postazando = bovitett
+    .filter((s) => s.allapot === "szamlazva" || s.allapot === "email_elment")
+    .map((s) => ({ ...s, piszkozat: piszkozatSzoveg(s) }));
 
   let kintlevoseg: ElszamolasVaszon["kintlevoseg"] = [];
   try {
@@ -88,11 +84,10 @@ export async function getElszamolasVaszon(): Promise<ElszamolasVaszon> {
     fejlec: {
       lejartDb: lejartak.length,
       lejartFt: lejartak.filter((k) => k.penznem === "Ft").reduce((a, k) => a + k.brutto, 0),
-      piszkozatDb: emailre.length,
     },
-    fotoraVar, szamlazhato, emailre, postazando, kintlevoseg: kintlevoseg.slice(0, 12),
+    szamlazando, postazando, kintlevoseg: kintlevoseg.slice(0, 12),
     osszegek: {
-      szamlazhatoFt: szamlazhato.filter((s) => s.fuvardij_penznem === "Ft").reduce((a, s) => a + (s.fuvardij ?? 0), 0),
+      szamlazhatoFt: szamlazando.filter((s) => s.fuvardij_penznem === "Ft").reduce((a, s) => a + (s.fuvardij ?? 0), 0),
       postazandoDb: postazando.length,
     },
   };

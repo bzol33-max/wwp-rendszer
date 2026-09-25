@@ -196,8 +196,8 @@ export async function getRendszerEgeszseg(): Promise<RendszerEgeszseg> {
     `select
       count(*) filter (where allapot = 'teljesitve')::int as fotora,
       count(*) filter (where allapot = 'szamlazhato')::int as szamlazhato,
-      count(*) filter (where allapot = 'szamlazva')::int as emailre,
-      count(*) filter (where allapot = 'email_elment')::int as postara
+      0 as emailre,
+      count(*) filter (where allapot in ('szamlazva','email_elment'))::int as postara
      from fuvar_megbizasok where torolt_at is null and jelleg = 'ber'`
   );
   sorok.push({
@@ -205,7 +205,7 @@ export async function getRendszerEgeszseg(): Promise<RendszerEgeszseg> {
     cim: "Elszámolás sora",
     allapot: (elsz?.fotora ?? 0) + (elsz?.szamlazhato ?? 0) > 10 ? "figyelmeztetes" : "rendben",
     ertek: `${(elsz?.fotora ?? 0) + (elsz?.szamlazhato ?? 0) + (elsz?.emailre ?? 0) + (elsz?.postara ?? 0)} nyitott`,
-    reszlet: `fotóra vár ${elsz?.fotora ?? 0} · számlázható ${elsz?.szamlazhato ?? 0} · e-mailre ${elsz?.emailre ?? 0} · postára ${elsz?.postara ?? 0}`,
+    reszlet: `fotóra vár ${elsz?.fotora ?? 0} · számlázható ${elsz?.szamlazhato ?? 0} · postára ${elsz?.postara ?? 0}`,
     utoljara: null,
   });
 

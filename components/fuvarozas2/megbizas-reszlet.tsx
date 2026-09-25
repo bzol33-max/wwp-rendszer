@@ -9,16 +9,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { valtAllapot, setSzamlaSzam, setMegjegyzes } from "@/lib/fuvarozas2/megbizasok";
 import type { MegbizasSor, Megallo, Esemeny, Dokumentum } from "@/lib/fuvarozas2/megbizasok";
 import type { Allapot } from "@/lib/fuvarozas/allapot";
-import { ALLAPOT_CIMKE, AllapotBadge, JellegBadge, formatFt, formatIdo, formatNap } from "@/components/fuvarozas2/kozos";
+import { ALLAPOT_CIMKE, LepesBadge, JellegBadge, formatFt, formatIdo, formatNap } from "@/components/fuvarozas2/kozos";
 
 const GOMB_CIMKE: Partial<Record<Allapot, string>> = {
   tervezett: "Jóváhagyás → Tervezett",
   folyamatban: "Megérkezett → Folyamatban",
   teljesitve: "Teljesítve",
-  szamlazhato: "Számlázható (kézi)",
   szamlazva: "Számlázva",
-  email_elment: "E-mail elment",
-  postazva: "Postázva ✓",
+  postazva: "Postázva ✓ (kész)",
   lezart: "Lezárás",
 };
 // Visszalépő élek — kevésbé hangsúlyos gomb.
@@ -50,8 +48,7 @@ export function MegbizasReszlet({
 
   const elore = celok.filter((c) => !VISSZA[`${sor.allapot}>${c}`]);
   const vissza = celok.filter((c) => VISSZA[`${sor.allapot}>${c}`]);
-  // Kézi kiskapuk, amiket az ellenőrző csak kontextussal enged:
-  const keziSzamlazhato = sor.allapot === "teljesitve" && sor.jelleg === "ber" && !sor.foto_van && !celok.includes("szamlazhato");
+  // Kézi kiskapu, amit az ellenőrző csak kontextussal enged:
   const keziLezaras = sor.allapot === "teljesitve" && sor.jelleg === "sajat" && !celok.includes("lezart");
 
   return (
@@ -64,7 +61,7 @@ export function MegbizasReszlet({
               <span>{sor.partner_nev ?? "(nincs megbízó)"}</span>
               <span className="text-muted-foreground">·</span>
               <span className="font-mono text-sm">{sor.hivatkozas ?? (sor.hivatkozas_nincs ? "nincs hivatkozás" : "—")}</span>
-              <AllapotBadge allapot={sor.allapot} className="ml-auto" />
+              <LepesBadge allapot={sor.allapot} className="ml-auto" />
             </CardTitle>
           </CardHeader>
           <CardContent className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
@@ -119,17 +116,14 @@ export function MegbizasReszlet({
             {szerkeszthet && elore.map((c) => (
               <Button key={c} size="sm" disabled={pending} onClick={() => valt(c)}>{GOMB_CIMKE[c] ?? ALLAPOT_CIMKE[c]}</Button>
             ))}
-            {szerkeszthet && keziSzamlazhato ? (
-              <Button size="sm" variant="secondary" disabled={pending} onClick={() => valt("szamlazhato", true)}>Számlázható (fotó nélkül, kézi)</Button>
-            ) : null}
             {szerkeszthet && keziLezaras ? (
               <Button size="sm" variant="secondary" disabled={pending} onClick={() => valt("lezart", true)}>Lezárás (szállítólevél nélkül, kézi)</Button>
             ) : null}
             {szerkeszthet && vissza.map((c) => (
               <Button key={c} size="sm" variant="outline" disabled={pending} onClick={() => valt(c)}>{VISSZA[`${sor.allapot}>${c}`]}</Button>
             ))}
-            {szerkeszthet && elore.length === 0 && vissza.length === 0 && !keziSzamlazhato && !keziLezaras ? (
-              <p className="text-xs text-muted-foreground">Innen nincs engedett lépés — {sor.allapot === "szamlazhato" ? "számlaszám kell a továbblépéshez." : "nézd a naplót."}</p>
+            {szerkeszthet && elore.length === 0 && vissza.length === 0 && !keziLezaras ? (
+              <p className="text-xs text-muted-foreground">Innen nincs engedett lépés — {sor.allapot === "szamlazhato" || sor.allapot === "teljesitve" ? "a számlaszám (lent) viszi tovább — a Számlázz.hu-ból magától is párosul." : "nézd a naplót."}</p>
             ) : null}
           </CardContent>
         </Card>
@@ -152,7 +146,7 @@ export function MegbizasReszlet({
                   </Button>
                 </div>
               </div>
-              <div className="flex items-center justify-between gap-2"><span>E-mail elment</span><span className="text-muted-foreground">{sor.email_elment_at ? formatIdo(sor.email_elment_at) : "—"}</span></div>
+              {sor.email_elment_at ? <div className="flex items-center justify-between gap-2"><span>E-mail elment</span><span className="text-muted-foreground">{formatIdo(sor.email_elment_at)}</span></div> : null}
               <div className="flex items-center justify-between gap-2"><span>Postázva</span><span className="text-muted-foreground">{sor.postazva_at ? formatIdo(sor.postazva_at) : "—"}</span></div>
               <div className="flex flex-col gap-0.5"><span>Postázási cím</span><span className="text-muted-foreground">{sor.postazasi_cim ?? "—"}</span></div>
               <div className="flex items-center justify-between gap-2"><span>Fizetési határidő</span><span className="text-muted-foreground">{sor.fizetesi_hatarido_nap != null ? `${sor.fizetesi_hatarido_nap} nap` : "—"}</span></div>
