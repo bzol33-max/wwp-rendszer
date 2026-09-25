@@ -78,6 +78,15 @@ eq("tartalék: eltérő útvonal", parositSzamlakat([fuvarok[3]], [{ ...szamlak[
 eq("tartalék: régi dátum", parositSzamlakat([fuvarok[3]], [{ ...szamlak[3], teljesitesNap: "2026-08-01" }]), []);
 eq("tartalék: már használt számla nem", parositSzamlakat([fuvarok[3]], [{ ...szamlak[3], hasznalt: true }]), []);
 
+// --- útvonal nélküli számla (WLLWR-2026-315, valós): partner + összeg + dátum elég
+const hajdu = fuvar({ id: "137", partnerNevek: ["Hajdúspedíció Kft."], szamok: [null], fuvardij: 245000,
+  felrakasNap: "2026-09-18", lerakasNap: "2026-09-21", felrako: "1. Nyírjákó (Baromfi-Coop Kft.)", lerako: "1. Mosonmagyaróvár" });
+const sz315 = szamla({ szamlaszam: "WLLWR-2026-315", vevoNev: "HAJDÚSPEDICIÓ Kft.", rendelesszam: null, netto: 245000, teljesitesNap: "2026-09-22", tetelekSzoveg: "Közúti árufuvarozás" });
+eq("útvonal nélküli számla: párosul", parositSzamlakat([hajdu], [sz315]), [{ fuvarId: "137", szamlaszam: "WLLWR-2026-315", mod: "partner_osszeg_datum" }]);
+eq("útvonal nélkül, de más összeg: nem", parositSzamlakat([hajdu], [{ ...sz315, netto: 240000 }]), []);
+eq("útvonal nélkül, két azonos fuvar: nem", parositSzamlakat([hajdu, { ...hajdu, id: "998" }], [sz315]), []);
+eq("van útvonal, de más: nem", parositSzamlakat([hajdu], [{ ...sz315, tetelekSzoveg: "Közúti árufuvarozás Nyírjákó-Győr" }]), []);
+
 // --- irat-szöveg más partnernél nem számít
 eq("irat-szöveg: más vevő", parositSzamlakat([fuvarok[2]], [{ ...szamlak[2], vevoNev: "LOGO TREK Kft." }]).length, 0);
 

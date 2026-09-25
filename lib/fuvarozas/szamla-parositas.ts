@@ -46,7 +46,7 @@ export type ParositasSzamla = {
   hasznalt?: boolean;
 };
 
-export type Parositas = { fuvarId: string; szamlaszam: string; mod: "szam" | "irat_szoveg" | "partner_osszeg_datum_utvonal" };
+export type Parositas = { fuvarId: string; szamlaszam: string; mod: "szam" | "irat_szoveg" | "partner_osszeg_datum_utvonal" | "partner_osszeg_datum" };
 
 /** Írásmód-független kulcs: ékezet, kis-nagybetű és minden nem betű/szám nélkül. */
 export function szamKulcs(s: string | null | undefined): string {
@@ -120,6 +120,19 @@ function datumEgyezik(sz: ParositasSzamla, f: ParositasFuvar): boolean {
 
 const TETEL_ALTALANOS = new Set(["kozuti", "arufuvarozas", "fuvarozas", "fuvar", "szallitas", "belfoldi", "nemzetkozi", "fuvardij", "dij", "db", "es"]);
 
+/** A tétel szavai az általános szavak („közúti árufuvarozás”) nélkül — ha üres, a számlán nincs útvonal. */
+function tetelSzavak(tetel: string): string[] {
+  return tetel
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+    .split(/[^a-z]+/)
+    .filter((w) => w.length >= 3 && !TETEL_ALTALANOS.has(w));
+}
+
+/** Van-e a számla tételeiben bármi az általános megnevezésen túl (város, útvonal). */
+export function vanUtvonal(tetelek: string | null): boolean {
+  return (tetelek ?? "").split(";").some((t) => tetelSzavak(t).length > 0);
+}
+
 /**
  * Útvonal-egyezés, két irányból (bármelyik elég):
  *   - a számla egy tételének első városa a felrakó címében, utolsó városa a
@@ -132,10 +145,7 @@ export function utvonalEgyezik(tetelek: string | null, felrako: string | null, l
   const le = szamKulcs(lerako);
   if (fel && le) {
     for (const tetel of tetelek.split(";")) {
-      const varosok = tetel
-        .normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
-        .split(/[^a-z]+/)
-        .filter((w) => w.length >= 3 && !TETEL_ALTALANOS.has(w));
+      const varosok = tetelSzavak(tetel);
       if (varosok.length >= 2 && fel.includes(varosok[0]) && le.includes(varosok[varosok.length - 1])) return true;
     }
   }
@@ -147,7 +157,7 @@ export function utvonalEgyezik(tetelek: string | null, felrako: string | null, l
 }
 
 /** Csak az egy-az-egyhez párokat tartja meg (egy fuvar egy számlát, egy számla egy fuvart). */
-function egyertelmu(parok: { fuvarId: string; szamlaszam: string }[]): { fuvarId: string; szamlaszam: string }[] {
+function egyertelmu<T extends { fuvarId: string; szamlaszam: string }>(parok: T[]): T[] {
   const fDb = new Map<string, number>();
   const szDb = new Map<string, number>();
   for (const p of parok) {
@@ -194,8 +204,11 @@ export function parositSzamlakat(fuvarok: ParositasFuvar[], szamlak: ParositasSz
     felhasznalt.add(p.szamlaszam);
   }
 
-  // 2. Tartalék: partner + összeg + dátum + útvonal — mind a négy.
-  const tartalekParok: { fuvarId: string; szamlaszam: string }[] = [];
+  // 2. Tartalék: partner + összeg + dátum + útvonal — mind a négy. Ha a
+  //    számlán nincs útvonal (csak „Közúti árufuvarozás”), a másik három is
+  //    elég (Budaházi Zoltán, 2026-09-25: ritka, de előfordul — WLLWR-2026-315);
+  //    ha van útvonal és nem egyezik, az kizárja a párt.
+  const tartalekParok: { fuvarId: string; szamlaszam: string; utvonalNelkul: boolean }[] = [];
   for (const sz of szamlak) {
     if (sz.hasznalt || felhasznalt.has(sz.szamlaszam)) continue;
     for (const f of fuvarok) {
@@ -204,11 +217,13 @@ export function parositSzamlakat(fuvarok: ParositasFuvar[], szamlak: ParositasSz
         partnerEgyezik(sz.vevoNev, f.partnerNevek) &&
         osszegEgyezik(sz, f) &&
         datumEgyezik(sz, f) &&
-        utvonalEgyezik(sz.tetelekSzoveg, f.felrako, f.lerako)
-      ) tartalekParok.push({ fuvarId: f.id, szamlaszam: sz.szamlaszam });
+        (!vanUtvonal(sz.tetelekSzoveg) || utvonalEgyezik(sz.tetelekSzoveg, f.felrako, f.lerako))
+      ) tartalekParok.push({ fuvarId: f.id, szamlaszam: sz.szamlaszam, utvonalNelkul: !vanUtvonal(sz.tetelekSzoveg) });
     }
   }
-  for (const p of egyertelmu(tartalekParok)) eredmeny.push({ ...p, mod: "partner_osszeg_datum_utvonal" });
+  for (const p of egyertelmu(tartalekParok)) {
+    eredmeny.push({ fuvarId: p.fuvarId, szamlaszam: p.szamlaszam, mod: p.utvonalNelkul ? "partner_osszeg_datum" : "partner_osszeg_datum_utvonal" });
+  }
 
   return eredmeny;
 }
