@@ -72,6 +72,7 @@ export type KeresettSor = {
   jarmu_cimke: string | null;
   sofor: string | null;
   szamla_szam: string | null;
+  szallitolevel?: string | null;
   aru: string | null;
   felrakas_nap: string | null;
   lerakas_nap: string | null;
@@ -86,7 +87,7 @@ export type KeresettSor = {
 export function keresEgyezik(s: KeresettSor, kereses: string): boolean {
   const szavak = kereses.split(/\s+/).map((x) => x.trim()).filter(Boolean);
   if (szavak.length === 0) return true;
-  const mezok = [s.partner_nev, s.hivatkozas, s.felrako, s.lerako, s.jarmu_kod, s.jarmu_cimke, s.sofor, s.szamla_szam, s.aru]
+  const mezok = [s.partner_nev, s.hivatkozas, s.felrako, s.lerako, s.jarmu_kod, s.jarmu_cimke, s.sofor, s.szamla_szam, s.szallitolevel, s.aru]
     .filter(Boolean)
     .join(" ");
   const szoveg = normal(mezok);

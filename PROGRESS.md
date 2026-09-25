@@ -2203,3 +2203,41 @@ pihenőn állva semmi nem mutatta, hogy az út nagyobb része megvolt.
     kocsi → Kocsira adom (Micó, 2 megálló) → Visszaveszem (a kocsi lekerül,
     a megállók törlődnek) → új; a napló nem duplikál; konzolhiba nincs.
   - tsc, eslint és next build tiszta.
+
+## 2026-09-25 — Számlázz.hu-s szállítólevél párosítása a saját fuvarhoz
+
+- **Kérés (Budaházi Zoltán):**
+  - A Számlázz.hu-ban kiállított szállítólevél kerüljön a saját fuvarhoz:
+    vevő, dátum, rendszám alapján.
+  - A dátum a fuvaré, amit ő állít be (a szállítólevelet előre állítják
+    ki). A saját fuvar lerakás és fotó után az archívba megy.
+- **Minta:** S-WLLWR-2026-162 · FABRIKA + 2000 Kft. · 2026.09.23. ·
+  „Rendszám:NMZ-492,XZV-926” · Használt EUR Raklap 812 db.
+- **Módosítás:**
+  - **Számlák modul (`lib/szamlak/poll.ts`):** külön kereső az
+    `S-WLLWR-{év}-{n}` sorszámokra (2026-ban a 150-estől).
+    - A találat a `szallitolevel_import` táblába kerül, NEM a `szamla`-ba,
+      így a számlák és a kintlévőség tiszta marad.
+    - A rendszám a megjegyzésből jön; a tételek mennyiségei és a raklap
+      darabszám is mentődik.
+    - A kliens ehhez a tételek mennyiségét és a megjegyzést is visszaadja.
+  - **Párosítás (`lib/fuvarozas2/szallitolevel-parositas.ts`):**
+    - rendszám → ugyanaz a saját kocsi;
+    - vevő → a „kinek” vagy a „hová” szövegében;
+    - a szállítólevél kelte a fuvar napjától legfeljebb 3 nappal tér el;
+    - csak egy-az-egyhez párosít, az előkészítés alatti fuvarral is.
+    - A fuvar megkapja a szállítólevél számát (`kulso_azonosito`), és ha
+      üres, az árut és a darabszámot („812 db”). Naplózva.
+  - **Felület:** a listában „szállító S-WLLWR-…”, a részletben
+    „Szállítólevél:” sor. A kereső a szállítólevél számára is keres.
+  - **Napló:** a számla-szinkron naplósora kiírja: „szállítólevél: N új /
+    M párosítva”.
+- **Nyitott kérdés:** nem ellenőriztem, hogy a Számlázz.hu Agent
+  számla-lekérdezése a szállítólevelet is visszaadja-e. A dokumentáció
+  innen nem érhető el. Ha nem adja, a kereső egyszerűen nem talál semmit;
+  ezt az éles napló mutatja.
+- **Teszt:**
+  - teszt-szallitolevel-parositas 14/0, a valós mintával.
+  - Helyi Postgres: mentés (ismételve is), párosítás, a második kör 0, a
+    fuvar árut és darabszámot kap.
+  - tsc, eslint és next build tiszta.

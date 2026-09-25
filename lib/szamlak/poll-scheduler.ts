@@ -32,10 +32,11 @@ async function tick() {
       eredmeny.pendingMegoldva ||
       eredmeny.rendelesszamJavitva ||
       eredmeny.szamlaSzamParositva ||
+      eredmeny.szallitolevelUj ||
       eredmeny.hibak.length
     ) {
       console.log(
-        `[szamlak-poll] új: ${eredmeny.ujMegtalalt}, pending megoldva: ${eredmeny.pendingMegoldva}, rendelésszám javítva: ${eredmeny.rendelesszamJavitva ?? 0}, fuvarhoz párosítva: ${eredmeny.szamlaSzamParositva ?? 0}, hibák: ${eredmeny.hibak.length ? eredmeny.hibak.join(" | ") : "—"}`
+        `[szamlak-poll] új: ${eredmeny.ujMegtalalt}, pending megoldva: ${eredmeny.pendingMegoldva}, rendelésszám javítva: ${eredmeny.rendelesszamJavitva ?? 0}, fuvarhoz párosítva: ${eredmeny.szamlaSzamParositva ?? 0}, szállítólevél: ${eredmeny.szallitolevelUj ?? 0} új / ${eredmeny.szallitolevelParositva ?? 0} párosítva, hibák: ${eredmeny.hibak.length ? eredmeny.hibak.join(" | ") : "—"}`
       );
     }
   } catch (err) {

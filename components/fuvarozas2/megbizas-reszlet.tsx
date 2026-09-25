@@ -70,6 +70,7 @@ export function MegbizasReszlet({
             <div><span className="text-muted-foreground">Kocsi:</span> {sor.jarmu_cimke ?? "kocsi nélkül"}{sor.sofor ? ` · ${sor.sofor}` : ""}</div>
             <div><span className="text-muted-foreground">Díj:</span> {sor.jelleg === "ber" ? formatFt(sor.fuvardij, sor.fuvardij_penznem) : "saját fuvar"}</div>
             <div><span className="text-muted-foreground">Áru:</span> {sor.aru ?? "—"}{sor.mennyiseg ? ` · ${sor.mennyiseg}` : ""}</div>
+            {sor.jelleg === "sajat" ? <div><span className="text-muted-foreground">Szállítólevél:</span> {sor.szallitolevel ?? "még nincs párosítva"}</div> : null}
             <div><span className="text-muted-foreground">Forrás:</span> {sor.forras}{sor.dokumentum_url ? <> · <a className="underline" href={sor.dokumentum_url} target="_blank" rel="noreferrer">megbízás PDF</a></> : null}</div>
             {Array.isArray(sor.hianylista) && sor.hianylista.length > 0 ? (
               <div className="sm:col-span-2 rounded-lg bg-[var(--f2-amb-l)] px-2 py-1 text-[var(--f2-amb)]">Hiánylista: {sor.hianylista.map(String).join(", ")}</div>

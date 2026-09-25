@@ -209,6 +209,7 @@ export function MunkaLista({ sorok, ma, szuro, cim }: { sorok: MunkaasztalSor[];
                       s.jarmu_kod ?? (s.elokeszites ? s.elokeszites_jarmu ?? "—" : "kocsi nélkül"),
                       db > 2 ? `${db} megálló` : null,
                       s.szamla_szam && s.szakasz !== "szamlazasra" ? s.szamla_szam : null,
+                      s.szallitolevel ? `szállító ${s.szallitolevel}` : null,
                       s.szakasz === "archiv" && s.postazva_at ? `feladva ${formatIdo(s.postazva_at).slice(0, 6)}` : null,
                       s.szakasz !== "archiv" ? t.szoveg : null,
                     ].filter(Boolean).join(" · ")}
