@@ -127,6 +127,21 @@ export const PARTNEREK: readonly Partner[] = [
     hivatkozasNeve: "Jelünk / Pozíció",
   },
   {
+    kod: "eucargo",
+    nev: "EUCARGO 2008 Kft.",
+    // 2026.09.25.02: a felrakókat és a lerakókat a kísérő levélben adják
+    // meg, a PDF-ben csak „részletes adatokat emailben küldöm” áll.
+    ujjlenyomat: [/eucargo2008\.eu/i, /EU-?CARGO\s*2008/i],
+    // Nincs vágás: a hasznos sorok (postázási cím, SMS-kérés) a szerződéses
+    // bekezdés UTÁN állnak.
+    torzsVege: [],
+    // „Postázási cím: 9600 Sárvár, Munkácsy u.18.” (a számlázási cím Budapest).
+    postazasiCim: "9600 Sárvár, Munkácsy u. 18.",
+    // „Fiz.hat.: 45 naptári nap (az eredeti dokumentumok, számla beérkezésétől)”.
+    fizetesiHataridoNap: 45,
+    hivatkozasNeve: "Hivatkozás",
+  },
+  {
     kod: "huncargo",
     nev: "Huncargo Forwarding Kft.",
     // NEM a puszta "Huncargo": az a felrakóhely neve is ("Huncargo Raktár",

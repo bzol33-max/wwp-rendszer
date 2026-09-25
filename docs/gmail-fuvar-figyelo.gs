@@ -11,11 +11,14 @@
  * lejáró token, és a levelek tartalma nem hagyja el a postafiókot.
  *
  * MIT CSINÁL 5 PERCENKÉNT:
- *   1. Lekérdezi, mely korábbi levelek csatolmányát várja a rendszer, és
- *      feltölti azokat (csak amit a rendszer megbízásnak/papírnak ítélt).
+ *   1. Lekérdezi, mely korábbi levelek csatolmányát és szövegét várja a
+ *      rendszer. A szöveget CSAK a megbízásnak osztályozott levelekről kéri
+ *      (2026-09-25: az EUCARGO a felrakókat és lerakókat a levélben küldte,
+ *      a PDF-ben csak annyi állt, hogy „e-mailben küldöm”). Előbb a
+ *      szöveget, utána a csatolmányt küldi, hogy a beolvasás a kettőt
+ *      együtt kapja.
  *   2. A „Fuvarmegbízás" CÍMKÉVEL ellátott levelekről METAADATOT küld
- *      (feladó, tárgy, snippet, csatolmánynevek) — törzset SOHA. A rendszer
- *      ebből osztályoz.
+ *      (feladó, tárgy, snippet, csatolmánynevek). A rendszer ebből osztályoz.
  *
  * CSAK CÍMKÉZETT LEVÉL (Zoltán döntése, 2026-09-20): a figyelő NEM nézi a
  * teljes postafiókot, csak azt, amit te (vagy egy Gmail-szűrő) a
@@ -38,8 +41,11 @@
  *      (Leállítás: `torolIdozitot`.)
  *
  * ADATVÉDELEM: csak a címkézett leveleket nézi, a KIZART_FELADO listát
- * kihagyja, és a levél törzsét nem küldi el. Csatolmányt csak arra a
- * levélre tölt fel, amit a rendszer KÉRT (tehát megbízásnak osztályozott).
+ * kihagyja. A levél teljes szövegét és a csatolmányát csak arra a levélre
+ * küldi, amit a rendszer KÉRT (tehát megbízásnak osztályozott).
+ *
+ * FRISSÍTÉS (2026-09-25): a script.google.com projektben cseréld le a teljes
+ * tartalmat erre a fájlra, és mentsd. Az időzítőt nem kell újra telepíteni.
  */
 
 /** Ezekről a feladókról semmit nem küldünk (bank, hatóság, magán). */
@@ -111,9 +117,32 @@ function feladoNev_(felado) {
   return m ? m[1].trim() : '';
 }
 
-/** 1. kör: a rendszer által kért csatolmányok feltöltése. */
-function kertCsatolmanyokFeltoltese_() {
-  var kert = (hivas_('/api/fuvarozas2/gmail/kert', { method: 'get' }).kert) || [];
+/** A levél szövegének felső határa (a szerver is ennyinél vág). */
+var MAX_TORZS_KARAKTER = 50000;
+
+/** 1a. kör: a kért megbízás-levelek teljes szövege. */
+function kertTorzsekBekuldese_(kertTorzs) {
+  var db = 0;
+  for (var i = 0; i < kertTorzs.length; i++) {
+    var uzenet;
+    try {
+      uzenet = GmailApp.getMessageById(kertTorzs[i]);
+    } catch (e) {
+      continue;
+    }
+    if (!uzenet || kizart_(uzenet)) continue;
+    hivas_('/api/fuvarozas2/gmail/torzs', {
+      method: 'post',
+      contentType: 'application/json',
+      payload: JSON.stringify({ gmailMessageId: kertTorzs[i], torzs: String(uzenet.getPlainBody() || '').slice(0, MAX_TORZS_KARAKTER) }),
+    });
+    db++;
+  }
+  return db;
+}
+
+/** 1b. kör: a rendszer által kért csatolmányok feltöltése. */
+function kertCsatolmanyokFeltoltese_(kert) {
   var db = 0;
   for (var i = 0; i < kert.length; i++) {
     var uzenet;
@@ -234,9 +263,12 @@ function ujLevelekBekuldese_(csakProba) {
 
 /** Ez fut 5 percenként. */
 function fuvarFigyelo() {
-  var csatolmany = kertCsatolmanyokFeltoltese_();
+  var kertek = hivas_('/api/fuvarozas2/gmail/kert', { method: 'get' });
+  // Előbb a szöveg, utána a csatolmány: a beolvasás így a kettőt együtt látja.
+  var torzs = kertTorzsekBekuldese_(kertek.torzs || []);
+  var csatolmany = kertCsatolmanyokFeltoltese_(kertek.kert || []);
   var eredmeny = ujLevelekBekuldese_(false);
-  Logger.log('feltöltött csatolmány: ' + csatolmany + ' · új levél: ' + (eredmeny.uj || 0) + ' · ismert: ' + (eredmeny.ismert || 0));
+  Logger.log('levélszöveg: ' + torzs + ' · feltöltött csatolmány: ' + csatolmany + ' · új levél: ' + (eredmeny.uj || 0) + ' · ismert: ' + (eredmeny.ismert || 0));
 }
 
 /** Először ezt futtasd: nem küld semmit, csak kiírja, mit látna. */

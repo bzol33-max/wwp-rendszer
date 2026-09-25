@@ -45,7 +45,7 @@ import { pdfSzovegElemek } from "@/lib/fuvarozas/import/pdf-elemek";
 import { felismerPartner, partnerKodSzerint } from "@/lib/fuvarozas/import/partnerek";
 import { frissitsdFuvarozas2Modellt } from "@/lib/fuvarozas2/modell-szinkron";
 import { ellenorizKivontFuvart, type KivontFuvar } from "@/lib/fuvarozas/import/ellenorzes";
-import { osszesLerakoCime, soforAdatokKivonatbol, vanSoforAdat, type SoforAdatok } from "@/lib/fuvarozas/sofor-adatok";
+import { osszesFelrakoCime, osszesLerakoCime, soforAdatokKivonatbol, vanSoforAdat, type SoforAdatok } from "@/lib/fuvarozas/sofor-adatok";
 import {
   rogzitNaplot,
   nyersSzoveggelNaplozottFileIdk,
@@ -309,12 +309,23 @@ const KIVONATOLASI_UTASITAS = `Egy fuvarmegbízás-dokumentum szövege következ
       "cim": string|null, // irányítószám, város, utca házszám — cégnév NÉLKÜL (pl. "3527 Miskolc, Besenyői u. 8.")
       "nap": string|null, // ISO dátum ÉÉÉÉ-HH-NN, ha erre a megállóra meg van adva
       "ido": string|null, // időpont vagy időablak röviden, szó szerint (pl. "8:00-20:00", "15:00-ig", "15 órás időkapu")
-      "kontakt": string|null // a HELYSZÍNEN hívható személy neve és telefonszáma, ha meg van adva — NEM a megbízó ügyintézője
+      "kontakt": string|null, // a HELYSZÍNEN hívható személy neve és telefonszáma, ha meg van adva — NEM a megbízó ügyintézője
+      "rakomany": string|null // ezen a megállón fel- vagy lerakandó áru és mennyiség röviden (pl. "2 t 1.fok Titus", "33 raklap"), ha megállónként meg van adva
     }
   ],
   "referencia": string|null, // a felrakón/kapuban kért szám, ha KÜLÖNBÖZIK a pozíciószámtól (pl. "Ref.: 80066185", "Transporeon 1153460", rakodási szám, ORDER) — egyébként null
   "jarmuEloiras": string|null // a járműre vonatkozó előírás röviden (pl. "Mega autó", "13,6 m ponyvás", "spanifer kell") — egyébként null
 }
+
+HA A SZÖVEGBEN "=== A MEGBÍZÁST KÍSÉRŐ E-MAIL SZÖVEGE ===" RÉSZ IS VAN: a
+megbízó a megbízás mellé levelet írt. A díj, a hivatkozás, a rendszám, a
+fizetési határidő és a postázási cím az IRATBÓL jön. Ha az irat a helyek
+helyett csak annyit ír, hogy "e-mailben küldöm" / "részletes adatokat
+emailben", akkor a felrakókat, a lerakókat (MIND, a "megallok" tömbbe
+egyenként, cégnévvel, címmel, telefonnal, rakománnyal) és a sorrendet a
+LEVÉLBŐL vedd; a "felrako" és "lerako" mezőbe ilyenkor az első felrakó és
+az utolsó lerakó címe kerüljön, SOHA ne az "e-mailben küldöm" szöveg. Ha a
+levél sorrendet javasol, a megállók ebben a sorrendben kövessék egymást.
 
 HÁROM DOLOG, AMIT EZEK A SABLONOK RENDRE ELRONTANAK — figyelj rájuk:
 
@@ -370,8 +381,8 @@ async function kivonatolFuvarAdatot(szoveg: string): Promise<LlmValasz | null> {
       model,
       messages: [
         { role: "system", content: KIVONATOLASI_UTASITAS },
-        // A dokumentum szövege esetlegesen hosszú — 20 000 karakternél vágjuk, hogy ne fusson ki a kontextusból.
-        { role: "user", content: szoveg.slice(0, 20000) },
+        // A dokumentum (és a kísérő levél) szövege esetlegesen hosszú — 30 000 karakternél vágjuk.
+        { role: "user", content: szoveg.slice(0, 30000) },
       ],
       temperature: 0,
       response_format: { type: "json_object" },
@@ -397,6 +408,31 @@ function resolveJarmuMezo(rendszamVagySofor: string | null): string | undefined 
   const jarmu = findJarmuInSzoveg(rendszamVagySofor);
   return jarmu ? jarmuLabel(jarmu) : undefined;
 }
+
+/**
+ * Tartalék, ha a modell nem adta vissza a rendszámot: a saját kocsink
+ * rendszáma az irat szövegében (EUCARGO, 2026-09-25: „Rendszám:
+ * NMZ-492,XZV-926”, a sor mégis kocsi nélkül maradt). Csak a rendszám-alakú
+ * darabokat nézzük — a sofőrnév-keresés a teljes szövegen félrevinne.
+ */
+function resolveJarmuRendszamokbol(szoveg: string | null): string | undefined {
+  const rendszamok = (szoveg ?? "").toUpperCase().match(/\b[A-Z]{3,4}[-\s]?\d{3}\b/g);
+  return rendszamok ? resolveJarmuMezo(rendszamok.join(" ")) : undefined;
+}
+
+/** A csatolmányhoz tartozó levél szövege, ha a Gmail-figyelő beküldte (fuvar_level.torzs). */
+async function kiseroLevelSzovege(driveFileId: string): Promise<string | null> {
+  const [sor] = await query<{ torzs: string }>(
+    `select torzs from fuvar_level where drive_file_id = $1 and torzs is not null and torzs <> '' order by erkezett desc limit 1`,
+    [driveFileId]
+  );
+  return sor?.torzs ?? null;
+}
+
+const LEVEL_ELVALASZTO = "\n\n=== A MEGBÍZÁST KÍSÉRŐ E-MAIL SZÖVEGE ===\n";
+
+/** „e-mailben küldöm” típusú hely-helyettesítő — ilyen szöveg nem lehet felrakó/lerakó. */
+const EMAIL_HELYETTESITO = /e-?mail/i;
 
 /**
  * Az LLM válasza a "fuvardijPenznem" mezőre a kérés ellenére sem mindig
@@ -564,7 +600,10 @@ async function ujFajlokFeldolgozasa(
 
       // --- Nyelvi modell a MEGTISZTÍTOTT törzsszövegen ---
       const torzs = torzsSzoveg(normalizalt, partner?.torzsVege ?? []);
-      const llm = await kivonatolFuvarAdatot(torzs);
+      // A megbízó a helyeket néha a kísérő levélben adja meg ("részletes
+      // felrakási adatokat emailben küldöm") — a levél szövege a modellhez megy.
+      const kiseroLevel = await kiseroLevelSzovege(file.id);
+      const llm = await kivonatolFuvarAdatot(kiseroLevel ? torzs + LEVEL_ELVALASZTO + kiseroLevel : torzs);
       if (!llm || !llm.isFuvarmegbizas) {
         await rogzitNaplot({
           ...naploAlap,
@@ -601,7 +640,13 @@ async function ujFajlokFeldolgozasa(
       // a nyers érték "Cannot read properties of undefined (reading 'min')"
       // hibával buktatta el a fájlt minden szinkronban (02215-2026.pdf, 2026-09-17).
       kivont.fuvardijPenznem = normalizaltFuvardijPenznem(kivont.fuvardijPenznem) ?? null;
-      const { verdikt, kifogasok } = ellenorizKivontFuvart(kivont, !!partner, new Date(), !!partner?.nincsHivatkozas);
+      const ellenorzes = ellenorizKivontFuvart(kivont, !!partner, new Date(), !!partner?.nincsHivatkozas);
+      let { verdikt } = ellenorzes;
+      const kifogasok = [...ellenorzes.kifogasok];
+      if (EMAIL_HELYETTESITO.test(kivont.felrako ?? "") || EMAIL_HELYETTESITO.test(kivont.lerako ?? "")) {
+        kifogasok.push("A felrakó/lerakó helyén csak „e-mailben küldöm” áll — a kísérő levél még nem érkezett meg; amint megjön, a rendszer újraolvassa.");
+        if (verdikt === "biztos") verdikt = "ellenorizendo";
+      }
       if (verdikt === "elutasitva") {
         // Inkább ne legyen sor, mint rossz sor: egy hiányos irat csendben
         // felvitt fuvarja eddig számlázásig eljutott.
@@ -616,16 +661,17 @@ async function ujFajlokFeldolgozasa(
       // determinisztikus olvasója adta, mert az megbízhatóbb a modellnél.
       const soforAdatok = soforAdatokKivonatbol(llm);
       const lerakoMezo = (determinisztikus.lerako ? null : osszesLerakoCime(soforAdatok)) ?? kivont.lerako!;
+      const felrakoMezo = (determinisztikus.felrako ? null : osszesFelrakoCime(soforAdatok)) ?? kivont.felrako;
 
       const fuvarId = await addFuvar({
         tipus: "sajat",
         datum: kivont.felrakasDatum!,
         lerako: lerakoMezo,
-        felrako: kivont.felrako || undefined,
+        felrako: felrakoMezo || undefined,
         megrendelo: kivont.megrendelo || undefined,
         aru: kivont.aru || undefined,
         mennyiseg: kivont.mennyiseg || undefined,
-        jarmu: resolveJarmuMezo(kivont.rendszamVagySofor),
+        jarmu: resolveJarmuMezo(kivont.rendszamVagySofor) ?? resolveJarmuRendszamokbol(nyersSzoveg),
         sofor: kivont.rendszamVagySofor || undefined,
         fuvardij: kivont.fuvardij ?? undefined,
         fuvardijPenznem: normalizaltFuvardijPenznem(kivont.fuvardijPenznem),
@@ -648,6 +694,7 @@ async function ujFajlokFeldolgozasa(
         await csatolIratotFuvarhoz(fuvarId, { id: file.id, name: file.name, url }, "megbizas").catch((err) => {
           hibak.push(`${file.name}: az irat csatolása nem sikerült — ${err instanceof Error ? err.message : "ismeretlen hiba"}`);
         });
+        if (kiseroLevel) await query(`update fuvar_megbizasok set level_kiegeszitve_at = now() where id = $1`, [fuvarId]);
         await mentsSoforAdatokat(fuvarId, soforAdatok).catch((err) => {
           // A sofőr-adat kiegészítés — a felvett megbízást nem buktathatja el.
           hibak.push(`${file.name}: a sofőr-adatok mentése nem sikerült — ${err instanceof Error ? err.message : "ismeretlen hiba"}`);
@@ -793,6 +840,64 @@ async function mentsSoforAdatokat(fuvarId: string, adatok: SoforAdatok): Promise
       where id = $1`,
     [fuvarId, van ? JSON.stringify(adatok.megallok) : null, adatok.referencia, adatok.jarmuEloiras]
   );
+}
+
+/**
+ * A már felvett megbízás újraolvasása a kísérő levéllel (EUCARGO #281,
+ * 2026-09-25: a PDF-ben a helyek helyén „részletes adatokat emailben
+ * küldöm” állt, a 4 felrakó és 10 lerakó a levélben volt). Akkor fut, ha a
+ * Gmail-figyelő a levél szövegét a csatolmány UTÁN küldte be. Csak olyan
+ * soron, amelynek egyik megállóját sem érintette még sofőr vagy GPS — a
+ * megállók sorszámához kötött jelölések nem csúszhatnak el.
+ */
+async function levelSzovegPotlasa(hibak: string[]): Promise<number> {
+  const sorok = await query<{ fuvar_id: string; nyers_szoveg: string; torzs: string; jarmu: string | null }>(
+    `select distinct on (m.id) m.id::text as fuvar_id, n.nyers_szoveg, l.torzs, m.jarmu
+       from fuvar_level l
+       join fuvar_import_naplo n on n.drive_file_id = l.drive_file_id
+       join fuvar_megbizasok m on m.id = n.fuvar_id
+      where l.torzs is not null and l.torzs <> '' and n.nyers_szoveg is not null
+        and m.level_kiegeszitve_at is null and m.torolt_at is null and m.statusz <> 'torolt'
+        and not coalesce(m.teljesitve, false)
+        and not exists (select 1 from fuvar_megallo_allapot a where a.fuvar_id = m.id and (a.kesz or a.kezi_erkezes is not null))
+        and not exists (select 1 from fuvar_megallok g where g.megbizas_id = m.id and (g.gps_erkezes is not null or g.sofor_kesz_at is not null))
+      order by m.id, l.erkezett desc
+      limit 3`
+  );
+  let db = 0;
+  for (const sor of sorok) {
+    try {
+      const normalizalt = normalizaltSzoveg(sor.nyers_szoveg);
+      const partner = felismerPartner(normalizalt);
+      const torzs = torzsSzoveg(normalizalt, partner?.torzsVege ?? []);
+      const llm = await kivonatolFuvarAdatot(torzs + LEVEL_ELVALASZTO + sor.torzs);
+      if (llm) {
+        const adatok = soforAdatokKivonatbol(llm);
+        const tiszta = (v: string | null | undefined) => (v && !EMAIL_HELYETTESITO.test(v) ? v : null);
+        const felrako = osszesFelrakoCime(adatok) ?? tiszta(llm.felrako);
+        const lerako = osszesLerakoCime(adatok) ?? tiszta(llm.lerako);
+        const jarmu = sor.jarmu?.trim() ? null : resolveJarmuMezo(llm.rendszamVagySofor) ?? resolveJarmuRendszamokbol(sor.nyers_szoveg) ?? null;
+        await query(
+          `update fuvar_megbizasok
+              set felrako = coalesce($2, felrako), lerako = coalesce($3, lerako),
+                  jarmu = coalesce(nullif(jarmu, ''), $4), jarmu_id = case when $4::text is not null and coalesce(jarmu, '') = '' then null else jarmu_id end,
+                  aru = coalesce(nullif(aru, ''), $5), mennyiseg = coalesce(nullif(mennyiseg, ''), $6)
+            where id = $1`,
+          [sor.fuvar_id, felrako, lerako, jarmu, llm.aru ?? null, llm.mennyiseg ?? null]
+        );
+        await mentsSoforAdatokat(sor.fuvar_id, adatok);
+        // Az új modell megállói a felrakó/lerakó szövegből épülnek újra.
+        if (felrako || lerako) await query(`delete from fuvar_megallok where megbizas_id = $1`, [sor.fuvar_id]);
+        await frissitsdFuvarozas2Modellt(sor.fuvar_id);
+        console.log(`[level-potlas] #${sor.fuvar_id}: ${adatok.megallok.length} megálló a kísérő levélből`);
+        db++;
+      }
+      await query(`update fuvar_megbizasok set level_kiegeszitve_at = now() where id = $1`, [sor.fuvar_id]);
+    } catch (err) {
+      hibak.push(`#${sor.fuvar_id}: a kísérő levél újraolvasása nem sikerült — ${err instanceof Error ? err.message : "ismeretlen hiba"}`);
+    }
+  }
+  return db;
 }
 
 /** Ennyi régi sort pótolunk egy szinkron-körben — a nyelvi modell hívása nem ingyenes. */
@@ -958,6 +1063,7 @@ export async function vegrehajtDriveSync(): Promise<DriveSyncEredmeny> {
   // Az új iratok után, hogy a most felvett sorok naplója már megvan.
   const figyelmeztetesek = [...uj.figyelmeztetesek];
   const helyesbitettMegrendelok = await megrendelokHelyesbitese(hibak, figyelmeztetesek);
+  await levelSzovegPotlasa(hibak);
   await soforAdatokPotlasa(hibak);
   return {
     ujFuvarok: uj.ujFuvarok,

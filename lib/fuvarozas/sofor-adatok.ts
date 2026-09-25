@@ -33,6 +33,8 @@ export type MegalloReszlet = {
   ido: string | null;
   /** A helyszínen hívható személy neve és telefonszáma. */
   kontakt: string | null;
+  /** Ezen a megállón fel-/lerakandó áru és mennyiség röviden ("2 t 1.fok Titus"). */
+  rakomany?: string | null;
 };
 
 export type SoforAdatok = {
@@ -76,10 +78,12 @@ export function soforAdatokKivonatbol(nyers: unknown): SoforAdatok {
         nap: isoNap(r.nap),
         ido: szoveg(r.ido, 60),
         kontakt: szoveg(r.kontakt, 80),
+        rakomany: szoveg(r.rakomany, 80),
       };
     })
     .filter((m): m is MegalloReszlet => m !== null)
-    .slice(0, 12);
+    // 14 megállós megbízás is van (EUCARGO, 2026-09-25: 4 felrakó + 10 lerakó).
+    .slice(0, 20);
   return {
     megallok,
     referencia: szoveg(o.referencia, 60),
@@ -92,7 +96,7 @@ export function vanSoforAdat(a: SoforAdatok): boolean {
   return (
     a.referencia !== null ||
     a.jarmuEloiras !== null ||
-    a.megallok.some((m) => m.ceg || m.ido || m.kontakt || m.nap)
+    a.megallok.some((m) => m.ceg || m.ido || m.kontakt || m.nap || m.rakomany)
   );
 }
 
@@ -105,6 +109,13 @@ export function vanSoforAdat(a: SoforAdatok): boolean {
  * Speed Sopron → Miskolc → Debrecen fuvarjából Sopron → Debrecen lett, a
  * miskolci megálló eltűnt a sofőr és a GPS elől is.
  */
+/** Több felrakónál mind a felrakó címe, pontosvesszővel (a lerakó párja). */
+export function osszesFelrakoCime(a: SoforAdatok): string | null {
+  const felrakok = a.megallok.filter((m) => m.tipus === "felrako");
+  if (felrakok.length < 2 || felrakok.some((m) => !m.cim)) return null;
+  return felrakok.map((m) => m.cim!.replace(/;/g, ",")).join("; ");
+}
+
 export function osszesLerakoCime(a: SoforAdatok): string | null {
   const lerakok = a.megallok.filter((m) => m.tipus === "lerako");
   if (lerakok.length < 2 || lerakok.some((m) => !m.cim)) return null;

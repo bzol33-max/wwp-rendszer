@@ -267,6 +267,8 @@ export type SoforMegalloSor = {
   ido: string | null;
   nap: string | null;
   kontakt: string | null;
+  /** Ezen a megállón fel-/lerakandó áru ("2 t 1.fok Titus"), ha a megbízás megállónként adja. */
+  rakomany: string | null;
 };
 
 export type SoforDokumentum = {
@@ -544,6 +546,7 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
           (m.tipus === "felrako" ? extra?.datum_iso : extra?.lerakas_datum_iso ?? extra?.datum_iso) ??
           null,
         kontakt: reszletek[i]?.kontakt ?? null,
+        rakomany: reszletek[i]?.rakomany ?? null,
       })),
     };
   });
