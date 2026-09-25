@@ -16,6 +16,7 @@ import { getMegbizasok, type MegbizasSor } from "@/lib/fuvarozas2/megbizasok";
 import { getSzamlaLista } from "@/lib/szamlak/actions";
 import { varosNev } from "@/lib/fuvarozas/varos";
 import { papirHatraNap } from "@/lib/fuvarozas2/megbizas-szuro";
+import { getParositatlanFuvarszamlak } from "@/lib/fuvarozas/megbizasok";
 
 export type ElszamolasSor = MegbizasSor & {
   /** Hány nap van a partner papír-határidejéből (negatív: lejárt). */
@@ -30,6 +31,8 @@ export type ElszamolasVaszon = {
   fejlec: { lejartDb: number; lejartFt: number };
   szamlazando: ElszamolasSor[];
   postazando: (ElszamolasSor & { piszkozat: Piszkozat })[];
+  /** Fuvarszámlák, amiket a rendszer egyik fuvarhoz sem tudott párosítani (60 nap). */
+  parositatlan: { szamlaszam: string; vevo_nev: string; rendelesszam: string | null; netto: number | null; kiallitas_nap: string }[];
   kintlevoseg: { szamlaszam: string; vevo: string; esedekes: string | null; brutto: number; penznem: string; lejart: boolean }[];
   osszegek: { szamlazhatoFt: number; postazandoDb: number };
 };
@@ -79,13 +82,15 @@ export async function getElszamolasVaszon(): Promise<ElszamolasVaszon> {
     kintlevoseg = [];
   }
 
+  const parositatlan = await getParositatlanFuvarszamlak(60).catch(() => []);
+
   const lejartak = kintlevoseg.filter((k) => k.lejart);
   return {
     fejlec: {
       lejartDb: lejartak.length,
       lejartFt: lejartak.filter((k) => k.penznem === "Ft").reduce((a, k) => a + k.brutto, 0),
     },
-    szamlazando, postazando, kintlevoseg: kintlevoseg.slice(0, 12),
+    szamlazando, postazando, parositatlan, kintlevoseg: kintlevoseg.slice(0, 12),
     osszegek: {
       szamlazhatoFt: szamlazando.filter((s) => s.fuvardij_penznem === "Ft").reduce((a, s) => a + (s.fuvardij ?? 0), 0),
       postazandoDb: postazando.length,

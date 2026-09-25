@@ -63,7 +63,7 @@ export type SzamlazzHuSzamla = {
  * válaszban ellenőrizve ez okozott hibás ("VASB&#193;R-KER Kft.") neveket.
  * Ez a függvény utólag, biztonságosan feloldja ezeket.
  */
-function decodeEntities(s: string): string {
+export function decodeEntities(s: string): string {
   return s
     .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)))
     .replace(/&#x([0-9a-fA-F]+);/g, (_, code) => String.fromCharCode(parseInt(code, 16)))
@@ -201,7 +201,10 @@ export async function lekerdezSzamla(
   return {
     szamlaszam: szamlaszamValasz,
     vevoNev: decodeEntities(String(vevo["nev"] ?? "").trim()),
-    rendelesszam: rendelesszamNyers ? String(rendelesszamNyers).trim() || null : null,
+    // Dekódolva, mint a többi szöveges mező: az „ÁJ/2026/09/1279” &#193;J/…
+    // alakban jön, és dekódolás nélkül sosem egyezett a megbízás számával
+    // (WLLWR-2026-313, 2026-09-25).
+    rendelesszam: rendelesszamNyers ? decodeEntities(String(rendelesszamNyers)).trim() || null : null,
     fizmod: alap["fizmod"] ? decodeEntities(String(alap["fizmod"]).trim()) || null : null,
     penznem,
     // <telj> = teljesítés dátuma, <fizh> = fizetési határidő, <kelt> = kiállítás dátuma.
