@@ -87,3 +87,31 @@ export type SzamlaKiemeltStatisztika = {
   legnagyobbNyitottVevo: string | null;
   legnagyobbNyitottVevoOsszegHuf: number;
 };
+
+/** Egy találat a kereső javaslatai közül — számla. */
+export type SzamlaTalalat = {
+  id: string;
+  szamlaszam: string;
+  vevo_nev: string;
+  brutto: number;
+  fizetett_osszeg: number;
+  penznem: string;
+  fizetve: boolean;
+  fizetesi_hatarido: string | null;
+};
+
+/** Egy találat a kereső javaslatai közül — vevő (a nyitott tételeivel). */
+export type VevoTalalat = {
+  vevo_nev: string;
+  nyitott_darab: number;
+  nyitott_osszeg: number;
+  penznem: string;
+};
+
+/** A kereső legördülőjének tartalma: néhány számla és néhány vevő. */
+export type KeresesJavaslatok = {
+  szamlak: SzamlaTalalat[];
+  vevok: VevoTalalat[];
+  /** Összesen ennyi számla illik a keresésre (a legördülő csak az elejét mutatja). */
+  szamlaOsszes: number;
+};

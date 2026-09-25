@@ -7,12 +7,15 @@ import { query } from "@/lib/db";
 import { requireEditPermission } from "@/lib/auth/require-permission";
 import { futtatSzamlaSzinkron, type PollEredmeny } from "./poll";
 import type {
+  KeresesJavaslatok,
   SzamlaAlkategoria,
   SzamlaHaviBevetelSor,
   SzamlaKategoria,
   SzamlaKiemeltStatisztika,
   SzamlaOsszesitoSor,
   SzamlaRow,
+  SzamlaTalalat,
+  VevoTalalat,
 } from "./szamla-constants";
 
 const TIME_FMT = "YYYY-MM-DD";
@@ -31,6 +34,19 @@ const BRUTTO_SQL = `(brutto + helyesbites_osszeg)`;
  */
 const HATRALEK_SQL = `(brutto + helyesbites_osszeg - fizetett_osszeg)`;
 
+/**
+ * A szabad szöveges keresés feltétele: sorszám, vevő, hivatkozási szám és a
+ * tételek szövege — a számjegyekre az összeg is (a "317500" és a "317.500"
+ * ugyanarra a számlára találjon).
+ */
+const KERESES_FELTETEL = (n: number) => `(
+  szamlaszam ilike $${n}
+  or vevo_nev ilike $${n}
+  or coalesce(rendelesszam, '') ilike $${n}
+  or coalesce(tetelek_szoveg, '') ilike $${n}
+  or replace(replace(round(${BRUTTO_SQL})::text, '.', ''), ' ', '') like replace(replace(replace($${n}, '.', ''), ' ', ''), ',', '')
+)`;
+
 const SZAMLA_COLUMNS = `
   id::text, szamlaszam, vevo_nev, rendelesszam, fizmod, penznem,
   to_char(teljesites_datum, '${TIME_FMT}') as teljesites_datum,
@@ -47,6 +63,8 @@ export type SzamlaListaSzuro = {
   alkategoria?: SzamlaAlkategoria | null;
   vevoNev?: string;
   penznem?: string;
+  /** Szabad szöveges keresés: sorszám, vevő, hivatkozási szám, tételszöveg — és szám esetén az összeg. */
+  kereses?: string;
   /** true = kiállítás dátuma szerint, időrendben (a legrégebbi elöl) — pl. a több céget összefogó "Egyéb" csempénél hasznos. */
   idorendben?: boolean;
   /** true = csak a kifizetett számlák (a "Kifizetve" összecsukott szekcióhoz). */
@@ -84,6 +102,10 @@ export async function getSzamlaLista(szuro: SzamlaListaSzuro): Promise<SzamlaRow
   if (szuro.vevoNev) {
     parameterek.push(szuro.vevoNev);
     feltetelek.push(`vevo_nev = $${parameterek.length}`);
+  }
+  if (szuro.kereses && szuro.kereses.trim()) {
+    parameterek.push(`%${szuro.kereses.trim()}%`);
+    feltetelek.push(KERESES_FELTETEL(parameterek.length));
   }
   if (szuro.penznem) {
     parameterek.push(szuro.penznem);
@@ -381,4 +403,46 @@ export async function getSzamlaSzinkronAllapot(): Promise<SzamlaAllapot> {
     sztorno_darab: sztorno?.n ?? 0,
     elotagok,
   };
+}
+
+/**
+ * A kereső legördülőjéhez: gépelés közbeni javaslatok. Két csoport — a
+ * ráillő számlák (a nyitottak elöl, a legrégebben esedékessel kezdve) és a
+ * ráillő vevők a nyitott tételeikkel. Két karakter alatt nem keres.
+ */
+export async function keresJavaslatok(q: string): Promise<KeresesJavaslatok> {
+  const minta = q.trim();
+  if (minta.length < 2) return { szamlak: [], vevok: [], szamlaOsszes: 0 };
+  const parameter = [`%${minta}%`];
+
+  const [szamlak, vevok, osszes] = await Promise.all([
+    query<SzamlaTalalat>(
+      `select id::text, szamlaszam, vevo_nev, ${BRUTTO_SQL} as brutto, fizetett_osszeg, penznem, fizetve,
+              to_char(fizetesi_hatarido, '${TIME_FMT}') as fizetesi_hatarido
+       from szamla
+       where not sztorno and not sztornozva and ${KERESES_FELTETEL(1)}
+       order by fizetve asc, fizetesi_hatarido asc nulls last, szamlaszam desc
+       limit 8`,
+      parameter
+    ),
+    query<VevoTalalat>(
+      `select vevo_nev,
+              count(*) filter (where not fizetve)::int as nyitott_darab,
+              coalesce(sum(${HATRALEK_SQL}) filter (where not fizetve), 0)::float8 as nyitott_osszeg,
+              min(penznem) as penznem
+       from szamla
+       where not sztorno and not sztornozva and vevo_nev ilike $1
+       group by vevo_nev
+       order by nyitott_osszeg desc, vevo_nev
+       limit 5`,
+      parameter
+    ),
+    query<{ n: number }>(
+      `select count(*)::int as n from szamla
+       where not sztorno and not sztornozva and ${KERESES_FELTETEL(1)}`,
+      parameter
+    ),
+  ]);
+
+  return { szamlak, vevok, szamlaOsszes: osszes[0]?.n ?? 0 };
 }
