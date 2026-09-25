@@ -2082,3 +2082,16 @@ pihenőn állva semmi nem mutatta, hogy az út nagyobb része megvolt.
   - Helyi Postgres-próba: mind a négy fuvar párosult és „Számlázva” lett; a
     második kör 0; a LOGO TREK számla a párosítatlanok között maradt.
   - tsc és next build tiszta.
+
+## 2026-09-25 — Párosítás: útvonal nélküli számla
+
+- **Eset:** a WLLWR-2026-315 (Hajdúspedíció) tétele csak „Közúti
+  árufuvarozás”; rendelésszám és útvonal nincs rajta. A partner, az összeg
+  (245 000 Ft) és a dátum egyezik a #137-tel.
+- **Döntés (Budaházi Zoltán):** A + B.
+  - A: a számlára ezután is kerüljön rá az útvonal.
+  - B: ha mégsem, a partner + összeg + dátum elég, egyértelmű találatnál.
+  - Ha van útvonal a számlán, de nem egyezik, az továbbra is kizárja a párt.
+- **Módosítás:** `vanUtvonal()` a `lib/fuvarozas/szamla-parositas.ts`-ben.
+  Az új párosítási mód neve `partner_osszeg_datum`, ez kerül a naplóba.
+- **Teszt:** teszt-szamla-parositas 20/0, a valós 315-ös számlával.
