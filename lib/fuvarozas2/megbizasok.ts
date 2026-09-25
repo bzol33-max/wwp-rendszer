@@ -63,6 +63,10 @@ export type MegbizasSor = {
   foto_van: boolean;
   dokumentum_url: string | null;
   megjegyzes: string | null;
+  /** Saját fuvar előkészítésben (a sofőr még nem látja) — lib/fuvarozas2/sajat-fuvar.ts. */
+  elokeszites: boolean;
+  /** Az előkészítésben kiválasztott kocsi kódja (a `jarmu` csak a „Kocsira adom”-mal kap értéket). */
+  elokeszites_jarmu: string | null;
 };
 
 const SOR_SQL = `
@@ -85,7 +89,7 @@ const SOR_SQL = `
     coalesce(e.fizetesi_hatarido_nap, m.fizetesi_hatarido_nap, p.fizetesi_hatarido_nap) as fizetesi_hatarido_nap,
     p.papir_bekuldesi_hatarido_nap as papir_hatarido_nap,
     exists (select 1 from fuvar_dokumentumok d where d.fuvar_id = m.id and d.tipus = 'fuvarlevel') as foto_van,
-    m.dokumentum_url, m.megjegyzes
+    m.dokumentum_url, m.megjegyzes, m.elokeszites, m.elokeszites_jarmu
   from fuvar_megbizasok m
   left join fuvar_partnerek p on p.id = m.partner_id
   left join fuvar_jarmuvek j on j.id = m.jarmu_id
@@ -474,7 +478,7 @@ export async function getMunkaasztal(szuro: {
   const jarmuvek = await munkaasztalJarmuvei();
   const soforKod = new Map(jarmuvek.map((j) => [j.kod, j.sofor]));
 
-  const szakaszDb = { beerkezett: 0, folyamatban: 0, szamlazasra: 0, postara: 0, archiv: 0 } as Record<Szakasz, number>;
+  const szakaszDb = { elokeszites: 0, beerkezett: 0, folyamatban: 0, szamlazasra: 0, postara: 0, archiv: 0 } as Record<Szakasz, number>;
   const kocsiDb = new Map<string, number>();
   let kocsiNelkul = 0, ber = 0, sajat = 0;
   for (const s of osszes) {
@@ -498,7 +502,7 @@ export async function getMunkaasztal(szuro: {
     return true;
   });
   // Ami még előttünk van, időrendben; ami mögöttünk, a legújabb elöl.
-  if (!q && (szakasz === "beerkezett" || szakasz === "folyamatban")) {
+  if (!q && (szakasz === "elokeszites" || szakasz === "beerkezett" || szakasz === "folyamatban")) {
     sorok = [...sorok].sort((a, b) => (a.felrakas_nap ?? "").localeCompare(b.felrakas_nap ?? "") || a.id.localeCompare(b.id));
   }
 

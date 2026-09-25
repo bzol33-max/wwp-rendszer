@@ -9,17 +9,21 @@
 
 import type { Allapot } from "@/lib/fuvarozas/allapot";
 
-export type Szakasz = "beerkezett" | "folyamatban" | "szamlazasra" | "postara" | "archiv";
+export type Szakasz = "elokeszites" | "beerkezett" | "folyamatban" | "szamlazasra" | "postara" | "archiv";
 
 export const SZAKASZOK: readonly { kulcs: Szakasz; cimke: string; csoport: "Előkészítés" | "Úton" | "Pénz" | "Kész" }[] = [
-  { kulcs: "beerkezett", cimke: "Beérkezett", csoport: "Előkészítés" },
+  { kulcs: "beerkezett", cimke: "Beérkezett (e-mail)", csoport: "Előkészítés" },
+  { kulcs: "elokeszites", cimke: "Előre beírt saját fuvar", csoport: "Előkészítés" },
   { kulcs: "folyamatban", cimke: "Folyamatban", csoport: "Úton" },
   { kulcs: "szamlazasra", cimke: "Számlázásra vár", csoport: "Pénz" },
   { kulcs: "postara", cimke: "Postára vár", csoport: "Pénz" },
   { kulcs: "archiv", cimke: "Archív", csoport: "Kész" },
 ];
 
-export function szakaszSorbol(s: { jelleg: "ber" | "sajat"; allapot: Allapot }): Szakasz {
+export function szakaszSorbol(s: { jelleg: "ber" | "sajat"; allapot: Allapot; elokeszites?: boolean }): Szakasz {
+  // Az előkészítés alatti saját fuvar az állapotától függetlenül ott marad,
+  // amíg „kocsira nem adják”.
+  if (s.elokeszites) return "elokeszites";
   switch (s.allapot) {
     case "ellenorzesre_var":
       return "beerkezett";
@@ -42,7 +46,7 @@ export function szakaszSorbol(s: { jelleg: "ber" | "sajat"; allapot: Allapot }):
 
 /** A fuvar útja szakaszokra bontva (a sorok alatti csíkhoz): bérnél 5, sajátnál 3. */
 export function utSzakaszai(jelleg: "ber" | "sajat"): Szakasz[] {
-  return jelleg === "sajat" ? ["beerkezett", "folyamatban", "archiv"] : ["beerkezett", "folyamatban", "szamlazasra", "postara", "archiv"];
+  return jelleg === "sajat" ? ["elokeszites", "folyamatban", "archiv"] : ["beerkezett", "folyamatban", "szamlazasra", "postara", "archiv"];
 }
 
 function normal(s: string): string {

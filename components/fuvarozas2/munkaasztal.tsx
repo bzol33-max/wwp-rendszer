@@ -11,7 +11,7 @@ import type { KocsiMost, MunkaasztalSor } from "@/lib/fuvarozas2/megbizasok";
 // lista, jobbra az, amit a kocsi éppen csinál, és a következő fuvarja. Egy
 // sorra kattintva a jobb oldalon a sor részletei nyílnak.
 
-export type MunkaasztalSzuro = { szakasz?: Szakasz; jelleg?: "ber" | "sajat"; kocsi?: string; q?: string; reszlet?: string; kocsiMost?: string };
+export type MunkaasztalSzuro = { szakasz?: Szakasz; jelleg?: "ber" | "sajat"; kocsi?: string; q?: string; reszlet?: string; kocsiMost?: string; uj?: boolean };
 
 export function munkaasztalLink(alap: MunkaasztalSzuro, valtozas: Partial<MunkaasztalSzuro>): string {
   const p = new URLSearchParams();
@@ -22,6 +22,7 @@ export function munkaasztalLink(alap: MunkaasztalSzuro, valtozas: Partial<Munkaa
   if (e.kocsi) p.set("kocsi", e.kocsi);
   if (e.kocsiMost) p.set("km", e.kocsiMost);
   if (e.reszlet) p.set("reszlet", e.reszlet);
+  if (e.uj) p.set("uj", "1");
   const q = p.toString();
   return `/fuvarozas2/megbizasok${q ? `?${q}` : ""}`;
 }
@@ -60,6 +61,12 @@ export function Oldalsav({ szuro, szamok }: { szuro: MunkaasztalSzuro; szamok: S
   ];
   return (
     <nav className="flex flex-col gap-1 rounded-2xl border border-foreground/10 bg-card p-2.5 lg:sticky lg:top-4" aria-label="Megbízások szűrése">
+      <Link
+        href={munkaasztalLink({ jelleg: szuro.jelleg }, { szakasz: "elokeszites", uj: true })}
+        className="mb-1 rounded-lg bg-[var(--f2-mint)] px-3 py-2 text-sm font-bold text-white hover:opacity-90"
+      >
+        + Új saját fuvar
+      </Link>
       <form action="/fuvarozas2/megbizasok" className="flex flex-col gap-1">
         <input
           type="search"
@@ -174,7 +181,12 @@ export function MunkaLista({ sorok, ma, szuro, cim }: { sorok: MunkaasztalSor[];
       {sorok.length === 0 ? <p className="px-1 py-6 text-center text-sm text-muted-foreground">Nincs ilyen megbízás.</p> : null}
       <ul className="flex flex-col">
         {sorok.map((s) => {
-          const t = kovetkezoTeendo(s, ma);
+          const t = s.elokeszites
+            ? (() => {
+                const h = [!s.elokeszites_jarmu && "kocsi", !s.felrako?.trim() && "honnan", !s.lerako?.trim() && "hová"].filter(Boolean);
+                return h.length ? { szoveg: `előkészítés · hiányzik: ${h.join(", ")}`, surgos: true } : { szoveg: "kocsira adható", surgos: false };
+              })()
+            : kovetkezoTeendo(s, ma);
           const kijelolt = szuro.reszlet === s.id;
           const db = megalloDb(s.felrako) + megalloDb(s.lerako);
           return (
@@ -194,7 +206,7 @@ export function MunkaLista({ sorok, ma, szuro, cim }: { sorok: MunkaasztalSor[];
                   <span className="block truncate font-medium">{varos(s.felrako)} → {utolsoVaros(s.lerako)}</span>
                   <span className={cn("block truncate text-xs", t.surgos ? "font-semibold text-[var(--f2-red)]" : "text-muted-foreground")}>
                     {[
-                      s.jarmu_kod ?? "kocsi nélkül",
+                      s.jarmu_kod ?? (s.elokeszites ? s.elokeszites_jarmu ?? "—" : "kocsi nélkül"),
                       db > 2 ? `${db} megálló` : null,
                       s.szamla_szam && s.szakasz !== "szamlazasra" ? s.szamla_szam : null,
                       s.szakasz === "archiv" && s.postazva_at ? `feladva ${formatIdo(s.postazva_at).slice(0, 6)}` : null,

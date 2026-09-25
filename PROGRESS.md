@@ -2169,3 +2169,37 @@ pihenőn állva semmi nem mutatta, hogy az út nagyobb része megvolt.
   - helyi dev-szerver, valós-szerű adatokkal: asztali és mobil
     képernyőkép, részlet, keresés („micó szept”), konzolhiba nélkül.
   - tsc, eslint és next build tiszta.
+
+## 2026-09-25 — Saját fuvar előkészítése és „Kocsira adom”
+
+- **Kérés (Budaházi Zoltán):**
+  - A saját fuvarokat előre beírja, látni akarja őket, és módosítani
+    tudja.
+  - Egy gombbal kocsira adja, ha minden biztos. Onnantól olyan, mint egy
+    megbízás: megy a sofőrnek.
+  - Kötelező: honnan, hová, dátum (amit ő állít be), kocsi. Az áru nem
+    kötelező.
+- **Megoldás:**
+  - **Adatbázis (009-es migráció):** `fuvar_megbizasok.elokeszites`,
+    `elokeszites_jarmu`, `kocsira_adva_at`.
+  - **Előkészítés alatt a `jarmu` üres,** a kiválasztott kocsi az
+    `elokeszites_jarmu`-ban vár. A sofőr appja és a GPS-figyelő a `jarmu`
+    szerint válogat, így egyik sem látja a fuvart.
+  - **„Kocsira adom”:** beírja a kocsit, újraépíti a megállókat a mostani
+    címekből, és naplóz.
+  - **„Visszaveszem”:** a kocsira adott fuvart visszaveszi előkészítésbe,
+    amíg a sofőr/GPS egyik megállót sem érintette. Módosításhoz kell.
+  - **Törlés:** csak előkészítés alatt.
+- **Felület (munkaasztal):**
+  - „+ Új saját fuvar” gomb az oldalsáv tetején.
+  - Az Előkészítés alatt új szakasz: „Előre beírt saját fuvar”.
+  - Űrlap a jobb oszlopban. A helyek a telephelyekből (Szakoly, Balkány) és
+    a korábbi címekből választhatók, a „Kinek” a partnerekből.
+  - A sorban látszik, mi hiányzik még, vagy hogy „kocsira adható”.
+  - A tervezett fuvar címkéje „Folyamatban” (nem „Beérkezett”).
+- **Teszt:**
+  - teszt-munkaasztal 25/0.
+  - Helyi böngészős végigjátszás, valódi szerverrel: új → mentés →
+    kocsi → Kocsira adom (Micó, 2 megálló) → Visszaveszem (a kocsi lekerül,
+    a megállók törlődnek) → új; a napló nem duplikál; konzolhiba nincs.
+  - tsc, eslint és next build tiszta.
