@@ -28,10 +28,12 @@ const VISSZA: Partial<Record<string, string>> = {
 };
 
 export function MegbizasReszlet({
-  sor, megallok, esemenyek, dokumentumok, celok, szerkeszthet, elszamolasJog,
+  sor, megallok, esemenyek, dokumentumok, celok, szerkeszthet, elszamolasJog, egyOszlop = false,
 }: {
   sor: MegbizasSor; megallok: Megallo[]; esemenyek: Esemeny[]; dokumentumok: Dokumentum[]; celok: Allapot[];
   szerkeszthet: boolean; elszamolasJog: boolean;
+  /** A munkaasztal keskeny jobb oszlopában egy oszlopba rendeződik. */
+  egyOszlop?: boolean;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -52,7 +54,7 @@ export function MegbizasReszlet({
   const keziLezaras = sor.allapot === "teljesitve" && sor.jelleg === "sajat" && !celok.includes("lezart");
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
+    <div className={egyOszlop ? "flex flex-col gap-4" : "grid gap-4 lg:grid-cols-[2fr_1fr]"}>
       <div className="flex flex-col gap-4">
         <Card>
           <CardHeader>
@@ -64,7 +66,7 @@ export function MegbizasReszlet({
               <LepesBadge allapot={sor.allapot} className="ml-auto" />
             </CardTitle>
           </CardHeader>
-          <CardContent className="grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
+          <CardContent className={egyOszlop ? "grid gap-y-2 text-sm" : "grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2"}>
             <div><span className="text-muted-foreground">Kocsi:</span> {sor.jarmu_cimke ?? "kocsi nélkül"}{sor.sofor ? ` · ${sor.sofor}` : ""}</div>
             <div><span className="text-muted-foreground">Díj:</span> {sor.jelleg === "ber" ? formatFt(sor.fuvardij, sor.fuvardij_penznem) : "saját fuvar"}</div>
             <div><span className="text-muted-foreground">Áru:</span> {sor.aru ?? "—"}{sor.mennyiseg ? ` · ${sor.mennyiseg}` : ""}</div>
@@ -150,6 +152,7 @@ export function MegbizasReszlet({
               <div className="flex items-center justify-between gap-2"><span>Postázva</span><span className="text-muted-foreground">{sor.postazva_at ? formatIdo(sor.postazva_at) : "—"}</span></div>
               <div className="flex flex-col gap-0.5"><span>Postázási cím</span><span className="text-muted-foreground">{sor.postazasi_cim ?? "—"}</span></div>
               <div className="flex items-center justify-between gap-2"><span>Fizetési határidő</span><span className="text-muted-foreground">{sor.fizetesi_hatarido_nap != null ? `${sor.fizetesi_hatarido_nap} nap` : "—"}</span></div>
+              {sor.partner_id ? <a href={`/fuvarozas2/partnerek?nyit=${sor.partner_id}#p-${sor.partner_id}`} className="text-xs font-semibold text-[var(--f2-blue)] hover:underline">A partner adatainak szerkesztése →</a> : null}
             </CardContent>
           </Card>
         ) : null}

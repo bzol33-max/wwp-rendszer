@@ -23,6 +23,9 @@ import {
   type AtmenetForras,
   type AtmenetKontextus,
 } from "@/lib/fuvarozas/allapot";
+import { keresEgyezik, szakaszSorbol, type Szakasz } from "@/lib/fuvarozas2/munkaasztal";
+import { megalloReszlete, type MegalloReszlet } from "@/lib/fuvarozas/sofor-adatok";
+import { findJarmuByPlate } from "@/lib/fuvarozas/vehicles";
 
 export type MegbizasSor = {
   id: string;
@@ -421,6 +424,175 @@ export async function getMegbizasokVaszon(szuro: {
       jarmuNelkul,
       idoszak,
       mind: mind.length,
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Munkaasztal (2026-09-25): oldalsáv-szakaszok, kereső mindenre, és a
+// „kocsi most” panel. A szakasz- és keresési szabály tiszta modulban van
+// (lib/fuvarozas2/munkaasztal.ts, scripts/teszt-munkaasztal.ts).
+
+export type MunkaasztalSor = MegbizasSor & { szakasz: Szakasz };
+
+/**
+ * A munkaasztal kocsijai: a törzs aktív járművei, a sofőr keresztnevével
+ * (a törzsben ritkán van sofőr-hozzárendelés, ezért a saját járművek
+ * listájából — vehicles.ts). A rendszám nélküli, gyártás alatti kocsi csak
+ * akkor jelenik meg, ha van nyitott fuvarja.
+ */
+async function munkaasztalJarmuvei(): Promise<{ kod: string; cimke: string; sofor: string | null; rendszamos: boolean }[]> {
+  const sorok = await query<{ kod: string; cimke: string; sofor: string | null }>(
+    `select j.kod, j.cimke, a.name as sofor from fuvar_jarmuvek j left join alkalmazottak a on a.id = j.sofor_id where j.aktiv order by j.kod`
+  );
+  return sorok.map((j) => {
+    const sajat = findJarmuByPlate(j.kod);
+    return { ...j, sofor: sajat?.sofor ?? j.sofor?.split(" ").pop() ?? null, rendszamos: !!sajat };
+  });
+}
+
+export async function getMunkaasztal(szuro: {
+  szakasz?: Szakasz;
+  jelleg?: "ber" | "sajat";
+  kocsi?: string;
+  q?: string;
+}): Promise<{
+  sorok: MunkaasztalSor[];
+  ma: string;
+  szamok: {
+    szakasz: Record<Szakasz, number>;
+    kocsik: { kod: string; cimke: string; sofor: string | null; n: number }[];
+    kocsiNelkul: number;
+    jelleg: { ber: number; sajat: number };
+  };
+}> {
+  await requireAnyViewPermission(["fuvarozas", "elszamolas"]);
+  const [{ ma }] = await query<{ ma: string }>(`select ((now() at time zone 'Europe/Budapest')::date)::text as ma`);
+  const osszes = (await query<MegbizasSor>(
+    `${SOR_SQL} where m.allapot is not null and m.torolt_at is null order by coalesce(m.lerakas_datum, m.datum) desc, m.id desc limit 3000`
+  )).map((s) => ({ ...s, szakasz: szakaszSorbol(s) }));
+  const jarmuvek = await munkaasztalJarmuvei();
+  const soforKod = new Map(jarmuvek.map((j) => [j.kod, j.sofor]));
+
+  const szakaszDb = { beerkezett: 0, folyamatban: 0, szamlazasra: 0, postara: 0, archiv: 0 } as Record<Szakasz, number>;
+  const kocsiDb = new Map<string, number>();
+  let kocsiNelkul = 0, ber = 0, sajat = 0;
+  for (const s of osszes) {
+    if (s.jelleg === "ber") ber++; else sajat++;
+    if (szuro.jelleg && s.jelleg !== szuro.jelleg) continue;
+    szakaszDb[s.szakasz]++;
+    if (s.szakasz === "folyamatban") {
+      if (s.jarmu_kod) kocsiDb.set(s.jarmu_kod, (kocsiDb.get(s.jarmu_kod) ?? 0) + 1);
+      else kocsiNelkul++;
+    }
+  }
+
+  const q = szuro.q?.trim();
+  const szakasz = szuro.szakasz ?? "folyamatban";
+  let sorok = osszes.filter((s) => {
+    if (szuro.jelleg && s.jelleg !== szuro.jelleg) return false;
+    if (q) return keresEgyezik({ ...s, sofor: [s.sofor, s.jarmu_kod ? soforKod.get(s.jarmu_kod) : null].filter(Boolean).join(" ") }, q);
+    if (s.szakasz !== szakasz) return false;
+    if (szuro.kocsi === "nincs") return !s.jarmu_kod;
+    if (szuro.kocsi) return s.jarmu_kod === szuro.kocsi;
+    return true;
+  });
+  // Ami még előttünk van, időrendben; ami mögöttünk, a legújabb elöl.
+  if (!q && (szakasz === "beerkezett" || szakasz === "folyamatban")) {
+    sorok = [...sorok].sort((a, b) => (a.felrakas_nap ?? "").localeCompare(b.felrakas_nap ?? "") || a.id.localeCompare(b.id));
+  }
+
+  return {
+    sorok: sorok.slice(0, 300),
+    ma,
+    szamok: {
+      szakasz: szakaszDb,
+      kocsik: jarmuvek
+        .filter((j) => j.rendszamos || (kocsiDb.get(j.kod) ?? 0) > 0)
+        .map((j) => ({ kod: j.kod, cimke: j.cimke, sofor: j.sofor, n: kocsiDb.get(j.kod) ?? 0 })),
+      kocsiNelkul,
+      jelleg: { ber, sajat },
+    },
+  };
+}
+
+export type KocsiMostMegallo = {
+  sorszam: number;
+  tipus: "felrako" | "lerako";
+  cim: string;
+  ceg: string | null;
+  kontakt: string | null;
+  rakomany: string | null;
+  ido: string | null;
+  kesz: boolean;
+};
+
+export type KocsiMost = {
+  jarmuvek: { kod: string; cimke: string; sofor: string | null; dolgozik: boolean }[];
+  kod: string | null;
+  most: (MegbizasSor & { megallok: KocsiMostMegallo[] }) | null;
+  kovetkezo: MegbizasSor | null;
+};
+
+/**
+ * Amit a kocsi éppen csinál (a legkorábbi folyamatban lévő, vagy a ma
+ * induló tervezett fuvarja), megállónként a sofőr jelöléseivel, és a
+ * következő fuvarja. A megállók sorszáma a sofőr appjával azonos
+ * (modell-szinkron.ts: felrakók, aztán lerakók), így a „kész” jelölés a
+ * fuvar_megallo_allapot indexéből jön.
+ */
+export async function getKocsiMost(kod?: string): Promise<KocsiMost> {
+  await requireAnyViewPermission(["fuvarozas", "elszamolas"]);
+  const [{ ma }] = await query<{ ma: string }>(`select ((now() at time zone 'Europe/Budapest')::date)::text as ma`);
+  const osszesJarmu = await munkaasztalJarmuvei();
+  const nyitott = await query<MegbizasSor>(
+    `${SOR_SQL} where m.torolt_at is null and j.kod is not null and m.allapot in ('ellenorzesre_var','tervezett','folyamatban')
+     order by m.datum asc, m.id asc limit 200`
+  );
+  const aktivja = (k: string) =>
+    nyitott.find((s) => s.jarmu_kod === k && s.allapot === "folyamatban") ??
+    nyitott.find((s) => s.jarmu_kod === k && s.allapot === "tervezett" && (s.felrakas_nap ?? "") <= ma) ??
+    null;
+  const jarmuvek = osszesJarmu.filter((j) => j.rendszamos || nyitott.some((s) => s.jarmu_kod === j.kod));
+  const lista = jarmuvek.map((j) => ({ kod: j.kod, cimke: j.cimke, sofor: j.sofor, dolgozik: !!aktivja(j.kod) }));
+  const valasztott = kod && jarmuvek.some((j) => j.kod === kod) ? kod : (lista.find((j) => j.dolgozik)?.kod ?? jarmuvek[0]?.kod ?? null);
+  if (!valasztott) return { jarmuvek: lista, kod: null, most: null, kovetkezo: null };
+
+  const most = aktivja(valasztott);
+  const kovetkezo = nyitott.find((s) => s.jarmu_kod === valasztott && s.id !== most?.id && (s.felrakas_nap ?? "") >= ma) ?? null;
+  if (!most) return { jarmuvek: lista, kod: valasztott, most: null, kovetkezo };
+
+  const [megallok, kesz, extra] = await Promise.all([
+    query<{ sorszam: number; tipus: "felrako" | "lerako"; cim_nyers: string; sofor_kesz_at: string | null; gps_tavozas: string | null }>(
+      `select sorszam, tipus, cim_nyers, sofor_kesz_at::text, gps_tavozas::text from fuvar_megallok where megbizas_id = $1 order by sorszam`,
+      [most.id]
+    ),
+    query<{ megallo_index: number }>(`select megallo_index from fuvar_megallo_allapot where fuvar_id = $1 and kesz`, [most.id]),
+    query<{ megallo_reszletek: MegalloReszlet[] | null }>(`select megallo_reszletek from fuvar_megbizasok where id = $1`, [most.id]),
+  ]);
+  const keszIndex = new Set(kesz.map((k) => Number(k.megallo_index)));
+  const darab = { felrako: 0, lerako: 0 };
+  for (const m of megallok) darab[m.tipus]++;
+  const szamlalo = { felrako: 0, lerako: 0 };
+  return {
+    jarmuvek: lista,
+    kod: valasztott,
+    kovetkezo,
+    most: {
+      ...most,
+      megallok: megallok.map((m) => {
+        const r = megalloReszlete(extra[0]?.megallo_reszletek, m.tipus, szamlalo[m.tipus]++, darab[m.tipus], m.cim_nyers);
+        return {
+          sorszam: m.sorszam,
+          tipus: m.tipus,
+          cim: m.cim_nyers,
+          ceg: r?.ceg ?? null,
+          kontakt: r?.kontakt ?? null,
+          rakomany: r?.rakomany ?? null,
+          ido: r?.ido ?? null,
+          kesz: keszIndex.has(m.sorszam - 1) || !!m.sofor_kesz_at || !!m.gps_tavozas,
+        };
+      }),
     },
   };
 }

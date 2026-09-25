@@ -3,9 +3,10 @@ import { requireSession } from "@/lib/auth/dal";
 import { cn } from "@/lib/utils";
 
 // A Fuvarozás 2 fülsora. Szerver-komponens, mert a jogosultság dönti, mit
-// mutat: az „elszamolas" hatókör (Szabina) csak az Elszámolást, a
-// Megbízásokat, a Leveleket és a Partnereket látja — GPS-részletet,
-// tervezést, kimutatást és rendszer-egészséget nem (S16).
+// mutat: az „elszamolas" hatókör (Szabina) a Megbízásokat és a Leveleket
+// látja — GPS-részletet, tervezést, kimutatást és rendszer-egészséget nem
+// (S16). Az Elszámolás és a Partnerek fül 2026-09-25-én beolvadt a
+// Megbízások munkaasztalba (az oldalaik elérhetők maradnak linkről).
 const FULEK: { href: string; label: string; csakFuvarozas?: boolean; csakRendszer?: boolean }[] = [
   { href: "/fuvarozas2", label: "Ma" },
   { href: "/fuvarozas2/megbizasok", label: "Megbízások" },
@@ -13,8 +14,6 @@ const FULEK: { href: string; label: string; csakFuvarozas?: boolean; csakRendsze
   { href: "/fuvarozas2/tervezes", label: "Tervezés", csakFuvarozas: true },
   { href: "/fuvarozas2/gps", label: "Élő GPS", csakFuvarozas: true },
   { href: "/fuvarozas2/kalkulator", label: "Kalkulátor", csakFuvarozas: true },
-  { href: "/fuvarozas2/elszamolas", label: "Elszámolás" },
-  { href: "/fuvarozas2/partnerek", label: "Partnerek" },
   { href: "/fuvarozas2/kimutatas", label: "Kimutatás", csakFuvarozas: true },
   { href: "/fuvarozas2/rendszer", label: "Rendszer", csakRendszer: true },
 ];

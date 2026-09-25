@@ -1,60 +1,82 @@
-import { PageHeader } from "@/components/layout/page-header";
+import Link from "next/link";
 import { requireSession } from "@/lib/auth/dal";
-import { getMegbizas, getMegbizasokVaszon } from "@/lib/fuvarozas2/megbizasok";
-import { ALLAPOTOK, LEPESEK, type Allapot, type Lepes } from "@/lib/fuvarozas/allapot";
+import { getKocsiMost, getMegbizas, getMunkaasztal } from "@/lib/fuvarozas2/megbizasok";
+import { getParositatlanFuvarszamlak } from "@/lib/fuvarozas/megbizasok";
+import { SZAKASZOK, type Szakasz } from "@/lib/fuvarozas2/munkaasztal";
 import { Fuvarozas2Fulek } from "@/components/fuvarozas2/fulek";
-import { MegbizasSzuroSav, MegbizasTabla, type SzuroErtekek } from "@/components/fuvarozas2/megbizas-vaszon";
 import { MegbizasReszlet } from "@/components/fuvarozas2/megbizas-reszlet";
+import { KocsiMostPanel, MunkaLista, Oldalsav, munkaasztalLink, type MunkaasztalSzuro } from "@/components/fuvarozas2/munkaasztal";
+import { formatFt } from "@/components/fuvarozas2/kozos";
 
 export const dynamic = "force-dynamic";
 
-// A régi „csoport" paraméter (Ma-képernyő linkjei) leképezése az új állapot-szűrőre.
-const CSOPORT_ALLAPOT: Record<string, Allapot> = {
-  ellenorzes: "ellenorzesre_var",
-  folyamatban: "folyamatban",
-  elszamolas: "szamlazhato",
-  lezart: "lezart",
+// A régi linkek (Ma-képernyő „csoport”, a korábbi „allapot”/„lepes” szűrők)
+// leképezése a munkaasztal szakaszaira.
+const REGI_SZAKASZ: Record<string, Szakasz> = {
+  ellenorzes: "beerkezett", ellenorzesre_var: "beerkezett", beerkezett: "beerkezett",
+  folyamatban: "folyamatban", tervezett: "folyamatban", uton: "folyamatban",
+  elszamolas: "szamlazasra", teljesitve: "szamlazasra", szamlazhato: "szamlazasra", szamlazando: "szamlazasra",
+  szamlazva: "postara", email_elment: "postara", postara: "postara",
+  lezart: "archiv", postazva: "archiv", kesz: "archiv",
 };
 
 export default async function Page({ searchParams }: {
-  searchParams: Promise<{ jelleg?: string; allapot?: string; lepes?: string; jarmu?: string; idoszak?: string; reszlet?: string; csoport?: string; partner?: string }>;
+  searchParams: Promise<{ szakasz?: string; jelleg?: string; kocsi?: string; q?: string; reszlet?: string; km?: string; csoport?: string; allapot?: string; lepes?: string }>;
 }) {
   const sp = await searchParams;
-  const allapotParam = sp.allapot ?? (sp.csoport ? CSOPORT_ALLAPOT[sp.csoport] : undefined);
-  const allapot = (ALLAPOTOK as readonly string[]).includes(allapotParam ?? "") ? (allapotParam as Allapot) : undefined;
-  const lepes = LEPESEK.some((l) => l.kulcs === sp.lepes) ? (sp.lepes as Lepes) : undefined;
+  const szakaszParam = sp.szakasz ?? sp.csoport ?? sp.allapot ?? sp.lepes;
+  const szakasz = SZAKASZOK.some((s) => s.kulcs === szakaszParam) ? (szakaszParam as Szakasz) : szakaszParam ? REGI_SZAKASZ[szakaszParam] : undefined;
   const jelleg = sp.jelleg === "ber" || sp.jelleg === "sajat" ? sp.jelleg : undefined;
-  const idoszak = ["ez_a_het", "mult_het", "regebbi"].includes(sp.idoszak ?? "") ? (sp.idoszak as "ez_a_het" | "mult_het" | "regebbi") : undefined;
-  const szuro: SzuroErtekek = { jelleg, allapot, lepes, jarmu: sp.jarmu, idoszak, reszlet: sp.reszlet };
-
-  const { sorok, ma, szamok } = await getMegbizasokVaszon({ jelleg, allapot, lepes, jarmu: sp.jarmu, partner: sp.partner, idoszak });
+  const reszletId = sp.reszlet && /^\d+$/.test(sp.reszlet) ? sp.reszlet : undefined;
+  const szuro: MunkaasztalSzuro = { szakasz, jelleg, kocsi: sp.kocsi, q: sp.q?.trim() || undefined, reszlet: reszletId, kocsiMost: sp.km };
 
   const session = await requireSession();
-  const reszlet = sp.reszlet && /^\d+$/.test(sp.reszlet) ? await getMegbizas(sp.reszlet) : null;
+  const [asztal, kocsiMost, reszlet, parositatlan] = await Promise.all([
+    getMunkaasztal({ szakasz, jelleg, kocsi: sp.kocsi, q: szuro.q }),
+    getKocsiMost(sp.km),
+    reszletId ? getMegbizas(reszletId) : Promise.resolve(null),
+    getParositatlanFuvarszamlak(60).catch(() => []),
+  ]);
+
+  const aktiv = SZAKASZOK.find((s) => s.kulcs === (szakasz ?? "folyamatban"))!;
+  const kocsiCim = sp.kocsi === "nincs" ? " · kocsi nélkül" : sp.kocsi ? ` · ${sp.kocsi}` : "";
+  const listaCim = szuro.q ? `Keresés: „${szuro.q}”` : `${aktiv.cimke}${kocsiCim}`;
 
   return (
-    <div className="flex flex-col gap-5">
-      <PageHeader title="Megbízások" subtitle="Megérkezik → sofőr viszi → visszaér, számlázni → számlázva, postára → kész. Az utolsó oszlop mondja meg, mi a következő teendő." />
+    <div className="flex flex-col gap-4">
       <Fuvarozas2Fulek aktiv="/fuvarozas2/megbizasok" />
 
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-        <MegbizasSzuroSav szuro={szuro} szamok={szamok} />
-        <div className="flex min-w-0 flex-1 flex-col gap-4">
-          <MegbizasTabla sorok={sorok} ma={ma} szuro={szuro} />
+      {parositatlan.length > 0 ? (
+        <div className="flex flex-wrap items-baseline justify-between gap-2 rounded-xl bg-[var(--f2-amb-l)] px-4 py-2 text-sm text-[var(--f2-amb)]">
+          <span>
+            <b className="text-foreground">{parositatlan.length} fuvarszámla nincs fuvarhoz párosítva:</b>{" "}
+            {parositatlan.slice(0, 3).map((p) => `${p.szamlaszam} · ${p.vevo_nev} · ${formatFt(p.netto)}`).join(" | ")}
+            {parositatlan.length > 3 ? " …" : ""}
+          </span>
+          <span className="text-xs">A számlaszámot a fuvar részleteinél lehet beírni.</span>
+        </div>
+      ) : null}
+
+      <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)_380px] lg:items-start">
+        <Oldalsav szuro={szuro} szamok={asztal.szamok} />
+        <MunkaLista sorok={asztal.sorok} ma={asztal.ma} szuro={szuro} cim={listaCim} />
+        <aside className="order-first flex flex-col gap-3 lg:order-none lg:sticky lg:top-4" aria-label={reszlet ? "A kiválasztott megbízás" : "A kocsi most"}>
           {reszlet ? (
-            <div id="reszlet" className="scroll-mt-4">
+            <>
+              <Link href={munkaasztalLink(szuro, { reszlet: undefined })} className="text-sm font-semibold text-[var(--f2-blue)] hover:underline">
+                ← vissza a kocsihoz
+              </Link>
               <MegbizasReszlet
                 {...reszlet}
+                egyOszlop
                 szerkeszthet={session.can("fuvarozas").edit || session.can("elszamolas").edit}
                 elszamolasJog={session.can("elszamolas").edit || session.can("fuvarozas").edit}
               />
-            </div>
+            </>
           ) : (
-            <div className="rounded-2xl border border-dashed border-foreground/15 px-4 py-6 text-center text-sm text-muted-foreground">
-              Kattints egy megbízóra — a részletei (megállók, iratok, elszámolás, napló, műveletek) ide nyílnak.
-            </div>
+            <KocsiMostPanel adat={kocsiMost} szuro={szuro} />
           )}
-        </div>
+        </aside>
       </div>
     </div>
   );
