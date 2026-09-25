@@ -16,7 +16,12 @@ import {
   olvasKivonatFajlt,
   parositKivonatTranzakciokat,
 } from "@/lib/szamlak/kontokivonat";
-import type { KivonatFajl, KivonatParositas, KivonatTranzakcio } from "@/lib/szamlak/kontokivonat-constants";
+import type {
+  KivonatFajl,
+  KivonatKonyvelesEredmeny,
+  KivonatParositas,
+  KivonatTranzakcio,
+} from "@/lib/szamlak/kontokivonat-constants";
 
 function formatOsszeg(n: number, penznem: string) {
   return `${Number(n).toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${penznem}`;
@@ -38,9 +43,10 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
-function eredmenyUzenet(res: { sikeres: number; datumFrissitve: number; marKonyvelt: number }): string {
+function eredmenyUzenet(res: KivonatKonyvelesEredmeny): string {
   const reszek = [];
   if (res.sikeres) reszek.push(`${res.sikeres} számla fizetve-nek jelölve`);
+  if (res.reszfizetes) reszek.push(`${res.reszfizetes} részfizetés felírva (a számla nyitott maradt)`);
   if (res.datumFrissitve) reszek.push(`${res.datumFrissitve} számla fizetési dátuma pontosítva`);
   if (res.marKonyvelt) reszek.push(`${res.marKonyvelt} utalás már le volt könyvelve`);
   return reszek.length ? `${reszek.join(", ")}.` : "Nem történt változás.";
@@ -59,12 +65,15 @@ function ParositasKartya({
   const { tranzakcio, allapot } = parositas;
   const auto = allapot === "auto";
   const datum = allapot === "datum";
+  const resz = allapot === "resz";
   const bejelolheto = allapot === "review" || (datum && parositas.mod !== "memo");
-  const konyvelheto = allapot === "auto" || allapot === "review" || datum;
+  const konyvelheto = allapot === "auto" || allapot === "review" || datum || resz;
 
+  // A hátralékkal számolunk: egy részben fizetett számlából csak a maradékot
+  // fedezheti ez az utalás (a már fizetetteknél a hátralék a teljes bruttó).
   const kivalasztottOsszeg = parositas.szamlak
     .filter((sz) => kivalasztott.has(sz.id))
-    .reduce((s, sz) => s + Math.round(sz.brutto * 100), 0);
+    .reduce((s, sz) => s + Math.round(sz.hatralek * 100), 0);
   const osszegEgyezik = kivalasztottOsszeg === Math.round(tranzakcio.osszeg * 100);
 
   async function konyvel() {
@@ -93,7 +102,7 @@ function ParositasKartya({
   const szegely =
     allapot === "auto"
       ? "border-l-success"
-      : allapot === "review"
+      : allapot === "review" || resz
         ? "border-l-warning"
         : datum
           ? "border-l-primary"
@@ -132,7 +141,12 @@ function ParositasKartya({
                     onChange={() => toggle(sz.id)}
                   />
                 )}
-                {sz.szamlaszam} ({formatOsszeg(sz.brutto, tranzakcio.penznem)})
+                {sz.szamlaszam} ({formatOsszeg(sz.hatralek, tranzakcio.penznem)})
+                {sz.fizetettOsszeg > 0 && !sz.fizetveDatum && (
+                  <span className="text-muted-foreground">
+                    · hátralék a {formatOsszeg(sz.brutto, tranzakcio.penznem)}-ból
+                  </span>
+                )}
                 {datum && sz.fizetveDatum && (
                   <span className="text-muted-foreground">
                     · fizetve {rovidDatum(sz.fizetveDatum)} → {rovidDatum(tranzakcio.datum)}
@@ -142,7 +156,7 @@ function ParositasKartya({
             ))}
           </div>
         )}
-        {bejelolheto && kivalasztott.size > 0 && !osszegEgyezik && (
+        {bejelolheto && !resz && kivalasztott.size > 0 && !osszegEgyezik && (
           <div className="mt-1 text-[11px] text-warning">
             A bejelöltek összege {formatOsszeg(kivalasztottOsszeg / 100, tranzakcio.penznem)} — nem egyezik az utalással.
           </div>
@@ -159,7 +173,7 @@ function ParositasKartya({
             disabled={folyamatban || kivalasztott.size === 0}
             onClick={konyvel}
           >
-            {auto ? "Elfogad" : datum ? "Dátum frissítése" : `Könyvel (${kivalasztott.size})`}
+            {auto ? "Elfogad" : resz ? "Részfizetés könyvelése" : datum ? "Dátum frissítése" : `Könyvel (${kivalasztott.size})`}
           </Button>
         )}
       </div>
@@ -299,6 +313,7 @@ export function KontokivonatDialog({ onChanged }: { onChanged: () => void }) {
   const osszes = parositasok ?? [];
   const hatralevo = osszes.filter((p) => !konyveltek.has(p.tranzakcio.kulcs));
   const autoLista = hatralevo.filter((p) => p.allapot === "auto");
+  const reszLista = hatralevo.filter((p) => p.allapot === "resz");
   const datumLista = hatralevo.filter((p) => p.allapot === "datum");
   const reviewLista = hatralevo.filter((p) => p.allapot === "review");
   const marKonyveltLista = osszes.filter((p) => p.allapot === "konyvelt");
@@ -361,6 +376,13 @@ export function KontokivonatDialog({ onChanged }: { onChanged: () => void }) {
                 ))}
               </div>
 
+              <Szakasz
+                cim="Részfizetés"
+                badgeClass="bg-warning/15 text-warning hover:bg-warning/15"
+                lista={reszLista}
+                onKonyvelve={markKonyvelve}
+                leiras="Az utalás kisebb, mint a közleményben szereplő számla hátraléka. Könyveléskor csak a hátralék csökken, a számla nyitott marad — a következő utalás zárja majd le."
+              />
               <Szakasz
                 cim="Fizetés dátumának pontosítása"
                 badgeClass="bg-primary/15 text-primary hover:bg-primary/15"

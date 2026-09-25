@@ -23,6 +23,7 @@ import { requireSession } from "@/lib/auth/dal";
 import { requireAnyViewPermission } from "@/lib/auth/require-permission";
 import { getIdovonalak } from "@/lib/fuvarozas/actions";
 import { getSzamlaLista } from "@/lib/szamlak/actions";
+import { szamlaHatralek } from "@/lib/szamlak/szamla-constants";
 import { varosNev } from "@/lib/fuvarozas/varos";
 import { getRendszerEgeszseg } from "@/lib/fuvarozas2/rendszer";
 import type { Allapot } from "@/lib/fuvarozas/allapot";
@@ -342,7 +343,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
         const m = /^(\d{4})\.(\d{2})\.(\d{2})/.exec(sz.fizetesi_hatarido ?? "");
         return m ? `${m[1]}-${m[2]}-${m[3]}` < maISO : false;
       });
-      const osszeg = nyitott.filter((sz) => sz.penznem === "Ft").reduce((a, sz) => a + sz.brutto, 0);
+      const osszeg = nyitott.filter((sz) => sz.penznem === "Ft").reduce((a, sz) => a + szamlaHatralek(sz), 0);
       csempek.push({
         kulcs: "kintlevoseg", cimke: "Kintlévőség", ertek: ft(osszeg),
         also: lejart.length > 0 ? `${lejart.length} lejárt` : `${nyitott.length} nyitott számla`,

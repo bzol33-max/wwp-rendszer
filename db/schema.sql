@@ -408,6 +408,14 @@ alter table szamla add column if not exists sztornozo_szamla_id bigint reference
 -- lib/szamlak/sztorno.ts minden szinkron körben újraszámolja.
 alter table szamla add column if not exists helyesbites_osszeg numeric not null default 0;
 
+-- Részfizetés (2026-09-25): egy számlát több utalásban is kifizethetnek, és
+-- mindegyik utalás közleményében ott a számlaszám. Ez az oszlop a banki
+-- utalásokból már igazolt, beérkezett rész — a hátralék
+-- "brutto + helyesbites_osszeg - fizetett_osszeg", és a számla csak akkor
+-- vált "fizetve"-re, ha a hátralék elfogy (lib/szamlak/kontokivonat.ts).
+-- A nyitott listák/összesítők a hátralékkal számolnak.
+alter table szamla add column if not exists fizetett_osszeg numeric not null default 0;
+
 -- Kontókivonat-feltöltésből lekönyvelt banki utalások (2026-09-17): egy
 -- újrafeltöltött vagy átfedő kivonat ugyanazt az utalást ne könyvelhesse újra
 -- (egy visszatérő, azonos összegű vevőnél egy MÁSIK nyitott számlát jelölne

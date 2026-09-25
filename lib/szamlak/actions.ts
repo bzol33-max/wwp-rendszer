@@ -23,6 +23,13 @@ const MA_SQL = `(now() at time zone 'Europe/Budapest')::date`;
 const HUF_SQL = `penznem in ('Ft', 'HUF')`;
 /** A részleges (negatív) helyesbítésekkel csökkentett összeg — lásd sztorno.ts. */
 const BRUTTO_SQL = `(brutto + helyesbites_osszeg)`;
+/**
+ * A nyitott számlából még hátralévő rész: a részfizetésként már beérkezett
+ * utalásokkal csökkentett összeg (schema.sql: szamla.fizetett_osszeg). A
+ * nyitott/lejárt összesítők ezzel számolnak, hogy a "mennyi pénz jár még"
+ * kérdésre a részben fizetett számla is a valós maradékával szerepeljen.
+ */
+const HATRALEK_SQL = `(brutto + helyesbites_osszeg - fizetett_osszeg)`;
 
 const SZAMLA_COLUMNS = `
   id::text, szamlaszam, vevo_nev, rendelesszam, fizmod, penznem,
@@ -30,7 +37,7 @@ const SZAMLA_COLUMNS = `
   to_char(kiallitas_datum, '${TIME_FMT}') as kiallitas_datum,
   to_char(fizetesi_hatarido, '${TIME_FMT}') as fizetesi_hatarido,
   netto, afa, ${BRUTTO_SQL} as brutto, kategoria, alkategoria, tetelek_szoveg,
-  fizetve, fizetve_datum::text, lekerdezve_at::text
+  fizetve, fizetve_datum::text, fizetett_osszeg, lekerdezve_at::text
 `;
 
 export type SzamlaListaSzuro = {
@@ -129,11 +136,11 @@ export async function getSzamlaFejlec(): Promise<SzamlaFejlecSor[]> {
   return query<SzamlaFejlecSor>(
     `select
        penznem,
-       coalesce(sum(${BRUTTO_SQL}), 0)::float8 as nyitott_osszeg,
+       coalesce(sum(${HATRALEK_SQL}), 0)::float8 as nyitott_osszeg,
        count(*)::int as nyitott_darab,
-       coalesce(sum(${BRUTTO_SQL}) filter (where fizetesi_hatarido < ${MA_SQL}), 0)::float8 as lejart_osszeg,
+       coalesce(sum(${HATRALEK_SQL}) filter (where fizetesi_hatarido < ${MA_SQL}), 0)::float8 as lejart_osszeg,
        count(*) filter (where fizetesi_hatarido < ${MA_SQL})::int as lejart_darab,
-       coalesce(sum(${BRUTTO_SQL}) filter (where fizetesi_hatarido between ${MA_SQL} and ${MA_SQL} + 7), 0)::float8 as het_osszeg,
+       coalesce(sum(${HATRALEK_SQL}) filter (where fizetesi_hatarido between ${MA_SQL} and ${MA_SQL} + 7), 0)::float8 as het_osszeg,
        count(*) filter (where fizetesi_hatarido between ${MA_SQL} and ${MA_SQL} + 7)::int as het_darab
      from szamla
      where not fizetve and not sztorno and not sztornozva
@@ -202,8 +209,8 @@ export async function getSzamlaOsszesito(): Promise<SzamlaOsszesitoSor[]> {
   return query<SzamlaOsszesitoSor>(
     `select
        kategoria, alkategoria, penznem,
-       coalesce(sum(${BRUTTO_SQL}) filter (where not fizetve), 0) as nyitott_osszeg,
-       coalesce(sum(${BRUTTO_SQL}) filter (where not fizetve and fizetesi_hatarido < ${MA_SQL}), 0) as lejart_osszeg,
+       coalesce(sum(${HATRALEK_SQL}) filter (where not fizetve), 0) as nyitott_osszeg,
+       coalesce(sum(${HATRALEK_SQL}) filter (where not fizetve and fizetesi_hatarido < ${MA_SQL}), 0) as lejart_osszeg,
        count(*) filter (where not fizetve) as nyitott_darab,
        count(*) filter (where not fizetve and fizetesi_hatarido < ${MA_SQL}) as lejart_darab
      from szamla
@@ -255,7 +262,7 @@ export async function getSzamlaHaviBevetel(): Promise<SzamlaHaviBevetelSor[]> {
 /** A diagram alatti statisztika-sorhoz és a Nyitott csempe "legnagyobb vevő" sorához — csak HUF adatok. */
 export async function getSzamlaKiemeltStatisztika(): Promise<SzamlaKiemeltStatisztika> {
   const legnagyobbVevo = await query<{ vevo_nev: string; osszeg: number }>(
-    `select vevo_nev, sum(${BRUTTO_SQL})::float8 as osszeg
+    `select vevo_nev, sum(${HATRALEK_SQL})::float8 as osszeg
      from szamla
      where not fizetve and not sztorno and not sztornozva and ${HUF_SQL}
      group by vevo_nev

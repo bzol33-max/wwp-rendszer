@@ -45,6 +45,8 @@ import {
 import {
   ALKATEGORIA_LABEL,
   KATEGORIA_LABEL,
+  reszbenFizetve,
+  szamlaHatralek,
   type SzamlaAlkategoria,
   type SzamlaHaviBevetelSor,
   type SzamlaKategoria,
@@ -58,6 +60,21 @@ import {
 // nélkül a toLocaleString a stringen simán nem csinál semmit (nincs tagolás).
 function formatOsszeg(n: number, penznem: string) {
   return `${Number(n).toLocaleString("de-DE", { maximumFractionDigits: 2 })} ${penznem}`;
+}
+
+/** Amennyi a listában megjelenik: nyitott számlánál a hátralék (a banki részfizetések levonva). */
+function sorOsszeg(row: SzamlaRow): number {
+  return row.fizetve ? Number(row.brutto) : szamlaHatralek(row);
+}
+
+/** "részben fizetve" sor a számla összege alatt — csak ha jött rá részfizetés. */
+function ReszfizetesJelzes({ row }: { row: SzamlaRow }) {
+  if (!reszbenFizetve(row)) return null;
+  return (
+    <div className="text-[11px] font-normal text-primary">
+      részben fizetve · {formatOsszeg(row.fizetett_osszeg, row.penznem)} / {formatOsszeg(row.brutto, row.penznem)}
+    </div>
+  );
 }
 
 /** A mai nap Budapesten, "YYYY-MM-DD" — a toISOString() UTC-je éjfél és 2 óra között még a tegnapot adná. */
@@ -259,7 +276,7 @@ function SzamlaListaDialog({
       map.set(r.vevo_nev, [...(map.get(r.vevo_nev) ?? []), r]);
     }
     for (const [vevoNev, sorok] of map) {
-      const nyitottak = sorok.filter((r) => !r.fizetve).map((r) => ({ penznem: r.penznem, osszeg: Number(r.brutto) }));
+      const nyitottak = sorok.filter((r) => !r.fizetve).map((r) => ({ penznem: r.penznem, osszeg: szamlaHatralek(r) }));
       csoportok.push({ vevoNev, sorok, nyitott: nyitottak });
     }
     const nyitottOsszeg = (c: (typeof csoportok)[number]) => c.nyitott.reduce((s, o) => s + o.osszeg, 0);
@@ -279,7 +296,10 @@ function SzamlaListaDialog({
         <TableCell className={`whitespace-nowrap ${lejart ? "font-medium text-destructive" : ""}`}>
           {row.fizetesi_hatarido ?? "—"}
         </TableCell>
-        <TableCell className="whitespace-nowrap text-right tabular-nums">{formatOsszeg(row.brutto, row.penznem)}</TableCell>
+        <TableCell className="whitespace-nowrap text-right tabular-nums">
+          {formatOsszeg(sorOsszeg(row), row.penznem)}
+          <ReszfizetesJelzes row={row} />
+        </TableCell>
         <TableCell>
           {!row.fizetve && lejart ? (
             <div className="flex flex-col items-start gap-1">
@@ -554,7 +574,8 @@ function TeendoTabla({
                   {row.fizetesi_hatarido ?? "—"}
                 </TableCell>
                 <TableCell className="whitespace-nowrap text-right tabular-nums">
-                  {formatOsszeg(row.brutto, row.penznem)}
+                  {formatOsszeg(sorOsszeg(row), row.penznem)}
+                  <ReszfizetesJelzes row={row} />
                 </TableCell>
                 <TableCell>
                   <FizetveCella row={row} onFizetve={onFizetve} onVisszavon={onVisszavon} />
