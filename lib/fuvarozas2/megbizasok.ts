@@ -17,7 +17,9 @@ import { requireAnyViewPermission, requireAnyEditPermission } from "@/lib/auth/r
 import {
   ellenorizAtmenet,
   lehetsegesCelok,
+  lepesAllapotbol,
   type Allapot,
+  type Lepes,
   type AtmenetForras,
   type AtmenetKontextus,
 } from "@/lib/fuvarozas/allapot";
@@ -265,7 +267,19 @@ export async function valtAllapot(
        values ($1, $4, $5, $2, 'ember', $3, $6, $7) on conflict do nothing`,
       [id, hova, par[2], esemeny, sor.allapot, JSON.stringify({ atmenet: e.atmenet.szam, megjegyzes: opciok.megjegyzes ?? null, kezi: !!opciok.kezi }), opciok.kliensUuid ?? null]
     );
+    // „Postázva ✓” = kész (Budaházi Zoltán, 2026-09-25): a 11. él (számla +
+    // postázva) ugyanitt lezárja, nem kell külön „Lezárás” gomb.
+    const lezar = hova === "postazva" && sor.allapot !== "lezart" && ellenorizAtmenet("postazva", "lezart", "rendszer", { ...k, postazva: true }).ok;
+    if (lezar) {
+      await client.query(`update fuvar_megbizasok set allapot = 'lezart', allapot_at = now() where id = $1`, [id]);
+      await client.query(
+        `insert into fuvar_megbizas_esemeny (megbizas_id, esemeny, allapot_elott, allapot_utan, forras, ki, reszletek)
+         values ($1, 'lezart', 'postazva', 'lezart', 'rendszer', $2, $3)`,
+        [id, par[2], JSON.stringify({ atmenet: 11, automatikus: true })]
+      );
+    }
     await client.query("commit");
+    if (lezar) return { ok: true, allapot: "lezart" };
     return { ok: true, allapot: hova };
   } catch (err) {
     await client.query("rollback").catch(() => {});
@@ -322,7 +336,7 @@ export async function setSzamlaSzam(id: string, szamlaSzam: string | null): Prom
     id, ki, JSON.stringify({ szamla_szam: szam, szamla_id: sz?.id ?? null }),
   ]);
   const [sor] = await query<{ allapot: Allapot }>(`select allapot from fuvar_megbizasok where id = $1`, [id]);
-  if (szam && sor?.allapot === "szamlazhato") return (await valtAllapot(id, "szamlazva")).ok ? { ok: true } : { ok: false, hiba: "A számlaszám elmentve, de az állapot nem váltott." };
+  if (szam && (sor?.allapot === "szamlazhato" || sor?.allapot === "teljesitve")) return (await valtAllapot(id, "szamlazva")).ok ? { ok: true } : { ok: false, hiba: "A számlaszám elmentve, de az állapot nem váltott." };
   if (!szam && sor?.allapot === "szamlazva") await valtAllapot(id, "teljesitve");
   return { ok: true };
 }
@@ -345,6 +359,7 @@ export async function setMegjegyzes(id: string, megjegyzes: string | null): Prom
 export async function getMegbizasokVaszon(szuro: {
   jelleg?: "ber" | "sajat";
   allapot?: Allapot;
+  lepes?: Lepes;
   jarmu?: string;
   partner?: string;
   idoszak?: "ez_a_het" | "mult_het" | "regebbi" | "mind";
@@ -354,6 +369,7 @@ export async function getMegbizasokVaszon(szuro: {
   szamok: {
     jelleg: { ber: number; sajat: number };
     allapot: Record<string, number>;
+    lepes: Record<string, number>;
     jarmu: { kod: string; cimke: string; n: number }[];
     jarmuNelkul: number;
     idoszak: Record<string, number>;
@@ -366,11 +382,14 @@ export async function getMegbizasokVaszon(szuro: {
 
   const { idoszakVodor } = await import("@/lib/fuvarozas2/megbizas-szuro");
   const allapot: Record<string, number> = {};
+  const lepes: Record<string, number> = {};
   const idoszak: Record<string, number> = {};
   const jarmuMap = new Map<string, { kod: string; cimke: string; n: number }>();
   let ber = 0, sajat = 0, jarmuNelkul = 0;
   for (const s of mind) {
     allapot[s.allapot] = (allapot[s.allapot] ?? 0) + 1;
+    const l = lepesAllapotbol(s.allapot);
+    lepes[l] = (lepes[l] ?? 0) + 1;
     const v = idoszakVodor(s.lerakas_nap, ma);
     idoszak[v] = (idoszak[v] ?? 0) + 1;
     if (s.jelleg === "ber") ber++; else sajat++;
@@ -384,6 +403,7 @@ export async function getMegbizasokVaszon(szuro: {
   const sorok = mind.filter((s) => {
     if (szuro.jelleg && s.jelleg !== szuro.jelleg) return false;
     if (szuro.allapot && s.allapot !== szuro.allapot) return false;
+    if (szuro.lepes && lepesAllapotbol(s.allapot) !== szuro.lepes) return false;
     if (szuro.jarmu === "nincs" && s.jarmu_kod) return false;
     if (szuro.jarmu && szuro.jarmu !== "nincs" && s.jarmu_kod !== szuro.jarmu) return false;
     if (szuro.partner && s.partner_id !== szuro.partner) return false;
@@ -396,6 +416,7 @@ export async function getMegbizasokVaszon(szuro: {
     szamok: {
       jelleg: { ber, sajat },
       allapot,
+      lepes,
       jarmu: [...jarmuMap.values()].sort((a, b) => b.n - a.n),
       jarmuNelkul,
       idoszak,

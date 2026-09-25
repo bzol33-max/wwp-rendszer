@@ -59,7 +59,9 @@ enged("16. lezárt visszaállítása", "lezart", "postazva", "ember");
 
 // 2. Tiltott élek — a 11.1 felsorolás + a feltételek hiánya + rossz forrás.
 tilt("tervezett → teljesítve (megálló nélkül)", "tervezett", "teljesitve", "ember", teljes);
-tilt("teljesítve → számlázva (fotó/számlázható nélkül)", "teljesitve", "szamlazva", "ember", teljes);
+enged("8b. teljesítve → számlázva fotó nélkül (számlaszám van)", "teljesitve", "szamlazva", "ember", { szamlaVan: true });
+tilt("8b. teljesítve → számlázva számlaszám nélkül nem", "teljesitve", "szamlazva", "ember", {});
+tilt("8b. saját fuvar nem számlázható", "teljesitve", "szamlazva", "ember", { sajatFuvar: true, szamlaVan: true });
 tilt("ellenőrzésre vár → számlázható", "ellenorzesre_var", "szamlazhato", "rendszer", teljes);
 tilt("lezárt → ellenőrzésre vár", "lezart", "ellenorzesre_var", "ember", teljes);
 tilt("törölt soron semmi", "tervezett", "folyamatban", "gps", { torolt: true });
@@ -67,11 +69,16 @@ tilt("ugyanaz az állapot", "tervezett", "tervezett", "ember");
 tilt("7. fotó nélkül nem számlázható", "teljesitve", "szamlazhato", "rendszer", {});
 tilt("7. saját fuvar nem számlázható", "teljesitve", "szamlazhato", "rendszer", { sajatFuvar: true, fotoVan: true });
 tilt("8. számla nélkül nem számlázva", "szamlazhato", "szamlazva", "rendszer", {});
-tilt("11. e-mail nélkül nincs lezárás", "postazva", "lezart", "rendszer", { ...teljes, emailElment: false });
+enged("11. lezárás e-mail-jelölés nélkül (a Számlázz.hu küldi)", "postazva", "lezart", "rendszer", { ...teljes, emailElment: false });
+tilt("11. számla nélkül nincs lezárás", "postazva", "lezart", "rendszer", { ...teljes, szamlaVan: false });
+enged("10. postázva közvetlenül számlázottból", "szamlazva", "postazva", "ember");
+tilt("9. e-mail jelölés nem kézi gomb", "szamlazva", "email_elment", "ember");
+tilt("7. kézi számlázható nincs", "teljesitve", "szamlazhato", "ember", { fotoVan: true });
 enged("11. lezárás külön papír-jelölés nélkül (a postázás jelenti)", "postazva", "lezart", "rendszer", { ...teljes, papirBeerkezett: false });
 tilt("12. bér fuvarnak nincs rövid út", "teljesitve", "lezart", "rendszer", { szallitolevelParositva: true });
 tilt("12. saját fuvar szállítólevél nélkül nem zárható", "teljesitve", "lezart", "rendszer", { sajatFuvar: true });
 tilt("13. ha csak az e-mailt nem kéri", "szamlazva", "lezart", "rendszer", { partnerNemKerEmailt: true });
+enged("13. ha csak a postát nem kéri", "szamlazva", "lezart", "rendszer", { partnerNemKerPostat: true });
 tilt("14. GPS-érintés után nincs visszaállítás", "folyamatban", "tervezett", "ember", { gpsErintesVolt: true });
 tilt("3. jóváhagyást a GPS nem adhat", "ellenorzesre_var", "tervezett", "gps");
 tilt("10. postázást a rendszer nem jelölhet", "email_elment", "postazva", "rendszer", { papirBeerkezett: true });
@@ -125,17 +132,24 @@ utvonal("saját fuvar rövid út", [
   ["teljesitve", "sofor", {}],
   ["lezart", "rendszer", { sajatFuvar: true, szallitolevelParositva: true }],
 ], "tervezett");
+utvonal("egyszerű út: fotó nélkül számlaszám, feladva", [
+  ["folyamatban", "sofor", {}],
+  ["teljesitve", "sofor", {}],
+  ["szamlazva", "ember", { szamlaVan: true }],
+  ["postazva", "ember", {}],
+  ["lezart", "rendszer", { szamlaVan: true, postazva: true }],
+], "tervezett");
 utvonal("partner nem kér e-mailt/postát", [
   ["folyamatban", "gps", {}],
   ["teljesitve", "gps", {}],
-  ["szamlazhato", "ember", { fotoVan: true }],
+  ["szamlazhato", "rendszer", { fotoVan: true }],
   ["szamlazva", "ember", { szamlaVan: true }],
   ["lezart", "rendszer", { partnerNemKerEmailt: true, partnerNemKerPostat: true }],
 ], "tervezett");
 
 // lehetsegesCelok az UI-hoz: a sofőr a teljesített fuvaron nem lát gombot.
 eq("sofőr céljai teljesítve-n", lehetsegesCelok("teljesitve", "sofor", teljes), []);
-eq("ember céljai számlázva-n (teljes ctx)", lehetsegesCelok("szamlazva", "ember", { ...teljes, partnerNemKerEmailt: true, partnerNemKerPostat: true }).sort(), ["email_elment", "lezart", "teljesitve"]);
+eq("ember céljai számlázva-n (teljes ctx)", lehetsegesCelok("szamlazva", "ember", { ...teljes, partnerNemKerEmailt: true, partnerNemKerPostat: true }).sort(), ["lezart", "postazva", "teljesitve"]);
 
 console.log(`\nÁllapotgép teszt: ${ok} rendben, ${bad} hiba`);
 if (bad > 0) process.exit(1);

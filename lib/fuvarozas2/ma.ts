@@ -46,22 +46,17 @@ export async function getMaAdat(): Promise<MaAdat> {
   const [{ fotora_var }] = await query<{ fotora_var: number }>(
     `select count(*)::int as fotora_var from fuvar_megbizasok m where m.torolt_at is null and m.jelleg = 'ber' and m.allapot = 'teljesitve' and m.allapot_at < now() - interval '2 hours'`
   );
-  const [{ email_kell }] = await query<{ email_kell: number }>(
-    `select count(*)::int as email_kell from fuvar_megbizasok m left join fuvar_partnerek p on p.id = m.partner_id
-     where m.torolt_at is null and m.allapot = 'szamlazva' and not coalesce(p.szamla_email_nem_kell, false)`
-  );
   const [{ postazando }] = await query<{ postazando: number }>(
     `select count(*)::int as postazando from fuvar_megbizasok m
-     where m.torolt_at is null and m.allapot = 'email_elment'`
+     where m.torolt_at is null and m.jelleg = 'ber' and m.allapot in ('szamlazva','email_elment')`
   );
   const jelzesek: Jelzes[] = ([
     { kulcs: "ellenorzes", szoveg: "ellenőrzésre vár", darab: n("ellenorzesre_var"), sulyossag: "figyelmeztetes", href: "/fuvarozas2/megbizasok?csoport=ellenorzes" },
     { kulcs: "lejart", szoveg: "lejárt, nincs teljesítve", darab: lejart, sulyossag: "sulyos", href: "/fuvarozas2/megbizasok?csoport=folyamatban" },
     { kulcs: "kocsi_nelkul", szoveg: "kocsi nélkül (ma/holnap)", darab: kocsiNelkul.length, sulyossag: "sulyos", href: "/fuvarozas2/megbizasok?csoport=folyamatban" },
     { kulcs: "fotora_var", szoveg: "fotóra vár 2 óránál régebben", darab: fotora_var, sulyossag: "figyelmeztetes", href: "/fuvarozas2/elszamolas" },
-    { kulcs: "szamlazhato", szoveg: "számlázható", darab: n("szamlazhato"), sulyossag: "info", href: "/fuvarozas2/elszamolas" },
-    { kulcs: "email_kell", szoveg: "számlázva, e-mail küldendő", darab: email_kell, sulyossag: "info", href: "/fuvarozas2/elszamolas" },
-    { kulcs: "postazando", szoveg: "postázandó (papír beérkezett, e-mail elment)", darab: postazando, sulyossag: "info", href: "/fuvarozas2/elszamolas" },
+    { kulcs: "szamlazhato", szoveg: "számlázni (visszaért)", darab: n("szamlazhato") + n("teljesitve"), sulyossag: "info", href: "/fuvarozas2/elszamolas" },
+    { kulcs: "postazando", szoveg: "számlázva, postára vár", darab: postazando, sulyossag: "info", href: "/fuvarozas2/elszamolas" },
   ] as Jelzes[]).filter((j) => j.darab > 0);
 
   return { ma, holnap, kocsik, kocsiNelkul, jelzesek, allapotSzamok };

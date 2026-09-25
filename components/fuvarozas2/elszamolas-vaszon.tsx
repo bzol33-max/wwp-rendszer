@@ -1,8 +1,7 @@
 "use client";
 
-// Elszámolás a tervvászon (D5) szerint: szakaszonként egy-egy szekció, és
-// minden kártyán az a gomb, ami ott következik. A számla e-mail piszkozata
-// kibontható és kimásolható (automatikus Gmail-vázlat: S17, Apps Script).
+// Elszámolás két szakaszban: Számlázni (számlaszám) → Postára (Postázva ✓ =
+// kész). A kísérő e-mail piszkozata a posta-kártyán kibontható, ha kell.
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -86,28 +85,15 @@ export function ElszamolasVaszonNezet({ adat }: { adat: ElszamolasVaszon }) {
         <span className={`rounded-lg px-3 py-1.5 ${adat.fejlec.lejartDb > 0 ? "bg-[var(--f2-red-l)] text-[var(--f2-red)]" : "bg-card ring-1 ring-foreground/10"}`}>
           {adat.fejlec.lejartDb} lejárt számla{adat.fejlec.lejartFt > 0 ? ` · ${ft(adat.fejlec.lejartFt)}` : ""}
         </span>
-        <span className="rounded-lg bg-card px-3 py-1.5 ring-1 ring-foreground/10">{adat.fejlec.piszkozatDb} e-mail piszkozat vár</span>
+        <span className="rounded-lg bg-card px-3 py-1.5 ring-1 ring-foreground/10">{adat.szamlazando.length} számlázni · {adat.postazando.length} postára</span>
         <a href="https://www.szamlazz.hu" target="_blank" rel="noreferrer" className="rounded-lg bg-card px-3 py-1.5 underline ring-1 ring-foreground/10">Számlázz.hu ↗</a>
       </div>
 
-      <Szakasz cim="Fotóra vár" szam={String(adat.fotoraVar.length)} also="teljesítve, a sofőr fuvarlevél-fotója még nincs">
-        {adat.fotoraVar.length === 0 ? <Ures /> : adat.fotoraVar.map((s) => (
-          <Kartya key={s.id} s={s} jobb={<span className="text-muted-foreground">{ft(s.fuvardij, s.fuvardij_penznem)}</span>}>
-            <div className="text-xs text-[var(--f2-amb)]">A számlázáshoz a fotó elég — az eredeti papír a postázáshoz kell.</div>
-            <div className="flex gap-2">
-              <button type="button" disabled={pending} className={gomb2} onClick={() => fut("Számlázhatóra állítva", () => valtAllapot(s.id, "szamlazhato", { kezi: true }))}>
-                Számlázható (fotó nélkül, kézi)
-              </button>
-            </div>
-          </Kartya>
-        ))}
-      </Szakasz>
-
-      <Szakasz cim="Számlázható" szam={`${adat.szamlazhato.length} · ${ft(adat.osszegek.szamlazhatoFt)}`}>
-        {adat.szamlazhato.length === 0 ? <Ures /> : adat.szamlazhato.map((s) => (
+      <Szakasz cim="Számlázni" szam={`${adat.szamlazando.length} · ${ft(adat.osszegek.szamlazhatoFt)}`} also="visszaért fuvarok — a számlaszám a Számlázz.hu-ból magától is párosul">
+        {adat.szamlazando.length === 0 ? <Ures /> : adat.szamlazando.map((s) => (
           <Kartya key={s.id} s={s} jobb={<><div className="font-semibold">{ft(s.fuvardij, s.fuvardij_penznem)}</div><div className="text-xs text-muted-foreground">{s.fizetesi_hatarido_nap ?? 30} nap</div></>}>
             <div className="text-xs text-muted-foreground">
-              {s.foto_van ? "fotó ✓" : "fotó nincs"} · a számlára: <b className="text-foreground">{s.szamlanKertSzam ? `${s.szamlanKertSzam} ` : ""}{s.hivatkozas ?? "—"}</b>
+              {s.foto_van ? "fotó ✓" : <span className="text-[var(--f2-amb)]">fotó még nincs</span>} · a számlára: <b className="text-foreground">{s.szamlanKertSzam ? `${s.szamlanKertSzam} ` : ""}{s.hivatkozas ?? "—"}</b>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <a href="https://www.szamlazz.hu" target="_blank" rel="noreferrer" className={gomb2}>Kiállítom a Számlázz.hu-ban ↗</a>
@@ -122,18 +108,7 @@ export function ElszamolasVaszonNezet({ adat }: { adat: ElszamolasVaszon }) {
         ))}
       </Szakasz>
 
-      <Szakasz cim="Számlázva → e-mail" szam={String(adat.emailre.length)} also="a piszkozat kész, küldeni kézzel kell">
-        {adat.emailre.length === 0 ? <Ures /> : adat.emailre.map((s) => (
-          <Kartya key={s.id} s={s} jobb={<><div className="font-semibold">{s.szamla_szam ?? "—"}</div><div className="text-xs text-muted-foreground">{ft(s.fuvardij, s.fuvardij_penznem)}</div></>}>
-            <PiszkozatDoboz p={s.piszkozat} />
-            <div className="flex gap-2">
-              <button type="button" disabled={pending} className={gomb} onClick={() => fut("E-mail elment", () => valtAllapot(s.id, "email_elment"))}>E-mail elment ✓</button>
-            </div>
-          </Kartya>
-        ))}
-      </Szakasz>
-
-      <Szakasz cim="E-mail elment → posta" szam={String(adat.postazando.length)} also="Szabina adja fel a postán, és jelöli: Postázva ✓">
+      <Szakasz cim="Postára" szam={String(adat.postazando.length)} also="Szabina adja fel a postán, és jelöli: Postázva ✓ — ezzel a fuvar kész">
         {adat.postazando.length === 0 ? <Ures /> : adat.postazando.map((s) => (
           <Kartya key={s.id} s={s} jobb={<div className="font-semibold">{s.szamla_szam ?? "—"}</div>}>
             <div className="text-xs">
@@ -145,9 +120,13 @@ export function ElszamolasVaszonNezet({ adat }: { adat: ElszamolasVaszon }) {
               ) : null}
               {s.postazasi_cim ?? <span className="text-[var(--f2-amb)]">nincs postázási cím a törzsben</span>}
             </div>
+            <details className="text-xs">
+              <summary className="cursor-pointer text-muted-foreground">Kísérő e-mail piszkozat (ha a partner kéri)</summary>
+              <div className="mt-2"><PiszkozatDoboz p={s.piszkozat} /></div>
+            </details>
             <div className="flex flex-wrap gap-2">
               <button type="button" disabled={pending} className={gomb}
-                onClick={() => fut("Postázva", () => valtAllapot(s.id, "postazva"))}>Postázva ✓</button>
+                onClick={() => fut("Postázva — a fuvar kész", async () => { const r = await valtAllapot(s.id, "postazva"); if (!r.ok) throw new Error(r.hiba); })}>Postázva ✓</button>
             </div>
           </Kartya>
         ))}

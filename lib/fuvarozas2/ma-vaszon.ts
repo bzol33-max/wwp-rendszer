@@ -277,9 +277,9 @@ export async function getMaVaszon(): Promise<MaVaszon> {
   const [elsz] = await query<{ fotora: number; szamlazhato: number; szamlazhato_ft: number; postazando: number }>(
     `select
        count(*) filter (where m.allapot = 'teljesitve')::int as fotora,
-       count(*) filter (where m.allapot = 'szamlazhato')::int as szamlazhato,
-       coalesce(sum(m.fuvardij) filter (where m.allapot = 'szamlazhato' and m.fuvardij_penznem = 'Ft'), 0)::int as szamlazhato_ft,
-       count(*) filter (where m.allapot = 'email_elment')::int as postazando
+       count(*) filter (where m.allapot in ('teljesitve','szamlazhato'))::int as szamlazhato,
+       coalesce(sum(m.fuvardij) filter (where m.allapot in ('teljesitve','szamlazhato') and m.fuvardij_penznem = 'Ft'), 0)::int as szamlazhato_ft,
+       count(*) filter (where m.allapot in ('szamlazva','email_elment'))::int as postazando
      from fuvar_megbizasok m where m.torolt_at is null and m.jelleg = 'ber'`
   );
 
@@ -292,7 +292,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
      left join fuvar_partnerek p on p.id = m.partner_id
      left join fuvar_elszamolas e on e.megbizas_id = m.id
      where m.torolt_at is null and m.jelleg = 'ber'
-       and m.allapot in ('teljesitve','szamlazhato','szamlazva','email_elment')
+       and m.allapot in ('szamlazva','email_elment')
      order by coalesce(m.lerakas_datum, m.datum)`
   );
   const papirHatra = (r: { hatarido_nap: number | null; lerakas: string | null }) => {
@@ -415,8 +415,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
       href: "/fuvarozas2/elszamolas",
     },
     { cimke: "Számlázandó", ertek: `${elsz?.szamlazhato ?? 0}`, also: ft(elsz?.szamlazhato_ft ?? 0), href: "/fuvarozas2/elszamolas" },
-    { cimke: "Postázandó", ertek: `${elsz?.postazando ?? 0}`, also: null, href: "/fuvarozas2/elszamolas" },
-    { cimke: "Fotóra vár", ertek: `${elsz?.fotora ?? 0}`, also: null, href: "/fuvarozas2/elszamolas" },
+    { cimke: "Fotó még nincs", ertek: `${elsz?.fotora ?? 0}`, also: null, href: "/fuvarozas2/elszamolas" },
   ];
 
   const holnapiak = sorok.filter((s) => aznap(s, holnap));

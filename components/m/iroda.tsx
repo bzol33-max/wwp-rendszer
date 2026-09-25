@@ -3,7 +3,7 @@
 // Iroda (Szabina) mobil teendői — a terv 07/08 vászna.
 //   Posta: melyik fuvar papírját kell feladni — Szabina viszi postára és
 //     jelöli „Feladva ✓” (a korábbi külön „Papír megjött” lépés megszűnt).
-//   Számla: mit kell kiszámlázni, és melyik számla e-mailje megy ki.
+//   Számla: mit kell kiszámlázni (számlaszám); e-mail-lépés nincs.
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -47,8 +47,8 @@ function Fej({ s, jobb }: { s: MegbizasSor; jobb?: string }) {
 }
 
 /**
- * Posta (Szabina): a számla e-mailje kiment, a papírt postára kell adni. A
- * „Feladva ✓” zárja a lépést — külön „Papír megjött” jelölés nincs
+ * Posta (Szabina): a fuvar ki van számlázva, a papírt postára kell adni. A
+ * „Feladva ✓” zárja a fuvart — külön „Papír megjött” jelölés nincs
  * (Budaházi Zoltán, 2026-09-24): a feladott papír a kézben volt.
  */
 export function PostaLista({ sorok }: { sorok: MegbizasSor[] }) {
@@ -67,59 +67,46 @@ export function PostaLista({ sorok }: { sorok: MegbizasSor[] }) {
         <div key={s.id} className="flex flex-col gap-2 rounded-2xl bg-[var(--m-surf)] p-4">
           <Fej s={s} jobb={s.szamla_szam ?? undefined} />
           <div className="text-xs text-[var(--m-muted)]">{s.postazasi_cim ?? "nincs postázási cím a törzsben"}</div>
-          <Gomb primary disabled={pending} onClick={() => fut("Feladva", () => valtAllapot(s.id, "postazva"))}>Feladva ✓</Gomb>
+          <Gomb primary disabled={pending} onClick={() => fut("Feladva — a fuvar kész", () => valtAllapot(s.id, "postazva").then((r) => { if (!r.ok) throw new Error(r.hiba); }))}>Feladva ✓</Gomb>
         </div>
       ))}
     </div>
   );
 }
 
-export function SzamlaPostaLista({ szamlazhato, emailre }: { szamlazhato: MegbizasSor[]; emailre: MegbizasSor[] }) {
+/**
+ * Számla (Szabina): a visszaért bér fuvarok, amiket ki kell számlázni. A
+ * számlaszám a Számlázz.hu-ból magától is párosul (hivatkozási szám ↔
+ * rendelésszám); ha nem, itt beírható. Külön „E-mail elment” lépés nincs
+ * (Budaházi Zoltán, 2026-09-25): a számlát a Számlázz.hu küldi ki.
+ */
+export function SzamlaLista({ szamlazando }: { szamlazando: MegbizasSor[] }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [szamok, setSzamok] = useState<Record<string, string>>({});
   const fut = (nev: string, fn: () => Promise<unknown>) =>
     start(async () => { try { await fn(); toast.success(nev); router.refresh(); } catch (e) { toast.error(e instanceof Error ? e.message : "Nem sikerült"); } });
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       <div>
         <h1 className="text-xl font-bold">Számla</h1>
-        <div className="text-sm text-[var(--m-muted)]">{szamlazhato.length} számlázható · {emailre.length} e-mail</div>
+        <div className="text-sm text-[var(--m-muted)]">{szamlazando.length} fuvart kell kiszámlázni</div>
       </div>
-
-      <Szakasz cim="Számlázható" ures="Nincs számlázható fuvar.">
-        {szamlazhato.map((s) => (
-          <div key={s.id} className="flex flex-col gap-2 rounded-2xl bg-[var(--m-surf)] p-4">
-            <Fej s={s} jobb={ft(s.fuvardij, s.fuvardij_penznem)} />
-            <div className="text-xs text-[var(--m-muted)]">a számlára: <b className="text-[var(--m-txt)]">{s.hivatkozas ?? "—"}</b>{s.fizetesi_hatarido_nap != null ? ` · ${s.fizetesi_hatarido_nap} nap` : ""}</div>
-            <div className="flex gap-2">
-              <input value={szamok[s.id] ?? ""} onChange={(e) => setSzamok({ ...szamok, [s.id]: e.target.value })}
-                placeholder="számlaszám" inputMode="text"
-                className="min-w-0 flex-1 rounded-xl border border-[var(--m-line)] bg-[var(--m-surf2)] px-3 text-sm" />
-              <Gomb primary disabled={pending || !(szamok[s.id] ?? "").trim()} onClick={() => fut("Számlázva", () => setSzamlaSzam(s.id, szamok[s.id]))}>Kész</Gomb>
-            </div>
+      {szamlazando.length === 0 ? <div className="rounded-xl bg-[var(--m-surf)] p-4 text-sm text-[var(--m-muted)]">Nincs kiszámlázandó fuvar.</div> : null}
+      {szamlazando.map((s) => (
+        <div key={s.id} className="flex flex-col gap-2 rounded-2xl bg-[var(--m-surf)] p-4">
+          <Fej s={s} jobb={ft(s.fuvardij, s.fuvardij_penznem)} />
+          <div className="text-xs text-[var(--m-muted)]">
+            a számlára: <b className="text-[var(--m-txt)]">{s.hivatkozas ?? "—"}</b>{s.fizetesi_hatarido_nap != null ? ` · ${s.fizetesi_hatarido_nap} nap` : ""} · {s.foto_van ? "fotó ✓" : "fotó még nincs"}
           </div>
-        ))}
-      </Szakasz>
-
-      <Szakasz cim="Számla e-mail kimegy" ures="Nincs kiküldendő számla-e-mail.">
-        {emailre.map((s) => (
-          <div key={s.id} className="flex flex-col gap-2 rounded-2xl bg-[var(--m-surf)] p-4">
-            <Fej s={s} jobb={s.szamla_szam ?? undefined} />
-            <Gomb disabled={pending} onClick={() => fut("E-mail elment", () => valtAllapot(s.id, "email_elment"))}>E-mail elment ✓</Gomb>
+          <div className="flex gap-2">
+            <input value={szamok[s.id] ?? ""} onChange={(e) => setSzamok({ ...szamok, [s.id]: e.target.value })}
+              placeholder="számlaszám" inputMode="text"
+              className="min-w-0 flex-1 rounded-xl border border-[var(--m-line)] bg-[var(--m-surf2)] px-3 text-sm" />
+            <Gomb primary disabled={pending || !(szamok[s.id] ?? "").trim()} onClick={() => fut("Számlázva", () => setSzamlaSzam(s.id, szamok[s.id]))}>Kész</Gomb>
           </div>
-        ))}
-      </Szakasz>
-    </div>
-  );
-}
-
-function Szakasz({ cim, ures, children }: { cim: string; ures: string; children: React.ReactNode }) {
-  const van = Array.isArray(children) ? children.length > 0 : !!children;
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="text-xs font-semibold uppercase text-[var(--m-muted)]">{cim}</div>
-      {van ? children : <div className="rounded-xl bg-[var(--m-surf)] p-3 text-sm text-[var(--m-muted)]">{ures}</div>}
+        </div>
+      ))}
     </div>
   );
 }

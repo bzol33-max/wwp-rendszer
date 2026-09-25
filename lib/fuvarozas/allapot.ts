@@ -70,31 +70,41 @@ export const ATMENETEK: readonly Atmenet[] = [
   { szam: 5, honnan: "tervezett", hova: "folyamatban", kivalto: "első megálló érintése / Megérkeztem", forrasok: ["gps", "sofor", "ember", "migracio"] },
   { szam: 6, honnan: "folyamatban", hova: "teljesitve", kivalto: "utolsó lerakó elhagyva / Kész", forrasok: ["gps", "sofor", "ember", "migracio"] },
   {
-    szam: 7, honnan: "teljesitve", hova: "szamlazhato", kivalto: "fuvarlevél-fotó megérkezett vagy kézi „számlázható”", forrasok: ["rendszer", "ember", "migracio"],
+    // Nincs kézi gomb (Budaházi Zoltán, 2026-09-25): a fotó magától lépteti,
+    // fotó nélkül pedig a számlaszám közvetlenül számlázottra visz (8b).
+    szam: 7, honnan: "teljesitve", hova: "szamlazhato", kivalto: "fuvarlevél-fotó megérkezett", forrasok: ["rendszer", "migracio"],
     feltetel: (k) => (k.sajatFuvar ? "saját fuvar nem számlázható — a 12. él (lezárás) jár" : kell(k.fotoVan, "nincs fuvarlevél-fotó (vagy kézi jelölés)")),
   },
   {
     szam: 8, honnan: "szamlazhato", hova: "szamlazva", kivalto: "Számlázz.hu-párosítás vagy kézi számlaszám", forrasok: ["rendszer", "ember", "migracio"],
     feltetel: (k) => kell(k.szamlaVan, "nincs számla"),
   },
-  { szam: 9, honnan: "szamlazva", hova: "email_elment", kivalto: "a piszkozat elküldve (SENT szál) vagy kézi jelölés", forrasok: ["rendszer", "ember", "migracio"] },
+  {
+    szam: 8, honnan: "teljesitve", hova: "szamlazva", kivalto: "számlaszám rögzítve (fotó nélkül is)", forrasok: ["rendszer", "ember", "migracio"],
+    feltetel: (k) => (k.sajatFuvar ? "saját fuvar nem számlázható" : kell(k.szamlaVan, "nincs számla")),
+  },
+  // A külön „E-mail elment” lépés megszűnt (Budaházi Zoltán, 2026-09-25): a
+  // számlát a Számlázz.hu küldi ki. Az él csak a régi sorok miatt marad.
+  { szam: 9, honnan: "szamlazva", hova: "email_elment", kivalto: "régi: kézi e-mail jelölés", forrasok: ["rendszer", "migracio"] },
   {
     // A külön „Papír megjött” lépés megszűnt (Budaházi Zoltán, 2026-09-24):
     // Szabina viszi postára a papírt, a „Postázva ✓” maga jelenti, hogy a
     // papír a kezében volt — a papír dátumát a valtAllapot beírja.
-    szam: 10, honnan: "email_elment", hova: "postazva", kivalto: "Postázva ✓ (Szabina feladta)", forrasok: ["ember", "migracio"],
+    szam: 10, honnan: "szamlazva", hova: "postazva", kivalto: "Postázva ✓ (Szabina feladta)", forrasok: ["ember", "migracio"],
   },
+  { szam: 10, honnan: "email_elment", hova: "postazva", kivalto: "Postázva ✓ (Szabina feladta)", forrasok: ["ember", "migracio"] },
   {
-    szam: 11, honnan: "postazva", hova: "lezart", kivalto: "mind a négy feltétel áll (S1)", forrasok: ["rendszer", "ember", "migracio"],
-    feltetel: (k) => kell(k.szamlaVan && k.emailElment && k.postazva, "lezáráshoz kell: számla + e-mail + postázva"),
+    // A valtAllapot a „Postázva ✓” után ugyanabban a tranzakcióban lezárja.
+    szam: 11, honnan: "postazva", hova: "lezart", kivalto: "számla + postázva", forrasok: ["rendszer", "ember", "migracio"],
+    feltetel: (k) => kell(k.szamlaVan && k.postazva, "lezáráshoz kell: számla + postázva"),
   },
   {
     szam: 12, honnan: "teljesitve", hova: "lezart", kivalto: "saját fuvar: szállítólevél párosítva (rövid út)", forrasok: ["rendszer", "ember", "migracio"],
     feltetel: (k) => (k.sajatFuvar ? kell(k.szallitolevelParositva, "nincs párosított szállítólevél") : "csak saját fuvarnál"),
   },
   {
-    szam: 13, honnan: "szamlazva", hova: "lezart", kivalto: "partner nem kér e-mailt és postát (törzs-kapcsoló)", forrasok: ["rendszer", "ember", "migracio"],
-    feltetel: (k) => kell(k.partnerNemKerEmailt && k.partnerNemKerPostat, "a partner e-mailt vagy postát kér"),
+    szam: 13, honnan: "szamlazva", hova: "lezart", kivalto: "partner nem kér postát (törzs-kapcsoló)", forrasok: ["rendszer", "ember", "migracio"],
+    feltetel: (k) => kell(k.partnerNemKerPostat, "a partner postát kér"),
   },
   {
     szam: 14, honnan: "folyamatban", hova: "tervezett", kivalto: "Visszaállítás", forrasok: ["ember"],
@@ -153,3 +163,22 @@ export function lehetsegesCelok(honnan: Allapot, forras: AtmenetForras, k: Atmen
 export const NYITOTT_ALLAPOTOK: readonly Allapot[] = ALLAPOTOK.filter((a) => a !== "lezart");
 /** Elszámolás-oszlopok (asztali Elszámolás fül és Szabina Teendői). */
 export const ELSZAMOLAS_ALLAPOTOK: readonly Allapot[] = ["teljesitve", "szamlazhato", "szamlazva", "email_elment", "postazva"];
+
+/**
+ * A megbízás útja öt lépésben (Budaházi Zoltán, 2026-09-25): megérkezik →
+ * a sofőr viszi → visszaért, számlázni kell → számlázva, postára vár → kész.
+ * A listák és a szűrősáv ezt mutatják; a finomabb állapot csak a naplóban
+ * és a részleten látszik.
+ */
+export const LEPESEK = [
+  { kulcs: "beerkezett", cimke: "Beérkezett", allapotok: ["ellenorzesre_var", "tervezett"] },
+  { kulcs: "uton", cimke: "Úton", allapotok: ["folyamatban"] },
+  { kulcs: "szamlazando", cimke: "Visszaért — számlázni", allapotok: ["teljesitve", "szamlazhato"] },
+  { kulcs: "postara", cimke: "Számlázva — postára", allapotok: ["szamlazva", "email_elment"] },
+  { kulcs: "kesz", cimke: "Kész", allapotok: ["postazva", "lezart"] },
+] as const satisfies readonly { kulcs: string; cimke: string; allapotok: readonly Allapot[] }[];
+export type Lepes = (typeof LEPESEK)[number]["kulcs"];
+
+export function lepesAllapotbol(a: Allapot): Lepes {
+  return LEPESEK.find((l) => (l.allapotok as readonly Allapot[]).includes(a))!.kulcs;
+}

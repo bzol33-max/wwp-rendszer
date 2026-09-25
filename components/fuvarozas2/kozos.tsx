@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import type { Allapot } from "@/lib/fuvarozas/allapot";
+import { LEPESEK, lepesAllapotbol, type Allapot, type Lepes } from "@/lib/fuvarozas/allapot";
 
 export const ALLAPOT_CIMKE: Record<Allapot, string> = {
   ellenorzesre_var: "Ellenőrzésre vár",
@@ -32,6 +32,24 @@ export function AllapotBadge({ allapot, className }: { allapot: Allapot; classNa
   return (
     <Badge variant="outline" className={cn("border-transparent", ALLAPOT_SZIN[allapot], className)}>
       {ALLAPOT_CIMKE[allapot]}
+    </Badge>
+  );
+}
+
+const LEPES_SZIN: Record<Lepes, string> = {
+  beerkezett: "bg-[var(--f2-blue-l)] text-[var(--f2-blue)]",
+  uton: "bg-[var(--f2-blue)] text-white",
+  szamlazando: "bg-[var(--f2-amb-l)] text-[var(--f2-amb)]",
+  postara: "bg-[var(--f2-mint)] text-white",
+  kesz: "bg-[var(--secondary)] text-[var(--muted-foreground)]",
+};
+
+/** Az öt lépés egyike (LEPESEK) — a lista ezt mutatja a kilenc belső állapot helyett. */
+export function LepesBadge({ allapot, className }: { allapot: Allapot; className?: string }) {
+  const l = lepesAllapotbol(allapot);
+  return (
+    <Badge variant="outline" className={cn("border-transparent", LEPES_SZIN[l], className)} title={ALLAPOT_CIMKE[allapot]}>
+      {LEPESEK.find((x) => x.kulcs === l)!.cimke}
     </Badge>
   );
 }

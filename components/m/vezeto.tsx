@@ -26,12 +26,12 @@ const ALLAPOT_ROVID: Record<string, string> = {
   ellenorzesre_var: "ellenőrzésre vár",
   tervezett: "tervezett",
   folyamatban: "folyamatban",
-  teljesitve: "fotóra vár",
-  szamlazhato: "számlázható",
-  szamlazva: "számlázva",
-  email_elment: "e-mail elment",
-  postazva: "postázva",
-  lezart: "lezárt",
+  teljesitve: "visszaért — számlázni",
+  szamlazhato: "visszaért — számlázni",
+  szamlazva: "számlázva — postára",
+  email_elment: "számlázva — postára",
+  postazva: "kész",
+  lezart: "kész",
 };
 
 function ft(n: number | null | undefined, p = "Ft") {

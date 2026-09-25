@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { AllapotBadge, formatFt, formatNap } from "@/components/fuvarozas2/kozos";
-import { ALLAPOTOK, type Allapot } from "@/lib/fuvarozas/allapot";
+import { LepesBadge, formatFt, formatNap } from "@/components/fuvarozas2/kozos";
+import { LEPESEK } from "@/lib/fuvarozas/allapot";
 import { ALLAPOT_CIMKE } from "@/components/fuvarozas2/kozos";
 import { kovetkezoTeendo } from "@/lib/fuvarozas2/megbizas-szuro";
 import type { MegbizasSor } from "@/lib/fuvarozas2/megbizasok";
@@ -13,13 +13,14 @@ import { cn } from "@/lib/utils";
 type Szamok = {
   jelleg: { ber: number; sajat: number };
   allapot: Record<string, number>;
+  lepes: Record<string, number>;
   jarmu: { kod: string; cimke: string; n: number }[];
   jarmuNelkul: number;
   idoszak: Record<string, number>;
   mind: number;
 };
 
-export type SzuroErtekek = { jelleg?: string; allapot?: string; jarmu?: string; idoszak?: string; reszlet?: string };
+export type SzuroErtekek = { jelleg?: string; allapot?: string; lepes?: string; jarmu?: string; idoszak?: string; reszlet?: string };
 
 function link(alap: SzuroErtekek, valtozas: Partial<SzuroErtekek>): string {
   const p = new URLSearchParams();
@@ -64,11 +65,12 @@ export function MegbizasSzuroSav({ szuro, szamok }: { szuro: SzuroErtekek; szamo
         <SavSor href={link(szuro, { jelleg: "sajat" })} cimke="Saját fuvar" n={szamok.jelleg.sajat} aktiv={szuro.jelleg === "sajat"} />
       </SavCsoport>
 
-      <SavCsoport cim="Állapot">
-        <SavSor href={link(szuro, { allapot: undefined })} cimke="Mind" n={szamok.mind} aktiv={!szuro.allapot} />
-        {(ALLAPOTOK as readonly Allapot[]).map((a) => (
-          <SavSor key={a} href={link(szuro, { allapot: a })} cimke={ALLAPOT_CIMKE[a]} n={szamok.allapot[a] ?? 0} aktiv={szuro.allapot === a} />
+      <SavCsoport cim="Hol tart">
+        <SavSor href={link(szuro, { lepes: undefined, allapot: undefined })} cimke="Mind" n={szamok.mind} aktiv={!szuro.lepes && !szuro.allapot} />
+        {LEPESEK.map((l) => (
+          <SavSor key={l.kulcs} href={link(szuro, { lepes: l.kulcs, allapot: undefined })} cimke={l.cimke} n={szamok.lepes[l.kulcs] ?? 0} aktiv={szuro.lepes === l.kulcs} />
         ))}
+        {szuro.allapot ? <SavSor href={link(szuro, {})} cimke={`csak: ${ALLAPOT_CIMKE[szuro.allapot as keyof typeof ALLAPOT_CIMKE] ?? szuro.allapot}`} n={szamok.allapot[szuro.allapot] ?? 0} aktiv /> : null}
       </SavCsoport>
 
       <SavCsoport cim="Kocsi">
@@ -100,7 +102,7 @@ export function MegbizasTabla({ sorok, ma, szuro }: { sorok: MegbizasSor[]; ma: 
       <table className="w-full min-w-[52rem] text-sm">
         <thead>
           <tr className="border-b border-foreground/10 text-[11px] uppercase tracking-wide text-muted-foreground">
-            <th className="px-3 py-2 text-left font-semibold">Állapot</th>
+            <th className="px-3 py-2 text-left font-semibold">Hol tart</th>
             <th className="px-3 py-2 text-left font-semibold">Partner</th>
             <th className="px-3 py-2 text-left font-semibold">Hivatkozás</th>
             <th className="px-3 py-2 text-left font-semibold">Útvonal</th>
@@ -119,7 +121,7 @@ export function MegbizasTabla({ sorok, ma, szuro }: { sorok: MegbizasSor[]; ma: 
             const kijelolt = szuro.reszlet === s.id;
             return (
               <tr key={s.id} className={cn("border-b border-foreground/5 last:border-0 hover:bg-muted/40", kijelolt && "bg-[var(--f2-mint-l)]")}>
-                <td className="px-3 py-2"><AllapotBadge allapot={s.allapot} /></td>
+                <td className="px-3 py-2"><LepesBadge allapot={s.allapot} /></td>
                 <td className="px-3 py-2">
                   <Link href={reszletLink(s.id)} className="font-medium hover:underline">{s.partner_nev ?? "(nincs megbízó)"}</Link>
                 </td>

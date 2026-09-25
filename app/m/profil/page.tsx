@@ -24,8 +24,8 @@ export default async function Page() {
           </>
         ) : (
           <>
-            <p>A „Feladva ✓” gomb azt jelenti, hogy a papírt postára adtad — ezzel zárul a fuvar postai lépése.</p>
-            <p className="mt-2">Számlázni a sofőr fotója alapján is lehet; a teljes nézet a Fuvarozás 2 → Elszámolás fülön van.</p>
+            <p>Számla fül: a visszaért fuvarok — a számlaszám a Számlázz.hu-ból magától is párosul, ha nem, írd be.</p>
+            <p className="mt-2">Posta fül: a „Feladva ✓” azt jelenti, hogy a papírt postára adtad — ezzel a fuvar kész.</p>
           </>
         )}
       </div>
