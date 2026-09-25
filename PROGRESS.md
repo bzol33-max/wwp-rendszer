@@ -2283,3 +2283,10 @@ pihenőn állva semmi nem mutatta, hogy az út nagyobb része megvolt.
   Postgres: a Duvenbeck-hurok a régi kóddal előáll, az újjal nem; a
   kiegészítő számla párosul, a második kör 0. Böngészőben (asztal + mobil) a
   javaslatok, a kiválasztás és az Enter működik.
+
+## 2026-09-25 — Megbízás törlése a részletekből
+
+- Az új Megbízások oldal részleteiben nem volt Törlés. Most van („Fuvar
+  törlése”, megerősítő kérdéssel): `statusz = 'torolt'` + `torolt_at`/`torolt_by`
+  + „torolve” napló (`torolMegbizast`). Számlázott fuvart (fő vagy
+  kiegészítő számla) nem enged törölni.

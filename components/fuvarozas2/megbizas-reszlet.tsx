@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { valtAllapot, setSzamlaSzam, setMegjegyzes } from "@/lib/fuvarozas2/megbizasok";
+import { valtAllapot, setSzamlaSzam, setMegjegyzes, torolMegbizast } from "@/lib/fuvarozas2/megbizasok";
 import type { MegbizasSor, Megallo, Esemeny, Dokumentum } from "@/lib/fuvarozas2/megbizasok";
 import type { Allapot } from "@/lib/fuvarozas/allapot";
 import { ALLAPOT_CIMKE, LepesBadge, JellegBadge, formatFt, formatIdo, formatNap } from "@/components/fuvarozas2/kozos";
@@ -183,6 +183,30 @@ export function MegbizasReszlet({
               onClick={() => start(async () => { await setMegjegyzes(sor.id, megj); toast.success("Mentve"); router.refresh(); })}>Ment</Button>
           </CardContent>
         </Card>
+
+        {szerkeszthet && !sor.torolt ? (
+          sor.szamla_szam || sor.kieg_szamla_szamok?.length ? (
+            <p className="text-xs text-muted-foreground">Számlázott fuvar nem törölhető.</p>
+          ) : (
+            <button
+              type="button"
+              disabled={pending}
+              onClick={() => {
+                if (!confirm(`Biztosan törlöd? (#${sor.id} · ${sor.partner_nev ?? "megbízó nélkül"} · ${formatNap(sor.felrakas_nap)})`)) return;
+                start(async () => {
+                  const r = await torolMegbizast(sor.id);
+                  if (!r.ok) { toast.error(r.hiba); return; }
+                  toast.success("Fuvar törölve");
+                  router.push("/fuvarozas2/megbizasok");
+                  router.refresh();
+                });
+              }}
+              className="self-start text-sm font-semibold text-[var(--f2-red)] hover:underline disabled:opacity-45"
+            >
+              Fuvar törlése
+            </button>
+          )
+        ) : null}
       </div>
     </div>
   );

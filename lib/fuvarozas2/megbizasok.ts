@@ -365,6 +365,31 @@ export async function setMegjegyzes(id: string, megjegyzes: string | null): Prom
 }
 
 /**
+ * Megbízás törlése a részletekből (Budaházi Zoltán, 2026-09-25 — pl. a #280
+ * Duvenbeck-duplikátum). Nem fizikai törlés: `statusz = 'torolt'` (a trigger
+ * tölti a `torolt_at`-ot), a napló megmarad. Számlázott fuvart NEM enged
+ * törölni — azzal a kiállított számla és a fuvar kapcsolata veszne el.
+ */
+export async function torolMegbizast(id: string): Promise<{ ok: true } | { ok: false; hiba: string }> {
+  await requireAnyEditPermission(["fuvarozas"]);
+  const session = await requireSession();
+  const [sor] = await query<{ szamlas: boolean }>(
+    `select (coalesce(m.szamla_szam, '') <> '' or cardinality(m.kieg_szamla_szamok) > 0
+             or exists (select 1 from fuvar_elszamolas e where e.megbizas_id = m.id and coalesce(e.szamla_szam, '') <> '')) as szamlas
+     from fuvar_megbizasok m where m.id = $1 and m.torolt_at is null`,
+    [id]
+  );
+  if (!sor) return { ok: false, hiba: "Ez a fuvar már törölve van." };
+  if (sor.szamlas) return { ok: false, hiba: "Számlázott fuvar nem törölhető." };
+  const ki = session.name ?? session.username;
+  await query(`update fuvar_megbizasok set statusz = 'torolt', torolt_at = now(), torolt_by = $2 where id = $1`, [id, ki]);
+  await query(`insert into fuvar_megbizas_esemeny (megbizas_id, esemeny, forras, ki, reszletek) values ($1, 'torolve', 'ember', $2, $3)`, [
+    id, ki, JSON.stringify({ honnan: "munkaasztal" }),
+  ]);
+  return { ok: true };
+}
+
+/**
  * A Megbízások képernyő (tervvászon D2) egy lekérdezésben: a szűrt lista és
  * a bal oldali szűrősáv darabszámai. A számok MINDIG a teljes (nem szűrt)
  * halmazból jönnek, hogy a sáv ne ürüljön ki, amint az ember rákattint egyre.
