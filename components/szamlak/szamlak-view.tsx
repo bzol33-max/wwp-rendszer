@@ -216,19 +216,18 @@ function FizetveCella({
 }
 
 /**
- * A lapon belül megjelenő, szűrt számlalista (a bal oldali sáv nézetéhez) —
- * "csoportos" módban vevőnként csoportosítva. Korábban dialógusban nyílt; a
- * B-elrendezésben (2026-09-25) a jobb hasáb tartalma, dialógus nélkül.
+ * A lapon belül megjelenő, szűrt számlalista. Minden nézetben vevőnként
+ * csoportosít (2026-09-25, a felhasználó kérése): a cégek ábécésorrendben,
+ * a cégen belül a számlák időrendben (kiállítás dátuma szerint, a legrégebbi
+ * elöl). Korábban dialógusban nyílt.
  */
 function SzamlaLista({
   cim,
   szuro,
-  csoportos,
   onChanged,
 }: {
   cim: string;
   szuro: SzamlaListaSzuro;
-  csoportos: boolean;
   onChanged: () => void;
 }) {
   const [rows, setRows] = useState<SzamlaRow[]>([]);
@@ -259,22 +258,29 @@ function SzamlaLista({
   const vanRendelesszam = rows.some((row) => row.rendelesszam);
   const oszlopSzam = vanRendelesszam ? 7 : 6;
 
-  // Vevőnkénti csoportok, a legnagyobb nyitott összegű cég elöl — csak a nyitott
-  // (és az épp most, még visszavonható módon fizetettre jelölt) számlákkal, hogy a
-  // sok kis vevő régi, kifizetett tételei ne takarják el a teendőket.
+  // Vevőnkénti csoportok: a cégek ábécésorrendben, a cégen belül a számlák
+  // időrendben (kiállítás dátuma, majd sorszám szerint). A nyitott listákból a
+  // régen kifizetett sorok kimaradnak — az épp most, még visszavonható módon
+  // fizetettre jelöltek a helyükön maradnak.
   const csoportok: { vevoNev: string; sorok: SzamlaRow[]; nyitott: Osszeg[] }[] = [];
-  if (csoportos) {
+  {
     const map = new Map<string, SzamlaRow[]>();
     for (const r of rows) {
-      if (r.fizetve && !visszavonhato(r.fizetve_datum)) continue;
+      if (szuro.csakNyitott && r.fizetve && !visszavonhato(r.fizetve_datum)) continue;
       map.set(r.vevo_nev, [...(map.get(r.vevo_nev) ?? []), r]);
     }
     for (const [vevoNev, sorok] of map) {
-      const nyitottak = sorok.filter((r) => !r.fizetve).map((r) => ({ penznem: r.penznem, osszeg: szamlaHatralek(r) }));
-      csoportok.push({ vevoNev, sorok, nyitott: nyitottak });
+      const idorendben = [...sorok].sort(
+        (a, b) =>
+          (a.kiallitas_datum ?? "").localeCompare(b.kiallitas_datum ?? "") ||
+          a.szamlaszam.localeCompare(b.szamlaszam, "hu", { numeric: true })
+      );
+      const nyitottak = idorendben
+        .filter((r) => !r.fizetve)
+        .map((r) => ({ penznem: r.penznem, osszeg: szamlaHatralek(r) }));
+      csoportok.push({ vevoNev, sorok: idorendben, nyitott: nyitottak });
     }
-    const nyitottOsszeg = (c: (typeof csoportok)[number]) => c.nyitott.reduce((s, o) => s + o.osszeg, 0);
-    csoportok.sort((a, b) => nyitottOsszeg(b) - nyitottOsszeg(a));
+    csoportok.sort((a, b) => a.vevoNev.localeCompare(b.vevoNev, "hu", { sensitivity: "base" }));
   }
 
   const osszegSor = osszegLista(
@@ -316,7 +322,10 @@ function SzamlaLista({
     <div className="flex min-w-0 flex-col gap-2 rounded-xl border bg-card p-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <span className="text-sm font-semibold">
-          {cim} <span className="font-normal text-muted-foreground">({rows.length})</span>
+          {cim}{" "}
+          <span className="font-normal text-muted-foreground">
+            ({rows.length} számla · {csoportok.length} cég)
+          </span>
         </span>
         {!szuro.csakFizetve && (
           <span className="text-xs text-muted-foreground">
@@ -341,30 +350,29 @@ function SzamlaLista({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {!loading && (csoportos ? csoportok.length === 0 : rows.length === 0) && (
+            {!loading && csoportok.length === 0 && (
               <TableRow>
                 <TableCell colSpan={oszlopSzam} className="text-center text-muted-foreground">
                   Nincs ilyen számla.
                 </TableCell>
               </TableRow>
             )}
-            {csoportos
-              ? csoportok.map((c) => [
-                  <TableRow key={`cs-${c.vevoNev}`} className="bg-muted/40 hover:bg-muted/40">
-                    <TableCell colSpan={oszlopSzam} className="text-xs font-semibold">
-                      {c.vevoNev}
-                      <span className="ml-2 font-normal text-muted-foreground">
-                        {c.nyitott.length > 0
-                          ? `${c.nyitott.length} nyitott · ${osszegLista(c.nyitott)
-                              .map((o) => formatOsszeg(o.osszeg, o.penznem))
-                              .join(" + ")}`
-                          : "nincs nyitott"}
-                      </span>
-                    </TableCell>
-                  </TableRow>,
-                  ...c.sorok.map(sor),
-                ])
-              : rows.map(sor)}
+            {csoportok.map((c) => [
+              <TableRow key={`cs-${c.vevoNev}`} className="bg-muted/40 hover:bg-muted/40">
+                <TableCell colSpan={oszlopSzam} className="text-xs font-semibold">
+                  {c.vevoNev}
+                  <span className="ml-2 font-normal text-muted-foreground">
+                    {c.sorok.length} számla
+                    {c.nyitott.length > 0
+                      ? ` · ${c.nyitott.length} nyitott: ${osszegLista(c.nyitott)
+                          .map((o) => formatOsszeg(o.osszeg, o.penznem))
+                          .join(" + ")}`
+                      : " · nincs nyitott"}
+                  </span>
+                </TableCell>
+              </TableRow>,
+              ...c.sorok.map(sor),
+            ])}
           </TableBody>
         </Table>
       </div>
@@ -377,23 +385,21 @@ type MappaDef = {
   cim: string;
   kategoria: SzamlaKategoria;
   alkategoria: SzamlaAlkategoria | null;
-  /** Az Egyéb sok kis vevőt fog össze — a listája vevőnként csoportosítva nyílik. */
-  csoportos: boolean;
 };
 
 const MAPPAK: MappaDef[] = [
-  { kulcs: "fuvar", cim: "Fuvar", kategoria: "fuvar", alkategoria: null, csoportos: false },
-  { kulcs: "fabrika", cim: "Fabrika", kategoria: "raklap", alkategoria: "fabrika", csoportos: false },
-  { kulcs: "keter", cim: "Keter", kategoria: "raklap", alkategoria: "keter", csoportos: false },
-  { kulcs: "egyeb", cim: "Egyéb", kategoria: "raklap", alkategoria: "egyeb", csoportos: true },
+  { kulcs: "fuvar", cim: "Fuvar", kategoria: "fuvar", alkategoria: null },
+  { kulcs: "fabrika", cim: "Fabrika", kategoria: "raklap", alkategoria: "fabrika" },
+  { kulcs: "keter", cim: "Keter", kategoria: "raklap", alkategoria: "keter" },
+  { kulcs: "egyeb", cim: "Egyéb", kategoria: "raklap", alkategoria: "egyeb" },
 ];
 
-type Nezet = "teendok" | "lista" | "vevok" | "kifizetve" | "bevetel" | "kereses";
+type Nezet = "teendok" | "lista" | "kifizetve" | "bevetel" | "kereses";
 
+// Külön "Vevők" fül nincs: minden lista vevőnként csoportosít (2026-09-25).
 const FULEK: { kulcs: Nezet; cim: string }[] = [
   { kulcs: "teendok", cim: "Teendők" },
   { kulcs: "lista", cim: "Számlalista" },
-  { kulcs: "vevok", cim: "Vevők" },
   { kulcs: "kifizetve", cim: "Kifizetve" },
   { kulcs: "bevetel", cim: "Bevétel" },
 ];
@@ -834,22 +840,16 @@ export function SzamlakView() {
       alkategoria: mappa ? mappa.alkategoria : undefined,
       ...(nezet === "kifizetve"
         ? { csakFizetve: true, fizetveIdei: true, limit: 5000 }
-        : { csakNyitott: true, hatarido: nezet === "lista" && hatarido ? hatarido : undefined }),
+        : { csakNyitott: true, limit: 2000, hatarido: nezet === "lista" && hatarido ? hatarido : undefined }),
     };
   }, [mappa, nezet, hatarido, keresesSzuro]);
-
-  // Vevőnkénti bontás: a "Vevők" fülön mindig, a mappák közül az Egyébnél
-  // (sok kis vevő) a listában is.
-  const csoportos = nezet === "vevok" || (nezet === "lista" && !!mappa?.csoportos);
 
   const listaCim =
     nezet === "kereses"
       ? keresesCim
       : nezet === "kifizetve"
         ? `Kifizetve (idén)${mappa ? ` · ${mappa.cim}` : ""}`
-        : nezet === "vevok"
-          ? `Vevők${mappa ? ` · ${mappa.cim}` : ""}`
-          : `${hatarido === "lejart" ? "Lejárt" : hatarido === "het" ? "7 napon belül esedékes" : "Nyitott számlák"}${mappa ? ` · ${mappa.cim}` : ""}`;
+        : `${hatarido === "lejart" ? "Lejárt" : hatarido === "het" ? "7 napon belül esedékes" : "Nyitott számlák"}${mappa ? ` · ${mappa.cim}` : ""}`;
 
   function valtsFul(uj: Nezet) {
     setNezet(uj);
@@ -989,13 +989,12 @@ export function SzamlakView() {
 
       {nezet === "teendok" && <TeendokLista refreshKey={refreshKey} onChanged={loadOsszesito} />}
 
-      {(nezet === "lista" || nezet === "vevok" || nezet === "kifizetve" || nezet === "kereses") && (
+      {(nezet === "lista" || nezet === "kifizetve" || nezet === "kereses") && (
         <SzamlaLista
           // A fül/mappa/keresés váltás friss listát töltsön, ne a korábbi sorokat mutassa.
           key={`${nezet}-${mappa?.kulcs ?? "mind"}-${hatarido ?? "nyitott"}-${keresesCim}-${refreshKey}`}
           cim={listaCim}
           szuro={listaSzuro}
-          csoportos={csoportos}
           onChanged={loadOsszesito}
         />
       )}
