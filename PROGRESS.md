@@ -2131,3 +2131,41 @@ pihenőn állva semmi nem mutatta, hogy az út nagyobb része megvolt.
   - Helyi Postgres: a levél-szöveg mentése, a kért-lista és az
     újraolvasandó sor kiválasztása, a frissítés SQL-je.
   - A nyelvi modellt helyben nem lehetett hívni (nincs kulcs).
+
+## 2026-09-25 — Megbízások munkaasztal (egy oldal)
+
+- **Kérés (Budaházi Zoltán):** egy oldal, oldalsávval (folyamatban,
+  számlázásra, postára vár, archív), kereséssel (cég, útvonal, rendszám,
+  időszak). Jobbra mindig az, amit a kocsi éppen csinál, alatta kicsiben a
+  következő fuvarja. Az Elszámolás és a Partnerek fül megszűnik. Az
+  archívumnak nincs bontása, a kereső váltja ki.
+- **Új oldal (`/fuvarozas2/megbizasok`):**
+  - **Oldalsáv:**
+    - kereső mindenre (cég, város, rendszám, sofőr, hivatkozás,
+      számlaszám, hónapnév, évszám; ékezet és írásjel nélkül is);
+    - Mind/Bér/Saját váltó;
+    - szakaszok: Beérkezett · Folyamatban, kocsinként bontva és „kocsi
+      nélkül” · Számlázásra vár · Postára vár · Archív.
+  - **Lista:** megbízó + hivatkozás, első → utolsó város, kocsi, megállók
+    száma, számlaszám, a következő teendő, nap, díj, és egy csík a fuvar
+    útjáról.
+  - **Jobb oszlop:**
+    - kocsiváltó (Gergő, Micó);
+    - „most ezen dolgozik”: megállónként a cég, a telefon, a rakomány és
+      a sofőr „kész” jelölése, kiemelve, hol tart;
+    - alatta a következő fuvar.
+    - Egy sorra kattintva ugyanitt a részletek nyílnak.
+  - **Figyelmeztetés felül:** párosítatlan fuvarszámla sárga sávban.
+  - **Régi linkek:** a `?csoport=`, `?allapot=`, `?lepes=` a szakaszokra
+    képeződik.
+  - **Mobilon** a „kocsi most” kerül előre.
+- **Fülsor:** az Elszámolás és a Partnerek fül kikerült, az oldalaik
+  linkről elérhetők maradnak. A partner adatai a részletből nyílnak
+  (`/fuvarozas2/partnerek?nyit=<id>`).
+- **Szabályok:** `lib/fuvarozas2/munkaasztal.ts`. A saját fuvar lerakás
+  után archív, a bér a postázás után.
+- **Teszt:**
+  - teszt-munkaasztal 23/0;
+  - helyi dev-szerver, valós-szerű adatokkal: asztali és mobil
+    képernyőkép, részlet, keresés („micó szept”), konzolhiba nélkül.
+  - tsc, eslint és next build tiszta.

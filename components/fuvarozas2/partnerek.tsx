@@ -10,10 +10,11 @@ import { osszevonPartnereket, updatePartner, type Partner } from "@/lib/fuvaroza
 
 type Javaslat = { a: Partner; b: Partner; indok: string };
 
-export function PartnerekNezet({ partnerek, javaslatok, szerkeszthet }: { partnerek: Partner[]; javaslatok: Javaslat[]; szerkeszthet: boolean }) {
+export function PartnerekNezet({ partnerek, javaslatok, szerkeszthet, nyit }: { partnerek: Partner[]; javaslatok: Javaslat[]; szerkeszthet: boolean; nyit?: string }) {
   const router = useRouter();
   const [pending, start] = useTransition();
-  const [nyitott, setNyitott] = useState<string | null>(null);
+  // A munkaasztal részletéből „?nyit=<id>” paraméterrel jövünk: a partner sora nyitva.
+  const [nyitott, setNyitott] = useState<string | null>(nyit ?? null);
   const [kijelolt, setKijelolt] = useState<Set<string>>(new Set());
 
   function osszevon(celId: string, forrasIds: string[]) {
@@ -123,7 +124,7 @@ function PartnerSor({ p, nyitott, onNyit, szerkeszthet, kijelolve, onKijelol }: 
   );
   return (
     <>
-      <tr className="border-t border-foreground/5 hover:bg-muted/40">
+      <tr id={`p-${p.id}`} className="scroll-mt-20 border-t border-foreground/5 hover:bg-muted/40">
         {szerkeszthet ? <td className="px-2 py-2"><input type="checkbox" checked={kijelolve} onChange={(e) => onKijelol(e.target.checked)} aria-label="kijelölés összevonáshoz" /></td> : null}
         <td className="px-3 py-2">
           <button className="text-left font-medium hover:underline" onClick={onNyit}>{p.nev}</button>
