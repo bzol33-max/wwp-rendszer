@@ -64,6 +64,35 @@ export async function veszLeveleket(levelek: BeerkezoLevel[]): Promise<BeveteliE
   return { uj, ismert, kert: await kertCsatolmanyok() };
 }
 
+/** A levél szövegének felső határa (a megbízás-levelek néhány ezer karakteresek). */
+const MAX_TORZS = 50_000;
+
+/**
+ * Mely levelek TELJES szövegét kérjük: csak a megbízásnak osztályozottakét
+ * (a többi levél törzse nem kell és nem is jön), az utolsó 14 napból.
+ */
+export async function kertTorzsek(): Promise<string[]> {
+  const sorok = await query<{ gmail_message_id: string }>(
+    `select gmail_message_id from fuvar_level
+     where coalesce(kezi_osztaly, osztaly) = 'megbizas' and torzs is null and allapot <> 'elvetve'
+       and erkezett >= now() - interval '14 days'
+     order by erkezett desc limit 20`
+  );
+  return sorok.map((s) => s.gmail_message_id);
+}
+
+/** A megbízás-levél szövegének mentése (a figyelő küldi; más osztályú levélét eldobjuk). */
+export async function veszTorzset(gmailMessageId: string, torzs: string): Promise<{ ok: boolean; hiba?: string }> {
+  const szoveg = torzs.replace(/\r\n/g, "\n").trim().slice(0, MAX_TORZS);
+  const sorok = await query<{ id: string }>(
+    `update fuvar_level set torzs = $2, torzs_at = now()
+     where gmail_message_id = $1 and coalesce(kezi_osztaly, osztaly) = 'megbizas'
+     returning id::text`,
+    [gmailMessageId, szoveg]
+  );
+  return sorok.length > 0 ? { ok: true } : { ok: false, hiba: "ismeretlen vagy nem megbízás-levél" };
+}
+
 /** Mely levelek csatolmányát várjuk a figyelőtől (Gmail message id lista). */
 export async function kertCsatolmanyok(): Promise<string[]> {
   const sorok = await query<{ gmail_message_id: string }>(

@@ -147,6 +147,11 @@ egyenlo(
 );
 egyenlo(felismerPartner("Transorg Software / Ver:2.6003"), null, "a szoftvernév egymagában nem partner");
 egyenlo(
+  felismerPartner("Szállítási megbízás Megbízó: EUCARGO 2008 KFT. H-1103 Budapest,Gergely u.42. oliver.horvath@eucargo2008.eu Megbízott: WELL-WORN PALETT KFT.")?.kod,
+  "eucargo",
+  "EUCARGO felismerése (2026.09.25.02)"
+);
+egyenlo(
   felismerPartner("Felrakóhely: Huncargo - Dunaharaszti raktár. Megbízó adatai: ÁB Speed Szállítmányozási Kft. transport@abspeed.hu")?.kod,
   "ab-speed",
   "a Huncargo mint felrakóhely nem teszi Huncargo-irattá"

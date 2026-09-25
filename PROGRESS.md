@@ -2095,3 +2095,39 @@ pihenőn állva semmi nem mutatta, hogy az út nagyobb része megvolt.
 - **Módosítás:** `vanUtvonal()` a `lib/fuvarozas/szamla-parositas.ts`-ben.
   Az új párosítási mód neve `partner_osszeg_datum`, ez kerül a naplóba.
 - **Teszt:** teszt-szamla-parositas 20/0, a valós 315-ös számlával.
+
+## 2026-09-25 — A megbízást kísérő levél is beolvasódik (EUCARGO)
+
+- **Eset:** Horváth Olivér (EUCARGO 2008) megbízása (#281). A PDF-ben a
+  helyek helyén „RÉSZLETES FELRAKÁSI ADATOKAT KÜLDÖM EMAILBEN” állt, a
+  4 felrakó és a 10 lerakó (cím, telefon, tonna) a levélben volt. A rendszer
+  csak a PDF-et olvasta: a hely-helyettesítő szöveg lett a felrakó és a
+  lerakó, kocsit sem rendelt hozzá, pedig a PDF-ben ott az NMZ-492.
+- **Módosítás:**
+  - **Gmail-figyelő (`docs/gmail-fuvar-figyelo.gs`):** a megbízásnak
+    osztályozott levelek teljes szövegét is beküldi (`/api/fuvarozas2/gmail/torzs`),
+    a csatolmány ELŐTT. A `/kert` válaszban új lista: `torzs`. A szkriptet a
+    script.google.com-on cserélni kell.
+  - **Adatbázis:** `fuvar_level.torzs` / `torzs_at` és
+    `fuvar_megbizasok.level_kiegeszitve_at` (008-as migráció).
+  - **Beolvasás (`drive-sync-core.ts`):**
+    - Ha van kísérő levél, a modell a PDF szövegével együtt kapja, és a
+      helyeket a levélből veszi, ha az irat „e-mailben küldöm”-öt ír.
+    - Több felrakó is bekerül (pontosvesszővel).
+    - Ha a modell nem ad rendszámot, a saját rendszámainkat az irat
+      szövegéből keresi.
+    - Az „e-mailben küldöm” hely kifogás lesz („ellenőrizendő”).
+  - **Új lépés, `levelSzovegPotlasa`:** a már felvett sort újraolvassa, ha
+    a levél utólag jön, de csak ha a sofőr/GPS még egyik megállót sem
+    érintette. A felrakó/lerakó, a kocsi (ha üres) és a megállók
+    újraépülnek.
+  - **Sofőr-adatok:** megállónként `rakomany` („2 t 1.fok Titus”), a sofőr
+    appja mutatja („Fel: …”, „Le: …”). A megállók felső korlátja 12-ről
+    20-ra nőtt.
+  - **Partner:** EUCARGO 2008 Kft. (Sárvár postázási cím, 45 nap).
+- **Teszt:**
+  - teszt-import 106/0 (EUCARGO), teszt-sofor-adatok 37/0 (14 megálló,
+    rakomány, több felrakó).
+  - Helyi Postgres: a levél-szöveg mentése, a kért-lista és az
+    újraolvasandó sor kiválasztása, a frissítés SQL-je.
+  - A nyelvi modellt helyben nem lehetett hívni (nincs kulcs).

@@ -19,6 +19,7 @@ import {
   kontaktNev,
   kontaktTelefon,
   megalloReszlete,
+  osszesFelrakoCime,
   osszesLerakoCime,
   soforAdatokKivonatbol,
   vanSoforAdat,
@@ -112,6 +113,23 @@ eq("tagolt szám", kontaktTelefon("Kiss Péter, +36 20 594 22 96"), "+3620594229
 eq("tagolt szám: név", kontaktNev("Kiss Péter, +36 20 594 22 96"), "Kiss Péter");
 eq("szám nélkül nincs telefon", kontaktTelefon("Baán József"), null);
 eq("üres kontakt", kontaktTelefon(null), null);
+
+// --- EUCARGO (2026-09-25): 4 felrakó + 10 lerakó a kísérő levélből, megállónkénti rakománnyal
+{
+  const nyers = {
+    megallok: [
+      { tipus: "felrako", ceg: "Rau és Fiai Kft", cim: "4233 Balkány, Geszterédi u. 1.", kontakt: "30/9252165", rakomany: "2 t 1.fok Titus" },
+      { tipus: "felrako", ceg: "Legény Péter", cim: "4080 Hajdúnánás, Pázsit u. 2", kontakt: "30/2193233", rakomany: "5 t 1.fok Primátor" },
+      ...Array.from({ length: 12 }, (_, i) => ({ tipus: "lerako", ceg: `Lerakó ${i + 1}`, cim: `${2000 + i} Város${i + 1}, Fő u. ${i + 1}.`, rakomany: "1 t" })),
+    ],
+  };
+  const a = soforAdatokKivonatbol(nyers);
+  eq("14 megálló mind megmarad (a korlát 20)", a.megallok.length, 14);
+  eq("megállónkénti rakomány", a.megallok[0].rakomany, "2 t 1.fok Titus");
+  eq("több felrakó címe pontosvesszővel", osszesFelrakoCime(a), "4233 Balkány, Geszterédi u. 1.; 4080 Hajdúnánás, Pázsit u. 2");
+  eq("egy felrakónál nincs összefűzés", osszesFelrakoCime({ ...a, megallok: a.megallok.slice(1) }), null);
+  eq("csak rakomány is sofőr-adat", vanSoforAdat({ megallok: [{ tipus: "lerako", cim: "x", ceg: null, nap: null, ido: null, kontakt: null, rakomany: "3 t" }], referencia: null, jarmuEloiras: null }), true);
+}
 
 console.log(`\n${ok} rendben, ${bad} hiba`);
 process.exit(bad ? 1 : 0);
