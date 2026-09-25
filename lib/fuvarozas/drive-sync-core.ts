@@ -862,6 +862,11 @@ async function levelSzovegPotlasa(hibak: string[]): Promise<number> {
       where l.torzs is not null and l.torzs <> '' and n.nyers_szoveg is not null
         and m.level_kiegeszitve_at is null and m.torolt_at is null and m.statusz <> 'torolt'
         and not coalesce(m.teljesitve, false)
+        -- Kiszámlázott / postázott fuvarhoz nem nyúlunk: a szkriptcsere után
+        -- (2026-09-25) a régi levelek szövege is beérkezett, és régi, lezárt
+        -- sorokat (#151, #152) írt át.
+        and coalesce(m.szamla_szam, '') = '' and not coalesce(m.postazva, false)
+        and coalesce(m.allapot, '') not in ('szamlazva', 'email_elment', 'postazva', 'lezart')
         and not exists (select 1 from fuvar_megallo_allapot a where a.fuvar_id = m.id and (a.kesz or a.kezi_erkezes is not null))
         and not exists (select 1 from fuvar_megallok g where g.megbizas_id = m.id and (g.gps_erkezes is not null or g.sofor_kesz_at is not null))
       order by m.id, l.erkezett desc

@@ -2290,3 +2290,11 @@ pihenőn állva semmi nem mutatta, hogy az út nagyobb része megvolt.
   törlése”, megerősítő kérdéssel): `statusz = 'torolt'` + `torolt_at`/`torolt_by`
   + „torolve” napló (`torolMegbizast`). Számlázott fuvart (fő vagy
   kiegészítő számla) nem enged törölni.
+
+## 2026-09-25 — Gmail-figyelő lecserélve; a levél-újraolvasás csak számlázatlan fuvarhoz
+
+- A szkriptcsere után (19:13) beérkezett a megbízás-levelek teljes szövege; a
+  20:02-es körben a #281 (EUCARGO, Olivér) 14 megállót kapott a levélből.
+- Ugyanebben a körben a régi, kiszámlázott és postázott #151 és #152 is
+  újraolvasódott. A `levelSzovegPotlasa` mostantól csak számla nélküli, nem
+  postázott, nem számlázott állapotú fuvarhoz nyúl.
