@@ -2321,3 +2321,17 @@ pihenőn állva semmi nem mutatta, hogy az út nagyobb része megvolt.
 - Teszt: helyi ál-modellel (OPENROUTER_BASE_URL) böngészőben — eszközhívás,
   válasz fuvarlinkkel, tanulás-jóváhagyás, megmaradás újratöltés után, új
   beszélgetés, mobil nyit/csuk; mind a 11 eszköz lefut a helyi adatbázison.
+
+## 2026-09-26 — Saját fuvar: a beragadt partner-kötés is felszabadul
+
+- Az MTS → Fabrika 2000 Kft átírás a 09-25-i javítás után is MTS maradt. Ok:
+  a javítás előtti mentés a szöveget már Fabrikára írta, de a kötés az MTS-en
+  maradt; a javítás csak akkor bontott, ha a szöveg VÁLTOZIK, így ez a sor
+  sosem gyógyult meg.
+- Most a mentés (`lib/fuvarozas2/sajat-fuvar.ts` `mentSajatFuvart`) azt nézi,
+  hogy a kötött partner kulcsa (`normalizaltCegKulcs`) a beírt névé-e; ha nem,
+  bontja, és rögtön (`frissitsdFuvarozas2Modellt`) a beírt névhez köt.
+  Érintetlen „kinek” mellett a kötés marad.
+- Helyben, böngészőben ellenőrizve a beragadt állapotból (szöveg Fabrika,
+  kötés MTS): mentés után Fabrika 2000 Kft; megjegyzés-módosításnál a kötés
+  változatlan.
