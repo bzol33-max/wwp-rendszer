@@ -2405,3 +2405,41 @@ pihenőn állva semmi nem mutatta, hogy az út nagyobb része megvolt.
   fuvarja jelenik meg „Hétfő” címkével a „Mára nincs fuvarod” alatt.
 - Teszt: helyben Gergőhöz kötött sofőrfiókkal, szombaton: „Mára nincs
   fuvarod.” + „HÉTFŐ · … Biharkeresztes → Szentendre”.
+
+## 2026-09-26 — A segéd okosítása (a 2. rész után, éles próba alapján)
+
+Budaházi Zoltán kipróbálta a cselekvő segédet („nagyon buta”). A prod
+beszélgetést kiolvasva négy konkrét ok látszott — a gépezet (javaslat →
+jóváhagyás → végrehajtás → napló) hibátlanul működött, a modell tudása volt
+rossz, és egy művelet hiányzott:
+
+- **Ellentmondott magának**, mert az eszköz egyszerre adta vissza az
+  `allapot`-ot és a `szakasz`-t: „már folyamatban van” (miközben tervezett
+  volt, csak a Folyamatban fülön áll). Most az `allapot` magyar címkével megy
+  (`ALLAPOT_CIMKE` átkerült a `lib/fuvarozas/allapot.ts`-be, egy forrás a
+  felülettel), a szakasz neve `lista_ful`, és a rendszerutasítás kimondja,
+  hogy a kettő nem ugyanaz.
+- **Nevet költött a rendszámhoz** („Micó viszi”): a #281 sofőr mezőjében
+  `N M Z - 4 9 2 , X Z V - 9 2 6` áll. Az eszköz ezt mostantól nem sofőrként
+  adja át, hanem `sofor_megjegyzes`-ben jelzi, hogy ez rendszám.
+  A `kocsi: null` helyett kiírja: „NINCS kocsi hozzárendelve”.
+- **Keresés helyett visszakérdezett** a cégnévre. A rendszerutasítás: cégnév,
+  város, rendszám, számlaszám, hónap → először `keres_fuvarok`.
+- **Nem tudott kocsit adni a fuvarnak** — pedig pont ez kellett. Új, szűk
+  függvény: `setFuvarJarmu` (csak a Kocsi mező + kulcs-újraépítés + napló; a
+  régi `approveFuvar` az egész sort újraírta), és rá a `javasol_kocsi`
+  művelet. Előkészítés alatti saját fuvart nem bánt.
+- **Modell**: az alap a `google/gemini-2.5-flash` helyett
+  `anthropic/claude-sonnet-5`, rövid gondolkodással;
+  `OPENROUTER_SEGED_MODEL`-lel továbbra is cserélhető.
+
+Az ok, amiért a #281 kocsi nélkül állt, nem a segéd: a beolvasás a rendszámot
+karakterenként, szóközökkel a sofőr mezőbe írta. A `findJarmuInSzoveg` most a
+szóközök összehúzása után is felismeri (csak PONTOS rendszám-egyezéssel, két
+különböző kocsi esetén nem tippel), és egy egyszeri migrációs lépés
+(`potoldSzetszortRendszamKocsitOnce`) a már felvett sorokat is pótolja.
+
+Teszt: új `scripts/teszt-rendszam.ts` (8 eset, a `npm run teszt` része) — a
+teljes készlet 0 hibával fut; `tsc --noEmit`, eslint, `next build` rendben.
+Böngészőben itt sem futott (nincs helyi Postgres) — a segéd okosodását éles
+kérdésekkel kell megnézni.

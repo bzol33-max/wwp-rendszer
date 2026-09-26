@@ -90,6 +90,14 @@ export function findJarmuByPlate(plate: string): SajatJarmu | null {
  */
 const RENDSZAM_ALAK = /\b([A-Z]{3,4})-?(\d{3})\b/g;
 
+/**
+ * Ugyanaz szóhatár nélkül — CSAK a szóközöktől megtisztított szövegre, ahol a
+ * két rendszám egymáshoz tapad ("AOPU-427AOTY-474"). Itt a találatnak pontosan
+ * egyeznie kell egy saját rendszámmal (elgépelés-tűrés nélkül), ezért a lazább
+ * alak nem tippel.
+ */
+const RENDSZAM_ALAK_TAPADO = /([A-Z]{3,4})-?(\d{3})/g;
+
 /** Két normalizált rendszám Levenshtein-távolsága — az elgépelt rendszámok felismeréséhez. */
 function szerkesztesiTavolsag(a: string, b: string): number {
   const sor = Array.from({ length: b.length + 1 }, (_, i) => i);
@@ -130,7 +138,19 @@ const RENDSZAM_ELTERES_HATAR = 1;
 export function findJarmuInSzoveg(szoveg: string | null | undefined): SajatJarmu | null {
   if (!szoveg) return null;
   const jeloltek = [...new Set([...szoveg.toUpperCase().matchAll(RENDSZAM_ALAK)].map((m) => m[1] + m[2]))];
-  if (jeloltek.length === 0) return findJarmuBySoforNev(szoveg);
+  if (jeloltek.length === 0) {
+    // Szétszórt betűs rendszám: némelyik PDF-ből karakterenként, szóközökkel
+    // jön a szám ("N M Z - 4 9 2 , X Z V - 9 2 6" — EUCARGO, #281), így a
+    // fenti alak semmit sem talált, és a fuvar "kocsi nélkül" maradt. A
+    // szóközök összehúzása után CSAK pontos rendszám-egyezést fogadunk el
+    // (elgépelés-tűrés nélkül), hogy az összeragasztott szöveg ne tippeljen.
+    const tomor = szoveg.toUpperCase().replace(/\s+/g, "");
+    const pontosak = new Set(
+      [...tomor.matchAll(RENDSZAM_ALAK_TAPADO)].map((m) => findJarmuByPlate(m[1] + m[2])).filter((j): j is SajatJarmu => j !== null)
+    );
+    if (pontosak.size === 1) return [...pontosak][0];
+    return findJarmuBySoforNev(szoveg);
+  }
 
   const talalatok = new Set<SajatJarmu>();
   for (const jelolt of jeloltek) {

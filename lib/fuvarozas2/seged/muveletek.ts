@@ -8,9 +8,9 @@
 // kontextusában (a munkamenet és a jogosultság így érvényes).
 
 import { query } from "@/lib/db";
-import { ALLAPOTOK, type Allapot } from "@/lib/fuvarozas/allapot";
-import { findJarmuByPlate } from "@/lib/fuvarozas/vehicles";
-import { getMegbizas, setMegjegyzes, setPapirBeerkezett, setSzamlaSzam, valtAllapot } from "@/lib/fuvarozas2/megbizasok";
+import { ALLAPOTOK, ALLAPOT_CIMKE, type Allapot } from "@/lib/fuvarozas/allapot";
+import { SAJAT_JARMUVEK, findJarmuByPlate, jarmuLabel } from "@/lib/fuvarozas/vehicles";
+import { getMegbizas, setFuvarJarmu, setMegjegyzes, setPapirBeerkezett, setSzamlaSzam, valtAllapot } from "@/lib/fuvarozas2/megbizasok";
 import { kocsiraAdom, mentSajatFuvart } from "@/lib/fuvarozas2/sajat-fuvar";
 import { setLevelAllapot, setLevelOsztaly } from "@/lib/fuvarozas2/levelek";
 import { getPartnerek, updatePartner } from "@/lib/fuvarozas2/partnerek";
@@ -30,18 +30,6 @@ export type SegedMuvelet = {
 
 /** Egy válaszban legfeljebb ennyi javaslat — ne lehessen egy kattintással sok dolgot elintézni. */
 export const MAX_MUVELET = 3;
-
-const ALLAPOT_CIMKE: Record<Allapot, string> = {
-  ellenorzesre_var: "Beérkezett (ellenőrzésre vár)",
-  tervezett: "Jóváhagyva (tervezett)",
-  folyamatban: "Folyamatban",
-  teljesitve: "Teljesítve",
-  szamlazhato: "Számlázható",
-  szamlazva: "Számlázva",
-  email_elment: "Számla e-mailben elment",
-  postazva: "Postázva",
-  lezart: "Lezárt",
-};
 
 const LEVEL_ALLAPOTOK = ["uj", "feldolgozva", "elvetve", "megvalaszolva"] as const;
 const LEVEL_OSZTALYOK = [
@@ -116,6 +104,20 @@ export const MUVELET_ESZKOZOK: EszkozLeiras[] = [
           megjegyzes: { type: "string" },
         },
         ["datum", "honnan", "hova"]
+      ),
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "javasol_kocsi",
+      description: `Kocsi hozzárendelése egy fuvarhoz, vagy a kocsi levétele róla (üres rendszám). Erre van szükség, ha egy fuvar „kocsi nélkül” áll. Előkészítés alatti saját fuvarnál nem működik — ott az űrlap és a „Kocsira adom” a járható út. ${JOVAHAGYAS}`,
+      parameters: obj(
+        {
+          id: { type: "string", description: "A fuvar azonosítója, pl. '281'." },
+          kocsi: { type: "string", description: `Rendszám. Választható: ${SAJAT_JARMUVEK.filter((j) => j.rendszamok.length).map((j) => `${j.rendszamok[0]} (${j.sofor})`).join(", ")}. Üres szöveg: a kocsi levétele.` },
+        },
+        ["id", "kocsi"]
       ),
     },
   },
@@ -286,6 +288,24 @@ async function keszit(nev: string, a: Args): Promise<Keszites> {
         },
       };
     }
+    case "javasol_kocsi": {
+      const id = szoveg(a, "id").replace(/^#/, "");
+      const s = await fuvar(id);
+      if (!s) return { ok: false, hiba: `Nincs #${id} fuvar.` };
+      if (s.elokeszites) return { ok: false, hiba: `A(z) #${id} előkészítésben van — ott az űrlapon állítsd a kocsit, aztán „Kocsira adom”.` };
+      const kocsi = szoveg(a, "kocsi");
+      const jarmu = kocsi ? findJarmuByPlate(kocsi) : null;
+      if (kocsi && !jarmu) return { ok: false, hiba: `Ismeretlen kocsi: ${kocsi}.` };
+      return {
+        ok: true,
+        javaslat: {
+          osszefoglalo: jarmu ? `${fuvarCimke(s)}: kocsi = ${jarmuLabel(jarmu)}` : `${fuvarCimke(s)}: a kocsi levétele`,
+          argumentumok: { id, kocsi: kocsi || null },
+          megbizasId: id,
+          ellenorzo: { allapot: s.allapot },
+        },
+      };
+    }
     case "javasol_kocsira_adom": {
       const id = szoveg(a, "id").replace(/^#/, "");
       const s = await fuvar(id);
@@ -434,6 +454,10 @@ async function futtat(m: MuveletRow): Promise<{ ok: true; eredmeny: string } | {
         megjegyzes: (a.megjegyzes as string | null) ?? null,
       });
       return r.ok ? { ok: true, eredmeny: `#${r.id}: saját fuvar előkészítve` } : { ok: false, hiba: r.hiba };
+    }
+    case "javasol_kocsi": {
+      const r = await setFuvarJarmu(id, typeof a.kocsi === "string" ? a.kocsi : null);
+      return r.ok ? { ok: true, eredmeny: `#${id}: kocsi ${r.cimke ?? "levéve"}` } : { ok: false, hiba: r.hiba };
     }
     case "javasol_kocsira_adom": {
       const r = await kocsiraAdom(id);

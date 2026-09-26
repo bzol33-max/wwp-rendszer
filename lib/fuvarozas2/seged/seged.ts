@@ -10,7 +10,8 @@
 // fut le, a meglévő, jogosultság-ellenőrzött függvényen keresztül.
 //
 // A modell az OpenRouteren fut (ugyanaz a kulcs, mint a PDF-beolvasásé);
-// OPENROUTER_SEGED_MODEL-lel cserélhető. Az eszközök: ./eszkozok.ts, a
+// OPENROUTER_SEGED_MODEL-lel cserélhető (alap: anthropic/claude-sonnet-5).
+// Az eszközök: ./eszkozok.ts, a
 // tudás: ./szakmai-tudas.ts.
 
 import { query } from "@/lib/db";
@@ -90,10 +91,16 @@ async function modell(uzenetek: ModellUzenet[]): Promise<{ content: string | nul
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: process.env.OPENROUTER_SEGED_MODEL || "google/gemini-2.5-flash",
+      // A gemini-2.5-flash (az eredeti alap) összekeverte a fuvar állapotát a
+      // lista-füllel, nevet költött a rendszámhoz, és keresés helyett
+      // visszakérdezett (Budaházi Zoltán, 2026-09-26: „nagyon buta”). Ezért a
+      // alap egy erősebb modell; OPENROUTER_SEGED_MODEL-lel bármikor cserélhető.
+      model: process.env.OPENROUTER_SEGED_MODEL || "anthropic/claude-sonnet-5",
       messages: uzenetek,
       tools: MINDEN_ESZKOZ,
       temperature: 0.2,
+      // Rövid gondolkodás: a diszpécser-kérdésekhez elég, és nem lassít.
+      reasoning: { effort: "low" },
     }),
   });
   if (!res.ok) throw new Error(`OpenRouter hiba (${res.status}): ${(await res.text()).slice(0, 300)}`);

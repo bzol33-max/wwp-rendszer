@@ -26,7 +26,8 @@ import {
 import { keresEgyezik, keresNapok, keresSzoveg, szakaszSorbol, type KeresoIndex, type Szakasz } from "@/lib/fuvarozas2/munkaasztal";
 import { varosNev } from "@/lib/fuvarozas/varos";
 import { megalloReszlete, type MegalloReszlet } from "@/lib/fuvarozas/sofor-adatok";
-import { findJarmuByPlate } from "@/lib/fuvarozas/vehicles";
+import { findJarmuByPlate, jarmuLabel } from "@/lib/fuvarozas/vehicles";
+import { frissitsdFuvarozas2Modellt } from "@/lib/fuvarozas2/modell-szinkron";
 
 export type MegbizasSor = {
   id: string;
@@ -364,6 +365,38 @@ export async function setMegjegyzes(id: string, megjegyzes: string | null): Prom
   await query(`insert into fuvar_megbizas_esemeny (megbizas_id, esemeny, forras, ki, reszletek) values ($1, 'modositva', 'ember', $2, $3)`, [
     id, session.name ?? session.username, JSON.stringify({ mezo: "megjegyzes" }),
   ]);
+}
+
+/**
+ * Kocsi hozzárendelése egy fuvarhoz (Budaházi Zoltán, 2026-09-26): eddig
+ * bér fuvarnál csak a régi Fuvarozás szerkesztője (`approveFuvar`) tudott
+ * kocsit írni, ami az EGÉSZ sort újraírja — ezért a „kocsi nélkül” álló
+ * fuvart sem a munkaasztalról, sem a segéddel nem lehetett elrendezni.
+ * Ez a függvény csak a Kocsi mezőt állítja, és a `jarmu_id` kulcsot a
+ * szinkronra hagyja (`frissitsdFuvarozas2Modellt`), ahogy a mentés is.
+ *
+ * Előkészítés alatti saját fuvarhoz NEM való: ott a kocsi az
+ * `elokeszites_jarmu`-ban vár (lib/fuvarozas2/sajat-fuvar.ts).
+ */
+export async function setFuvarJarmu(id: string, jarmuKod: string | null): Promise<{ ok: true; cimke: string | null } | { ok: false; hiba: string }> {
+  await requireAnyEditPermission(["fuvarozas"]);
+  const session = await requireSession();
+  const jarmu = jarmuKod?.trim() ? findJarmuByPlate(jarmuKod.trim()) : null;
+  if (jarmuKod?.trim() && !jarmu) return { ok: false, hiba: "Ismeretlen kocsi." };
+  const [sor] = await query<{ elokeszites: boolean; jarmu: string | null }>(
+    `select elokeszites, jarmu from fuvar_megbizasok where id = $1 and torolt_at is null`,
+    [id]
+  );
+  if (!sor) return { ok: false, hiba: "Nincs ilyen fuvar." };
+  if (sor.elokeszites) return { ok: false, hiba: "Ez a fuvar előkészítésben van — ott az űrlapon állítsd a kocsit, aztán „Kocsira adom”." };
+  const cimke = jarmu ? jarmuLabel(jarmu) : null;
+  await query(`update fuvar_megbizasok set jarmu = $2, jarmu_id = null where id = $1`, [id, cimke]);
+  await frissitsdFuvarozas2Modellt(id);
+  await query(
+    `insert into fuvar_megbizas_esemeny (megbizas_id, esemeny, forras, ki, reszletek) values ($1, 'hozzarendeles', 'ember', $2, $3)`,
+    [id, session.name ?? session.username, JSON.stringify({ kocsi: cimke, elozo: sor.jarmu })]
+  );
+  return { ok: true, cimke };
 }
 
 /**
