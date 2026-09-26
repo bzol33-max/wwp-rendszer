@@ -17,6 +17,7 @@ import { requireSession } from "@/lib/auth/dal";
 import { requireEditPermission, requireViewPermission } from "@/lib/auth/require-permission";
 import { SAJAT_JARMUVEK, findJarmuByPlate, jarmuLabel } from "@/lib/fuvarozas/vehicles";
 import { SAJAT_TELEPHELYEK } from "@/lib/fuvarozas/telephelyek";
+import { normalizaltCegKulcs } from "@/lib/fuvarozas/fuvar-constants";
 import { frissitsdFuvarozas2Modellt } from "@/lib/fuvarozas2/modell-szinkron";
 
 export type SajatFuvarAdat = {
@@ -83,16 +84,20 @@ export async function mentSajatFuvart(id: string | null, nyers: SajatFuvarAdat):
     return { ok: true, id: sor.id };
   }
   // A háttér-szinkron a „kinek” szövegéből partnert köt a fuvarhoz, és a
-  // felület a partner nevét mutatja. Ha a „kinek” változik, a régi kötést
-  // eldobjuk (a szinkron az újból köt újra), különben a régi név tér vissza.
-  // Az UPDATE jobb oldalán a megrendelo még a RÉGI érték.
+  // felület a partner nevét mutatja. A kötés csak akkor marad, ha a partner
+  // kulcsa a beírt névé; különben eldobjuk, és lent a beírtból kötünk újra.
+  // Nem elég a régi szöveggel összevetni: a 2026-09-26 előtti mentések a
+  // szöveget már átírták („Fabrika 2000 Kft”), a kötés viszont az MTS-en
+  // maradt — a szöveg így nem változott, és az MTS mindig visszajött.
   const frissitve = await query<{ id: string }>(
     `update fuvar_megbizasok set datum = $2, felrako = $3, lerako = $4, megrendelo = $5, megjegyzes = $6, elokeszites_jarmu = $7,
-       partner_id = case when megrendelo is distinct from $5 then null else partner_id end
+       partner_id = case when exists (select 1 from fuvar_partnerek p where p.id = partner_id and p.nev_kulcs = $8::text)
+                         then partner_id end
      where id = $1 and elokeszites and tipus = 'ber' and torolt_at is null returning id::text`,
-    [id, a.datum, a.honnan, a.hova, a.kinek, a.megjegyzes, a.jarmuKod]
+    [id, a.datum, a.honnan, a.hova, a.kinek, a.megjegyzes, a.jarmuKod, a.kinek ? normalizaltCegKulcs(a.kinek) : null]
   );
   if (frissitve.length === 0) return { ok: false, hiba: "Ez a fuvar már nincs előkészítésben — előbb vedd vissza." };
+  await frissitsdFuvarozas2Modellt(id);
   await naplo(id, "modositva", { elokeszites: true });
   return { ok: true, id };
 }
