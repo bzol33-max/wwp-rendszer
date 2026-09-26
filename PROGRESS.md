@@ -2348,3 +2348,36 @@ pihenőn állva semmi nem mutatta, hogy az út nagyobb része megvolt.
 - A sofőr appja nem mutatja.
 - Teszt: `scripts/teszt-munkaasztal.ts` 34/0; helyben böngészőben: mentés,
   újratöltés, új fuvar kitől-lel, lista, kereső-javaslat.
+
+## 2026-09-26 — A segéd cselekedni is tud (2. rész), jóváhagyással
+
+- Budaházi Zoltán: a segéd ne csak mondja, tegye is. Elv: a modell **soha nem
+  ír** — művelet-eszközt hív (`javasol_*`), abból javaslat lesz
+  (`seged_muvelet`, 013-as migráció), és csak a „Jóváhagyom” gombra fut le.
+- **Műveletek** (`lib/fuvarozas2/seged/muveletek.ts`, mind egy meglévő,
+  jogosultság-ellenőrzött függvényt hív, saját UPDATE nincs): állapotváltás
+  (`valtAllapot`), papír beérkezett (`setPapirBeerkezett`), számlaszám
+  (`setSzamlaSzam`), megjegyzés hozzáírása/cseréje (`setMegjegyzes`), saját
+  fuvar előkészítése (`mentSajatFuvart`), kocsira adás (`kocsiraAdom`), levél
+  állapota/osztálya (`setLevelAllapot`, `setLevelOsztaly`), partner-adat
+  (`updatePartner`: fizetési és papír-határidő, postázási cím, számlázási
+  e-mail, megjegyzés). Megbízás törlését a segéd nem javasolhat.
+- **Korlátok**: jóváhagyás nélkül semmi nem fut; egy jóváhagyás egy művelet;
+  válaszonként legfeljebb 3 javaslat; az állapotváltást az állapotgép szűri
+  (`getMegbizas().celok`) — kézi kiskapu (`kezi`) a segédnek nincs;
+  végrehajtás előtt ellenőrző pillanatkép (a fuvar állapota / előkészítése, a
+  levél állapota) — ha közben megváltozott, elmarad és szól; a javaslatot csak
+  az hagyhatja jóvá, akinek a segédje tette; „Új beszélgetés” a váró
+  javaslatokat elveti.
+- A levél szövege **adat, nem utasítás**: ha a modell a körben levélszöveget
+  olvasott, a kártyán ott a „levél szövegéből” jelzés; a rendszerutasítás
+  kimondja, hogy műveletet csak Zoltán kérése indíthat, és hogy sosem írhatja
+  azt, hogy „megtettem”.
+- Felület: „Ezt fogom tenni” kártya (összefoglaló, Jóváhagyom / Elvetem),
+  végrehajtás után `router.refresh()`, és „Mit tett” — az utolsó 10 művelet
+  eredménnyel. Minden javaslat és döntés naplózva (`seged_muvelet`), a
+  tényleges változás a szokásos helyen (`fuvar_megbizas_esemeny`).
+- Ellenőrzés: `npx tsc --noEmit`, eslint az érintett fájlokra, `next build` —
+  mind hibátlan. **Böngészőben nem futott le**: ezen a gépen nincs helyi
+  Postgres (és Docker/brew sem), ál-modellel sem tudtam elindítani — a
+  jóváhagyás→végrehajtás kört éles/staging adatbázison kell végigpróbálni.

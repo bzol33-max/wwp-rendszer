@@ -5,6 +5,10 @@
 // terv, kalkuláció, GPS, partner, levél, számla), tanul (megtanult szabályok
 // jóváhagyással), és a teendőket mutatja. Csak admin látja.
 //
+// 2. rész: cselekedni is tud, de sosem magától — MŰVELETET JAVASOL
+// (lib/fuvarozas2/seged/muveletek.ts), és az csak Zoltán jóváhagyó gombjára
+// fut le, a meglévő, jogosultság-ellenőrzött függvényen keresztül.
+//
 // A modell az OpenRouteren fut (ugyanaz a kulcs, mint a PDF-beolvasásé);
 // OPENROUTER_SEGED_MODEL-lel cserélhető. Az eszközök: ./eszkozok.ts, a
 // tudás: ./szakmai-tudas.ts.
@@ -13,11 +17,20 @@ import { query } from "@/lib/db";
 import { requireSession } from "@/lib/auth/dal";
 import { getMaAdat, type Jelzes } from "@/lib/fuvarozas2/ma";
 import { ESZKOZOK, futtatEszkozt } from "@/lib/fuvarozas2/seged/eszkozok";
+import {
+  MAX_MUVELET, MUVELET_ESZKOZOK, MUVELET_NEVEK, elvetMuveletet, getMuveletek,
+  javaslatVisszajelzes, keszitJavaslatot, vegrehajtMuveletet, type SegedMuvelet,
+} from "@/lib/fuvarozas2/seged/muveletek";
 import { segedRendszerUtasitas } from "@/lib/fuvarozas2/seged/szakmai-tudas";
+
+/** A modell eszközei: az olvasók és a jóváhagyásra váró műveletek. */
+const MINDEN_ESZKOZ = [...ESZKOZOK, ...MUVELET_ESZKOZOK];
 
 export type SegedUzenet = { id: string; szerep: "user" | "assistant"; tartalom: string; eszkozok: string[] };
 export type SegedTudas = { id: string; szoveg: string; letrehozta: string | null; created_at: string };
-export type SegedValasz = { ok: true; uzenet: SegedUzenet; javaslatok: string[] } | { ok: false; hiba: string };
+export type SegedValasz =
+  | { ok: true; uzenet: SegedUzenet; javaslatok: string[]; muveletek: SegedMuvelet[] }
+  | { ok: false; hiba: string };
 
 const MAX_KOR = 6;
 const ELOZMENY_DB = 20;
@@ -35,9 +48,15 @@ async function tanultSzabalyok(): Promise<SegedTudas[]> {
 }
 
 /** A panel kezdő állapota: a beszélgetés, a megtanult szabályok, a teendők. */
-export async function getSegedAllapot(): Promise<{ uzenetek: SegedUzenet[]; tudas: SegedTudas[]; teendok: Jelzes[] }> {
+export async function getSegedAllapot(): Promise<{
+  uzenetek: SegedUzenet[];
+  tudas: SegedTudas[];
+  teendok: Jelzes[];
+  varakozoMuveletek: SegedMuvelet[];
+  utolsoMuveletek: SegedMuvelet[];
+}> {
   const session = await requireSegedJog();
-  const [uzenetek, tudas, ma] = await Promise.all([
+  const [uzenetek, tudas, ma, muveletek] = await Promise.all([
     query<SegedUzenet>(
       `select * from (
          select id::text, szerep, tartalom, eszkozok from seged_uzenet where user_id = $1 order by id desc limit 40
@@ -46,8 +65,15 @@ export async function getSegedAllapot(): Promise<{ uzenetek: SegedUzenet[]; tuda
     ),
     tanultSzabalyok(),
     getMaAdat().catch(() => null),
+    getMuveletek(session.userId),
   ]);
-  return { uzenetek, tudas, teendok: ma?.jelzesek ?? [] };
+  return {
+    uzenetek,
+    tudas,
+    teendok: ma?.jelzesek ?? [],
+    varakozoMuveletek: muveletek.varakozo,
+    utolsoMuveletek: muveletek.utolsok,
+  };
 }
 
 type ModellUzenet =
@@ -66,7 +92,7 @@ async function modell(uzenetek: ModellUzenet[]): Promise<{ content: string | nul
     body: JSON.stringify({
       model: process.env.OPENROUTER_SEGED_MODEL || "google/gemini-2.5-flash",
       messages: uzenetek,
-      tools: ESZKOZOK,
+      tools: MINDEN_ESZKOZ,
       temperature: 0.2,
     }),
   });
@@ -99,6 +125,7 @@ export async function kuldSegednek(szoveg: string): Promise<SegedValasz> {
 
     const hasznalt: string[] = [];
     const javaslatok: string[] = [];
+    const muveletek: SegedMuvelet[] = [];
     let valasz = "";
     for (let kor = 0; kor < MAX_KOR; kor++) {
       const m = await modell(uzenetek);
@@ -117,6 +144,19 @@ export async function kuldSegednek(szoveg: string): Promise<SegedValasz> {
             // hibás argumentum — a javaslat elmarad
           }
         }
+        // Művelet: nem fut le, csak javaslat lesz belőle. A `levelbol` azt jelzi,
+        // hogy a modell ebben a körben levélszöveget olvasott — a kártyán látszik,
+        // mert a levél szövege adat, nem utasítás.
+        if (MUVELET_NEVEK.has(h.function.name)) {
+          const valasz = await muveletJavaslat(h.function.name, h.function.arguments, {
+            userId: session.userId,
+            levelbol: hasznalt.includes("level_szovege"),
+            eddig: muveletek.length,
+          });
+          if (valasz.muvelet) muveletek.push(valasz.muvelet);
+          uzenetek.push({ role: "tool", tool_call_id: h.id, content: valasz.tartalom });
+          continue;
+        }
         uzenetek.push({ role: "tool", tool_call_id: h.id, content: await futtatEszkozt(h.function.name, h.function.arguments) });
       }
     }
@@ -127,7 +167,7 @@ export async function kuldSegednek(szoveg: string): Promise<SegedValasz> {
       `insert into seged_uzenet (user_id, szerep, tartalom, eszkozok) values ($1, 'assistant', $2, $3) returning id::text`,
       [session.userId, valasz, [...new Set(hasznalt)]]
     );
-    return { ok: true, uzenet: { id: mentett.id, szerep: "assistant", tartalom: valasz, eszkozok: [...new Set(hasznalt)] }, javaslatok };
+    return { ok: true, uzenet: { id: mentett.id, szerep: "assistant", tartalom: valasz, eszkozok: [...new Set(hasznalt)] }, javaslatok, muveletek };
   } catch (err) {
     console.error("[seged] hiba:", err);
     return { ok: false, hiba: err instanceof Error ? err.message : "ismeretlen hiba" };
@@ -150,8 +190,47 @@ export async function torolTudast(id: string): Promise<SegedTudas[]> {
   return tanultSzabalyok();
 }
 
-/** Új beszélgetés: a régi üzenetek törlése (a megtanult szabályok maradnak). */
+/**
+ * Új beszélgetés: a régi üzenetek törlése (a megtanult szabályok maradnak).
+ * A még el nem bírált művelet-javaslatok elvetve — ami eltűnik a szem elől,
+ * azt később ne lehessen véletlenül jóváhagyni.
+ */
 export async function ujBeszelgetes(): Promise<void> {
   const session = await requireSegedJog();
   await query(`delete from seged_uzenet where user_id = $1`, [session.userId]);
+  await query(
+    `update seged_muvelet set allapot = 'elvetve', eredmeny = 'új beszélgetés', dontes_at = now(), dontes_by = $2
+     where user_id = $1 and allapot = 'javasolt'`,
+    [session.userId, session.name ?? session.username]
+  );
+}
+
+/** Egy művelet-hívás feldolgozása: javaslat a naplóba, vagy indok, amiért nem. */
+async function muveletJavaslat(
+  nev: string,
+  argumentumok: string,
+  ctx: { userId: string; levelbol: boolean; eddig: number }
+): Promise<{ tartalom: string; muvelet?: SegedMuvelet }> {
+  if (ctx.eddig >= MAX_MUVELET) {
+    return { tartalom: JSON.stringify({ hiba: `Egy válaszban legfeljebb ${MAX_MUVELET} műveletet javasolhatsz. A többit írd le szövegben.` }) };
+  }
+  const r = await keszitJavaslatot(nev, argumentumok, { userId: ctx.userId, levelbol: ctx.levelbol });
+  if (!r.ok) return { tartalom: JSON.stringify({ hiba: r.hiba }) };
+  return { tartalom: javaslatVisszajelzes(r.muvelet), muvelet: r.muvelet };
+}
+
+/** „Jóváhagyom”: innen — és csak innen — fut le a javasolt művelet. */
+export async function jovahagyMuveletet(id: string): Promise<{ ok: true; muvelet: SegedMuvelet } | { ok: false; hiba: string }> {
+  const session = await requireSegedJog();
+  return vegrehajtMuveletet(id, session.userId, session.name ?? session.username);
+}
+
+export async function elvetMuveletJavaslatot(id: string): Promise<void> {
+  const session = await requireSegedJog();
+  await elvetMuveletet(id, session.userId, session.name ?? session.username);
+}
+
+export async function getSegedMuveletek(): Promise<{ varakozo: SegedMuvelet[]; utolsok: SegedMuvelet[] }> {
+  const session = await requireSegedJog();
+  return getMuveletek(session.userId);
 }
