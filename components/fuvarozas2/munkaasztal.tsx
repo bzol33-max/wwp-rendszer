@@ -189,7 +189,7 @@ export function MunkaLista({ sorok, ma, szuro, cim }: { sorok: MunkaasztalSor[];
                 )}
               >
                 <span className="min-w-0">
-                  <span className="block truncate font-semibold">{s.partner_nev ?? (s.jelleg === "sajat" ? "Saját fuvar" : "(nincs megbízó)")}</span>
+                  <span className="block truncate font-semibold">{s.kitol ? `${s.kitol} → ${s.partner_nev ?? "?"}` : s.partner_nev ?? (s.jelleg === "sajat" ? "Saját fuvar" : "(nincs megbízó)")}</span>
                   <span className="block truncate font-mono text-[11px] text-muted-foreground">{s.hivatkozas ?? (s.jelleg === "sajat" ? "saját" : "—")}</span>
                 </span>
                 <span className="min-w-0">

@@ -35,6 +35,8 @@ export type MegbizasSor = {
   allapot_at: string | null;
   partner_id: string | null;
   partner_nev: string | null;
+  /** Saját fuvar: ki adja az árut (szöveg) — lib/fuvarozas2/sajat-fuvar.ts. */
+  kitol: string | null;
   hivatkozas: string | null;
   hivatkozas_nincs: boolean;
   jarmu_kod: string | null;
@@ -76,7 +78,7 @@ export type MegbizasSor = {
 
 const SOR_SQL = `
   select m.id::text, m.jelleg, m.allapot, m.allapot_at::text, m.partner_id::text,
-    coalesce(p.nev, m.megrendelo) as partner_nev,
+    coalesce(p.nev, m.megrendelo) as partner_nev, m.kitol,
     coalesce(m.hivatkozas_kanonikus, m.pozicioszam, m.reise_id) as hivatkozas, m.hivatkozas_nincs,
     j.kod as jarmu_kod, coalesce(j.cimke, m.jarmu) as jarmu_cimke, coalesce(a.name, m.sofor) as sofor,
     coalesce((select g.cim_nyers from fuvar_megallok g where g.megbizas_id = m.id and g.tipus = 'felrako' order by g.sorszam limit 1), m.felrako) as felrako,
@@ -578,7 +580,7 @@ function keresoIndex(
       const l = reszek(s.lerako);
       return {
         id: s.id,
-        cim: s.partner_nev ?? (s.jelleg === "sajat" ? "Saját fuvar" : "(nincs megbízó)"),
+        cim: s.kitol ? `${s.kitol} → ${s.partner_nev ?? "?"}` : s.partner_nev ?? (s.jelleg === "sajat" ? "Saját fuvar" : "(nincs megbízó)"),
         ut: `${rovid(f[0] ?? null)} → ${rovid(l[l.length - 1] ?? null)}`,
         nap: s.felrakas_nap,
         szakasz: s.szakasz,
@@ -586,7 +588,7 @@ function keresoIndex(
         napok: keresNapok(s),
       };
     }),
-    cegek: egyedi(sorok.map((s) => s.partner_nev)),
+    cegek: egyedi(sorok.flatMap((s) => [s.partner_nev, s.kitol])),
     varosok: egyedi(sorok.flatMap((s) => [...reszek(s.felrako), ...reszek(s.lerako)].map((c) => varosNev(c))))
       // Ha a címből nem jön ki városnév, a varosNev a teljes szöveget adja
       // („BMW HU Plant Debrecen”) — az nem város.
