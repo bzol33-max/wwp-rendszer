@@ -1,13 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CheckIcon, InfoIcon, SearchIcon } from "lucide-react";
+import { CheckIcon, ChevronRightIcon, InfoIcon, SearchIcon } from "lucide-react";
 import { useCanEdit } from "@/components/auth/edit-permission-context";
 import { PageHeader } from "@/components/layout/page-header";
 import { KontokivonatDialog } from "@/components/szamlak/kontokivonat-dialog";
 import { SzamlaBevetelDiagram } from "@/components/szamlak/szamla-bevetel-diagram";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -215,11 +214,47 @@ function FizetveCella({
   );
 }
 
+/** Hány napja járt le — a lejárt lista sorai alá. */
+function napjaLejart(ma: string, hatarido: string): number {
+  return Math.round((new Date(ma).getTime() - new Date(hatarido).getTime()) / 86_400_000);
+}
+
+/** Egy számla sora egy lenyitott cég alatt. */
+function CegSzamlaSor({
+  row,
+  ma,
+  onFizetve,
+  onVisszavon,
+}: {
+  row: SzamlaRow;
+  ma: string;
+  onFizetve: (id: string) => void;
+  onVisszavon: (id: string) => void;
+}) {
+  const lejart = !row.fizetve && !!row.fizetesi_hatarido && row.fizetesi_hatarido < ma;
+  return (
+    <div className="flex items-center gap-2 border-t py-1.5 pl-7 pr-2 text-xs">
+      <span className="w-28 shrink-0 truncate font-mono text-muted-foreground">{row.szamlaszam}</span>
+      <span className="w-20 shrink-0 text-muted-foreground">{row.kiallitas_datum}</span>
+      <span className={`w-20 shrink-0 ${lejart ? "font-medium text-destructive" : "text-muted-foreground"}`}>
+        {row.fizetesi_hatarido ?? "—"}
+      </span>
+      <span className="min-w-0 flex-1 text-right tabular-nums">
+        {formatOsszeg(sorOsszeg(row), row.penznem)}
+        <ReszfizetesJelzes row={row} />
+      </span>
+      <span className="w-24 shrink-0 text-right">
+        <FizetveCella row={row} onFizetve={onFizetve} onVisszavon={onVisszavon} />
+      </span>
+    </div>
+  );
+}
+
 /**
- * A lapon belül megjelenő, szűrt számlalista. Minden nézetben vevőnként
- * csoportosít (2026-09-25, a felhasználó kérése): a cégek ábécésorrendben,
- * a cégen belül a számlák időrendben (kiállítás dátuma szerint, a legrégebbi
- * elöl). Korábban dialógusban nyílt.
+ * A lapon belül megjelenő, szűrt számlalista két hasábban (2026-09-26):
+ * balra a cégek egymás alatt, alapból összecsukva (ábécésorrendben, a cégen
+ * belül a számlák időrendben), jobbra ugyanannak a szűrőnek a lejárt számlái
+ * a legrégebben lejárttal kezdve. A Kifizetve nézetben nincs lejárt hasáb.
  */
 function SzamlaLista({
   cim,
@@ -232,6 +267,7 @@ function SzamlaLista({
 }) {
   const [rows, setRows] = useState<SzamlaRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [nyitottCegek, setNyitottCegek] = useState<Set<string>>(new Set());
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -253,16 +289,12 @@ function SzamlaLista({
   );
 
   const ma = budapestMa();
-  // A "Hiv. szám" (rendelésszám) gyakorlatilag sosem töltött — ha egy sorban sincs
-  // adat, ne foglaljon helyet a fontosabb oszlopoktól (dátum, összeg).
-  const vanRendelesszam = rows.some((row) => row.rendelesszam);
-  const oszlopSzam = vanRendelesszam ? 7 : 6;
 
   // Vevőnkénti csoportok: a cégek ábécésorrendben, a cégen belül a számlák
   // időrendben (kiállítás dátuma, majd sorszám szerint). A nyitott listákból a
   // régen kifizetett sorok kimaradnak — az épp most, még visszavonható módon
   // fizetettre jelöltek a helyükön maradnak.
-  const csoportok: { vevoNev: string; sorok: SzamlaRow[]; nyitott: Osszeg[] }[] = [];
+  const csoportok: { vevoNev: string; sorok: SzamlaRow[]; nyitott: Osszeg[]; lejartDarab: number }[] = [];
   {
     const map = new Map<string, SzamlaRow[]>();
     for (const r of rows) {
@@ -275,106 +307,142 @@ function SzamlaLista({
           (a.kiallitas_datum ?? "").localeCompare(b.kiallitas_datum ?? "") ||
           a.szamlaszam.localeCompare(b.szamlaszam, "hu", { numeric: true })
       );
-      const nyitottak = idorendben
-        .filter((r) => !r.fizetve)
-        .map((r) => ({ penznem: r.penznem, osszeg: szamlaHatralek(r) }));
-      csoportok.push({ vevoNev, sorok: idorendben, nyitott: nyitottak });
+      csoportok.push({
+        vevoNev,
+        sorok: idorendben,
+        nyitott: idorendben.filter((r) => !r.fizetve).map((r) => ({ penznem: r.penznem, osszeg: szamlaHatralek(r) })),
+        lejartDarab: idorendben.filter((r) => !r.fizetve && !!r.fizetesi_hatarido && r.fizetesi_hatarido < ma).length,
+      });
     }
     csoportok.sort((a, b) => a.vevoNev.localeCompare(b.vevoNev, "hu", { sensitivity: "base" }));
   }
 
-  const osszegSor = osszegLista(
+  // Jobb hasáb: ugyanennek a szűrőnek a lejárt számlái, a legrégebben lejárttal kezdve.
+  const lejartak = szuro.csakFizetve
+    ? []
+    : rows
+        .filter((r) => !r.fizetve && !!r.fizetesi_hatarido && r.fizetesi_hatarido < ma)
+        .sort((a, b) => (a.fizetesi_hatarido ?? "").localeCompare(b.fizetesi_hatarido ?? ""));
+  const lejartOsszeg = osszegLista(lejartak.map((r) => ({ penznem: r.penznem, osszeg: szamlaHatralek(r) })));
+  const osszesOsszeg = osszegLista(
     rows.filter((r) => !r.fizetve).map((r) => ({ penznem: r.penznem, osszeg: szamlaHatralek(r) }))
   );
 
-  function sor(row: SzamlaRow) {
-    const lejart = !row.fizetve && !!row.fizetesi_hatarido && row.fizetesi_hatarido < ma;
-    return (
-      <TableRow key={row.id}>
-        <TableCell className="whitespace-nowrap text-muted-foreground">{row.szamlaszam}</TableCell>
-        <TableCell className="max-w-[9rem] truncate" title={row.vevo_nev}>
-          {row.vevo_nev}
-        </TableCell>
-        {vanRendelesszam && <TableCell>{row.rendelesszam ?? "—"}</TableCell>}
-        <TableCell className="whitespace-nowrap">{row.kiallitas_datum}</TableCell>
-        <TableCell className={`whitespace-nowrap ${lejart ? "font-medium text-destructive" : ""}`}>
-          {row.fizetesi_hatarido ?? "—"}
-        </TableCell>
-        <TableCell className="whitespace-nowrap text-right tabular-nums">
-          {formatOsszeg(sorOsszeg(row), row.penznem)}
-          <ReszfizetesJelzes row={row} />
-        </TableCell>
-        <TableCell>
-          {!row.fizetve && lejart ? (
-            <div className="flex flex-col items-start gap-1">
-              <Badge className="bg-destructive/15 text-destructive hover:bg-destructive/15 text-xs">Lejárt</Badge>
-              <FizetveCella row={row} onFizetve={fizetve} onVisszavon={visszavon} />
-            </div>
-          ) : (
-            <FizetveCella row={row} onFizetve={fizetve} onVisszavon={visszavon} />
-          )}
-        </TableCell>
-      </TableRow>
-    );
+  function toggleCeg(vevoNev: string) {
+    setNyitottCegek((prev) => {
+      const uj = new Set(prev);
+      if (uj.has(vevoNev)) uj.delete(vevoNev);
+      else uj.add(vevoNev);
+      return uj;
+    });
   }
 
-  return (
-    <div className="flex min-w-0 flex-col gap-2 rounded-xl border bg-card p-3">
+  const cegekHasab = (
+    <div className="flex min-w-0 flex-col gap-2">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <span className="text-sm font-semibold">
-          {cim}{" "}
-          <span className="font-normal text-muted-foreground">
-            ({rows.length} számla · {csoportok.length} cég)
-          </span>
+        <span className="text-sm font-semibold">{cim}</span>
+        <span className="text-xs text-muted-foreground">
+          {csoportok.length} cég · {rows.length} számla
+          {!szuro.csakFizetve && (
+            <>
+              {" · "}
+              <span className="font-semibold tabular-nums text-foreground">
+                {osszesOsszeg.map((o) => formatOsszeg(o.osszeg, o.penznem)).join(" + ")}
+              </span>
+            </>
+          )}
         </span>
-        {!szuro.csakFizetve && (
-          <span className="text-xs text-muted-foreground">
-            hátralék{" "}
-            <span className="font-semibold tabular-nums text-foreground">
-              {osszegSor.map((o) => formatOsszeg(o.osszeg, o.penznem)).join(" + ")}
-            </span>
-          </span>
+      </div>
+      <div className="overflow-hidden rounded-xl border bg-card">
+        {csoportok.length === 0 ? (
+          <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+            {loading ? "Betöltés…" : "Nincs ilyen számla."}
+          </div>
+        ) : (
+          csoportok.map((c) => {
+            const nyitva = nyitottCegek.has(c.vevoNev);
+            return (
+              <div key={c.vevoNev} className="border-b last:border-b-0">
+                <button
+                  type="button"
+                  onClick={() => toggleCeg(c.vevoNev)}
+                  aria-expanded={nyitva}
+                  className={`flex min-h-10 w-full items-center gap-2 px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted/50 ${nyitva ? "bg-muted/40" : ""}`}
+                >
+                  <ChevronRightIcon
+                    className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${nyitva ? "rotate-90" : ""}`}
+                  />
+                  <span className="min-w-0 flex-1 truncate" title={c.vevoNev}>
+                    <span className={nyitva ? "font-medium" : ""}>{c.vevoNev}</span>
+                    <span className="ml-1.5 text-xs text-muted-foreground">· {c.sorok.length}</span>
+                    {c.lejartDarab > 0 && (
+                      <span className="ml-1.5 text-xs text-destructive">· {c.lejartDarab} lejárt</span>
+                    )}
+                  </span>
+                  <span className="shrink-0 text-right text-sm tabular-nums">
+                    {c.nyitott.length > 0
+                      ? osszegLista(c.nyitott)
+                          .map((o) => formatOsszeg(o.osszeg, o.penznem))
+                          .join(" + ")
+                      : "—"}
+                  </span>
+                </button>
+                {nyitva &&
+                  c.sorok.map((row) => (
+                    <CegSzamlaSor key={row.id} row={row} ma={ma} onFizetve={fizetve} onVisszavon={visszavon} />
+                  ))}
+              </div>
+            );
+          })
         )}
       </div>
-      <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Sorszám</TableHead>
-              <TableHead>Vevő</TableHead>
-              {vanRendelesszam && <TableHead>Hiv. szám</TableHead>}
-              <TableHead>Kiállítás</TableHead>
-              <TableHead>Fizetési határidő</TableHead>
-              <TableHead className="text-right">Összeg</TableHead>
-              <TableHead className="w-28">Állapot</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {!loading && csoportok.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={oszlopSzam} className="text-center text-muted-foreground">
-                  Nincs ilyen számla.
-                </TableCell>
-              </TableRow>
-            )}
-            {csoportok.map((c) => [
-              <TableRow key={`cs-${c.vevoNev}`} className="bg-muted/40 hover:bg-muted/40">
-                <TableCell colSpan={oszlopSzam} className="text-xs font-semibold">
-                  {c.vevoNev}
-                  <span className="ml-2 font-normal text-muted-foreground">
-                    {c.sorok.length} számla
-                    {c.nyitott.length > 0
-                      ? ` · ${c.nyitott.length} nyitott: ${osszegLista(c.nyitott)
-                          .map((o) => formatOsszeg(o.osszeg, o.penznem))
-                          .join(" + ")}`
-                      : " · nincs nyitott"}
+    </div>
+  );
+
+  if (szuro.csakFizetve) return cegekHasab;
+
+  return (
+    <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.85fr)]">
+      {cegekHasab}
+
+      <div className="flex min-w-0 flex-col gap-2">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <span className="text-sm font-semibold text-destructive">Lejárt</span>
+          <span className="text-xs text-muted-foreground">
+            {lejartak.length} számla ·{" "}
+            <span className="font-semibold tabular-nums text-destructive">
+              {lejartOsszeg.map((o) => formatOsszeg(o.osszeg, o.penznem)).join(" + ")}
+            </span>
+          </span>
+        </div>
+        <div className="overflow-hidden rounded-xl border border-l-4 border-l-destructive bg-card">
+          {lejartak.length === 0 ? (
+            <div className="px-3 py-6 text-center text-sm text-muted-foreground">
+              {loading ? "Betöltés…" : "Nincs lejárt számla."}
+            </div>
+          ) : (
+            lejartak.map((row) => (
+              <div key={row.id} className="flex items-start gap-2 border-b px-2 py-1.5 text-xs last:border-b-0">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate" title={row.vevo_nev}>
+                    {row.vevo_nev}
                   </span>
-                </TableCell>
-              </TableRow>,
-              ...c.sorok.map(sor),
-            ])}
-          </TableBody>
-        </Table>
+                  <span className="block truncate text-[11px] text-destructive">
+                    {row.fizetesi_hatarido} · {napjaLejart(ma, row.fizetesi_hatarido!)} napja ·{" "}
+                    <span className="font-mono text-muted-foreground">{row.szamlaszam}</span>
+                  </span>
+                </span>
+                <span className="shrink-0 text-right">
+                  <span className="block tabular-nums">{formatOsszeg(sorOsszeg(row), row.penznem)}</span>
+                  <ReszfizetesJelzes row={row} />
+                </span>
+                <span className="w-24 shrink-0 text-right">
+                  <FizetveCella row={row} onFizetve={fizetve} onVisszavon={visszavon} />
+                </span>
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );
