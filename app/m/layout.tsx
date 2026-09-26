@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireSession } from "@/lib/auth/dal";
 import { MTabbar, SOFOR_TABOK, IRODA_TABOK, VEZETO_TABOK } from "@/components/m/tabbar";
+import { budapestHetNapja } from "@/lib/fuvarozas/idozona";
 
 // Mobil nézet három szerepre, ugyanazzal a kerettel (terv: „Mobil" vászon):
 //   • sofőr (fuvarozas_sajat + alkalmazott): Ma · Holnap · Profil
@@ -16,6 +17,8 @@ export default async function Layout({ children }: { children: React.ReactNode }
   const teljes = session.can("fuvarozas").view;
   const ok = sofor || iroda || teljes;
   const tabok = sofor ? SOFOR_TABOK : teljes ? VEZETO_TABOK : IRODA_TABOK;
+  // Pénteken és szombaton a „Holnap” fül a hétfőt mutatja (app/m/holnap).
+  const hetvege = [5, 6].includes(budapestHetNapja(new Date()));
   return (
     <div className="sofor-m mx-auto flex min-h-dvh w-full max-w-md flex-col">
       <div className="flex-1 px-4 pb-24 pt-4">
@@ -27,7 +30,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
           </div>
         )}
       </div>
-      <MTabbar tabok={tabok} />
+      <MTabbar tabok={tabok} holnapFelirat={hetvege ? "Hétfő" : undefined} />
     </div>
   );
 }

@@ -2348,3 +2348,16 @@ pihenőn állva semmi nem mutatta, hogy az út nagyobb része megvolt.
 - A sofőr appja nem mutatja.
 - Teszt: `scripts/teszt-munkaasztal.ts` 34/0; helyben böngészőben: mentés,
   újratöltés, új fuvar kitől-lel, lista, kereső-javaslat.
+
+## 2026-09-26 — Sofőr app: a „Holnap” fül a következő munkanapot mutatja
+
+- Szombaton a sofőrök nem látták a hétfői fuvart: az app csak „Ma” és
+  „Holnap” (= vasárnap) napot mutatott.
+- Most a `/m/holnap` a következő munkanapot mutatja (`kovetkezoMunkanapISO`,
+  `lib/fuvarozas/idozona.ts`): pénteken és szombaton a hétfőt, a fül felirata
+  és a címsor ilyenkor „Hétfő”. Ünnepnapot nem ismer.
+- A fül átnevezése a kliens fülsávban (`MTabbar` `holnapFelirat`): a
+  `SOFOR_TABOK` kliens-modulból jön, szerveren nem módosítható.
+- Teszt: a dátum-segéd hét esettel (hét közben, péntek, szombat, vasárnap,
+  hónap- és évváltás); helyben sofőrfiókkal böngészőben a „Hétfő” fül a
+  hétfői fuvart mutatja, a „Ma” fül változatlan.

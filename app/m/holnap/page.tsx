@@ -1,17 +1,17 @@
 import { requireSession } from "@/lib/auth/dal";
 import { getSoforNap } from "@/lib/fuvarozas/sofor";
+import { budapestHetNapja, budapestNapISO, kovetkezoMunkanapISO } from "@/lib/fuvarozas/idozona";
 import { SoforNapNezet } from "@/components/m/sofor-nap";
 
 export const dynamic = "force-dynamic";
 
-function holnapISO() {
-  const d = new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Budapest" }));
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().slice(0, 10);
-}
-
+// A „Holnap” fül a következő munkanapot mutatja: pénteken és szombaton a
+// hétfőt, hogy a sofőr a hétvégén is lássa, mivel indul (2026-09-26). A fül
+// feliratát az app/m/layout.tsx ugyanígy váltja.
 export default async function Page() {
   const session = await requireSession();
-  const nap = session.employeeId ? await getSoforNap(session.employeeId, holnapISO()) : null;
-  return <SoforNapNezet nap={nap} ma={false} />;
+  const most = new Date();
+  const hetvege = [5, 6].includes(budapestHetNapja(most));
+  const nap = session.employeeId ? await getSoforNap(session.employeeId, kovetkezoMunkanapISO(budapestNapISO(most))) : null;
+  return <SoforNapNezet nap={nap} ma={false} cim={hetvege ? "Hétfő" : "Holnap"} />;
 }
