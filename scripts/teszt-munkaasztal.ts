@@ -43,6 +43,7 @@ eq("számlaszám", keresEgyezik(sor, "WLLWR-2026-320"), true);
 eq("hivatkozás", keresEgyezik(sor, "3814"), true);
 eq("évszám", keresEgyezik(sor, "2026"), true);
 eq("rossz hónap", keresEgyezik(sor, "debrecen okt"), false);
+eq("kitől (saját fuvar)", keresEgyezik({ ...sor, kitol: "MTS Kft." }, "mts"), true);
 eq("más város", keresEgyezik(sor, "győr"), false);
 eq("minden szónak illeszkednie kell", keresEgyezik(sor, "micó győr"), false);
 

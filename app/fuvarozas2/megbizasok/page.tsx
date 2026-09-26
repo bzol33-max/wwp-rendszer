@@ -88,6 +88,7 @@ export default async function Page({ searchParams }: {
                   jarmuKod: elokeszitett?.elokeszites_jarmu ?? null,
                   honnan: elokeszitett?.felrako ?? "",
                   hova: elokeszitett?.lerako ?? "",
+                  kitol: elokeszitett?.kitol ?? null,
                   kinek: elokeszitett?.partner_nev ?? null,
                   megjegyzes: elokeszitett?.megjegyzes ?? null,
                 }}

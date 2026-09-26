@@ -65,6 +65,7 @@ export function honapKeresoszo(szo: string): number | null {
 
 export type KeresettSor = {
   partner_nev: string | null;
+  kitol?: string | null;
   hivatkozas: string | null;
   felrako: string | null;
   lerako: string | null;
@@ -92,7 +93,7 @@ export function keresEgyezik(s: KeresettSor, kereses: string): boolean {
 /** A sor kereshető szövege (normalizálva) — a böngészős javaslatokhoz egyszer számoljuk ki. */
 export function keresSzoveg(s: KeresettSor): string {
   return normal(
-    [s.partner_nev, s.hivatkozas, s.felrako, s.lerako, s.jarmu_kod, s.jarmu_cimke, s.sofor, s.szamla_szam, ...(s.kieg_szamla_szamok ?? []), s.szallitolevel, s.aru]
+    [s.partner_nev, s.kitol, s.hivatkozas, s.felrako, s.lerako, s.jarmu_kod, s.jarmu_cimke, s.sofor, s.szamla_szam, ...(s.kieg_szamla_szamok ?? []), s.szallitolevel, s.aru]
       .filter(Boolean)
       .join(" ")
   );

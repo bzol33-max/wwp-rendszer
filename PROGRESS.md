@@ -2335,3 +2335,16 @@ pihenőn állva semmi nem mutatta, hogy az út nagyobb része megvolt.
 - Helyben, böngészőben ellenőrizve a beragadt állapotból (szöveg Fabrika,
   kötés MTS): mentés után Fabrika 2000 Kft; megjegyzés-módosításnál a kötés
   változatlan.
+
+## 2026-09-26 — Saját fuvar: „Kitől” mező
+
+- Budaházi Zoltán kérése: a saját fuvaron a „Kinek” mellé „Kitől” is (ki adja
+  az árut). Csak saját fuvarra.
+- Új oszlop: `fuvar_megbizasok.kitol` (012-es migráció), csak szöveg — nem köt
+  partnerhez, így nem ugorhat vissza, mint a „kinek” (MTS).
+- Űrlap (`sajat-fuvar-urlap.tsx`): „Kitől (nem kötelező)” a „Kinek” fölött, a
+  partnerlistát ajánlja. Lista és kereső-javaslat: „Kitől → Kinek”; a részleteknél
+  „Kitől:” sor; a kereső a kitől-cégre is talál (cégek közt is).
+- A sofőr appja nem mutatja.
+- Teszt: `scripts/teszt-munkaasztal.ts` 34/0; helyben böngészőben: mentés,
+  újratöltés, új fuvar kitől-lel, lista, kereső-javaslat.

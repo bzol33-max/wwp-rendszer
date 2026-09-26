@@ -90,6 +90,7 @@ export function SajatFuvarUrlap({
         </label>
         <label className={`${cimke} col-span-2`}>Honnan<input id="sf-honnan" list="sf-helyek" className={mezo} value={a.honnan} onChange={allit("honnan")} placeholder="telephely vagy cím" /></label>
         <label className={`${cimke} col-span-2`}>Hová<input id="sf-hova" list="sf-helyek" className={mezo} value={a.hova} onChange={allit("hova")} placeholder="cím" /></label>
+        <label className={`${cimke} col-span-2`}>Kitől (nem kötelező)<input id="sf-kitol" list="sf-partnerek" className={mezo} value={a.kitol ?? ""} onChange={allit("kitol")} placeholder="ki adja az árut" /></label>
         <label className={`${cimke} col-span-2`}>Kinek (nem kötelező)<input id="sf-kinek" list="sf-partnerek" className={mezo} value={a.kinek ?? ""} onChange={allit("kinek")} placeholder="pl. FABRIKA + 2000 Kft." /></label>
         <label className={`${cimke} col-span-2`}>Megjegyzés<textarea id="sf-megj" rows={2} className={mezo} value={a.megjegyzes ?? ""} onChange={allit("megjegyzes")} /></label>
       </div>
