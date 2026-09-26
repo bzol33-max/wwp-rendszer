@@ -33,11 +33,12 @@ function napNev(iso: string) {
   return d.toLocaleDateString("hu-HU", { timeZone: "Europe/Budapest", weekday: "long", month: "short", day: "numeric" });
 }
 
-export function SoforNapNezet({ nap, ma }: { nap: SoforNap | null; ma: boolean }) {
+export function SoforNapNezet({ nap, ma, cim }: { nap: SoforNap | null; ma: boolean; cim?: string }) {
+  const felirat = cim ?? (ma ? "Ma" : "Holnap");
   if (!nap) {
     return (
       <div className="flex flex-col gap-3">
-        <h1 className="text-xl font-bold">{ma ? "Ma" : "Holnap"}</h1>
+        <h1 className="text-xl font-bold">{felirat}</h1>
         <div className="rounded-xl bg-[var(--m-surf)] p-4 text-sm text-[var(--m-muted)]">Nincs kocsi a fiókodhoz rendelve.</div>
       </div>
     );
@@ -49,7 +50,7 @@ export function SoforNapNezet({ nap, ma }: { nap: SoforNap | null; ma: boolean }
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <h1 className="text-xl font-bold">{ma ? "Ma" : "Holnap"} · {napNev(nap.napISO)}</h1>
+        <h1 className="text-xl font-bold">{felirat} · {napNev(nap.napISO)}</h1>
         <div className="text-sm text-[var(--m-muted)]">
           {nap.jarmuLabel} · {nap.fuvarok.length} megbízás{ma && hatra > 0 ? ` · ${hatra} megálló hátra` : ""}
         </div>

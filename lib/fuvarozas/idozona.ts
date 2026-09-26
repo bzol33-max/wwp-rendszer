@@ -92,3 +92,16 @@ export function formatBudapestFaliora(instant: Date): string {
   }, {});
   return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`;
 }
+
+/**
+ * A következő munkanap (YYYY-MM-DD) egy naptári naphoz: a másnap, de a
+ * hétvégét átugorja — pénteken és szombaton a hétfő (a sofőr app „Holnap”
+ * füle, 2026-09-26: szombaton nem látták a hétfői fuvart). Ünnepnapot nem
+ * ismer.
+ */
+export function kovetkezoMunkanapISO(napISO: string): string {
+  const d = new Date(`${napISO}T12:00:00Z`);
+  do d.setUTCDate(d.getUTCDate() + 1);
+  while (d.getUTCDay() === 0 || d.getUTCDay() === 6);
+  return d.toISOString().slice(0, 10);
+}
