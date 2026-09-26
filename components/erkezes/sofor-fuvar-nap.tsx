@@ -53,7 +53,7 @@ import {
   type SoforMegalloSor,
   type SoforNap,
 } from "@/lib/fuvarozas/sofor";
-import { budapestNapISO } from "@/lib/fuvarozas/idozona";
+import { budapestNapISO, kovetkezoMunkanapISO } from "@/lib/fuvarozas/idozona";
 import { kontaktNev, kontaktTelefon } from "@/lib/fuvarozas/sofor-adatok";
 
 const IDO_OPCIOK: Intl.DateTimeFormatOptions = {
@@ -684,7 +684,10 @@ function MegbizasElonezet({ blokk, cimke }: { blokk: SoforFuvarBlokk; cimke: str
 
 export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
   const napISO = budapestNapISO();
-  const holnapISO = kovetkezoNapISO(napISO);
+  // A „holnap” a következő munkanap: pénteken és szombaton a hétfő, hogy a
+  // sofőr a hétvégén is lássa, mivel indul (2026-09-26, mint az /m/holnap).
+  const holnapISO = kovetkezoMunkanapISO(napISO);
+  const holnapCimke = holnapISO === kovetkezoNapISO(napISO) ? "Holnap" : "Hétfő";
   const [nap, setNap] = useState<SoforNap | null>(null);
   const [holnap, setHolnap] = useState<SoforNap | null>(null);
   // Melyik napra van betöltött adat — ebből SZÁMOLJUK a "betöltés" állapotot,
@@ -835,7 +838,7 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
   const holnapElso = (holnap?.fuvarok ?? []).find((b) => !maiIdk.has(b.fuvarId)) ?? null;
   const maiKovetkezo = aktivIndex >= 0 ? blokkok[aktivIndex + 1] ?? null : null;
   const kovetkezoBlokk = maiKovetkezo ?? holnapElso;
-  const kovetkezoCimke = maiKovetkezo ? "Ezután következik" : "Holnap";
+  const kovetkezoCimke = maiKovetkezo ? "Ezután következik" : holnapCimke;
 
   if (loading && !nap) {
     return <p className="text-sm text-[var(--mob-muted)]">Betöltés…</p>;
