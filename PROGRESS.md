@@ -2394,3 +2394,14 @@ pihenőn állva semmi nem mutatta, hogy az út nagyobb része megvolt.
   mind hibátlan. **Böngészőben nem futott le**: ezen a gépen nincs helyi
   Postgres (és Docker/brew sem), ál-modellel sem tudtam elindítani — a
   jóváhagyás→végrehajtás kört éles/staging adatbázison kell végigpróbálni.
+
+## 2026-09-26 — A régi sofőr-nézet (/erkezes) is a következő munkanapot mutatja
+
+- A #234 után Gergő továbbra sem látott semmit: a sofőrök nem az /m appot,
+  hanem a régi dolgozói oldalt (/erkezes → Fuvarok) használják, és annak
+  saját „Holnap” előnézete (`components/erkezes/sofor-fuvar-nap.tsx`) még a
+  naptári másnapot kérdezte.
+- Most ez is `kovetkezoMunkanapISO`: pénteken és szombaton a hétfő első
+  fuvarja jelenik meg „Hétfő” címkével a „Mára nincs fuvarod” alatt.
+- Teszt: helyben Gergőhöz kötött sofőrfiókkal, szombaton: „Mára nincs
+  fuvarod.” + „HÉTFŐ · … Biharkeresztes → Szentendre”.
