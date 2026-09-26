@@ -2298,3 +2298,26 @@ pihenőn állva semmi nem mutatta, hogy az út nagyobb része megvolt.
 - Ugyanebben a körben a régi, kiszámlázott és postázott #151 és #152 is
   újraolvasódott. A `levelSzovegPotlasa` mostantól csak számla nélküli, nem
   postázott, nem számlázott állapotú fuvarhoz nyúl.
+
+## 2026-09-26 — Beépített segéd a Megbízások oldalon (1. rész)
+
+- A jobb oldali kocsi-panel helyén (Budaházi Zoltán: „ez a rész nem kell”)
+  csevegő segéd, csak adminnak. Mobilon összecsukva indul.
+- **Eszközök** (`lib/fuvarozas2/seged/eszkozok.ts`, csak olvasnak, a meglévő
+  jogosultság-ellenőrzött függvényeket hívják): fuvarkeresés, fuvar részletei,
+  mai/holnapi fuvarok + teendők, heti terv (üres napok, 56 órás keret),
+  kalkuláció (HU-GO + önköltség + ajánlat-sávok), élő GPS, partner, levelek,
+  levél teljes szövege, párosítatlan számlák, tudás-javaslat.
+- **Tudás** (`lib/fuvarozas2/seged/szakmai-tudas.ts`): a cég (kocsik,
+  telephelyek a törzsből, a fordított bér/saját elnevezés, a fuvar útja,
+  költségek) és szakmai alapok (561/2006 vezetési-pihenőidő, hétvégi
+  korlátozás, sebesség, HU-GO, raklap/LDM/pótkocsi, CMR, ADR, tervezési
+  szempontok).
+- **Tanulás**: a modell `tudas_javaslat`-ot tesz, Zoltán „Megjegyzem”-mel
+  jóváhagyja (`seged_tudas`, 011-es migráció); a szabályok minden válasz előtt
+  a modell elé kerülnek, listázhatók, kézzel is felvehetők, törölhetők.
+  A beszélgetés felhasználónként megmarad (`seged_uzenet`).
+- Modell: OpenRouter, `OPENROUTER_SEGED_MODEL` (alap: google/gemini-2.5-flash).
+- Teszt: helyi ál-modellel (OPENROUTER_BASE_URL) böngészőben — eszközhívás,
+  válasz fuvarlinkkel, tanulás-jóváhagyás, megmaradás újratöltés után, új
+  beszélgetés, mobil nyit/csuk; mind a 11 eszköz lefut a helyi adatbázison.
