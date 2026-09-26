@@ -112,7 +112,15 @@ export default async function Page({ searchParams }: {
               />
             </>
           ) : (
-            seged ? <Seged kezdoUzenetek={seged.uzenetek} kezdoTudas={seged.tudas} teendok={seged.teendok} /> : null
+            seged ? (
+              <Seged
+                kezdoUzenetek={seged.uzenetek}
+                kezdoTudas={seged.tudas}
+                teendok={seged.teendok}
+                kezdoMuveletek={seged.varakozoMuveletek}
+                kezdoUtolsoMuveletek={seged.utolsoMuveletek}
+              />
+            ) : null
           )}
         </aside>
       </div>
