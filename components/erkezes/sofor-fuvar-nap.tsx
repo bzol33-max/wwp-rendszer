@@ -68,6 +68,18 @@ function formatIdo(d: Date): string {
 
 const TIPUS_CIMKE = { felrako: "Felrakó", lerako: "Lerakó" } as const;
 
+/** Helyszíni kontakt az előnézetben: ha van benne szám, hívható (06-tal, lásd kontaktTelefon). */
+function KontaktSor({ kontakt }: { kontakt: string }) {
+  const telefon = kontaktTelefon(kontakt);
+  if (!telefon) return <span className="text-xs">{kontakt}</span>;
+  return (
+    <a href={`tel:${telefon}`} className="flex w-fit items-center gap-1 text-sm font-semibold text-[var(--mob-positive)]">
+      <Phone className="h-3.5 w-3.5 shrink-0" />
+      {[kontaktNev(kontakt), telefon].filter(Boolean).join(" · ")}
+    </a>
+  );
+}
+
 /** A megadott nap utáni nap ISO-ban, naptári léptetéssel (hónap-/évfordulón is jó). */
 function kovetkezoNapISO(napISO: string): string {
   const [ev, ho, nap] = napISO.split("-").map(Number);
@@ -651,7 +663,7 @@ function MegbizasElonezet({ blokk, cimke }: { blokk: SoforFuvarBlokk; cimke: str
               {m.ceg && <span className="text-sm font-semibold">{m.ceg}</span>}
               <span className="text-xs text-[var(--mob-muted)]">{m.cim}</span>
               {m.rakomany && <span className="text-xs font-semibold">{m.tipus === "felrako" ? "Fel: " : "Le: "}{m.rakomany}</span>}
-              {m.kontakt && <span className="text-xs">{m.kontakt}</span>}
+              {m.kontakt && <KontaktSor kontakt={m.kontakt} />}
             </div>
           ))}
 

@@ -113,6 +113,13 @@ eq("tagolt szám", kontaktTelefon("Kiss Péter, +36 20 594 22 96"), "+3620594229
 eq("tagolt szám: név", kontaktNev("Kiss Péter, +36 20 594 22 96"), "Kiss Péter");
 eq("szám nélkül nincs telefon", kontaktTelefon("Baán József"), null);
 eq("üres kontakt", kontaktTelefon(null), null);
+// Előhívó nélküli belföldi szám (EUCARGO-levél, 2026-09-27): 06 elé.
+eq("mobil 06 nélkül", kontaktTelefon("Kovács Anna 30 123 4567"), "06301234567");
+eq("mobil perjellel", kontaktTelefon("20/594-2296"), "06205942296");
+eq("budapesti 06 nélkül", kontaktTelefon("iroda: 1 234 5678"), "0612345678");
+eq("vidéki 06 nélkül", kontaktTelefon("42 123 456"), "0642123456");
+eq("36-tal, + nélkül", kontaktTelefon("36 30 123 4567"), "+36301234567");
+eq("06-os marad", kontaktTelefon("06 30 123 4567"), "06301234567");
 
 // --- EUCARGO (2026-09-25): 4 felrakó + 10 lerakó a kísérő levélből, megállónkénti rakománnyal
 {
