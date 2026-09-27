@@ -2406,6 +2406,20 @@ pihenőn állva semmi nem mutatta, hogy az út nagyobb része megvolt.
 - Teszt: helyben Gergőhöz kötött sofőrfiókkal, szombaton: „Mára nincs
   fuvarod.” + „HÉTFŐ · … Biharkeresztes → Szentendre”.
 
+## 2026-09-27 — Sofőr: a megállók telefonszáma hívható, 06-tal
+
+- Micó holnapi, sok fel- és lerakós fuvarján a levélből jött számok 06
+  nélkül álltak („30 123 4567”), és az előnézetben csak szövegként — a
+  telefon nem tudta hívni őket.
+- `kontaktTelefon` (`lib/fuvarozas/sofor-adatok.ts`): előhívó nélküli
+  belföldi szám (8–9 jegy, nem 0-val kezdődik) elé 06 kerül; a 36-tal kezdődő
+  11 jegyű +36 lesz; a 06-os és +36-os marad.
+- A régi sofőr-nézet (`/erkezes` → Fuvarok) következő/holnapi előnézetében a
+  megállók kontaktja is hívható link lett („név · 06…”), nem csak az aktuális
+  megállóé.
+- Teszt: `scripts/teszt-sofor-adatok.mts` 43/0 (6 új eset); helyben
+  sofőrfiókkal a holnapi előnézetben mindkét kontakt `tel:06…` link.
+
 ## 2026-09-26 — A segéd okosítása (a 2. rész után, éles próba alapján)
 
 Budaházi Zoltán kipróbálta a cselekvő segédet („nagyon buta”). A prod

@@ -159,7 +159,13 @@ export function kontaktTelefon(kontakt: string | null | undefined): string | nul
   const m = kontakt?.match(/\+?\d[\d\s/().-]{6,}\d/);
   if (!m) return null;
   const szam = m[0].replace(/[^\d+]/g, "");
-  return szam.length >= 8 ? szam : null;
+  if (szam.length < 8) return null;
+  // Belföldi szám előhívó nélkül („30 123 4567”, „1 234 5678”, „42 123 456”
+  // — a levelekben gyakori): a telefon csak 06-tal tudja hívni (Micó
+  // EUCARGO-fuvarja, 2026-09-27). 36-tal kezdődő 11 jegyűből +36 lesz.
+  if (/^36\d{8,9}$/.test(szam)) return `+${szam}`;
+  if (/^[1-9]\d{7,8}$/.test(szam)) return `06${szam}`;
+  return szam;
 }
 
 /** A kontakt szövegből a név — a telefonszám nélkül. */
