@@ -1,18 +1,10 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { LEPESEK, lepesAllapotbol, type Allapot, type Lepes } from "@/lib/fuvarozas/allapot";
+import { ALLAPOT_CIMKE, LEPESEK, lepesAllapotbol, type Allapot, type Lepes } from "@/lib/fuvarozas/allapot";
 
-export const ALLAPOT_CIMKE: Record<Allapot, string> = {
-  ellenorzesre_var: "Ellenőrzésre vár",
-  tervezett: "Tervezett",
-  folyamatban: "Folyamatban",
-  teljesitve: "Teljesítve · fotóra vár",
-  szamlazhato: "Számlázható",
-  szamlazva: "Számlázva",
-  email_elment: "E-mail elment",
-  postazva: "Postázva",
-  lezart: "Lezárt",
-};
+// A címkék az állapotgép mellett élnek (a szerveroldal is onnan veszi);
+// innen csak továbbadjuk, hogy a meglévő importok ne változzanak.
+export { ALLAPOT_CIMKE };
 
 // A terv jelzőszínei: menta = rendben/pénz, borostyán = figyelem, vörös =
 // gond, kék = információ/terv, sötét = lezárt.

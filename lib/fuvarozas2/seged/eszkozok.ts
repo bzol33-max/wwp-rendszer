@@ -15,6 +15,8 @@ import { getPartnerek } from "@/lib/fuvarozas2/partnerek";
 import { getLevelek } from "@/lib/fuvarozas2/levelek";
 import { getParositatlanFuvarszamlak } from "@/lib/fuvarozas/megbizasok";
 import { SZAKASZOK, type Szakasz } from "@/lib/fuvarozas2/munkaasztal";
+import { ALLAPOT_CIMKE } from "@/lib/fuvarozas/allapot";
+import { findJarmuInSzoveg } from "@/lib/fuvarozas/vehicles";
 
 /** OpenAI-kompatibilis eszköz-leírás (OpenRouter `tools`). */
 export type EszkozLeiras = {
@@ -136,6 +138,21 @@ export const ESZKOZOK: EszkozLeiras[] = [
 
 const MAX_EREDMENY = 14000;
 
+/**
+ * A sofőr mező néha nem sofőr: a beolvasás egyes iratokból a rendszámot írja
+ * bele (#281: „N M Z - 4 9 2 , X Z V - 9 2 6”). Ilyenkor a modell nevet
+ * költött rá („Micó viszi”), ezért a nyers szöveget megjelöljük.
+ */
+function soforErteke(s: MegbizasSor): { sofor: string | null; sofor_megjegyzes?: string } {
+  if (!s.sofor?.trim()) return { sofor: null };
+  const rendszamos = /\d/.test(s.sofor) && findJarmuInSzoveg(s.sofor) !== null;
+  if (!rendszamos) return { sofor: s.sofor };
+  return {
+    sofor: null,
+    sofor_megjegyzes: `az iratban a sofőr helyén rendszám áll („${s.sofor.slice(0, 60)}”) — ez NEM sofőrnév, ne találj ki hozzá nevet`,
+  };
+}
+
 function roviden(s: MegbizasSor & { szakasz?: Szakasz }) {
   return {
     id: s.id,
@@ -146,10 +163,16 @@ function roviden(s: MegbizasSor & { szakasz?: Szakasz }) {
     hova: s.lerako?.slice(0, 120) ?? null,
     felrakas: s.felrakas_nap,
     lerakas: s.lerakas_nap,
-    allapot: s.allapot,
-    szakasz: s.szakasz,
-    kocsi: s.jarmu_kod ?? (s.elokeszites ? `előkészítés: ${s.elokeszites_jarmu ?? "—"}` : null),
-    sofor: s.sofor,
+    // Az állapot a fuvar valódi állása; a lista_ful csak az, hogy melyik fülön
+    // LÁTSZIK (egy fülre több állapot esik) — a kettő NEM ugyanaz.
+    allapot: `${ALLAPOT_CIMKE[s.allapot]} (${s.allapot})`,
+    lista_ful: s.szakasz ? SZAKASZOK.find((x) => x.kulcs === s.szakasz)?.cimke ?? s.szakasz : undefined,
+    kocsi:
+      s.jarmu_kod ??
+      (s.elokeszites
+        ? `előkészítés alatt, kocsi: ${s.elokeszites_jarmu ?? "még nincs"}`
+        : "NINCS kocsi hozzárendelve (a fuvar kocsi nélkül áll)"),
+    ...soforErteke(s),
     dij: s.fuvardij != null ? `${s.fuvardij} ${s.fuvardij_penznem ?? ""}`.trim() : null,
     szamla: s.szamla_szam,
     kieg_szamla: s.kieg_szamla_szamok?.length ? s.kieg_szamla_szamok : undefined,

@@ -21,6 +21,25 @@ export const ALLAPOTOK = [
 ] as const;
 export type Allapot = (typeof ALLAPOTOK)[number];
 
+/**
+ * A felületen megjelenő magyar címkék. Itt (a tiszta modulban) van, nem a
+ * kliens-komponensben, mert a szerveroldal is ezt használja: a segéd az
+ * összefoglalóiban és az eszköz-válaszaiban pontosan azt a szót adja, amit
+ * Zoltán a képernyőn lát (2026-09-26 — a segéd az `allapot` és a lista-fül
+ * összekeverésével ellentmondott magának).
+ */
+export const ALLAPOT_CIMKE: Record<Allapot, string> = {
+  ellenorzesre_var: "Ellenőrzésre vár",
+  tervezett: "Tervezett",
+  folyamatban: "Folyamatban",
+  teljesitve: "Teljesítve · fotóra vár",
+  szamlazhato: "Számlázható",
+  szamlazva: "Számlázva",
+  email_elment: "E-mail elment",
+  postazva: "Postázva",
+  lezart: "Lezárt",
+};
+
 /** Ki/mi váltja ki az átmenetet — a naplóba (`megbizas_esemeny.forras`) is ez kerül. */
 export type AtmenetForras = "rendszer" | "ember" | "gps" | "sofor" | "migracio";
 

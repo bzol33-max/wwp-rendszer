@@ -258,6 +258,7 @@ async function main() {
   await torolDokumentumNelkuliDuplikatumokatOnce(pool);
   await rendezFuvarHelyeketOnce(pool);
   await vonjaVisszaSzamlatlanArchivalastOnce(pool);
+  await potoldSzetszortRendszamKocsitOnce(pool);
   await toltsdBeNyiregyhazaArchivumotOnce(pool);
   await javitsaSajatCegMegrendelotSzamlabol(pool);
   await javitsaMaradekSajatCegMegrendelotOnce(pool);
@@ -410,6 +411,49 @@ async function vonjaVisszaSzamlatlanArchivalastOnce(pool) {
   console.log(
     `[migrate] számlázatlan, script-archivált bér fuvar visszatéve a Számla/Postára: ${rows.length} sor` +
       (rows.length ? ": " + rows.map((r) => `#${r.id} ${r.nap} ${r.megrendelo ?? "-"}`).join("; ") : ".")
+  );
+}
+
+
+// Egyszeri javítás (2026-09-26): néhány iratból a rendszám KARAKTERENKÉNT,
+// szóközökkel olvasódott ki, és a sofőr mezőbe került ("N M Z - 4 9 2 , X Z V
+// - 9 2 6", EUCARGO #281). A kocsi-felismerés (findJarmuInSzoveg) így nem
+// talált rá, a fuvar "kocsi nélkül" állt a munkaasztalon. A felismerés mostantól
+// összehúzza a szóközöket; ez a lépés a MÁR felvett sorokat pótolja.
+//
+// Szűken fogalmaz: csak akkor ír, ha a jarmu üres, a sofőr mezőben egy SAJÁT
+// rendszám áll szétszórva, és a szöveg egyetlen kocsira mutat. A sofőr mezőt
+// nem törli (az irat tartalma marad, ahogy jött), csak a Kocsit tölti ki.
+// Rendszám-minta szóközöket megengedve, pontos betű- és számsorrenddel —
+// szűkebb, mint egy LIKE: csak ez a rendszám illeszkedik rá, más szám nem.
+const SZETSZORT_KOCSIK = [
+  { minta: "N *M *Z *-? *4 *9 *2", cimke: "Micó — NMZ-492/XZV-926" },
+  { minta: "X *Z *V *-? *9 *2 *6", cimke: "Micó — NMZ-492/XZV-926" },
+  { minta: "A *O *P *U *-? *4 *2 *7", cimke: "Gergő — AOPU-427/AOTY-474" },
+  { minta: "A *O *T *Y *-? *4 *7 *4", cimke: "Gergő — AOPU-427/AOTY-474" },
+];
+
+async function potoldSzetszortRendszamKocsitOnce(pool) {
+  const JAVITAS_KOD = "szetszort-rendszam-kocsi-2026-09-26";
+  const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (mar.length > 0) return;
+
+  const javitott = [];
+  for (const k of SZETSZORT_KOCSIK) {
+    const { rows } = await pool.query(
+      `update fuvar_megbizasok set jarmu = $2, jarmu_id = null
+       where coalesce(jarmu, '') = ''
+         and not elokeszites
+         and statusz <> 'torolt'
+         and sofor ~* $1
+       returning id, megrendelo`,
+      [k.minta, k.cimke]
+    );
+    for (const r of rows) javitott.push(`#${r.id} ${r.megrendelo ?? "-"} → ${k.cimke}`);
+  }
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1) on conflict (kod) do nothing`, [JAVITAS_KOD]);
+  console.log(
+    `[migrate] szétszórt rendszámból pótolt kocsi: ${javitott.length} fuvar` + (javitott.length ? ": " + javitott.join("; ") : ".")
   );
 }
 
