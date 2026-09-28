@@ -2524,3 +2524,26 @@ kérdésekkel kell megnézni.
   2400×1800-as → JPEG-re kicsinyítve), a kártya végig kint, „Kész” után
   eltűnik; a PDF 3 oldal (842×595, 595×842, 842×595). /m: 2 kép a
   fotótárból, 3 → 5 oldal.
+
+## 2026-09-28 — Ma oldal: a kocsi-oszlop „tükörben”, a GPS-állások a helyükön
+
+- Budaházi Zoltán: a lap tetején lévő „nem tervezett állás” sáv „nem jó így”,
+  épüljön be a helyére, és kocsinként legyenek átláthatóbbak a megbízások.
+  20 tervből a 18-ast (Tükör) választotta.
+- Kocsi-oszlop „Ma” része (`components/fuvarozas2/ma-vaszon.tsx` `Tukor`):
+  középen a lépcső (pont + vonal), balra a TERV (város, fel/le, ablak, más
+  napra a nap neve), jobbra a TÉNY (GPS/sofőr idő ✓, „ott … óta”, ETA) és az
+  eltérés-címke („ablakban”, „+18 p”, „késik …”, „+35 p várható”). A mostani
+  / következő megállónál cég és hívható kontakt.
+- A GPS nem tervezett állása kikerült a felső eltérés-sávból, a kocsi
+  oszlopába került (`lib/fuvarozas2/ma-tukor.ts` `tukorSorok`, tiszta
+  függvény): ha egy GPS-érkezés nélküli megálló városában volt (a cím nincs
+  pontosan meg — Micó: Polgár, Pap tanya; Gergő: Budapest, Sörgyár u.), a
+  megállónál jelenik meg „Ez a hely” gombbal; egyébként külön borostyán sor,
+  időrendben a helyén, bal (terv) oldal nélkül.
+- „Ez a hely” (`rogzitAllasMegalloHelyekent`): a GPS-állás koordinátáját a
+  megálló címéhez írja (`fuvar_helyszin_koordinata`, forrás „diszpecser”) —
+  ugyanaz a szótár, amit a sofőr „Rossz a cím? Itt vagyok” gombja ír —, így a
+  GPS legközelebb felismeri, és nem jelez hamis állást.
+- Teszt: `scripts/teszt-ma-tukor.ts` 10/0 (a 09-28-i Gergő- és Micó-nap,
+  köztes állás, két állás ugyanoda); helyben böngészőben a tükör-oszlop.
