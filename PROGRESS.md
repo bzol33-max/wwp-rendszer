@@ -2482,3 +2482,22 @@ kérdésekkel kell megnézni.
 - Teszt: helyben böngészőben asztalon és telefonon, próbaadatokkal (Gergő
   2 megálló, Micó 8 megállós túra várakozással, holnapi és kocsi nélküli
   fuvar). A GPS-fejléc és a heti óra helyben nem próbálható (nincs Ecofleet-kulcs).
+
+## 2026-09-28 — Sofőr fuvarlevél-fotó: az adatbázisba, nem a Drive-ra
+
+- A sofőrök nem tudtak fotót küldeni a papírokról; a telefonon „Minified
+  React error #441” jelent meg (a szerver-akció hibájának éles, rejtett
+  alakja). A szervernaplóban minden próbálkozás (09-24 óta, a napló eleje)
+  ugyanazzal bukott: Google Drive 403 „Service Accounts do not have storage
+  quota”. A service account nem tud saját fájlt létrehozni egy magán-Drive
+  mappában, megosztott meghajtó pedig csak Workspace-szel van — a
+  fotófeltöltés soha nem működött.
+- Most a fotó a `fuvar_dokumentumok`-ba kerül (`tarolas = 'db'`, új
+  `tartalom bytea` + `mime_type`, 014-es migráció); a `dokumentum_url` a
+  saját kiszolgálónkra mutat. A `/api/fuvarozas/dokumentum/[dokId]` a 'db'
+  tárolásút az adatbázisból adja ki, a többit továbbra is a Drive-ról.
+- A halott Drive-feltöltő (`feltoltFuvarlevelFotot`) törölve.
+- Teszt: helyben sofőrfiókkal a /erkezes → Fuvarok „Fuvarlevél fotó”
+  gombjával feltöltve: a sor létrejött (db, image/png, 9,9 KB, Vadon Gergő),
+  a letöltő-cím 200-zal adja vissza, a fuvar „számlázható” lett (003
+  trigger).

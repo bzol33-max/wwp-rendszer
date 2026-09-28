@@ -29,13 +29,27 @@ export async function GET(
     return NextResponse.json({ hiba: "Érvénytelen dokumentum-azonosító." }, { status: 400 });
   }
 
-  const sorok = await query<{ drive_file_id: string; fajlnev: string | null }>(
-    `select drive_file_id, fajlnev from fuvar_dokumentumok where id = $1`,
+  const sorok = await query<{ drive_file_id: string | null; fajlnev: string | null; tarolas: string; tartalom: Buffer | null; mime_type: string | null }>(
+    `select drive_file_id, fajlnev, tarolas, tartalom, mime_type from fuvar_dokumentumok where id = $1`,
     [dokId]
   );
   const dok = sorok[0];
   if (!dok) {
     return NextResponse.json({ hiba: "Nincs ilyen dokumentum." }, { status: 404 });
+  }
+
+  // A sofőr fuvarlevél-fotója az adatbázisban van (014-es migráció).
+  if (dok.tarolas === "db" && dok.tartalom) {
+    return new NextResponse(new Uint8Array(dok.tartalom), {
+      headers: {
+        "Content-Type": dok.mime_type ?? "image/jpeg",
+        "Content-Disposition": `inline; filename="${(dok.fajlnev ?? `dokumentum-${dokId}.jpg`).replace(/"/g, "")}"`,
+        "Cache-Control": "private, max-age=300",
+      },
+    });
+  }
+  if (!dok.drive_file_id) {
+    return NextResponse.json({ hiba: "A dokumentumnak nincs tartalma." }, { status: 404 });
   }
 
   try {

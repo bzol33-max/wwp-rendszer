@@ -95,8 +95,8 @@ function driveClient() {
   const credentials = JSON.parse(raw);
   const auth = new google.auth.GoogleAuth({
     credentials,
-    // Teljes Drive-jog (2026-09-17): a sofőr mobil fuvarlevél-fotói ide
-    // töltődnek fel (feltoltFuvarlevelFotot). A "drive.file" nem lenne elég,
+    // Teljes Drive-jog (2026-09-17): az e-mailből jött megbízás-iratok ide
+    // töltődnek fel (feltoltMegbizasIratot). A "drive.file" nem lenne elég,
     // mert az csak az app által létrehozott fájlokat látná, a megbízás-PDF-eket
     // nem. A service account a Fuvarmegbizások mappán Szerkesztő.
     scopes: ["https://www.googleapis.com/auth/drive"],
@@ -155,17 +155,6 @@ export async function letoltDriveFajl(fileId: string): Promise<{ buffer: Buffer;
   };
 }
 
-/** A fuvarlevél-fotók almappája a Fuvarmegbizások mappán belül. */
-const FUVARLEVEL_MAPPA_NEV = "Fuvarlevelek";
-
-/**
- * A sofőr által lefotózott fuvarlevél/CMR feltöltése a Drive-ba, a
- * Fuvarmegbizások mappa "Fuvarlevelek" almappájába (ha nincs, létrejön).
- *
- * Miért almappa: a drive-sync a Fuvarmegbizások mappa KÖZVETLEN fájljait
- * olvassa megbízásként. Egy kép mime-típusa ugyan kiesne a szűrőn, de az
- * almappa a biztos: a fotók sosem keverednek a megbízás-iratok közé.
- */
 /**
  * Egy e-mailből érkezett megbízás-irat feltöltése a FIGYELT mappába — onnan
  * a szokásos drive-sync veszi fel (nincs külön import-út). A Gmail-figyelő
@@ -180,37 +169,6 @@ export async function feltoltMegbizasIratot(
   const { Readable } = await import("node:stream");
   const res = await drive.files.create({
     requestBody: { name: nev, parents: [DRIVE_FOLDER_ID], mimeType },
-    media: { mimeType, body: Readable.from(tartalom) },
-    fields: "id, webViewLink",
-  });
-  if (!res.data.id) throw new Error("A Drive nem adott vissza fájl-azonosítót.");
-  return { id: res.data.id, url: res.data.webViewLink ?? `https://drive.google.com/file/d/${res.data.id}/view` };
-}
-
-export async function feltoltFuvarlevelFotot(
-  nev: string,
-  mimeType: string,
-  tartalom: Buffer
-): Promise<{ id: string; url: string }> {
-  const drive = driveClient();
-  const lista = await drive.files.list({
-    q: `'${DRIVE_FOLDER_ID}' in parents and mimeType = 'application/vnd.google-apps.folder' and name = '${FUVARLEVEL_MAPPA_NEV}' and trashed = false`,
-    fields: "files(id)",
-    pageSize: 1,
-  });
-  let mappaId = lista.data.files?.[0]?.id ?? null;
-  if (!mappaId) {
-    const uj = await drive.files.create({
-      requestBody: { name: FUVARLEVEL_MAPPA_NEV, mimeType: "application/vnd.google-apps.folder", parents: [DRIVE_FOLDER_ID] },
-      fields: "id",
-    });
-    mappaId = uj.data.id ?? null;
-  }
-  if (!mappaId) throw new Error("Nem sikerült a Fuvarlevelek mappát létrehozni a Drive-on.");
-
-  const { Readable } = await import("node:stream");
-  const res = await drive.files.create({
-    requestBody: { name: nev, parents: [mappaId], mimeType },
     media: { mimeType, body: Readable.from(tartalom) },
     fields: "id, webViewLink",
   });
