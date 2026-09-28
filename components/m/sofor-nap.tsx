@@ -13,7 +13,8 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { SoforNap, SoforMegalloSor, SoforFuvarBlokk } from "@/lib/fuvarozas/sofor";
-import { jelolMegerkeztem, markMegalloKesz, jelolVarakozast, jelezGondot, rogzitPozicioszamot, feltoltFuvarlevelFoto } from "@/lib/fuvarozas/sofor";
+import { jelolMegerkeztem, markMegalloKesz, jelolVarakozast, jelezGondot, rogzitPozicioszamot } from "@/lib/fuvarozas/sofor";
+import { feltoltOldalakat, feltoltesUzenet } from "@/lib/fuvarozas/fuvarlevel-feltoltes";
 
 async function ujraprobal<T>(fn: () => Promise<T>): Promise<T> {
   let hiba: unknown;
@@ -118,12 +119,29 @@ function FuvarKartya({ f, ma }: { f: SoforFuvarBlokk; ma: boolean }) {
   const [gondSzoveg, setGondSzoveg] = useState("");
   const [poz, setPoz] = useState("");
   const fotoRef = useRef<HTMLInputElement>(null);
+  const tarRef = useRef<HTMLInputElement>(null);
+  const [haladas, setHaladas] = useState<string | null>(null);
+  // Többoldalas papír (2026-09-28): minden oldal külön fotó; a „Megbízás PDF” a megbízás irata, nem a fotó.
+  const oldalak = f.dokumentumok.filter((d) => d.tipus === "fuvarlevel").length;
+  const megbizasIrat = f.dokumentumok.find((d) => d.tipus === "megbizas") ?? f.dokumentumok.find((d) => d.tipus !== "fuvarlevel") ?? null;
   const kesz = f.megallok.every((m) => m.kesz);
   const utolsoLerakoKesz = f.megallok.filter((m) => m.tipus === "lerako").every((m) => m.kesz) && f.megallok.some((m) => m.tipus === "lerako");
   const fut = (nev: string, fn: () => Promise<unknown>) =>
     start(async () => {
       try { await ujraprobal(fn); toast.success(nev); router.refresh(); } catch (e) { toast.error(e instanceof Error ? e.message : "Nem sikerült — próbáld újra."); }
     });
+  const fotok = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fajlok = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (!fajlok.length) return;
+    start(async () => {
+      const eredmeny = await feltoltOldalakat(f.fuvarId, fajlok, (k, n) => setHaladas(n > 1 ? `${Math.min(k + 1, n)}/${n}` : null));
+      setHaladas(null);
+      const u = feltoltesUzenet(eredmeny);
+      if (u.ok) toast.success(u.szoveg); else toast.error(u.szoveg);
+      router.refresh();
+    });
+  };
   const elso = f.megallok[0];
   const utolso = f.megallok[f.megallok.length - 1];
   return (
@@ -157,15 +175,13 @@ function FuvarKartya({ f, ma }: { f: SoforFuvarBlokk; ma: boolean }) {
         <>
           {utolsoLerakoKesz ? (
             <div className="flex flex-col gap-2 rounded-xl border border-[var(--m-mint)] p-3">
-              <div className="text-sm font-bold">Fuvarlevél / CMR fotó</div>
-              <div className="text-xs text-[var(--m-muted)]">A fotó a diszpécsernek szól — ettől lesz számlázható. Az eredeti papírt hozd haza.</div>
-              <input ref={fotoRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => {
-                const fajl = e.target.files?.[0]; if (!fajl) return;
-                const form = new FormData(); form.append("foto", fajl);
-                fut("Fotó feltöltve", () => feltoltFuvarlevelFoto(f.fuvarId, form));
-                e.target.value = "";
-              }} />
-              <Gomb primary disabled={pending} onClick={() => fotoRef.current?.click()}>{pending ? "küldés…" : "Fotó készítése"}</Gomb>
+              <div className="text-sm font-bold">Fuvarlevél / CMR fotó{oldalak > 0 ? ` · ✓ ${oldalak} oldal feltöltve` : ""}</div>
+              <div className="text-xs text-[var(--m-muted)]">Minden oldalt külön fotózz le. A fotó a diszpécsernek szól — ettől lesz számlázható. Az eredeti papírt hozd haza.</div>
+              <input ref={fotoRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={fotok} />
+              <input ref={tarRef} type="file" accept="image/*" multiple className="hidden" onChange={fotok} />
+              {haladas ? <div className="text-sm font-semibold">Feltöltés {haladas}…</div> : null}
+              <Gomb primary disabled={pending} onClick={() => fotoRef.current?.click()}>{pending ? "küldés…" : oldalak > 0 ? "+ Még egy oldal" : "Fotó készítése"}</Gomb>
+              <Gomb disabled={pending} onClick={() => tarRef.current?.click()}>Több kép a fotótárból</Gomb>
             </div>
           ) : null}
           {!f.pozicioszam && !f.reiseId ? (
@@ -184,13 +200,13 @@ function FuvarKartya({ f, ma }: { f: SoforFuvarBlokk; ma: boolean }) {
             </div>
           ) : (
             <div className="flex gap-2">
-              {f.dokumentumok.length > 0 ? <Gomb onClick={() => window.open(`/api/fuvarozas/dokumentum/${f.dokumentumok[0].id}`, "_blank")}>Megbízás PDF</Gomb> : null}
+              {megbizasIrat ? <Gomb onClick={() => window.open(`/api/fuvarozas/dokumentum/${megbizasIrat.id}`, "_blank")}>Megbízás PDF</Gomb> : null}
               <Gomb danger onClick={() => setGond(true)}>Gond van</Gomb>
             </div>
           )}
         </>
-      ) : f.dokumentumok.length > 0 ? (
-        <div className="flex gap-2"><Gomb onClick={() => window.open(`/api/fuvarozas/dokumentum/${f.dokumentumok[0].id}`, "_blank")}>Megbízás PDF</Gomb></div>
+      ) : megbizasIrat ? (
+        <div className="flex gap-2"><Gomb onClick={() => window.open(`/api/fuvarozas/dokumentum/${megbizasIrat.id}`, "_blank")}>Megbízás PDF</Gomb></div>
       ) : null}
     </div>
   );

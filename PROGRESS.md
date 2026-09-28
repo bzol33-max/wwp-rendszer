@@ -2501,3 +2501,26 @@ kérdésekkel kell megnézni.
   gombjával feltöltve: a sor létrejött (db, image/png, 9,9 KB, Vadon Gergő),
   a letöltő-cím 200-zal adja vissza, a fuvar „számlázható” lett (003
   trigger).
+
+## 2026-09-28 — Többoldalas fuvarlevél-fotó + PDF
+
+- Budaházi Zoltán: „az okmányok több oldalasak, akár 10 vagy több … kell pdf”.
+  Eddig az első fotó után a „Fotózd le” kártya eltűnt, több oldalt nem lehetett
+  hozzáadni.
+- Sofőr (régi dolgozói nézet `/erkezes` és az `/m` app): a kártya az első
+  kép után is kint marad („✓ N oldal feltöltve”), gombok: „+ Még egy oldal”
+  (kamera), „Több kép a fotótárból” (több kép egyszerre), „Kész, ez minden”
+  (eltünteti; saját fuvarnál fotó nélkül „Nem kaptam”). Az oldalak egyenként,
+  kicsinyítve mennek fel („Feltöltés 3/10…”); egy elakadt oldal nem viszi a
+  többit. Közös segéd: `lib/fuvarozas/fuvarlevel-feltoltes.ts`.
+- Az /m appban a „Megbízás PDF” gomb a megbízás iratát nyitja, nem az első
+  dokumentumot (ami már fotó is lehet).
+- Iroda: `/api/fuvarozas/fuvarlevel-pdf/[fuvarId]` — a fuvar összes
+  fuvarlevél-oldala egy PDF-ben, feltöltési sorrendben, A4 (fekvő képhez
+  fekvő lap), mindig a pillanatnyi oldalakból (`pdf-lib`). A Megbízások
+  részleteinél „Fuvarlevél PDF (N oldal)” gomb, az oldalak „Fuvarlevél
+  1/N…” sorszámmal; a régi Fuvarozás „fotó (N)” linkje több oldalnál a PDF.
+- Teszt: helyben sofőrfiókkal /erkezes: 1 kamera + 2 fotótár-kép (egy
+  2400×1800-as → JPEG-re kicsinyítve), a kártya végig kint, „Kész” után
+  eltűnik; a PDF 3 oldal (842×595, 595×842, 842×595). /m: 2 kép a
+  fotótárból, 3 → 5 oldal.

@@ -2163,7 +2163,7 @@ function SzamlaPostaLista({ refreshKey }: { refreshKey: number }) {
                   <TableCell className="align-top text-center">
                     {row.fuvarlevel_foto_db > 0 && row.fuvarlevel_foto_id ? (
                       <a
-                        href={`/api/fuvarozas/dokumentum/${row.fuvarlevel_foto_id}`}
+                        href={row.fuvarlevel_foto_db > 1 ? `/api/fuvarozas/fuvarlevel-pdf/${row.id}` : `/api/fuvarozas/dokumentum/${row.fuvarlevel_foto_id}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         title="A sofőr lefotózta a fuvarlevelet a lerakásnál"
