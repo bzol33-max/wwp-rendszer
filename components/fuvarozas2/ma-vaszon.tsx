@@ -1,9 +1,12 @@
 import Link from "next/link";
-import type { MaVaszon, Elteres, MaKocsi, MaBlokk, CsempeSzin, MaKocsiAllapot } from "@/lib/fuvarozas2/ma-vaszon";
+import type { MaVaszon, Elteres, MaKocsi, MaBlokk, CsempeSzin, MaKocsiAllapot, TukorSor, TukorAllas } from "@/lib/fuvarozas2/ma-vaszon";
+import { AllasRogzitesGomb } from "@/components/fuvarozas2/allas-rogzites";
 
 // A „Ma" képernyő (Budaházi Zoltán, 2026-09-28): négy kocsi-oszlop egymás
 // mellett, mindegyik ugyanabban a sorrendben — fejléc (hol van most),
-// vezetési idő, Most, Ma hátra, a következő munkanap, papír/számla. Fölötte
+// vezetési idő, a mai megállók „tükörben” (18-as terv: balra a terv, középen
+// a lépcső, jobbra a tény; a nem tervezett GPS-állás a helyén), a következő
+// munkanap, papír/számla. Fölötte
 // csak akkor sáv, ha van eltérés; alatta a kocsi nélküli fuvarok és az iroda
 // számai. Szerver-komponens; a kocsi-oszlop <details>, telefonon
 // összecsukható.
@@ -83,6 +86,96 @@ function BlokkSorok({ b, osszecsuk }: { b: MaBlokk; osszecsuk: boolean }) {
   );
 }
 
+const TUKOR_RACS = "grid grid-cols-[minmax(0,1fr)_16px_minmax(0,1.15fr)] gap-x-2";
+
+function AllasDoboz({ a, varos }: { a: TukorAllas; varos: string | null }) {
+  return (
+    <div className="mt-1 rounded-lg bg-[var(--f2-amb-l)] px-2 py-1 text-[11px] leading-snug text-[#6b430a]">
+      <b>{a.folyamatban ? `áll ${a.tol} óta` : `állt ${a.percek} p`}</b>
+      {a.folyamatban ? ` (${a.percek} p)` : ` · ${a.tol}–${a.ig}`}
+      {a.cim ? <div className="truncate">GPS: {a.cim}</div> : null}
+      {varos ? (
+        <div>
+          a cím nincs rögzítve
+          {a.rogzites ? <> · <AllasRogzitesGomb {...a.rogzites} varos={varos} /></> : null}
+        </div>
+      ) : (
+        <div>nem tervezett állás</div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * A mai megállók tükörben: bal a terv (hely, ablak), közép a lépcső, jobb a
+ * tény. A nem tervezett állásnak nincs bal oldala — ettől szembeötlő.
+ */
+function Tukor({ sorok }: { sorok: TukorSor[] }) {
+  const utolsoMegallo = sorok.reduce((u, r, i) => (r.tipus !== "fuvar" ? i : u), -1);
+  return (
+    <div className="flex flex-col">
+      <div className={`${TUKOR_RACS} pb-1 text-[10px] font-bold tracking-wide text-muted-foreground`}>
+        <span className="text-right">TERV</span><span /><span>TÉNY</span>
+      </div>
+      {sorok.map((r, i) => {
+        if (r.tipus === "fuvar") {
+          return (
+            <Link key={`f${r.fuvarId}`} href={reszlet(r.fuvarId)} className="truncate pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground hover:underline">
+              {r.partner}{r.hivatkozas ? ` · ${r.hivatkozas}` : r.jelleg === "sajat" ? " · saját" : ""}
+            </Link>
+          );
+        }
+        const vonal = i < utolsoMegallo;
+        if (r.tipus === "allas") {
+          return (
+            <div key={`a${i}`} className={TUKOR_RACS}>
+              <span className="pb-2 text-right text-xs text-muted-foreground/50">—</span>
+              <span className="flex flex-col items-center">
+                <span className="mt-1 size-3 shrink-0 rounded-[3px] bg-[var(--f2-amb)]" />
+                {vonal ? <span className="w-0.5 flex-1 bg-[var(--f2-mint)]" /> : null}
+              </span>
+              <div className="pb-2"><AllasDoboz a={r.allas} varos={null} /></div>
+            </div>
+          );
+        }
+        const pont =
+          r.allapot === "kesz"
+            ? "bg-[var(--f2-mint)]"
+            : r.allapot === "most"
+              ? r.kiemelt === "varakozik" ? "border-[3px] border-[var(--f2-red)] bg-card" : "border-[3px] border-[var(--f2-amb)] bg-card"
+              : r.allapot === "kovetkezo"
+                ? "border-[3px] border-[var(--f2-blue)] bg-card"
+                : "border-2 border-foreground/25 bg-card";
+        const tenySzin =
+          r.allapot === "kesz" ? "text-[var(--f2-mint)]" : r.allapot === "most" ? "text-[#6b430a]" : r.allapot === "kovetkezo" ? "text-[var(--f2-blue)]" : "text-muted-foreground";
+        const elteresSzin = r.elteres === "ablakban" ? "bg-[var(--f2-mint-l)] text-[var(--f2-mint)]" : r.elteres?.startsWith("+") && !r.elteres.includes("várható") && r.allapot === "kesz" ? "bg-[var(--f2-amb-l)] text-[var(--f2-amb)]" : r.elteres?.startsWith("késik") ? "bg-[var(--f2-red-l)] text-[var(--f2-red)]" : "bg-[var(--f2-blue-l)] text-[var(--f2-blue)]";
+        const kiemelt = r.allapot === "most" || r.allapot === "kovetkezo";
+        return (
+          <div key={`m${i}`} className={TUKOR_RACS}>
+            <Link href={reszlet(r.fuvarId)} className={`pb-2 text-right text-xs leading-snug hover:underline ${r.allapot === "hatra" ? "text-muted-foreground" : ""}`}>
+              <b className={kiemelt ? "text-sm" : ""}>{r.varos}</b>
+              <div className="font-mono text-[11px] text-muted-foreground">{r.felLe === "felrako" ? "fel" : "le"}{r.terv ? ` ${r.terv}` : ""}</div>
+            </Link>
+            <span className="flex flex-col items-center">
+              <span className={`mt-1 size-3 shrink-0 rounded-full ${pont}`} />
+              {vonal ? <span className={`w-0.5 flex-1 ${r.allapot === "kesz" ? "bg-[var(--f2-mint)]" : "bg-[repeating-linear-gradient(var(--border)_0_4px,transparent_4px_8px)]"}`} /> : null}
+            </span>
+            <div className="min-w-0 pb-2 text-xs leading-snug">
+              {r.teny ? <span className={`font-mono text-[11px] ${tenySzin}`}>{r.teny}{r.allapot === "kesz" ? " ✓" : ""}</span> : <span className="text-muted-foreground">—</span>}
+              {r.elteres ? <span className={`ml-1 rounded-full px-1.5 py-px text-[10px] font-semibold ${elteresSzin}`}>{r.elteres}</span> : null}
+              {r.allas ? <AllasDoboz a={r.allas} varos={r.varos} /> : null}
+              {kiemelt && r.ceg ? <div className="truncate font-semibold">{r.ceg}</div> : null}
+              {kiemelt && r.telefon ? (
+                <a href={`tel:${r.telefon}`} className="block truncate font-semibold text-[var(--f2-mint)] hover:underline">📞 {[r.kontaktNev, r.telefon].filter(Boolean).join(" · ")}</a>
+              ) : null}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function KocsiOszlop({ k, holnapCimke }: { k: MaKocsi; holnapCimke: string }) {
   if (k.helykitolto) {
     return (
@@ -93,7 +186,6 @@ function KocsiOszlop({ k, holnapCimke }: { k: MaKocsi; holnapCimke: string }) {
       </Doboz>
     );
   }
-  const vanFuvar = k.ma.length > 0;
   return (
     <Doboz className="flex flex-col">
       <details open className="group flex flex-col">
@@ -122,42 +214,10 @@ function KocsiOszlop({ k, holnapCimke }: { k: MaKocsi; holnapCimke: string }) {
             </div>
           ) : null}
 
-          {k.most ? (
-            <div className="flex flex-col gap-1">
-              <SzakaszCim>Most</SzakaszCim>
-              <Link
-                href={reszlet(k.most.fuvarId)}
-                className={`flex flex-col gap-0.5 rounded-xl border px-3 py-2 hover:ring-1 hover:ring-foreground/20 ${
-                  k.most.kiemelt === "varakozik"
-                    ? "border-[var(--f2-red)]/40 bg-[var(--f2-red-l)]"
-                    : k.most.kiemelt === "kesik"
-                      ? "border-[var(--f2-amb)]/40 bg-[var(--f2-amb-l)]"
-                      : "border-foreground/10"
-                }`}
-              >
-                <span className="text-sm font-bold">
-                  {k.most.tipus === "felrako" ? "Felrakó" : "Lerakó"} · {k.most.varos}
-                  <span className="ml-1 text-xs font-normal text-muted-foreground">{k.most.hanyadik}</span>
-                </span>
-                {k.most.ceg ? <span className="text-xs font-semibold">{k.most.ceg}</span> : null}
-                <span className="truncate text-xs text-muted-foreground">{k.most.cim}</span>
-                <span className="text-xs">
-                  {[k.most.allapot, k.most.ablak ? `ablak ${k.most.ablak}` : null, k.etaSor].filter(Boolean).join(" · ")}
-                </span>
-                <span className="truncate text-xs text-muted-foreground">{k.most.partner}</span>
-              </Link>
-              {k.most.telefon ? (
-                <a href={`tel:${k.most.telefon}`} className="w-fit text-xs font-semibold text-[var(--f2-mint)] hover:underline">
-                  📞 {[k.most.kontaktNev, k.most.telefon].filter(Boolean).join(" · ")}
-                </a>
-              ) : null}
-            </div>
-          ) : null}
-
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-1">
             <SzakaszCim>Ma</SzakaszCim>
-            {vanFuvar ? (
-              k.ma.map((b) => <BlokkSorok key={b.id} b={b} osszecsuk={b.megallok.length > 6} />)
+            {k.sorok.length > 0 ? (
+              <Tukor sorok={k.sorok} />
             ) : (
               <Link href="/fuvarozas2/tervezes" className="rounded-xl bg-[var(--f2-amb-l)] px-3 py-2 text-xs font-semibold text-[var(--f2-amb)] hover:underline">
                 Üres nap — keress fuvart →

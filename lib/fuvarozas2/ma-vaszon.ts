@@ -22,17 +22,21 @@
 
 import { query } from "@/lib/db";
 import { requireSession } from "@/lib/auth/dal";
-import { requireAnyViewPermission } from "@/lib/auth/require-permission";
+import { revalidatePath } from "next/cache";
+import { requireAnyViewPermission, requireEditPermission } from "@/lib/auth/require-permission";
 import { getIdovonalak } from "@/lib/fuvarozas/actions";
 import { getSzamlaLista } from "@/lib/szamlak/actions";
 import { szamlaHatralek } from "@/lib/szamlak/szamla-constants";
-import { varosNev } from "@/lib/fuvarozas/varos";
+import { cimKulcs, varosNev } from "@/lib/fuvarozas/varos";
+import { toroljGeokodCachet } from "@/lib/fuvarozas/erintes-felismeres";
+import { toroljIdovonalCachet } from "@/lib/fuvarozas/idovonal-cache";
 import { getUtvonalJelentes, rendszamKulcs } from "@/lib/fuvarozas/ecofleet";
 import { cachelve } from "@/lib/fuvarozas/idovonal-cache";
 import { kovetkezoMunkanapISO } from "@/lib/fuvarozas/idozona";
 import { SAJAT_JARMUVEK } from "@/lib/fuvarozas/vehicles";
-import { kontaktNev, kontaktTelefon, megalloReszlete, type MegalloReszlet } from "@/lib/fuvarozas/sofor-adatok";
+import type { MegalloReszlet } from "@/lib/fuvarozas/sofor-adatok";
 import type { Allapot } from "@/lib/fuvarozas/allapot";
+import { tukorSorok, type TukorSor } from "@/lib/fuvarozas2/ma-tukor";
 
 export type CsempeSzin = "normal" | "amber" | "red" | "mint";
 export type Csempe = { kulcs: string; cimke: string; ertek: string; also: string | null; szin: CsempeSzin; href: string | null };
@@ -69,22 +73,7 @@ export type MaBlokk = {
 /** A kocsi pillanatnyi helyzete a GPS-ből. */
 export type MaKocsiAllapot = { szoveg: string; szin: "mint" | "amber" | "red" | "normal"; hely: string | null };
 
-/** A soron következő (első nem kész) mai megálló. */
-export type MaMost = {
-  fuvarId: string;
-  partner: string;
-  tipus: "felrako" | "lerako";
-  varos: string;
-  cim: string;
-  ceg: string | null;
-  ablak: string | null;
-  allapot: string;
-  kiemelt: "kesik" | "varakozik" | null;
-  /** „3/14" — hányadik megálló a fuvaron. */
-  hanyadik: string;
-  kontaktNev: string | null;
-  telefon: string | null;
-};
+export type { TukorSor, TukorAllas } from "@/lib/fuvarozas2/ma-tukor";
 
 export type MaKocsi = {
   kod: string | null;
@@ -99,8 +88,8 @@ export type MaKocsi = {
   hetiSor: string | null;
   napiKm: number | null;
   etaSor: string | null;
-  most: MaMost | null;
-  ma: MaBlokk[];
+  /** A mai megbízások megállói és a GPS-állások, tükörben (lásd TukorSor). */
+  sorok: TukorSor[];
   /** A következő munkanap új fuvarjai (ami a maiból folytatódik, az a „ma” alatt van). */
   holnap: MaBlokk[];
   /** Igaz, ha egy mai fuvar a következő munkanapon is tart. */
@@ -155,6 +144,7 @@ type MegalloSor = {
   sofor_kesz_at: string | null;
   varakozas_kezdete: string | null;
   varakozas_vege: string | null;
+  tervezett_nap: string | null;
 };
 
 export async function getMaVaszon(): Promise<MaVaszon> {
@@ -196,7 +186,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
     ? await query<MegalloSor>(
         `select megbizas_id::text, sorszam, tipus, cim_nyers, telepules,
            ablak_tol::text, ablak_ig::text, gps_erkezes::text, gps_tavozas::text,
-           sofor_kesz_at::text, varakozas_kezdete::text, varakozas_vege::text
+           sofor_kesz_at::text, varakozas_kezdete::text, varakozas_vege::text, tervezett_nap::text
          from fuvar_megallok where megbizas_id = any($1::bigint[]) order by megbizas_id, sorszam`,
         [sorok.map((s) => s.id)]
       )
@@ -298,7 +288,8 @@ export async function getMaVaszon(): Promise<MaVaszon> {
     }
   }
 
-  // 2e. Sofőr gondjelzései és tervezetlen állások az élő rétegből.
+  // 2e. Sofőr gondjelzései az élő rétegből. (A nem tervezett GPS-állás nem
+  // ide kerül, hanem a kocsi oszlopába, időrendben a helyére — lásd tukorSorok.)
   for (const j of idovonal?.jarmuvek ?? []) {
     for (const blokk of j.fuvarok) {
       for (const gond of blokk.gondok ?? []) {
@@ -312,17 +303,6 @@ export async function getMaVaszon(): Promise<MaVaszon> {
           href: `/fuvarozas2/megbizasok/${blokk.fuvarId}`,
         });
       }
-    }
-    for (const allas of j.nemTervezettAllasok ?? []) {
-      if (allas.percek < 30) continue;
-      elteresek.push({
-        kulcs: `allas-${j.sofor}-${allas.kezdet.getTime()}`,
-        cim: `${j.sofor} · nem tervezett állás`,
-        badge: `${allas.percek} p`,
-        szin: "amber",
-        sorok: [`${allas.cim ?? "ismeretlen hely"} · ${ORA(allas.kezdet)}–${ORA(allas.veg)}`, "Nem fel-/lerakó cím közelében állt."],
-        href: null,
-      });
     }
   }
 
@@ -463,36 +443,6 @@ export async function getMaVaszon(): Promise<MaVaszon> {
     };
   };
 
-  const mostKeres = (maiak: (typeof sorok)[number][]): MaMost | null => {
-    for (const s of maiak) {
-      const gs = megalloMap.get(s.id) ?? [];
-      const i = gs.findIndex((g) => !(g.gps_tavozas || g.sofor_kesz_at));
-      if (i === -1) continue;
-      const g = gs[i];
-      const azonosTipus = gs.filter((x) => x.tipus === g.tipus);
-      const r = megalloReszlete(s.megallo_reszletek, g.tipus, azonosTipus.indexOf(g), azonosTipus.length, g.cim_nyers);
-      const varakozik = !!(g.varakozas_kezdete && !g.varakozas_vege);
-      const ablakIg = idobelyeg(g.ablak_ig);
-      return {
-        fuvarId: s.id,
-        partner: s.partner ?? "(nincs megbízó)",
-        tipus: g.tipus,
-        varos: varosNev(g.cim_nyers) ?? g.cim_nyers,
-        cim: r?.cim ?? g.cim_nyers,
-        ceg: r?.ceg ?? null,
-        ablak: g.ablak_tol || g.ablak_ig ? `${ORA(g.ablak_tol)}–${ORA(g.ablak_ig)}` : r?.ido ?? null,
-        allapot: g.gps_erkezes
-          ? varakozik ? `várakozik ${percKulonbseg(most, idobelyeg(g.varakozas_kezdete)!)} perce` : `megérkezett ${ORA(g.gps_erkezes)}`
-          : "úton oda",
-        kiemelt: varakozik ? "varakozik" : ablakIg != null && ablakIg < most ? "kesik" : null,
-        hanyadik: `${i + 1}/${gs.length}`,
-        kontaktNev: kontaktNev(r?.kontakt),
-        telefon: kontaktTelefon(r?.kontakt),
-      };
-    }
-    return null;
-  };
-
   const kocsiAllapot = (elo: NonNullable<typeof idovonal>["jarmuvek"][number] | undefined): MaKocsiAllapot | null => {
     if (!elo) return null;
     const p = elo.eloPozicio;
@@ -548,8 +498,20 @@ export async function getMaVaszon(): Promise<MaVaszon> {
       hetiSor: hp != null ? `Hét: ${Math.round(hp / 60)} / 56 óra` : null,
       napiKm: elo?.napiKm ?? null,
       etaSor,
-      most: mostKeres(maiak),
-      ma: maiak.map(blokkKesz),
+      sorok: tukorSorok({
+        fuvarok: maiak.map((s) => ({
+          id: s.id, partner: s.partner, hivatkozas: s.hivatkozas, jelleg: s.jelleg,
+          megallo_reszletek: s.megallo_reszletek, megallok: megalloMap.get(s.id) ?? [],
+        })),
+        // A GPS nem tervezett állásai, a koordinátájukkal (az idővonal állás-szakaszából).
+        allasok: (elo?.nemTervezettAllasok ?? []).map((a) => {
+          const sz = elo?.szakaszok.find((x) => x.tipus === "allas" && x.kezdet.getTime() === a.kezdet.getTime());
+          return { ...a, lat: sz && sz.tipus === "allas" ? sz.lat : null, lon: sz && sz.tipus === "allas" ? sz.lon : null };
+        }),
+        eta: elo?.eloEta && !elo.eloEta.bizonytalan ? elo.eloEta.erkezes : null,
+        most,
+        ma,
+      }),
       holnap: holnapiak.map(blokkKesz),
       holnapFolytatodik: maiak.some((s) => (s.lerakas_nap ?? "") >= holnap),
       papir: papirSorok,
@@ -558,8 +520,8 @@ export async function getMaVaszon(): Promise<MaVaszon> {
   while (kocsik.length < KOCSI_OSZLOP) {
     kocsik.push({
       kod: null, cimke: `${kocsik.length + 1}. kocsi`, sofor: null, helykitolto: "még nincs beállítva",
-      allapot: null, vezetesSor: null, hetiSor: null, napiKm: null, etaSor: null, most: null,
-      ma: [], holnap: [], holnapFolytatodik: false, papir: [],
+      allapot: null, vezetesSor: null, hetiSor: null, napiKm: null, etaSor: null,
+      sorok: [], holnap: [], holnapFolytatodik: false, papir: [],
     });
   }
 
@@ -634,4 +596,45 @@ async function hetiVezetesPercek(
     }
     return eredmeny;
   });
+}
+
+/**
+ * „Ez a hely”: a GPS szerinti állás koordinátáját a megálló címéhez rögzíti
+ * (fuvar_helyszin_koordinata — ugyanaz a szótár, amit a sofőr „Rossz a cím?
+ * Itt vagyok” gombja ír). Onnantól a GPS-felismerés ide várja ezt a címet, és
+ * a kocsi itt állása nem „nem tervezett”. A diszpécser a Ma oldalon teszi,
+ * amikor a GPS-állás egy fel nem ismert megállóra esett (Polgár, Pap tanya;
+ * Budapest, Sörgyár u. — 2026-09-28).
+ */
+export async function rogzitAllasMegalloHelyekent(
+  megbizasId: string,
+  sorszam: number,
+  lat: number,
+  lon: number
+): Promise<{ ok: true; cim: string } | { ok: false; hiba: string }> {
+  await requireEditPermission("fuvarozas");
+  const session = await requireSession();
+  if (!Number.isFinite(lat) || !Number.isFinite(lon) || lat < 44 || lat > 50 || lon < 13 || lon > 26) {
+    return { ok: false, hiba: "Érvénytelen koordináta." };
+  }
+  const [g] = await query<{ cim_nyers: string }>(
+    `select cim_nyers from fuvar_megallok where megbizas_id = $1 and sorszam = $2`,
+    [megbizasId, sorszam]
+  );
+  if (!g) return { ok: false, hiba: "Nincs ilyen megálló." };
+  const kulcs = cimKulcs(g.cim_nyers);
+  if (!kulcs) return { ok: false, hiba: "A megállónak nincs címe." };
+  await query(
+    `insert into fuvar_helyszin_koordinata (cim_kulcs, cim_minta, lat, lon, forras, rogzitve_by)
+     values ($1, $2, $3, $4, 'diszpecser', $5)
+     on conflict (cim_kulcs)
+     do update set cim_minta = excluded.cim_minta, lat = excluded.lat, lon = excluded.lon,
+                   forras = excluded.forras, rogzitve_by = excluded.rogzitve_by, rogzitve_at = now()`,
+    [kulcs, g.cim_nyers, lat, lon, session.name ?? session.username]
+  );
+  toroljGeokodCachet();
+  toroljIdovonalCachet();
+  revalidatePath("/fuvarozas2");
+  console.log(`[ma] megálló helye rögzítve a GPS-állásból: "${g.cim_nyers}" → ${lat.toFixed(5)}, ${lon.toFixed(5)} (${session.name})`);
+  return { ok: true, cim: g.cim_nyers };
 }
