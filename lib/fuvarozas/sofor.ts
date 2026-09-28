@@ -20,7 +20,6 @@ import { bontsMegallokra, cimKulcs, cimPontossaga, varosNev } from "@/lib/fuvaro
 import { toroljIdovonalCachet } from "@/lib/fuvarozas/idovonal-cache";
 import { getFleetLastPositions, parseEcofleetTimestamp } from "@/lib/fuvarozas/ecofleet";
 import { mozogE, toroljGeokodCachet } from "@/lib/fuvarozas/erintes-felismeres";
-import { feltoltFuvarlevelFotot } from "@/lib/fuvarozas/drive-sync-core";
 import { ceglNevKanonikusan, normalizaltCegKulcs, type FuvarRow } from "@/lib/fuvarozas/fuvar-constants";
 import { megalloReszlete, type MegalloReszlet } from "@/lib/fuvarozas/sofor-adatok";
 
@@ -653,8 +652,9 @@ export async function rogzitMegalloHelyet(
 const FOTO_MAX_BAJT = 8 * 1024 * 1024;
 
 /**
- * A sofőr lefotózza a fuvarlevelet/CMR-t a lerakásnál. A kép a Drive
- * Fuvarmegbizások/Fuvarlevelek mappájába kerül, és "fuvarlevel" típusú
+ * A sofőr lefotózza a fuvarlevelet/CMR-t a lerakásnál. A kép az adatbázisba
+ * kerül (fuvar_dokumentumok.tartalom, tarolas = 'db' — a Drive-ra a service
+ * account nem tud írni, lásd 014-es migráció), és "fuvarlevel" típusú
  * dokumentumként a fuvarhoz kötődik (fuvar_dokumentumok) — így a Számla/
  * Posta oldal aznap látja, hogy a papír létezik és mi van rajta. A fizikai
  * beérkezést (papirok_beerkeztek_at) NEM váltja ki: papír nélkül nem
@@ -681,13 +681,14 @@ export async function feltoltFuvarlevelFoto(fuvarId: string, form: FormData): Pr
   const nev = `${fuvar.datum}_${rendszam}_${hivatkozas}_${Date.now()}.${kiterjesztes}`;
   const tartalom = Buffer.from(await fajl.arrayBuffer());
 
-  const feltoltve = await feltoltFuvarlevelFotot(nev, fajl.type, tartalom);
   const beszurt = await query<{ id: string }>(
-    `insert into fuvar_dokumentumok (fuvar_id, drive_file_id, dokumentum_url, tipus, fajlnev)
-     values ($1, $2, $3, 'fuvarlevel', $4)
+    `insert into fuvar_dokumentumok (fuvar_id, tipus, fajlnev, tarolas, tartalom, mime_type, meret_byte, feltoltotte)
+     values ($1, 'fuvarlevel', $2, 'db', $3, $4, $5, $6)
      returning id::text`,
-    [fuvarId, feltoltve.id, feltoltve.url, nev]
+    [fuvarId, nev, tartalom, fajl.type, tartalom.length, session.name ?? session.username]
   );
+  // A részletek-lista a dokumentum_url-t linkeli — a saját kiszolgálónkra mutat.
+  await query(`update fuvar_dokumentumok set dokumentum_url = $2 where id = $1`, [beszurt[0].id, `/api/fuvarozas/dokumentum/${beszurt[0].id}`]);
   // Saját fuvarnál ez a BEFELÉ kapott szállítólevél fotója (a kifelé menőt a
   // Számlázz.hu állítja ki) — ugyanaz a 'fuvarlevel' irat-típus, mert a
   // fuvar_dokumentumok CHECK-je csak ezt ismeri, és a saját fuvar állapotát a
