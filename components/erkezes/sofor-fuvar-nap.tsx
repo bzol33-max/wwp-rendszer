@@ -42,7 +42,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
-  feltoltFuvarlevelFoto,
   getSoforNap,
   jelezGondot,
   jelolMegerkeztem,
@@ -55,6 +54,7 @@ import {
 } from "@/lib/fuvarozas/sofor";
 import { budapestNapISO, kovetkezoMunkanapISO } from "@/lib/fuvarozas/idozona";
 import { kontaktNev, kontaktTelefon } from "@/lib/fuvarozas/sofor-adatok";
+import { feltoltOldalakat, feltoltesUzenet } from "@/lib/fuvarozas/fuvarlevel-feltoltes";
 
 const IDO_OPCIOK: Intl.DateTimeFormatOptions = {
   timeZone: "Europe/Budapest",
@@ -93,34 +93,6 @@ const DOK_CIMKE: Record<string, string> = {
   fuvarlevel: "Fuvarlevél fotó",
   egyeb: "Irat",
 };
-
-/** A feltöltött kép leghosszabb oldala pixelben — a telefon 4000 px-es, 5-8 MB-os fotója így ~300-600 KB lesz. */
-const FOTO_MAX_OLDAL_PX = 1600;
-const FOTO_JPEG_MINOSEG = 0.82;
-
-/**
- * A fotó kicsinyítése a telefonon, feltöltés előtt. Mobilnetről egy 8 MB-os
- * kép lassú és a szerver-akció korlátjába is beleütközne; egy fuvarlevél
- * 1600 px-en tökéletesen olvasható. Ha a böngésző nem tudja (nincs canvas),
- * az eredeti megy.
- */
-async function kicsinyitFotot(fajl: File): Promise<Blob> {
-  try {
-    const kep = await createImageBitmap(fajl);
-    const arany = Math.min(1, FOTO_MAX_OLDAL_PX / Math.max(kep.width, kep.height));
-    if (arany === 1 && fajl.size < 1_500_000) return fajl;
-    const vaszon = document.createElement("canvas");
-    vaszon.width = Math.round(kep.width * arany);
-    vaszon.height = Math.round(kep.height * arany);
-    const ctx = vaszon.getContext("2d");
-    if (!ctx) return fajl;
-    ctx.drawImage(kep, 0, 0, vaszon.width, vaszon.height);
-    const blob = await new Promise<Blob | null>((ok) => vaszon.toBlob(ok, "image/jpeg", FOTO_JPEG_MINOSEG));
-    return blob ?? fajl;
-  } catch {
-    return fajl;
-  }
-}
 
 function navigacioUrl(cim: string): string {
   return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(cim)}`;
@@ -254,13 +226,17 @@ function papirNemKellIr(idk: string[]) {
   }
 }
 
-/** Minden megállója kész, de még nincs róla papír-fotó. */
+/**
+ * Minden megállója kész — a papír-kártya ilyenkor kint van, amíg a sofőr a
+ * „Kész, ez minden”-t (vagy saját fuvarnál a „Nem kaptam”-ot) meg nem nyomja.
+ * Az első fotó után sem tűnik el: a papír gyakran többoldalas (2026-09-28).
+ */
 function papirraVar(blokk: SoforFuvarBlokk): boolean {
-  return (
-    blokk.megallok.length > 0 &&
-    blokk.megallok.every((m) => m.kesz) &&
-    !blokk.dokumentumok.some((d) => d.tipus === "fuvarlevel")
-  );
+  return blokk.megallok.length > 0 && blokk.megallok.every((m) => m.kesz);
+}
+
+function fotoOldalak(blokk: SoforFuvarBlokk): number {
+  return blokk.dokumentumok.filter((d) => d.tipus === "fuvarlevel").length;
 }
 
 /**
@@ -274,57 +250,86 @@ function papirraVar(blokk: SoforFuvarBlokk): boolean {
 function PapirKeres({
   blokk,
   pending,
+  haladas,
   onFoto,
-  onNemKaptam,
+  onKesz,
 }: {
   blokk: SoforFuvarBlokk;
   pending: boolean;
-  onFoto: (fuvarId: string, fajl: File) => void;
-  onNemKaptam: (fuvarId: string) => void;
+  /** „3/10” feltöltés közben. */
+  haladas: string | null;
+  onFoto: (fuvarId: string, fajlok: File[]) => void;
+  onKesz: (fuvarId: string) => void;
 }) {
-  const input = useRef<HTMLInputElement>(null);
+  const kamera = useRef<HTMLInputElement>(null);
+  const tar = useRef<HTMLInputElement>(null);
   const utvonal = utvonalVarosok(blokk).map((m) => m.varos).join(" → ");
+  const oldalak = fotoOldalak(blokk);
+  const valaszt = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fajlok = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (fajlok.length) onFoto(blokk.fuvarId, fajlok);
+  };
+  const papirNev = blokk.sajatFuvar ? "Szállítólevél" : "Fuvarlevél";
   return (
     <div className="flex flex-col gap-2 rounded-2xl border-2 border-amber-500 bg-amber-50 px-4 py-3 text-amber-950">
       <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-800">
         Lerakva · {blokk.megrendelo ?? (blokk.sajatFuvar ? "Saját fuvar" : "Megbízás")}
       </span>
       <span className="text-sm">{utvonal}</span>
-      <span className="text-base font-bold leading-tight">
-        {blokk.sajatFuvar ? "Kaptál szállítólevelet? Fotózd le." : "Fotózd le az aláírt fuvarlevelet (CMR)."}
-      </span>
-      {!blokk.sajatFuvar && <span className="text-xs">Enélkül nem tudjuk kiszámlázni a fuvart.</span>}
-      <input
-        ref={input}
-        type="file"
-        accept="image/*"
-        capture="environment"
-        className="hidden"
-        onChange={(e) => {
-          const fajl = e.target.files?.[0];
-          e.target.value = "";
-          if (fajl) onFoto(blokk.fuvarId, fajl);
-        }}
-      />
+      {oldalak === 0 ? (
+        <>
+          <span className="text-base font-bold leading-tight">
+            {blokk.sajatFuvar ? "Kaptál szállítólevelet? Fotózd le." : "Fotózd le az aláírt fuvarlevelet (CMR)."}
+          </span>
+          <span className="text-xs">
+            {blokk.sajatFuvar ? "" : "Enélkül nem tudjuk kiszámlázni a fuvart. "}Minden oldalt külön fotózz le.
+          </span>
+        </>
+      ) : (
+        <>
+          <span className="text-base font-bold leading-tight">✓ {oldalak} oldal feltöltve</span>
+          <span className="text-xs">Ha van még oldal, fotózd le azt is. Ha mind megvan, nyomd meg a „Kész”-t.</span>
+        </>
+      )}
+      <input ref={kamera} type="file" accept="image/*" capture="environment" className="hidden" onChange={valaszt} />
+      <input ref={tar} type="file" accept="image/*" multiple className="hidden" onChange={valaszt} />
+      {haladas ? <span className="text-sm font-semibold">Feltöltés {haladas}…</span> : null}
+      <Button
+        disabled={pending}
+        onClick={() => kamera.current?.click()}
+        className="h-12 w-full justify-center bg-amber-600 text-base font-semibold text-white hover:bg-amber-600/90"
+      >
+        <Camera className="h-5 w-5" />
+        {oldalak === 0 ? `${papirNev} fotó` : "+ Még egy oldal"}
+      </Button>
       <div className="flex flex-wrap gap-2">
         <Button
+          variant="outline"
           disabled={pending}
-          onClick={() => input.current?.click()}
-          className="h-12 flex-1 justify-center bg-amber-600 text-base font-semibold text-white hover:bg-amber-600/90"
+          onClick={() => tar.current?.click()}
+          className="h-11 flex-1 border-amber-400 bg-transparent text-amber-900"
         >
-          <Camera className="h-5 w-5" />
-          {blokk.sajatFuvar ? "Szállítólevél fotó" : "Fuvarlevél fotó"}
+          Több kép a fotótárból
         </Button>
-        {blokk.sajatFuvar && (
+        {oldalak > 0 ? (
+          <Button
+            disabled={pending}
+            onClick={() => onKesz(blokk.fuvarId)}
+            className="h-11 flex-1 bg-emerald-700 text-white hover:bg-emerald-700/90"
+          >
+            Kész, ez minden
+          </Button>
+        ) : blokk.sajatFuvar ? (
           <Button
             variant="outline"
             disabled={pending}
-            onClick={() => onNemKaptam(blokk.fuvarId)}
-            className="h-12 border-amber-400 bg-transparent text-amber-900"
+            onClick={() => onKesz(blokk.fuvarId)}
+            className="h-11 flex-1 border-amber-400 bg-transparent text-amber-900"
           >
             Nem kaptam
           </Button>
-        )}
+        ) : null}
       </div>
     </div>
   );
@@ -399,7 +404,7 @@ function AktualisMegbizas({
   onErkezes: (fuvarId: string, megalloIndex: number) => void;
   onIndulok: (m: SoforMegalloSor) => void;
   onHely: (m: SoforMegalloSor) => void;
-  onFoto: (fuvarId: string, fajl: File) => void;
+  onFoto: (fuvarId: string, fajlok: File[]) => void;
   onGond: (fuvarId: string) => void;
 }) {
   const fotoInput = useRef<HTMLInputElement>(null);
@@ -559,9 +564,9 @@ function AktualisMegbizas({
             capture="environment"
             className="hidden"
             onChange={(e) => {
-              const fajl = e.target.files?.[0];
+              const fajlok = Array.from(e.target.files ?? []);
               e.target.value = "";
-              if (fajl) onFoto(blokk.fuvarId, fajl);
+              if (fajlok.length) onFoto(blokk.fuvarId, fajlok);
             }}
           />
           <Button
@@ -706,6 +711,7 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
   // nem külön setState-tel az effektben (react-hooks/set-state-in-effect).
   const [betoltottNap, setBetoltottNap] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [haladas, setHaladas] = useState<{ fuvarId: string; szoveg: string } | null>(null);
   // Csak kliensen olvasható; a lista a betöltés UTÁN jelenik meg, így a
   // szerveres első képpel nem ütközik.
   const [nemKaptam, setNemKaptam] = useState<string[]>(() =>
@@ -792,18 +798,16 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
     });
   }
 
-  function foto(fuvarId: string, fajl: File) {
+  function foto(fuvarId: string, fajlok: File[]) {
     startTransition(async () => {
-      try {
-        const kicsi = await kicsinyitFotot(fajl);
-        const form = new FormData();
-        form.append("foto", kicsi, "fuvarlevel.jpg");
-        await feltoltFuvarlevelFoto(fuvarId, form);
-        await load();
-        toast.success("Fotó feltöltve.");
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Nem sikerült feltölteni a fotót.");
-      }
+      const eredmeny = await feltoltOldalakat(fuvarId, fajlok, (kesz, osszes) =>
+        setHaladas(osszes > 1 ? { fuvarId, szoveg: `${Math.min(kesz + 1, osszes)}/${osszes}` } : { fuvarId, szoveg: "" })
+      );
+      setHaladas(null);
+      await load().catch(() => undefined);
+      const u = feltoltesUzenet(eredmeny);
+      if (u.ok) toast.success(u.szoveg);
+      else toast.error(u.szoveg);
     });
   }
 
@@ -830,7 +834,7 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
   // A lerakott, de még papír-fotó nélküli fuvarok — a lista tetején, amíg
   // le nem fotózza (saját fuvarnál: vagy a "Nem kaptam"-ot nem nyomja).
   const papirKeresek = blokkok.filter(
-    (b) => papirraVar(b) && !(b.sajatFuvar && nemKaptam.includes(b.fuvarId))
+    (b) => papirraVar(b) && !nemKaptam.includes(b.fuvarId)
   );
   // Az aktív megbízás az, amelyikben a soron következő (első nem kész) megálló
   // van; a soron következő megálló kapja a gombokat. Amit befejezett, az
@@ -873,7 +877,14 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
       )}
 
       {papirKeresek.map((b) => (
-        <PapirKeres key={b.fuvarId} blokk={b} pending={pending} onFoto={foto} onNemKaptam={papirNemKaptam} />
+        <PapirKeres
+          key={b.fuvarId}
+          blokk={b}
+          pending={pending}
+          haladas={haladas?.fuvarId === b.fuvarId ? haladas.szoveg || "" : null}
+          onFoto={foto}
+          onKesz={papirNemKaptam}
+        />
       ))}
 
       {blokkok.length === 0 ? (

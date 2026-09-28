@@ -39,6 +39,8 @@ export function MegbizasReszlet({
   const [pending, start] = useTransition();
   const [szamla, setSzamla] = useState(sor.szamla_szam ?? "");
   const [megj, setMegj] = useState(sor.megjegyzes ?? "");
+  const fuvarlevelek = dokumentumok.filter((d) => d.tipus === "fuvarlevel");
+  const fuvarlevelDb = fuvarlevelek.length;
 
   function valt(hova: Allapot, kezi = false) {
     start(async () => {
@@ -166,12 +168,27 @@ export function MegbizasReszlet({
           <CardHeader><CardTitle className="text-base">Dokumentumok</CardTitle></CardHeader>
           <CardContent className="flex flex-col gap-1 text-sm">
             {dokumentumok.length === 0 ? <p className="text-muted-foreground">Nincs.</p> : null}
-            {dokumentumok.map((d) => (
-              <div key={d.id} className="flex gap-2">
-                <span className="w-24 shrink-0 text-xs uppercase text-muted-foreground">{d.tipus ?? "egyéb"}</span>
-                {d.dokumentum_url ? <a className="truncate underline" href={d.dokumentum_url} target="_blank" rel="noreferrer">{d.fajlnev ?? d.dokumentum_url}</a> : <span className="truncate">{d.fajlnev ?? "—"}</span>}
-              </div>
-            ))}
+            {fuvarlevelDb > 0 ? (
+              <a
+                href={`/api/fuvarozas/fuvarlevel-pdf/${sor.id}`}
+                target="_blank"
+                rel="noreferrer"
+                className="mb-1 w-fit rounded-lg border border-[var(--f2-mint)] px-3 py-1.5 text-sm font-semibold text-[var(--f2-mint)] hover:bg-[var(--f2-mint-l)]"
+              >
+                Fuvarlevél PDF ({fuvarlevelDb} oldal)
+              </a>
+            ) : null}
+            {dokumentumok.map((d) => {
+              // Többoldalas fuvarlevél: az oldalak sorszámot kapnak (1/10, 2/10…).
+              const oldal = d.tipus === "fuvarlevel" ? fuvarlevelek.indexOf(d) + 1 : 0;
+              const felirat = oldal > 0 ? `Fuvarlevél ${oldal}/${fuvarlevelDb}` : d.fajlnev ?? d.dokumentum_url ?? "—";
+              return (
+                <div key={d.id} className="flex gap-2">
+                  <span className="w-24 shrink-0 text-xs uppercase text-muted-foreground">{d.tipus ?? "egyéb"}</span>
+                  {d.dokumentum_url ? <a className="truncate underline" href={d.dokumentum_url} target="_blank" rel="noreferrer">{felirat}</a> : <span className="truncate">{felirat}</span>}
+                </div>
+              );
+            })}
           </CardContent>
         </Card>
 
