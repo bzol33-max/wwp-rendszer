@@ -9,7 +9,7 @@ export default async function Page() {
   const adat = await getMaVaszon();
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title="Ma — irányítópult" subtitle="Ami nem terv szerint megy, az van elöl. A normál működés egy sor." />
+      <PageHeader title="Ma — irányítópult" subtitle="Kocsinként: hol van, mit csinál most, mi van még ma és a következő munkanapon." />
       <Fuvarozas2Fulek aktiv="/fuvarozas2" />
       <MaVaszonNezet adat={adat} />
     </div>

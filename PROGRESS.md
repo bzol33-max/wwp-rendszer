@@ -2457,3 +2457,28 @@ Teszt: új `scripts/teszt-rendszam.ts` (8 eset, a `npm run teszt` része) — a
 teljes készlet 0 hibával fut; `tsc --noEmit`, eslint, `next build` rendben.
 Böngészőben itt sem futott (nincs helyi Postgres) — a segéd okosodását éles
 kérdésekkel kell megnézni.
+
+## 2026-09-28 — Ma oldal: négy kocsi-oszlop
+
+- Budaházi Zoltán: a Ma oldal legyen átlátható, négy kocsira, minden
+  szükséges infóval (a javasolt vázlat „pont így”).
+- Elrendezés (`components/fuvarozas2/ma-vaszon.tsx`): fent eltérés-sáv csak ha
+  van (egyébként egy zöld sor); középen négy egyforma kocsi-oszlop
+  (asztalon egymás mellett, telefonon egymás alatt, `<details>`-szel
+  összecsukható); alul „Kocsi nélkül” és „Iroda és holnap”. A hat
+  számcsempe és a Rendszer-doboz megszűnt (a számok az iroda-dobozban, a
+  rendszer a Rendszer fülön).
+- Kocsi-oszlop sorrendje: fejléc (sofőr, rendszám, GPS: megy X km/h / áll
+  N perce / nem jelez, hely) → vezetés ma / 9 óra, szünet, szolgálat, heti
+  óra / 56, napi km (GPS-becslés) → Most (az első nem kész mai megálló:
+  hányadik, cég, cím, ablak, várakozás/késés színnel, ETA, hívható kontakt)
+  → Ma (fuvarok, megállók pipával; 6 megálló felett összecsukva) → Holnap
+  / pénteken-szombaton Hétfő (`kovetkezoMunkanapISO`) → Papír/számla (csak
+  ha hiányzik). Üres napnál „keress fuvart” link a Tervezésre.
+- `lib/fuvarozas2/ma-vaszon.ts`: minden aktív kocsi (a GPS nélküli „még nem
+  üzemel”), 4 oszlopra kiegészítve „N. kocsi — még nincs beállítva”
+  helykitöltővel; heti vezetési perc az Ecofleet heti útjelentéséből, 10
+  percig gyorsítótárazva; kocsinkénti fotó/számlázandó (30 nap).
+- Teszt: helyben böngészőben asztalon és telefonon, próbaadatokkal (Gergő
+  2 megálló, Micó 8 megállós túra várakozással, holnapi és kocsi nélküli
+  fuvar). A GPS-fejléc és a heti óra helyben nem próbálható (nincs Ecofleet-kulcs).

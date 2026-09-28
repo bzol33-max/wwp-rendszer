@@ -2,9 +2,11 @@
 
 // Fuvarozás 2 — a „Ma" képernyő a tervvászon (D1) szerint.
 //
-// A vászon elve: NEM a normál működést mutatja, hanem az ELTÉRÉSEKET. Fent
-// hat mérőszám, alatta „mi nem megy terv szerint", és csak utána a kocsik
-// napja. Ami rendben van, az egy sor.
+// Elrendezés (Budaházi Zoltán, 2026-09-28): négy kocsi-oszlop egymás
+// mellett, mindegyik ugyanabban a sorrendben — hol van most (GPS), vezetési
+// idő, a mostani megálló, a mai hátralévő megállók, a következő munkanap
+// fuvarja, és ha hiányzik, a papír/számla. Fölötte csak akkor sáv, ha van
+// eltérés; alatta a kocsi nélküli fuvarok és az iroda számai egy sorban.
 //
 // Honnan jön az adat:
 //   • állapot, megbízás, megálló, ablak, várakozás → az ÚJ modell
@@ -13,7 +15,7 @@
 //     getIdovonalak() (a meglévő GPS-lánc, nem duplikáljuk);
 //   • kintlévőség → a Számlák modul nyitott számlái (ha a nézőnek van rá
 //     joga; enélkül a csempe egyszerűen kimarad);
-//   • rendszer-csík → getRendszerEgeszseg().
+//   • heti vezetési idő → Ecofleet heti útjelentés (10 percig gyorsítótárazva).
 //
 // Minden becsült érték jelölve van a felületen (ETA, vezetési idő) — a
 // tachográf a sofőrnél van, ez előrejelzés.
@@ -25,7 +27,11 @@ import { getIdovonalak } from "@/lib/fuvarozas/actions";
 import { getSzamlaLista } from "@/lib/szamlak/actions";
 import { szamlaHatralek } from "@/lib/szamlak/szamla-constants";
 import { varosNev } from "@/lib/fuvarozas/varos";
-import { getRendszerEgeszseg } from "@/lib/fuvarozas2/rendszer";
+import { getUtvonalJelentes, rendszamKulcs } from "@/lib/fuvarozas/ecofleet";
+import { cachelve } from "@/lib/fuvarozas/idovonal-cache";
+import { kovetkezoMunkanapISO } from "@/lib/fuvarozas/idozona";
+import { SAJAT_JARMUVEK } from "@/lib/fuvarozas/vehicles";
+import { kontaktNev, kontaktTelefon, megalloReszlete, type MegalloReszlet } from "@/lib/fuvarozas/sofor-adatok";
 import type { Allapot } from "@/lib/fuvarozas/allapot";
 
 export type CsempeSzin = "normal" | "amber" | "red" | "mint";
@@ -46,6 +52,7 @@ export type MaMegalloSor = {
   allapot: string;
   ido: string;
   kiemelt: "kesik" | "varakozik" | null;
+  kesz: boolean;
 };
 
 export type MaBlokk = {
@@ -53,30 +60,70 @@ export type MaBlokk = {
   partner: string;
   hivatkozas: string | null;
   jelleg: "ber" | "sajat";
+  utvonal: string;
+  felrakasNap: string | null;
+  lerakasNap: string | null;
   megallok: MaMegalloSor[];
 };
 
+/** A kocsi pillanatnyi helyzete a GPS-ből. */
+export type MaKocsiAllapot = { szoveg: string; szin: "mint" | "amber" | "red" | "normal"; hely: string | null };
+
+/** A soron következő (első nem kész) mai megálló. */
+export type MaMost = {
+  fuvarId: string;
+  partner: string;
+  tipus: "felrako" | "lerako";
+  varos: string;
+  cim: string;
+  ceg: string | null;
+  ablak: string | null;
+  allapot: string;
+  kiemelt: "kesik" | "varakozik" | null;
+  /** „3/14" — hányadik megálló a fuvaron. */
+  hanyadik: string;
+  kontaktNev: string | null;
+  telefon: string | null;
+};
+
 export type MaKocsi = {
-  kod: string;
+  kod: string | null;
   cimke: string;
   sofor: string | null;
-  blokkok: MaBlokk[];
+  /** Ha a kocsi még nem üzemel („gyártás alatt”, „még nincs beállítva”). */
+  helykitolto: string | null;
+  allapot: MaKocsiAllapot | null;
   /** „Vezetés ma 3:20 · szünet 1:10 múlva · szolgálat 05:41 óta" — becslés a GPS-ből. */
   vezetesSor: string | null;
+  /** „Hét: 31 / 56 óra" — GPS-becslés. */
+  hetiSor: string | null;
+  napiKm: number | null;
   etaSor: string | null;
+  most: MaMost | null;
+  ma: MaBlokk[];
+  /** A következő munkanap új fuvarjai (ami a maiból folytatódik, az a „ma” alatt van). */
+  holnap: MaBlokk[];
+  /** Igaz, ha egy mai fuvar a következő munkanapon is tart. */
+  holnapFolytatodik: boolean;
+  /** Hiányzó papír/számla ennél a kocsinál, pl. „2 fotó hiányzik”. */
+  papir: { szoveg: string; href: string }[];
 };
 
 export type MaVaszon = {
   ma: string;
   holnap: string;
+  /** „Holnap”, vagy pénteken/szombaton „Hétfő” (a következő munkanap). */
+  holnapCimke: string;
   csempek: Csempe[];
   elteresek: Elteres[];
   kocsik: MaKocsi[];
   kocsiNelkul: { id: string; partner: string; utvonal: string; nap: string | null; allapot: Allapot }[];
   teendok: { cimke: string; ertek: string; also: string | null; href: string }[];
   holnapDoboz: { cimke: string; ertek: string; szin: CsempeSzin }[];
-  rendszer: { cimke: string; ertek: string; rendben: boolean }[];
 };
+
+/** Ennyi oszlop van mindig (a még nem üzemelő kocsik helye is látszik). */
+const KOCSI_OSZLOP = 4;
 
 /** A Postgres „2026-09-20 07:00:00+00" alakját is érti (az órás offszetet kiegészíti percekkel). */
 function idobelyeg(d: Date | string | null | undefined): Date | null {
@@ -115,22 +162,26 @@ export async function getMaVaszon(): Promise<MaVaszon> {
   const session = await requireSession();
   const most = new Date();
 
-  const [{ ma, holnap }] = await query<{ ma: string; holnap: string }>(
-    `select ((now() at time zone 'Europe/Budapest')::date)::text as ma, ((now() at time zone 'Europe/Budapest')::date + 1)::text as holnap`
+  const [{ ma, naptariHolnap }] = await query<{ ma: string; naptariHolnap: string }>(
+    `select ((now() at time zone 'Europe/Budapest')::date)::text as ma, ((now() at time zone 'Europe/Budapest')::date + 1)::text as "naptariHolnap"`
   );
+  // A „holnap” a következő munkanap: pénteken és szombaton a hétfő.
+  const holnap = kovetkezoMunkanapISO(ma);
+  const holnapCimke = holnap === naptariHolnap ? "Holnap" : "Hétfő";
 
   // 1. A nyitott megbízások (ma és holnap) kocsival, partnerrel.
   const sorok = await query<{
     id: string; allapot: Allapot; jelleg: "ber" | "sajat"; partner: string | null; hivatkozas: string | null;
     jarmu_kod: string | null; jarmu_cimke: string | null; sofor: string | null;
     felrakas_nap: string | null; lerakas_nap: string | null; hianylista: unknown[]; felrako: string | null; lerako: string | null;
+    megallo_reszletek: MegalloReszlet[] | null;
   }>(
     `select m.id::text, m.allapot, m.jelleg, coalesce(p.nev, m.megrendelo) as partner,
        coalesce(m.hivatkozas_kanonikus, m.pozicioszam, m.reise_id) as hivatkozas,
        j.kod as jarmu_kod, coalesce(j.cimke, m.jarmu) as jarmu_cimke, coalesce(a.name, m.sofor) as sofor,
        to_char(m.datum, 'YYYY-MM-DD') as felrakas_nap,
        to_char(coalesce(m.lerakas_datum, m.datum), 'YYYY-MM-DD') as lerakas_nap,
-       m.hianylista, m.felrako, m.lerako
+       m.hianylista, m.felrako, m.lerako, m.megallo_reszletek
      from fuvar_megbizasok m
      left join fuvar_partnerek p on p.id = m.partner_id
      left join fuvar_jarmuvek j on j.id = m.jarmu_id
@@ -161,11 +212,12 @@ export async function getMaVaszon(): Promise<MaVaszon> {
   const idovonal = await getIdovonalak().catch(() => null);
 
   // 3. Kocsik az új törzsből.
-  const jarmuvek = await query<{ kod: string; cimke: string; sofor: string | null }>(
-    `select j.kod, j.cimke, a.name as sofor from fuvar_jarmuvek j
+  const osszesJarmu = await query<{ id: string; kod: string; cimke: string; sofor: string | null; ecofleet_object_id: string | null; vontato_rendszam: string | null }>(
+    `select j.id::text, j.kod, j.cimke, a.name as sofor, j.ecofleet_object_id, j.vontato_rendszam from fuvar_jarmuvek j
      left join alkalmazottak a on a.id = j.sofor_id
-     where j.aktiv and j.ecofleet_object_id is not null order by j.id`
+     where j.aktiv order by j.id`
   );
+  const jarmuvek = osszesJarmu.filter((j) => j.ecofleet_object_id);
 
   const aznap = (s: { felrakas_nap: string | null; lerakas_nap: string | null }, nap: string) =>
     (s.felrakas_nap ?? "") <= nap && (s.lerakas_nap ?? s.felrakas_nap ?? "") >= nap;
@@ -321,16 +373,20 @@ export async function getMaVaszon(): Promise<MaVaszon> {
     {
       kulcs: "ellenorzes", cimke: "Ellenőrzésre vár", ertek: String(ellenorzesre.length),
       also: ellenorzesre.length > 0 ? (ellenorzesre[0].partner ?? "import") : "nincs nyitott import",
-      szin: ellenorzesre.length > 0 ? "amber" : "normal", href: "/fuvarozas2/megbizasok?csoport=ellenorzes",
+      szin: ellenorzesre.length > 0 ? "amber" : "normal", href: "/fuvarozas2/megbizasok?szakasz=beerkezett",
     },
     {
       kulcs: "papir", cimke: "Postára vár", ertek: String(papir.length),
       also: papirSurgos.length > 0 ? `${papirSurgos.length} sürgős (${papirSurgos[0].partner ?? "—"})` : "nincs sürgős",
-      szin: papirSurgos.length > 0 ? "red" : "normal", href: "/fuvarozas2/elszamolas",
+      szin: papirSurgos.length > 0 ? "red" : "normal", href: "/fuvarozas2/megbizasok?szakasz=postara",
     },
     {
       kulcs: "szamlazando", cimke: "Számlázandó", ertek: String(elsz?.szamlazhato ?? 0),
-      also: ft(elsz?.szamlazhato_ft ?? 0), szin: (elsz?.szamlazhato ?? 0) > 0 ? "mint" : "normal", href: "/fuvarozas2/elszamolas",
+      also: ft(elsz?.szamlazhato_ft ?? 0), szin: (elsz?.szamlazhato ?? 0) > 0 ? "mint" : "normal", href: "/fuvarozas2/megbizasok?szakasz=szamlazasra",
+    },
+    {
+      kulcs: "foto", cimke: "Fotó még nincs", ertek: String(elsz?.fotora ?? 0),
+      also: null, szin: (elsz?.fotora ?? 0) > 0 ? "amber" : "normal", href: "/fuvarozas2/megbizasok?szakasz=szamlazasra",
     },
   ];
 
@@ -355,41 +411,113 @@ export async function getMaVaszon(): Promise<MaVaszon> {
   }
 
   // ---------------------------------------------------------------- kocsik
-  const kocsik: MaKocsi[] = jarmuvek.map((j) => {
-    const sajat = sorok.filter((s) => s.jarmu_kod === j.kod && (aznap(s, ma) || aznap(s, holnap)));
-    const elo = idovonal?.jarmuvek.find((x) => j.cimke.includes(x.sofor) || (j.sofor ?? "").includes(x.sofor) || x.sofor === j.sofor);
-    const blokkok: MaBlokk[] = sajat.map((s) => {
-      const gs = megalloMap.get(s.id) ?? [];
-      const megalloSorok: MaMegalloSor[] = gs.map((g) => {
-        const kesz = g.gps_tavozas || g.sofor_kesz_at;
-        const varakozik = g.varakozas_kezdete && !g.varakozas_vege;
-        const ablakIg = idobelyeg(g.ablak_ig);
-        const lejartAblak = !kesz && ablakIg != null && ablakIg < most;
-        return {
-          tipus: g.tipus,
-          varos: varosNev(g.cim_nyers) ?? g.cim_nyers,
-          allapot: kesz
-            ? `kész ${ORA(g.sofor_kesz_at ?? g.gps_tavozas)}`
-            : g.gps_erkezes
-              ? varakozik ? `várakozik ${percKulonbseg(most, idobelyeg(g.varakozas_kezdete)!)} p` : `megérkezett ${ORA(g.gps_erkezes)}`
-              : "úton",
-          ido: g.ablak_tol || g.ablak_ig ? `${ORA(g.ablak_tol)}–${ORA(g.ablak_ig)}` : "—",
-          kiemelt: varakozik ? "varakozik" : lejartAblak ? "kesik" : null,
-        };
-      });
+  // Kocsinként a hiányzó papír/számla (az elmúlt 30 nap lerakásai).
+  const papirKocsinkent = await query<{ jarmu_id: string; fotora: number; szamlazando: number }>(
+    `select m.jarmu_id::text,
+       count(*) filter (where m.allapot = 'teljesitve')::int as fotora,
+       count(*) filter (where m.allapot = 'szamlazhato' and m.jelleg = 'ber')::int as szamlazando
+     from fuvar_megbizasok m
+     where m.torolt_at is null and m.jarmu_id is not null
+       and coalesce(m.lerakas_datum, m.datum) >= $1::date - 30
+     group by m.jarmu_id`,
+    [ma]
+  );
+  const hetiPerc = await hetiVezetesPercek(jarmuvek, ma).catch(() => new Map<string, number>());
+
+  const blokkKesz = (s: (typeof sorok)[number]): MaBlokk => {
+    const gs = megalloMap.get(s.id) ?? [];
+    const megalloSorok: MaMegalloSor[] = gs.map((g) => {
+      const kesz = !!(g.gps_tavozas || g.sofor_kesz_at);
+      const varakozik = !!(g.varakozas_kezdete && !g.varakozas_vege);
+      const ablakIg = idobelyeg(g.ablak_ig);
+      const lejartAblak = !kesz && ablakIg != null && ablakIg < most;
       return {
-        id: s.id,
-        partner: s.partner ?? "(nincs megbízó)",
-        hivatkozas: s.hivatkozas,
-        jelleg: s.jelleg,
-        megallok: megalloSorok.length > 0
-          ? megalloSorok
-          : [
-              { tipus: "felrako" as const, varos: varosNev(s.felrako ?? "") ?? s.felrako ?? "—", allapot: "nincs megálló-adat", ido: "—", kiemelt: null },
-              { tipus: "lerako" as const, varos: varosNev(s.lerako ?? "") ?? s.lerako ?? "—", allapot: "", ido: "—", kiemelt: null },
-            ],
+        tipus: g.tipus,
+        varos: varosNev(g.cim_nyers) ?? g.cim_nyers,
+        allapot: kesz
+          ? `kész ${ORA(g.sofor_kesz_at ?? g.gps_tavozas)}`
+          : g.gps_erkezes
+            ? varakozik ? `várakozik ${percKulonbseg(most, idobelyeg(g.varakozas_kezdete)!)} p` : `megérkezett ${ORA(g.gps_erkezes)}`
+            : "",
+        ido: g.ablak_tol || g.ablak_ig ? `${ORA(g.ablak_tol)}–${ORA(g.ablak_ig)}` : "",
+        kiemelt: varakozik ? "varakozik" : lejartAblak ? "kesik" : null,
+        kesz,
       };
     });
+    const f = varosNev(s.felrako ?? "") ?? s.felrako ?? "—";
+    const l = varosNev(s.lerako ?? "") ?? s.lerako ?? "—";
+    return {
+      id: s.id,
+      partner: s.partner ?? "(nincs megbízó)",
+      hivatkozas: s.hivatkozas,
+      jelleg: s.jelleg,
+      utvonal: megalloSorok.length > 1 ? `${megalloSorok[0].varos} → ${megalloSorok[megalloSorok.length - 1].varos}` : `${f} → ${l}`,
+      felrakasNap: s.felrakas_nap,
+      lerakasNap: s.lerakas_nap,
+      megallok: megalloSorok.length > 0
+        ? megalloSorok
+        : [
+            { tipus: "felrako" as const, varos: f, allapot: "", ido: "", kiemelt: null, kesz: false },
+            { tipus: "lerako" as const, varos: l, allapot: "", ido: "", kiemelt: null, kesz: false },
+          ],
+    };
+  };
+
+  const mostKeres = (maiak: (typeof sorok)[number][]): MaMost | null => {
+    for (const s of maiak) {
+      const gs = megalloMap.get(s.id) ?? [];
+      const i = gs.findIndex((g) => !(g.gps_tavozas || g.sofor_kesz_at));
+      if (i === -1) continue;
+      const g = gs[i];
+      const azonosTipus = gs.filter((x) => x.tipus === g.tipus);
+      const r = megalloReszlete(s.megallo_reszletek, g.tipus, azonosTipus.indexOf(g), azonosTipus.length, g.cim_nyers);
+      const varakozik = !!(g.varakozas_kezdete && !g.varakozas_vege);
+      const ablakIg = idobelyeg(g.ablak_ig);
+      return {
+        fuvarId: s.id,
+        partner: s.partner ?? "(nincs megbízó)",
+        tipus: g.tipus,
+        varos: varosNev(g.cim_nyers) ?? g.cim_nyers,
+        cim: r?.cim ?? g.cim_nyers,
+        ceg: r?.ceg ?? null,
+        ablak: g.ablak_tol || g.ablak_ig ? `${ORA(g.ablak_tol)}–${ORA(g.ablak_ig)}` : r?.ido ?? null,
+        allapot: g.gps_erkezes
+          ? varakozik ? `várakozik ${percKulonbseg(most, idobelyeg(g.varakozas_kezdete)!)} perce` : `megérkezett ${ORA(g.gps_erkezes)}`
+          : "úton oda",
+        kiemelt: varakozik ? "varakozik" : ablakIg != null && ablakIg < most ? "kesik" : null,
+        hanyadik: `${i + 1}/${gs.length}`,
+        kontaktNev: kontaktNev(r?.kontakt),
+        telefon: kontaktTelefon(r?.kontakt),
+      };
+    }
+    return null;
+  };
+
+  const kocsiAllapot = (elo: NonNullable<typeof idovonal>["jarmuvek"][number] | undefined): MaKocsiAllapot | null => {
+    if (!elo) return null;
+    const p = elo.eloPozicio;
+    if (!p) return { szoveg: elo.hiba ?? "nincs élő GPS-adat", szin: "amber", hely: null };
+    const regi = percKulonbseg(most, p.utolsoAdat);
+    if (regi > 30) return { szoveg: `GPS ${ORA(p.utolsoAdat)} óta nem jelez`, szin: "amber", hely: p.cim };
+    if (p.sebesseg >= 5) return { szoveg: `megy · ${Math.round(p.sebesseg)} km/h`, szin: "mint", hely: p.cim };
+    const allas = [...elo.szakaszok].reverse().find((x) => x.tipus === "allas");
+    const allPerc = allas && allas.tipus === "allas" && allas.elo ? percKulonbseg(most, allas.kezdet) : null;
+    const tervezetlen = elo.nemTervezettAllasok.some((a) => percKulonbseg(most, a.veg) <= 5 && a.percek >= 30);
+    return {
+      szoveg: [allPerc != null ? `áll ${allPerc >= 60 ? `${oraPerc(allPerc)} ó` : `${allPerc} p`}` : "áll", p.motorJar ? "motor jár" : null].filter(Boolean).join(" · "),
+      szin: tervezetlen ? "amber" : "normal",
+      hely: p.cim,
+    };
+  };
+
+  const kocsik: MaKocsi[] = osszesJarmu.map((j) => {
+    const torzs = SAJAT_JARMUVEK.find((x) => x.rendszamok[0] === j.kod) ?? SAJAT_JARMUVEK.find((x) => x.rendszamok.length === 0 && j.kod === "JANI");
+    const becenev = torzs?.sofor ?? null;
+    const sajat = sorok.filter((s) => s.jarmu_kod === j.kod && s.allapot !== "ellenorzesre_var");
+    // Ma: a mai napra eső, és a korábbról csúszó, még folyamatban lévő fuvarok.
+    const maiak = sajat.filter((s) => aznap(s, ma) || ((s.lerakas_nap ?? "") < ma && s.allapot === "folyamatban"));
+    const holnapiak = sajat.filter((s) => aznap(s, holnap) && !maiak.includes(s));
+    const elo = becenev ? idovonal?.jarmuvek.find((x) => x.sofor === becenev) : undefined;
 
     // Vezetési idő becslés: 4,5 óra vezetés után kötelező 45 perc szünet.
     let vezetesSor: string | null = null;
@@ -398,15 +526,42 @@ export async function getMaVaszon(): Promise<MaVaszon> {
       const utolsoSzunetOta = elo.utolsoSzunetVege ? percKulonbseg(most, elo.utolsoSzunetVege) : vezetesPerc;
       const szunetigPerc = Math.max(0, 270 - Math.min(utolsoSzunetOta, vezetesPerc));
       vezetesSor = [
-        `Vezetés ma ${oraPerc(vezetesPerc)}`,
+        `Vezetés ma ${oraPerc(vezetesPerc)} / 9:00`,
         szunetigPerc === 0 ? "szünet esedékes" : `szünet ${oraPerc(szunetigPerc)} múlva`,
         elo.szolgalatKezdet ? `szolgálat ${ORA(elo.szolgalatKezdet)} óta` : null,
       ].filter(Boolean).join(" · ");
     }
-    const etaSor = elo?.eloEta && !elo.eloEta.bizonytalan ? `ETA ${elo.eloEta.cel}: ${ORA(elo.eloEta.erkezes)}` : elo?.hiba ? elo.hiba : null;
+    const hp = hetiPerc.get(j.kod);
+    const etaSor = elo?.eloEta && !elo.eloEta.bizonytalan ? `ETA ${elo.eloEta.cel}: ${ORA(elo.eloEta.erkezes)}` : null;
+    const pk = papirKocsinkent.find((x) => x.jarmu_id === j.id);
+    const papirSorok: { szoveg: string; href: string }[] = [];
+    if (pk?.fotora) papirSorok.push({ szoveg: `${pk.fotora} fuvarnál nincs még fotó/papír`, href: "/fuvarozas2/megbizasok?szakasz=szamlazasra" });
+    if (pk?.szamlazando) papirSorok.push({ szoveg: `${pk.szamlazando} számlázandó`, href: "/fuvarozas2/megbizasok?szakasz=szamlazasra" });
 
-    return { kod: j.kod, cimke: j.cimke, sofor: j.sofor, blokkok, vezetesSor, etaSor };
+    return {
+      kod: j.kod,
+      cimke: j.cimke,
+      sofor: becenev ?? j.sofor,
+      helykitolto: j.ecofleet_object_id ? null : "még nem üzemel",
+      allapot: j.ecofleet_object_id ? kocsiAllapot(elo) : null,
+      vezetesSor,
+      hetiSor: hp != null ? `Hét: ${Math.round(hp / 60)} / 56 óra` : null,
+      napiKm: elo?.napiKm ?? null,
+      etaSor,
+      most: mostKeres(maiak),
+      ma: maiak.map(blokkKesz),
+      holnap: holnapiak.map(blokkKesz),
+      holnapFolytatodik: maiak.some((s) => (s.lerakas_nap ?? "") >= holnap),
+      papir: papirSorok,
+    };
   });
+  while (kocsik.length < KOCSI_OSZLOP) {
+    kocsik.push({
+      kod: null, cimke: `${kocsik.length + 1}. kocsi`, sofor: null, helykitolto: "még nincs beállítva",
+      allapot: null, vezetesSor: null, hetiSor: null, napiKm: null, etaSor: null, most: null,
+      ma: [], holnap: [], holnapFolytatodik: false, papir: [],
+    });
+  }
 
   // ---------------------------------------------------------------- teendők, holnap, rendszer
   const teendok = [
@@ -423,21 +578,13 @@ export async function getMaVaszon(): Promise<MaVaszon> {
   const holnapKocsiNelkul = holnapiak.filter((s) => !s.jarmu_kod);
   const utkozes = jarmuvek.filter((j) => holnapiak.filter((s) => s.jarmu_kod === j.kod).length > 1).length;
   const holnapDoboz: { cimke: string; ertek: string; szin: CsempeSzin }[] = [
-    { cimke: "Holnapi megbízás", ertek: String(holnapiak.length), szin: "normal" },
-    { cimke: "Holnap kocsi nélkül", ertek: String(holnapKocsiNelkul.length), szin: holnapKocsiNelkul.length > 0 ? "red" : "normal" },
+    { cimke: `${holnapCimke}i megbízás`, ertek: String(holnapiak.length), szin: "normal" },
+    { cimke: `${holnapCimke} kocsi nélkül`, ertek: String(holnapKocsiNelkul.length), szin: holnapKocsiNelkul.length > 0 ? "red" : "normal" },
     { cimke: "Ütközés", ertek: utkozes === 0 ? "nincs" : `${utkozes} kocsi`, szin: utkozes > 0 ? "amber" : "normal" },
   ];
 
-  let rendszer: { cimke: string; ertek: string; rendben: boolean }[] = [];
-  try {
-    const eg = await getRendszerEgeszseg();
-    rendszer = eg.sorok.map((s) => ({ cimke: s.cim, ertek: s.ertek, rendben: s.allapot === "rendben" }));
-  } catch {
-    rendszer = [];
-  }
-
   return {
-    ma, holnap, csempek,
+    ma, holnap, holnapCimke, csempek,
     elteresek: elteresek.sort((a, b) => (a.szin === b.szin ? 0 : a.szin === "red" ? -1 : 1)),
     kocsik,
     kocsiNelkul: sorok.filter((s) => !s.jarmu_kod && (aznap(s, ma) || aznap(s, holnap))).map((s) => ({
@@ -445,7 +592,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
       utvonal: `${varosNev(s.felrako ?? "") ?? s.felrako ?? "—"} → ${varosNev(s.lerako ?? "") ?? s.lerako ?? "—"}`,
       nap: s.felrakas_nap, allapot: s.allapot,
     })),
-    teendok, holnapDoboz, rendszer,
+    teendok, holnapDoboz,
   };
 }
 
@@ -456,4 +603,35 @@ function elteresekOsszefoglalo(e: Elteres[]): string {
     csoport.set(kulcs, (csoport.get(kulcs) ?? 0) + 1);
   }
   return [...csoport.entries()].map(([k, n]) => `${n} ${k}`).join(" · ");
+}
+
+/**
+ * A hét (hétfőtől máig) GPS szerinti vezetési perce kocsinként — az 56 órás
+ * heti kerethez. Az Ecofleet heti útjelentéséből, 10 percig gyorsítótárazva,
+ * hogy a Ma oldal ne kérdezze minden megnyitáskor.
+ */
+async function hetiVezetesPercek(
+  jarmuvek: { kod: string; ecofleet_object_id: string | null; vontato_rendszam: string | null }[],
+  ma: string
+): Promise<Map<string, number>> {
+  const d = new Date(`${ma}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  const hetfo = d.toISOString().slice(0, 10);
+  const ids = jarmuvek.map((j) => j.ecofleet_object_id).filter((x): x is string => !!x);
+  if (ids.length === 0) return new Map();
+  return cachelve(`ma-heti-vezetes:${hetfo}:${ma}`, 10 * 60 * 1000, async () => {
+    const utak = await getUtvonalJelentes(ids, hetfo, ma);
+    const eredmeny = new Map<string, number>();
+    for (const j of jarmuvek) {
+      const kulcs = rendszamKulcs(j.vontato_rendszam ?? j.kod);
+      let percek = 0;
+      for (const u of utak.filter((x) => x.rendszamKulcs === kulcs)) {
+        const i = new Date(u.indulas.replace(" ", "T"));
+        const e = new Date(u.erkezes.replace(" ", "T"));
+        if (!Number.isNaN(i.getTime()) && !Number.isNaN(e.getTime()) && e > i) percek += (e.getTime() - i.getTime()) / 60000;
+      }
+      eredmeny.set(j.kod, Math.round(percek));
+    }
+    return eredmeny;
+  });
 }
