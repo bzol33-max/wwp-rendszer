@@ -18,6 +18,7 @@ import {
   cimSugarKm,
   epitsIdovonal,
   haversineKm,
+  eloLancSorrend,
   jelolMegallokat,
   kiegesziteloAllapottal,
   napiTavKm,
@@ -822,20 +823,12 @@ async function lancoltEloBecsles(
   kalibracio: KalibraciosEredmeny
 ): Promise<TervezettFuvarSzakasz[]> {
   const maiNapISO = budapestNapISO(most);
-  const sorrend = fuvarok
-    .flatMap((f, fi) => f.megallok.map((m, mi) => ({ fi, mi, m })))
-    // Az `eppenItt` pontok is kimaradnak: a jármű ott áll, nincs mit becsülni —
-    // és ha bevonnánk, a lánc a nulla távolságú "út" miatt a rá következő
-    // pontok idejét is a jelen pillanattól számolná, mintha a rakodás már
-    // véget ért volna.
-    .filter(({ m }) => !m.elhagyva && !m.eppenItt && budapestNapISO(m.idopont) === maiNapISO)
-    // A lánc sorrendje: előbb az aznapi fuvarok pontjai, a nap végére sorolt
-    // (időpont nélküli többnapos) fuvaré utánuk — lásd napVegereSorolt.
-    .sort(
-      (a, b) =>
-        Number(napVegereSorolt(fuvarok[a.fi], maiNapISO)) - Number(napVegereSorolt(fuvarok[b.fi], maiNapISO)) ||
-        a.m.idopont.getTime() - b.m.idopont.getTime()
-    );
+  // Az `eppenItt` pontok kimaradnak: a jármű ott áll, nincs mit becsülni — és
+  // ha bevonnánk, a lánc a nulla távolságú "út" miatt a rá következő pontok
+  // idejét is a jelen pillanattól számolná, mintha a rakodás már véget ért
+  // volna. A sorrend (elkezdett fuvar elöl, fuvaronként egyben, a nap végére
+  // sorolt a végén): lásd eloLancSorrend.
+  const sorrend = eloLancSorrend(fuvarok, maiNapISO, (f) => napVegereSorolt(f, maiNapISO));
 
   const eredmeny = fuvarok.map((f) => ({ ...f, megallok: [...f.megallok] }));
 

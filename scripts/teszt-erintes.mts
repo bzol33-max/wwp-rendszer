@@ -9,11 +9,13 @@
 // rövid megállás (piros lámpa).
 
 import {
+  eloLancSorrend,
   fuvarKeszGpsSzerint,
   jelolMegallokat,
   kiegesziteloAllapottal,
   ratesziKeziJeloleseket,
   type IdovonalSzakasz,
+  type TervezettFuvarSzakasz,
   type TervezettMegallo,
 } from "@/lib/fuvarozas/idovonal";
 import { cimPontossaga, varosNev } from "@/lib/fuvarozas/varos";
@@ -422,6 +424,27 @@ function vezetes(honnan: { lat: number; lon: number }, hova: { lat: number; lon:
   // Lerakási ablakkal (Duvenbeck PV/PB) nem tágítunk.
   const kotott = [megallo(0, "felrako", HAJDUNANAS, t(0, 0, 25)), megallo(1, "lerako", JASZBERENY, t(0, 0, 29))];
   eq("megadott lerakási ablak: nem tágul", jelolMegallokat([kotott], szakaszok)[0][1].elhagyva, false);
+}
+
+// 7) Élő ETA-lánc sorrendje (Gergő, 2026-09-29): a már felrakott RBT-fuvar
+//    (#284) budapesti lerakója jön ELŐBB, nem a később rögzített saját fuvar
+//    (#275) korábbi statikus idejű pontjai — különben a budapesti ETA 20:50.
+{
+  const fuvar = (id: string, megallok: TervezettMegallo[]): TervezettFuvarSzakasz => ({
+    id, fuvarTipus: "sajat", megrendelo: null, pozicioszam: null, aru: null, mennyiseg: null, suly: null,
+    fuvardij: null, fuvardijPenznem: "Ft", fuvarlevelFotoDb: 0, referencia: null, honnan: null, hova: "",
+    megallok, kezdet: t(6, 0, 29), veg: t(18, 0, 29), idoBizonytalan: false, utvonalBizonytalan: false, tobbNapos: false,
+  });
+  const f275 = fuvar("275", [
+    { ...megallo(0, "felrako", PAPA, t(8, 0, 29)), idopont: t(8, 0, 29) },
+    { ...megallo(1, "lerako", DEBRECEN, t(12, 0, 29)), idopont: t(12, 0, 29) },
+  ]);
+  const f284 = fuvar("284", [
+    { ...megallo(0, "felrako", DEBRECEN, t(6, 0, 29)), elhagyva: true, idopont: t(9, 17, 29) },
+    { ...megallo(1, "lerako", PAPA, t(18, 0, 29)), idopont: t(18, 0, 29) },
+  ]);
+  const sorrend = eloLancSorrend([f275, f284], "2026-09-29", () => false);
+  eq("ETA-lánc: az elkezdett fuvar lerakója elöl, a saját fuvar utána, egyben", sorrend.map((x) => `${x.fi}/${x.mi}`), ["1/1", "0/0", "0/1"]);
 }
 
 console.log(`\n${ok} rendben, ${bad} hiba`);
