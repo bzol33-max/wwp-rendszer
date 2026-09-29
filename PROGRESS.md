@@ -2582,3 +2582,14 @@ kérdésekkel kell megnézni.
 - Ugyanez a hiba a Trans-Sped bejegyzésében: az „InnoManagement” programnév
   is kikerült az ujjlenyomatból. Teszt: 108/0.
 - A már felvett 4173-as sor megrendelője még RBT — a felületen kell átírni.
+
+## 2026-09-29 — Ma oldal: a kocsi fuvarjai a valós sorrendben
+
+- **Hiba:** Gergő oszlopában a saját fuvar (#275, Szigetszentmiklós →
+  Tompaládony) a bér fuvar (#284, RBT, Téglás → Budapest) ELŐTT állt, pedig
+  az RBT-t már felrakta, a saját csak utána jön. A lista dátum + sorszám
+  szerint rendezett, a két fuvar egy napra esett, a #275 kisebb sorszámú.
+- **Javítás (`lib/fuvarozas2/ma-tukor.ts` `fuvarSorrend`):** előbb a már
+  elkezdett fuvarok (GPS-érkezés / kész jelölés) a legkorábbi tényük szerint,
+  utánuk a többi a tervezett idejük szerint — ugyanaz az elv, mint a sofőr
+  telefonján és a GPS lapon. Teszt: `scripts/teszt-ma-tukor.ts` 12/0.
