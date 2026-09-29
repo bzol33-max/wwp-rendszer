@@ -2674,3 +2674,15 @@ Budaházi Zoltán a 8 látványtervből az 1-est választotta, üres csempékkel
 - 2. csempe: ugyanez a hétre (hétfőtől máig, ISO-hét, pl. „40. hét”), ugyanazzal
   a szabállyal (első felrakás a héten, legkésőbb ma).
 - `BerHavi` → `BerOsszesito` (`cim` mező), `berHeti` a `MaVaszon`-ban.
+
+## 2026-09-29 — Ma oldal: a havi bérfuvar-csempe lenyitható hetekre
+
+- Az 1. csempére kattintva alatta lenyílik egy sor: a hónap hetei, ugyanolyan
+  bérfuvar-csempékben („39. hét · 21–27.”). A hetek a hónapba eső napokra
+  vannak vágva, így az összegük kiadja a havit (szeptember: 5 hét, mert 1-je
+  kedd; február 2027: 4).
+- Ugyanaz a szabály (első felrakás az időszakban, legkésőbb ma); a még el nem
+  kezdődött hét „—”.
+- A csempesor külön kliens-komponens lett: `components/fuvarozas2/csempesor.tsx`.
+- Mellette: a heti csempe számainak magyarázatához csak olvasó napló a
+  `scripts/migrate.mjs`-ben (`naplozBerCsempeHetet`, #250).
