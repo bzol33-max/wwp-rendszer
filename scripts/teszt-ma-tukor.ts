@@ -112,5 +112,25 @@ const ket = tukorSorok({
 });
 eq("Két állás időrendben a nyitott megálló előtt", rovid(ket), ["ÁLLÁS 40p A pihenő", "ÁLLÁS 30p B kút", "# X", "Le Győr [kovetkezo]"]);
 
+// --- Gergő 09-29: a korábban rögzített saját fuvar (#275) csak a már
+// elkezdett RBT-fuvar (#284) UTÁN jön — a sorrendet a tény dönti, nem a sorszám.
+const n29 = (x: Partial<TukorMegallo>) => ({ tervezett_nap: "2026-09-29", ...x });
+const t29 = (hhmm: string) => t(hhmm).replace("2026-09-28", "2026-09-29");
+const g29 = tukorSorok({
+  fuvarok: [
+    { id: "275", partner: "Fabrika 2000 Kft", hivatkozas: null, jelleg: "sajat", megallo_reszletek: null, megallok: [
+      m(1, "felrako", "Szigetszentmiklós", n29({})),
+      m(2, "lerako", "Tompaládony", n29({})),
+    ] },
+    { id: "284", partner: "RBT EUROPE Kft.", hivatkozas: "R16 / 2679 / 3168", jelleg: "ber", megallo_reszletek: null, megallok: [
+      m(1, "felrako", "HAJDU HAJDUSÁGI ZRT, [H-4243] TÉGLÁS, Hrsz. 0135/9", n29({ gps_erkezes: t29("09:17"), gps_tavozas: t29("10:03") })),
+      m(2, "lerako", "[H-1106] BUDAPEST X, Maglódi út 14/B.", n29({})),
+    ] },
+  ],
+  allasok: [], eta: null, most: new Date("2026-09-29T09:00:00Z"), ma: "2026-09-29",
+});
+eq("Gergő 09-29: az elkezdett bér fuvar elöl, a saját utána", rovid(g29).filter((x) => x.startsWith("#")), ["# RBT EUROPE Kft.", "# Fabrika 2000 Kft"]);
+eq("Gergő 09-29: Budapest a következő, a saját fuvar hátra", rovid(g29).filter((x) => !x.startsWith("#")).map((x) => x.replace(/^.* \[/, "[")), ["[kesz]", "[kovetkezo]", "[hatra]", "[hatra]"]);
+
 console.log(`\nMa-tükör teszt: ${ok} rendben, ${bad} hiba`);
 if (bad > 0) process.exit(1);

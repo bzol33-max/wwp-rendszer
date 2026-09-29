@@ -85,6 +85,33 @@ const perc = (a: Date, b: Date) => Math.round((a.getTime() - b.getTime()) / 6000
 const napNeve = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("hu-HU", { timeZone: "UTC", weekday: "long" });
 const ekezetNelkul = (x: string) => x.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
+/**
+ * A kocsi fuvarjai a valós sorrendben: előbb a már elkezdettek (van GPS-
+ * érkezés vagy kész jelölés) a legkorábbi tényük szerint, utánuk a többi a
+ * legkorábbi tervezett idejük (ablak, különben a nap) szerint; egyezésnél a
+ * bejövő sorrend marad. A dátum+sorszám nem elég: Gergő 09-29-i napján a
+ * később rögzített, de már elkezdett RBT-fuvar (#284) a korábban rögzített,
+ * utána következő saját fuvar (#275) mögé került.
+ */
+function fuvarSorrend(fuvarok: TukorFuvar[]): TukorFuvar[] {
+  const kulcs = (f: TukorFuvar) => {
+    const tenyek = f.megallok
+      .flatMap((g) => [idobelyeg(g.gps_erkezes), idobelyeg(g.sofor_kesz_at)])
+      .filter((d): d is Date => d !== null)
+      .map((d) => d.getTime());
+    if (tenyek.length) return { elkezdve: 0, ido: Math.min(...tenyek) };
+    const tervek = f.megallok
+      .map((g) => idobelyeg(g.ablak_tol) ?? (g.tervezett_nap ? idobelyeg(`${g.tervezett_nap} 00:00:00+00`) : null))
+      .filter((d): d is Date => d !== null)
+      .map((d) => d.getTime());
+    return { elkezdve: 1, ido: tervek.length ? Math.min(...tervek) : Number.MAX_SAFE_INTEGER };
+  };
+  return fuvarok
+    .map((f, i) => ({ f, i, k: kulcs(f) }))
+    .sort((a, b) => a.k.elkezdve - b.k.elkezdve || a.k.ido - b.k.ido || a.i - b.i)
+    .map((x) => x.f);
+}
+
 export function tukorSorok(be: {
   fuvarok: TukorFuvar[];
   allasok: TukorGpsAllas[];
@@ -109,7 +136,7 @@ export function tukorSorok(be: {
   // A megálló tényleges ideje — ehhez sorolódnak be a különálló állások.
   const rendezoIdo = new Map<TukorSor, number | null>();
   let nyitottVolt = false;
-  for (const f of be.fuvarok) {
+  for (const f of fuvarSorrend(be.fuvarok)) {
     eredmeny.push({ tipus: "fuvar", fuvarId: f.id, partner: f.partner ?? "(nincs megbízó)", hivatkozas: f.hivatkozas, jelleg: f.jelleg });
     for (const g of f.megallok) {
       const kesz = !!(g.gps_tavozas || g.sofor_kesz_at);
