@@ -2652,3 +2652,16 @@ Budaházi Zoltán a 8 látványtervből az 1-est választotta, üres csempékkel
   ugyanúgy megjelenik.
 - Következő: sorban funkció a csempéknek (a hely kitöltése = a tömb elemének
   cseréje `{ cimke, ertek, also?, szin, href? }`-re).
+
+## 2026-09-29 — Ma oldal, 1. csempe: havi bérfuvar kocsinként (D terv)
+
+- Felül zöld fejlécben a hónap bérfuvarjainak nettó díja (Ft), alatta külön
+  „+ … €” — az euró nincs átváltva.
+- Alatta kocsinként: név, összeg, csík a kocsi színében (Gergő kék, Micó
+  sárga, Jani zöld; a 4. hely szürke „—”). A csík hossza csak a forintos részt
+  mutatja.
+- Szabály: az a fuvar számít a hónapba, amelyik első felrakása (`m.datum`) ebben
+  a hónapban van és legkésőbb ma kezdődött; előző havi megbízás e havi
+  lerakása nem. Ellenőrzésre váró import és törölt megbízás nem számít.
+- Kód: `BerHavi` a `lib/fuvarozas2/ma-vaszon.ts`-ben, `BerHaviCsempe` a
+  `components/fuvarozas2/ma-vaszon.tsx`-ben. A 2–10. hely még üres.
