@@ -178,7 +178,9 @@ export const PARTNEREK: readonly Partner[] = [
   {
     kod: "trans-sped",
     nev: "Trans-Sped Kft.",
-    ujjlenyomat: [/@trans-sped\.hu/i, /\bTrans-Sped\b/i, /InnoManagement/i],
+    // Az "InnoManagement" (a megbízás-készítő program) NEM ujjlenyomat —
+    // ugyanaz a hiba, ami a SpedINFORM-mal a Flexlogot RBT-vé tette.
+    ujjlenyomat: [/@trans-sped\.hu/i, /\bTrans-Sped\b/i],
     torzsVege: [
       /Felt[ée]telek az alv[áa]llalkoz[óo] fel[ée]/i,
       /BELF[ÖO]LDI FUVAROZ[ÁA]SI MEGB[ÍI]Z[ÁA]S/,

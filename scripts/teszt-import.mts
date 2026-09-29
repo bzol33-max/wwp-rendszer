@@ -163,9 +163,14 @@ egyenlo(
   "a Huncargo mint felrakóhely nem teszi Huncargo-irattá"
 );
 egyenlo(
-  felismerPartner("A dokumentum az Innomedio Kft. InnoManagement szoftverével készült.")?.kod,
+  felismerPartner("A dokumentum az Innomedio Kft. InnoManagement szoftverével készült."),
+  null,
+  "az InnoManagement egymagában nem Trans-Sped"
+);
+egyenlo(
+  felismerPartner("Megbízó: Trans-Sped Kft. 4031 Debrecen — InnoManagement")?.kod,
   "trans-sped",
-  "Trans-Sped felismerése a sablongeneráló szoftver nevéből"
+  "Trans-Sped felismerése a cégnévből"
 );
 egyenlo(
   felismerPartner("Flott-Trans Kft. 3300 Eger, flott@flott.hu")?.kod,

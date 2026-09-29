@@ -2579,4 +2579,6 @@ kérdésekkel kell megnézni.
   RBT ujjlenyomatából; új partner: Flexlog Kft. (`flexlog.hu`, „FLEXLOG
   KFT”, 30 nap, „Poz.számunk”, a szerződéses rész levágása). Teszt:
   `scripts/teszt-import.mts` 107/0.
-- A már felvett 4173-as sor megrendelője még RBT — átírása jóváhagyásra vár.
+- Ugyanez a hiba a Trans-Sped bejegyzésében: az „InnoManagement” programnév
+  is kikerült az ujjlenyomatból. Teszt: 108/0.
+- A már felvett 4173-as sor megrendelője még RBT — a felületen kell átírni.
