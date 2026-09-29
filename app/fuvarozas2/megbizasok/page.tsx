@@ -1,16 +1,14 @@
 import Link from "next/link";
 import { requireSession } from "@/lib/auth/dal";
-import { getMegbizas, getMunkaasztal } from "@/lib/fuvarozas2/megbizasok";
+import { getKocsiMost, getMegbizas, getMunkaasztal } from "@/lib/fuvarozas2/megbizasok";
 import { getParositatlanFuvarszamlak } from "@/lib/fuvarozas/megbizasok";
 import { SZAKASZOK, type Szakasz } from "@/lib/fuvarozas2/munkaasztal";
 import { Fuvarozas2Fulek } from "@/components/fuvarozas2/fulek";
 import { MegbizasReszlet } from "@/components/fuvarozas2/megbizas-reszlet";
-import { MunkaLista, Oldalsav, munkaasztalLink, type MunkaasztalSzuro } from "@/components/fuvarozas2/munkaasztal";
+import { KocsiMostPanel, MunkaLista, Oldalsav, munkaasztalLink, type MunkaasztalSzuro } from "@/components/fuvarozas2/munkaasztal";
 import { formatFt } from "@/components/fuvarozas2/kozos";
 import { SajatFuvarUrlap, VisszaveszemGomb } from "@/components/fuvarozas2/sajat-fuvar-urlap";
 import { getSajatFuvarSegedlet } from "@/lib/fuvarozas2/sajat-fuvar";
-import { getSegedAllapot } from "@/lib/fuvarozas2/seged/seged";
-import { Seged } from "@/components/fuvarozas2/seged";
 
 export const dynamic = "force-dynamic";
 
@@ -37,11 +35,9 @@ export default async function Page({ searchParams }: {
 
   const session = await requireSession();
   const szerkeszthet = session.can("fuvarozas").edit;
-  // A jobb oldali kocsi-panel helyén a segéd (2026-09-26) — csak adminnak.
-  const segedJog = session.role === "admin";
-  const [asztal, seged, reszlet, parositatlan] = await Promise.all([
+  const [asztal, kocsiMost, reszlet, parositatlan] = await Promise.all([
     getMunkaasztal({ szakasz, jelleg, kocsi: sp.kocsi, q: szuro.q }),
-    segedJog && !reszletId && !uj ? getSegedAllapot().catch(() => null) : Promise.resolve(null),
+    getKocsiMost(sp.km),
     reszletId ? getMegbizas(reszletId) : Promise.resolve(null),
     getParositatlanFuvarszamlak(60).catch(() => []),
   ]);
@@ -74,11 +70,11 @@ export default async function Page({ searchParams }: {
       <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)_380px] lg:items-start">
         <Oldalsav szuro={szuro} szamok={asztal.szamok} kereso={asztal.kereso} />
         <MunkaLista sorok={asztal.sorok} ma={asztal.ma} szuro={szuro} cim={listaCim} />
-        <aside className="order-first flex flex-col gap-3 lg:order-none lg:sticky lg:top-4" aria-label={reszlet ? "A kiválasztott megbízás" : "Segéd"}>
+        <aside className="order-first flex flex-col gap-3 lg:order-none lg:sticky lg:top-4" aria-label={reszlet ? "A kiválasztott megbízás" : "A kocsi most"}>
           {segedlet && (uj || elokeszitett) ? (
             <>
               <Link href={munkaasztalLink(szuro, { reszlet: undefined, uj: false })} className="text-sm font-semibold text-[var(--f2-blue)] hover:underline">
-                ← vissza a segédhez
+                ← vissza a kocsihoz
               </Link>
               <SajatFuvarUrlap
                 key={elokeszitett?.id ?? "uj"}
@@ -101,7 +97,7 @@ export default async function Page({ searchParams }: {
           ) : reszlet ? (
             <>
               <Link href={munkaasztalLink(szuro, { reszlet: undefined })} className="text-sm font-semibold text-[var(--f2-blue)] hover:underline">
-                ← vissza a segédhez
+                ← vissza a kocsihoz
               </Link>
               {visszaveheto ? <VisszaveszemGomb id={reszlet.sor.id} /> : null}
               <MegbizasReszlet
@@ -112,15 +108,7 @@ export default async function Page({ searchParams }: {
               />
             </>
           ) : (
-            seged ? (
-              <Seged
-                kezdoUzenetek={seged.uzenetek}
-                kezdoTudas={seged.tudas}
-                teendok={seged.teendok}
-                kezdoMuveletek={seged.varakozoMuveletek}
-                kezdoUtolsoMuveletek={seged.utolsoMuveletek}
-              />
-            ) : null
+            <KocsiMostPanel adat={kocsiMost} szuro={szuro} />
           )}
         </aside>
       </div>
