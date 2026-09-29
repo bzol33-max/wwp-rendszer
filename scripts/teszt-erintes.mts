@@ -398,5 +398,31 @@ function vezetes(honnan: { lat: number; lon: number }, hova: { lat: number; lon:
   eq("zárójeles irsz továbbra is jó", varosNev("Nyíregyháza (4400 Móricz Zsigmond u. 24.)"), "Nyíregyháza");
 }
 
+// 6) Korábban lerakott megálló (Micó EUCARGO #281, 2026-09-28): a lerakók
+//    napja 09-29, de Jászberény már 09-28 délután megvolt, a felrakás
+//    (Hajdúnánás) után. A csak napra szóló ablak a fuvar első GPS-felrakásáig
+//    előrejön — a felrakás ELŐTTI ottlét viszont továbbra sem számít.
+{
+  const HAJDUNANAS = { lat: 47.8556, lon: 21.4252 };
+  const JASZBERENY = { lat: 47.4799, lon: 19.9131 };
+  const lerako = (index: number, hely: { lat: number; lon: number }) => ({ ...megallo(index, "lerako", hely, t(0, 0, 29)), ablakTagithato: true });
+  const f281 = [megallo(0, "felrako", HAJDUNANAS, t(0, 0, 25)), lerako(1, JASZBERENY)];
+  const szakaszok: IdovonalSzakasz[] = [
+    allas(JASZBERENY, t(6, 0, 28), 30), // a rakodás előtt: nem ez a lerakás
+    vezetes(JASZBERENY, HAJDUNANAS, t(6, 30, 28), t(8, 10, 28)),
+    allas(HAJDUNANAS, t(8, 18, 28), 25),
+    vezetes(HAJDUNANAS, JASZBERENY, t(8, 43, 28), t(15, 50, 28)),
+    allas(JASZBERENY, t(15, 54, 28), 30),
+    vezetes(JASZBERENY, HAJDUNANAS, t(16, 24, 28), t(18, 0, 28)),
+  ];
+  const [m] = jelolMegallokat([f281], szakaszok);
+  eq("korábbi lerakás: kész", m[1].elhagyva, true);
+  eq("korábbi lerakás: a rakodás utáni ottlét", m[1].tenylegesIdo?.toISOString(), t(15, 54, 28).toISOString());
+
+  // Lerakási ablakkal (Duvenbeck PV/PB) nem tágítunk.
+  const kotott = [megallo(0, "felrako", HAJDUNANAS, t(0, 0, 25)), megallo(1, "lerako", JASZBERENY, t(0, 0, 29))];
+  eq("megadott lerakási ablak: nem tágul", jelolMegallokat([kotott], szakaszok)[0][1].elhagyva, false);
+}
+
 console.log(`\n${ok} rendben, ${bad} hiba`);
 process.exit(bad ? 1 : 0);

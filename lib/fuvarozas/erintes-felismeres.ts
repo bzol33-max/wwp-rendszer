@@ -53,6 +53,11 @@ export function megalloAblakKezdet(sor: AblakosFuvarSor, tipus: "felrako" | "ler
   return sor.lerakas_ablak_tol ? new Date(sor.lerakas_ablak_tol) : napKezdete(sor.lerakas_datum ?? sor.datum);
 }
 
+/** Lerakó, amelynek ablakát csak a lerakás napja adja — lásd TervezettMegallo.ablakTagithato. */
+export function megalloAblakTagithato(sor: AblakosFuvarSor, tipus: "felrako" | "lerako"): boolean {
+  return tipus === "lerako" && !sor.lerakas_ablak_tol;
+}
+
 // A címek geokódolása külső API-t hív — a címek nem változnak, a
 // folyamat élettartamáig érvényes gyorsítótár elég. A helyszín-szótár
 // (fuvar_helyszin_koordinata) a külső hívás ELŐTT jön: ha egy címhez a
@@ -140,6 +145,7 @@ export async function epitsErintesMegallokat(
       tenylegesTavozas: null,
       bizonytalanFelismeres: false,
       ablakKezdet,
+      ablakTagithato: megalloAblakTagithato(sor, m.tipus),
       keszForras: null,
       keszBy: null,
     };

@@ -279,6 +279,7 @@ async function main() {
   await toroljeMasodpeldanyokatOnce(pool);
   await toroljeMasodpeldanyokat2Once(pool);
   await javitsaHuncargoMegrendelotOnce(pool);
+  await aktualizaldMicoEucargoNapjatOnce(pool);
   await naplozFuvarHelyEllenorzest(pool);
   await ellenorizSoforFiokokat(pool);
 
@@ -1241,6 +1242,157 @@ async function javitsaHuncargoMegrendelotOnce(pool) {
     `[migrate] Huncargo 26S009326/1 megrendelője javítva: ${rows.length} sor` +
       rows.map((r) => ` | #${r.id} (volt: ${r.regi_megrendelo ?? "-"}; kocsi: ${r.jarmu ?? "-"}; sofőr: ${r.sofor ?? "-"}; jarmu_id: ${r.jarmu_id ?? "-"})`).join("")
   );
+}
+
+// Egyszeri javítás (2026-09-29, Budaházi Zoltán kérésére): Micó EUCARGO-
+// fuvarja (#281, 2026.09.25.02) összevetve Horváth Olivér 09-25-i levelével
+// és a GPS-szel.
+//   1. A 10 lerakó a rendszerben összekeverve állt (Ete Kossuth, Nagyalásony,
+//      Császár, Galgamácsa, Bakonycsernye, Ete Ady, Farmos, Jászberény, …) —
+//      most a levél útvonal-sorrendjében: Hejőpapi, Jászberény, Farmos,
+//      Galgamácsa, Ete (Kossuth), Ete (Ady), Császár, Bakonycsernye,
+//      Nagyalásony, Mezőlak. A sorrend HÁROM helyen él, együtt mozgatjuk:
+//      a lerako szöveg (sofőr-nézet, GPS-felismerés), a fuvar_megallok
+//      sorszáma és a fuvar_megallo_allapot indexe (sofőr jelölése, GPS-napló).
+//      A megallo_reszletek (cég, kontakt) város szerint párosul — a két Ete
+//      egymáshoz képesti sorrendje nem változik.
+//   2. Jászberény (09-28 15:54–~16:25), Farmos (16:47–~17:40) és Galgamácsa
+//      (09-28 19:03-tól, reggel lerakva, ~08:00-kor indult) a GPS szerint
+//      megvolt, de nyitottként állt: a lerakók napja 09-29, a figyelő csak
+//      attól kereste őket (azóta javítva: lib/fuvarozas/idovonal.ts
+//      jelolMegallokat). Késznek jelöljük.
+//   3. Hat hely koordinátája a kocsi tényleges állásából a helyszín-szótárba
+//      (a cím csak a faluközépig vagy rossz helyre geokódolódott — Palotást a
+//      templomhoz tette, 2,5 km-re a majortól). Ha már van rögzített pont,
+//      az marad.
+// BIZTONSÁG: csak akkor ír, ha a fuvar felrakói/lerakói pontosan a várt
+// helyek a várt régi sorrendben, és a megálló-sorok a szöveggel egyeznek;
+// különben a napló jelzi, és a következő indulás újra megpróbálja.
+const MICO_281 = {
+  fuvarId: 281,
+  regiLerakok: ["hejopapi", "ete kossuth", "nagyalasony", "csaszar", "galgamacsa", "bakonycsernye", "ete ady", "farmos", "jaszbereny", "mezolak"],
+  ujLerakok: ["hejopapi", "jaszbereny", "farmos", "galgamacsa", "ete kossuth", "ete ady", "csaszar", "bakonycsernye", "nagyalasony", "mezolak"],
+  kesz: [
+    { hely: "jaszbereny", at: "2026-09-28 16:25+02" },
+    { hely: "farmos", at: "2026-09-28 17:40+02" },
+    { hely: "galgamacsa", at: "2026-09-29 08:00+02" },
+  ],
+  koordinatak: [
+    { hely: "polgar", lat: 47.8618, lon: 21.0957 },
+    { hely: "palotas", lat: 47.7885, lon: 19.6266 },
+    { hely: "hejopapi", lat: 47.892, lon: 20.8988 },
+    { hely: "jaszbereny", lat: 47.4799, lon: 19.9131 },
+    { hely: "farmos", lat: 47.3496, lon: 19.8616 },
+    { hely: "galgamacsa", lat: 47.6928, lon: 19.4 },
+  ],
+};
+
+/** lib/fuvarozas/varos.ts cimKulcs — a helyszín-szótár kulcsa. */
+function cimKulcsJs(cim) {
+  return cim.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+/** A megállók bontása — a 003-as trigger (és a bontsMegallokra) elsődleges elválasztói. */
+function bontsMegallokraJs(szoveg) {
+  return (szoveg ?? "").split(/\s*\+\s*|;\s*|\n+/).map((x) => x.trim()).filter(Boolean);
+}
+
+/** Melyik várt hely ez a darab: minden szava (pl. "ete kossuth") szerepel-e a cím szavai közt. */
+function helyAzonosito(darab, helyek) {
+  const szavak = new Set(cimKulcsJs(darab).split(" "));
+  const talalat = helyek.filter((h) => h.split(" ").every((sz) => szavak.has(sz)));
+  return talalat.length === 1 ? talalat[0] : null;
+}
+
+async function aktualizaldMicoEucargoNapjatOnce(pool) {
+  const JAVITAS_KOD = "mico-281-lerako-sorrend-es-kesz-2026-09-29";
+  const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (mar.length > 0) return;
+  const M = MICO_281;
+
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    const [f] = (
+      await client.query(`select felrako, lerako from fuvar_megbizasok where id = $1 and statusz <> 'torolt' for update`, [M.fuvarId])
+    ).rows;
+    const felrakok = bontsMegallokraJs(f?.felrako);
+    const lerakok = bontsMegallokraJs(f?.lerako);
+    const regiSorrend = lerakok.map((d) => helyAzonosito(d, M.regiLerakok));
+    const { rows: megallok } = await client.query(
+      `select id, sorszam, tipus, cim_nyers from fuvar_megallok where megbizas_id = $1 order by sorszam`,
+      [M.fuvarId]
+    );
+    const F = felrakok.length;
+    const egyezik =
+      f &&
+      JSON.stringify(regiSorrend) === JSON.stringify(M.regiLerakok) &&
+      megallok.length === F + lerakok.length &&
+      megallok.every((m, i) => m.sorszam === i + 1 && m.cim_nyers === (i < F ? felrakok[i] : lerakok[i - F]));
+    if (!egyezik) {
+      await client.query("rollback");
+      console.log(
+        `[migrate] #${M.fuvarId} Micó-napja: KIHAGYVA, nem a várt állapot — lerakók: ${regiSorrend.join(", ") || "-"}; ` +
+          `megálló-sorok: ${megallok.length} (felrakó ${F}, lerakó ${lerakok.length})`
+      );
+      return;
+    }
+
+    // 1. Sorrend. Régi lerakó-pozíció → új pozíció; előbb félre (+1000), hogy
+    // az egyedi kulcsok (sorszám, index) ne ütközzenek. Előbb a megálló-sorok,
+    // utána az állapot-sorok: az állapot tükör-triggere megallo_id nélkül
+    // index szerint keresi a megálló-sort.
+    const ujHely = M.regiLerakok.map((h) => M.ujLerakok.indexOf(h));
+    const esetSorszam = ujHely.map((q, p) => `when ${F + p + 1 + 1000} then ${F + q + 1}`).join(" ");
+    const esetIndex = ujHely.map((q, p) => `when ${F + p + 1000} then ${F + q}`).join(" ");
+    await client.query(`update fuvar_megallok set sorszam = sorszam + 1000 where megbizas_id = $1 and sorszam > $2`, [M.fuvarId, F]);
+    await client.query(`update fuvar_megallok set sorszam = case sorszam ${esetSorszam} end where megbizas_id = $1 and sorszam > 1000`, [M.fuvarId]);
+    await client.query(`update fuvar_megallo_allapot set megallo_index = megallo_index + 1000 where fuvar_id = $1 and megallo_index >= $2`, [M.fuvarId, F]);
+    await client.query(`update fuvar_megallo_allapot set megallo_index = case megallo_index ${esetIndex} end where fuvar_id = $1 and megallo_index >= 1000`, [M.fuvarId]);
+    const ujLerako = M.ujLerakok.map((h) => lerakok[M.regiLerakok.indexOf(h)]).join("; ");
+    await client.query(`update fuvar_megbizasok set lerako = $2 where id = $1`, [M.fuvarId, ujLerako]);
+
+    // 2. Kész a GPS szerint (ha a sofőr még nem jelölte).
+    const kesz = [];
+    for (const k of M.kesz) {
+      const index = F + M.ujLerakok.indexOf(k.hely);
+      const { rowCount } = await client.query(
+        `insert into fuvar_megallo_allapot (fuvar_id, megallo_index, kesz, kesz_at, kesz_by)
+         values ($1, $2, true, $3::timestamptz, $4)
+         on conflict (fuvar_id, megallo_index)
+         do update set kesz = true, kesz_at = excluded.kesz_at, kesz_by = excluded.kesz_by
+         where not fuvar_megallo_allapot.kesz`,
+        [M.fuvarId, index, k.at, "iroda (GPS szerint, 2026-09-29)"]
+      );
+      if (rowCount) kesz.push(`${k.hely}/${index}`);
+    }
+
+    // 3. Helyszín-szótár a kocsi tényleges állásából.
+    const koord = [];
+    for (const k of M.koordinatak) {
+      const darab = [...felrakok, ...lerakok].find((d) => helyAzonosito(d, [k.hely]));
+      if (!darab) continue;
+      const { rowCount } = await client.query(
+        `insert into fuvar_helyszin_koordinata (cim_kulcs, cim_minta, lat, lon, forras, rogzitve_by)
+         values ($1, $2, $3, $4, 'diszpecser', 'Budaházi Zoltán kérésére, GPS-állásból (2026-09-29)')
+         on conflict (cim_kulcs) do nothing`,
+        [cimKulcsJs(darab), darab, k.lat, k.lon]
+      );
+      if (rowCount) koord.push(k.hely);
+    }
+
+    await client.query(`insert into alkalmazott_javitasok (kod) values ($1) on conflict (kod) do nothing`, [JAVITAS_KOD]);
+    await client.query("commit");
+    console.log(
+      `[migrate] #${M.fuvarId} Micó-napja aktualizálva: lerakók új sorrendben (${M.ujLerakok.join(" → ")}); ` +
+        `kész: ${kesz.join(", ") || "-"}; helyszín rögzítve: ${koord.join(", ") || "-"}`
+    );
+  } catch (err) {
+    await client.query("rollback").catch(() => {});
+    console.error(`[migrate] #${M.fuvarId} Micó-napja: hiba, visszagörgetve:`, err);
+  } finally {
+    client.release();
+  }
 }
 
 // Egyszeri javítás (2026-09-16, Budaházi Zoltán jóváhagyásával): a Drive-mappa

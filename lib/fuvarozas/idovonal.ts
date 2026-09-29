@@ -336,6 +336,14 @@ export type TervezettMegallo = {
    * lerakás egy nappal a tényleges lerakás előtt "késznek" látszott.
    */
   ablakKezdet: Date | null;
+  /**
+   * Igaz a lerakónál, ha az ablakát csak a lerakás NAPJA adja (a megbízás
+   * nem adott lerakási ablakot). Ilyenkor a lerakás a tervezett nap előtt is
+   * megtörténhet — Micó EUCARGO-fuvarján (#281) Jászberény és Farmos egy
+   * nappal korábban volt meg —, ezért jelolMegallokat az ablakot a fuvar
+   * első GPS-felrakásáig előrehozza.
+   */
+  ablakTagithato?: boolean;
   /** Honnan tudjuk, hogy a megálló kész: GPS-felismerés, vagy kézi jelölés (sofőr a mobilon, vagy iroda a GPS lapon / a fuvar Teljesítve gombja). */
   keszForras: "gps" | "kezi" | null;
   /** Kézi jelölésnél a jelölő neve (fuvar_megallo_allapot.kesz_by), ha ismert. */
@@ -679,7 +687,33 @@ export function jelolMegallokat(
 ): TervezettMegallo[][] {
   const allasok = szakaszok.filter((sz): sz is Extract<IdovonalSzakasz, { tipus: "allas" }> => sz.tipus === "allas");
   const pontok = idovonalPontjai(szakaszok);
+  const elso = parositMegallokat(fuvarokMegalloi, allasok, pontok);
 
+  // A csak napra szóló lerakó-ablak előrehozása a fuvar első GPS-felrakásáig
+  // (lásd TervezettMegallo.ablakTagithato): a korábban lerakott megálló így
+  // is kész lesz, de a rakodás ELŐTTI ottlét továbbra sem számít — az ingázó
+  // kocsi előző napi állása a lerakónál (a #128 esete) kívül marad.
+  let tagitva = false;
+  const tagitott = fuvarokMegalloi.map((megallok, fi) => {
+    const felrakasok = elso[fi]
+      .filter((m) => m.tipus === "felrako" && m.tenylegesIdo)
+      .map((m) => m.tenylegesIdo!.getTime());
+    if (felrakasok.length === 0) return megallok;
+    const rakodas = Math.min(...felrakasok);
+    return megallok.map((m) => {
+      if (!m.ablakTagithato || !m.ablakKezdet || rakodas >= m.ablakKezdet.getTime()) return m;
+      tagitva = true;
+      return { ...m, ablakKezdet: new Date(rakodas) };
+    });
+  });
+  return tagitva ? parositMegallokat(tagitott, allasok, pontok) : elso;
+}
+
+function parositMegallokat(
+  fuvarokMegalloi: TervezettMegallo[][],
+  allasok: Extract<IdovonalSzakasz, { tipus: "allas" }>[],
+  pontok: { lat: number; lon: number; at: number }[]
+): TervezettMegallo[][] {
   // A nap ÖSSZES tervezett megállója egy listában, hogy a párosítás a jármű
   // egész napjára érvényes legyen, ne fuvaronként külön. Enélkül ugyanaz a
   // valós megállás több, egymástól független megbízás megállóját is
