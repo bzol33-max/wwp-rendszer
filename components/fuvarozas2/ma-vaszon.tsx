@@ -6,7 +6,7 @@ import { AllasRogzitesGomb } from "@/components/fuvarozas2/allas-rogzites";
 // mellett, mindegyik ugyanabban a sorrendben — fejléc (hol van most),
 // vezetési idő, a mai megállók „tükörben” (18-as terv: balra a terv, középen
 // a lépcső, jobbra a tény; a nem tervezett GPS-állás a helyén), a következő
-// munkanap, papír/számla. Fölötte
+// munkanap, papír/számla. Fölötte a csempesor, és
 // csak akkor sáv, ha van eltérés; alatta a kocsi nélküli fuvarok és az iroda
 // számai. Szerver-komponens; a kocsi-oszlop <details>, telefonon
 // összecsukható.
@@ -253,15 +253,49 @@ function KocsiOszlop({ k, holnapCimke }: { k: MaKocsi; holnapCimke: string }) {
   );
 }
 
+// Csempesor a fejléc alatt (1-es látványterv, 2026-09-29): tíz hely egy
+// sorban, egyelőre üresen — Budaházi Zoltán sorban ad mindegyiknek
+// funkciót. Egy hely kitöltése: a CSEMPE_HELYEK megfelelő elemét cseréld
+// { cimke, ertek, also?, szin, href? }-re. Telefonon oldalra húzható.
+type CsempeHely = { cimke: string; ertek: string; also?: string; szin: CsempeSzin; href?: string } | null;
+const CSEMPE_HELYEK: CsempeHely[] = [null, null, null, null, null, null, null, null, null, null];
+
+function Csempesor() {
+  return (
+    <div className="-mx-4 flex snap-x gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:grid md:grid-cols-5 md:overflow-visible md:px-0 md:pb-0 xl:grid-cols-10">
+      {CSEMPE_HELYEK.map((c, i) => {
+        const oszt = "flex min-h-[76px] w-[132px] shrink-0 snap-start flex-col gap-0.5 rounded-xl px-3 py-2.5 md:w-auto";
+        if (!c) {
+          return (
+            <div key={i} className={`${oszt} items-start justify-between border border-dashed border-foreground/15 text-muted-foreground/60`}>
+              <span className="text-[11px] tabular-nums">{i + 1}.</span>
+            </div>
+          );
+        }
+        const belso = (
+          <>
+            <span className="text-xs text-muted-foreground">{c.cimke}</span>
+            <b className={`text-xl font-semibold tabular-nums ${SZIN_ERTEK[c.szin]}`}>{c.ertek}</b>
+            {c.also ? <span className="truncate text-[11px] text-muted-foreground">{c.also}</span> : null}
+          </>
+        );
+        return c.href ? (
+          <Link key={i} href={c.href} className={`${oszt} border border-foreground/10 bg-card hover:bg-muted`}>{belso}</Link>
+        ) : (
+          <div key={i} className={`${oszt} border border-foreground/10 bg-card`}>{belso}</div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function MaVaszonNezet({ adat }: { adat: MaVaszon }) {
   const iroda = adat.csempek.filter((c) => c.kulcs !== "uton" && c.kulcs !== "elteres");
   return (
     <div className="flex flex-col gap-4">
-      {adat.elteresek.length === 0 ? (
-        <div className="rounded-2xl border border-[var(--f2-mint)]/30 bg-[var(--f2-mint-l)] px-4 py-2 text-sm text-[var(--f2-mint)]">
-          Minden terv szerint megy — nincs késés, várakozás vagy jóváhagyásra váró levél.
-        </div>
-      ) : (
+      <Csempesor />
+
+      {adat.elteresek.length === 0 ? null : (
         <div
           className={`flex flex-col gap-1.5 rounded-2xl border px-4 py-3 ${
             adat.elteresek.some((e) => e.szin === "red") ? "border-[var(--f2-red)]/30 bg-[var(--f2-red-l)]" : "border-[var(--f2-amb)]/30 bg-[var(--f2-amb-l)]"
