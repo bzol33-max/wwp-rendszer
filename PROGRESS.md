@@ -2718,3 +2718,14 @@ Budaházi Zoltán a 8 látványtervből az 1-est választotta, üres csempékkel
   miatt a `varosNev` az egész szöveget adta. A visszaesés előtt a zárójeles
   rész lekerül; a hibaszöveg „nem található cím (település szerint sem):”
   lett, így az eddigi hibás sorokat egyszer újra megpróbálja.
+
+## 2026-09-29 — A Megbízások oldal segédje megszűnt
+
+- Budaházi Zoltán kérésére kikerült a beépített segéd (#231, 2. rész): nem
+  hozta azt, amiért készült. Törölve: `lib/fuvarozas2/seged/`,
+  `components/fuvarozas2/seged.tsx`.
+- A jobb oldali panelen újra a „Kocsi most” (`KocsiMostPanel`, `getKocsiMost`)
+  van, ahogy a segéd előtt; a „← vissza a kocsihoz” link is visszaállt.
+- A `seged_tudas`, `seged_uzenet`, `seged_muvelet` táblák (011, 013-as
+  migráció) és adataik megmaradtak, a kód nem használja őket; eldobásuk
+  külön döntés.
