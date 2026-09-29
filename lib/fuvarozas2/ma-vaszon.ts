@@ -111,6 +111,8 @@ export type MaVaszon = {
   holnapDoboz: { cimke: string; ertek: string; szin: CsempeSzin }[];
   berHavi: BerOsszesito;
   berHeti: BerOsszesito;
+  /** A hónap hetei (a hónapba eső napokra vágva), a havi csempe lenyitásához. */
+  berHonapHetei: BerOsszesito[];
 };
 
 /**
@@ -416,8 +418,9 @@ export async function getMaVaszon(): Promise<MaVaszon> {
   }
 
   // ---------------------------------------------------------------- havi és heti bérfuvar
-  const berOsszesit = async (kezdet: string, cim: string): Promise<BerOsszesito> => {
-    const berSorok = await query<{ jarmu_id: string | null; ft: number; eur: number }>(
+  const berOsszesit = async (kezdet: string, veg: string, cim: string): Promise<BerOsszesito> => {
+    const zaras = veg < ma ? veg : ma;
+    const berSorok = kezdet > zaras ? [] : await query<{ jarmu_id: string | null; ft: number; eur: number }>(
       `select m.jarmu_id::text,
          coalesce(sum(m.fuvardij) filter (where m.fuvardij_penznem = 'Ft'), 0)::float8 as ft,
          coalesce(sum(m.fuvardij) filter (where m.fuvardij_penznem = 'EUR'), 0)::float8 as eur
@@ -426,7 +429,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
          and m.allapot is not null and m.allapot <> 'ellenorzesre_var'
          and m.datum >= $1::date and m.datum <= $2::date
        group by m.jarmu_id`,
-      [kezdet, ma]
+      [kezdet, zaras]
     );
     const kocsik = osszesJarmu.map((j) => {
       const torzs = SAJAT_JARMUVEK.find((x) => x.rendszamok[0] === j.kod) ?? SAJAT_JARMUVEK.find((x) => x.rendszamok.length === 0 && j.kod === "JANI");
@@ -436,10 +439,28 @@ export async function getMaVaszon(): Promise<MaVaszon> {
     while (kocsik.length < KOCSI_OSZLOP) kocsik.push({ nev: `${kocsik.length + 1}. kocsi`, szin: null, ft: 0, eur: 0 });
     return { cim, ft: berSorok.reduce((x, r) => x + r.ft, 0), eur: berSorok.reduce((x, r) => x + r.eur, 0), kocsik };
   };
-  const hetfo = new Date(`${ma}T12:00:00Z`);
-  hetfo.setUTCDate(hetfo.getUTCDate() - ((hetfo.getUTCDay() + 6) % 7));
-  const berHavi = await berOsszesit(`${ma.slice(0, 7)}-01`, HONAPOK[Number(ma.slice(5, 7)) - 1] ?? "hónap");
-  const berHeti = await berOsszesit(hetfo.toISOString().slice(0, 10), `${isoHetSzam(hetfo)}. hét`);
+  const napISO = (d: Date) => d.toISOString().slice(0, 10);
+  const hetfoje = (iso: string) => {
+    const d = new Date(`${iso}T12:00:00Z`);
+    d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+    return d;
+  };
+  const honapElso = `${ma.slice(0, 7)}-01`;
+  const honapUtolso = new Date(`${honapElso}T12:00:00Z`);
+  honapUtolso.setUTCMonth(honapUtolso.getUTCMonth() + 1, 0);
+  const hetfo = hetfoje(ma);
+  const vasarnap = new Date(hetfo.getTime() + 6 * 86400000);
+  const berHavi = await berOsszesit(honapElso, napISO(honapUtolso), HONAPOK[Number(ma.slice(5, 7)) - 1] ?? "hónap");
+  const berHeti = await berOsszesit(napISO(hetfo), napISO(vasarnap), `${isoHetSzam(hetfo)}. hét`);
+  // A havi csempére kattintva: a hónap hetei, a hónapba eső napokra vágva
+  // (így a hetek összege kiadja a havit).
+  const berHonapHetei: BerOsszesito[] = [];
+  for (let h = hetfoje(honapElso); napISO(h) <= napISO(honapUtolso); h = new Date(h.getTime() + 7 * 86400000)) {
+    const tol = napISO(h) < honapElso ? honapElso : napISO(h);
+    const vas = napISO(new Date(h.getTime() + 6 * 86400000));
+    const ig = vas > napISO(honapUtolso) ? napISO(honapUtolso) : vas;
+    berHonapHetei.push(await berOsszesit(tol, ig, `${isoHetSzam(h)}. hét · ${Number(tol.slice(8))}–${Number(ig.slice(8))}.`));
+  }
 
   // ---------------------------------------------------------------- kocsik
   // Kocsinként a hiányzó papír/számla (az elmúlt 30 nap lerakásai).
@@ -598,7 +619,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
   ];
 
   return {
-    ma, holnap, holnapCimke, csempek, berHavi, berHeti,
+    ma, holnap, holnapCimke, csempek, berHavi, berHeti, berHonapHetei,
     elteresek: elteresek.sort((a, b) => (a.szin === b.szin ? 0 : a.szin === "red" ? -1 : 1)),
     kocsik,
     kocsiNelkul: sorok.filter((s) => !s.jarmu_kod && (aznap(s, ma) || aznap(s, holnap))).map((s) => ({
