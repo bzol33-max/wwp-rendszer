@@ -2747,6 +2747,9 @@ Budaházi Zoltán a 8 látványtervből az 1-est választotta, üres csempékkel
   sehonnan nem hivatkozott): `components/fuvarozas2/megbizas-vaszon.tsx`,
   `components/fuvarozas2/megbizas-lista.tsx`, `getMegbizasokVaszon`,
   `idoszakVodor` és a hozzá tartozó tesztsorok.
-- **Nyitva hagyva (mérni kellene):** a lap minden kattintásra 3000 sort olvas
-  (`getMunkaasztal`), soronként 5 korrelált alkérdéssel, és ~1500 fuvar
-  kereső-indexét küldi a böngészőnek.
+- **Sebesség — megmérve, nincs teendő:** a `getMunkaasztal` `limit 3000`-e
+  és a soronkénti 5 alkérdés gyanús volt, de a Railway HTTP-naplója szerint
+  (2026-09-29, 296 GET) a lap mediánja 14 ms, p90 44 ms, max 114 ms — élesben
+  ~290 megbízás van, a 3000 csak felső korlát. Akkor érdemes újranézni, ha a
+  megbízások száma a több ezret közelíti (a lekérdezés és a kereső-index a
+  sorszámmal arányosan nő).
