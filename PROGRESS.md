@@ -2714,3 +2714,7 @@ Budaházi Zoltán a 8 látványtervből az 1-est választotta, üres csempékkel
   településre esik vissza (pár km pontatlanság).
 - Új hibaszöveg: „nem található cím (településsel sem): …”; a régi „nem
   található cím” hibás sorokat egyszer újrapróbálja.
+- Utána #76 („Nyírjákó (Baromfi-Coop Kft.)”) bukott el: a zárójeles cégnév
+  miatt a `varosNev` az egész szöveget adta. A visszaesés előtt a zárójeles
+  rész lekerül; a hibaszöveg „nem található cím (település szerint sem):”
+  lett, így az eddigi hibás sorokat egyszer újra megpróbálja.
