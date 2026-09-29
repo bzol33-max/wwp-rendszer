@@ -44,9 +44,18 @@ export function szakaszSorbol(s: { jelleg: "ber" | "sajat"; allapot: Allapot; el
   }
 }
 
-/** A fuvar útja szakaszokra bontva (a sorok alatti csíkhoz): bérnél 5, sajátnál 3. */
-export function utSzakaszai(jelleg: "ber" | "sajat"): Szakasz[] {
-  return jelleg === "sajat" ? ["elokeszites", "folyamatban", "archiv"] : ["beerkezett", "folyamatban", "szamlazasra", "postara", "archiv"];
+const BER_UT: Szakasz[] = ["beerkezett", "folyamatban", "szamlazasra", "postara", "archiv"];
+const SAJAT_UT: Szakasz[] = ["elokeszites", "folyamatban", "archiv"];
+
+/**
+ * A fuvar útja szakaszokra bontva (a sorok alatti csíkhoz): bérnél 5, sajátnál 3.
+ * Ha a saját fuvar a saját útján kívüli szakaszban áll (pl. a régi modellből
+ * „számlázható” vagy „ellenőrzésre vár” állapotban), a bér útja rajzolódik,
+ * különben a csíkon egyik szakasz sem lenne kiemelve.
+ */
+export function utSzakaszai(jelleg: "ber" | "sajat", szakasz?: Szakasz): Szakasz[] {
+  if (jelleg === "sajat" && (!szakasz || SAJAT_UT.includes(szakasz))) return SAJAT_UT;
+  return BER_UT;
 }
 
 function normal(s: string): string {

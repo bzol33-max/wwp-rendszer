@@ -28,10 +28,12 @@ const VISSZA: Partial<Record<string, string>> = {
 };
 
 export function MegbizasReszlet({
-  sor, megallok, esemenyek, dokumentumok, celok, szerkeszthet, elszamolasJog, egyOszlop = false,
+  sor, megallok, esemenyek, dokumentumok, celok, szerkeszthet, elszamolasJog, fuvarozasJog, egyOszlop = false,
 }: {
   sor: MegbizasSor; megallok: Megallo[]; esemenyek: Esemeny[]; dokumentumok: Dokumentum[]; celok: Allapot[];
   szerkeszthet: boolean; elszamolasJog: boolean;
+  /** A megjegyzés és a törlés csak a Fuvarozás szerkesztőjéé (setMegjegyzes, torolMegbizast) — az elszámolás-jog ehhez kevés. */
+  fuvarozasJog: boolean;
   /** A munkaasztal keskeny jobb oszlopában egy oszlopba rendeződik. */
   egyOszlop?: boolean;
 }) {
@@ -195,14 +197,17 @@ export function MegbizasReszlet({
         <Card>
           <CardHeader><CardTitle className="text-base">Megjegyzés</CardTitle></CardHeader>
           <CardContent className="flex flex-col gap-2">
-            <textarea value={megj} onChange={(e) => setMegj(e.target.value)} disabled={!szerkeszthet || pending} rows={3}
-              className="w-full rounded-lg border bg-background px-3 py-2 text-sm" />
-            <Button size="sm" variant="secondary" disabled={!szerkeszthet || pending || megj === (sor.megjegyzes ?? "")}
-              onClick={() => start(async () => { await setMegjegyzes(sor.id, megj); toast.success("Mentve"); router.refresh(); })}>Ment</Button>
+            <textarea value={megj} onChange={(e) => setMegj(e.target.value)} disabled={!fuvarozasJog || pending} rows={3}
+              aria-label="Megjegyzés" className="w-full rounded-lg border bg-background px-3 py-2 text-sm" />
+            <Button size="sm" variant="secondary" disabled={!fuvarozasJog || pending || megj === (sor.megjegyzes ?? "")}
+              onClick={() => start(async () => {
+                try { await setMegjegyzes(sor.id, megj); toast.success("Mentve"); router.refresh(); }
+                catch { toast.error("A megjegyzés nem mentődött el."); }
+              })}>Ment</Button>
           </CardContent>
         </Card>
 
-        {szerkeszthet && !sor.torolt ? (
+        {fuvarozasJog && !sor.torolt ? (
           sor.szamla_szam || sor.kieg_szamla_szamok?.length ? (
             <p className="text-xs text-muted-foreground">Számlázott fuvar nem törölhető.</p>
           ) : (
@@ -212,7 +217,7 @@ export function MegbizasReszlet({
               onClick={() => {
                 if (!confirm(`Biztosan törlöd? (#${sor.id} · ${sor.partner_nev ?? "megbízó nélkül"} · ${formatNap(sor.felrakas_nap)})`)) return;
                 start(async () => {
-                  const r = await torolMegbizast(sor.id);
+                  const r = await torolMegbizast(sor.id).catch(() => ({ ok: false as const, hiba: "A törlés nem sikerült." }));
                   if (!r.ok) { toast.error(r.hiba); return; }
                   toast.success("Fuvar törölve");
                   router.push("/fuvarozas2/megbizasok");

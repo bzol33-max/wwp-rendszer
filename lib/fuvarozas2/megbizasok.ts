@@ -17,9 +17,7 @@ import { requireAnyViewPermission, requireAnyEditPermission } from "@/lib/auth/r
 import {
   ellenorizAtmenet,
   lehetsegesCelok,
-  lepesAllapotbol,
   type Allapot,
-  type Lepes,
   type AtmenetForras,
   type AtmenetKontextus,
 } from "@/lib/fuvarozas/allapot";
@@ -422,80 +420,6 @@ export async function torolMegbizast(id: string): Promise<{ ok: true } | { ok: f
     id, ki, JSON.stringify({ honnan: "munkaasztal" }),
   ]);
   return { ok: true };
-}
-
-/**
- * A Megbízások képernyő (tervvászon D2) egy lekérdezésben: a szűrt lista és
- * a bal oldali szűrősáv darabszámai. A számok MINDIG a teljes (nem szűrt)
- * halmazból jönnek, hogy a sáv ne ürüljön ki, amint az ember rákattint egyre.
- */
-export async function getMegbizasokVaszon(szuro: {
-  jelleg?: "ber" | "sajat";
-  allapot?: Allapot;
-  lepes?: Lepes;
-  jarmu?: string;
-  partner?: string;
-  idoszak?: "ez_a_het" | "mult_het" | "regebbi" | "mind";
-} = {}): Promise<{
-  sorok: MegbizasSor[];
-  ma: string;
-  szamok: {
-    jelleg: { ber: number; sajat: number };
-    allapot: Record<string, number>;
-    lepes: Record<string, number>;
-    jarmu: { kod: string; cimke: string; n: number }[];
-    jarmuNelkul: number;
-    idoszak: Record<string, number>;
-    mind: number;
-  };
-}> {
-  await requireAnyViewPermission(["fuvarozas", "elszamolas"]);
-  const [{ ma }] = await query<{ ma: string }>(`select ((now() at time zone 'Europe/Budapest')::date)::text as ma`);
-  const mind = await query<MegbizasSor>(`${SOR_SQL} where m.allapot is not null and m.torolt_at is null order by coalesce(m.lerakas_datum, m.datum) desc, m.id desc limit 1000`);
-
-  const { idoszakVodor } = await import("@/lib/fuvarozas2/megbizas-szuro");
-  const allapot: Record<string, number> = {};
-  const lepes: Record<string, number> = {};
-  const idoszak: Record<string, number> = {};
-  const jarmuMap = new Map<string, { kod: string; cimke: string; n: number }>();
-  let ber = 0, sajat = 0, jarmuNelkul = 0;
-  for (const s of mind) {
-    allapot[s.allapot] = (allapot[s.allapot] ?? 0) + 1;
-    const l = lepesAllapotbol(s.allapot);
-    lepes[l] = (lepes[l] ?? 0) + 1;
-    const v = idoszakVodor(s.lerakas_nap, ma);
-    idoszak[v] = (idoszak[v] ?? 0) + 1;
-    if (s.jelleg === "ber") ber++; else sajat++;
-    if (s.jarmu_kod) {
-      const e = jarmuMap.get(s.jarmu_kod) ?? { kod: s.jarmu_kod, cimke: s.jarmu_cimke ?? s.jarmu_kod, n: 0 };
-      e.n++;
-      jarmuMap.set(s.jarmu_kod, e);
-    } else jarmuNelkul++;
-  }
-
-  const sorok = mind.filter((s) => {
-    if (szuro.jelleg && s.jelleg !== szuro.jelleg) return false;
-    if (szuro.allapot && s.allapot !== szuro.allapot) return false;
-    if (szuro.lepes && lepesAllapotbol(s.allapot) !== szuro.lepes) return false;
-    if (szuro.jarmu === "nincs" && s.jarmu_kod) return false;
-    if (szuro.jarmu && szuro.jarmu !== "nincs" && s.jarmu_kod !== szuro.jarmu) return false;
-    if (szuro.partner && s.partner_id !== szuro.partner) return false;
-    if (szuro.idoszak && szuro.idoszak !== "mind" && idoszakVodor(s.lerakas_nap, ma) !== szuro.idoszak) return false;
-    return true;
-  });
-
-  return {
-    sorok, ma,
-    szamok: {
-      jelleg: { ber, sajat },
-      allapot,
-      lepes,
-      jarmu: [...jarmuMap.values()].sort((a, b) => b.n - a.n),
-      jarmuNelkul,
-      idoszak,
-      mind: mind.length,
-    },
-  };
 }
 
 // ---------------------------------------------------------------------------

@@ -20,7 +20,7 @@ export default async function Page({ params }: { params: Promise<{ id: string }>
     <div className="flex flex-col gap-5">
       <PageHeader title={`Megbízás #${id}`} actions={<Link href="/fuvarozas2/megbizasok" className="text-sm underline">← vissza a listához</Link>} />
       <Fuvarozas2Fulek aktiv="/fuvarozas2/megbizasok" />
-      <MegbizasReszlet {...adat} szerkeszthet={szerkeszthet} elszamolasJog={elszamolasJog} />
+      <MegbizasReszlet {...adat} szerkeszthet={szerkeszthet} elszamolasJog={elszamolasJog} fuvarozasJog={session.can("fuvarozas").edit} />
     </div>
   );
 }

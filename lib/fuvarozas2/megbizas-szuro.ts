@@ -1,19 +1,10 @@
-// Megbízás-lista szűrők és a „Következő teendő" oszlop (tervvászon D2).
+// A munkaasztal-lista „Következő teendő” szövege (tervvászon D2).
 //
 // Tiszta függvények — nincs adatbázis, nincs "use server": így tesztelhető
 // (scripts/teszt-megbizas-szuro.ts), és a szerver- és kliens-oldal
 // ugyanazt a logikát látja.
 
 import type { Allapot } from "@/lib/fuvarozas/allapot";
-
-export type Idoszak = "ez_a_het" | "mult_het" | "regebbi" | "mind";
-
-export type SzuroAllapot = {
-  jelleg?: "ber" | "sajat";
-  allapot?: Allapot;
-  jarmu?: string;          // jármű kód, vagy "nincs"
-  idoszak?: Idoszak;
-};
 
 /** A „Következő teendő" oszlop: mi az EGY dolog, ami ezen a soron most hátravan. */
 export function kovetkezoTeendo(s: {
@@ -69,24 +60,4 @@ export function papirHatraNap(lerakasNap: string | null, hataridoNap: number | n
   const hatar = new Date(`${lerakasNap}T12:00:00Z`);
   hatar.setUTCDate(hatar.getUTCDate() + (hataridoNap ?? 7));
   return Math.round((hatar.getTime() - most.getTime()) / 86400000);
-}
-
-/** Melyik időszak-vödörbe esik egy nap a mai naphoz képest (hétfői hétkezdettel). */
-export function idoszakVodor(nap: string | null, ma: string): Idoszak {
-  if (!nap) return "regebbi";
-  const hetKezdet = (iso: string) => {
-    const d = new Date(`${iso}T12:00:00Z`);
-    const nd = (d.getUTCDay() + 6) % 7; // hétfő = 0
-    d.setUTCDate(d.getUTCDate() - nd);
-    return d.toISOString().slice(0, 10);
-  };
-  const ezAHet = hetKezdet(ma);
-  const multHet = (() => {
-    const d = new Date(`${ezAHet}T12:00:00Z`);
-    d.setUTCDate(d.getUTCDate() - 7);
-    return d.toISOString().slice(0, 10);
-  })();
-  if (nap >= ezAHet) return "ez_a_het";
-  if (nap >= multHet) return "mult_het";
-  return "regebbi";
 }

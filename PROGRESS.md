@@ -2729,3 +2729,24 @@ Budaházi Zoltán a 8 látványtervből az 1-est választotta, üres csempékkel
 - A `seged_tudas`, `seged_uzenet`, `seged_muvelet` táblák (011, 013-as
   migráció) és adataik megmaradtak, a kód nem használja őket; eldobásuk
   külön döntés.
+
+## 2026-09-29 — Megbízások oldal: átnézés utáni rendbetétel
+
+- **Jogosultság a részleteknél:** a „Megjegyzés → Ment” és a „Fuvar törlése”
+  szerver-akciója (`setMegjegyzes`, `torolMegbizast`) csak a Fuvarozás
+  szerkesztőjét engedi, a részlet viszont az elszámolás-joggal is
+  szerkeszthetőnek mutatta őket — kattintásra kezeletlen kivétel lett
+  hibaüzenet helyett. A `MegbizasReszlet` új `fuvarozasJog` propot kap: e
+  nélkül a megjegyzés csak olvasható, a törlés-link nem látszik. Mindkét hívás
+  hibája toast-ként jelenik meg.
+- **Útcsík:** ha egy saját fuvar a saját útján kívüli szakaszban áll (a régi
+  modellből „számlázható” vagy „ellenőrzésre vár”), a csík a bér útját
+  rajzolja (`utSzakaszai(jelleg, szakasz)`); eddig egyik szakasz sem volt
+  kiemelve. Teszt: `scripts/teszt-munkaasztal.ts`.
+- **Halott kód törölve** (a munkaasztal előtti szűrősávos vászon maradéka,
+  sehonnan nem hivatkozott): `components/fuvarozas2/megbizas-vaszon.tsx`,
+  `components/fuvarozas2/megbizas-lista.tsx`, `getMegbizasokVaszon`,
+  `idoszakVodor` és a hozzá tartozó tesztsorok.
+- **Nyitva hagyva (mérni kellene):** a lap minden kattintásra 3000 sort olvas
+  (`getMunkaasztal`), soronként 5 korrelált alkérdéssel, és ~1500 fuvar
+  kereső-indexét küldi a böngészőnek.

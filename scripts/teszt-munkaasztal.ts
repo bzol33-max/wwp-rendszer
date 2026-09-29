@@ -1,7 +1,7 @@
 // A Megbízások munkaasztal szakaszainak és keresőjének tesztje.
 // Futtatás: npx tsx scripts/teszt-munkaasztal.ts
 
-import { szakaszSorbol, keresEgyezik, honapKeresoszo, javaslatok, keresSzoveg, keresNapok, type KeresettSor, type KeresoIndex } from "@/lib/fuvarozas2/munkaasztal";
+import { szakaszSorbol, utSzakaszai, keresEgyezik, honapKeresoszo, javaslatok, keresSzoveg, keresNapok, type KeresettSor, type KeresoIndex } from "@/lib/fuvarozas2/munkaasztal";
 
 let ok = 0, bad = 0;
 function eq(nev: string, kapott: unknown, vart: unknown) {
@@ -19,6 +19,12 @@ eq("régi e-mail elment → postára", szakaszSorbol({ jelleg: "ber", allapot: "
 eq("postázva → archív", szakaszSorbol({ jelleg: "ber", allapot: "postazva" }), "archiv");
 eq("előkészítés az állapottól függetlenül", szakaszSorbol({ jelleg: "sajat", allapot: "folyamatban", elokeszites: true }), "elokeszites");
 eq("kocsira adott saját → folyamatban", szakaszSorbol({ jelleg: "sajat", allapot: "tervezett", elokeszites: false }), "folyamatban");
+
+// Az útcsík: minden szakasznak rajta kell lennie a saját útján, különben a csík üres.
+eq("bér útja 5 szakasz", utSzakaszai("ber", "szamlazasra").length, 5);
+eq("saját útja 3 szakasz", utSzakaszai("sajat", "folyamatban"), ["elokeszites", "folyamatban", "archiv"]);
+eq("saját számlázható → bér útja (a csík nem üres)", utSzakaszai("sajat", szakaszSorbol({ jelleg: "sajat", allapot: "szamlazhato" })).includes("szamlazasra"), true);
+eq("saját ellenőrzésre vár → bér útja", utSzakaszai("sajat", szakaszSorbol({ jelleg: "sajat", allapot: "ellenorzesre_var" })).includes("beerkezett"), true);
 
 // Hónapnevek
 eq("szept", honapKeresoszo("szept"), 9);

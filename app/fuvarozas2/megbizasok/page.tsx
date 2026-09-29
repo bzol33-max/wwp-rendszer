@@ -105,6 +105,7 @@ export default async function Page({ searchParams }: {
                 egyOszlop
                 szerkeszthet={session.can("fuvarozas").edit || session.can("elszamolas").edit}
                 elszamolasJog={session.can("elszamolas").edit || session.can("fuvarozas").edit}
+                fuvarozasJog={szerkeszthet}
               />
             </>
           ) : (
