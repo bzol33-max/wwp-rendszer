@@ -447,5 +447,30 @@ function vezetes(honnan: { lat: number; lon: number }, hova: { lat: number; lon:
   eq("ETA-lánc: az elkezdett fuvar lerakója elöl, a saját fuvar utána, egyben", sorrend.map((x) => `${x.fi}/${x.mi}`), ["1/1", "0/0", "0/1"]);
 }
 
+// 8) Élő érkezés hosszan nyitott trip után (Micó, 2026-09-29): az utolsó
+//    lezárt szakasz a galgamácsai állás (07:39-ig), a kocsi 11:46-kor még
+//    1,5 km-re úton volt, 11:54-től Etén áll. Az érkezés nem a 07:39-ből
+//    számolt 09:50, hanem 11:46 után pár perccel.
+{
+  const GALGAMACSA = { lat: 47.6928, lon: 19.4 };
+  const ETE_ADY = { lat: 47.5287, lon: 18.0771 };
+  const lezart: IdovonalSzakasz[] = [
+    { tipus: "indulas", idopont: t(19, 3, 28), cim: null, lat: GALGAMACSA.lat, lon: GALGAMACSA.lon },
+    allas(GALGAMACSA, t(19, 3, 28), 12 * 60 + 36),
+  ];
+  const most = t(12, 31, 29);
+  const elozmeny = [
+    { idobelyeg: t(11, 38, 29), lat: 47.6223, lon: 18.071, mozog: true },
+    { idobelyeg: t(11, 46, 29), lat: 47.5429, lon: 18.071, mozog: true },
+    { idobelyeg: t(11, 54, 29), lat: 47.5288, lon: 18.0772, mozog: false },
+    { idobelyeg: t(12, 6, 29), lat: 47.5287, lon: 18.0773, mozog: false },
+  ];
+  const all = kiegesziteloAllapottal(lezart, { ...ETE_ADY, cim: null, mozog: false, idobelyeg: t(12, 31, 29) }, most, [], elozmeny);
+  const vege = all[all.length - 1];
+  eq("hosszan nyitott trip: a vége élő állás Etén", vege.tipus, "allas");
+  const kezdet = vege.tipus === "allas" ? vege.kezdet.getTime() : 0;
+  eq("hosszan nyitott trip: az érkezés 11:46 és 11:54 közé esik, nem 09:50", kezdet > t(11, 46, 29).getTime() && kezdet <= t(11, 54, 29).getTime(), true);
+}
+
 console.log(`\n${ok} rendben, ${bad} hiba`);
 process.exit(bad ? 1 : 0);

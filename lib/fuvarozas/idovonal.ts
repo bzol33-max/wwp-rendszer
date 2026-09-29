@@ -521,9 +521,31 @@ export function kiegesziteloAllapottal(
       // Q-ra érkezés: megfigyelésből (mióta látjuk ott), különben a P
       // elhagyásától becsült menetidővel — de ha P-n pótolt állás van, a
       // Q-n töltött idő csak a megfigyelésekből számít (lásd fent).
+      //
+      // A P elhagyásából számolt menetidő csak ALSÓ korlát (P-t legkorábban
+      // ekkor hagyta el) — ha egy megfigyelés UTÁNA is úton látta a kocsit,
+      // az érkezés legkorábban az onnan számolt menetidő. Micó 09-29-én
+      // 07:39-kor „indult” Galgamácsáról (a trip órákig nem zárult le), a
+      // korlát 09:50 lett, holott 11:46-kor még 1,5 km-re úton volt, és
+      // 11:54-kor állt Etén — az „ott 09:50 óta” két órával több várakozást
+      // mutatott (és így került a GPS-naplóba). Megfigyelés nélkül marad a
+      // korlát (a Nyírjákó-eset, lásd scripts/teszt-erintes.mts 3c).
       const becsultErkezes = new Date(vezetesKezdet.getTime() + menetidoMs);
-      const qKezdet = qOta ?? (pAllas ? null : becsultErkezes);
-      const qErkezes = qKezdet ? new Date(Math.max(vezetesKezdet.getTime(), Math.min(qKezdet.getTime(), becsultErkezes.getTime()))) : null;
+      const utolsoUton = megfigyelesek
+        .filter(
+          (m) =>
+            (!qOta || m.idobelyeg.getTime() < qOta.getTime()) &&
+            (m.mozog || haversineKm(elo.lat, elo.lon, m.lat, m.lon) >= OSSZEVONAS_KM)
+        )
+        .pop();
+      const alsoKorlat = new Date(
+        Math.max(
+          becsultErkezes.getTime(),
+          utolsoUton ? utolsoUton.idobelyeg.getTime() + becsultMenetidoMs(utolsoUton.lat, utolsoUton.lon, elo.lat, elo.lon) : 0
+        )
+      );
+      const qKezdet = qOta ?? (pAllas ? null : alsoKorlat);
+      const qErkezes = qKezdet ? new Date(Math.max(vezetesKezdet.getTime(), Math.min(qKezdet.getTime(), alsoKorlat.getTime()))) : null;
       if (qErkezes && most.getTime() - qErkezes.getTime() >= ELO_ALLAS_MIN_PERC * 60000) {
         return [...szakaszok, ...(pAllas ? [pAllas] : []), vezetes(vezetesKezdet, qErkezes), allas(qErkezes, most, elo)];
       }

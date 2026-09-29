@@ -19,7 +19,7 @@
 // Ez a fájl NEM "use server" — tiszta függvények, a teszt
 // (scripts/teszt-sofor-adatok.mts) közvetlenül hívja.
 
-import { varosNev } from "./varos";
+import { cimKulcs, varosNev } from "./varos";
 
 export type MegalloReszlet = {
   tipus: "felrako" | "lerako";
@@ -147,6 +147,17 @@ export function megalloReszlete(
   const v = varosKulcs(cim);
   const azonosVarosuak = v ? jeloltek.filter((r) => varosKulcs(r.cim) === v) : [];
   if (azonosVarosuak.length === 1) return azonosVarosuak[0];
+  // Több azonos városú jelölt: előbb a cím többi szava (utca, házszám) dönt —
+  // a sorszám a megállók átrendezése után már nem megbízható (Micó #281, két
+  // etei lerakó: a Kossuth utcaihoz a galgamácsai cég került, 2026-09-29).
+  if (azonosVarosuak.length > 1) {
+    const szavak = (x: string | null | undefined) =>
+      new Set(cimKulcs(x ?? "").split(" ").filter((sz) => sz.length >= 2 && sz !== cimKulcs(varosNev(x))));
+    const sajat = szavak(cim);
+    const pont = azonosVarosuak.map((r) => [...szavak(r.cim)].filter((sz) => sajat.has(sz)).length);
+    const legjobb = Math.max(...pont);
+    if (legjobb > 0 && pont.filter((p) => p === legjobb).length === 1) return azonosVarosuak[pont.indexOf(legjobb)];
+  }
   if (jeloltek.length === tipusonBeluliDarab) return jeloltek[tipusonBeluliIndex] ?? null;
   // Több azonos városú jelölt (pl. két debreceni lerakó): a sorrend dönt
   // közöttük, ha a darabszám ott is egyezik.

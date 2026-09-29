@@ -138,5 +138,23 @@ eq("06-os marad", kontaktTelefon("06 30 123 4567"), "06301234567");
   eq("csak rakomány is sofőr-adat", vanSoforAdat({ megallok: [{ tipus: "lerako", cim: "x", ceg: null, nap: null, ido: null, kontakt: null, rakomany: "3 t" }], referencia: null, jarmuEloiras: null }), true);
 }
 
+// Micó #281 (2026-09-29): a lerakók sorrendje átrendezve, a részletek a levél
+// eredeti sorrendjében maradtak — két etei lerakó; a sorszám a galgamácsai
+// céget adta a Kossuth utcaihoz. A cím utcája dönt.
+{
+  const r = (cim: string, ceg: string) => ({ tipus: "lerako" as const, cim, ceg, nap: null, ido: null, kontakt: null });
+  const reszletek = [
+    r("3594 Hejőpapi, 034/3 Hrsz", "KISS-FRÓNA Major Kft"),
+    r("2947 ETE KOSSUTH LAJOS UTCA 42.", "Cseke Mihály"),
+    r("8484 Nagyalásony, Kossuth 114.", "Ferenczy Szabolcs"),
+    r("2858 Császár, Petőfi Sándor utca 28.", "Fazekas László Csaba"),
+    r("2183 Galgamácsa, Központi tanya 3", "Mácsa 99 Kft."),
+    r("8056 Bakonycsernye, Táncsics M. u. 29.", "Valásek Soma"),
+    r("2947 ETE ADY ENDRE UTCA 27.", "Malcsikné Tálos Erzsébet"),
+  ];
+  eq("két etei lerakó: Kossuth utca → Cseke", megalloReszlete(reszletek, "lerako", 4, 7, "2947 ETE KOSSUTH LAJOS UTCA 42.")?.ceg, "Cseke Mihály");
+  eq("két etei lerakó: Ady utca → Malcsikné", megalloReszlete(reszletek, "lerako", 5, 7, "2947 ETE ADY ENDRE UTCA 27.")?.ceg, "Malcsikné Tálos Erzsébet");
+}
+
 console.log(`\n${ok} rendben, ${bad} hiba`);
 process.exit(bad ? 1 : 0);

@@ -509,6 +509,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
           return { ...a, lat: sz && sz.tipus === "allas" ? sz.lat : null, lon: sz && sz.tipus === "allas" ? sz.lon : null };
         }),
         eta: elo?.eloEta && !elo.eloEta.bizonytalan ? elo.eloEta.erkezes : null,
+        etaCel: elo?.eloEta?.cel ?? null,
         most,
         ma,
       }),
