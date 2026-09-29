@@ -2593,3 +2593,17 @@ kérdésekkel kell megnézni.
   elkezdett fuvarok (GPS-érkezés / kész jelölés) a legkorábbi tényük szerint,
   utánuk a többi a tervezett idejük szerint — ugyanaz az elv, mint a sofőr
   telefonján és a GPS lapon. Teszt: `scripts/teszt-ma-tukor.ts` 12/0.
+
+## 2026-09-29 — Sztornózott számla helyére az új számla (Huncargo 325, Lösung 328)
+
+- **Hiba:** a Megbízások oldal „2 fuvarszámla nincs fuvarhoz párosítva”
+  sávja a WLLWR-2026-325-öt (Huncargo) és a -328-at (Lösung Trans) mutatta.
+  Mindkét partner hibás teljesítési dátum miatt sztornót és új számlát kért
+  (09-28): a régi számla sztornózva, a fuvaron viszont a RÉGI szám maradt, és
+  a párosító (`szinkronizalSzamlaSzamokat`) csak a számla nélküli fuvarokat
+  nézte — az új számla így sehova nem került.
+- **Javítás (`lib/fuvarozas/megbizasok.ts`):** a sztornózott számlaszámú fuvar
+  a párosításban számla nélkülinek számít, az új számla a sztornózott helyére
+  kerül (esemény: `sztornozott_elozo`, napló: „a sztornózott … helyett”).
+  Egy érvényes számlát nem ír felül. A két mostani eset a következő
+  számla-szinkronnál (15 percenként) magától rendbe jön.
