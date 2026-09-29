@@ -33,7 +33,7 @@ import { toroljIdovonalCachet } from "@/lib/fuvarozas/idovonal-cache";
 import { getUtvonalJelentes, rendszamKulcs } from "@/lib/fuvarozas/ecofleet";
 import { cachelve } from "@/lib/fuvarozas/idovonal-cache";
 import { kovetkezoMunkanapISO } from "@/lib/fuvarozas/idozona";
-import { SAJAT_JARMUVEK } from "@/lib/fuvarozas/vehicles";
+import { SAJAT_JARMUVEK, type JarmuSzin } from "@/lib/fuvarozas/vehicles";
 import type { MegalloReszlet } from "@/lib/fuvarozas/sofor-adatok";
 import type { Allapot } from "@/lib/fuvarozas/allapot";
 import { tukorSorok, type TukorSor } from "@/lib/fuvarozas2/ma-tukor";
@@ -109,6 +109,21 @@ export type MaVaszon = {
   kocsiNelkul: { id: string; partner: string; utvonal: string; nap: string | null; allapot: Allapot }[];
   teendok: { cimke: string; ertek: string; also: string | null; href: string }[];
   holnapDoboz: { cimke: string; ertek: string; szin: CsempeSzin }[];
+  berHavi: BerHavi;
+};
+
+/**
+ * Az 1-es csempe: a hónap bérfuvarjai (Budaházi Zoltán, 2026-09-29). A
+ * hónaphoz az a fuvar tartozik, amelyiknek az első felrakása (m.datum) ebben
+ * a hónapban van és már elkezdődött (legkésőbb ma) — egy előző havi
+ * megbízás e havi lerakása nem. Nettó
+ * fuvardíj; az euró külön, átváltás nélkül.
+ */
+export type BerHavi = {
+  honap: string;
+  ft: number;
+  eur: number;
+  kocsik: { nev: string; szin: JarmuSzin | null; ft: number; eur: number }[];
 };
 
 /** Ennyi oszlop van mindig (a még nem üzemelő kocsik helye is látszik). */
@@ -129,6 +144,7 @@ const ORA = (d: Date | string | null | undefined) => {
 };
 const percKulonbseg = (a: Date, b: Date) => Math.round((a.getTime() - b.getTime()) / 60000);
 const oraPerc = (perc: number) => `${Math.floor(perc / 60)}:${String(perc % 60).padStart(2, "0")}`;
+const HONAPOK = ["január", "február", "március", "április", "május", "június", "július", "augusztus", "szeptember", "október", "november", "december"];
 const ft = (n: number) => `${new Intl.NumberFormat("hu-HU").format(Math.round(n))} Ft`;
 
 type MegalloSor = {
@@ -390,6 +406,31 @@ export async function getMaVaszon(): Promise<MaVaszon> {
     }
   }
 
+  // ---------------------------------------------------------------- havi bérfuvar
+  const honapKezdet = `${ma.slice(0, 7)}-01`;
+  const berSorok = await query<{ jarmu_id: string | null; ft: number; eur: number }>(
+    `select m.jarmu_id::text,
+       coalesce(sum(m.fuvardij) filter (where m.fuvardij_penznem = 'Ft'), 0)::float8 as ft,
+       coalesce(sum(m.fuvardij) filter (where m.fuvardij_penznem = 'EUR'), 0)::float8 as eur
+     from fuvar_megbizasok m
+     where m.torolt_at is null and m.jelleg = 'ber'
+       and m.allapot is not null and m.allapot <> 'ellenorzesre_var'
+       and m.datum >= $1::date and m.datum <= $2::date
+     group by m.jarmu_id`,
+    [honapKezdet, ma]
+  );
+  const berHavi: BerHavi = {
+    honap: HONAPOK[Number(ma.slice(5, 7)) - 1] ?? "",
+    ft: berSorok.reduce((a, r) => a + r.ft, 0),
+    eur: berSorok.reduce((a, r) => a + r.eur, 0),
+    kocsik: osszesJarmu.map((j) => {
+      const torzs = SAJAT_JARMUVEK.find((x) => x.rendszamok[0] === j.kod) ?? SAJAT_JARMUVEK.find((x) => x.rendszamok.length === 0 && j.kod === "JANI");
+      const r = berSorok.find((x) => x.jarmu_id === j.id);
+      return { nev: torzs?.sofor ?? j.sofor ?? j.cimke, szin: torzs?.szin ?? null, ft: r?.ft ?? 0, eur: r?.eur ?? 0 };
+    }),
+  };
+  while (berHavi.kocsik.length < KOCSI_OSZLOP) berHavi.kocsik.push({ nev: `${berHavi.kocsik.length + 1}. kocsi`, szin: null, ft: 0, eur: 0 });
+
   // ---------------------------------------------------------------- kocsik
   // Kocsinként a hiányzó papír/számla (az elmúlt 30 nap lerakásai).
   const papirKocsinkent = await query<{ jarmu_id: string; fotora: number; szamlazando: number }>(
@@ -547,7 +588,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
   ];
 
   return {
-    ma, holnap, holnapCimke, csempek,
+    ma, holnap, holnapCimke, csempek, berHavi,
     elteresek: elteresek.sort((a, b) => (a.szin === b.szin ? 0 : a.szin === "red" ? -1 : 1)),
     kocsik,
     kocsiNelkul: sorok.filter((s) => !s.jarmu_kod && (aznap(s, ma) || aznap(s, holnap))).map((s) => ({
