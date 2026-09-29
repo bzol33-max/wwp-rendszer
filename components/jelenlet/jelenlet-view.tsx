@@ -9,17 +9,16 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useCanEdit } from "@/components/auth/edit-permission-context";
 import { cn } from "@/lib/utils";
-import { UjFeladatGomb } from "@/components/jelenlet/feladat-rogzites-tile";
 import { MaiJelenletSav } from "@/components/jelenlet/mai-jelenlet-sav";
 import { HaviNaploDialog } from "@/components/jelenlet/havi-naplo-dialog";
 import { TelephelyFeladatokTile } from "@/components/jelenlet/telephely-feladatok-tile";
 import { FeladatCommentsDialog } from "@/components/jelenlet/feladat-comments-dialog";
 import {
-  getMaiKeszSzamok,
   getNyitottNapok,
   getSites,
   lezarJelenletSession,
   listFeladatok,
+  listFrissenKeszFeladatok,
   type NyitottNap,
 } from "@/lib/jelenlet/actions";
 import {
@@ -126,7 +125,10 @@ export function JelenletView() {
   const [sites, setSites] = useState<Site[]>([]);
   const [feladatok, setFeladatok] = useState<Feladat[]>([]);
   const [nyitottNapok, setNyitottNapok] = useState<NyitottNap[]>([]);
-  const [keszMa, setKeszMa] = useState<Record<number, number>>({});
+  const [keszFeladatok, setKeszFeladatok] = useState<Feladat[]>([]);
+  // Hány napig maradjon látható egy elvégzett feladat a telephely
+  // oszlopának alján, mielőtt csak az archívumban lenne meg.
+  const [keszNapok, setKeszNapok] = useState(3);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<Feladat | null>(null);
   const [haviNyitva, setHaviNyitva] = useState(false);
@@ -136,13 +138,13 @@ export function JelenletView() {
       getSites(),
       listFeladatok(),
       getNyitottNapok().catch(() => [] as NyitottNap[]),
-      getMaiKeszSzamok().catch(() => ({}) as Record<number, number>),
+      listFrissenKeszFeladatok(keszNapok).catch(() => [] as Feladat[]),
     ]);
     setSites(siteRows);
     setFeladatok(taskRows);
     setNyitottNapok(nyitott);
-    setKeszMa(kesz);
-  }, []);
+    setKeszFeladatok(kesz);
+  }, [keszNapok]);
 
   useEffect(() => {
     let mounted = true;
@@ -171,13 +173,35 @@ export function JelenletView() {
         subtitle="Napi érkezés és feladatok"
         actions={
           <div className="flex items-center gap-2">
+            {/* Meddig maradjon látható egy elvégzett feladat. A nap munkája
+                így nem tűnik el nyomtalanul a képernyőről. */}
+            <div className="flex items-center gap-1 rounded-lg border bg-card px-2 py-1">
+              <span className="text-[11px] text-muted-foreground">Kész látszik:</span>
+              {KESZ_VALASZTAS.map((v) => (
+                <button
+                  key={v.napok}
+                  type="button"
+                  onClick={() => {
+                    setKeszNapok(v.napok);
+                    setLoading(true);
+                  }}
+                  className={cn(
+                    "rounded-md px-1.5 py-0.5 text-[11px] font-semibold",
+                    keszNapok === v.napok
+                      ? "bg-foreground text-background"
+                      : "text-muted-foreground hover:bg-muted"
+                  )}
+                >
+                  {v.cimke}
+                </button>
+              ))}
+            </div>
             <Link
               href="/jelenlet/archivum"
               className={buttonVariants({ variant: "outline", size: "sm" })}
             >
               Archívum
             </Link>
-            <UjFeladatGomb sites={sites} canEdit={canEdit} onCreated={load} />
           </div>
         }
       />
@@ -193,10 +217,14 @@ export function JelenletView() {
           {sites.map((s) => (
             <TelephelyFeladatokTile
               key={s.id}
+              siteId={s.id}
               siteName={s.name}
               feladatok={aktualis.filter((f) => f.site_id === s.id)}
-              keszMa={keszMa[s.id] ?? 0}
+              keszFeladatok={keszFeladatok.filter((f) => f.site_id === s.id)}
+              maIso={todayIso()}
+              canEdit={canEdit}
               onSelect={setSelected}
+              onChanged={load}
             />
           ))}
         </div>
@@ -248,3 +276,9 @@ export function JelenletView() {
 }
 
 const LATHATO_SZOVEG = "3 nappal az esedékesség előtt jelenik meg";
+
+const KESZ_VALASZTAS = [
+  { napok: 1, cimke: "ma" },
+  { napok: 3, cimke: "3 nap" },
+  { napok: 7, cimke: "egy hét" },
+] as const;

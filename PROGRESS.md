@@ -1,5 +1,35 @@
 # PROGRESS
 
+## 2026-09-29 — Jelenlét: feladat-bevitel az oszlopban, az elvégzettek láthatók maradnak
+
+- **Probléma:** a feladat-rész nem volt átlátható. A rögzítés a fejléc gombja
+  mögött, felugró ablakban történt (telephely-választással, pedig az oszlopból
+  amúgy is látszik), a készre jelentett feladat pedig azonnal eltűnt az
+  archívumba — a nap munkája nyomtalanul lekerült a képernyőről.
+- **Módosítás — bevitel:** minden telephely-oszlop tetején gyorsbevitel
+  (`gyors-feladat-bevitel.tsx`). Alapból egyetlen sor; fókuszra kinyílik a
+  sürgősség (öt színes gomb, nem legördülő), az ismétlődés és a dátum. A
+  telephelyet az oszlop adja, azt nem kell választani. Enter rögzít, Escape
+  bezár, és hozzáadás után a panel nyitva marad üres mezővel, hogy egymás
+  után több feladat is felvehető legyen. A fejléc gombja és a felugró ablak
+  megszűnt (`feladat-rogzites-tile.tsx`, `uj-feladat-form.tsx` törölve).
+- **Módosítás — elvégzett feladatok:** a készre jelentés a sor bal szélén egy
+  négyzet egy kattintása (eddig a részletek ablakán át vezetett az út). A sor
+  nem tűnik el, hanem lecsúszik az oszlop alján lévő zöld "Elvégezve"
+  szakaszba, áthúzva, a készre jelentés idejével és a jelentő nevével. A
+  fejlécben kapcsoló: ma / 3 nap / egy hét (alapból 3 nap), utána a tétel már
+  csak az archívumban van. Visszanyitni ugyanott, ugyanazzal a négyzettel.
+- **Séma:** `feladatok.elvegzes_at` + `elvegezte` — eddig csak a nap rögzült,
+  így nem lehetett tudni, ki és mikor jelentette készre. Visszanyitáskor
+  mindkettő törlődik. Új részleges index a kész sorokra.
+- **Takarítás:** a `getMaiKeszSzamok` szerver-akció megszűnt (a lábléc-számláló
+  helyét az elvégzettek tényleges listája vette át); egy "use server" export
+  távolról hívható, ezért a halott akciót nem hagyjuk bent.
+- **Teszt:** typecheck, build, eslint (hibaszám változatlan), a modul 40
+  tesztesete zöld.
+- **Kockázat:** a séma-bővítés két nullázható oszlop, a régi kész sorokon
+  üresek maradnak — ott csak a dátum látszik, név és óra nélkül.
+
 ## 2026-09-20 — Jelenléti/üzenőfal: havi napló, ismétlődő feladatok, mobil javítások
 
 - **Probléma (éles adatból):** a modult szeptember 12. óta nem használták, és

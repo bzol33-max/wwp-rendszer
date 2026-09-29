@@ -38,6 +38,10 @@ export type Feladat = {
   repeat_freq: RepeatFreq;
   done: boolean;
   elvegzes_datum: string | null;
+  /** Mikor jelentették készre (budapesti idő, "YYYY-MM-DD HH:MM") — a régi soroknál null. */
+  elvegzes_at: string | null;
+  /** Ki jelentette készre — a régi soroknál null. */
+  elvegezte: string | null;
   created_by: string | null;
   created_at: string;
 };

@@ -45,7 +45,8 @@ const SESSION_COLS = `id::text, employee_id::text, to_char(work_date, 'YYYY-MM-D
 const FELADAT_COLS = `f.id::text, to_char(f.task_date, 'YYYY-MM-DD') as task_date, f.site_id,
    s.name as site_name, f.description, f.urgency, f.repeat_freq, f.done,
    to_char(f.elvegzes_datum, 'YYYY-MM-DD') as elvegzes_datum,
-   f.created_by, to_char(f.created_at at time zone 'Europe/Budapest', 'YYYY-MM-DD HH24:MI') as created_at`;
+   to_char(f.elvegzes_at at time zone 'Europe/Budapest', 'YYYY-MM-DD HH24:MI') as elvegzes_at,
+   f.elvegezte, f.created_by, to_char(f.created_at at time zone 'Europe/Budapest', 'YYYY-MM-DD HH24:MI') as created_at`;
 
 function revalidateJelenlet() {
   revalidatePath("/jelenlet");
@@ -485,6 +486,27 @@ export async function getArchivedFeladatok(): Promise<Feladat[]> {
   );
 }
 
+/**
+ * A frissen elvégzett feladatok: a készre jelentett tétel nem tűnik el
+ * azonnal, hanem a telephely oszlopának alján marad áthúzva, amíg a megadott
+ * napszám le nem telik — utána már csak az archívumban látszik. Enélkül a
+ * nap munkája nyomtalanul eltűnt a képernyőről.
+ */
+export async function listFrissenKeszFeladatok(napok: number): Promise<Feladat[]> {
+  await requireAnyViewPermission(["jelenlet", "erkezes"]);
+  const hatar = Math.min(31, Math.max(0, Math.trunc(napok)));
+  return query<Feladat>(
+    `select ${FELADAT_COLS}
+     from feladatok f
+     join sites s on s.id = f.site_id
+     where f.done = true and f.forras = 'jelenlet'
+       and f.elvegzes_datum is not null
+       and f.elvegzes_datum > ${BUDAPEST_NOW_DATE} - $1::int
+     order by f.elvegzes_datum desc, f.elvegzes_at desc nulls last, f.id desc`,
+    [hatar]
+  );
+}
+
 export async function createFeladat(input: {
   taskDate: string;
   siteId: number;
@@ -549,11 +571,17 @@ export async function toggleFeladatDone(id: string, done: boolean) {
     const f = rows[0];
     if (!f) return;
 
+    // A készre jelentés nyoma: nap, pontos időpont és a jelentő neve. A
+    // lista néhány napig megtartja az elvégzett tételt, ott ez látszik.
+    const session = await requireSession();
     await q(
       `update feladatok
-       set done = $2, elvegzes_datum = case when $2 then ${BUDAPEST_NOW_DATE} else null end
+       set done = $2,
+         elvegzes_datum = case when $2 then ${BUDAPEST_NOW_DATE} else null end,
+         elvegzes_at = case when $2 then now() else null end,
+         elvegezte = case when $2 then $3::text else null end
        where id = $1`,
-      [id, done]
+      [id, done, session.name]
     );
 
     if (f.repeat_freq === "egyszeri" || f.forras !== "jelenlet") return;
@@ -633,22 +661,6 @@ export async function addFeladatComment(input: {
   revalidateJelenlet();
 }
 
-/**
- * Telephelyenként hány feladatot jelentettek ma készre — a nyitókép oszlopai
- * ezt írják ki a lábukban, hogy a nap munkája ne tűnjön el nyomtalanul
- * (a kész feladat azonnal lekerül a listáról az archívumba).
- */
-export async function getMaiKeszSzamok(): Promise<Record<number, number>> {
-  await requireAnyViewPermission(["jelenlet", "erkezes"]);
-  const rows = await query<{ site_id: number; db: string }>(
-    `select site_id, count(*)::text as db
-     from feladatok
-     where done = true and forras = 'jelenlet' and elvegzes_datum = ${BUDAPEST_NOW_DATE}
-     group by site_id`
-  );
-  // A pg a count()-ot (bigint) szövegként adja vissza — lásd CLAUDE.md.
-  return Object.fromEntries(rows.map((r) => [r.site_id, Number(r.db)]));
-}
 
 /**
  * Egy tetszőleges időszak jelenlét-sorai, minden jelenlét-aktív dolgozóval.

@@ -1015,3 +1015,13 @@ alter table fuvar_megbizasok add column if not exists sofor_adatok_at timestampt
 alter table fuvar_megbizasok add column if not exists rakott_km double precision;
 alter table fuvar_megbizasok add column if not exists rakott_km_kulcs text;
 alter table fuvar_megbizasok add column if not exists rakott_km_hiba text;
+
+-- Készre jelentés nyoma (2026-09-29): eddig csak az elvegzes_datum (nap)
+-- rögzült, tehát nem lehetett tudni, ki és pontosan mikor jelentette készre
+-- a feladatot. A Jelenlét oldal az elvégzett tételeket néhány napig a lista
+-- alján tartja — ott ennek a két adatnak látszania kell. Visszanyitáskor
+-- mindkettő törlődik (lásd lib/jelenlet/actions.ts:toggleFeladatDone).
+alter table feladatok add column if not exists elvegzes_at timestamptz;
+alter table feladatok add column if not exists elvegezte text;
+create index if not exists idx_feladatok_elvegzes on feladatok (done, elvegzes_datum desc)
+  where done = true;
