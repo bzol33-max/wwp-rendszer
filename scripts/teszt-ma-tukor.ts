@@ -132,5 +132,24 @@ const g29 = tukorSorok({
 eq("Gergő 09-29: az elkezdett bér fuvar elöl, a saját utána", rovid(g29).filter((x) => x.startsWith("#")), ["# RBT EUROPE Kft.", "# Fabrika 2000 Kft"]);
 eq("Gergő 09-29: Budapest a következő, a saját fuvar hátra", rovid(g29).filter((x) => !x.startsWith("#")).map((x) => x.replace(/^.* \[/, "[")), ["[kesz]", "[kovetkezo]", "[hatra]", "[hatra]"]);
 
+// --- Micó 09-29: a második etei lerakón (Ady u.) áll 11:54 óta, az első
+// (Kossuth u.) még nyitott. „Most” az, ahol áll; a Kossuth a következő, az
+// ETA (célja Ete) oda kerül; a Császár hátra — ETA nélkül.
+const e29 = tukorSorok({
+  fuvarok: [{ id: "281", partner: "EUCARGO 2008 Kft.", hivatkozas: null, jelleg: "ber", megallo_reszletek: null, megallok: [
+    m(9, "lerako", "2947 ETE KOSSUTH LAJOS UTCA 42.", n29({})),
+    m(10, "lerako", "2947 ETE ADY ENDRE UTCA 27.", n29({ gps_erkezes: t29("11:54") })),
+    m(11, "lerako", "2858 Császár, Petőfi Sándor utca 28.", n29({})),
+  ] }],
+  allasok: [], eta: new Date("2026-09-29T10:40:00Z"), etaCel: "ETE", most: new Date("2026-09-29T10:35:00Z"), ma: "2026-09-29",
+});
+const eSorok = e29.filter((r) => r.tipus === "megallo");
+eq("Micó Ete: most ott áll, az első Ete a következő", eSorok.map((r) => r.tipus === "megallo" ? `${r.allapot} ${r.teny ?? "-"}` : ""), ["kovetkezo ETA 12:40", "most ott 11:54 óta", "hatra -"]);
+const csaszarEta = tukorSorok({
+  fuvarok: [{ id: "281", partner: "X", hivatkozas: null, jelleg: "ber", megallo_reszletek: null, megallok: [m(1, "lerako", "2858 Császár, Petőfi Sándor utca 28.", n29({}))] }],
+  allasok: [], eta: new Date("2026-09-29T10:40:00Z"), etaCel: "Mezőlak", most: new Date("2026-09-29T10:35:00Z"), ma: "2026-09-29",
+});
+eq("más célú ETA nem kerül rossz megállóra", csaszarEta.find((r) => r.tipus === "megallo")?.tipus === "megallo" ? (csaszarEta.find((r) => r.tipus === "megallo") as { teny: string | null }).teny : "x", null);
+
 console.log(`\nMa-tükör teszt: ${ok} rendben, ${bad} hiba`);
 if (bad > 0) process.exit(1);

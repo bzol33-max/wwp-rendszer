@@ -2620,3 +2620,22 @@ kérdésekkel kell megnézni.
   egyben, útvonal-sorrendben halad; elöl a már elkezdett fuvar, utána a többi
   a legkorábbi hátralévő tervezett idő szerint, a nap végére sorolt a végén.
   Teszt: `scripts/teszt-erintes.mts` 71/0.
+
+## 2026-09-29 — Micó Etén: „ott 09:50 óta”, rossz cég, rossz „most”
+
+Három hiba Micó oszlopában (Ete, Ady u., 11:54-től áll ott):
+- **„ott 09:50 óta” — két órával korábbi érkezés** (`idovonal.ts`
+  `kiegesziteloAllapottal`): a Galgamácsáról induló trip órákig nem zárult le,
+  az érkezést a 07:39-es utolsó lezárt pontból becsült menetidő adta (09:50),
+  és a megfigyelés helyett ez nyert — ez került a GPS-naplóba is (a várakozás
+  2 órával hosszabbnak látszott). Mostantól ha egy megfigyelés később is úton
+  látta a kocsit, az érkezés legkorábban onnan számít. Megfigyelés nélkül
+  marad a becslés (Nyírjákó-eset). Teszt: `teszt-erintes.mts` 73/0.
+- **„Mácsa 99 Kft.” az etei lerakónál** (`sofor-adatok.ts`
+  `megalloReszlete`): két azonos városú lerakónál a sorszám döntött, ami a
+  reggeli átrendezés után elcsúszott — mostantól az utca/házszám dönt.
+  Teszt: `teszt-sofor-adatok.mts` 45/0.
+- **A valódi „most” szürke, az ETA rossz megállón** (`ma-tukor.ts`): „most”
+  az a megálló, ahol a kocsi GPS szerint áll, akkor is, ha előtte egy másik
+  még nyitott; az ETA csak a célja szerinti megállón jelenik meg.
+  Teszt: `teszt-ma-tukor.ts` 14/0.

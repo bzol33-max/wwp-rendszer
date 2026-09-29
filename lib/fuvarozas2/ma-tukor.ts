@@ -117,6 +117,8 @@ export function tukorSorok(be: {
   allasok: TukorGpsAllas[];
   /** Élő GPS-becslés a következő megállóhoz (ha nem bizonytalan). */
   eta: Date | null;
+  /** Az ETA célja (város) — csak az ezzel egyező megállónál jelenik meg. Null: a következőnél. */
+  etaCel?: string | null;
   most: Date;
   /** A mai nap (YYYY-MM-DD, Budapest). */
   ma: string;
@@ -135,8 +137,14 @@ export function tukorSorok(be: {
   const eredmeny: TukorSor[] = [];
   // A megálló tényleges ideje — ehhez sorolódnak be a különálló állások.
   const rendezoIdo = new Map<TukorSor, number | null>();
-  let nyitottVolt = false;
-  for (const f of fuvarSorrend(be.fuvarok)) {
+  const fuvarok = fuvarSorrend(be.fuvarok);
+  // Ahol a kocsi MOST áll (GPS-érkezés, nincs kész) — akkor is „most”, ha egy
+  // előtte álló megálló még nyitott (Micó 09-29: a két etei lerakó közül a
+  // másodikon kezdett, az első „következő” lett, a valódi „most” szürke).
+  const mostItt = fuvarok.flatMap((f) => f.megallok).find((g) => g.gps_erkezes && !g.gps_tavozas && !g.sofor_kesz_at) ?? null;
+  let kovetkezoVolt = false;
+  const etaCel = be.etaCel ? ekezetNelkul(varosNev(be.etaCel) ?? be.etaCel) : null;
+  for (const f of fuvarok) {
     eredmeny.push({ tipus: "fuvar", fuvarId: f.id, partner: f.partner ?? "(nincs megbízó)", hivatkozas: f.hivatkozas, jelleg: f.jelleg });
     for (const g of f.megallok) {
       const kesz = !!(g.gps_tavozas || g.sofor_kesz_at);
@@ -161,9 +169,14 @@ export function tukorSorok(be: {
 
       let allapot: "kesz" | "most" | "kovetkezo" | "hatra" = "kesz";
       if (!kesz) {
-        allapot = nyitottVolt ? "hatra" : erk || allas?.folyamatban ? "most" : "kovetkezo";
-        nyitottVolt = true;
+        if (g === mostItt || (!mostItt && !kovetkezoVolt && allas?.folyamatban)) allapot = "most";
+        else if (!kovetkezoVolt) {
+          allapot = "kovetkezo";
+          kovetkezoVolt = true;
+        } else allapot = "hatra";
+        if (allapot === "most" && !mostItt) kovetkezoVolt = true;
       }
+      const etaIde = allapot === "kovetkezo" && be.eta && (!etaCel || etaCel === ekezetNelkul(varos)) ? be.eta : null;
 
       const masNap = g.tervezett_nap && g.tervezett_nap !== ma ? napNeve(g.tervezett_nap) : null;
       const ablak = tol || ig ? (tol && ig && ORA(tol) !== ORA(ig) ? `${ORA(tol)}–${ORA(ig)}` : ORA(tol ?? ig)) : null;
@@ -173,14 +186,14 @@ export function tukorSorok(be: {
       if (kesz) teny = erk && tav ? `${ORA(erk)}–${ORA(tav)}` : ORA(tav ?? erk);
       else if (erk) teny = varakozik ? `várakozik ${perc(most, idobelyeg(g.varakozas_kezdete)!)} p` : `ott ${ORA(erk)} óta`;
       else if (allas) teny = allas.folyamatban ? `áll ${allas.tol} óta` : `állt ${allas.tol}–${allas.ig}`;
-      else if (allapot === "kovetkezo" && be.eta) teny = `ETA ${ORA(be.eta)}`;
+      else if (etaIde) teny = `ETA ${ORA(etaIde)}`;
 
       let elteres: string | null = null;
       const tenyKezdet = erk ?? (kesz ? tav : null);
       if (tenyKezdet && ig && tenyKezdet > ig) elteres = `+${perc(tenyKezdet, ig)} p`;
       else if (tenyKezdet && tol && ig) elteres = "ablakban";
       else if (!kesz && ig && ig < most) elteres = `késik ${perc(most, ig)} p`;
-      else if (allapot === "kovetkezo" && be.eta && ig && be.eta > ig) elteres = `+${perc(be.eta, ig)} p várható`;
+      else if (etaIde && ig && etaIde > ig) elteres = `+${perc(etaIde, ig)} p várható`;
 
       // A mostani / következő megállónál a cég és a helyszíni kontakt is kell.
       let ceg: string | null = null;
