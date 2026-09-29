@@ -14,7 +14,7 @@
 
 import { query } from "@/lib/db";
 import { calculateToll, geocodeAddress, TollCalcError } from "@/lib/fuvarozas/utdijkalkulacio";
-import { bontsMegallokra, cimKulcs } from "@/lib/fuvarozas/varos";
+import { bontsMegallokra, cimKulcs, varosNev } from "@/lib/fuvarozas/varos";
 
 type Pont = { lat: number; lon: number };
 export type RakottKmSzolgaltatas = {
@@ -53,14 +53,25 @@ export function rakottKmKulcs(felrako: string | null, lerako: string | null): st
   return [...bontsMegallokra(felrako), "→", ...bontsMegallokra(lerako)].join(" | ");
 }
 
+/** A településre visszaesés óta (2026-09-29) írt hibaüzenet eleje — a régebbi „nem található cím” hibás sorokat egyszer újrapróbáljuk. */
+const NEM_TALALHATO = "nem található cím (településsel sem):";
+
 /** Egy fuvar rakott km-e; végleges hiba esetén az ok szövegesen, átmenetinél dob. */
 async function szamoljRakottKmet(felrako: string | null, lerako: string | null, sz: RakottKmSzolgaltatas): Promise<{ km: number } | { hiba: string }> {
   const cimek = [...bontsMegallokra(felrako), ...bontsMegallokra(lerako)];
   if (cimek.length < 2) return { hiba: "kevesebb mint két megálló" };
   const pontok: (Pont | null)[] = [];
-  for (const c of cimek) pontok.push(await sz.geokod(c));
+  for (const c of cimek) {
+    // Ha a teljes cím nem található (zavaros szöveg, pl. „1. Szállítólevél
+    // szerint - Debrecen GLOBUS …”), a település szerint — pár km pontatlanság
+    // árán (Budaházi Zoltán, 2026-09-29).
+    let p = await sz.geokod(c);
+    const varos = varosNev(c);
+    if (!p && varos && varos !== c) p = await sz.geokod(varos);
+    pontok.push(p);
+  }
   const hianyzo = cimek.filter((_, i) => !pontok[i]);
-  if (hianyzo.length > 0) return { hiba: `nem található cím: ${hianyzo.join("; ")}` };
+  if (hianyzo.length > 0) return { hiba: `${NEM_TALALHATO} ${hianyzo.join("; ")}` };
   try {
     const km = await sz.utvonalKm(pontok as Pont[]);
     return km > 0 ? { km } : { hiba: "az útvonaltervező 0 km-t adott" };
@@ -76,8 +87,8 @@ async function szamoljRakottKmet(felrako: string | null, lerako: string | null, 
  * a kör megáll, a következő újra próbálja.
  */
 export async function potoldRakottKmet(korlat = 30, sz: RakottKmSzolgaltatas = ALAP): Promise<{ szamolt: number; hibas: number }> {
-  const sorok = await query<{ id: string; felrako: string | null; lerako: string | null; rakott_km_kulcs: string | null }>(
-    `select m.id::text, m.felrako, m.lerako, m.rakott_km_kulcs
+  const sorok = await query<{ id: string; felrako: string | null; lerako: string | null; rakott_km_kulcs: string | null; rakott_km_hiba: string | null }>(
+    `select m.id::text, m.felrako, m.lerako, m.rakott_km_kulcs, m.rakott_km_hiba
      from fuvar_megbizasok m
      where m.torolt_at is null and m.jelleg = 'ber'
        and m.datum >= date_trunc('month', (now() at time zone 'Europe/Budapest')::date) - interval '1 month'
@@ -87,7 +98,8 @@ export async function potoldRakottKmet(korlat = 30, sz: RakottKmSzolgaltatas = A
   for (const s of sorok) {
     if (szamolt + hibas >= korlat) break;
     const kulcs = rakottKmKulcs(s.felrako, s.lerako);
-    if (s.rakott_km_kulcs === kulcs) continue;
+    const regiCimHiba = s.rakott_km_hiba?.startsWith("nem található cím") && !s.rakott_km_hiba.startsWith(NEM_TALALHATO);
+    if (s.rakott_km_kulcs === kulcs && !regiCimHiba) continue;
     let eredmeny: Awaited<ReturnType<typeof szamoljRakottKmet>>;
     try {
       eredmeny = await szamoljRakottKmet(s.felrako, s.lerako, sz);

@@ -2705,3 +2705,12 @@ Budaházi Zoltán a 8 látványtervből az 1-est választotta, üres csempékkel
   találat”-nak veszi.
 - Helyben kamu szolgáltatással tesztelve (5 eset); a valódi útvonaltervező a
   fejlesztői gépről nem érhető el (proxy), élesben még nem látott.
+
+## 2026-09-29 — Rakott km: ha a cím nem található, a település szerint
+
+- Élesben az első kör 28 fuvart kiszámolt, 2 zavaros cím miatt elbukott
+  (#225 „1. Szállítólevél szerint - Debrecen GLOBUS …”, #149 „EMSR
+  Tiszaújváros TVK-Ipartelep …”). Most ilyenkor a `varosNev` szerinti
+  településre esik vissza (pár km pontatlanság).
+- Új hibaszöveg: „nem található cím (településsel sem): …”; a régi „nem
+  található cím” hibás sorokat egyszer újrapróbálja.
