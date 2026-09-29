@@ -53,8 +53,8 @@ export function rakottKmKulcs(felrako: string | null, lerako: string | null): st
   return [...bontsMegallokra(felrako), "→", ...bontsMegallokra(lerako)].join(" | ");
 }
 
-/** A településre visszaesés óta (2026-09-29) írt hibaüzenet eleje — a régebbi „nem található cím” hibás sorokat egyszer újrapróbáljuk. */
-const NEM_TALALHATO = "nem található cím (településsel sem):";
+/** A településre visszaesés (a zárójeles cégnév levágásával) óta írt hibaüzenet eleje — a régebbi „nem található cím…” hibás sorokat egyszer újrapróbáljuk. Ha a visszaesés szabálya változik, ezt is át kell írni. */
+const NEM_TALALHATO = "nem található cím (település szerint sem):";
 
 /** Egy fuvar rakott km-e; végleges hiba esetén az ok szövegesen, átmenetinél dob. */
 async function szamoljRakottKmet(felrako: string | null, lerako: string | null, sz: RakottKmSzolgaltatas): Promise<{ km: number } | { hiba: string }> {
@@ -65,8 +65,9 @@ async function szamoljRakottKmet(felrako: string | null, lerako: string | null, 
     // Ha a teljes cím nem található (zavaros szöveg, pl. „1. Szállítólevél
     // szerint - Debrecen GLOBUS …”), a település szerint — pár km pontatlanság
     // árán (Budaházi Zoltán, 2026-09-29).
+    // A zárójeles cégnév („Nyírjákó (Baromfi-Coop Kft.)”) előbb lekerül.
     let p = await sz.geokod(c);
-    const varos = varosNev(c);
+    const varos = varosNev(c.replace(/\s*\([^)]*\)/g, " ").trim());
     if (!p && varos && varos !== c) p = await sz.geokod(varos);
     pontok.push(p);
   }
