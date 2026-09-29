@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { PDFDocument } from "pdf-lib";
 import { query } from "@/lib/db";
-import { apiAnyViewGuard } from "@/lib/auth/api-guard";
+import { fuvarIratGuard } from "@/lib/fuvarozas/irat-jog";
 import { letoltDriveFajl } from "@/lib/fuvarozas/drive-sync-core";
 
 /**
@@ -22,13 +22,14 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ fuvarId: string }> }
 ) {
-  const tiltas = await apiAnyViewGuard(["fuvarozas", "fuvarozas_sajat", "attekintes", "elszamolas"]);
-  if (tiltas) return tiltas;
-
   const { fuvarId } = await params;
   if (!/^\d+$/.test(fuvarId)) {
     return NextResponse.json({ hiba: "Érvénytelen fuvar-azonosító." }, { status: 400 });
   }
+
+  // A sofőri önkiszolgáló jog csak a SAJÁT fuvarra szól (lib/fuvarozas/irat-jog.ts).
+  const tiltas = await fuvarIratGuard(fuvarId, ["fuvarozas", "attekintes", "elszamolas"]);
+  if (tiltas) return tiltas;
 
   const [fuvar] = await query<{ datum: string | null; hivatkozas: string | null }>(
     `select to_char(datum, 'YYYY-MM-DD') as datum,
