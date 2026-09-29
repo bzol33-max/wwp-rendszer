@@ -144,7 +144,7 @@ function megalloDb(cim: string | null): number {
 }
 
 function Csik({ s }: { s: MunkaasztalSor }) {
-  const ut = utSzakaszai(s.jelleg);
+  const ut = utSzakaszai(s.jelleg, s.szakasz);
   const hol = ut.indexOf(s.szakasz);
   return (
     <span className="mt-1 flex gap-0.5" aria-hidden>

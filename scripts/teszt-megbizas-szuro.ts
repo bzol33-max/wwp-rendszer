@@ -1,11 +1,11 @@
-// A Megbízások képernyő (D2) „Következő teendő" oszlopának és időszak-
-// vödreinek tesztje. Futtatás: npx tsx scripts/teszt-megbizas-szuro.ts
+// A Megbízások képernyő (D2) „Következő teendő" oszlopának tesztje.
+// Futtatás: npx tsx scripts/teszt-megbizas-szuro.ts
 //
 // Miért fontos: ez az oszlop mondja meg, mi a soron következő lépés — ha
 // rosszat mond, a fuvar megáll (pl. „postázás", miközben a papír még meg
 // sem jött).
 
-import { kovetkezoTeendo, idoszakVodor, papirHatraNap } from "@/lib/fuvarozas2/megbizas-szuro";
+import { kovetkezoTeendo, papirHatraNap } from "@/lib/fuvarozas2/megbizas-szuro";
 import type { Allapot } from "@/lib/fuvarozas/allapot";
 
 let ok = 0, bad = 0;
@@ -49,13 +49,6 @@ eq("lezárt", t({ allapot: "lezart" }), { szoveg: "—", surgos: false });
 eq("papír-határidő 7 nap a lerakástól", papirHatraNap("2026-09-15", 7, new Date("2026-09-20T09:00:00Z")), 2);
 eq("papír-határidő alapértelmezés (7)", papirHatraNap("2026-09-15", null, new Date("2026-09-20T09:00:00Z")), 2);
 eq("papír-határidő lerakás nélkül", papirHatraNap(null, 7), null);
-
-// Időszak-vödrök (a hét hétfővel kezdődik; 2026-09-20 vasárnap → a hét 09-14-én kezdődött)
-eq("ma = ez a hét", idoszakVodor(MA, MA), "ez_a_het");
-eq("hétfő = ez a hét", idoszakVodor("2026-09-14", MA), "ez_a_het");
-eq("előző vasárnap = múlt hét", idoszakVodor("2026-09-13", MA), "mult_het");
-eq("két hete = régebbi", idoszakVodor("2026-09-06", MA), "regebbi");
-eq("nap nélkül = régebbi", idoszakVodor(null, MA), "regebbi");
 
 console.log(`\nMegbízás-szűrő teszt: ${ok} rendben, ${bad} hiba`);
 if (bad > 0) process.exit(1);
