@@ -2568,3 +2568,17 @@ kérdésekkel kell megnézni.
   nap előtt lerakott megálló így is kész lesz, a rakodás előtti ottlét (az
   ingázó kocsi esete, #128) továbbra sem számít. Megadott ablaknál nincs
   tágítás. `scripts/teszt-erintes.mts`: 70/0.
+
+## 2026-09-29 — Flexlog megbízása RBT-ként jött be: a partnerfelismerés javítása
+
+- **Ok:** az RBT ujjlenyomatában a `SpedINFORM` programnév is szerepelt — a
+  fájl saját szabálya szerint szoftvernév nem lehet ujjlenyomat. A Flexlog
+  Kft. is SpedINFORM-mal ír (poz. F26 / 3682 / 4173), így az irata RBT
+  EUROPE megrendelőt kapott.
+- **Javítás (`lib/fuvarozas/import/partnerek.ts`):** a SpedINFORM kikerült az
+  RBT ujjlenyomatából; új partner: Flexlog Kft. (`flexlog.hu`, „FLEXLOG
+  KFT”, 30 nap, „Poz.számunk”, a szerződéses rész levágása). Teszt:
+  `scripts/teszt-import.mts` 107/0.
+- Ugyanez a hiba a Trans-Sped bejegyzésében: az „InnoManagement” programnév
+  is kikerült az ujjlenyomatból. Teszt: 108/0.
+- A már felvett 4173-as sor megrendelője még RBT — a felületen kell átírni.

@@ -158,15 +158,29 @@ export const PARTNEREK: readonly Partner[] = [
   {
     kod: "rbt-europe",
     nev: "RBT EUROPE Kft.",
-    ujjlenyomat: [/rbteurope\.com/i, /\bRBT\s*EUROPE\b/i, /SpedINFORM/i],
+    // A "SpedINFORM" (a megbízás-készítő program) NEM ujjlenyomat: a Flexlog
+    // is azzal ír, és a 4173-as megbízása RBT-ként jött be (2026-09-29).
+    ujjlenyomat: [/rbteurope\.com/i, /\bRBT\s*EUROPE\b/i],
     torzsVege: [/Fel-\s*[ée]s\s+lerak[áa]s\s+ut[áa]n\s+1\s+[óo]r[áa]n\s+bel[üu]l/i],
+    fizetesiHataridoNap: 30,
+    hivatkozasNeve: "Poz.számunk",
+  },
+  {
+    kod: "flexlog",
+    nev: "Flexlog Kft.",
+    // SpedINFORM-sablon, mint az RBT-é (poz. F26 / 3682 / 4173, 2026-09-29).
+    ujjlenyomat: [/flexlog\.hu/i, /\bFLEXLOG\s+KFT\b/i],
+    torzsVege: [/Az al[áa]bbi [áa]ltal[áa]nos rendelkez[ée]sek abban az esetben [ée]rv[ée]nyesek/i],
+    // „Számla érkezése napjától számított 30 naptári napra.”
     fizetesiHataridoNap: 30,
     hivatkozasNeve: "Poz.számunk",
   },
   {
     kod: "trans-sped",
     nev: "Trans-Sped Kft.",
-    ujjlenyomat: [/@trans-sped\.hu/i, /\bTrans-Sped\b/i, /InnoManagement/i],
+    // Az "InnoManagement" (a megbízás-készítő program) NEM ujjlenyomat —
+    // ugyanaz a hiba, ami a SpedINFORM-mal a Flexlogot RBT-vé tette.
+    ujjlenyomat: [/@trans-sped\.hu/i, /\bTrans-Sped\b/i],
     torzsVege: [
       /Felt[ée]telek az alv[áa]llalkoz[óo] fel[ée]/i,
       /BELF[ÖO]LDI FUVAROZ[ÁA]SI MEGB[ÍI]Z[ÁA]S/,
