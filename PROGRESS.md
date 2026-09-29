@@ -2607,3 +2607,16 @@ kérdésekkel kell megnézni.
   kerül (esemény: `sztornozott_elozo`, napló: „a sztornózott … helyett”).
   Egy érvényes számlát nem ír felül. A két mostani eset a következő
   számla-szinkronnál (15 percenként) magától rendbe jön.
+
+## 2026-09-29 — Élő ETA: a már elkezdett fuvar megállói jönnek előbb
+
+- **Hiba:** Gergő ETA-ja a MERKAPT-hoz (Budapest X, #284) 20:50-et mutatott,
+  pedig 11:37-kor Mezőkövesdnél járt, ~13:00-ra ér oda. Az ETA-lánc
+  (`lancoltEloBecsles`) a hátralévő pontokat fuvartól függetlenül a statikus
+  becslés szerint fűzte fel: a később jövő saját fuvar (#275) korai statikus
+  idejű pontjai (Szigetszentmiklós → Tompaládony) a budapesti lerakó ELÉ
+  kerültek.
+- **Javítás (`lib/fuvarozas/idovonal.ts` `eloLancSorrend`):** a lánc fuvaronként
+  egyben, útvonal-sorrendben halad; elöl a már elkezdett fuvar, utána a többi
+  a legkorábbi hátralévő tervezett idő szerint, a nap végére sorolt a végén.
+  Teszt: `scripts/teszt-erintes.mts` 71/0.

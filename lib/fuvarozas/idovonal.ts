@@ -17,6 +17,7 @@ import type { EcofleetTrip } from "./ecofleet";
 import { parseEcofleetTimestamp } from "./ecofleet";
 import type { FuvardijPenznem, FuvarTipus } from "./fuvar-constants";
 import type { CimPontossag } from "./varos";
+import { budapestNapISO } from "./idozona";
 
 /** Két koordináta közti távolság km-ben (haversine). */
 export function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -832,4 +833,45 @@ export function ratesziKeziJeloleseket(
 export function fuvarKeszGpsSzerint(megallok: TervezettMegallo[]): boolean {
   const lerakok = megallok.filter((m) => m.tipus === "lerako");
   return lerakok.length > 0 && lerakok.every((m) => m.lat != null && m.lon != null && m.elhagyva && m.keszForras === "gps");
+}
+
+/**
+ * Az élő ETA-lánc sorrendje (actions.ts lancoltEloBecsles): a mai, még el nem
+ * ért pontok. Egy fuvar pontjai EGYBEN maradnak, útvonal-sorrendben (index);
+ * a fuvarok közül előbb a nap végére soroltak kivételével azok, amelyek már
+ * elkezdődtek (van elhagyott vagy éppen érintett pontjuk), utánuk a többi a
+ * legkorábbi hátralévő tervezett idejük szerint.
+ *
+ * Korábban a pontok fuvartól függetlenül, a statikus becslés szerint álltak
+ * sorba: Gergő 09-29-én a Téglásról Budapestre tartó, már felrakott RBT-fuvar
+ * (#284) lerakója a később jövő saját fuvar (#275, Szigetszentmiklós →
+ * Tompaládony) két pontja MÖGÉ került, és a budapesti ETA 13:00 helyett
+ * 20:50 lett.
+ */
+export function eloLancSorrend(
+  fuvarok: TervezettFuvarSzakasz[],
+  maiNapISO: string,
+  napVegere: (f: TervezettFuvarSzakasz) => boolean
+): { fi: number; mi: number; m: TervezettMegallo }[] {
+  const nyitott = fuvarok.map((f, fi) =>
+    f.megallok
+      .map((m, mi) => ({ fi, mi, m }))
+      .filter(({ m }) => !m.elhagyva && !m.eppenItt && budapestNapISO(m.idopont) === maiNapISO)
+      .sort((a, b) => a.m.index - b.m.index)
+  );
+  const kulcs = fuvarok.map((f, fi) => ({
+    napVegen: napVegere(f) ? 1 : 0,
+    elkezdve: f.megallok.some((m) => m.elhagyva || m.eppenItt) ? 0 : 1,
+    elso: nyitott[fi].length ? Math.min(...nyitott[fi].map(({ m }) => m.idopont.getTime())) : Number.MAX_SAFE_INTEGER,
+  }));
+  return fuvarok
+    .map((_, fi) => fi)
+    .sort(
+      (a, b) =>
+        kulcs[a].napVegen - kulcs[b].napVegen ||
+        kulcs[a].elkezdve - kulcs[b].elkezdve ||
+        kulcs[a].elso - kulcs[b].elso ||
+        a - b
+    )
+    .flatMap((fi) => nyitott[fi]);
 }
