@@ -1007,3 +1007,11 @@ alter table fuvar_megbizasok add column if not exists megallo_reszletek jsonb;
 alter table fuvar_megbizasok add column if not exists referencia text;
 alter table fuvar_megbizasok add column if not exists jarmu_eloiras text;
 alter table fuvar_megbizasok add column if not exists sofor_adatok_at timestamptz;
+
+-- Rakott km (2026-09-29, Ma oldal 3. csempe: havi átlag km-díj): a felrakótól
+-- a megállókon át az utolsó lerakóig, a HU-GO útvonaltervező szerint.
+-- Háttérben számolja lib/fuvarozas2/rakott-km.ts; a kulcs az útvonal szövege,
+-- amire számolva lett (változáskor újraszámol), a hiba az ok, ha nem ment.
+alter table fuvar_megbizasok add column if not exists rakott_km double precision;
+alter table fuvar_megbizasok add column if not exists rakott_km_kulcs text;
+alter table fuvar_megbizasok add column if not exists rakott_km_hiba text;

@@ -2686,3 +2686,22 @@ Budaházi Zoltán a 8 látványtervből az 1-est választotta, üres csempékkel
 - A csempesor külön kliens-komponens lett: `components/fuvarozas2/csempesor.tsx`.
 - Mellette: a heti csempe számainak magyarázatához csak olvasó napló a
   `scripts/migrate.mjs`-ben (`naplozBerCsempeHetet`, #250).
+
+## 2026-09-29 — Ma oldal, 3. csempe: havi átlag km-díj (rakott km)
+
+- Km-díj = a hónapban kezdett díjas bérfuvarok díja ÷ rakott km-jük
+  (összegek hányadosa, nem fuvaronkénti átlag). Felül a flotta, alatta
+  kocsinként; EUR fuvar külön €/km, nem váltjuk át. „N fuvar még km nélkül”,
+  ha van díjas fuvar km nélkül.
+- Rakott km: felrakó → megállók → utolsó lerakó, HU-GO útvonaltervező
+  (J5, EURO6, 40 t — mint a Kalkulátor). Új oszlopok: `rakott_km`,
+  `rakott_km_kulcs` (az útvonal szövege, változáskor újraszámol),
+  `rakott_km_hiba`. Háttérben, óránként (`modell-szinkron-scheduler` →
+  `lib/fuvarozas2/rakott-km.ts`), az előző hónap elejétől, körönként max 30.
+- Végleges hiba (nem található cím, nincs útvonal) → `rakott_km_hiba`, nem
+  próbálja újra, amíg az útvonal nem változik; átmeneti (hálózat, 429/5xx) →
+  a kör megáll, a következő újrapróbálja. Szándékosan nem a
+  `geokodolCachelve`-t használja, mert az a hálózati hibát is „nincs
+  találat”-nak veszi.
+- Helyben kamu szolgáltatással tesztelve (5 eset); a valódi útvonaltervező a
+  fejlesztői gépről nem érhető el (proxy), élesben még nem látott.
