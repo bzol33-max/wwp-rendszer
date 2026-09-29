@@ -33,7 +33,7 @@ import {
 } from "./idovonal";
 import { SAJAT_JARMUVEK, resolveJarmu, type JarmuSzin, type SajatJarmu } from "./vehicles";
 import { bontsMegallokra, cimPontossaga, varosNev } from "./varos";
-import { geokodolCachelve, megalloAblakKezdet, mozogE } from "./erintes-felismeres";
+import { geokodolCachelve, megalloAblakKezdet, megalloAblakTagithato, mozogE } from "./erintes-felismeres";
 import { cachelve } from "./idovonal-cache";
 import {
   getFuvarokIdoszakban,
@@ -746,6 +746,7 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus, kali
     tenylegesTavozas: null,
     bizonytalanFelismeres: false,
     ablakKezdet: megalloAblakKezdet(row, m.tipus),
+    ablakTagithato: megalloAblakTagithato(row, m.tipus),
     keszForras: null,
     keszBy: null,
   }));

@@ -2547,3 +2547,24 @@ kérdésekkel kell megnézni.
   GPS legközelebb felismeri, és nem jelez hamis állást.
 - Teszt: `scripts/teszt-ma-tukor.ts` 10/0 (a 09-28-i Gergő- és Micó-nap,
   köztes állás, két állás ugyanoda); helyben böngészőben a tükör-oszlop.
+
+## 2026-09-29 — Micó EUCARGO-fuvarja (#281): a nap aktualizálása + korábbi lerakás felismerése
+
+- **Összevetés:** Horváth Olivér 09-25-i levele (4 felrakó, 10 lerakó, útvonal-
+  sorrenddel) és a rendszer: mind a 14 megálló megvan, de a lerakók össze
+  voltak keverve, és a GPS szerint Jászberény (09-28 15:54), Farmos (16:47)
+  és Galgamácsa (09-28 19:03-tól, reggel lerakva) megvolt, a rendszerben
+  mégis nyitottként álltak.
+- **Egyszeri javítás (`aktualizaldMicoEucargoNapjatOnce`, migrate.mjs):** a
+  lerakók a levél sorrendjében (Hejőpapi, Jászberény, Farmos, Galgamácsa,
+  Ete ×2, Császár, Bakonycsernye, Nagyalásony, Mezőlak) — a sorrend három
+  helyen él, együtt mozog: `lerako` szöveg, `fuvar_megallok.sorszam`,
+  `fuvar_megallo_allapot.megallo_index`. A három megálló kész a GPS szerinti
+  idővel; hat hely koordinátája (Polgár, Palotás, Hejőpapi, Jászberény,
+  Farmos, Galgamácsa) a kocsi tényleges állásából a helyszín-szótárba.
+  Csak akkor ír, ha a fuvar pontosan a várt régi állapotban van.
+- **Hibajavítás (`jelolMegallokat`):** a csak napra szóló lerakó-ablak (nincs
+  megadott lerakási ablak) a fuvar első GPS-felrakásáig előrejön — a tervezett
+  nap előtt lerakott megálló így is kész lesz, a rakodás előtti ottlét (az
+  ingázó kocsi esete, #128) továbbra sem számít. Megadott ablaknál nincs
+  tágítás. `scripts/teszt-erintes.mts`: 70/0.
