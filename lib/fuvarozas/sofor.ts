@@ -23,6 +23,7 @@ import { getFleetLastPositions, parseEcofleetTimestamp } from "@/lib/fuvarozas/e
 import { mozogE, toroljGeokodCachet } from "@/lib/fuvarozas/erintes-felismeres";
 import { ceglNevKanonikusan, normalizaltCegKulcs } from "@/lib/fuvarozas/fuvar-constants";
 import { megalloReszlete, type MegalloReszlet } from "@/lib/fuvarozas/sofor-adatok";
+import { szkennelj } from "@/lib/fuvarozas/doksi-kivagas";
 
 function budapestMaIso(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Budapest" });
@@ -650,15 +651,21 @@ export async function feltoltFuvarlevelFoto(fuvarId: string, form: FormData): Pr
 
   const hivatkozas = (fuvar.reise_id ?? fuvar.pozicioszam ?? `fuvar${fuvarId}`).replace(/[^A-Za-z0-9_-]+/g, "_");
   const rendszam = (fuvar.jarmu ?? "").replace(/[^A-Za-z0-9]+/g, "").toUpperCase() || "kocsi";
-  const kiterjesztes = fajl.type === "image/png" ? "png" : "jpg";
-  const nev = `${fuvar.datum}_${rendszam}_${hivatkozas}_${Date.now()}.${kiterjesztes}`;
-  const tartalom = Buffer.from(await fajl.arrayBuffer());
+  // A fotóból szkennelt oldal lesz: a papír kivágva, egyenesbe hozva,
+  // tisztítva (lib/fuvarozas/doksi-kivagas.ts). A kimenet mindig JPEG, ezért
+  // a fájlnév is az. Ha a lap nem ismerhető fel, a kép tisztítva, de vágatlanul
+  // megy tovább — az EREDETIT nem tároljuk el külön (Budaházi Zoltán döntése,
+  // 2026-09-29), tehát a kivágás csak biztos kontúr esetén történik meg.
+  const nev = `${fuvar.datum}_${rendszam}_${hivatkozas}_${Date.now()}.jpg`;
+  const eredeti = Buffer.from(await fajl.arrayBuffer());
+  const szken = await szkennelj(eredeti);
+  const tartalom = szken.tartalom;
 
   const beszurt = await query<{ id: string }>(
     `insert into fuvar_dokumentumok (fuvar_id, tipus, fajlnev, tarolas, tartalom, mime_type, meret_byte, feltoltotte)
      values ($1, 'fuvarlevel', $2, 'db', $3, $4, $5, $6)
      returning id::text`,
-    [fuvarId, nev, tartalom, fajl.type, tartalom.length, session.name ?? session.username]
+    [fuvarId, nev, tartalom, szken.mimeType, tartalom.length, session.name ?? session.username]
   );
   // A részletek-lista a dokumentum_url-t linkeli — a saját kiszolgálónkra mutat.
   await query(`update fuvar_dokumentumok set dokumentum_url = $2 where id = $1`, [beszurt[0].id, `/api/fuvarozas/dokumentum/${beszurt[0].id}`]);
@@ -666,7 +673,11 @@ export async function feltoltFuvarlevelFoto(fuvarId: string, form: FormData): Pr
   // Számlázz.hu állítja ki) — ugyanaz a 'fuvarlevel' irat-típus, mert a
   // fuvar_dokumentumok CHECK-je csak ezt ismeri, és a saját fuvar állapotát a
   // fotó amúgy sem mozdítja (003 trigger: csak jelleg='ber').
-  console.log(`[sofor] fuvarlevél-fotó feltöltve: fuvar #${fuvarId}, ${nev}, ${Math.round(tartalom.length / 1024)} KB (${session.name})`);
+  console.log(
+    `[sofor] fuvarlevél-fotó feltöltve: fuvar #${fuvarId}, ${nev}, ` +
+      `${Math.round(eredeti.length / 1024)} KB → ${Math.round(tartalom.length / 1024)} KB, ` +
+      `${szken.kivagva ? "lap kivágva" : `vágatlan (${szken.ok ?? "?"})`} (${session.name})`
+  );
   revalidatePath("/erkezes");
   revalidatePath("/fuvarozas");
   return { dokId: beszurt[0].id };
