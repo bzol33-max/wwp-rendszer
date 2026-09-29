@@ -127,8 +127,21 @@ export type BerOsszesito = {
   cim: string;
   ft: number;
   eur: number;
-  kocsik: { nev: string; szin: JarmuSzin | null; ft: number; eur: number }[];
+  kocsik: { nev: string; szin: JarmuSzin | null; ft: number; eur: number; km: KmDij }[];
+  /** A km-díjhoz (3. csempe): csak a díjas ÉS rakott km-es fuvarok. */
+  km: KmDij;
+  /** Díjas fuvar, aminek még nincs rakott km-e (számolás alatt vagy nem számolható). */
+  kmNelkul: number;
 };
+
+/** Km-díj alapja: Ft és km a forintos, € és km az eurós fuvarokból (lib/fuvarozas2/rakott-km.ts). */
+export type KmDij = { kmFt: number; kmFtKm: number; kmEur: number; kmEurKm: number };
+const kmDij = (sorok: KmDij[]): KmDij => ({
+  kmFt: sorok.reduce((x, r) => x + r.kmFt, 0),
+  kmFtKm: sorok.reduce((x, r) => x + r.kmFtKm, 0),
+  kmEur: sorok.reduce((x, r) => x + r.kmEur, 0),
+  kmEurKm: sorok.reduce((x, r) => x + r.kmEurKm, 0),
+});
 
 /** Ennyi oszlop van mindig (a még nem üzemelő kocsik helye is látszik). */
 const KOCSI_OSZLOP = 4;
@@ -420,10 +433,15 @@ export async function getMaVaszon(): Promise<MaVaszon> {
   // ---------------------------------------------------------------- havi és heti bérfuvar
   const berOsszesit = async (kezdet: string, veg: string, cim: string): Promise<BerOsszesito> => {
     const zaras = veg < ma ? veg : ma;
-    const berSorok = kezdet > zaras ? [] : await query<{ jarmu_id: string | null; ft: number; eur: number }>(
+    const berSorok = kezdet > zaras ? [] : await query<{ jarmu_id: string | null; ft: number; eur: number } & KmDij & { km_nelkul: number }>(
       `select m.jarmu_id::text,
          coalesce(sum(m.fuvardij) filter (where m.fuvardij_penznem = 'Ft'), 0)::float8 as ft,
-         coalesce(sum(m.fuvardij) filter (where m.fuvardij_penznem = 'EUR'), 0)::float8 as eur
+         coalesce(sum(m.fuvardij) filter (where m.fuvardij_penznem = 'EUR'), 0)::float8 as eur,
+         coalesce(sum(m.fuvardij) filter (where m.fuvardij_penznem = 'Ft' and m.fuvardij > 0 and m.rakott_km > 0), 0)::float8 as "kmFt",
+         coalesce(sum(m.rakott_km) filter (where m.fuvardij_penznem = 'Ft' and m.fuvardij > 0 and m.rakott_km > 0), 0)::float8 as "kmFtKm",
+         coalesce(sum(m.fuvardij) filter (where m.fuvardij_penznem = 'EUR' and m.fuvardij > 0 and m.rakott_km > 0), 0)::float8 as "kmEur",
+         coalesce(sum(m.rakott_km) filter (where m.fuvardij_penznem = 'EUR' and m.fuvardij > 0 and m.rakott_km > 0), 0)::float8 as "kmEurKm",
+         count(*) filter (where m.fuvardij > 0 and m.rakott_km is null)::int as km_nelkul
        from fuvar_megbizasok m
        where m.torolt_at is null and m.jelleg = 'ber'
          and m.allapot is not null and m.allapot <> 'ellenorzesre_var'
@@ -434,10 +452,13 @@ export async function getMaVaszon(): Promise<MaVaszon> {
     const kocsik = osszesJarmu.map((j) => {
       const torzs = SAJAT_JARMUVEK.find((x) => x.rendszamok[0] === j.kod) ?? SAJAT_JARMUVEK.find((x) => x.rendszamok.length === 0 && j.kod === "JANI");
       const r = berSorok.find((x) => x.jarmu_id === j.id);
-      return { nev: torzs?.sofor ?? j.sofor ?? j.cimke, szin: torzs?.szin ?? null, ft: r?.ft ?? 0, eur: r?.eur ?? 0 };
+      return { nev: torzs?.sofor ?? j.sofor ?? j.cimke, szin: torzs?.szin ?? null, ft: r?.ft ?? 0, eur: r?.eur ?? 0, km: kmDij(r ? [r] : []) };
     });
-    while (kocsik.length < KOCSI_OSZLOP) kocsik.push({ nev: `${kocsik.length + 1}. kocsi`, szin: null, ft: 0, eur: 0 });
-    return { cim, ft: berSorok.reduce((x, r) => x + r.ft, 0), eur: berSorok.reduce((x, r) => x + r.eur, 0), kocsik };
+    while (kocsik.length < KOCSI_OSZLOP) kocsik.push({ nev: `${kocsik.length + 1}. kocsi`, szin: null, ft: 0, eur: 0, km: kmDij([]) });
+    return {
+      cim, ft: berSorok.reduce((x, r) => x + r.ft, 0), eur: berSorok.reduce((x, r) => x + r.eur, 0), kocsik,
+      km: kmDij(berSorok), kmNelkul: berSorok.reduce((x, r) => x + r.km_nelkul, 0),
+    };
   };
   const napISO = (d: Date) => d.toISOString().slice(0, 10);
   const hetfoje = (iso: string) => {
