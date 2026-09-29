@@ -832,6 +832,15 @@ export async function getAktivFuvarokUtkozeshez(): Promise<UtkozesJelolt[]> {
 }
 
 /**
+ * A fuvaron álló számlaszám egy sztornózott (törölt/teljesen helyesbített)
+ * számláé — a fuvar valójában nincs kiszámlázva, az új, helyes számla még
+ * jön (Huncargo WLLWR-2026-323 → 325, Lösung Trans → 328, 2026-09-28: hibás
+ * teljesítési dátum miatt sztornó + új számla). Az ilyen fuvart a párosítás
+ * számla nélkülinek veszi, és az új számla a sztornózott helyére kerül.
+ */
+const SZTORNOZOTT_SZAMLA_SQL = `exists (select 1 from szamla sz where sz.szamlaszam = m.szamla_szam and sz.sztornozva)`;
+
+/**
  * A Számlák modulban rögzített fuvarszámlák (kategoria = 'fuvar') sorszámát
  * automatikusan beírja a megfelelő bér fuvar "Számla szám" mezőjébe. A döntés
  * a lib/fuvarozas/szamla-parositas.ts-ben van (szám → irat-szöveg →
@@ -858,7 +867,7 @@ export async function szinkronizalSzamlaSzamokat(): Promise<number> {
      from fuvar_megbizasok m
      left join fuvar_partnerek p on p.id = m.partner_id
      where m.tipus = 'sajat' and m.statusz <> 'torolt' and m.torolt_at is null
-       and coalesce(m.szamla_szam, '') = ''
+       and (coalesce(m.szamla_szam, '') = '' or ${SZTORNOZOTT_SZAMLA_SQL})
        and coalesce(m.lerakas_datum, m.datum) >= current_date - 180`
   );
   const kieg = await szinkronizalKiegSzamlakat();
@@ -900,17 +909,21 @@ export async function szinkronizalSzamlaSzamokat(): Promise<number> {
 
   let talalatDarab = 0;
   for (const p of parok) {
-    const frissitve = await query<{ id: string }>(
-      `update fuvar_megbizasok set szamla_szam = $2 where id = $1 and coalesce(szamla_szam, '') = '' returning id::text`,
+    const frissitve = await query<{ id: string; regi: string | null }>(
+      `update fuvar_megbizasok m set szamla_szam = $2
+       from (select szamla_szam as regi from fuvar_megbizasok where id = $1) r
+       where m.id = $1 and (coalesce(m.szamla_szam, '') = '' or ${SZTORNOZOTT_SZAMLA_SQL})
+       returning m.id::text, nullif(r.regi, '') as regi`,
       [p.fuvarId, p.szamlaszam]
     );
     if (frissitve.length === 0) continue;
     talalatDarab++;
+    const regi = frissitve[0].regi;
     await query(
       `insert into fuvar_megbizas_esemeny (megbizas_id, esemeny, forras, reszletek) values ($1, 'szamla_parositva', 'szamla_szinkron', $2)`,
-      [p.fuvarId, JSON.stringify({ szamla_szam: p.szamlaszam, mod: p.mod })]
+      [p.fuvarId, JSON.stringify({ szamla_szam: p.szamlaszam, mod: p.mod, ...(regi ? { sztornozott_elozo: regi } : {}) })]
     );
-    console.log(`[szamla-parositas] #${p.fuvarId} ← ${p.szamlaszam} (${p.mod})`);
+    console.log(`[szamla-parositas] #${p.fuvarId} ← ${p.szamlaszam} (${p.mod})${regi ? ` — a sztornózott ${regi} helyett` : ""}`);
   }
   return talalatDarab + kieg;
 }
