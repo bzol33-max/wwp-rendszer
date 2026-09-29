@@ -147,6 +147,12 @@ egyenlo(
 );
 egyenlo(felismerPartner("Transorg Software / Ver:2.6003"), null, "a szoftvernév egymagában nem partner");
 egyenlo(
+  felismerPartner("Ügyintézőnk: PAPP DÁVID E-mail címe: david.papp@flexlog.hu Poz.számunk: F26 / 3682 / 4173 Program: SpedINFORM v11.0")?.kod,
+  "flexlog",
+  "Flexlog felismerése — ugyanaz a SpedINFORM-sablon, mint az RBT-é (4173)"
+);
+egyenlo(felismerPartner("Program: SpedINFORM v11.0 - fuvarozók, szállítmányozók ügyviteli"), null, "a SpedINFORM egymagában nem RBT");
+egyenlo(
   felismerPartner("Szállítási megbízás Megbízó: EUCARGO 2008 KFT. H-1103 Budapest,Gergely u.42. oliver.horvath@eucargo2008.eu Megbízott: WELL-WORN PALETT KFT.")?.kod,
   "eucargo",
   "EUCARGO felismerése (2026.09.25.02)"
