@@ -18,13 +18,14 @@ const FULEK: { href: string; label: string; csakFuvarozas?: boolean; csakRendsze
   { href: "/fuvarozas2/rendszer", label: "Rendszer", csakRendszer: true },
 ];
 
-export async function Fuvarozas2Fulek({ aktiv }: { aktiv: string }) {
+export async function Fuvarozas2Fulek({ aktiv, cim }: { aktiv: string; cim?: string }) {
   const session = await requireSession();
   const fuvarozas = session.can("fuvarozas").view;
   const rendszer = session.can("rendszer").view;
   const lathato = FULEK.filter((f) => (f.csakFuvarozas ? fuvarozas : true) && (f.csakRendszer ? rendszer || fuvarozas : true));
   return (
-    <nav className="flex flex-wrap gap-1 border-b pb-2">
+    <nav className="flex flex-wrap items-center gap-1 border-b pb-2">
+      {cim ? <h1 className="mr-4 text-lg font-semibold tracking-tight">{cim}</h1> : null}
       {lathato.map((f) => (
         <Link
           key={f.href}

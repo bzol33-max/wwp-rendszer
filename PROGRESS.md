@@ -2639,3 +2639,16 @@ Három hiba Micó oszlopában (Ete, Ady u., 11:54-től áll ott):
   az a megálló, ahol a kocsi GPS szerint áll, akkor is, ha előtte egy másik
   még nyitott; az ETA csak a célja szerinti megállón jelenik meg.
   Teszt: `teszt-ma-tukor.ts` 14/0.
+
+## 2026-09-29 — Ma oldal: tömör fejléc + üres csempesor
+
+Budaházi Zoltán a 8 látványtervből az 1-est választotta, üres csempékkel.
+
+- A cím a fülsorba került (`Fuvarozas2Fulek` új `cim` propja), az alcím kimaradt.
+- A zöld „Minden terv szerint megy” sáv helyén 10 üres, sorszámozott csempe
+  (`CSEMPE_HELYEK` a `components/fuvarozas2/ma-vaszon.tsx`-ben): asztalon egy
+  sorban 10, közepes szélességen 5-ösével, telefonon oldalra húzható sor.
+- Az eltérés-sáv megmaradt: ha van késés/várakozás/levél, a csempék alatt
+  ugyanúgy megjelenik.
+- Következő: sorban funkció a csempéknek (a hely kitöltése = a tömb elemének
+  cseréje `{ cimke, ertek, also?, szin, href? }`-re).
