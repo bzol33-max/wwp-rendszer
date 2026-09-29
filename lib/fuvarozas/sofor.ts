@@ -15,44 +15,17 @@ import { requireAnyEditPermission, requireSajatVagyModulJog } from "@/lib/auth/r
 import { requireSession } from "@/lib/auth/dal";
 import { getIdovonalak } from "@/lib/fuvarozas/actions";
 import { getFuvarok } from "@/lib/fuvarozas/megbizasok";
-import { resolveJarmu, SAJAT_JARMUVEK, type SajatJarmu } from "@/lib/fuvarozas/vehicles";
+import { resolveJarmu } from "@/lib/fuvarozas/vehicles";
+import { findJarmuByEmployeeName, jarmuMatch } from "@/lib/fuvarozas/sofor-jarmu";
 import { bontsMegallokra, cimKulcs, cimPontossaga, varosNev } from "@/lib/fuvarozas/varos";
 import { toroljIdovonalCachet } from "@/lib/fuvarozas/idovonal-cache";
 import { getFleetLastPositions, parseEcofleetTimestamp } from "@/lib/fuvarozas/ecofleet";
 import { mozogE, toroljGeokodCachet } from "@/lib/fuvarozas/erintes-felismeres";
-import { ceglNevKanonikusan, normalizaltCegKulcs, type FuvarRow } from "@/lib/fuvarozas/fuvar-constants";
+import { ceglNevKanonikusan, normalizaltCegKulcs } from "@/lib/fuvarozas/fuvar-constants";
 import { megalloReszlete, type MegalloReszlet } from "@/lib/fuvarozas/sofor-adatok";
-
-function jarmuMatch(jarmu: SajatJarmu, row: FuvarRow): boolean {
-  if (row.jarmu && resolveJarmu(row.jarmu) === jarmu) return true;
-  if (row.sofor && row.sofor.trim().toLowerCase() === jarmu.sofor.toLowerCase()) return true;
-  return false;
-}
 
 function budapestMaIso(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Budapest" });
-}
-
-/**
- * A SAJAT_JARMUVEK "sofor" mezője a rövid, keresztnévi alak ("Gergő",
- * "Micó") — a dolgozói bejelentkezés (users.employee_id -> alkalmazottak)
- * viszont a törzsadat TELJES nevét adja ("Vadon Gergő", "Takács Micó").
- * Ezért itt tartalmazás-egyezés kell a rövid alakra, nem pontos egyezés.
- */
-function findJarmuByEmployeeName(employeeName: string): SajatJarmu | null {
-  const norm = employeeName.trim().toLowerCase();
-  // 1. Explicit összerendelés a teljes név alapján (vehicles.ts
-  //    alkalmazottNevek) — ez a mérvadó, mert a becenév ("Micó") és a
-  //    törzsadat hivatalos neve ("Takács Miklós") eltérhet.
-  const explicit = SAJAT_JARMUVEK.find((j) => (j.alkalmazottNevek ?? []).some((n) => n.trim().toLowerCase() === norm));
-  if (explicit) return explicit;
-  // 2. Tartalék: a keresztnév szó szerinti egyezése, nem puszta tartalmazás
-  //    (a "Gergő" ne illeszkedjen egy "Gergőkúti" vezetéknévre). Ha több
-  //    jármű is illeszkedne, inkább egyiket sem adjuk vissza — a rossz kocsi
-  //    idővonala rosszabb, mint az üres képernyő.
-  const szavak = new Set(norm.split(/[^\p{L}\p{N}]+/u).filter(Boolean));
-  const talalatok = SAJAT_JARMUVEK.filter((j) => szavak.has(j.sofor.toLowerCase()));
-  return talalatok.length === 1 ? talalatok[0] : null;
 }
 
 export type SoforMegallo = {

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
-import { apiAnyViewGuard } from "@/lib/auth/api-guard";
+import { fuvarIratGuard } from "@/lib/fuvarozas/irat-jog";
 import { letoltDriveFajl } from "@/lib/fuvarozas/drive-sync-core";
 
 /**
@@ -13,30 +13,34 @@ import { letoltDriveFajl } from "@/lib/fuvarozas/drive-sync-core";
  * service account viszont amúgy is olvassa a mappát, tehát a fájlt mi adjuk
  * ki, a saját jogosultság-ellenőrzésünk mögött.
  *
- * A "fuvarozas_sajat" (sofőri mobil) jog is elég hozzá — a sofőrnek látnia
- * kell a saját fuvarja papírjait a kapuban. Az "attekintes" (vezetői mobil
- * nézet) jog is: a Fuvar fülön a sofőr fuvarlevél-fotója innen nyílik meg.
+ * A "fuvarozas_sajat" (sofőri mobil) jog is elég hozzá — de CSAK a saját
+ * fuvar irataira (lib/fuvarozas/irat-jog.ts): az útvonal egyetlen sorszám,
+ * tehát enélkül egy sofőr végigpörgethetné a cég összes iratát. Az
+ * "attekintes" (vezetői mobil nézet) jog viszont mindet nyitja: a Fuvar
+ * fülön a sofőr fuvarlevél-fotója innen nyílik meg.
  */
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ dokId: string }> }
 ) {
-  const tiltas = await apiAnyViewGuard(["fuvarozas", "fuvarozas_sajat", "attekintes"]);
-  if (tiltas) return tiltas;
-
   const { dokId } = await params;
   if (!/^\d+$/.test(dokId)) {
     return NextResponse.json({ hiba: "Érvénytelen dokumentum-azonosító." }, { status: 400 });
   }
 
-  const sorok = await query<{ drive_file_id: string | null; fajlnev: string | null; tarolas: string; tartalom: Buffer | null; mime_type: string | null }>(
-    `select drive_file_id, fajlnev, tarolas, tartalom, mime_type from fuvar_dokumentumok where id = $1`,
+  // A jog a dokumentum FUVARJÁHOZ kötődik, ezért előbb a sor kell — a
+  // lekérdezés maga nem ad ki semmit a hívónak.
+  const sorok = await query<{ fuvar_id: string; drive_file_id: string | null; fajlnev: string | null; tarolas: string; tartalom: Buffer | null; mime_type: string | null }>(
+    `select fuvar_id::text, drive_file_id, fajlnev, tarolas, tartalom, mime_type from fuvar_dokumentumok where id = $1`,
     [dokId]
   );
   const dok = sorok[0];
   if (!dok) {
     return NextResponse.json({ hiba: "Nincs ilyen dokumentum." }, { status: 404 });
   }
+
+  const tiltas = await fuvarIratGuard(dok.fuvar_id, ["fuvarozas", "attekintes"]);
+  if (tiltas) return tiltas;
 
   // A sofőr fuvarlevél-fotója az adatbázisban van (014-es migráció).
   if (dok.tarolas === "db" && dok.tartalom) {
