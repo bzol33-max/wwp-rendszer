@@ -281,6 +281,7 @@ async function main() {
   await javitsaHuncargoMegrendelotOnce(pool);
   await aktualizaldMicoEucargoNapjatOnce(pool);
   await naplozFuvarHelyEllenorzest(pool);
+  await naplozBerCsempeHetet(pool);
   await ellenorizSoforFiokokat(pool);
 
   await pool.end();
@@ -1475,6 +1476,43 @@ async function toroljeParokat(pool, JAVITAS_KOD, parok, cimke) {
 // A fülenkénti darabszám csak tájékoztató. A CASE a lib/fuvarozas/
 // fuvar-hely.ts FUVAR_HELY_SQL másolata — a MÉRVADÓ az ottani; ha az
 // változik, ezt is kövesd (a SQL/TS egyezést a --check script méri).
+// Csak napló, NEM javít (2026-09-29): a Ma oldal 2. csempéjének (heti
+// bérfuvar) sorai — mi számít bele és mi nem, és miért. Az éles adatbázis
+// kívülről nem kérdezhető le, ezért itt látszik. Ugyanaz a szabály, mint a
+// lib/fuvarozas2/ma-vaszon.ts berOsszesit-jében.
+async function naplozBerCsempeHetet(pool) {
+  try {
+    const { rows } = await pool.query(
+      `with n as (select (now() at time zone 'Europe/Budapest')::date as ma),
+            h as (select ma, date_trunc('week', ma)::date as hetfo from n)
+       select m.id, to_char(m.datum, 'MM-DD') as felrak, to_char(m.lerakas_datum, 'MM-DD') as lerak,
+         j.kod as jarmu, coalesce(p.nev, m.megrendelo) as megrendelo, m.fuvardij, m.fuvardij_penznem as penznem,
+         m.allapot, (m.torolt_at is not null) as torolt,
+         case
+           when m.torolt_at is not null then 'nem: törölt'
+           when m.allapot is null then 'nem: nincs állapot'
+           when m.allapot = 'ellenorzesre_var' then 'nem: ellenőrzésre vár'
+           when m.datum < h.hetfo then 'nem: korábbi héten kezdődött'
+           when m.datum > h.ma then 'nem: még nem kezdődött'
+           when m.jarmu_id is null then 'IGEN (kocsi nélkül — csak az összesenben)'
+           else 'IGEN'
+         end as szamit
+       from fuvar_megbizasok m cross join h
+       left join fuvar_jarmuvek j on j.id = m.jarmu_id
+       left join fuvar_partnerek p on p.id = m.partner_id
+       where m.jelleg = 'ber'
+         and (m.datum between h.hetfo - 7 and h.ma + 7 or coalesce(m.lerakas_datum, m.datum) between h.hetfo and h.ma + 7)
+       order by m.datum, m.id`
+    );
+    const sor = (r) =>
+      `#${r.id} ${r.felrak ?? "-"}→${r.lerak ?? "-"} ${r.jarmu ?? "kocsi nélkül"} ${r.megrendelo ?? "-"} ${r.fuvardij ?? "díj nélkül"} ${r.penznem ?? ""} [${r.allapot ?? "-"}] ${r.szamit}`;
+    console.log(`[migrate] heti bérfuvar-csempe: ${rows.length} közeli sor`);
+    for (const r of rows) console.log(`[migrate]   ${sor(r)}`);
+  } catch (err) {
+    console.log(`[migrate] heti bérfuvar-csempe napló hiba: ${err instanceof Error ? err.message : err}`);
+  }
+}
+
 async function naplozFuvarHelyEllenorzest(pool) {
   try {
     const { rows } = await pool.query(
