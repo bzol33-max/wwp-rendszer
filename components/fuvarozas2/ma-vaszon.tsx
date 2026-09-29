@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { BerHavi, MaVaszon, Elteres, MaKocsi, MaBlokk, CsempeSzin, MaKocsiAllapot, TukorSor, TukorAllas } from "@/lib/fuvarozas2/ma-vaszon";
+import type { BerOsszesito, MaVaszon, Elteres, MaKocsi, MaBlokk, CsempeSzin, MaKocsiAllapot, TukorSor, TukorAllas } from "@/lib/fuvarozas2/ma-vaszon";
 import { AllasRogzitesGomb } from "@/components/fuvarozas2/allas-rogzites";
 import { JARMU_SZIN_DOT_CLASS } from "@/lib/fuvarozas/vehicles";
 
@@ -256,43 +256,42 @@ function KocsiOszlop({ k, holnapCimke }: { k: MaKocsi; holnapCimke: string }) {
 
 // Csempesor a fejléc alatt (1-es látványterv, 2026-09-29): tíz hely egy
 // sorban — Budaházi Zoltán sorban ad mindegyiknek funkciót. Az 1. hely a
-// havi bérfuvar (D terv); a többi egyelőre üres. Egy hely kitöltése: a
+// havi, a 2. a heti bérfuvar (D terv, alacsony változat); a többi egyelőre üres. Egy hely kitöltése: a
 // CSEMPE_HELYEK megfelelő elemét cseréld { cimke, ertek, also?, szin, href? }-re.
 // Telefonon oldalra húzható.
 type CsempeHely = { cimke: string; ertek: string; also?: string; szin: CsempeSzin; href?: string } | null;
-/** A 2–10. hely. */
-const CSEMPE_HELYEK: CsempeHely[] = [null, null, null, null, null, null, null, null, null];
+/** A 3–10. hely. */
+const CSEMPE_HELYEK: CsempeHely[] = [null, null, null, null, null, null, null, null];
 const CSEMPE_OSZT = "flex min-h-[76px] w-[132px] shrink-0 snap-start flex-col rounded-xl md:w-auto";
 
 const rovidFt = (n: number) =>
   n >= 1_000_000 ? `${(n / 1_000_000).toFixed(2).replace(".", ",")} M` : n >= 1000 ? `${Math.round(n / 1000)} e` : String(Math.round(n));
 const eur = (n: number) => `${new Intl.NumberFormat("hu-HU").format(Math.round(n))} €`;
 
-/** 1. csempe: a hónapban kezdett bérfuvarok nettó díja, kocsinként; az euró külön. */
-function BerHaviCsempe({ b }: { b: BerHavi }) {
+/** 1–2. csempe: a hónapban / héten kezdett bérfuvarok nettó díja, kocsinként; az euró külön. */
+function BerCsempe({ b }: { b: BerOsszesito }) {
   const max = Math.max(...b.kocsik.map((k) => k.ft), 1);
   return (
     <div className={`${CSEMPE_OSZT} overflow-hidden border border-foreground/10 bg-card`}>
-      <div className="flex flex-col bg-[var(--f2-mint)] px-3 py-2 text-white">
-        <span className="text-[11px] opacity-90">Bérfuvar · {b.honap}</span>
-        <b className="text-lg font-bold leading-tight tabular-nums">{rovidFt(b.ft)} Ft</b>
-        {b.eur > 0 ? <span className="text-xs font-semibold tabular-nums">+ {eur(b.eur)}</span> : null}
+      <div className="flex flex-col bg-[var(--f2-mint)] px-2.5 py-1 text-white">
+        <span className="truncate text-[10px] leading-tight opacity-90">Bérfuvar · {b.cim}</span>
+        <span className="flex flex-wrap items-baseline gap-x-1.5 leading-tight">
+          <b className="text-base font-bold tabular-nums">{rovidFt(b.ft)} Ft</b>
+          {b.eur > 0 ? <span className="text-[10px] font-semibold tabular-nums">+ {eur(b.eur)}</span> : null}
+        </span>
       </div>
-      <div className="flex flex-col gap-1.5 px-3 py-2">
+      <div className="flex flex-col gap-px px-2.5 py-1">
         {b.kocsik.map((k, i) => {
           const ures = k.ft === 0 && k.eur === 0;
           return (
-            <div key={i} className={`flex flex-col gap-0.5 ${ures ? "text-muted-foreground" : ""}`}>
-              <div className="flex items-baseline justify-between gap-1 text-[11px]">
-                <span className="truncate">{k.nev}</span>
-                <b className="shrink-0 font-semibold tabular-nums">{ures ? "—" : k.ft > 0 ? rovidFt(k.ft) : ""}</b>
-              </div>
-              {k.eur > 0 ? <div className="text-right text-[10px] font-semibold tabular-nums">+ {eur(k.eur)}</div> : null}
-              <div className="h-[5px] rounded-full bg-foreground/10">
+            <div key={i} className={`flex items-center gap-1 text-[10px] leading-tight ${ures ? "text-muted-foreground" : ""}`} title={k.eur > 0 ? `${k.nev}: ${rovidFt(k.ft)} Ft + ${eur(k.eur)}` : undefined}>
+              <span className="w-8 shrink-0 truncate">{k.nev}</span>
+              <span className="h-[4px] min-w-0 flex-1 rounded-full bg-foreground/10">
                 {k.ft > 0 ? (
-                  <div className={`h-[5px] rounded-full ${k.szin ? JARMU_SZIN_DOT_CLASS[k.szin] : "bg-foreground/40"}`} style={{ width: `${Math.max(4, Math.round((k.ft / max) * 100))}%` }} />
+                  <span className={`block h-[4px] rounded-full ${k.szin ? JARMU_SZIN_DOT_CLASS[k.szin] : "bg-foreground/40"}`} style={{ width: `${Math.max(4, Math.round((k.ft / max) * 100))}%` }} />
                 ) : null}
-              </div>
+              </span>
+              <b className="shrink-0 font-semibold tabular-nums">{ures ? "—" : k.ft > 0 ? rovidFt(k.ft) : ""}{k.eur > 0 ? " +€" : ""}</b>
             </div>
           );
         })}
@@ -301,16 +300,17 @@ function BerHaviCsempe({ b }: { b: BerHavi }) {
   );
 }
 
-function Csempesor({ berHavi }: { berHavi: BerHavi }) {
+function Csempesor({ berHavi, berHeti }: { berHavi: BerOsszesito; berHeti: BerOsszesito }) {
   return (
     <div className="-mx-4 flex snap-x items-stretch gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:grid md:grid-cols-5 md:overflow-visible md:px-0 md:pb-0 xl:grid-cols-10">
-      <BerHaviCsempe b={berHavi} />
+      <BerCsempe b={berHavi} />
+      <BerCsempe b={berHeti} />
       {CSEMPE_HELYEK.map((c, i) => {
         const oszt = `${CSEMPE_OSZT} gap-0.5 px-3 py-2.5`;
         if (!c) {
           return (
             <div key={i} className={`${oszt} items-start justify-between border border-dashed border-foreground/15 text-muted-foreground/60`}>
-              <span className="text-[11px] tabular-nums">{i + 2}.</span>
+              <span className="text-[11px] tabular-nums">{i + 3}.</span>
             </div>
           );
         }
@@ -335,7 +335,7 @@ export function MaVaszonNezet({ adat }: { adat: MaVaszon }) {
   const iroda = adat.csempek.filter((c) => c.kulcs !== "uton" && c.kulcs !== "elteres");
   return (
     <div className="flex flex-col gap-4">
-      <Csempesor berHavi={adat.berHavi} />
+      <Csempesor berHavi={adat.berHavi} berHeti={adat.berHeti} />
 
       {adat.elteresek.length === 0 ? null : (
         <div

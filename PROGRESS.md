@@ -2665,3 +2665,12 @@ Budaházi Zoltán a 8 látványtervből az 1-est választotta, üres csempékkel
   lerakása nem. Ellenőrzésre váró import és törölt megbízás nem számít.
 - Kód: `BerHavi` a `lib/fuvarozas2/ma-vaszon.ts`-ben, `BerHaviCsempe` a
   `components/fuvarozas2/ma-vaszon.tsx`-ben. A 2–10. hely még üres.
+
+## 2026-09-29 — Ma oldal: alacsonyabb bérfuvar-csempe + 2. csempe heti nézetben
+
+- Az 1. csempe alacsonyabb: egy sor a fejléc (címke, Ft, „+ … €”), kocsinként
+  egyetlen sor (név · csík · összeg; ha van euró is, „+€” jel, az összeg a
+  súgóban).
+- 2. csempe: ugyanez a hétre (hétfőtől máig, ISO-hét, pl. „40. hét”), ugyanazzal
+  a szabállyal (első felrakás a héten, legkésőbb ma).
+- `BerHavi` → `BerOsszesito` (`cim` mező), `berHeti` a `MaVaszon`-ban.
