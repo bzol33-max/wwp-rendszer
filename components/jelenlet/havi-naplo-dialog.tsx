@@ -103,12 +103,15 @@ function NapiJeloles({
 export function HaviNaploDialog({
   open,
   onOpenChange,
+  induloHonap,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Melyik hónapon nyíljon (Archívum); alapból a folyó hónap. */
+  induloHonap?: { year: number; month: number };
 }) {
   const canEdit = useCanEdit();
-  const indulo = currentYearMonth();
+  const indulo = induloHonap ?? currentYearMonth();
   const [ev, setEv] = useState(indulo.year);
   const [honap, setHonap] = useState(indulo.month);
   const [employees, setEmployees] = useState<JelenletEmployee[]>([]);

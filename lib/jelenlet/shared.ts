@@ -407,3 +407,41 @@ export function honapHetei(ev: number, honap: number): string[][] {
   }
   return hetek;
 }
+
+// ---------------------------------------------------------------------------
+// Havi jelenlét-archívum (Jelenlét → Archívum, 2026-09-30)
+// ---------------------------------------------------------------------------
+
+/**
+ * Egy dolgozó egy lezárt hónapja. Élő összesítő: mindig a jelenletek
+ * tábla aktuális soraiból számolódik (nincs befagyasztott pillanatkép), így
+ * egy visszamenőleg pótolt nap az archívumban is azonnal látszik. A számítás
+ * ugyanaz, mint a havi naptár alján lévő összegé (summarizeByDay).
+ */
+export type HaviArchivumSor = {
+  employeeId: string;
+  name: string;
+  /** Lezárt munkanapok (a nyitva maradt nap nem számít bele). */
+  munkanap: number;
+  /** A lezárt munkanapokon ledolgozott idő, percben. */
+  workedMinutes: number;
+  /** A napi 9 órához képesti eltérés összege, percben. */
+  diffMinutes: number;
+  szabadsag: number;
+  beteg: number;
+  nyitott: number;
+  /** A hónap végén még kivehető szabadság; null, ha nincs keret vagy a fordulónap későbbi. */
+  keretMaradek: number | null;
+};
+
+export type HaviArchivumHonap = {
+  /** YYYY-MM */
+  monthKey: string;
+  year: number;
+  month: number;
+  sorok: HaviArchivumSor[];
+};
+
+export function formatOra(minutes: number): string {
+  return (minutes / 60).toLocaleString("hu-HU", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}

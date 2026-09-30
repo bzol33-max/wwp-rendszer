@@ -12,7 +12,9 @@ import {
 } from "@/lib/auth/require-permission";
 import {
   kovetkezoEsedekesseg,
+  summarizeByDay,
   type DayType,
+  type HaviArchivumHonap,
   type Feladat,
   type FeladatComment,
   type JelenletEmployee,
@@ -683,4 +685,74 @@ export async function getJelenletekIdoszak(
      order by work_date, employee_id, arrival_time nulls last, id`,
     [tolIso, igIso]
   );
+}
+
+/**
+ * Jelenlét → Archívum, Havi jelenlét fül: minden lezárt (a folyó hónapnál
+ * korábbi) hónap dolgozónkénti összesítője, a legújabb elöl. Élő számítás a
+ * jelenletek sorából — a hónap a fordulókor magától kerül ide, zárás nincs.
+ */
+export async function getHaviJelenletArchivum(): Promise<HaviArchivumHonap[]> {
+  await requireViewPermission("jelenlet");
+  const [employees, sessions, honapok] = await Promise.all([
+    query<{ id: string; name: string; keret: number | null; fordulonap: string | null }>(
+      `select id::text, name, szabadsag_keret_nap as keret,
+         to_char(szabadsag_keret_datum, 'YYYY-MM-DD') as fordulonap
+       from alkalmazottak
+       where jelenlet_aktiv and active
+       order by position, id`
+    ),
+    query<JelenletSession>(
+      `select ${SESSION_COLS}
+       from jelenletek j
+       where work_date < date_trunc('month', ${BUDAPEST_NOW_DATE})::date
+         and exists (select 1 from alkalmazottak a
+                      where a.id = j.employee_id and a.jelenlet_aktiv and a.active)
+       order by work_date, employee_id, arrival_time nulls last, id`
+    ),
+    query<{ month_key: string }>(
+      `select to_char(g, 'YYYY-MM') as month_key
+       from (select min(work_date) as elso from jelenletek) h
+       cross join lateral generate_series(
+         date_trunc('month', h.elso),
+         date_trunc('month', ${BUDAPEST_NOW_DATE}) - interval '1 month',
+         interval '1 month'
+       ) as g
+       where h.elso is not null
+       order by 1 desc`
+    ),
+  ]);
+
+  const napokDolgozonkent = new Map(
+    employees.map((e) => [e.id, summarizeByDay(sessions.filter((s) => s.employee_id === e.id))])
+  );
+
+  return honapok.map(({ month_key }) => {
+    const [year, month] = month_key.split("-").map(Number);
+    const honapVege = `${month_key}-${String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, "0")}`;
+    const sorok = employees.map((e) => {
+      const osszes = napokDolgozonkent.get(e.id) ?? [];
+      const napok = osszes.filter((n) => n.date.startsWith(month_key));
+      const lezartMunka = napok.filter((n) => n.dayType === "munka" && !n.nyitott);
+      let keretMaradek: number | null = null;
+      if (e.keret !== null && e.fordulonap && honapVege >= e.fordulonap) {
+        const felhasznalt = osszes.filter(
+          (n) => n.dayType === "szabadsag" && n.date > e.fordulonap! && n.date <= honapVege
+        ).length;
+        keretMaradek = Math.max(0, Number(e.keret) - felhasznalt);
+      }
+      return {
+        employeeId: e.id,
+        name: e.name,
+        munkanap: lezartMunka.length,
+        workedMinutes: lezartMunka.reduce((sum, n) => sum + n.workedMinutes, 0),
+        diffMinutes: napok.reduce((sum, n) => sum + (n.diffMinutes ?? 0), 0),
+        szabadsag: napok.filter((n) => n.dayType === "szabadsag").length,
+        beteg: napok.filter((n) => n.dayType === "beteg").length,
+        nyitott: napok.filter((n) => n.nyitott).length,
+        keretMaradek,
+      };
+    });
+    return { monthKey: month_key, year, month, sorok };
+  });
 }
