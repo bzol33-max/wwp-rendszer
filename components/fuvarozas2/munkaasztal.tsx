@@ -12,7 +12,7 @@ import type { MunkaasztalSor } from "@/lib/fuvarozas2/megbizasok";
 // saját oszlop tetején lenyíló „+ Új saját fuvar”; egy sorra kattintva a
 // részlet jobbról becsúszó lapon nyílik (reszlet-lap.tsx).
 
-export type MunkaasztalSzuro = { q?: string; reszlet?: string; uj?: boolean };
+export type MunkaasztalSzuro = { q?: string; reszlet?: string; uj?: boolean; szerk?: boolean; ujBer?: boolean };
 
 export function munkaasztalLink(alap: MunkaasztalSzuro, valtozas: Partial<MunkaasztalSzuro>): string {
   const p = new URLSearchParams();
@@ -20,6 +20,8 @@ export function munkaasztalLink(alap: MunkaasztalSzuro, valtozas: Partial<Munkaa
   if (e.q) p.set("q", e.q);
   if (e.reszlet) p.set("reszlet", e.reszlet);
   if (e.uj) p.set("uj", "1");
+  if (e.szerk) p.set("szerk", "1");
+  if (e.ujBer) p.set("ujber", "1");
   const q = p.toString();
   return `/fuvarozas2/megbizasok${q ? `?${q}` : ""}`;
 }
@@ -80,7 +82,7 @@ function Sor({ s, ma, szuro }: { s: MunkaasztalSor; ma: string; szuro: Munkaaszt
   return (
     <li>
       <Link
-        href={munkaasztalLink(szuro, { reszlet: s.id, uj: false })}
+        href={munkaasztalLink(szuro, { reszlet: s.id, uj: false, szerk: false, ujBer: false })}
         scroll={false}
         className={cn(
           "grid grid-cols-[minmax(0,1.1fr)_minmax(0,1.5fr)_auto] items-start gap-3 border-b border-foreground/5 px-3 py-2.5 text-sm hover:bg-muted/50",
@@ -116,21 +118,25 @@ function Sor({ s, ma, szuro }: { s: MunkaasztalSor; ma: string; szuro: Munkaaszt
 }
 
 /** Egy oszlop (Bérfuvarok / Saját fuvarok): a sorok szakaszonként, fejléccel és darabszámmal. */
-export function OszlopLista({ cim, sorok, ma, szuro, felso, ures }: {
+export function OszlopLista({ cim, sorok, ma, szuro, felso, fejlecJobb, ures }: {
   cim: string;
   sorok: MunkaasztalSor[];
   ma: string;
   szuro: MunkaasztalSzuro;
   /** Az oszlop tetején (a saját oszlopban a lenyíló „+ Új saját fuvar”). */
   felso?: ReactNode;
+  /** A fejléc jobb oldalán (a bér oszlopban: Frissítés, + Új bérfuvar). */
+  fejlecJobb?: ReactNode;
   ures: string;
 }) {
   const csoportok = SZAKASZOK.map((sz) => ({ sz, sorok: sorok.filter((s) => s.szakasz === sz.kulcs) })).filter((c) => c.sorok.length > 0);
   return (
     <section className="flex min-w-0 flex-col rounded-2xl border border-foreground/10 bg-card" aria-label={cim}>
-      <div className="flex items-baseline justify-between gap-2 border-b border-foreground/5 px-4 py-3">
-        <h2 className="text-base font-semibold">{cim}</h2>
-        <span className="text-xs text-muted-foreground">{sorok.length === 300 ? "az első 300" : szuro.q ? `${sorok.length} találat` : `${sorok.length} nyitott`}</span>
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-foreground/5 px-4 py-3">
+        <h2 className="text-base font-semibold">
+          {cim} <span className="ml-1 text-xs font-normal text-muted-foreground">{sorok.length === 300 ? "az első 300" : szuro.q ? `${sorok.length} találat` : `${sorok.length} nyitott`}</span>
+        </h2>
+        {fejlecJobb ? <div className="flex items-center gap-2">{fejlecJobb}</div> : null}
       </div>
       {felso ? <div className="p-3 pb-1">{felso}</div> : null}
       {csoportok.length === 0 ? <p className="px-4 py-6 text-center text-sm text-muted-foreground">{ures}</p> : null}

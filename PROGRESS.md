@@ -2813,3 +2813,32 @@ Ma fülön látszik.
 - **Törölve:** `Oldalsav`, `KocsiMostPanel`, `getKocsiMost`, `getMunkaasztal`.
 - Ellenőrzés: `tsc` 0 hiba, eslint tiszta, `next build` sikeres,
   tesztek 40/0 és 21/0. Böngészőben helyben nem próbálható (nincs helyi DB).
+
+## 2026-09-30 — Megbízások: a régi Fuvarozás bérfuvar-eszközei átköltöztek (1/3 a régi oldal kivezetéséhez)
+
+Budaházi Zoltán: a régi „Fuvarozás” megszűnik, mindenki a Fuvarozás 2-re áll
+át. Előtte átjön, ami csak a régiben volt. Ez az első kör (a 2. a közös
+kalkulátor, a 3. a kikapcsolás: `FUVAROZAS_REGI=off`).
+
+- **Bérfuvarok fejléce:** „↻ Frissítés” — azonnal átnézi a Drive-mappát új
+  megbízásokért (a régi gomb üzeneteivel), és „+ Új bérfuvar” (kézi felvétel,
+  a becsúszó lapon). `components/fuvarozas2/berfuvar.tsx`.
+- **Bérfuvar szerkesztése:** a részlet-lapon „✎ Szerkesztés (minden mező)”:
+  dátum, lerakás napja, felrakó, lerakó, időpont, megrendelő, hiv. szám
+  (+ „nincs ilyen szám”), kocsi, sofőr, fuvardíj (Ft/EUR), költség, áru,
+  mennyiség, súly, postázási cím, megjegyzés. Szerver: `modositBerFuvart`,
+  `getBerFuvarAdat`, `ujBerFuvar` (`lib/fuvarozas2/megbizasok.ts`); ellenőrzés:
+  `lib/fuvarozas2/berfuvar.ts`, teszt: `scripts/teszt-berfuvar.ts` (14/0).
+  **Eltérés a régitől:** a mentés az állapotot NEM számolja újra (a régi
+  `approveFuvar` után a 002 trigger a dátumokból újraszámolta — egy úton lévő
+  fuvar dátumjavítása „teljesítve” lett volna), és nem hagy jóvá; a naplóba
+  kerül, mely mezők változtak. A fuvardíj/költség egész Ft (az oszlop
+  integer; a tizedes eddig mentési hibát okozott volna).
+- **Újraolvasás:** a Drive-ból jött bérfuvar részletén „↻ Újraolvasás az
+  iratból” (a régi gomb logikájával: a sor törlődik, az irat újra beolvasódik).
+- **Jogosultsági javítás:** a `frissitsDriveBol` szerver-akció eddig semmilyen
+  jogot nem ellenőrzött (bármely bejelentkezett felhasználó indíthatott
+  Drive-szinkront OpenRouter-költséggel); mostantól Fuvarozás-szerkesztés kell.
+  Az óránkénti automatika nem ezt hívja.
+- `kanonikusMegrendeloNev` külön modulba költözött (`lib/fuvarozas/megrendelo-nev.ts`),
+  mert a régi és az új mentés is használja.
