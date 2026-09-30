@@ -2868,3 +2868,17 @@ után legyen” — a döntés a közös kalkulátor (a régi + a tervvászon D6
   nem ellenőriztek jogot — mostantól Fuvarozás-megtekintés kell. (A
   `getGazolajAr` marad, azt az Áttekintés is hívja.) Törölve a sehonnan nem
   hívott, jog nélküli `kalkulatorHiba` export és a `KalkulatorVaszon`.
+
+## 2026-09-30 — A régi Fuvarozás kikapcsolása (3/3)
+
+Budaházi Zoltán: „a régi fuvarozás megszűnik, áttérünk a Fuvarozás 2-re”.
+Az 1–2. körrel (#258 bérfuvar-eszközök, #259 közös kalkulátor) minden
+átjött, ami csak a régiben volt.
+
+- **Kapcsoló:** Railway `FUVAROZAS_REGI=off` (lib/fuvarozas2/flag.ts): a régi
+  menüpont eltűnik, a `/fuvarozas` a `/fuvarozas2`-re irányít, a Fuvarozás 2
+  menüpont mindenkinek látszik. **Visszakapcsolás:** a változó törlése.
+- A Fuvarozás 2 fülsorában a „régi Fuvarozás →” link és a kezdőlap
+  Fuvarozás-kártyája a kapcsolót követi; a modul leírása frissült.
+- A régi kód (components/fuvarozas, app/fuvarozas) egyelőre bent marad a
+  visszakapcsolhatóság miatt; a törlése és a 002 trigger kivezetése külön kör.

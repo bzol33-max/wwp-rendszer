@@ -40,7 +40,7 @@ export const MODULES: ModuleInfo[] = [
     href: "/fuvarozas",
     icon: Truck,
     status: "elkeszult",
-    description: "Megbízások (saját/bér fuvarok) munkaasztallal és beépített segéddel (keresés, terv, kalkuláció, tanult szabályok), útdíjkalkulátor, Ecofleet GPS-pozíció és fogyasztás élesben. Ütemezés kidolgozás alatt.",
+    description: "Megbízások (bér- és saját fuvarok két oszlopban, szakaszonként), kalkulátor (útdíj, üzemanyag, önköltség, ajánlat), tervezés, élő GPS és kimutatás.",
   },
   {
     key: "jarmuvek",
