@@ -1037,3 +1037,27 @@ create table if not exists fuvar_kalkulacio (
   hiba         text,
   szamolva_at  timestamptz not null default now()
 );
+
+-- Élő GPS-megfigyelések (lib/fuvarozas/elo-elozmeny.ts): a memóriabeli
+-- előzmény tartós másolata, hogy egy kiadás (újraindulás) ne törölje ki,
+-- mióta áll a kocsi a mostani helyén. Két napnál régebbit nem tartunk.
+create table if not exists fuvar_elo_megfigyeles (
+  object_id  text not null,
+  idobelyeg  timestamptz not null,
+  lat        double precision not null,
+  lon        double precision not null,
+  mozog      boolean not null,
+  primary key (object_id, idobelyeg)
+);
+
+-- A Ma oldal eltéréseinek nyugtázása (lib/fuvarozas2/ma-vaszon.ts): a
+-- nyugtázott eltérés aznap nem látszik a sávban, amíg nem lesz súlyosabb
+-- (sárgából piros). Éjfélkor lejár (a nap része a kulcsnak).
+create table if not exists fuvar_elteres_nyugta (
+  nap         date not null,
+  kulcs       text not null,
+  szin        text not null,
+  nyugtazta   text,
+  nyugtazva_at timestamptz not null default now(),
+  primary key (nap, kulcs)
+);

@@ -1,4 +1,5 @@
-// A szerver-folyamat élettartama alatt fut, 15 percenként, egész nap — a
+// A szerver-folyamat élettartama alatt fut, 5 percenként (2026-09-30 óta;
+// korábban 15 — a Ma oldal eltérései ennyit késhettek a valóságtól), egész nap — a
 // szamlak-poll-scheduler.ts mintáját követve, de NAPSZAK-KORLÁTOZÁS NÉLKÜL:
 // a fuvarok kiszállítása (és így a GPS-alapú "Teljesítve" jelölés) nem áll
 // meg üzleti órákon kívül. A `instrumentation.ts` indítja a szerver
@@ -7,7 +8,7 @@
 import { futtatTeljesitesFigyeles } from "./teljesites-figyeles";
 import { futtatRendszerkent } from "@/lib/auth/system-context";
 
-const INTERVALL_MS = 15 * 60 * 1000;
+const INTERVALL_MS = 5 * 60 * 1000;
 
 let inditva = false;
 
@@ -33,5 +34,5 @@ export function inditTeljesitesFigyelesScheduler() {
   // induláskori egyéb munkájával.
   setTimeout(tick, 30_000);
   setInterval(tick, INTERVALL_MS);
-  console.log("[teljesites-figyeles] ütemező elindítva (15 percenként).");
+  console.log("[teljesites-figyeles] ütemező elindítva (5 percenként).");
 }

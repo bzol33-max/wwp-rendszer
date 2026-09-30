@@ -34,7 +34,7 @@ export type GpsErintes = {
  * élesben viszont két külön látogatást mosott egybe (a #128 pápai lerakója
  * a #126 09-15-i pápai felrakásának érkezését és a saját 09-16-i távozását
  * kapta), és a hibás korai érkezést utána semmi nem tudta kijavítani.
- * Mostantól kizárólag a 15 perces figyelő ír ide (3 napos trip-ablakkal,
+ * Mostantól kizárólag az 5 perces figyelő ír ide (3 napos trip-ablakkal,
  * lásd teljesites-figyeles.ts), a GPS lap csak olvas — így nincs szűkebb
  * ablakú, rosszabb újraszámolás, ami felülírhatná. A sofőr kézi jelölését
  * (kesz/kesz_at/kesz_by) nem érinti.

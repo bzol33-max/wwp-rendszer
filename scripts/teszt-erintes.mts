@@ -472,5 +472,34 @@ function vezetes(honnan: { lat: number; lon: number }, hova: { lat: number; lon:
   eq("hosszan nyitott trip: az érkezés 11:46 és 11:54 közé esik, nem 09:50", kezdet > t(11, 46, 29).getTime() && kezdet <= t(11, 54, 29).getTime(), true);
 }
 
+// 3i) Telephelyen araszoló kocsi (Micó 09-30, Kunhegyes): a lezárt trip
+//     Törökszentmiklóson ért véget 09:21-kor, 10:07-kor úton volt, 10:22-kor
+//     a lerakón állt, 10:23-kor 6 km/h-val araszolt (átállás a rámpához),
+//     10:26-kor megint állt. A telephelyen belüli araszolás nem szakítja meg
+//     az ott-létet: a lerakón legkésőbb 10:22-től élő állás, a megálló „itt áll”.
+{
+  const TOROKSZENTMIKLOS = { lat: 47.197, lon: 20.5002 };
+  const KUNHEGYES = { lat: 47.3782, lon: 20.6472 };
+  const lezart: IdovonalSzakasz[] = [
+    { tipus: "indulas", idopont: t(7, 57, 30), cim: null, lat: 47.3771, lon: 19.221 },
+    vezetes({ lat: 47.3771, lon: 19.221 }, TOROKSZENTMIKLOS, t(7, 57, 30), t(9, 21, 30)),
+  ];
+  const elozmeny = [
+    { ...TOROKSZENTMIKLOS, mozog: false, idobelyeg: t(9, 37, 30) },
+    { ...TOROKSZENTMIKLOS, mozog: false, idobelyeg: t(9, 52, 30) },
+    { lat: 47.2975, lon: 20.5988, mozog: true, idobelyeg: t(10, 7, 30) },
+    { lat: 47.3779, lon: 20.6471, mozog: false, idobelyeg: t(10, 22, 30) },
+    { lat: 47.3779, lon: 20.6472, mozog: true, idobelyeg: t(10, 23, 30) },
+  ];
+  const elo = { lat: 47.3775, lon: 20.6466, cim: null, mozog: false, idobelyeg: t(10, 26, 30) };
+  const all = kiegesziteloAllapottal(lezart, elo, t(10, 38, 30), [], elozmeny);
+  const vege = all[all.length - 1];
+  eq("araszolás a telephelyen: a vége élő állás", vege.tipus, "allas");
+  const kezdet = vege.tipus === "allas" ? vege.kezdet.getTime() : 0;
+  eq("araszolás a telephelyen: az állás 10:07 és 10:22 közt kezdődött", kezdet > t(10, 7, 30).getTime() && kezdet <= t(10, 22, 30).getTime(), true);
+  const f = [megallo(0, "lerako", KUNHEGYES, t(0, 0, 30))];
+  eq("araszolás a telephelyen: a lerakón itt áll", jelolMegallokat([f], all)[0][0].eppenItt, true);
+}
+
 console.log(`\n${ok} rendben, ${bad} hiba`);
 process.exit(bad ? 1 : 0);

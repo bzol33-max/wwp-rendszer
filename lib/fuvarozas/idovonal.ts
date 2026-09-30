@@ -373,7 +373,7 @@ export type EloPozicio = {
 };
 
 /**
- * Egy korábbi élő megfigyelés (a 15 perces figyelő egy köre vagy egy
+ * Egy korábbi élő megfigyelés (az 5 perces figyelő egy köre vagy egy
  * oldalbetöltés): hol volt a kocsi, és mozgott-e. Lásd lib/fuvarozas/
  * elo-elozmeny.ts — ebből tudjuk pontosítani, mikor hagyta el a kocsi a
  * lezárt trip végpontját, és mióta áll a mostani helyén, amíg az Ecofleet
@@ -480,13 +480,16 @@ export function kiegesziteloAllapottal(
       .filter((m) => m.idobelyeg.getTime() > utolsoVeg.getTime() && m.idobelyeg.getTime() <= most.getTime())
       .sort((a, b) => a.idobelyeg.getTime() - b.idobelyeg.getTime());
 
-    // Mióta áll a kocsi a mostani helyen (Q)? A legkorábbi megfigyelés,
-    // amelytől kezdve mindegyik Q közelében, állva látta.
+    // Mióta áll a kocsi a mostani helyen (Q)? A legkorábbi álló
+    // megfigyelés, amelytől kezdve mindegyik Q közelében látta. A Q-n belüli
+    // araszolás (átállás a rámpához) nem szakítja meg az ott-létet, csak nem
+    // is kezdi — Micó 09-30-án Kunhegyesen 10:22-kor állt, 10:23-kor 6 km/h-val
+    // araszolt, 10:26-kor megint állt, és a lerakó „nincs érintés” maradt.
     let qOta: Date | null = null;
     for (let i = megfigyelesek.length - 1; i >= 0; i--) {
       const m = megfigyelesek[i];
-      if (m.mozog || haversineKm(elo.lat, elo.lon, m.lat, m.lon) >= OSSZEVONAS_KM) break;
-      qOta = m.idobelyeg;
+      if (haversineKm(elo.lat, elo.lon, m.lat, m.lon) >= OSSZEVONAS_KM) break;
+      if (!m.mozog) qOta = m.idobelyeg;
     }
 
     // Mikor hagyta el a kocsi P-t (az utolsó lezárt szakasz helyét)?

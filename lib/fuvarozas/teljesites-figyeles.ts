@@ -12,7 +12,7 @@
 // Két hibát zár ez a közös út:
 // 1. A GPS-érintések naplója (fuvar_megallo_allapot.gps_erkezes/gps_tavozas)
 //    korábban csak akkor íródott, ha valaki megnyitotta a GPS lapot — most
-//    a 15 perces kör írja, nézőtől függetlenül.
+//    az 5 perces kör írja, nézőtől függetlenül.
 // 2. A figyelő és a lap más-más logikával döntött (a figyelő a lerakó mezőt
 //    egyben geokódolta, több-lerakós fuvarnál rossz címmel), így ugyanarra a
 //    fuvarra ellentmondó állapotot mutattak.
@@ -33,7 +33,7 @@ import { getSajatFuvarokErinteshez, setFuvarTeljesitve } from "./megbizasok";
 import { cimSugarKm, epitsIdovonal, fuvarKeszGpsSzerint, haversineKm, jelolMegallokat, kiegesziteloAllapottal } from "./idovonal";
 import { epitsErintesMegallokat, mozogE } from "./erintes-felismeres";
 import { rogzitGpsErinteseket } from "./megallo-naplo";
-import { getEloElozmeny, rogzitEloMegfigyelest } from "./elo-elozmeny";
+import { betoltEloElozmenyt, getEloElozmeny, rogzitEloMegfigyelest } from "./elo-elozmeny";
 import { budapestFalioraToInstant, budapestNapISO, formatBudapestFaliora } from "./idozona";
 import type { IdovonalSzakasz, TervezettCim, TervezettMegallo } from "./idovonal";
 
@@ -103,6 +103,7 @@ export async function futtatTeljesitesFigyeles(): Promise<TeljesitesFigyelesEred
   const sorok = await getSajatFuvarokErinteshez(napIsoEltolva(budapestNapISO(most), -VISSZATEKINTES_NAP));
   if (sorok.length === 0) return eredmeny;
 
+  await betoltEloElozmenyt();
   let eloPoziciok: EcofleetPosition[];
   try {
     eloPoziciok = await getFleetLastPositions();

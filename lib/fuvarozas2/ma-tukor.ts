@@ -53,6 +53,8 @@ export type TukorMegallo = {
   ablak_ig: string | null;
   gps_erkezes: string | null;
   gps_tavozas: string | null;
+  /** A sofőr „Megérkeztem” koppintása — ha a GPS még nem látta, ez az érkezés. */
+  sofor_megerkezett_at?: string | null;
   sofor_kesz_at: string | null;
   varakozas_kezdete: string | null;
   varakozas_vege: string | null;
@@ -148,7 +150,7 @@ export function tukorSorok(be: {
     eredmeny.push({ tipus: "fuvar", fuvarId: f.id, partner: f.partner ?? "(nincs megbízó)", hivatkozas: f.hivatkozas, jelleg: f.jelleg });
     for (const g of f.megallok) {
       const kesz = !!(g.gps_tavozas || g.sofor_kesz_at);
-      const erk = idobelyeg(g.gps_erkezes);
+      const erk = idobelyeg(g.gps_erkezes ?? g.sofor_megerkezett_at ?? null);
       const tav = idobelyeg(g.gps_tavozas ?? g.sofor_kesz_at);
       const tol = idobelyeg(g.ablak_tol);
       const ig = idobelyeg(g.ablak_ig);
@@ -209,7 +211,8 @@ export function tukorSorok(be: {
 
       const sor: TukorSor = {
         tipus: "megallo", fuvarId: f.id, felLe: g.tipus, varos, terv, teny, elteres, allapot,
-        kiemelt: varakozik ? "varakozik" : !kesz && ig && ig < most ? "kesik" : null,
+        // Ha a kocsi már ott van, az ablak lejárta nem késés (a rakodás tart).
+        kiemelt: varakozik ? "varakozik" : !kesz && !erk && ig && ig < most ? "kesik" : null,
         allas, ceg, kontaktNev: kNev, telefon: tel,
       };
       rendezoIdo.set(sor, (erk ?? tav)?.getTime() ?? null);
