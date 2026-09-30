@@ -1,6 +1,7 @@
 "use server";
 
 import { query } from "@/lib/db";
+import { requireViewPermission } from "@/lib/auth/require-permission";
 import { getEloElozmeny, rogzitEloMegfigyelest } from "./elo-elozmeny";
 import { getFleetLastPositions, getVehicleTrips, parseEcofleetTimestamp, EcofleetError, type EcofleetPosition, type EcofleetTrip } from "./ecofleet";
 import {
@@ -13,7 +14,8 @@ import {
   type GeocodedAddress,
   type TollRoute,
 } from "./utdijkalkulacio";
-import { fetchGazolajAr, GazolajArError } from "./uzemanyagar";
+import { gazolajArKedvezmennyel, type GazolajArResult } from "./gazolaj";
+export type { GazolajArResult } from "./gazolaj";
 import {
   cimSugarKm,
   epitsIdovonal,
@@ -48,48 +50,13 @@ import type { FuvardijPenznem, FuvarTipus, MaiFuvarSor } from "./fuvar-constants
 import { budapestFalioraToInstant, budapestHetNapja, budapestNapISO, budapestOra, formatBudapestFaliora } from "./idozona";
 import { SAJAT_TELEPHELYEK } from "./telephelyek";
 
-// Ha a NAV oldala nem érhető el (átmeneti hiba, oldalszerkezet-változás),
-// ez a tartalék érték jelenik meg — utoljára kézzel ellenőrizve 2026.
-// szeptemberében. Csak akkor használódik, ha az automatikus lekérés hibázik.
-const GAZOLAJ_AR_TARTALEK = { ar: 667, cimke: "2026. szeptember (tartalék érték)" };
-
-// A flotta mindig ugyanott tankol, ahol literenként 50 Ft kedvezményt kap a
-// NAV hivatalos árához képest — ezt a kalkulátor a NAV-áron automatikusan
-// levonja.
-const TANKOLASI_KEDVEZMENY_FT_PER_LITER = 50;
-
-export type GazolajArResult = {
-  /** A ténylegesen alkalmazandó ár (NAV ár - kedvezmény) — ezzel kell számolni. */
-  ar: number;
-  /** A NAV hivatalos, kedvezmény nélküli ára — csak tájékoztatásul. */
-  navAr: number;
-  kedvezmeny: number;
-  cimke: string;
-  /** false, ha a NAV oldaláról nem sikerült frissen lekérni, és a tartalék érték jelenik meg. */
-  friss: boolean;
-};
-
 /**
  * A NAV hivatalos, aktuális havi gázolajárának automatikus lekérése (napi
  * cache-eléssel), a flotta állandó tankolási kedvezményével csökkentve.
+ * A számolás a lib/fuvarozas/gazolaj.ts-ben van (a Fuvarozás 2 kalkulátora is azt hívja).
  */
 export async function getGazolajAr(): Promise<GazolajArResult> {
-  const kedvezmeny = TANKOLASI_KEDVEZMENY_FT_PER_LITER;
-  try {
-    const { ar, cimke } = await fetchGazolajAr();
-    return { ar: ar - kedvezmeny, navAr: ar, kedvezmeny, cimke, friss: true };
-  } catch (err) {
-    if (!(err instanceof GazolajArError)) {
-      console.error("[uzemanyagar] váratlan hiba:", err);
-    }
-    return {
-      ar: GAZOLAJ_AR_TARTALEK.ar - kedvezmeny,
-      navAr: GAZOLAJ_AR_TARTALEK.ar,
-      kedvezmeny,
-      cimke: GAZOLAJ_AR_TARTALEK.cimke,
-      friss: false,
-    };
-  }
+  return gazolajArKedvezmennyel();
 }
 
 export type EcofleetPositionWithCim = EcofleetPosition & {
@@ -1328,7 +1295,9 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
   return { jarmuvek, elakadtak };
 }
 
+// Jogosultság (2026-09-30): a HU-GO-hívó akciók eddig nem ellenőriztek jogot.
 export async function searchAddressSuggestions(query: string): Promise<GeocodedAddress[]> {
+  await requireViewPermission("fuvarozas");
   try {
     return await suggestAddresses(query);
   } catch {
@@ -1367,6 +1336,7 @@ export async function calculateTollForPoints(
   stops: GeocodedAddress[],
   withGeometry?: boolean
 ): Promise<TollCalcResult> {
+  await requireViewPermission("fuvarozas");
   return runTollCalc(stops, withGeometry);
 }
 
@@ -1375,6 +1345,7 @@ export async function calculateTollForAddresses(
   queries: string[],
   withGeometry?: boolean
 ): Promise<TollCalcResult> {
+  await requireViewPermission("fuvarozas");
   try {
     const stops = await Promise.all(queries.map((q) => geocodeAddress(q)));
     return runTollCalc(stops, withGeometry);

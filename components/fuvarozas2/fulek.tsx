@@ -10,10 +10,10 @@ import { cn } from "@/lib/utils";
 const FULEK: { href: string; label: string; csakFuvarozas?: boolean; csakRendszer?: boolean }[] = [
   { href: "/fuvarozas2", label: "Ma" },
   { href: "/fuvarozas2/megbizasok", label: "Megbízások" },
+  { href: "/fuvarozas2/kalkulator", label: "Kalkulátor", csakFuvarozas: true },
   { href: "/fuvarozas2/levelek", label: "Levelek" },
   { href: "/fuvarozas2/tervezes", label: "Tervezés", csakFuvarozas: true },
   { href: "/fuvarozas2/gps", label: "Élő GPS", csakFuvarozas: true },
-  { href: "/fuvarozas2/kalkulator", label: "Kalkulátor", csakFuvarozas: true },
   { href: "/fuvarozas2/kimutatas", label: "Kimutatás", csakFuvarozas: true },
   { href: "/fuvarozas2/rendszer", label: "Rendszer", csakRendszer: true },
 ];

@@ -1,74 +1,31 @@
 "use server";
 
-// Fuvarozás 2 — Kalkulátor (tervvászon D6): HU-GO útdíj + saját önköltség,
-// és abból három ajánlat-sáv.
-//
-// Amit számol:
-//   • RAKOTT km: felrakó → lerakó (HU-GO útvonaltervező).
-//   • ÜRES km: telephely → felrakó és lerakó → telephely — ez az, ami a
-//     legtöbb kalkulációból kimarad, pedig ezt is meg kell keresni.
-//   • Üzemanyag: (rakott + üres) km × mért fogyasztás × NAV gázolajár.
-//   • Útdíj: a HU-GO tarifa a teljes útra (rakott + üres).
-//   • Napi költség: sofőr + kocsi együtt, 50 000 Ft/nap (lásd
-//     kalkulator-alap.ts), annyi napra, amennyit a menetidő lefoglal.
+// Fuvarozás 2 — közös Kalkulátor (2026-09-30: a régi útdíjkalkulátor és a
+// tervvászon D6 kalkulátora egyben). Amit számol:
+//   • RAKOTT km, menetidő, útdíj: az összes megállón át (HU-GO), a térképhez
+//     geometriával.
+//   • ÜRES km: telephely → első megálló és utolsó megálló → telephely (ha
+//     nincs visszfuvar) — ez az, ami a legtöbb kalkulációból kimarad.
+//   • Üzemanyag: (rakott + üres) km × mért fogyasztás (Ecofleet, 14 nap) ×
+//     NAV gázolajár a tankolási kedvezménnyel (lib/fuvarozas/gazolaj.ts).
+//   • Útdíj a teljes útra; napi költség 50 000 Ft/nap (kalkulator-alap.ts).
+//   • Önköltség, 500/600/700 Ft/km ajánlat-sáv és a megbízó ajánlatának minősítése.
 //
 // Minden külső hívás a sorosított, cache-elt úton megy (lib/fuvarozas/
 // kulso-hivas.ts), ezért a lap ismételt megnyitása nem terheli a HU-GO-t.
 
 import { requireViewPermission } from "@/lib/auth/require-permission";
 import { query } from "@/lib/db";
-import { calculateToll, geocodeAddress, TollCalcError } from "@/lib/fuvarozas/utdijkalkulacio";
+import { calculateToll, geocodeAddress, TollCalcError, FIXED_VEHICLE, type GeocodedAddress, type TollRoute } from "@/lib/fuvarozas/utdijkalkulacio";
+import { gazolajArKedvezmennyel } from "@/lib/fuvarozas/gazolaj";
 import { getUtvonalJelentes, rendszamKulcs } from "@/lib/fuvarozas/ecofleet";
-import { fetchGazolajAr } from "@/lib/fuvarozas/uzemanyagar";
 import { SAJAT_TELEPHELYEK } from "@/lib/fuvarozas/telephelyek";
 import {
-  ALAP_FOGYASZTAS_L100, NAPI_KOLTSEG_FT, ajanlatSavok, minositsAjanlatot, napokMenetidobol, szamoljOnkoltseget,
+  ALAP_FOGYASZTAS_L100, ajanlatSavok, minositsAjanlatot, napokMenetidobol, szamoljOnkoltseget,
   type Ajanlat, type Onkoltseg,
 } from "@/lib/fuvarozas2/kalkulator-alap";
 
-export type KalkulacioBemenet = {
-  honnan: string;
-  hova: string;
-  /** Jármű kód — a mért fogyasztáshoz. Üres: flotta-átlag. */
-  jarmuKod?: string;
-  /** A megbízó ajánlata Ft-ban, ha van. */
-  ajanlatFt?: number;
-  /** Van-e visszfuvar: ha igen, a hazaút üres km-jét nem erre a fuvarra terheljük. */
-  vanVisszfuvar?: boolean;
-};
-
-export type KalkulacioEredmeny = {
-  honnan: string;
-  hova: string;
-  rakottKm: number;
-  uresKm: number;
-  uresReszletek: string;
-  menetidoPerc: number;
-  napok: number;
-  utdijFt: number;
-  fogyasztasL100: number;
-  fogyasztasForras: string;
-  gazolajFt: number;
-  gazolajCimke: string;
-  onkoltseg: Onkoltseg;
-  savok: Ajanlat[];
-  megbizoiAjanlat: (Ajanlat & { sajat: true }) | null;
-  figyelmeztetesek: string[];
-};
-
 const TELEPHELY = SAJAT_TELEPHELYEK[0].cim;
-
-async function utvonal(honnan: string, hova: string): Promise<{ km: number; perc: number; utdij: number }> {
-  const a = await geocodeAddress(honnan);
-  const b = await geocodeAddress(hova);
-  const r = await calculateToll({
-    points: [{ lon: a.lon, lat: a.lat }, { lon: b.lon, lat: b.lat }],
-    vehicleCategory: "J5",
-    euroCategory: "EURO6",
-    weight: 40,
-  });
-  return { km: r.distanceKm, perc: r.durationMin, utdij: r.tollHuf?.grossTotal ?? 0 };
-}
 
 /** Mért fogyasztás (l/100) az elmúlt 14 napból, kocsira vagy flottára. */
 async function mertFogyasztas(jarmuKod?: string): Promise<{ l100: number; forras: string }> {
@@ -94,71 +51,128 @@ async function mertFogyasztas(jarmuKod?: string): Promise<{ l100: number; forras
   return { l100: ALAP_FOGYASZTAS_L100, forras: "alapérték (nincs mért adat)" };
 }
 
-export async function szamoljKalkulaciot(bemenet: KalkulacioBemenet): Promise<KalkulacioEredmeny> {
+export type KozosBemenet = {
+  /** A megállók sorrendben (≥ 2): kiválasztott javaslat (koordinátával) vagy szabad szöveg. */
+  megallok: (GeocodedAddress | string)[];
+  /** Jármű kód — a mért fogyasztáshoz. Üres: flotta-átlag. */
+  jarmuKod?: string;
+  /** A megbízó ajánlata Ft-ban, ha van. */
+  ajanlatFt?: number;
+  /** Van-e visszfuvar: ha igen, a hazaút üres km-jét nem erre a fuvarra terheljük. */
+  vanVisszfuvar?: boolean;
+};
+
+export type KozosEredmeny = {
+  stops: GeocodedAddress[];
+  /** A rakott út (az összes megállón át), a térképhez geometriával. */
+  route: TollRoute;
+  rakottKm: number;
+  uresKm: number;
+  uresReszletek: string;
+  menetidoPerc: number;
+  napok: number;
+  /** Útdíj a rakott útra (HU-GO) — a régi kalkulátor ezt mutatta. */
+  rakottUtdijFt: number;
+  /** Útdíj a teljes útra (rakott + üres) — ez megy az önköltségbe. */
+  utdijFt: number;
+  fogyasztasL100: number;
+  fogyasztasForras: string;
+  literek: number;
+  gazolaj: { ar: number; navAr: number; kedvezmeny: number; cimke: string; friss: boolean };
+  onkoltseg: Onkoltseg;
+  savok: Ajanlat[];
+  megbizoiAjanlat: (Ajanlat & { sajat: true }) | null;
+  jarmuKod: string | null;
+  vanVisszfuvar: boolean;
+  figyelmeztetesek: string[];
+};
+
+async function pontbolPontba(a: { lon: number; lat: number }, b: { lon: number; lat: number }): Promise<{ km: number; perc: number; utdij: number }> {
+  const r = await calculateToll({ points: [a, b], ...FIXED_VEHICLE });
+  return { km: r.distanceKm, perc: r.durationMin, utdij: r.tollHuf?.grossTotal ?? 0 };
+}
+
+/**
+ * A közös kalkulátor (2026-09-30, a régi és az új egyesítése): több megálló,
+ * térkép-geometria, üres km, mért fogyasztás, NAV-ár a tankolási
+ * kedvezménnyel, önköltség, ajánlat-sávok és a megbízó ajánlatának minősítése.
+ */
+export async function szamoljKozosKalkulaciot(bemenet: KozosBemenet): Promise<{ ok: true; eredmeny: KozosEredmeny } | { ok: false; hiba: string }> {
   await requireViewPermission("fuvarozas");
   const figyelmeztetesek: string[] = [];
+  let stops: GeocodedAddress[];
+  let route: TollRoute;
+  try {
+    stops = await Promise.all(bemenet.megallok.map((m) => (typeof m === "string" ? geocodeAddress(m) : Promise.resolve(m))));
+    if (stops.length < 2) return { ok: false, hiba: "Legalább két megálló kell." };
+    route = await calculateToll({ points: stops.map((s) => ({ lon: s.lon, lat: s.lat })), ...FIXED_VEHICLE, withGeometry: true });
+  } catch (err) {
+    return { ok: false, hiba: err instanceof TollCalcError ? err.message : "Nem sikerült kiszámítani az útvonalat." };
+  }
 
-  const rakott = await utvonal(bemenet.honnan, bemenet.hova);
-
-  // Üres szakaszok: telephely → felrakó, és (ha nincs visszfuvar) lerakó → telephely.
+  // Üres szakaszok: telephely → első megálló, és (ha nincs visszfuvar) utolsó megálló → telephely.
   let uresKm = 0, uresUtdij = 0, uresPerc = 0;
   const uresReszek: string[] = [];
+  let telephely: GeocodedAddress | null = null;
   try {
-    const oda = await utvonal(TELEPHELY, bemenet.honnan);
-    uresKm += oda.km; uresUtdij += oda.utdij; uresPerc += oda.perc;
-    uresReszek.push(`telephely → felrakó ${Math.round(oda.km)} km`);
+    telephely = await geocodeAddress(TELEPHELY);
   } catch {
-    figyelmeztetesek.push("A telephely → felrakó üres szakasz nem számolható (cím?) — nélküle a kalkuláció optimista.");
+    figyelmeztetesek.push("A telephely címe nem található — az üres km nélkül a kalkuláció optimista.");
   }
-  if (!bemenet.vanVisszfuvar) {
+  if (telephely) {
     try {
-      const vissza = await utvonal(bemenet.hova, TELEPHELY);
-      uresKm += vissza.km; uresUtdij += vissza.utdij; uresPerc += vissza.perc;
-      uresReszek.push(`lerakó → telephely ${Math.round(vissza.km)} km`);
+      const oda = await pontbolPontba(telephely, stops[0]);
+      uresKm += oda.km; uresUtdij += oda.utdij; uresPerc += oda.perc;
+      uresReszek.push(`telephely → első megálló ${Math.round(oda.km)} km`);
     } catch {
-      figyelmeztetesek.push("A lerakó → telephely hazaút nem számolható — nélküle a kalkuláció optimista.");
+      figyelmeztetesek.push("A telephely → első megálló üres szakasz nem számolható — nélküle a kalkuláció optimista.");
     }
-  } else {
-    uresReszek.push("hazaút nincs beszámítva (visszfuvarral számolsz)");
+    if (!bemenet.vanVisszfuvar) {
+      try {
+        const vissza = await pontbolPontba(stops[stops.length - 1], telephely);
+        uresKm += vissza.km; uresUtdij += vissza.utdij; uresPerc += vissza.perc;
+        uresReszek.push(`utolsó megálló → telephely ${Math.round(vissza.km)} km`);
+      } catch {
+        figyelmeztetesek.push("Az utolsó megálló → telephely hazaút nem számolható — nélküle a kalkuláció optimista.");
+      }
+    } else {
+      uresReszek.push("hazaút nincs beszámítva (visszfuvarral számolsz)");
+    }
   }
 
   const { l100, forras } = await mertFogyasztas(bemenet.jarmuKod);
-  let gazolajFt = 0, gazolajCimke = "nincs ár";
-  try {
-    const ar = await fetchGazolajAr();
-    gazolajFt = ar.ar; gazolajCimke = ar.cimke;
-  } catch {
-    gazolajFt = 650;
-    gazolajCimke = "becsült 650 Ft/l (a NAV-ár nem érhető el)";
-    figyelmeztetesek.push("A NAV gázolajár nem érhető el, 650 Ft/l-rel számoltunk.");
-  }
+  const gazolaj = await gazolajArKedvezmennyel();
+  if (!gazolaj.friss) figyelmeztetesek.push(`A NAV gázolajár nem érhető el — tartalék árral számoltunk (${gazolaj.cimke}).`);
 
-  const napok = napokMenetidobol(rakott.perc + uresPerc);
-  const utdijFt = Math.round(rakott.utdij + uresUtdij);
-  const onkoltseg = szamoljOnkoltseget({
-    rakottKm: rakott.km, uresKm, fogyasztasL100: l100, gazolajFt, utdijFt, napok,
-  });
-
-  const savok = ajanlatSavok(rakott.km, onkoltseg.osszesenFt);
+  const rakottKm = route.distanceKm;
+  const napok = napokMenetidobol(route.durationMin + uresPerc);
+  const rakottUtdijFt = Math.round(route.tollHuf?.grossTotal ?? 0);
+  const utdijFt = Math.round(rakottUtdijFt + uresUtdij);
+  const onkoltseg = szamoljOnkoltseget({ rakottKm, uresKm, fogyasztasL100: l100, gazolajFt: gazolaj.ar, utdijFt, napok });
+  const savok = ajanlatSavok(rakottKm, onkoltseg.osszesenFt);
   const megbizoiAjanlat = bemenet.ajanlatFt
     ? {
-        ftKm: rakott.km > 0 ? Math.round(bemenet.ajanlatFt / rakott.km) : 0,
+        ftKm: rakottKm > 0 ? Math.round(bemenet.ajanlatFt / rakottKm) : 0,
         dijFt: bemenet.ajanlatFt,
         ...minositsAjanlatot(bemenet.ajanlatFt, onkoltseg.osszesenFt),
         sajat: true as const,
       }
     : null;
-
   if (onkoltseg.ftPerRakottKm == null) figyelmeztetesek.push("Nulla rakott km — ellenőrizd a címeket.");
-  figyelmeztetesek.push(`A napi költség ${new Intl.NumberFormat("hu-HU").format(NAPI_KOLTSEG_FT)} Ft/nap (sofőr + kocsi együtt), ${napok} napra számolva.`);
 
   return {
-    honnan: bemenet.honnan, hova: bemenet.hova,
-    rakottKm: Math.round(rakott.km), uresKm: Math.round(uresKm),
-    uresReszletek: uresReszek.join(" · "),
-    menetidoPerc: Math.round(rakott.perc), napok, utdijFt,
-    fogyasztasL100: l100, fogyasztasForras: forras, gazolajFt, gazolajCimke,
-    onkoltseg, savok, megbizoiAjanlat, figyelmeztetesek,
+    ok: true,
+    eredmeny: {
+      stops, route,
+      rakottKm: Math.round(rakottKm), uresKm: Math.round(uresKm), uresReszletek: uresReszek.join(" · "),
+      menetidoPerc: Math.round(route.durationMin), napok, rakottUtdijFt, utdijFt,
+      fogyasztasL100: l100, fogyasztasForras: forras,
+      literek: Math.round(((rakottKm + uresKm) * l100) / 100),
+      gazolaj,
+      onkoltseg, savok, megbizoiAjanlat,
+      jarmuKod: bemenet.jarmuKod ?? null, vanVisszfuvar: !!bemenet.vanVisszfuvar,
+      figyelmeztetesek,
+    },
   };
 }
 
@@ -166,8 +180,4 @@ export async function szamoljKalkulaciot(bemenet: KalkulacioBemenet): Promise<Ka
 export async function getKalkulatorJarmuvek(): Promise<{ kod: string; cimke: string }[]> {
   await requireViewPermission("fuvarozas");
   return query<{ kod: string; cimke: string }>(`select kod, cimke from fuvar_jarmuvek where aktiv order by id`);
-}
-
-export async function kalkulatorHiba(err: unknown): Promise<string> {
-  return err instanceof TollCalcError ? err.message : err instanceof Error ? err.message : "Ismeretlen hiba";
 }

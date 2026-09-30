@@ -2842,3 +2842,29 @@ kalkulátor, a 3. a kikapcsolás: `FUVAROZAS_REGI=off`).
   Az óránkénti automatika nem ezt hívja.
 - `kanonikusMegrendeloNev` külön modulba költözött (`lib/fuvarozas/megrendelo-nev.ts`),
   mert a régi és az új mentés is használja.
+
+## 2026-09-30 — Fuvarozás 2: közös Kalkulátor, a Megbízások után (2/3 a régi oldal kivezetéséhez)
+
+Budaházi Zoltán: „a kalkulátor oldalt minden tudásával hozd át, a Megbízások
+után legyen” — a döntés a közös kalkulátor (a régi + a tervvászon D6 egyben).
+
+- **Fül:** Ma · Megbízások · **Kalkulátor** · Levelek · … (`fulek.tsx`).
+- **Felület** (`components/fuvarozas2/kozos-kalkulator.tsx`, a régi
+  `KalkulatorVaszon` és a lenyitható régi kalkulátor helyett): megállók
+  címjavaslattal (minden kitöltött mező után új üres mező, mint a régiben),
+  kocsi a mért fogyasztáshoz, a megbízó ajánlata, visszfuvar; térkép az összes
+  eddigi számítással (élő előnézettel); a kiválasztott eredmény teljes bontása
+  (rakott és üres km, menetidő, útdíj, üzemanyag literben és Ft-ban, napi
+  költség, önköltség, Ft/rakott km, 500/600/700 Ft/km sáv és a megbízó
+  ajánlata minősítéssel); alul az eredménycsempék, amelyek a böngészőben
+  megmaradnak. A Tervezés linkje (`?honnan=…&hova=…`) az első két megállót tölti.
+- **Számolás** (`szamoljKozosKalkulaciot`, `lib/fuvarozas2/kalkulator.ts`):
+  a rakott út az összes megállón át; üres km: telephely → első megálló és
+  utolsó → telephely. **Javítás:** az új kalkulátor eddig a NAV-árral
+  számolt, a régi viszont levonta az 50 Ft/l tankolási kedvezményt — most
+  mindkettő ugyanazt a forrást használja (`lib/fuvarozas/gazolaj.ts`).
+- **Jogosultsági javítás:** a HU-GO-hívó `searchAddressSuggestions`,
+  `calculateTollForPoints`, `calculateTollForAddresses` szerver-akciók eddig
+  nem ellenőriztek jogot — mostantól Fuvarozás-megtekintés kell. (A
+  `getGazolajAr` marad, azt az Áttekintés is hívja.) Törölve a sehonnan nem
+  hívott, jog nélküli `kalkulatorHiba` export és a `KalkulatorVaszon`.
