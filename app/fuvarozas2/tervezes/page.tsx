@@ -23,7 +23,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ h
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Fuvarozás 2 · Tervezés"
+        title="Fuvarozás · Tervezés"
         subtitle="A hét kocsinként. A piros mezők üresek — oda kell fuvar; a panel megmondja, honnan keress."
         actions={
           <div className="flex items-center gap-1 text-sm">

@@ -24,7 +24,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ s
   ]);
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title="Fuvarozás 2 · Levelek" subtitle="A beérkező levelek osztályozva: megbízás → Drive → import; a többi teendőként. A levelek törzse nem hagyja el a postafiókot." />
+      <PageHeader title="Fuvarozás · Levelek" subtitle="A beérkező levelek osztályozva: megbízás → Drive → import; a többi teendőként. A levelek törzse nem hagyja el a postafiókot." />
       <Fuvarozas2Fulek aktiv="/fuvarozas2/levelek" />
       <LevelekNezet
         levelek={levelek}

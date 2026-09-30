@@ -2882,3 +2882,10 @@ Az 1–2. körrel (#258 bérfuvar-eszközök, #259 közös kalkulátor) minden
   Fuvarozás-kártyája a kapcsolót követi; a modul leírása frissült.
 - A régi kód (components/fuvarozas, app/fuvarozas) egyelőre bent marad a
   visszakapcsolhatóság miatt; a törlése és a 002 trigger kivezetése külön kör.
+
+## 2026-09-30 — „Fuvarozás 2” → „Fuvarozás”
+
+A régi modul kikapcsolása után (FUVAROZAS_REGI=off) a menüpont, az oldalcímek
+(Tervezés, Levelek, Kimutatás, Partnerek, Rendszer), a mobil Rendszer-link és a
+két jogosultság-felirat „Fuvarozás” lett. Az útvonal marad `/fuvarozas2`
+(a régi `/fuvarozas` a kapcsoló miatt oda irányít).

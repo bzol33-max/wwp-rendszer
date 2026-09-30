@@ -58,9 +58,9 @@ export const MODULES: { key: ModuleKey; label: string }[] = [
   // a "rendszer" a Rendszer-egészség csempe (figyelők, keretek, hibák).
   {
     key: "elszamolas",
-    label: "Elszámolás (Fuvarozás 2 — számlázható/számlázva/e-mail/posta; díjjal, GPS-részlet nélkül)",
+    label: "Elszámolás (Fuvarozás — számlázható/számlázva/e-mail/posta; díjjal, GPS-részlet nélkül)",
   },
-  { key: "rendszer", label: "Rendszer-egészség (Fuvarozás 2 — figyelők, keretek, hibák)" },
+  { key: "rendszer", label: "Rendszer-egészség (Fuvarozás — figyelők, keretek, hibák)" },
 ];
 
 /** Modulok, amik utólag, opt-in jelleggel lettek bevezetve — ld. resolvePermission. */
