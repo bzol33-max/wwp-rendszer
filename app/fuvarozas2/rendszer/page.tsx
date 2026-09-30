@@ -23,7 +23,7 @@ export default async function Page() {
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Fuvarozás 2 · Rendszer"
+        title="Fuvarozás · Rendszer"
         subtitle={gond === 0 && figy === 0 ? "Minden figyelő és kapu rendben." : `${gond} gond · ${figy} figyelmeztetés — alább, melyik.`}
       />
       <Fuvarozas2Fulek aktiv="/fuvarozas2/rendszer" />

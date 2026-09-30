@@ -41,7 +41,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ i
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
-        title="Fuvarozás 2 · Kimutatás"
+        title="Fuvarozás · Kimutatás"
         subtitle="Mennyi km ment, mennyi pénzt hozott, és mennyit spóroltunk a saját fuvarokkal."
         actions={
           <div className="flex items-center gap-1 text-sm">

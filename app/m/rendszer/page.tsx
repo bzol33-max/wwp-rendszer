@@ -56,7 +56,7 @@ export default async function Page() {
         <div className="text-xs font-semibold uppercase text-[var(--m-muted)]">Fiók</div>
         <div className="text-lg font-semibold">{session.name}</div>
         <div className="text-xs text-[var(--m-muted)]">{session.username}</div>
-        <Link href="/fuvarozas2" className="text-sm underline">Fuvarozás 2 asztali nézet →</Link>
+        <Link href="/fuvarozas2" className="text-sm underline">Fuvarozás asztali nézet →</Link>
         <form action={logout}>
           <button type="submit" className="mt-1 w-full rounded-xl border border-[var(--m-line)] py-3 text-sm font-semibold">Kijelentkezés</button>
         </form>
