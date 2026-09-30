@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { SZAKASZOK, javaslatok, type KeresoIndex } from "@/lib/fuvarozas2/munkaasztal";
 
-// A munkaasztal keresője gépelés közbeni javaslatokkal (Budaházi Zoltán,
+// A Megbízások oldal keresője gépelés közbeni javaslatokkal (Budaházi Zoltán,
 // 2026-09-25). Fuvarra kattintva a fuvar nyílik meg; cégre, városra, kocsira,
 // számra vagy hónapra kattintva arra keres. Az Enter kijelölés nélkül a
 // mostani teljes keresést adja (a form elküldése).
@@ -32,7 +32,7 @@ export function KeresoJavaslatok({ index, kezdo, jelleg }: { index: KeresoIndex;
   const talalat = useMemo(() => javaslatok(index, q), [index, q]);
   const elemek: Elem[] = [
     ...talalat.fuvarok.map((f) => {
-      const p = new URLSearchParams({ szakasz: f.szakasz, reszlet: f.id });
+      const p = new URLSearchParams({ reszlet: f.id });
       if (jelleg) p.set("jelleg", jelleg);
       return { kulcs: `f${f.id}`, href: `/fuvarozas2/megbizasok?${p}` };
     }),
