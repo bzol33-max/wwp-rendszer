@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requireSession } from "@/lib/auth/dal";
 import { cn } from "@/lib/utils";
+import { regiFuvarozasAktiv } from "@/lib/fuvarozas2/flag";
 
 // A Fuvarozás 2 fülsora. Szerver-komponens, mert a jogosultság dönti, mit
 // mutat: az „elszamolas" hatókör (Szabina) a Megbízásokat és a Leveleket
@@ -38,7 +39,8 @@ export async function Fuvarozas2Fulek({ aktiv, cim }: { aktiv: string; cim?: str
           {f.label}
         </Link>
       ))}
-      {fuvarozas ? (
+      {/* A régi Fuvarozás a kapcsolóig (FUVAROZAS_REGI=off) érhető el — utána nincs mire linkelni. */}
+      {fuvarozas && regiFuvarozasAktiv() ? (
         <Link href="/fuvarozas" className="ml-auto rounded-md px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted">
           régi Fuvarozás →
         </Link>

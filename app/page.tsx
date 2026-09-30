@@ -7,6 +7,7 @@ import { ModuleStatusBadge } from "@/components/layout/module-status-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { SITES } from "@/lib/nav";
 import { MODULES } from "@/lib/modules";
+import { regiFuvarozasAktiv } from "@/lib/fuvarozas2/flag";
 import { requireSession } from "@/lib/auth/dal";
 import type { ModuleKey } from "@/lib/auth/permissions";
 
@@ -72,7 +73,7 @@ export default async function Home() {
           {visibleModules.map((mod) => {
             const Icon = mod.icon;
             return (
-              <Link key={mod.key} href={mod.href} className="group block">
+              <Link key={mod.key} href={mod.key === "fuvarozas" && !regiFuvarozasAktiv() ? "/fuvarozas2" : mod.href} className="group block">
                 <Card className="h-full transition-colors group-hover:ring-foreground/20">
                   <CardHeader>
                     <CardTitle className="flex items-center justify-between gap-2 text-sm">
