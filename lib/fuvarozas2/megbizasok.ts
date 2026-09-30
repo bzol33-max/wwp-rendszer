@@ -13,7 +13,7 @@
 
 import { pool, query } from "@/lib/db";
 import { requireSession } from "@/lib/auth/dal";
-import { requireAnyViewPermission, requireAnyEditPermission } from "@/lib/auth/require-permission";
+import { requireAnyViewPermission, requireAnyEditPermission, requireEditPermission } from "@/lib/auth/require-permission";
 import {
   ellenorizAtmenet,
   lehetsegesCelok,
@@ -25,6 +25,9 @@ import { keresEgyezik, keresNapok, keresSzoveg, szakaszSorbol, szakaszSorrendben
 import { varosNev } from "@/lib/fuvarozas/varos";
 import { findJarmuByPlate, jarmuLabel } from "@/lib/fuvarozas/vehicles";
 import { frissitsdFuvarozas2Modellt } from "@/lib/fuvarozas2/modell-szinkron";
+import { kanonikusMegrendeloNev } from "@/lib/fuvarozas/megrendelo-nev";
+import { addFuvar } from "@/lib/fuvarozas/megbizasok";
+import { berFuvarHiba, berSzam, valtozottMezok, type BerFuvarAdat } from "@/lib/fuvarozas2/berfuvar";
 
 export type MegbizasSor = {
   id: string;
@@ -394,6 +397,128 @@ export async function setFuvarJarmu(id: string, jarmuKod: string | null): Promis
     [id, session.name ?? session.username, JSON.stringify({ kocsi: cimke, elozo: sor.jarmu })]
   );
   return { ok: true, cimke };
+}
+
+// ---------------------------------------------------------------------------
+// Bérfuvar szerkesztése és kézi felvétele (2026-09-30): a régi Fuvarozás
+// szerkesztőjének (approveFuvar / addFuvar) minden mezője, hogy a régi oldal
+// kivezethető legyen. Különbség az approveFuvar-hoz képest: a mentés NEM
+// számolja újra az állapotot a régi jelölőkből (a 002 trigger a dátum
+// változására azt tenné — pl. egy úton lévő fuvar dátumjavítása „teljesítve”
+// lenne), és nem hagy jóvá (az a „Jóváhagyás” gomb dolga).
+
+const BER_SQL = `
+  select to_char(m.datum, 'YYYY-MM-DD') as datum, coalesce(to_char(m.lerakas_datum, 'YYYY-MM-DD'), '') as "lerakasDatum",
+    coalesce(m.idopont, '') as idopont, coalesce(m.felrako, '') as felrako, coalesce(m.lerako, '') as lerako,
+    coalesce(m.megrendelo, '') as megrendelo, coalesce(m.pozicioszam, '') as pozicioszam, m.pozicioszam_nincs as "pozicioszamNincs",
+    coalesce(m.aru, '') as aru, coalesce(m.mennyiseg, '') as mennyiseg, coalesce(m.suly, '') as suly,
+    coalesce(m.jarmu, '') as jarmu, coalesce(m.sofor, '') as sofor,
+    coalesce(m.fuvardij::text, '') as fuvardij, coalesce(m.fuvardij_penznem, 'Ft') as "fuvardijPenznem",
+    coalesce(m.koltseg::text, '') as koltseg, coalesce(m.megjegyzes, '') as megjegyzes,
+    coalesce(e.postazasi_cim, m.postazasi_cim, '') as "postazasiCim"
+  from fuvar_megbizasok m left join fuvar_elszamolas e on e.megbizas_id = m.id
+  where m.id = $1 and m.jelleg = 'ber' and m.torolt_at is null`;
+
+/** A fuvardíj és a költség oszlop egész szám (integer): kerekítve, hibás/üres → null. */
+function egesz(s: string): number | null {
+  const n = berSzam(s);
+  return typeof n === "number" ? Math.round(n) : null;
+}
+
+export async function getBerFuvarAdat(id: string): Promise<BerFuvarAdat | null> {
+  await requireEditPermission("fuvarozas");
+  const [a] = await query<BerFuvarAdat>(BER_SQL, [id]);
+  return a ?? null;
+}
+
+export async function modositBerFuvart(id: string, a: BerFuvarAdat): Promise<{ ok: true } | { ok: false; hiba: string }> {
+  await requireEditPermission("fuvarozas");
+  const session = await requireSession();
+  const hiba = berFuvarHiba(a);
+  if (hiba) return { ok: false, hiba };
+  const megrendelo = await kanonikusMegrendeloNev(a.megrendelo);
+  const client = await pool.connect();
+  let valtozott: string[] = [];
+  try {
+    await client.query("begin");
+    const { rows: [regi] } = await client.query<BerFuvarAdat & { allapot: string }>(
+      BER_SQL.replace("select ", "select m.allapot, ") + " for update of m",
+      [id]
+    );
+    if (!regi) { await client.query("rollback"); return { ok: false, hiba: "Nincs ilyen bérfuvar." }; }
+    valtozott = valtozottMezok(regi, a);
+    if (valtozott.length === 0) { await client.query("rollback"); return { ok: true }; }
+    await client.query(`select set_config('fuvarozas2.uj_kod', '1', true)`);
+    await client.query(
+      `update fuvar_megbizasok set
+         datum = $2, lerakas_datum = $3, idopont = $4, felrako = $5, lerako = $6, megrendelo = $7,
+         pozicioszam = $8, pozicioszam_nincs = $9, aru = $10, mennyiseg = $11, suly = $12,
+         jarmu = $13, sofor = $14, fuvardij = $15, fuvardij_penznem = $16, koltseg = $17,
+         megjegyzes = $18, postazasi_cim = $19,
+         -- mint az approveFuvar: más megrendelőnél/kocsinál a Fuvarozás 2 kulcsát a szinkron újraépíti
+         partner_id = case when megrendelo is distinct from $7 then null else partner_id end,
+         jarmu_id = case when jarmu is distinct from $13 or sofor is distinct from $14 then null else jarmu_id end
+       where id = $1`,
+      [
+        id, a.datum, a.lerakasDatum || null, a.idopont.trim() || null, a.felrako.trim(), a.lerako.trim(), megrendelo,
+        a.pozicioszamNincs ? null : a.pozicioszam.trim() || null, a.pozicioszamNincs, a.aru.trim() || null, a.mennyiseg.trim() || null, a.suly.trim() || null,
+        a.jarmu.trim() || null, a.sofor.trim() || null, egesz(a.fuvardij), a.fuvardijPenznem === "EUR" ? "EUR" : "Ft", egesz(a.koltseg),
+        a.megjegyzes.trim() || null, a.postazasiCim.trim() || null,
+      ]
+    );
+    // Az állapot marad, ami volt: ha a 002 trigger a dátumok miatt átírta, visszaállítjuk.
+    await client.query(`update fuvar_megbizasok set allapot = $2 where id = $1 and allapot is distinct from $2`, [id, regi.allapot]);
+    if (valtozott.includes("postazasiCim")) {
+      await client.query(`update fuvar_elszamolas set postazasi_cim = $2, frissitve_at = now() where megbizas_id = $1`, [id, a.postazasiCim.trim() || null]);
+    }
+    await client.query(
+      `insert into fuvar_megbizas_esemeny (megbizas_id, esemeny, forras, ki, reszletek) values ($1, 'modositva', 'ember', $2, $3)`,
+      [id, session.name ?? session.username, JSON.stringify({ mezok: valtozott, honnan: "megbizasok" })]
+    );
+    await client.query("commit");
+  } catch (err) {
+    await client.query("rollback").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+  await frissitsdFuvarozas2Modellt(id);
+  return { ok: true };
+}
+
+/** Kézi új bérfuvar (ami nem e-mailben vagy Drive-on jött). */
+export async function ujBerFuvar(a: BerFuvarAdat): Promise<{ ok: true; id: string } | { ok: false; hiba: string }> {
+  await requireEditPermission("fuvarozas");
+  const session = await requireSession();
+  const hiba = berFuvarHiba(a);
+  if (hiba) return { ok: false, hiba };
+  const dij = egesz(a.fuvardij), koltseg = egesz(a.koltseg);
+  const id = await addFuvar({
+    tipus: "sajat", // fordított elnevezés: a DB-ben tipus='sajat' = bérfuvar
+    datum: a.datum,
+    lerakasDatum: a.lerakasDatum || undefined,
+    idopont: a.idopont.trim() || undefined,
+    felrako: a.felrako.trim(),
+    lerako: a.lerako.trim(),
+    megrendelo: a.megrendelo.trim() || undefined,
+    pozicioszam: a.pozicioszamNincs ? undefined : a.pozicioszam.trim() || undefined,
+    pozicioszamNincs: a.pozicioszamNincs,
+    aru: a.aru.trim() || undefined,
+    mennyiseg: a.mennyiseg.trim() || undefined,
+    suly: a.suly.trim() || undefined,
+    jarmu: a.jarmu.trim() || undefined,
+    sofor: a.sofor.trim() || undefined,
+    fuvardij: typeof dij === "number" ? dij : undefined,
+    fuvardijPenznem: a.fuvardijPenznem,
+    koltseg: typeof koltseg === "number" ? koltseg : undefined,
+    megjegyzes: a.megjegyzes.trim() || undefined,
+    postazasiCim: a.postazasiCim.trim() || undefined,
+    forras: "kezi",
+    ellenorzott: true,
+    createdBy: session.name ?? session.username,
+  });
+  if (!id) return { ok: false, hiba: "Nem jött létre a fuvar." };
+  return { ok: true, id };
 }
 
 /**
