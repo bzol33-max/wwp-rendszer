@@ -1025,3 +1025,15 @@ alter table feladatok add column if not exists elvegzes_at timestamptz;
 alter table feladatok add column if not exists elvegezte text;
 create index if not exists idx_feladatok_elvegzes on feladatok (done, elvegzes_datum desc)
   where done = true;
+
+-- Tervezés (2026-09-30): a megbízásonkénti kalkuláció tárolva, hogy az oldal
+-- betöltéskor csak olvasson (lib/fuvarozas2/kalkulacio-tar.ts). A
+-- bemenet_kulcs a számítás bemenetének ujjlenyomata (megállók, díj, kocsi,
+-- gázolajár, paraméterek): ha eltér, a sor elavult és újraszámolódik.
+create table if not exists fuvar_kalkulacio (
+  megbizas_id  bigint primary key references fuvar_megbizasok(id) on delete cascade,
+  bemenet_kulcs text not null,
+  eredmeny     jsonb,
+  hiba         text,
+  szamolva_at  timestamptz not null default now()
+);

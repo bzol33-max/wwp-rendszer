@@ -4,11 +4,13 @@
 // kellett), de a 2026-09-20 előtt keletkezett sorokat és a kézi úton bevitt
 // fuvarokat valakinek be kell érnie. Óránként fut, felső korláttal — ha nincs
 // mit tenni, egyetlen olcsó lekérdezés. Ugyanez a kör pótolja a bérfuvarok
-// rakott km-ét (lib/fuvarozas2/rakott-km.ts).
+// rakott km-ét (lib/fuvarozas2/rakott-km.ts) és a nyitott bérmegbízások
+// tárolt kalkulációját (lib/fuvarozas2/kalkulacio-tar.ts, Tervezés).
 
 import { potoldAHianyzoModelleket } from "@/lib/fuvarozas2/modell-szinkron";
 import { potoldRakottKmet } from "@/lib/fuvarozas2/rakott-km";
 import { futtatRendszerkent } from "@/lib/auth/system-context";
+import { frissitsKalkulaciokat, tervezettBerMegbizasok } from "@/lib/fuvarozas2/kalkulacio-tar";
 
 const INTERVALL_MS = 60 * 60 * 1000;
 const KORLAT = 50;
@@ -30,6 +32,13 @@ async function tick() {
     if (km.szamolt + km.hibas > 0) console.log(`[rakott-km] ${km.szamolt} fuvar km-e kiszámolva, ${km.hibas} nem számolható.`);
   } catch (err) {
     console.error("[rakott-km] váratlan hiba:", err);
+  }
+  // A nyitott bérmegbízások tárolt kalkulációja (Tervezés) — hogy az oldal csak olvasson.
+  try {
+    const k = await futtatRendszerkent("kalkulacio", async () => frissitsKalkulaciokat(await tervezettBerMegbizasok()));
+    if (k.szamolt + k.hibas > 0) console.log(`[kalkulacio-tar] ${k.szamolt} kalkuláció frissítve, ${k.hibas} nem számolható.`);
+  } catch (err) {
+    console.error("[kalkulacio-tar] váratlan hiba:", err);
   }
 }
 
