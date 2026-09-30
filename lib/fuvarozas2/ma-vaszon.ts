@@ -42,6 +42,7 @@ export type CsempeSzin = "normal" | "amber" | "red" | "mint";
 export type Csempe = { kulcs: string; cimke: string; ertek: string; also: string | null; szin: CsempeSzin; href: string | null };
 
 export type Elteres = {
+  /** Naponta egyedi azonosító — a nyugtázás (fuvar_elteres_nyugta) ehhez kötődik. */
   kulcs: string;
   cim: string;
   badge: string;
@@ -104,7 +105,14 @@ export type MaVaszon = {
   /** „Holnap”, vagy pénteken/szombaton „Hétfő” (a következő munkanap). */
   holnapCimke: string;
   csempek: Csempe[];
+  /** A még nem nyugtázott eltérések (a sáv). */
   elteresek: Elteres[];
+  /** Ma nyugtázott, azóta nem súlyosbodott eltérések (összecsukva a sáv alján). */
+  nyugtazott: (Elteres & { nyugtazta: string | null; mikor: string })[];
+  /** Nyugtázhat-e a néző (fuvarozás szerkesztési jog). */
+  nyugtazhat: boolean;
+  /** Az adat előállításának ideje, „10:42” — a felület kiírja, mikor frissült. */
+  frissitve: string;
   kocsik: MaKocsi[];
   kocsiNelkul: { id: string; partner: string; utvonal: string; nap: string | null; allapot: Allapot }[];
   teendok: { cimke: string; ertek: string; also: string | null; href: string }[];
@@ -181,6 +189,7 @@ type MegalloSor = {
   ablak_ig: string | null;
   gps_erkezes: string | null;
   gps_tavozas: string | null;
+  sofor_megerkezett_at: string | null;
   sofor_kesz_at: string | null;
   varakozas_kezdete: string | null;
   varakozas_vege: string | null;
@@ -226,7 +235,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
     ? await query<MegalloSor>(
         `select megbizas_id::text, sorszam, tipus, cim_nyers, telepules,
            ablak_tol::text, ablak_ig::text, gps_erkezes::text, gps_tavozas::text,
-           sofor_kesz_at::text, varakozas_kezdete::text, varakozas_vege::text, tervezett_nap::text
+           sofor_megerkezett_at::text, sofor_kesz_at::text, varakozas_kezdete::text, varakozas_vege::text, tervezett_nap::text
          from fuvar_megallok where megbizas_id = any($1::bigint[]) order by megbizas_id, sorszam`,
         [sorok.map((s) => s.id)]
       )
@@ -278,22 +287,30 @@ export async function getMaVaszon(): Promise<MaVaszon> {
       });
     }
 
-    // 2b. Késés az időablakhoz képest: a még nyitott megálló ablaka lejárt.
+    // 2b. Késés az időablakhoz képest: a még nyitott megálló ablaka lejárt,
+    // és a kocsi még nem ért oda. Ha már ott van, az ablakon belül érkezett
+    // kocsi nem késik (csak a rakodás tart tovább); az ablak után érkezett
+    // késése egy rögzített szám, nem nő tovább.
     for (const g of gs) {
       const kesz = !!(g.gps_tavozas || g.sofor_kesz_at);
       if (kesz || !g.ablak_ig) continue;
       const ig = idobelyeg(g.ablak_ig);
       if (!ig) continue;
       if (ig >= most) continue;
-      const perc = percKulonbseg(most, ig);
+      const erk = idobelyeg(g.gps_erkezes ?? g.sofor_megerkezett_at);
+      if (erk && erk <= ig) continue;
+      const perc = percKulonbseg(erk ?? most, ig);
+      const ido = perc >= 60 ? `${oraPerc(perc)} ó` : `${perc} p`;
       elteresek.push({
         kulcs: `kes-${s.id}-${g.sorszam}`,
         cim: `${ki} · ${varosNev(g.cim_nyers) ?? g.cim_nyers} ${g.tipus === "felrako" ? "felrakó" : "lerakó"}`,
-        badge: `késés ${perc >= 60 ? `${oraPerc(perc)} ó` : `${perc} p`}`,
+        badge: erk ? `késve ért oda ${ido}` : `késés ${ido}`,
         szin: perc >= 60 ? "red" : "amber",
         sorok: [
           `${s.partner ?? "(nincs megbízó)"}${s.hivatkozas ? ` · ${s.hivatkozas}` : ""}`,
-          `Ablak ${ORA(g.ablak_tol)}–${ORA(g.ablak_ig)} — a megálló még nincs lezárva.`,
+          erk
+            ? `Ablak ${ORA(g.ablak_tol)}–${ORA(g.ablak_ig)} — a kocsi ${ORA(erk)}-kor ért oda.`
+            : `Ablak ${ORA(g.ablak_tol)}–${ORA(g.ablak_ig)} — a kocsi még nem ért oda.`,
         ],
         href: `/fuvarozas2/megbizasok/${s.id}`,
       });
@@ -345,6 +362,24 @@ export async function getMaVaszon(): Promise<MaVaszon> {
       }
     }
   }
+
+  // 2f. Nyugtázás: a ma nyugtázott eltérés kimarad a sávból, amíg nem lesz
+  // súlyosabb (sárgán nyugtázott, azóta piros → újra látszik). Éjfélkor lejár.
+  const nyugtak = await query<{ kulcs: string; szin: string; nyugtazta: string | null; mikor: string }>(
+    `select kulcs, szin, nyugtazta, to_char(nyugtazva_at at time zone 'Europe/Budapest', 'HH24:MI') as mikor
+     from fuvar_elteres_nyugta where nap = $1::date`,
+    [ma]
+  ).catch(() => []);
+  const nyugtaMap = new Map(nyugtak.map((n) => [n.kulcs, n]));
+  const nyugtazott: MaVaszon["nyugtazott"] = [];
+  const aktivElteresek: Elteres[] = [];
+  for (const e of elteresek) {
+    const n = nyugtaMap.get(e.kulcs);
+    if (n && !(n.szin === "amber" && e.szin === "red")) nyugtazott.push({ ...e, nyugtazta: n.nyugtazta, mikor: n.mikor });
+    else aktivElteresek.push(e);
+  }
+  elteresek.length = 0;
+  elteresek.push(...aktivElteresek);
 
   // ---------------------------------------------------------------- csempék
   const [elsz] = await query<{ fotora: number; szamlazhato: number; szamlazhato_ft: number; postazando: number }>(
@@ -503,7 +538,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
       const kesz = !!(g.gps_tavozas || g.sofor_kesz_at);
       const varakozik = !!(g.varakozas_kezdete && !g.varakozas_vege);
       const ablakIg = idobelyeg(g.ablak_ig);
-      const lejartAblak = !kesz && ablakIg != null && ablakIg < most;
+      const lejartAblak = !kesz && !(g.gps_erkezes || g.sofor_megerkezett_at) && ablakIg != null && ablakIg < most;
       return {
         tipus: g.tipus,
         varos: varosNev(g.cim_nyers) ?? g.cim_nyers,
@@ -640,7 +675,9 @@ export async function getMaVaszon(): Promise<MaVaszon> {
   ];
 
   return {
-    ma, holnap, holnapCimke, csempek, berHavi, berHeti, berHonapHetei,
+    ma, holnap, holnapCimke, csempek, berHavi, berHeti, berHonapHetei, nyugtazott,
+    nyugtazhat: session.can("fuvarozas").edit,
+    frissitve: ORA(most),
     elteresek: elteresek.sort((a, b) => (a.szin === b.szin ? 0 : a.szin === "red" ? -1 : 1)),
     kocsik,
     kocsiNelkul: sorok.filter((s) => !s.jarmu_kod && (aznap(s, ma) || aznap(s, holnap))).map((s) => ({
@@ -731,4 +768,38 @@ export async function rogzitAllasMegalloHelyekent(
   revalidatePath("/fuvarozas2");
   console.log(`[ma] megálló helye rögzítve a GPS-állásból: "${g.cim_nyers}" → ${lat.toFixed(5)}, ${lon.toFixed(5)} (${session.name})`);
   return { ok: true, cim: g.cim_nyers };
+}
+
+/**
+ * Eltérés nyugtázása a Ma oldalon („OK”): aznap nem látszik a sávban, amíg
+ * nem lesz súlyosabb (sárgából piros). A kulcs a getMaVaszon eltérés-kulcsa.
+ */
+export async function nyugtazElterest(
+  kulcs: string,
+  szin: "red" | "amber"
+): Promise<{ ok: true } | { ok: false; hiba: string }> {
+  await requireEditPermission("fuvarozas");
+  const session = await requireSession();
+  if (typeof kulcs !== "string" || kulcs.length === 0 || kulcs.length > 200) return { ok: false, hiba: "Érvénytelen eltérés." };
+  if (szin !== "red" && szin !== "amber") return { ok: false, hiba: "Érvénytelen szín." };
+  await query(
+    `insert into fuvar_elteres_nyugta (nap, kulcs, szin, nyugtazta)
+     values ((now() at time zone 'Europe/Budapest')::date, $1, $2, $3)
+     on conflict (nap, kulcs) do update set szin = excluded.szin, nyugtazta = excluded.nyugtazta, nyugtazva_at = now()`,
+    [kulcs, szin, session.name ?? session.username]
+  );
+  revalidatePath("/fuvarozas2");
+  return { ok: true };
+}
+
+/** A nyugtázás visszavonása — az eltérés újra a sávba kerül. */
+export async function visszavonNyugtat(kulcs: string): Promise<{ ok: true } | { ok: false; hiba: string }> {
+  await requireEditPermission("fuvarozas");
+  if (typeof kulcs !== "string" || kulcs.length === 0 || kulcs.length > 200) return { ok: false, hiba: "Érvénytelen eltérés." };
+  await query(
+    `delete from fuvar_elteres_nyugta where nap = (now() at time zone 'Europe/Budapest')::date and kulcs = $1`,
+    [kulcs]
+  );
+  revalidatePath("/fuvarozas2");
+  return { ok: true };
 }

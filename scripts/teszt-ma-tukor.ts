@@ -151,5 +151,23 @@ const csaszarEta = tukorSorok({
 });
 eq("más célú ETA nem kerül rossz megállóra", csaszarEta.find((r) => r.tipus === "megallo")?.tipus === "megallo" ? (csaszarEta.find((r) => r.tipus === "megallo") as { teny: string | null }).teny : "x", null);
 
+// Ablakon belül megérkezett, az ablak lejárt, de még rakodik: nem késés.
+// Ablak után érkezett: rögzített „+N p”, nem „késik”.
+{
+  const rakodik = tukorSorok({
+    fuvarok: [{ id: "286", partner: "X", hivatkozas: null, jelleg: "ber", megallo_reszletek: null, megallok: [
+      m(1, "lerako", "Kunhegyes", { ablak_tol: t("08:00"), ablak_ig: t("10:00"), gps_erkezes: t("09:40") }),
+      m(2, "lerako", "Debrecen", { ablak_tol: t("08:00"), ablak_ig: t("10:00"), sofor_megerkezett_at: t("10:30") }),
+      m(3, "lerako", "Hajdúnánás", { ablak_tol: t("08:00"), ablak_ig: t("10:00") }),
+    ] }],
+    allasok: [], eta: null, most: d("11:00"), ma: "2026-09-28",
+  }).filter((r) => r.tipus === "megallo") as Extract<TukorSor, { tipus: "megallo" }>[];
+  eq("ablakon belül érkezett, rakodik: nincs késés-kiemelés", rakodik[0].kiemelt, null);
+  eq("ablakon belül érkezett: „ablakban”", rakodik[0].elteres, "ablakban");
+  eq("ablak után érkezett (sofőr jelölte): nincs késés-kiemelés", rakodik[1].kiemelt, null);
+  eq("ablak után érkezett: rögzített +30 p", rakodik[1].elteres, "+30 p");
+  eq("még nem érkezett: késik", rakodik[2].kiemelt, "kesik");
+}
+
 console.log(`\nMa-tükör teszt: ${ok} rendben, ${bad} hiba`);
 if (bad > 0) process.exit(1);

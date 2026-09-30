@@ -1,6 +1,8 @@
 import Link from "next/link";
 import type { MaVaszon, Elteres, MaKocsi, MaBlokk, CsempeSzin, MaKocsiAllapot, TukorSor, TukorAllas } from "@/lib/fuvarozas2/ma-vaszon";
 import { AllasRogzitesGomb } from "@/components/fuvarozas2/allas-rogzites";
+import { NyugtaGomb, VisszavonGomb } from "@/components/fuvarozas2/elteres-nyugta";
+import { AutoFrissites } from "@/components/fuvarozas2/auto-frissites";
 import { Csempesor } from "@/components/fuvarozas2/csempesor";
 
 // A „Ma" képernyő (Budaházi Zoltán, 2026-09-28): négy kocsi-oszlop egymás
@@ -36,7 +38,7 @@ function SzakaszCim({ children }: { children: React.ReactNode }) {
   return <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{children}</div>;
 }
 
-function ElteresSor({ e }: { e: Elteres }) {
+function ElteresSor({ e, nyugtazhat }: { e: Elteres; nyugtazhat: boolean }) {
   const badge = e.szin === "red" ? "bg-[var(--f2-red)] text-white" : "bg-[var(--f2-amb)] text-white";
   const belso = (
     <>
@@ -47,8 +49,13 @@ function ElteresSor({ e }: { e: Elteres }) {
       </span>
     </>
   );
-  const oszt = "flex items-start gap-2 text-sm";
-  return e.href ? <Link href={e.href} className={`${oszt} hover:underline`}>{belso}</Link> : <div className={oszt}>{belso}</div>;
+  const oszt = "flex min-w-0 flex-1 items-start gap-2 text-sm";
+  return (
+    <div className="flex items-start gap-2">
+      {e.href ? <Link href={e.href} className={`${oszt} hover:underline`}>{belso}</Link> : <div className={oszt}>{belso}</div>}
+      {nyugtazhat ? <NyugtaGomb kulcs={e.kulcs} szin={e.szin} /> : null}
+    </div>
+  );
 }
 
 /** Egy fuvar röviden: megbízó, hivatkozás, útvonal, megállók pipával. */
@@ -254,13 +261,41 @@ function KocsiOszlop({ k, holnapCimke }: { k: MaKocsi; holnapCimke: string }) {
   );
 }
 
+/** A ma nyugtázott eltérések, összecsukva — „vissza” gombbal visszatehetők a sávba. */
+function NyugtazottLista({ adat, kulon = false }: { adat: MaVaszon; kulon?: boolean }) {
+  if (adat.nyugtazott.length === 0) return null;
+  return (
+    <details className={kulon ? "rounded-2xl border border-foreground/10 bg-card px-4 py-2 text-sm" : "text-sm"}>
+      <summary className="cursor-pointer text-xs text-muted-foreground">
+        {kulon ? "Nincs nyitott eltérés · " : ""}{adat.nyugtazott.length} nyugtázva ma
+      </summary>
+      <div className="mt-1.5 flex flex-col gap-1">
+        {adat.nyugtazott.map((e) => (
+          <div key={e.kulcs} className="flex items-baseline gap-2 text-xs text-muted-foreground">
+            <span className="shrink-0 font-semibold">{e.badge}</span>
+            <span className="min-w-0 flex-1 truncate">{e.cim}</span>
+            <span className="shrink-0">{e.nyugtazta ?? "—"} · {e.mikor}</span>
+            {adat.nyugtazhat ? <VisszavonGomb kulcs={e.kulcs} /> : null}
+          </div>
+        ))}
+      </div>
+    </details>
+  );
+}
+
 export function MaVaszonNezet({ adat }: { adat: MaVaszon }) {
   const iroda = adat.csempek.filter((c) => c.kulcs !== "uton" && c.kulcs !== "elteres");
   return (
     <div className="flex flex-col gap-4">
       <Csempesor berHavi={adat.berHavi} berHeti={adat.berHeti} berHonapHetei={adat.berHonapHetei} />
 
-      {adat.elteresek.length === 0 ? null : (
+      <div className="-mb-2 flex justify-end">
+        <AutoFrissites frissitve={adat.frissitve} />
+      </div>
+
+      {adat.elteresek.length === 0 && adat.nyugtazott.length === 0 ? null : adat.elteresek.length === 0 ? (
+        <NyugtazottLista adat={adat} kulon />
+      ) : (
         <div
           className={`flex flex-col gap-1.5 rounded-2xl border px-4 py-3 ${
             adat.elteresek.some((e) => e.szin === "red") ? "border-[var(--f2-red)]/30 bg-[var(--f2-red-l)]" : "border-[var(--f2-amb)]/30 bg-[var(--f2-amb-l)]"
@@ -268,8 +303,9 @@ export function MaVaszonNezet({ adat }: { adat: MaVaszon }) {
         >
           <SzakaszCim>Eltérés ({adat.elteresek.length}) — ami nem terv szerint megy</SzakaszCim>
           <div className="grid gap-x-6 gap-y-1.5 lg:grid-cols-2">
-            {adat.elteresek.map((e) => <ElteresSor key={e.kulcs} e={e} />)}
+            {adat.elteresek.map((e) => <ElteresSor key={e.kulcs} e={e} nyugtazhat={adat.nyugtazhat} />)}
           </div>
+          <NyugtazottLista adat={adat} />
         </div>
       )}
 

@@ -1,5 +1,36 @@
 # PROGRESS
 
+## 2026-09-30 — Ma oldal: mindig friss adat, pontosabb GPS-párosítás, eltérés nyugtázása
+
+- **Probléma (Budaházi Zoltán):** a Ma oldal nem frissült magától; az
+  eltérések egész nap kint maradtak; a GPS és a megbízások viszonya
+  pontatlan volt. Élő eset: Micó #286, Kunhegyes — 10:22-kor a lerakón állt,
+  a figyelő mégis „nincs érintés”-t írt, a Ma oldal „késés”-t mutatott.
+- **Okok:** (1) az oldal csak betöltéskor kérte le az adatot; (2) a GPS-tény
+  15 percenként került a megállókra; (3) a telephelyen belüli araszolás
+  (6 km/h) megszakította az „ott áll” láncot; (4) az élő megfigyelések csak
+  memóriában éltek, a 10:23-as kiadás kitörölte őket; (5) a „késés” akkor is
+  kint volt, ha a kocsi az ablakon belül megérkezett, csak a rakodás tartott.
+- **Módosítás:**
+  - `auto-frissites.tsx`: a Ma oldal percenként (látható fülön) és
+    visszaváltáskor frissül, kiírja: „frissítve 10:42”.
+  - GPS-figyelő 15 → 5 perc (`teljesites-figyeles-scheduler.ts`).
+  - `idovonal.ts` kiegesziteloAllapottal: a Q-hely közelében mozgó
+    megfigyelés nem szakítja meg az ott-létet (csak az álló kezdi).
+  - `elo-elozmeny.ts`: a megfigyelések a `fuvar_elo_megfigyeles` táblába is
+    íródnak, és induláskor onnan töltődnek vissza (2 nap megőrzés).
+  - Késés: az ablakon belül megérkezett kocsi nem késik; az ablak után
+    érkezett „késve ért oda N p” (rögzített szám). A sofőr „Megérkeztem”
+    jelölése is érkezésnek számít (Ma sáv és tükör).
+  - Nyugtázás: `fuvar_elteres_nyugta` (nap, kulcs, szín, ki, mikor); „OK”
+    gomb a sorban (fuvarozás szerkesztési jog), a nyugtázott aznap nem
+    látszik, csak ha sárgából piros lesz; alul „N nyugtázva ma”, „vissza”
+    gombbal. Éjfélkor lejár.
+- **Teszt:** typecheck, eslint; teszt-erintes 76/0 (új: Kunhegyes-eset),
+  teszt-ma-tukor 19/0 (új: késés érkezés után), jogosultság 28/0.
+- **Kockázat:** 3× több Ecofleet-hívás a figyelőből (5 percenként kb. 4
+  hívás); a Ma oldal percenkénti frissítése nyitott fülenként egy lekérés.
+
 ## 2026-09-29 — Jelenlét: feladat-bevitel az oszlopban, az elvégzettek láthatók maradnak
 
 - **Probléma:** a feladat-rész nem volt átlátható. A rögzítés a fejléc gombja

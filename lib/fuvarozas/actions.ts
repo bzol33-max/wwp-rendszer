@@ -2,7 +2,7 @@
 
 import { query } from "@/lib/db";
 import { requireViewPermission } from "@/lib/auth/require-permission";
-import { getEloElozmeny, rogzitEloMegfigyelest } from "./elo-elozmeny";
+import { betoltEloElozmenyt, getEloElozmeny, rogzitEloMegfigyelest } from "./elo-elozmeny";
 import { getFleetLastPositions, getVehicleTrips, parseEcofleetTimestamp, EcofleetError, type EcofleetPosition, type EcofleetTrip } from "./ecofleet";
 import {
   calculateToll,
@@ -1029,6 +1029,7 @@ async function getGondJelzesek(fuvarIds: string[]): Promise<Map<string, GondJelz
 
 async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
   const { kezdet, veg, napISO, maiNap } = budapestNapHatarok(nap);
+  if (maiNap) await betoltEloElozmenyt();
   // A mai napon a csúszó (korábbi lerakási napú, még nem Teljesítve) fuvarok
   // is kellenek — a kocsi ezeket viszi, nem tűnhetnek el éjfélkor.
   const [berFuvarok, sajatFuvarok] = await Promise.all([
