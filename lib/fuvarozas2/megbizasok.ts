@@ -21,9 +21,8 @@ import {
   type AtmenetForras,
   type AtmenetKontextus,
 } from "@/lib/fuvarozas/allapot";
-import { keresEgyezik, keresNapok, keresSzoveg, szakaszSorbol, type KeresoIndex, type Szakasz } from "@/lib/fuvarozas2/munkaasztal";
+import { keresEgyezik, keresNapok, keresSzoveg, szakaszSorbol, szakaszSorrendben, type KeresoIndex, type Szakasz } from "@/lib/fuvarozas2/munkaasztal";
 import { varosNev } from "@/lib/fuvarozas/varos";
-import { megalloReszlete, type MegalloReszlet } from "@/lib/fuvarozas/sofor-adatok";
 import { findJarmuByPlate, jarmuLabel } from "@/lib/fuvarozas/vehicles";
 import { frissitsdFuvarozas2Modellt } from "@/lib/fuvarozas2/modell-szinkron";
 
@@ -423,8 +422,9 @@ export async function torolMegbizast(id: string): Promise<{ ok: true } | { ok: f
 }
 
 // ---------------------------------------------------------------------------
-// Munkaasztal (2026-09-25): oldalsáv-szakaszok, kereső mindenre, és a
-// „kocsi most” panel. A szakasz- és keresési szabály tiszta modulban van
+// Megbízások oldal (2026-09-30, Budaházi Zoltán: 1-es terv, „Bér | Saját”):
+// két oszlop, a bérfuvarok és a saját fuvarok szakaszonként, kereső
+// mindenre. A szakasz-, sorrend- és keresési szabály tiszta modulban van
 // (lib/fuvarozas2/munkaasztal.ts, scripts/teszt-munkaasztal.ts).
 
 export type MunkaasztalSor = MegbizasSor & { szakasz: Szakasz };
@@ -445,21 +445,17 @@ async function munkaasztalJarmuvei(): Promise<{ kod: string; cimke: string; sofo
   });
 }
 
-export async function getMunkaasztal(szuro: {
-  szakasz?: Szakasz;
-  jelleg?: "ber" | "sajat";
-  kocsi?: string;
-  q?: string;
-}): Promise<{
-  sorok: MunkaasztalSor[];
+/**
+ * A két oszlop sorai: kereső nélkül minden nyitott (nem archív) fuvar,
+ * keresővel a találatok az archívval együtt — jellegenként szakasz-sorrendben.
+ */
+export async function getKetOszlop(szuro: { q?: string }): Promise<{
+  ber: MunkaasztalSor[];
+  sajat: MunkaasztalSor[];
   ma: string;
-  szamok: {
-    szakasz: Record<Szakasz, number>;
-    kocsik: { kod: string; cimke: string; sofor: string | null; n: number }[];
-    kocsiNelkul: number;
-    jelleg: { ber: number; sajat: number };
-  };
   kereso: KeresoIndex;
+  /** Keresésnél a találatok száma (a levágás előtt), különben null. */
+  talalat: number | null;
 }> {
   await requireAnyViewPermission(["fuvarozas", "elszamolas"]);
   const [{ ma }] = await query<{ ma: string }>(`select ((now() at time zone 'Europe/Budapest')::date)::text as ma`);
@@ -469,46 +465,18 @@ export async function getMunkaasztal(szuro: {
   const jarmuvek = await munkaasztalJarmuvei();
   const soforKod = new Map(jarmuvek.map((j) => [j.kod, j.sofor]));
 
-  const szakaszDb = { elokeszites: 0, beerkezett: 0, folyamatban: 0, szamlazasra: 0, postara: 0, archiv: 0 } as Record<Szakasz, number>;
-  const kocsiDb = new Map<string, number>();
-  let kocsiNelkul = 0, ber = 0, sajat = 0;
-  for (const s of osszes) {
-    if (s.jelleg === "ber") ber++; else sajat++;
-    if (szuro.jelleg && s.jelleg !== szuro.jelleg) continue;
-    szakaszDb[s.szakasz]++;
-    if (s.szakasz === "folyamatban") {
-      if (s.jarmu_kod) kocsiDb.set(s.jarmu_kod, (kocsiDb.get(s.jarmu_kod) ?? 0) + 1);
-      else kocsiNelkul++;
-    }
-  }
-
   const q = szuro.q?.trim();
-  const szakasz = szuro.szakasz ?? "folyamatban";
-  let sorok = osszes.filter((s) => {
-    if (szuro.jelleg && s.jelleg !== szuro.jelleg) return false;
-    if (q) return keresEgyezik({ ...s, sofor: [s.sofor, s.jarmu_kod ? soforKod.get(s.jarmu_kod) : null].filter(Boolean).join(" ") }, q);
-    if (s.szakasz !== szakasz) return false;
-    if (szuro.kocsi === "nincs") return !s.jarmu_kod;
-    if (szuro.kocsi) return s.jarmu_kod === szuro.kocsi;
-    return true;
-  });
-  // Ami még előttünk van, időrendben; ami mögöttünk, a legújabb elöl.
-  if (!q && (szakasz === "elokeszites" || szakasz === "beerkezett" || szakasz === "folyamatban")) {
-    sorok = [...sorok].sort((a, b) => (a.felrakas_nap ?? "").localeCompare(b.felrakas_nap ?? "") || a.id.localeCompare(b.id));
-  }
+  const sorok = q
+    ? osszes.filter((s) => keresEgyezik({ ...s, sofor: [s.sofor, s.jarmu_kod ? soforKod.get(s.jarmu_kod) : null].filter(Boolean).join(" ") }, q))
+    : osszes.filter((s) => s.szakasz !== "archiv");
+  const rendezett = szakaszSorrendben(sorok);
 
   return {
-    sorok: sorok.slice(0, 300),
+    ber: rendezett.filter((s) => s.jelleg === "ber").slice(0, 300),
+    sajat: rendezett.filter((s) => s.jelleg === "sajat").slice(0, 300),
     ma,
-    kereso: keresoIndex(osszes.filter((s) => !szuro.jelleg || s.jelleg === szuro.jelleg), jarmuvek, soforKod),
-    szamok: {
-      szakasz: szakaszDb,
-      kocsik: jarmuvek
-        .filter((j) => j.rendszamos || (kocsiDb.get(j.kod) ?? 0) > 0)
-        .map((j) => ({ kod: j.kod, cimke: j.cimke, sofor: j.sofor, n: kocsiDb.get(j.kod) ?? 0 })),
-      kocsiNelkul,
-      jelleg: { ber, sajat },
-    },
+    kereso: keresoIndex(osszes, jarmuvek, soforKod),
+    talalat: q ? sorok.length : null,
   };
 }
 
@@ -552,86 +520,5 @@ function keresoIndex(
       .filter((v) => v.length >= 2 && v.length <= 32 && v.split(/\s+/).length <= 2),
     kocsik: jarmuvek.map((j) => ({ kod: j.kod, cimke: j.sofor ? `${j.sofor} · ${j.kod}` : j.kod })),
     szamok: egyedi(sorok.flatMap((s) => [s.szamla_szam, ...(s.kieg_szamla_szamok ?? []), s.szallitolevel, s.hivatkozas])),
-  };
-}
-
-export type KocsiMostMegallo = {
-  sorszam: number;
-  tipus: "felrako" | "lerako";
-  cim: string;
-  ceg: string | null;
-  kontakt: string | null;
-  rakomany: string | null;
-  ido: string | null;
-  kesz: boolean;
-};
-
-export type KocsiMost = {
-  jarmuvek: { kod: string; cimke: string; sofor: string | null; dolgozik: boolean }[];
-  kod: string | null;
-  most: (MegbizasSor & { megallok: KocsiMostMegallo[] }) | null;
-  kovetkezo: MegbizasSor | null;
-};
-
-/**
- * Amit a kocsi éppen csinál (a legkorábbi folyamatban lévő, vagy a ma
- * induló tervezett fuvarja), megállónként a sofőr jelöléseivel, és a
- * következő fuvarja. A megállók sorszáma a sofőr appjával azonos
- * (modell-szinkron.ts: felrakók, aztán lerakók), így a „kész” jelölés a
- * fuvar_megallo_allapot indexéből jön.
- */
-export async function getKocsiMost(kod?: string): Promise<KocsiMost> {
-  await requireAnyViewPermission(["fuvarozas", "elszamolas"]);
-  const [{ ma }] = await query<{ ma: string }>(`select ((now() at time zone 'Europe/Budapest')::date)::text as ma`);
-  const osszesJarmu = await munkaasztalJarmuvei();
-  const nyitott = await query<MegbizasSor>(
-    `${SOR_SQL} where m.torolt_at is null and j.kod is not null and m.allapot in ('ellenorzesre_var','tervezett','folyamatban')
-     order by m.datum asc, m.id asc limit 200`
-  );
-  const aktivja = (k: string) =>
-    nyitott.find((s) => s.jarmu_kod === k && s.allapot === "folyamatban") ??
-    nyitott.find((s) => s.jarmu_kod === k && s.allapot === "tervezett" && (s.felrakas_nap ?? "") <= ma) ??
-    null;
-  const jarmuvek = osszesJarmu.filter((j) => j.rendszamos || nyitott.some((s) => s.jarmu_kod === j.kod));
-  const lista = jarmuvek.map((j) => ({ kod: j.kod, cimke: j.cimke, sofor: j.sofor, dolgozik: !!aktivja(j.kod) }));
-  const valasztott = kod && jarmuvek.some((j) => j.kod === kod) ? kod : (lista.find((j) => j.dolgozik)?.kod ?? jarmuvek[0]?.kod ?? null);
-  if (!valasztott) return { jarmuvek: lista, kod: null, most: null, kovetkezo: null };
-
-  const most = aktivja(valasztott);
-  const kovetkezo = nyitott.find((s) => s.jarmu_kod === valasztott && s.id !== most?.id && (s.felrakas_nap ?? "") >= ma) ?? null;
-  if (!most) return { jarmuvek: lista, kod: valasztott, most: null, kovetkezo };
-
-  const [megallok, kesz, extra] = await Promise.all([
-    query<{ sorszam: number; tipus: "felrako" | "lerako"; cim_nyers: string; sofor_kesz_at: string | null; gps_tavozas: string | null }>(
-      `select sorszam, tipus, cim_nyers, sofor_kesz_at::text, gps_tavozas::text from fuvar_megallok where megbizas_id = $1 order by sorszam`,
-      [most.id]
-    ),
-    query<{ megallo_index: number }>(`select megallo_index from fuvar_megallo_allapot where fuvar_id = $1 and kesz`, [most.id]),
-    query<{ megallo_reszletek: MegalloReszlet[] | null }>(`select megallo_reszletek from fuvar_megbizasok where id = $1`, [most.id]),
-  ]);
-  const keszIndex = new Set(kesz.map((k) => Number(k.megallo_index)));
-  const darab = { felrako: 0, lerako: 0 };
-  for (const m of megallok) darab[m.tipus]++;
-  const szamlalo = { felrako: 0, lerako: 0 };
-  return {
-    jarmuvek: lista,
-    kod: valasztott,
-    kovetkezo,
-    most: {
-      ...most,
-      megallok: megallok.map((m) => {
-        const r = megalloReszlete(extra[0]?.megallo_reszletek, m.tipus, szamlalo[m.tipus]++, darab[m.tipus], m.cim_nyers);
-        return {
-          sorszam: m.sorszam,
-          tipus: m.tipus,
-          cim: m.cim_nyers,
-          ceg: r?.ceg ?? null,
-          kontakt: r?.kontakt ?? null,
-          rakomany: r?.rakomany ?? null,
-          ido: r?.ido ?? null,
-          kesz: keszIndex.has(m.sorszam - 1) || !!m.sofor_kesz_at || !!m.gps_tavozas,
-        };
-      }),
-    },
   };
 }

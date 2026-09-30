@@ -1,7 +1,7 @@
 // A Megbízások munkaasztal szakaszainak és keresőjének tesztje.
 // Futtatás: npx tsx scripts/teszt-munkaasztal.ts
 
-import { szakaszSorbol, utSzakaszai, keresEgyezik, honapKeresoszo, javaslatok, keresSzoveg, keresNapok, type KeresettSor, type KeresoIndex } from "@/lib/fuvarozas2/munkaasztal";
+import { szakaszSorbol, szakaszSorrendben, utSzakaszai, keresEgyezik, honapKeresoszo, javaslatok, keresSzoveg, keresNapok, type KeresettSor, type KeresoIndex } from "@/lib/fuvarozas2/munkaasztal";
 
 let ok = 0, bad = 0;
 function eq(nev: string, kapott: unknown, vart: unknown) {
@@ -25,6 +25,14 @@ eq("bér útja 5 szakasz", utSzakaszai("ber", "szamlazasra").length, 5);
 eq("saját útja 3 szakasz", utSzakaszai("sajat", "folyamatban"), ["elokeszites", "folyamatban", "archiv"]);
 eq("saját számlázható → bér útja (a csík nem üres)", utSzakaszai("sajat", szakaszSorbol({ jelleg: "sajat", allapot: "szamlazhato" })).includes("szamlazasra"), true);
 eq("saját ellenőrzésre vár → bér útja", utSzakaszai("sajat", szakaszSorbol({ jelleg: "sajat", allapot: "ellenorzesre_var" })).includes("beerkezett"), true);
+
+// A két oszlop sorrendje: szakaszonként; előttünk lévő szakaszban a felrakás napja szerint előre, a többi marad.
+{
+  const x = (id: string, szakasz: Parameters<typeof szakaszSorrendben>[0][number]["szakasz"], felrakas_nap: string | null) => ({ id, szakasz, felrakas_nap });
+  const be = [x("9", "postara", "2026-09-28"), x("5", "folyamatban", "2026-09-30"), x("7", "szamlazasra", "2026-09-29"), x("3", "folyamatban", "2026-09-25"), x("8", "szamlazasra", "2026-09-20"), x("4", "elokeszites", "2026-10-07"), x("6", "folyamatban", "2026-09-30")];
+  eq("szakasz-sorrend", szakaszSorrendben(be).map((s) => s.id), ["4", "3", "5", "6", "7", "8", "9"]);
+  eq("a bemenet nem módosul", be.map((s) => s.id), ["9", "5", "7", "3", "8", "4", "6"]);
+}
 
 // Hónapnevek
 eq("szept", honapKeresoszo("szept"), 9);

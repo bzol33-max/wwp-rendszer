@@ -1,56 +1,81 @@
 import Link from "next/link";
 import { requireSession } from "@/lib/auth/dal";
-import { getKocsiMost, getMegbizas, getMunkaasztal } from "@/lib/fuvarozas2/megbizasok";
+import { getKetOszlop, getMegbizas } from "@/lib/fuvarozas2/megbizasok";
 import { getParositatlanFuvarszamlak } from "@/lib/fuvarozas/megbizasok";
-import { SZAKASZOK, type Szakasz } from "@/lib/fuvarozas2/munkaasztal";
 import { Fuvarozas2Fulek } from "@/components/fuvarozas2/fulek";
 import { MegbizasReszlet } from "@/components/fuvarozas2/megbizas-reszlet";
-import { KocsiMostPanel, MunkaLista, Oldalsav, munkaasztalLink, type MunkaasztalSzuro } from "@/components/fuvarozas2/munkaasztal";
+import { OszlopLista, munkaasztalLink, type MunkaasztalSzuro } from "@/components/fuvarozas2/munkaasztal";
+import { KeresoJavaslatok } from "@/components/fuvarozas2/kereso-javaslatok";
+import { ReszletLap } from "@/components/fuvarozas2/reszlet-lap";
 import { formatFt } from "@/components/fuvarozas2/kozos";
 import { SajatFuvarUrlap, VisszaveszemGomb } from "@/components/fuvarozas2/sajat-fuvar-urlap";
 import { getSajatFuvarSegedlet } from "@/lib/fuvarozas2/sajat-fuvar";
 
 export const dynamic = "force-dynamic";
 
-// A régi linkek (Ma-képernyő „csoport”, a korábbi „allapot”/„lepes” szűrők)
-// leképezése a munkaasztal szakaszaira.
-const REGI_SZAKASZ: Record<string, Szakasz> = {
-  ellenorzes: "beerkezett", ellenorzesre_var: "beerkezett", beerkezett: "beerkezett",
-  folyamatban: "folyamatban", tervezett: "folyamatban", uton: "folyamatban",
-  elszamolas: "szamlazasra", teljesitve: "szamlazasra", szamlazhato: "szamlazasra", szamlazando: "szamlazasra",
-  szamlazva: "postara", email_elment: "postara", postara: "postara",
-  lezart: "archiv", postazva: "archiv", kesz: "archiv",
-};
+// Megbízások (2026-09-30, Budaházi Zoltán: 1-es terv, B-változat): balra a
+// bérfuvarok, jobbra a saját fuvarok, minden nyitott szakasz egyszerre. A
+// saját oszlop tetején lenyíló „+ Új saját fuvar”; az előre beírt saját
+// fuvar ugyanott nyílik szerkesztésre. Minden más sor részlete jobbról
+// becsúszó lapon. A régi linkek szakasz-/jelleg-/kocsi-paramétere
+// (Ma oldal, korábbi könyvjelzők) nem szűr többé — minden szakasz látszik.
 
 export default async function Page({ searchParams }: {
-  searchParams: Promise<{ szakasz?: string; jelleg?: string; kocsi?: string; q?: string; reszlet?: string; km?: string; uj?: string; csoport?: string; allapot?: string; lepes?: string }>;
+  searchParams: Promise<{ q?: string; reszlet?: string; uj?: string }>;
 }) {
   const sp = await searchParams;
-  const szakaszParam = sp.szakasz ?? sp.csoport ?? sp.allapot ?? sp.lepes;
-  const szakasz = SZAKASZOK.some((s) => s.kulcs === szakaszParam) ? (szakaszParam as Szakasz) : szakaszParam ? REGI_SZAKASZ[szakaszParam] : undefined;
-  const jelleg = sp.jelleg === "ber" || sp.jelleg === "sajat" ? sp.jelleg : undefined;
+  const q = sp.q?.trim() || undefined;
   const reszletId = sp.reszlet && /^\d+$/.test(sp.reszlet) ? sp.reszlet : undefined;
   const uj = sp.uj === "1";
-  const szuro: MunkaasztalSzuro = { szakasz, jelleg, kocsi: sp.kocsi, q: sp.q?.trim() || undefined, reszlet: reszletId, kocsiMost: sp.km, uj };
+  const szuro: MunkaasztalSzuro = { q, reszlet: reszletId, uj };
 
   const session = await requireSession();
   const szerkeszthet = session.can("fuvarozas").edit;
-  const [asztal, kocsiMost, reszlet, parositatlan] = await Promise.all([
-    getMunkaasztal({ szakasz, jelleg, kocsi: sp.kocsi, q: szuro.q }),
-    getKocsiMost(sp.km),
+  const [asztal, reszlet, parositatlan] = await Promise.all([
+    getKetOszlop({ q }),
     reszletId ? getMegbizas(reszletId) : Promise.resolve(null),
     getParositatlanFuvarszamlak(60).catch(() => []),
   ]);
-  const elokeszitett = reszlet?.sor.elokeszites ? reszlet.sor : null;
-  const segedlet = szerkeszthet && (uj || elokeszitett) ? await getSajatFuvarSegedlet() : null;
+  // Az előre beírt saját fuvar a saját oszlop űrlapjában nyílik, nem a lapon.
+  const elokeszitett = szerkeszthet && reszlet?.sor.elokeszites ? reszlet.sor : null;
+  const urlapNyitva = szerkeszthet && (uj || !!elokeszitett);
+  const segedlet = urlapNyitva ? await getSajatFuvarSegedlet() : null;
+  const lapon = reszlet && !elokeszitett ? reszlet : null;
   const visszaveheto =
-    szerkeszthet && reszlet && reszlet.sor.jelleg === "sajat" && !reszlet.sor.elokeszites &&
-    (reszlet.sor.allapot === "tervezett" || reszlet.sor.allapot === "folyamatban") &&
-    !reszlet.megallok.some((m) => m.gps_erkezes || m.sofor_kesz_at);
+    szerkeszthet && lapon && lapon.sor.jelleg === "sajat" && !lapon.sor.elokeszites &&
+    (lapon.sor.allapot === "tervezett" || lapon.sor.allapot === "folyamatban") &&
+    !lapon.megallok.some((m) => m.gps_erkezes || m.sofor_kesz_at);
+  const bezar = munkaasztalLink(szuro, { reszlet: undefined, uj: false });
 
-  const aktiv = SZAKASZOK.find((s) => s.kulcs === (szakasz ?? "folyamatban"))!;
-  const kocsiCim = sp.kocsi === "nincs" ? " · kocsi nélkül" : sp.kocsi ? ` · ${sp.kocsi}` : "";
-  const listaCim = szuro.q ? `Keresés: „${szuro.q}”` : `${aktiv.cimke}${kocsiCim}`;
+  const sajatFelso = !szerkeszthet ? null : segedlet ? (
+    <SajatFuvarUrlap
+      key={elokeszitett?.id ?? "uj"}
+      id={elokeszitett?.id ?? null}
+      kezdo={{
+        datum: elokeszitett?.felrakas_nap ?? "",
+        jarmuKod: elokeszitett?.elokeszites_jarmu ?? null,
+        honnan: elokeszitett?.felrako ?? "",
+        hova: elokeszitett?.lerako ?? "",
+        kitol: elokeszitett?.kitol ?? null,
+        kinek: elokeszitett?.partner_nev ?? null,
+        megjegyzes: elokeszitett?.megjegyzes ?? null,
+      }}
+      segedlet={segedlet}
+      bezarHref={bezar}
+      listaHref={bezar}
+      reszletHref={bezar}
+      kocsiraHref={bezar}
+    />
+  ) : (
+    <Link
+      href={munkaasztalLink(szuro, { uj: true, reszlet: undefined })}
+      scroll={false}
+      className="flex items-center justify-between gap-2 rounded-xl bg-[var(--f2-mint)] px-4 py-2.5 text-sm font-bold text-white hover:opacity-90"
+    >
+      + Új saját fuvar
+      <span className="text-xs font-normal opacity-85">itt nyílik ki</span>
+    </Link>
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -67,52 +92,39 @@ export default async function Page({ searchParams }: {
         </div>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)_380px] lg:items-start">
-        <Oldalsav szuro={szuro} szamok={asztal.szamok} kereso={asztal.kereso} />
-        <MunkaLista sorok={asztal.sorok} ma={asztal.ma} szuro={szuro} cim={listaCim} />
-        <aside className="order-first flex flex-col gap-3 lg:order-none lg:sticky lg:top-4" aria-label={reszlet ? "A kiválasztott megbízás" : "A kocsi most"}>
-          {segedlet && (uj || elokeszitett) ? (
-            <>
-              <Link href={munkaasztalLink(szuro, { reszlet: undefined, uj: false })} className="text-sm font-semibold text-[var(--f2-blue)] hover:underline">
-                ← vissza a kocsihoz
-              </Link>
-              <SajatFuvarUrlap
-                key={elokeszitett?.id ?? "uj"}
-                id={elokeszitett?.id ?? null}
-                kezdo={{
-                  datum: elokeszitett?.felrakas_nap ?? "",
-                  jarmuKod: elokeszitett?.elokeszites_jarmu ?? null,
-                  honnan: elokeszitett?.felrako ?? "",
-                  hova: elokeszitett?.lerako ?? "",
-                  kitol: elokeszitett?.kitol ?? null,
-                  kinek: elokeszitett?.partner_nev ?? null,
-                  megjegyzes: elokeszitett?.megjegyzes ?? null,
-                }}
-                segedlet={segedlet}
-                listaHref={munkaasztalLink({ jelleg }, { szakasz: "elokeszites" })}
-                reszletHref="/fuvarozas2/megbizasok?szakasz=elokeszites&reszlet={id}"
-                kocsiraHref="/fuvarozas2/megbizasok?szakasz=folyamatban&reszlet={id}"
-              />
-            </>
-          ) : reszlet ? (
-            <>
-              <Link href={munkaasztalLink(szuro, { reszlet: undefined })} className="text-sm font-semibold text-[var(--f2-blue)] hover:underline">
-                ← vissza a kocsihoz
-              </Link>
-              {visszaveheto ? <VisszaveszemGomb id={reszlet.sor.id} /> : null}
-              <MegbizasReszlet
-                {...reszlet}
-                egyOszlop
-                szerkeszthet={session.can("fuvarozas").edit || session.can("elszamolas").edit}
-                elszamolasJog={session.can("elszamolas").edit || session.can("fuvarozas").edit}
-                fuvarozasJog={szerkeszthet}
-              />
-            </>
-          ) : (
-            <KocsiMostPanel adat={kocsiMost} szuro={szuro} />
-          )}
-        </aside>
+      <div className="flex items-start gap-3">
+        <div className="min-w-0 flex-1">
+          <KeresoJavaslatok key={q ?? ""} index={asztal.kereso} kezdo={q ?? ""} />
+        </div>
+        {q ? (
+          <Link href="/fuvarozas2/megbizasok" className="mt-1.5 shrink-0 rounded-lg border border-foreground/15 bg-card px-3 py-1.5 text-sm font-semibold hover:bg-muted">
+            × keresés törlése
+          </Link>
+        ) : null}
       </div>
+      {q ? (
+        <p className="-mt-2 text-sm text-muted-foreground">
+          Keresés: „{q}” — {asztal.talalat} találat, az archívval együtt.
+        </p>
+      ) : null}
+
+      <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+        <OszlopLista cim="Bérfuvarok" sorok={asztal.ber} ma={asztal.ma} szuro={szuro} ures={q ? "Nincs találat." : "Nincs nyitott bérfuvar."} />
+        <OszlopLista cim="Saját fuvarok" sorok={asztal.sajat} ma={asztal.ma} szuro={szuro} felso={sajatFelso} ures={q ? "Nincs találat." : "Nincs nyitott saját fuvar."} />
+      </div>
+
+      {lapon ? (
+        <ReszletLap bezarHref={bezar} cim={`#${lapon.sor.id} · ${lapon.sor.partner_nev ?? (lapon.sor.jelleg === "sajat" ? "Saját fuvar" : "(nincs megbízó)")}`}>
+          {visszaveheto ? <VisszaveszemGomb id={lapon.sor.id} /> : null}
+          <MegbizasReszlet
+            {...lapon}
+            egyOszlop
+            szerkeszthet={session.can("fuvarozas").edit || session.can("elszamolas").edit}
+            elszamolasJog={session.can("elszamolas").edit || session.can("fuvarozas").edit}
+            fuvarozasJog={szerkeszthet}
+          />
+        </ReszletLap>
+      ) : null}
     </div>
   );
 }

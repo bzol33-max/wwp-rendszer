@@ -2783,3 +2783,33 @@ Budaházi Zoltán a 8 látványtervből az 1-est választotta, üres csempékkel
   ~290 megbízás van, a 3000 csak felső korlát. Akkor érdemes újranézni, ha a
   megbízások száma a több ezret közelíti (a lekérdezés és a kereső-index a
   sorszámmal arányosan nő).
+
+## 2026-09-30 — Megbízások oldal: két oszlop (Bér | Saját), lenyíló saját fuvar, becsúszó részlet
+
+Budaházi Zoltán választása 10 asztali terv közül az 1-es („Bér | Saját”),
+a saját fuvar bevitelére az 5 változatból a B („helyben lenyíló”), a
+részletre a becsúszó lap. A jobb oldali „Kocsi most” panel kikerült — az a
+Ma fülön látszik.
+
+- **Elrendezés** (`app/fuvarozas2/megbizasok/page.tsx`): felül a kereső
+  (javaslatokkal), alatta két oszlop: Bérfuvarok és Saját fuvarok, mindkettő
+  minden nyitott fuvarral, szakaszonként (Beérkezett · Előre beírt saját ·
+  Folyamatban · Számlázásra vár · Postára vár) fejléccel és darabszámmal
+  (`OszlopLista`, `components/fuvarozas2/munkaasztal.tsx`). A bal oldalsáv
+  (szakasz-, jelleg-, kocsi-szűrő) megszűnt.
+- **Keresés:** keresőszóval mindkét oszlop a találatokat mutatja az archívval
+  együtt; az archívum így érhető el. Adat: `getKetOszlop` (a `getMunkaasztal`
+  és a `getKocsiMost` helyett), sorrend: `szakaszSorrendben`
+  (`lib/fuvarozas2/munkaasztal.ts`, teszt: `scripts/teszt-munkaasztal.ts`).
+- **Új saját fuvar:** a Saját oszlop tetején zöld sáv; rákattintva helyben
+  kinyílik a meglévő űrlap (`SajatFuvarUrlap`, új `bezarHref` → „× bezár”;
+  honnan/hová és kitől/kinek párban). Mentés vagy „Kocsira adom” után
+  visszacsukódik. Egy előre beírt saját fuvarra kattintva ugyanez az űrlap
+  nyílik, kitöltve.
+- **Részlet:** jobbról becsúszó lap (`components/fuvarozas2/reszlet-lap.tsx`),
+  bezárás ×-szel, a háttérre kattintva vagy Esc-kel; az URL-ből él
+  (`?reszlet=…`), így a Ma oldal linkjei is ide nyitnak. A régi `szakasz`,
+  `jelleg`, `kocsi`, `km` paraméterek nem szűrnek többé.
+- **Törölve:** `Oldalsav`, `KocsiMostPanel`, `getKocsiMost`, `getMunkaasztal`.
+- Ellenőrzés: `tsc` 0 hiba, eslint tiszta, `next build` sikeres,
+  tesztek 40/0 és 21/0. Böngészőben helyben nem próbálható (nincs helyi DB).

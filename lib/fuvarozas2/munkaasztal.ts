@@ -1,11 +1,12 @@
-// A Megbízások munkaasztal (2026-09-25) tiszta logikája: melyik oldalsáv-
-// szakaszba esik egy megbízás, és illeszkedik-e a keresésre. Nincs
+// A Megbízások oldal tiszta logikája: melyik szakaszba esik egy megbízás,
+// milyen sorrendben állnak, és illeszkedik-e a keresésre. Nincs
 // adatbázis, nincs "use server" — scripts/teszt-munkaasztal.ts teszteli.
 //
-// Budaházi Zoltán döntései: az oldalsáv részei Beérkezett · Folyamatban
-// (kocsinként) · Számlázásra vár · Postára vár · Archív; az archívumnak
-// nincs bontása, a felső kereső váltja ki; a postázás után a fuvar az
-// archívba megy; a saját fuvar a lerakás után szintén.
+// Budaházi Zoltán döntései: a szakaszok Beérkezett · Előre beírt saját ·
+// Folyamatban · Számlázásra vár · Postára vár · Archív; az archívumnak
+// nincs bontása, a kereső váltja ki; a postázás után a fuvar az archívba
+// megy; a saját fuvar a lerakás után szintén. 2026-09-30 óta az oldal két
+// oszlop (Bér | Saját), minden nyitott szakasz egyszerre látszik.
 
 import type { Allapot } from "@/lib/fuvarozas/allapot";
 
@@ -42,6 +43,26 @@ export function szakaszSorbol(s: { jelleg: "ber" | "sajat"; allapot: Allapot; el
     case "lezart":
       return "archiv";
   }
+}
+
+/**
+ * A két oszlop sorrendje: szakaszonként (a SZAKASZOK sorrendjében); ami még
+ * előttünk van (előkészítés, beérkezett, folyamatban), azon belül a
+ * felrakás napja szerint előre; a többi a bejövő sorrendben marad (a
+ * lekérdezés a legújabbat adja előre).
+ */
+export function szakaszSorrendben<T extends { szakasz: Szakasz; felrakas_nap: string | null; id: string }>(sorok: T[]): T[] {
+  const hely = new Map(SZAKASZOK.map((s, i) => [s.kulcs, i]));
+  const elore = new Set<Szakasz>(["elokeszites", "beerkezett", "folyamatban"]);
+  return sorok
+    .map((s, i) => ({ s, i }))
+    .sort((a, b) =>
+      (hely.get(a.s.szakasz)! - hely.get(b.s.szakasz)!) ||
+      (elore.has(a.s.szakasz)
+        ? (a.s.felrakas_nap ?? "").localeCompare(b.s.felrakas_nap ?? "") || Number(a.s.id) - Number(b.s.id)
+        : a.i - b.i)
+    )
+    .map((x) => x.s);
 }
 
 const BER_UT: Szakasz[] = ["beerkezett", "folyamatban", "szamlazasra", "postara", "archiv"];

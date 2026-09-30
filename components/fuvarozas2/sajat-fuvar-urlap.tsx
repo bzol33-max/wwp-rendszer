@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { kocsiraAdom, mentSajatFuvart, torolElokeszitettet, visszaveszem, type SajatFuvarAdat, type SajatFuvarSegedlet } from "@/lib/fuvarozas2/sajat-fuvar";
@@ -22,7 +23,7 @@ const mezo = "w-full rounded-lg border border-foreground/15 bg-background px-3 p
 const cimke = "flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground";
 
 export function SajatFuvarUrlap({
-  id, kezdo, segedlet, listaHref, reszletHref, kocsiraHref,
+  id, kezdo, segedlet, listaHref, reszletHref, kocsiraHref, bezarHref,
 }: {
   id: string | null;
   kezdo: SajatFuvarAdat;
@@ -33,6 +34,8 @@ export function SajatFuvarUrlap({
   reszletHref: string;
   /** A „Kocsira adom” után ide lépünk (a Folyamatban lista, a sor részletével). */
   kocsiraHref: string;
+  /** Ha van: „× bezár” link a fejlécben (a Megbízások oldalon a lenyíló űrlap csukása). */
+  bezarHref?: string;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -77,7 +80,12 @@ export function SajatFuvarUrlap({
     <div className="flex flex-col gap-3 rounded-2xl border border-[var(--f2-mint)] bg-card p-4">
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="text-base font-bold">{id ? "Előkészített saját fuvar" : "Új saját fuvar"}</h2>
-        <span className="text-xs text-muted-foreground">a sofőr még nem látja</span>
+        <span className="ml-auto text-xs text-muted-foreground">a sofőr még nem látja</span>
+        {bezarHref ? (
+          <Link href={bezarHref} scroll={false} className="text-xs font-semibold text-muted-foreground hover:text-foreground">
+            × bezár
+          </Link>
+        ) : null}
       </div>
 
       <div className="grid grid-cols-2 gap-2.5">
@@ -88,10 +96,10 @@ export function SajatFuvarUrlap({
             {segedlet.jarmuvek.map((j) => <option key={j.kod} value={j.kod}>{j.cimke}</option>)}
           </select>
         </label>
-        <label className={`${cimke} col-span-2`}>Honnan<input id="sf-honnan" list="sf-helyek" className={mezo} value={a.honnan} onChange={allit("honnan")} placeholder="telephely vagy cím" /></label>
-        <label className={`${cimke} col-span-2`}>Hová<input id="sf-hova" list="sf-helyek" className={mezo} value={a.hova} onChange={allit("hova")} placeholder="cím" /></label>
-        <label className={`${cimke} col-span-2`}>Kitől (nem kötelező)<input id="sf-kitol" list="sf-partnerek" className={mezo} value={a.kitol ?? ""} onChange={allit("kitol")} placeholder="ki adja az árut" /></label>
-        <label className={`${cimke} col-span-2`}>Kinek (nem kötelező)<input id="sf-kinek" list="sf-partnerek" className={mezo} value={a.kinek ?? ""} onChange={allit("kinek")} placeholder="pl. FABRIKA + 2000 Kft." /></label>
+        <label className={cimke}>Honnan<input id="sf-honnan" list="sf-helyek" className={mezo} value={a.honnan} onChange={allit("honnan")} placeholder="telephely vagy cím" /></label>
+        <label className={cimke}>Hová<input id="sf-hova" list="sf-helyek" className={mezo} value={a.hova} onChange={allit("hova")} placeholder="cím" /></label>
+        <label className={cimke}>Kitől (nem kötelező)<input id="sf-kitol" list="sf-partnerek" className={mezo} value={a.kitol ?? ""} onChange={allit("kitol")} placeholder="ki adja az árut" /></label>
+        <label className={cimke}>Kinek (nem kötelező)<input id="sf-kinek" list="sf-partnerek" className={mezo} value={a.kinek ?? ""} onChange={allit("kinek")} placeholder="pl. FABRIKA + 2000 Kft." /></label>
         <label className={`${cimke} col-span-2`}>Megjegyzés<textarea id="sf-megj" rows={2} className={mezo} value={a.megjegyzes ?? ""} onChange={allit("megjegyzes")} /></label>
       </div>
       <datalist id="sf-helyek">
