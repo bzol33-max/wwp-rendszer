@@ -2889,3 +2889,41 @@ A régi modul kikapcsolása után (FUVAROZAS_REGI=off) a menüpont, az oldalcím
 (Tervezés, Levelek, Kimutatás, Partnerek, Rendszer), a mobil Rendszer-link és a
 két jogosultság-felirat „Fuvarozás” lett. Az útvonal marad `/fuvarozas2`
 (a régi `/fuvarozas` a kapcsoló miatt oda irányít).
+
+## 2026-09-30 — Tervezés: bejövő · döntés · hét, tárolt kalkulációkkal
+
+Budaházi Zoltán választása a Kalkulátor 2+5+9 terveiből az 1-es („három
+oszlop”), de a **Tervezés** oldalra; kérése: ami egyszer ki van számolva,
+rögzüljön, és ne lassítsa az oldalt.
+
+- **Oldal** (`app/fuvarozas2/tervezes/page.tsx`, `components/fuvarozas2/tervezo.tsx`):
+  - **Bejövő:** a döntésre váró bérmegbízások (ellenőrzésre vár, vagy
+    tervezett kocsi nélkül) három jelzéssel: *magában* (a tárolt pontos
+    kalkulációból), *hét* (a legjobb kocsi hetébe illesztve mennyit hoz),
+    *előzmény* (a korábbi Ft/km-hez képest).
+  - **Döntés:** a kiválasztott pontos kalkulációja (rakott/üres km, üzemanyag,
+    útdíj, napi, önköltség, a megbízó ajánlatának minősítése, célár 8%
+    árréssel) és az ár-előzmény (saját archívum: ugyanaz a partner és út,
+    ugyanaz az út, ugyanaz a partner), figyelmeztetéssel, ha olcsóbb.
+  - **Hét:** a kocsik közti váltóval (mindegyiken a heti hatás vagy „ütközik”),
+    a hét napjai a fuvarokkal (az új szaggatott kerettel), bevétel, km, üres
+    arány, önköltség, eredmény, és hogy mennyit hoz a fuvar a hétnek.
+  - **Döntés-sáv** (`tervezo-dontes.tsx`): „Jóváhagyom → kocsi, nap”
+    (`setFuvarJarmu` + `valtAllapot` → tervezett), „Visszaírok más árral…”
+    (ajánlat-szöveg a vágólapra, a célárral), „Elutasítom” (`torolMegbizast`).
+  - Alul, összecsukva a korábbi Tervezés (minden kocsi hete, üres napok,
+    Timocom, kocsi nélküliek), `Suspense`-szel utólag betöltve, mert az
+    Ecofleet-lekérés lassabb (`regi-terv-het.tsx`).
+- **Tárolt kalkulációk** (új tábla `fuvar_kalkulacio`, `lib/fuvarozas2/kalkulacio-tar.ts`):
+  az eredmény megbízásonként, a bemenet ujjlenyomatával (megállók, díj, kocsi,
+  hónap, napi költség, verzió); eltérő ujjlenyomat vagy 7 napnál régebbi →
+  elavult, újraszámolódik, addig a régi látszik. Az óránkénti modell-szinkron
+  kör számolja a nyitott bérmegbízásokra; az oldal csak olvas, egyedül a
+  kiválasztott, soha ki nem számolt megbízásra vár egyszer.
+- **Heti becslés** (`lib/fuvarozas2/tervezo-alap.ts`, teszt: `scripts/teszt-tervezo.ts` 22/0):
+  rakott km a tárolt HU-GO-értékből, üres utak a tárolt megálló-koordinátákból
+  légvonalból ×1,3, útdíj a tárolt kalkulációból vagy km-arányosan, napi
+  költség a hét 5 munkanapjára fix. Külső hívás nincs.
+- A kalkulátor számoló magja külön modulba került (`kalkulator-szamitas.ts`),
+  hogy a háttér munkamenet nélkül is hívhassa; a "use server" burok marad a
+  jogosultsággal.
