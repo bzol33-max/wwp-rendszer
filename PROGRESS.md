@@ -1,5 +1,17 @@
 # PROGRESS
 
+## 2026-10-01 — Szabina: a régi /posta oldal is csak a kiszámlázottat mutatja
+
+- **Probléma:** a #266 után is látszottak a számlázatlanok. Ok: Szabina
+  bejelentkezés után nem az új `/m/posta`-ra, hanem a régi `/posta` oldalra
+  kerül (a kezdőlap a „posta” jog alapján oda irányít), ami a régi
+  Számla/Posta listát (`getSzamlaPostaFuvarok`, fotóra váró és számlázható
+  sorokkal) mutatta. A HTTP-napló szerint az új nézetet senki nem nyitotta.
+- **Javítás:** a kezdőlap az elszámolás-jogú, modul nélküli fiókot az
+  `/m/posta`-ra viszi; a `/posta` az ilyen fiókot oda irányítja, és
+  mindenkinek csak a számlaszámos sorokat mutatja.
+- **Teszt:** typecheck, eslint. Szabina fiókjával nem próbálva.
+
 ## 2026-10-01 — Szabina mobilja: csak a kiszámlázott fuvarok
 
 - **Probléma (Budaházi Zoltán):** a szabály az, hogy Szabina mobilon csak a

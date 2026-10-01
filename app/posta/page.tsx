@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowLeft, LogOut } from "lucide-react";
 import { requireSession } from "@/lib/auth/dal";
 import { getSzamlaPostaFuvarok } from "@/lib/fuvarozas/megbizasok";
@@ -15,9 +16,12 @@ export default async function PostaPage() {
   // szándékosan önálló, korlátozott nézet, független attól, hogy a
   // felhasználó a teljes Fuvarozás modulhoz hozzáfér-e (ld. lib/auth/
   // permissions.ts OPT_IN_MODULES).
+  // Az irodai (elszámolás) fiók az új mobil Postát használja.
+  if (session.can("elszamolas").view && !session.can("fuvarozas").view) redirect("/m/posta");
   const showPosta = session.can("fuvarozas").view || session.can("posta").view;
 
-  const rows = showPosta ? await getSzamlaPostaFuvarok() : [];
+  // Postára csak a kiszámlázott fuvar mehet — számlázatlan itt nem jelenhet meg.
+  const rows = showPosta ? (await getSzamlaPostaFuvarok()).filter((r) => !!r.szamla_szam?.trim()) : [];
 
   return (
     <div

@@ -34,6 +34,9 @@ export default async function Home() {
   // hozzáférése), azt bejelentkezés után rögtön oda irányítjuk — neki ez a
   // kezdőlap üres modul-rácsot mutatna.
   if (visibleModules.length === 0) {
+    // Irodai (elszámolás) fiók — Szabina: az új mobil Posta, ahol csak a
+    // kiszámlázott fuvarok látszanak (a régi /posta a számlázatlanokat is mutatta).
+    if (session.can("elszamolas").view) redirect("/m/posta");
     if (session.can("mobil").view) redirect("/mobil");
     if (session.can("posta").view) redirect("/posta");
     if (session.can("erkezes").view) redirect("/erkezes");
