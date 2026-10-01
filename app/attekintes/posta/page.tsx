@@ -6,7 +6,10 @@ export default async function AttekintesPostaPage() {
   const session = await requireSession();
   const showPosta = session.can("fuvarozas").view || session.can("posta").view;
 
-  const rows = showPosta ? await getSzamlaPostaFuvarok() : [];
+  // Postára csak a kiszámlázott fuvar mehet — a számlázatlan (fotóra váró,
+  // számlázható) itt nem jelenhet meg (Budaházi Zoltán szabálya: Szabina
+  // mobilon csak a kiszámlázottat látja, 2026-10-01).
+  const rows = showPosta ? (await getSzamlaPostaFuvarok()).filter((r) => !!r.szamla_szam?.trim()) : [];
 
   return (
     <div className="flex flex-col gap-4 py-4">
