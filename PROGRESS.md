@@ -1,5 +1,16 @@
 # PROGRESS
 
+## 2026-10-01 — Szabina mobilja: csak a kiszámlázott fuvarok
+
+- **Probléma (Budaházi Zoltán):** a szabály az, hogy Szabina mobilon csak a
+  kiszámlázott fuvarokat lássa. A 2026-09-25-i kör viszont a Posta mellé
+  egy „Számla” fület is adott neki a még ki nem számlázott (visszaért)
+  fuvarokkal — ez nem volt kérve.
+- **Javítás:** az irodai fülsor Posta · Profil; a `/m/szamla` csak teljes
+  Fuvarozás-joggal nyílik, az irodai fiókot a Postára irányítja; a Posta
+  csak számlaszámos fuvart mutat.
+- **Teszt:** typecheck, eslint.
+
 ## 2026-10-01 — Partner-adat javaslatok: a megbízás fejléce is olvasva
 
 - **Probléma:** a Flexlog postacíme a megbízás fejlécében áll, de nem

@@ -13,9 +13,14 @@ export const SOFOR_TABOK: MTab[] = [
   { href: "/m/holnap", label: "Holnap", ikon: "naptar" },
   { href: "/m/profil", label: "Profil", ikon: "profil" },
 ];
+/**
+ * Iroda (Szabina): mobilon CSAK a kiszámlázott fuvarok látszanak — a Posta
+ * fül (Budaházi Zoltán szabálya, 2026-10-01-én számon kérve). A számlázás
+ * az asztali Elszámolásban történik, a még ki nem számlázott fuvar nem az
+ * övé mobilon.
+ */
 export const IRODA_TABOK: MTab[] = [
   { href: "/m/posta", label: "Posta", ikon: "posta" },
-  { href: "/m/szamla", label: "Számla", ikon: "szamla" },
   { href: "/m/profil", label: "Profil", ikon: "profil" },
 ];
 /** Vezetői fiók (terv: 4 fül) — a Profil a Rendszer-fül alján van, nem külön fül. */
