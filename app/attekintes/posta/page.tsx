@@ -1,5 +1,5 @@
 import { requireSession } from "@/lib/auth/dal";
-import { getSzamlaPostaFuvarok } from "@/lib/fuvarozas/megbizasok";
+import { getMaPostazottFuvarok, getSzamlaPostaFuvarok } from "@/lib/fuvarozas/megbizasok";
 import { PostaLista } from "@/components/posta/posta-lista";
 
 export default async function AttekintesPostaPage() {
@@ -21,7 +21,7 @@ export default async function AttekintesPostaPage() {
       {!showPosta ? (
         <p className="text-sm text-[var(--at-muted)]">Nincs jogosultságod ehhez a nézethez.</p>
       ) : (
-        <PostaLista initialRows={rows} />
+        <PostaLista initialRows={rows} maPostazott={showPosta ? await getMaPostazottFuvarok().catch(() => []) : []} />
       )}
     </div>
   );

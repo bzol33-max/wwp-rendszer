@@ -509,6 +509,24 @@ export async function setFuvarPostazva(id: string, postazva: boolean) {
 }
 
 /**
+ * A ma „Postázva”-nak jelölt bér fuvarok — a Posta nézet alján, hogy egy
+ * véletlen pipa visszavonható legyen (Budaházi Zoltán, 2026-10-01: a
+ * Flexlog #286-ot tévedésből jelölték, és a sor azonnal eltűnt).
+ */
+export async function getMaPostazottFuvarok(): Promise<{ id: string; megrendelo: string | null; pozicioszam: string | null; felrako: string | null; lerako: string | null; szamla_szam: string | null; mikor: string }[]> {
+  await requireAnyViewPermission(["fuvarozas", "posta"]);
+  return query(
+    `select id::text, megrendelo, pozicioszam, felrako, lerako, szamla_szam,
+       to_char(postazva_at at time zone 'Europe/Budapest', 'HH24:MI') as mikor
+     from fuvar_megbizasok
+     where statusz <> 'torolt' and postazva and tipus = 'sajat'
+       and postazva_at >= ((now() at time zone 'Europe/Budapest')::date) at time zone 'Europe/Budapest'
+     order by postazva_at desc
+     limit 50`
+  );
+}
+
+/**
  * A fuvar eredeti papírjainak (CMR, fuvarlevél) beérkezése a telephelyre.
  * Ez a Számla/Posta fülön a "Papírra vár" és a "Számlázható" csoport közti
  * határ — papír nélkül nem állítunk ki számlát.

@@ -1,5 +1,18 @@
 # PROGRESS
 
+## 2026-10-01 — Posta: a „Postázva” jelölés zölden marad egy percig, visszavonható
+
+- **Probléma:** a Flexlog #286-ot véletlenül jelölték postázottnak, és a sor
+  azonnal eltűnt — visszavonni nem lehetett. (Számla még nincs rajta, ezért
+  az állapota nem változott, de a jelölés a számla megjöttekor azonnal
+  lezárta volna.)
+- **Módosítás (`components/posta/posta-lista.tsx`, a `/posta` és az
+  Áttekintés → Posta):** a jelölés után a kártya zöld, „Postázva ✓ —
+  visszavonás” gombbal, és csak 1 perc múlva tűnik el. Alul „Ma feladva (N)”
+  lista (`getMaPostazottFuvarok`) visszavonás gombbal — így a #286 is
+  visszaállítható.
+- **Teszt:** typecheck, eslint.
+
 ## 2026-10-01 — Szabina: az Áttekintés → Posta fül is csak a kiszámlázottat mutatja
 
 - **Probléma:** a #266/#267 után is látszottak a számlázatlanok — Szabina
