@@ -1,5 +1,15 @@
 # PROGRESS
 
+## 2026-10-01 — Posta-lista: a partner-törzs postacíme is
+
+- **Probléma:** a régi Posta-lista (`/posta`, Áttekintés → Posta) a
+  postacímet csak a beégetett partner-sablonokból és a megbízó korábbi
+  fuvarjáról vette, a Partnerek fülön rögzített (vagy javaslatból átvett)
+  címet nem — a Flexlognál így üres maradt volna.
+- **Javítás:** `getMegbizoCime` a `fuvar_partnerek.postazasi_cim`-et is
+  nézi (név-kulcs vagy névváltozat szerint).
+- **Teszt:** typecheck.
+
 ## 2026-10-01 — Posta: a „Postázva” jelölés zölden marad egy percig, visszavonható
 
 - **Probléma:** a Flexlog #286-ot véletlenül jelölték postázottnak, és a sor

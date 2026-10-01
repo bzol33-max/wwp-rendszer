@@ -685,6 +685,16 @@ export async function getMegbizoCime(megrendelo: string | null | undefined): Pro
     (p) => p.postazasiCim && normalizaltCegKulcs(ceglNevKanonikusan(p.nev)) === kulcs
   );
   if (sablon?.postazasiCim) return sablon.postazasiCim;
+  // A Fuvarozás partner-törzse (Partnerek fül, ill. az elfogadott
+  // javaslat): név vagy névváltozat szerint. Enélkül a Partnereknél
+  // rögzített cím (pl. Flexlog, 2026-10-01) a Posta-listán nem jelent meg.
+  const [torzs] = await query<{ postazasi_cim: string }>(
+    `select postazasi_cim from fuvar_partnerek
+     where postazasi_cim is not null and (nev_kulcs = any(array[$1, $3]) or $2 = any(nevvaltozatok))
+     limit 1`,
+    [kulcs, nev, normalizaltCegKulcs(nev)]
+  );
+  if (torzs?.postazasi_cim) return torzs.postazasi_cim;
   return getPostazasiCimJavaslat(nev);
 }
 
