@@ -1,5 +1,24 @@
 # PROGRESS
 
+## 2026-10-01 — K+N-megbízás: a felrakó/lerakó címe a sablonból
+
+- **Probléma:** a Kuehne + Nagel 36998-as megbízásán (Micó, BMW Leergut) a
+  nyelvi modell a felrakó/lerakó helyére a rakodóhely cégét írta, cím
+  nélkül („AWF KFT. UM_15705911”, „SZERIP ZRT.”). A GPS így a sárvári
+  rakodást (14:01–15:21) „nem tervezett állásnak” mutatta, a felrakónál
+  hamis „ETA 22:45” állt, és a pénteki debreceni lerakást sem ismerte volna fel.
+- **Javítás:** új determinisztikus olvasó (`lib/fuvarozas/import/kuehne-nagel.ts`)
+  a pdf-parse valódi tördelésére: megállónként cím (irsz, város, utca),
+  nap, Hiv.Sz., fuvardíj, rendszámok. A K+N bekerült a `PARTNEREK` közé
+  (ujjlenyomat: kuehne-nagel.com / „KUEHNE + NAGEL (AG & CO”, 60 nap).
+- **Meglévő sorok:** a `megrendelokHelyesbitese` kör (egyszer soronként)
+  most a városnév nélküli felrakót/lerakót is a sablon címére cseréli
+  (`cimekHelyesbitese`); a megállókon csak a `cim_nyers` változik, a
+  GPS-tény és a sofőr jelölése marad. Kézi javítást nem ír felül.
+- **Teszt:** `scripts/teszt-import.mts` 123/0 (új minta:
+  `scripts/teszt-minta/kuehne-nagel-megbizas.txt`, kitalált nevekkel),
+  `teszt-sofor-adatok` 45/0, typecheck.
+
 ## 2026-10-01 — Posta-lista: a partner-törzs postacíme is
 
 - **Probléma:** a régi Posta-lista (`/posta`, Áttekintés → Posta) a

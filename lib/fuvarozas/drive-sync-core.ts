@@ -41,6 +41,7 @@ import {
   ujUtonFeldolgozottFileIdk,
 } from "@/lib/fuvarozas/duvenbeck-import";
 import { normalizaltSzoveg, torzsSzoveg } from "@/lib/fuvarozas/import/normalizalas";
+import { bontsMegallokra, cimPontossaga } from "@/lib/fuvarozas/varos";
 import { pdfSzovegElemek } from "@/lib/fuvarozas/import/pdf-elemek";
 import { felismerPartner, partnerKodSzerint } from "@/lib/fuvarozas/import/partnerek";
 import { frissitsdFuvarozas2Modellt } from "@/lib/fuvarozas2/modell-szinkron";
@@ -951,13 +952,15 @@ async function megrendelokHelyesbitese(hibak: string[], figyelmeztetesek: string
   const sorok = await query<{
     id: string;
     megrendelo: string | null;
+    felrako: string | null;
+    lerako: string | null;
     pozicioszam: string | null;
     partner_kod: string | null;
     drive_file_id: string;
     fajlnev: string | null;
     nyers_szoveg: string;
   }>(
-    `select f.id::text, f.megrendelo, f.pozicioszam,
+    `select f.id::text, f.megrendelo, f.felrako, f.lerako, f.pozicioszam,
             n.partner_kod, n.drive_file_id, n.fajlnev, n.nyers_szoveg
        from fuvar_megbizasok f
        join fuvar_import_naplo n on n.fuvar_id = f.id
@@ -1002,6 +1005,11 @@ async function megrendelokHelyesbitese(hibak: string[], figyelmeztetesek: string
           elozo?.postazasiCim ?? null,
         ]
       );
+      if (await cimekHelyesbitese(sor, partner)) {
+        figyelmeztetesek.push(
+          `${sor.fajlnev ?? sor.drive_file_id}: a felrakó/lerakó helyén cégnév állt — a címet a partner-sablonból írtuk be.`
+        );
+      }
       await frissitsdFuvarozas2Modellt(sor.id);
       await query(`update fuvar_import_naplo set partner_kod = $2, frissitve_at = now() where drive_file_id = $1`, [
         sor.drive_file_id,
@@ -1018,6 +1026,49 @@ async function megrendelokHelyesbitese(hibak: string[], figyelmeztetesek: string
     }
   }
   return helyesbitett;
+}
+
+/**
+ * Ha a sor felrakója/lerakója városnév nélküli (a modell a rakodóhely cégét
+ * írta a cím helyére — K+N 36998, 2026-10-01: „AWF KFT. UM_15705911”), és
+ * a partner-sablon olvasója címet ad, a címet beírjuk. A megállókon csak a
+ * címet cseréljük, sorszám szerint — a GPS-tény és a sofőr jelölése marad.
+ * Csak városnév nélküli szöveget cserélünk, tehát kézi javítást nem írunk felül.
+ */
+async function cimekHelyesbitese(
+  sor: { id: string; felrako: string | null; lerako: string | null; nyers_szoveg: string },
+  partner: NonNullable<ReturnType<typeof felismerPartner>>
+): Promise<boolean> {
+  if (!partner.kivon) return false;
+  const det = partner.kivon(sor.nyers_szoveg, null);
+  if (!det.felrako || !det.lerako) return false;
+  const ujFelrako = cimPontossaga(sor.felrako) === "ismeretlen" ? det.felrako : null;
+  const ujLerako = cimPontossaga(sor.lerako) === "ismeretlen" ? det.lerako : null;
+  if (!ujFelrako && !ujLerako) return false;
+  await query(`update fuvar_megbizasok set felrako = coalesce($2, felrako), lerako = coalesce($3, lerako) where id = $1`, [
+    sor.id,
+    ujFelrako,
+    ujLerako,
+  ]);
+  const megallok = await query<{ sorszam: number; tipus: string }>(
+    `select sorszam, tipus from fuvar_megallok where megbizas_id = $1 order by sorszam`,
+    [sor.id]
+  );
+  for (const [tipus, uj] of [["felrako", ujFelrako], ["lerako", ujLerako]] as const) {
+    if (!uj) continue;
+    const cimek = bontsMegallokra(uj);
+    const sajat = megallok.filter((m) => m.tipus === tipus);
+    if (sajat.length !== cimek.length) continue;
+    for (let i = 0; i < sajat.length; i++) {
+      await query(`update fuvar_megallok set cim_nyers = $3 where megbizas_id = $1 and sorszam = $2`, [
+        sor.id,
+        sajat[i].sorszam,
+        cimek[i],
+      ]);
+    }
+  }
+  console.log(`[drive-sync] #${sor.id}: cím a partner-sablonból — fel: ${ujFelrako ?? "marad"}, le: ${ujLerako ?? "marad"}`);
+  return true;
 }
 
 /**

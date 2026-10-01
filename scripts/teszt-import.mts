@@ -23,6 +23,8 @@ import { ellenorizKivontFuvart, type KivontFuvar } from "@/lib/fuvarozas/import/
 import { findJarmuInSzoveg } from "@/lib/fuvarozas/vehicles";
 import { kivonSpediTransMezoket } from "@/lib/fuvarozas/import/speditrans";
 import { kivonGhibliMezoket } from "@/lib/fuvarozas/import/ghibli";
+import { kivonKuehneNagelMezoket } from "@/lib/fuvarozas/import/kuehne-nagel";
+import { cimPontossaga } from "@/lib/fuvarozas/varos";
 import type { SzovegElem } from "@/lib/fuvarozas/import/pdf-elemek";
 
 const mintaDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "teszt-minta");
@@ -356,6 +358,34 @@ const ghibliEgynapos = kivonGhibliMezoket(
 egyenlo(ghibliEgynapos.lerakasDatum, null, "Ghibli: azonos napi lerakásnál a lerakási dátum null");
 egyenlo(ghibliEgynapos.rendszamVagySofor, "AOPU427,/AOTY474", "Ghibli: vesszős rendszám-elgépelés szó szerint");
 egyenlo(Object.keys(kivonGhibliMezoket("Felrakás helye: Budapest")).length, 0, "Ghibli: idegen szövegből nincs mező");
+
+// Kuehne + Nagel: a modell a rakodóhely cégét írta a felrakó/lerakó helyére,
+// cím nélkül (36998, 2026-10-01) — a GPS nem ismerte fel a sárvári rakodást.
+// A minta a pdf-parse valódi tördelése, kitalált cégnevekkel.
+const knSzoveg = minta("kuehne-nagel-megbizas.txt");
+const knPartner = felismerPartner(normalizaltSzoveg(knSzoveg));
+egyenlo(knPartner?.kod, "kuehne-nagel", "K+N felismerése");
+egyenlo(knPartner?.nev, "KUEHNE + NAGEL (AG & CO.) KG", "K+N: a meglévő fuvarokon álló név");
+allit(
+  torzsSzoveg(normalizaltSzoveg(knSzoveg), knPartner?.torzsVege ?? []).includes("HU 4031 DEBRECEN"),
+  "K+N: a második oldal lerakója a levágás előtt marad"
+);
+const kn = kivonKuehneNagelMezoket(knSzoveg);
+egyenlo(kn.felrako, "9600 Sarvar, Pelda Ut 5", "K+N: felrakó címe, cégnév nélkül");
+egyenlo(kn.lerako, "4031 Debrecen, Minta Utca 3", "K+N: lerakó címe a második oldalról");
+egyenlo(cimPontossaga(kn.felrako), "pontos", "K+N: a felrakó címe pontosként geokódolható");
+egyenlo(kn.felrakasDatum, "2026-10-01", "K+N: felrakás napja");
+egyenlo(kn.lerakasDatum, "2026-10-02", "K+N: lerakás napja");
+egyenlo(kn.pozicioszam, "10001", "K+N: Hiv.Sz.");
+egyenlo(kn.fuvardij, 900, "K+N: fuvardíj 900,00 EUR → 900");
+egyenlo(kn.fuvardijPenznem, "EUR", "K+N: pénznem");
+egyenlo(kocsi(kn.rendszamVagySofor ?? null), "Micó", "K+N: a rendszámokból Micó kocsija");
+// A saját címünk ("HU 4234 SZAKOLY") nem megálló: nem előzi meg megállás-fej.
+allit(!/Szakoly/i.test(`${kn.felrako} ${kn.lerako}`), "K+N: a saját telephelyünk nem lesz felrakó");
+// Csak felrakó, lerakó nélkül: nem írjuk felül a modellt.
+const knFel = kivonKuehneNagelMezoket(knSzoveg.split("Kirakodás").join("Valami"));
+egyenlo(knFel.felrako, undefined, "K+N: lerakó nélkül a címeket nem írjuk felül");
+egyenlo(Object.keys(kivonKuehneNagelMezoket("Felrakás helye: Budapest")).length, 0, "K+N: idegen szövegből nincs mező");
 
 // A megrendelőnek olvasott cég a rakodóhely cége (Ghibli-eset: Apollo Tyres).
 allit(
