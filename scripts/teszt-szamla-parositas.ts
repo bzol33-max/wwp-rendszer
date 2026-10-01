@@ -32,6 +32,10 @@ eq("partner: ÁB SPEED Kft. ~ ÁB Speed Szállítmányozási Kft.", partnerEgyez
 eq("partner: FLOTT-TRANS KFT ~ Flott-Trans Kft.", partnerEgyezik("FLOTT-TRANS KFT", ["Flott-Trans Kft."]), true);
 eq("partner: HAJDÚSPEDICIÓ Kft. ~ Hajdúspedíció Kft.", partnerEgyezik("HAJDÚSPEDICIÓ Kft.", ["Hajdúspedíció Kft."]), true);
 eq("partner: ÁJ-TRANS ≠ FLOTT-TRANS", partnerEgyezik("ÁJ-TRANS Kft.", ["Flott-Trans Kft."]), false);
+eq("partner: EU-Cargo 2008 Kft. ~ EUCARGO 2008 Kft.", partnerEgyezik("EU-Cargo 2008 Kft.", ["EUCARGO 2008 Kft."]), true);
+eq("partner: EUCARGO 2008 KFT. ~ EU-Cargo 2008 Kft.", partnerEgyezik("EUCARGO 2008 KFT.", ["EU-Cargo 2008 Kft."]), true);
+eq("partner: EU-Cargo ≠ EUCARGO 2009", partnerEgyezik("EU-Cargo 2008 Kft.", ["EUCARGO 2009 Kft."]), false);
+eq("partner: Trans ≠ BHS Trans (rövid szó nem részszó)", partnerEgyezik("ÁB Trans Kft.", ["BHS Trans Kft."]), false);
 eq("útvonal: Nyírbátor-Budapest", utvonalEgyezik("Közuti Árufuvarozás; Nyírbátor-Budapest", "Unilever Magyarország Kft., 4300, Nyírbátor, Tancsics u. 2-4", "Budapest (BILK) EURÓPA U. 6. 'H' Épület"), true);
 eq("útvonal: fordított irány is a városokat nézi", utvonalEgyezik("Közuti Árufuvarozás; Debrecen-Füzesabony", "3390 Füzesabony, Kerecsendi út 123", "4000 Debrecen, Határ út 1."), true);
 eq("útvonal: más város nem", utvonalEgyezik("Közuti Árufuvarozás; Nyírbátor-Budapest", "3390 Füzesabony, Kerecsendi út 123", "4000 Debrecen, Határ út 1."), false);

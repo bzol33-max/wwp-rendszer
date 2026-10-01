@@ -1,5 +1,20 @@
 # PROGRESS
 
+## 2026-10-01 — Számla-párosítás: kötőjeles és egybeírt cégnév egyezik
+
+- **Probléma:** a WLLWR-2026-334 (EU-Cargo 2008 Kft., 500 000 Ft) nem
+  párosult a #281-es fuvarhoz (EUCARGO 2008 Kft., 500 000 Ft,
+  számlázható). A `partnerEgyezik` szavanként hasonlított: „eu” + „cargo”
+  ≠ „eucargo”, így a tartalék kör (partner + összeg + dátum + útvonal) el
+  sem indult.
+- **Javítás:** az egybeírt alak egyezése, és egy legalább 5 betűs szó a
+  másik név egybeírt alakjában is elfogadott (rövid szó nem, hogy az
+  ÁJ-TRANS ≠ FLOTT-TRANS megmaradjon).
+- **Teszt:** teszt-szamla-parositas 35/0 (4 új eset), typecheck.
+- **Flexlog postázási cím:** nem hiba — új partner (első megbízás
+  09-29), a partner-törzsben nincs postázási cím; egyszer kell rögzíteni a
+  Partnerek fülön.
+
 ## 2026-09-30 — Ma oldal: mindig friss adat, pontosabb GPS-párosítás, eltérés nyugtázása
 
 - **Probléma (Budaházi Zoltán):** a Ma oldal nem frissült magától; az

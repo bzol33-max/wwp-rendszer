@@ -85,15 +85,24 @@ function cegSzavak(nev: string): string[] {
     .filter((w) => w && !CEGFORMA.has(w));
 }
 
-/** A számla vevője és a megbízó ugyanaz-e: a rövidebb név minden szava szerepel a hosszabban. */
+/**
+ * A számla vevője és a megbízó ugyanaz-e: a rövidebb név minden szava
+ * szerepel a hosszabban. Az egybeírt és a kötőjellel tagolt név is egyezik:
+ * a számlán „EU-Cargo 2008 Kft.”, a megbízáson „EUCARGO 2008 Kft.” (a
+ * WLLWR-2026-334 emiatt maradt párosítatlan, 2026-10-01) — ezért egy legalább
+ * 5 betűs szó a másik név egybeírt alakjában is megtalálható lehet.
+ */
 export function partnerEgyezik(vevoNev: string, partnerNevek: string[]): boolean {
   const v = cegSzavak(vevoNev);
   if (v.length === 0) return false;
   return partnerNevek.some((n) => {
     const p = cegSzavak(n ?? "");
     if (p.length === 0) return false;
-    const [rovid, hosszu] = v.length <= p.length ? [v, new Set(p)] : [p, new Set(v)];
-    return rovid.every((w) => hosszu.has(w));
+    if (v.join("") === p.join("")) return true;
+    const [rovid, hosszu] = v.length <= p.length ? [v, p] : [p, v];
+    const hosszuSzavak = new Set(hosszu);
+    const hosszuEgyben = hosszu.join("");
+    return rovid.every((w) => hosszuSzavak.has(w) || (w.length >= 5 && hosszuEgyben.includes(w)));
   });
 }
 
