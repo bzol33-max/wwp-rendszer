@@ -1,5 +1,14 @@
 # PROGRESS
 
+## 2026-10-01 — Szabina: az Áttekintés → Posta fül is csak a kiszámlázottat mutatja
+
+- **Probléma:** a #266/#267 után is látszottak a számlázatlanok — Szabina
+  az Áttekintés mobil nézetét használja (Nyíregyháza · Posta · Fuvar), annak
+  Posta füle (`/attekintes/posta`) ugyanazt a régi listát mutatta.
+- **Javítás:** csak számlaszámos sor. Ezzel mindhárom mobil Posta-nézet
+  (`/m/posta`, `/posta`, `/attekintes/posta`) ugyanazt a szabályt követi.
+- **Teszt:** typecheck, eslint.
+
 ## 2026-10-01 — Szabina: a régi /posta oldal is csak a kiszámlázottat mutatja
 
 - **Probléma:** a #266 után is látszottak a számlázatlanok. Ok: Szabina
