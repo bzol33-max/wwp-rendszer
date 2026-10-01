@@ -9,6 +9,17 @@ import { pool, query } from "@/lib/db";
 import { requireSession } from "@/lib/auth/dal";
 import { requireAnyViewPermission, requireEditPermission } from "@/lib/auth/require-permission";
 import { normalizaltCegKulcs } from "@/lib/fuvarozas/fuvar-constants";
+import { JAVASLAT_MEZOK, type JavaslatMezo } from "@/lib/fuvarozas2/partner-javaslat-alap";
+
+/** Nyitott javaslat a partner egy hiányzó adatára (lásd lib/fuvarozas2/partner-javaslat.ts). */
+export type PartnerAdatJavaslat = {
+  id: string;
+  partner_id: string;
+  mezo: JavaslatMezo;
+  ertek: string;
+  forras: string;
+  forras_leiras: string | null;
+};
 
 export type Partner = {
   id: string;
@@ -151,4 +162,76 @@ export async function osszevonPartnereket(celId: string, forrasIds: string[]): P
   } finally {
     client.release();
   }
+}
+
+/** A nyitott partner-adat javaslatok (egy partneré, vagy mindenkié). */
+export async function getPartnerAdatJavaslatok(partnerId?: string): Promise<PartnerAdatJavaslat[]> {
+  await requireAnyViewPermission(["fuvarozas", "elszamolas"]);
+  return query<PartnerAdatJavaslat>(
+    `select j.id::text, j.partner_id::text, j.mezo, j.ertek, j.forras, j.forras_leiras
+     from fuvar_partner_javaslat j
+     where j.allapot = 'nyitott' and ($1::bigint is null or j.partner_id = $1::bigint)
+     order by j.partner_id, j.mezo, j.letrehozva_at desc`,
+    [partnerId && /^\d+$/.test(partnerId) ? partnerId : null]
+  ).catch(() => []);
+}
+
+/**
+ * „Átveszem”: a javaslat értéke a partner-törzsbe kerül (onnan minden
+ * fuvarjára érvényes), a mező többi nyitott javaslata elvetődik.
+ */
+export async function elfogadPartnerJavaslatot(id: string): Promise<{ ok: true } | { ok: false; hiba: string }> {
+  await requireEditPermission("fuvarozas");
+  const session = await requireSession();
+  const ki = session.name ?? session.username;
+  const [j] = await query<{ partner_id: string; mezo: JavaslatMezo; ertek: string }>(
+    `select partner_id::text, mezo, ertek from fuvar_partner_javaslat where id = $1 and allapot = 'nyitott'`,
+    [id]
+  );
+  if (!j) return { ok: false, hiba: "Ez a javaslat már nem nyitott." };
+  if (!(JAVASLAT_MEZOK as readonly string[]).includes(j.mezo)) return { ok: false, hiba: "Ismeretlen mező." };
+  const ertek = j.mezo.endsWith("_nap") ? Number(j.ertek) : j.ertek;
+  const client = await pool.connect();
+  try {
+    await client.query("begin");
+    await client.query(`update fuvar_partnerek set ${j.mezo} = $2, frissitve_at = now() where id = $1`, [j.partner_id, ertek]);
+    await client.query(`update fuvar_partner_javaslat set allapot = 'elfogadva', dontes_at = now(), dontes_by = $2 where id = $1`, [id, ki]);
+    await client.query(
+      `update fuvar_partner_javaslat set allapot = 'elvetve', dontes_at = now(), dontes_by = $3
+       where partner_id = $1 and mezo = $2 and allapot = 'nyitott'`,
+      [j.partner_id, j.mezo, ki]
+    );
+    await client.query("commit");
+  } catch (err) {
+    await client.query("rollback").catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+  return { ok: true };
+}
+
+/** „Elvetem”: a javaslat nem jön elő újra (ugyanez az érték ugyanerre a mezőre). */
+export async function elvetPartnerJavaslatot(id: string): Promise<{ ok: true } | { ok: false; hiba: string }> {
+  await requireEditPermission("fuvarozas");
+  const session = await requireSession();
+  await query(
+    `update fuvar_partner_javaslat set allapot = 'elvetve', dontes_at = now(), dontes_by = $2 where id = $1 and allapot = 'nyitott'`,
+    [id, session.name ?? session.username]
+  );
+  return { ok: true };
+}
+
+/** Új partner postázási címe közvetlenül a fuvar részleteiből (a partner-törzsbe ír). */
+export async function setPartnerPostazasiCim(partnerId: string, cim: string): Promise<{ ok: true } | { ok: false; hiba: string }> {
+  await requireEditPermission("fuvarozas");
+  const c = typeof cim === "string" ? cim.trim().replace(/\s+/g, " ") : "";
+  if (c.length < 5 || c.length > 200) return { ok: false, hiba: "Adj meg egy teljes címet (irányítószám, település, utca, házszám)." };
+  if (!/^\d+$/.test(partnerId)) return { ok: false, hiba: "Érvénytelen partner." };
+  await query(`update fuvar_partnerek set postazasi_cim = $2, frissitve_at = now() where id = $1`, [partnerId, c]);
+  await query(
+    `update fuvar_partner_javaslat set allapot = 'elvetve', dontes_at = now() where partner_id = $1 and mezo = 'postazasi_cim' and allapot = 'nyitott'`,
+    [partnerId]
+  );
+  return { ok: true };
 }

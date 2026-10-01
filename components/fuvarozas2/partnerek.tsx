@@ -6,11 +6,17 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { osszevonPartnereket, updatePartner, type Partner } from "@/lib/fuvarozas2/partnerek";
+import { osszevonPartnereket, updatePartner, type Partner, type PartnerAdatJavaslat } from "@/lib/fuvarozas2/partnerek";
+import { AdatJavaslatSor } from "@/components/fuvarozas2/partner-adat-javaslat";
 
 type Javaslat = { a: Partner; b: Partner; indok: string };
 
-export function PartnerekNezet({ partnerek, javaslatok, szerkeszthet, nyit }: { partnerek: Partner[]; javaslatok: Javaslat[]; szerkeszthet: boolean; nyit?: string }) {
+export function PartnerekNezet({ partnerek, javaslatok, adatJavaslatok = [], szerkeszthet, nyit }: {
+  partnerek: Partner[]; javaslatok: Javaslat[];
+  /** A partnerek hiányzó adataira a megbízás-PDF-ekből és a számlákból (lib/fuvarozas2/partner-javaslat.ts). */
+  adatJavaslatok?: PartnerAdatJavaslat[];
+  szerkeszthet: boolean; nyit?: string;
+}) {
   const router = useRouter();
   const [pending, start] = useTransition();
   // A munkaasztal részletéből „?nyit=<id>” paraméterrel jövünk: a partner sora nyitva.
@@ -27,8 +33,25 @@ export function PartnerekNezet({ partnerek, javaslatok, szerkeszthet, nyit }: { 
     });
   }
 
+  const javasoltPartnerek = [...new Set(adatJavaslatok.map((j) => j.partner_id))];
   return (
     <div className="flex flex-col gap-4">
+      {javasoltPartnerek.length > 0 ? (
+        <Card>
+          <CardHeader><CardTitle className="text-base">Hiányzó partner-adatok — javaslatok a megbízásokból és a számlákból</CardTitle></CardHeader>
+          <CardContent className="flex flex-col gap-3 text-sm">
+            {javasoltPartnerek.map((pid) => (
+              <div key={pid} className="flex flex-col gap-1">
+                <a href={`#p-${pid}`} onClick={() => setNyitott(pid)} className="font-semibold hover:underline">
+                  {partnerek.find((p) => p.id === pid)?.nev ?? `#${pid}`}
+                </a>
+                {adatJavaslatok.filter((j) => j.partner_id === pid).map((j) => <AdatJavaslatSor key={j.id} j={j} szerkeszthet={szerkeszthet} />)}
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      ) : null}
+
       {javaslatok.length > 0 && szerkeszthet ? (
         <Card>
           <CardHeader><CardTitle className="text-base">Összevonási javaslatok — E5 (névváltozatok)</CardTitle></CardHeader>

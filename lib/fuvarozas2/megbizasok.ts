@@ -11,6 +11,7 @@
 // mezőit coalesce-szel veszi (új tábla, ha van; különben a régi oszlop).
 // A régi kód írásait a 002 migráció triggere húzza át az allapot-ra.
 
+import { getPartnerAdatJavaslatok, type PartnerAdatJavaslat } from "@/lib/fuvarozas2/partnerek";
 import { pool, query } from "@/lib/db";
 import { requireSession } from "@/lib/auth/dal";
 import { requireAnyViewPermission, requireAnyEditPermission, requireEditPermission } from "@/lib/auth/require-permission";
@@ -162,6 +163,8 @@ export async function getMegbizas(id: string): Promise<{
   esemenyek: Esemeny[];
   dokumentumok: Dokumentum[];
   celok: Allapot[];
+  /** A partner hiányzó adataira nyitott javaslatok (postacím stb.). */
+  partnerJavaslatok: PartnerAdatJavaslat[];
 } | null> {
   await requireAnyViewPermission(["fuvarozas", "elszamolas"]);
   const [sor] = await query<MegbizasSor>(`${SOR_SQL} where m.id = $1`, [id]);
@@ -181,7 +184,8 @@ export async function getMegbizas(id: string): Promise<{
     query<Dokumentum>(`select id::text, tipus, fajlnev, dokumentum_url, created_at::text from fuvar_dokumentumok where fuvar_id = $1 order by created_at`, [id]),
   ]);
   const k = await kontextus(sor, megallok);
-  return { sor, megallok, esemenyek, dokumentumok, celok: lehetsegesCelok(sor.allapot, "ember", k) };
+  const partnerJavaslatok = sor.partner_id ? await getPartnerAdatJavaslatok(sor.partner_id) : [];
+  return { sor, megallok, esemenyek, dokumentumok, celok: lehetsegesCelok(sor.allapot, "ember", k), partnerJavaslatok };
 }
 
 async function kontextus(sor: MegbizasSor, megallok?: Megallo[]): Promise<AtmenetKontextus> {

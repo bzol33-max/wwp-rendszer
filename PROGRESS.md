@@ -1,5 +1,30 @@
 # PROGRESS
 
+## 2026-10-01 — Partner-adat javaslatok: a megbízás fejléce is olvasva
+
+- **Probléma:** a Flexlog postacíme a megbízás fejlécében áll, de nem
+  szövegként (kép/grafika), ezért a pdf-parse alapú kiolvasás sosem látta;
+  új partnernél a postázási cím üres maradt. A PDF a számlázási feltételeket
+  is tartalmazza (szamlazas@ e-mail, 15 napos papír-határidő 50 € levonással,
+  30 napos fizetés), ezek sem kerültek a partnerhez.
+- **Módosítás:**
+  - `partner-javaslat.ts` (óránként, a modell-szinkron körben): a hiányos
+    partnerek legutóbbi megbízás-PDF-jét a modell PDF-ként (képpel együtt)
+    kapja (`OPENROUTER_PDF_MODEL`, alap: gemini-2.5-flash), iratonként
+    egyszer (`fuvar_partner_kiolvasas`); a postacímhez a korábbi számlák
+    vevőcíme (szamla.raw_xml) is forrás.
+  - `partner-javaslat-alap.ts` (tiszta): ellenőrzés — a mi címünk/nevünk, más
+    megbízó, hihetetlen cím/e-mail/nap kiszűrve; Számlázz.hu vevő-XML olvasó.
+  - `fuvar_partner_javaslat`: csak a hiányzó mezőkre, ember fogadja el
+    („Átveszem” → partner-törzs, „Elvetem”).
+  - Felület: Partnerek fül tetején „Hiányzó partner-adatok” kártya; a fuvar
+    részleteinél a postázási cím helyén a javaslat, ha nincs, beviteli mező
+    (a partnerhez ment).
+- **Teszt:** teszt-partner-javaslat 11/0, jogosultság 28/0, typecheck, build.
+- **Kockázat:** a számla-XML vevő-szerkezetét élő mintán nem láttam — ha nem
+  olvasható, csak a PDF-forrás ad javaslatot. Költség: hiányos partnerenként
+  egy PDF-hívás, utána csak új irat.
+
 ## 2026-10-01 — Számla-párosítás: kötőjeles és egybeírt cégnév egyezik
 
 - **Probléma:** a WLLWR-2026-334 (EU-Cargo 2008 Kft., 500 000 Ft) nem
