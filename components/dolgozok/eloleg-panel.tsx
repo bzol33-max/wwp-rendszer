@@ -11,8 +11,10 @@ import { ft, type Employee, type AdvanceRow } from "@/lib/dolgozok/shared";
 import { addAdvance, deleteAdvance } from "@/lib/dolgozok/actions";
 import { getCurrentUser } from "@/lib/current-user";
 
+// Budapesti naptári nap — a toISOString() UTC-t ad, ami éjfél után 1-2
+// óráig még a tegnapi dátumot ajánlotta fel.
 function todayIso() {
-  return new Date().toISOString().slice(0, 10);
+  return new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Budapest" });
 }
 
 function ElolegRow({ advance, canEdit, onReload }: { advance: AdvanceRow; canEdit: boolean; onReload: () => void | Promise<void> }) {
@@ -20,6 +22,7 @@ function ElolegRow({ advance, canEdit, onReload }: { advance: AdvanceRow; canEdi
   const auto = !!advance.auto_key;
 
   function remove() {
+    if (!window.confirm(`Törlöd ezt az előleget? ${advance.advance_date} — ${ft(advance.amount)}`)) return;
     startTransition(async () => {
       try {
         await deleteAdvance(advance.id);
@@ -85,6 +88,7 @@ function ElolegEmployeeRow({
   const [amount, setAmount] = useState("");
   const [note, setNote] = useState("");
   const [pending, startTransition] = useTransition();
+  const egyenleg = advances.reduce((sum, a) => sum + a.amount, 0);
 
   function add() {
     const n = Number(amount);
@@ -119,7 +123,14 @@ function ElolegEmployeeRow({
         className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1.5 text-left text-sm font-medium hover:bg-muted"
       >
         <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-90")} />
-        {employee.name}
+        <span className="flex-1 truncate">{employee.name}</span>
+        {/* Nyitott egyenleg: előlegek mínusz a bérből levont tételek — ugyanaz,
+            amit a dolgozó a telefonján "el nem számolt előleg"-ként lát. */}
+        {egyenleg !== 0 && (
+          <span className={cn("shrink-0 text-xs tabular-nums", egyenleg > 0 ? "text-destructive" : "text-muted-foreground")}>
+            {ft(egyenleg)}
+          </span>
+        )}
       </button>
       {open && (
         <div className="ml-4 space-y-2 border-l pl-3 py-1.5">
@@ -132,20 +143,20 @@ function ElolegEmployeeRow({
           {canEdit && (
             <div className="flex flex-col gap-1.5 pt-1">
               <div className="flex gap-1.5">
-                <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-7 text-xs" />
+                <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-7 md:text-xs" />
                 <Input
                   type="number"
                   placeholder="Összeg"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  className="h-7 text-xs"
+                  className="h-7 md:text-xs"
                 />
               </div>
               <Input
                 placeholder="Megjegyzés (opcionális)"
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                className="h-7 text-xs"
+                className="h-7 md:text-xs"
               />
               <Button size="xs" onClick={add} disabled={pending}>
                 Hozzáadás

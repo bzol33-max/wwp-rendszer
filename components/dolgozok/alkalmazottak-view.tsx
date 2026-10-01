@@ -60,8 +60,11 @@ export function AlkalmazottakView() {
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_18rem]">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {withMode.map((e) => (
+            // A hónap is a kulcs része: hónapváltáskor (utolsó "Kifizetve" után)
+            // a kártya újraindul, különben a mezőkben az előző hónap beírt
+            // számai maradnának, és egy "mentés" átvinné őket az új hónapba.
             <EmployeeCard
-              key={e.id}
+              key={`${e.id}-${pointer.year}-${pointer.month}`}
               employee={e}
               heti={weekly.filter((r) => r.employee_id === e.id)}
               napiHavi={napiHavi.find((r) => r.employee_id === e.id)}

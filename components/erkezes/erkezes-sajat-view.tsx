@@ -642,6 +642,12 @@ function ProfilScreen({
                         <span className="shrink-0 rounded-full bg-[var(--mob-accent)]/15 px-2.5 py-1 text-xs font-semibold text-[var(--mob-positive)]">
                           Elfogadva
                         </span>
+                      ) : t.amount < 0 ? (
+                        // A negatív tétel a bérből levont előleg (bérkártya
+                        // szinkron) — nincs mit elfogadni, ne várjon "megerősítésre".
+                        <span className="shrink-0 rounded-full bg-[var(--mob-tile)] px-2.5 py-1 text-xs font-semibold text-[var(--mob-muted)]">
+                          Levonva
+                        </span>
                       ) : (
                         <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">
                           Megerősítésre vár

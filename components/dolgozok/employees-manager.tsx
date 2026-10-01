@@ -226,14 +226,15 @@ function EditEmployeeDialog({
   }
 
   function handleDeactivate() {
+    if (!window.confirm(`Deaktiválod: ${employee.name}? Eltűnik a bérkártyák és az előlegek közül.`)) return;
     startTransition(async () => {
       try {
         await deactivateEmployee(employee.id);
         toast.success("Dolgozó deaktiválva.");
         onSaved();
         onClose();
-      } catch {
-        toast.error("Nem sikerült menteni.");
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Nem sikerült menteni.");
       }
     });
   }

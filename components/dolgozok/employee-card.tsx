@@ -27,8 +27,11 @@ import { getCurrentUser } from "@/lib/current-user";
 
 // Minden dolgozó kártyája egyforma méretű csempe legyen a rácsban,
 // függetlenül attól, hogy heti/napi/fix havi bérmódú-e (utóbbinak több
-// mezője van) — lásd a "6 egyforma kocka" kérést.
-const CARD_HEIGHT = "h-80";
+// mezője van) — lásd a "6 egyforma kocka" kérést. Csak MINIMUM magasság:
+// a rács egy sorban úgyis egyforma magasra nyújtja a kártyákat, a fix
+// h-80 viszont levágta a 4 mezős fix havi kártya aljáról a "Kifizetve"
+// gombot (mobilon a 44 px-es mezőkkel a 2 mezősről is).
+const CARD_HEIGHT = "min-h-80";
 
 function NumberField({
   label,
@@ -77,6 +80,14 @@ function KifizetveButton({
   );
 }
 
+// Egy koppintás pénzt jelöl kifizetettnek (az utolsó le is zárja a hónapot),
+// ezért mindkét irányba rákérdezünk — telefonon könnyű mellényomni.
+function confirmPaid(mit: string, paid: boolean, osszeg: string): boolean {
+  return window.confirm(
+    paid ? `Visszavonod a kifizetést? ${mit} (${osszeg})` : `Kifizetettnek jelölöd? ${mit} — ${osszeg}`
+  );
+}
+
 function CardShell({ name, children }: { name: string; children: React.ReactNode }) {
   return (
     <Card className={cn(CARD_HEIGHT, "flex flex-col")}>
@@ -105,6 +116,7 @@ function HetiCard({
   const locked = readonly || !canEdit || pending;
 
   function toggle(row: HetiRow) {
+    if (!confirmPaid(`${employee.name}, ${row.week_index}. hét`, row.paid, ft(row.amount))) return;
     startTransition(async () => {
       try {
         await setHetiPaid(row.id, !row.paid, getCurrentUser() || undefined);
@@ -180,7 +192,22 @@ function NapiCard({
     });
   }
 
+  const gross = calcNapiGross({ days_count: Number(daysCount) || 0 }, employee);
+  const netto = calcNapiNetto(
+    { days_count: Number(daysCount) || 0, utalas: Number(utalas) || 0, eloleg: Number(eloleg) || 0 },
+    employee
+  );
+  const dirty =
+    (Number(daysCount) || 0) !== row.days_count ||
+    (Number(utalas) || 0) !== row.utalas ||
+    (Number(eloleg) || 0) !== row.eloleg;
+
   function toggle() {
+    if (!row.paid && dirty) {
+      toast.error("Előbb mentsd a módosított mezőket.");
+      return;
+    }
+    if (!confirmPaid(employee.name, row.paid, ft(netto))) return;
     startToggling(async () => {
       try {
         await setNapiHaviPaid(row.id, !row.paid, getCurrentUser() || undefined);
@@ -190,12 +217,6 @@ function NapiCard({
       }
     });
   }
-
-  const gross = calcNapiGross({ days_count: Number(daysCount) || 0 }, employee);
-  const netto = calcNapiNetto(
-    { days_count: Number(daysCount) || 0, utalas: Number(utalas) || 0, eloleg: Number(eloleg) || 0 },
-    employee
-  );
 
   return (
     <CardShell name={employee.name}>
@@ -224,9 +245,7 @@ function NapiCard({
             <span>{ft(netto)}</span>
           </div>
         </div>
-        {!readonly && (
-          <KifizetveButton paid={row.paid} disabled={!canEdit || toggling} onToggle={toggle} />
-        )}
+        <KifizetveButton paid={row.paid} disabled={readonly || !canEdit || toggling} onToggle={toggle} />
       </div>
     </CardShell>
   );
@@ -270,17 +289,6 @@ function HaviCard({
     });
   }
 
-  function toggle() {
-    startToggling(async () => {
-      try {
-        await setNapiHaviPaid(row.id, !row.paid, getCurrentUser() || undefined);
-        await onReload();
-      } catch {
-        toast.error("Nem sikerült menteni.");
-      }
-    });
-  }
-
   const netto = calcHaviNetto(
     {
       letiltas: employee.show_letiltas ? Number(letiltas) || 0 : 0,
@@ -290,6 +298,27 @@ function HaviCard({
     },
     employee
   );
+  const dirty =
+    (employee.show_letiltas && (Number(letiltas) || 0) !== row.letiltas) ||
+    (employee.show_uzemanyag && (Number(uzemanyag) || 0) !== row.uzemanyag) ||
+    (Number(utalas) || 0) !== row.utalas ||
+    (Number(eloleg) || 0) !== row.eloleg;
+
+  function toggle() {
+    if (!row.paid && dirty) {
+      toast.error("Előbb mentsd a módosított mezőket.");
+      return;
+    }
+    if (!confirmPaid(employee.name, row.paid, ft(netto))) return;
+    startToggling(async () => {
+      try {
+        await setNapiHaviPaid(row.id, !row.paid, getCurrentUser() || undefined);
+        await onReload();
+      } catch {
+        toast.error("Nem sikerült menteni.");
+      }
+    });
+  }
 
   return (
     <CardShell name={employee.name}>
@@ -327,9 +356,7 @@ function HaviCard({
             <span>{ft(netto)}</span>
           </div>
         </div>
-        {!readonly && (
-          <KifizetveButton paid={row.paid} disabled={!canEdit || toggling} onToggle={toggle} />
-        )}
+        <KifizetveButton paid={row.paid} disabled={readonly || !canEdit || toggling} onToggle={toggle} />
       </div>
     </CardShell>
   );
