@@ -2,9 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { ChevronRight, X } from "lucide-react";
+import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { ft, type Employee, type AdvanceRow } from "@/lib/dolgozok/shared";
@@ -68,18 +67,18 @@ function ElolegRow({ advance, canEdit, onReload }: { advance: AdvanceRow; canEdi
   );
 }
 
-function ElolegEmployeeRow({
+// A bérkártya „Előleg” füle (terv: „Bér | Előleg fül a kártyán”, 2026-10-01).
+// A korábbi, külön jobb oldali Előleg panel helyett minden dolgozó a saját
+// kártyáján mutatja a nyitott egyenlegét, a tételeit nyugtázási állapottal,
+// és itt is rögzíthető új előleg.
+export function ElolegTab({
   employee,
   advances,
-  open,
-  onToggle,
   canEdit,
   onReload,
 }: {
   employee: Employee;
   advances: AdvanceRow[];
-  open: boolean;
-  onToggle: () => void;
   canEdit: boolean;
   onReload: () => void | Promise<void>;
 }) {
@@ -107,7 +106,7 @@ function ElolegEmployeeRow({
         setAmount("");
         setNote("");
         await onReload();
-        toast.success("Előleg rögzítve.");
+        toast.success("Előleg rögzítve — a dolgozónak nyugtáznia kell.");
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Nem sikerült menteni.");
       }
@@ -115,90 +114,47 @@ function ElolegEmployeeRow({
   }
 
   return (
-    <div>
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-center gap-1.5 rounded-md px-1.5 py-1.5 text-left text-sm font-medium hover:bg-muted"
-      >
-        <ChevronRight className={cn("size-3.5 shrink-0 transition-transform", open && "rotate-90")} />
-        <span className="flex-1 truncate">{employee.name}</span>
-        {/* Nyitott egyenleg: előlegek mínusz a bérből levont tételek — ugyanaz,
-            amit a dolgozó a telefonján "el nem számolt előleg"-ként lát. */}
-        {egyenleg !== 0 && (
-          <span className={cn("shrink-0 text-xs tabular-nums", egyenleg > 0 ? "text-destructive" : "text-muted-foreground")}>
-            {ft(egyenleg)}
-          </span>
-        )}
-      </button>
-      {open && (
-        <div className="ml-4 space-y-2 border-l pl-3 py-1.5">
-          {advances.length === 0 && (
-            <p className="text-xs text-muted-foreground">Nincs rögzített előleg.</p>
-          )}
-          {advances.map((a) => (
-            <ElolegRow key={a.id} advance={a} canEdit={canEdit} onReload={onReload} />
-          ))}
-          {canEdit && (
-            <div className="flex flex-col gap-1.5 pt-1">
-              <div className="flex gap-1.5">
-                <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-7 md:text-xs" />
-                <Input
-                  type="number"
-                  placeholder="Összeg"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  className="h-7 md:text-xs"
-                />
-              </div>
-              <Input
-                placeholder="Megjegyzés (opcionális)"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                className="h-7 md:text-xs"
-              />
-              <Button size="xs" onClick={add} disabled={pending}>
-                Hozzáadás
-              </Button>
-            </div>
-          )}
+    <div className="flex flex-1 flex-col gap-2">
+      {/* Nyitott egyenleg: előlegek mínusz a bérből levont tételek — ugyanaz,
+          amit a dolgozó a telefonján "el nem számolt előleg"-ként lát. */}
+      <div className="flex items-baseline justify-between rounded-md bg-muted px-3 py-2">
+        <span className="text-xs text-muted-foreground">Nyitott egyenleg</span>
+        <span className={cn("text-lg font-semibold tabular-nums", egyenleg > 0 && "text-destructive")}>
+          {ft(egyenleg)}
+        </span>
+      </div>
+      <div className="max-h-40 space-y-1.5 overflow-y-auto">
+        {advances.length === 0 && <p className="text-xs text-muted-foreground">Nincs rögzített előleg.</p>}
+        {advances.map((a) => (
+          <ElolegRow key={a.id} advance={a} canEdit={canEdit} onReload={onReload} />
+        ))}
+      </div>
+      {canEdit && (
+        <div className="mt-auto flex flex-col gap-1.5 border-t pt-2">
+          <div className="flex gap-1.5">
+            <Input
+              type="number"
+              inputMode="numeric"
+              placeholder="Összeg"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              className="h-7 md:text-xs"
+            />
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="h-7 md:text-xs" />
+          </div>
+          <div className="flex gap-1.5">
+            <Input
+              placeholder="Megjegyzés (opcionális)"
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              className="h-7 md:text-xs"
+            />
+            <Button size="xs" onClick={add} disabled={pending}>
+              + rögzít
+            </Button>
+          </div>
         </div>
       )}
     </div>
-  );
-}
-
-export function ElolegPanel({
-  employees,
-  advances,
-  canEdit,
-  onReload,
-}: {
-  employees: Employee[];
-  advances: AdvanceRow[];
-  canEdit: boolean;
-  onReload: () => void | Promise<void>;
-}) {
-  const [openId, setOpenId] = useState<string | null>(null);
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-sm">Előleg</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-1">
-        {employees.map((e) => (
-          <ElolegEmployeeRow
-            key={e.id}
-            employee={e}
-            advances={advances.filter((a) => a.employee_id === e.id)}
-            open={openId === e.id}
-            onToggle={() => setOpenId((prev) => (prev === e.id ? null : e.id))}
-            canEdit={canEdit}
-            onReload={onReload}
-          />
-        ))}
-      </CardContent>
-    </Card>
   );
 }

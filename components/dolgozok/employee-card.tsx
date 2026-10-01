@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { createContext, useContext, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,7 @@ import {
   type Employee,
   type HetiRow,
   type NapiHaviRow,
+  type AdvanceRow,
 } from "@/lib/dolgozok/shared";
 import {
   saveNapiBer,
@@ -24,6 +25,7 @@ import {
   setNapiHaviPaid,
 } from "@/lib/dolgozok/actions";
 import { getCurrentUser } from "@/lib/current-user";
+import { ElolegTab } from "@/components/dolgozok/eloleg-tab";
 
 // Minden dolgozó kártyája egyforma méretű csempe legyen a rácsban,
 // függetlenül attól, hogy heti/napi/fix havi bérmódú-e (utóbbinak több
@@ -88,13 +90,63 @@ function confirmPaid(mit: string, paid: boolean, osszeg: string): boolean {
   );
 }
 
+type Tab = "ber" | "eloleg";
+
+// A "Bér | Előleg" fül állapota az EmployeeCard-ból jön. A bér-tartalom az
+// Előleg fülön is mounted marad (csak rejtve), így fülváltáskor nem vesznek
+// el a még nem mentett mezők. Archívumban nincs fül (null).
+const CardTabsContext = createContext<{
+  tab: Tab;
+  setTab: (t: Tab) => void;
+  fuggo: number;
+  eloleg: React.ReactNode;
+} | null>(null);
+
+function CardTabs() {
+  const t = useContext(CardTabsContext);
+  if (!t) return null;
+  const tabs: { key: Tab; label: string }[] = [
+    { key: "ber", label: "Bér" },
+    { key: "eloleg", label: "Előleg" },
+  ];
+  return (
+    <div className="flex justify-center">
+      <div className="inline-flex rounded-lg bg-muted p-0.5 text-xs">
+        {tabs.map(({ key, label }) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => t.setTab(key)}
+            className={cn(
+              "flex items-center gap-1 rounded-md px-3 py-1 text-muted-foreground",
+              t.tab === key && "bg-background font-semibold text-foreground shadow-sm"
+            )}
+          >
+            {label}
+            {/* Narancs szám: ennyi tétel vár még a dolgozó nyugtázására. */}
+            {key === "eloleg" && t.fuggo > 0 && (
+              <span className="rounded-full bg-amber-500 px-1.5 text-[10px] font-bold text-white">{t.fuggo}</span>
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function CardShell({ name, children }: { name: string; children: React.ReactNode }) {
+  const t = useContext(CardTabsContext);
+  const elolegFul = t?.tab === "eloleg";
   return (
     <Card className={cn(CARD_HEIGHT, "flex flex-col")}>
       <CardHeader>
         <CardTitle className="text-center text-xl">{name}</CardTitle>
+        <CardTabs />
       </CardHeader>
-      <CardContent className="flex flex-1 flex-col justify-between space-y-3">{children}</CardContent>
+      <CardContent className={cn("flex flex-1 flex-col justify-between space-y-3", elolegFul && "hidden")}>
+        {children}
+      </CardContent>
+      {elolegFul && t && <CardContent className="flex flex-1 flex-col">{t.eloleg}</CardContent>}
     </Card>
   );
 }
@@ -362,7 +414,7 @@ function HaviCard({
   );
 }
 
-export function EmployeeCard({
+function BerCard({
   employee,
   heti,
   napiHavi,
@@ -388,4 +440,36 @@ export function EmployeeCard({
     return <HaviCard employee={employee} row={napiHavi} readonly={readonly} canEdit={canEdit} onReload={onReload} />;
   }
   return null;
+}
+
+export function EmployeeCard({
+  advances,
+  ...props
+}: {
+  employee: Employee;
+  heti: HetiRow[];
+  napiHavi: NapiHaviRow | undefined;
+  /** A dolgozó előleg-tételei — ha nincs megadva (archívum), nincs Előleg fül. */
+  advances?: AdvanceRow[];
+  readonly?: boolean;
+  canEdit: boolean;
+  onReload: () => void | Promise<void>;
+}) {
+  const [tab, setTab] = useState<Tab>("ber");
+  if (!advances) return <BerCard {...props} />;
+  const fuggo = advances.filter((a) => !a.accepted_at).length;
+  return (
+    <CardTabsContext.Provider
+      value={{
+        tab,
+        setTab,
+        fuggo,
+        eloleg: (
+          <ElolegTab employee={props.employee} advances={advances} canEdit={props.canEdit} onReload={props.onReload} />
+        ),
+      }}
+    >
+      <BerCard {...props} />
+    </CardTabsContext.Provider>
+  );
 }

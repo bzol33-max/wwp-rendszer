@@ -5,7 +5,6 @@ import Link from "next/link";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/page-header";
 import { EmployeeCard } from "@/components/dolgozok/employee-card";
-import { ElolegPanel } from "@/components/dolgozok/eloleg-panel";
 import { EmployeesManager } from "@/components/dolgozok/employees-manager";
 import { useCanEdit } from "@/components/auth/edit-permission-context";
 import { HU_MONTHS, wageMode, type Snapshot } from "@/lib/dolgozok/shared";
@@ -57,23 +56,23 @@ export function AlkalmazottakView() {
         <EmployeesManager employees={employees} onChanged={load} />
       )}
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_18rem]">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {withMode.map((e) => (
-            // A hónap is a kulcs része: hónapváltáskor (utolsó "Kifizetve" után)
-            // a kártya újraindul, különben a mezőkben az előző hónap beírt
-            // számai maradnának, és egy "mentés" átvinné őket az új hónapba.
-            <EmployeeCard
-              key={`${e.id}-${pointer.year}-${pointer.month}`}
-              employee={e}
-              heti={weekly.filter((r) => r.employee_id === e.id)}
-              napiHavi={napiHavi.find((r) => r.employee_id === e.id)}
-              canEdit={canEdit}
-              onReload={load}
-            />
-          ))}
-        </div>
-        <ElolegPanel employees={withMode} advances={advances} canEdit={canEdit} onReload={load} />
+      {/* Az előleg a kártyák "Előleg" fülén van — külön oszlop nélkül a rács
+          teljes szélességű. */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {withMode.map((e) => (
+          // A hónap is a kulcs része: hónapváltáskor (utolsó "Kifizetve" után)
+          // a kártya újraindul, különben a mezőkben az előző hónap beírt
+          // számai maradnának, és egy "mentés" átvinné őket az új hónapba.
+          <EmployeeCard
+            key={`${e.id}-${pointer.year}-${pointer.month}`}
+            employee={e}
+            heti={weekly.filter((r) => r.employee_id === e.id)}
+            napiHavi={napiHavi.find((r) => r.employee_id === e.id)}
+            advances={advances.filter((a) => a.employee_id === e.id)}
+            canEdit={canEdit}
+            onReload={load}
+          />
+        ))}
       </div>
     </div>
   );
