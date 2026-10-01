@@ -575,7 +575,7 @@ function ProfilScreen({
   function accept(id: string, osszeg: number) {
     if (
       !window.confirm(
-        `Elfogadod a(z) ${ft(osszeg)} előleget?\n\nAz elfogadás a nevedet és a pontos időpontot rögzíti, és utólag nem vonható vissza.`
+        `${osszeg < 0 ? `Elfogadod a béredből levont ${ft(-osszeg)} előleget?` : `Elfogadod a(z) ${ft(osszeg)} előleget?`}\n\nAz elfogadás a nevedet és a pontos időpontot rögzíti, és utólag nem vonható vissza.`
       )
     ) {
       return;
@@ -642,12 +642,6 @@ function ProfilScreen({
                         <span className="shrink-0 rounded-full bg-[var(--mob-accent)]/15 px-2.5 py-1 text-xs font-semibold text-[var(--mob-positive)]">
                           Elfogadva
                         </span>
-                      ) : t.amount < 0 ? (
-                        // A negatív tétel a bérből levont előleg (bérkártya
-                        // szinkron) — nincs mit elfogadni, ne várjon "megerősítésre".
-                        <span className="shrink-0 rounded-full bg-[var(--mob-tile)] px-2.5 py-1 text-xs font-semibold text-[var(--mob-muted)]">
-                          Levonva
-                        </span>
                       ) : (
                         <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">
                           Megerősítésre vár
@@ -659,16 +653,16 @@ function ProfilScreen({
                         Elfogadva: {t.acceptedAt} · {t.acceptedBy}
                       </p>
                     ) : (
-                      t.amount > 0 && (
-                        <Button
-                          size="sm"
-                          disabled={pending}
-                          onClick={() => accept(t.id, t.amount)}
-                          className="bg-[var(--mob-accent)] text-white hover:bg-[var(--mob-accent)]/90"
-                        >
-                          ELFOGADOM
-                        </Button>
-                      )
+                      // A bérből levont (negatív) tételt is nyugtáznia kell —
+                      // Budaházi Zoltán kérése (2026-10-01).
+                      <Button
+                        size="sm"
+                        disabled={pending}
+                        onClick={() => accept(t.id, t.amount)}
+                        className="bg-[var(--mob-accent)] text-white hover:bg-[var(--mob-accent)]/90"
+                      >
+                        ELFOGADOM
+                      </Button>
                     )}
                   </CardContent>
                 </Card>
@@ -969,10 +963,10 @@ export function ErkezesSajatView({
     };
   }, [loadProfil]);
 
-  // Csak a POZITÍV, még nem nyugtázott tétel vár elfogadásra: a negatív
-  // sorok a bérkártyáról szinkronizált levonások, azokat nem kell okézni.
+  // Minden még nem nyugtázott tétel elfogadásra vár — a bérkártyáról
+  // szinkronizált levonás (negatív sor) is, azt is okéznia kell a dolgozónak.
   const fuggoEloleg = useMemo(
-    () => (elolegek?.tetelek ?? []).filter((t) => !t.acceptedAt && t.amount > 0).length,
+    () => (elolegek?.tetelek ?? []).filter((t) => !t.acceptedAt).length,
     [elolegek]
   );
 

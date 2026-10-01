@@ -248,7 +248,12 @@ async function syncEloleg(employeeId: string, year: number, month: number, elole
     await query(
       `insert into alkalmazott_elolegek (employee_id, advance_date, amount, note, auto_key)
        values ($1, make_date($2, $3, 1), $4, $5, $6)
-       on conflict (auto_key) do update set amount = excluded.amount, note = excluded.note`,
+       on conflict (auto_key) do update set amount = excluded.amount, note = excluded.note,
+         -- Ha a levont összeg változik, a dolgozónak újra nyugtáznia kell.
+         accepted_at = case when alkalmazott_elolegek.amount = excluded.amount
+                            then alkalmazott_elolegek.accepted_at end,
+         accepted_by = case when alkalmazott_elolegek.amount = excluded.amount
+                            then alkalmazott_elolegek.accepted_by end`,
       [employeeId, year, month, -eloleg, note, autoKey]
     );
   } else {
