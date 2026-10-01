@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowLeft, LogOut } from "lucide-react";
 import { requireSession } from "@/lib/auth/dal";
-import { getSzamlaPostaFuvarok } from "@/lib/fuvarozas/megbizasok";
+import { getMaPostazottFuvarok, getSzamlaPostaFuvarok } from "@/lib/fuvarozas/megbizasok";
 import { RefreshButton } from "@/components/mobil/refresh-button";
 import { PullToRefresh } from "@/components/mobil/pull-to-refresh";
 import { MOBIL_THEME } from "@/lib/mobil-theme";
@@ -56,7 +56,7 @@ export default async function PostaPage() {
               Nincs jogosultságod ehhez a nézethez.
             </p>
           ) : (
-            <PostaLista initialRows={rows} />
+            <PostaLista initialRows={rows} maPostazott={showPosta ? await getMaPostazottFuvarok().catch(() => []) : []} />
           )}
         </div>
       </PullToRefresh>
