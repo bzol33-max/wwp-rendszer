@@ -230,6 +230,7 @@ async function main() {
   });
   await grantElszamolasSzabinanakOnce(pool);
   await grantAttekintesVezetonekOnce(pool);
+  await fogadjaElRegiLevonasokatOnce(pool);
   // 2026-09-17: a két sofőr fiók a 09-13-i seed után törlődött (a lépés
   // rögzítve maradt, ezért a seed nem hozta újra létre). A dolgozói mobil
   // sofőr nézetéhez (lásd docs/sofor-mobil-terv.md) kell a fiók ÉS az
@@ -1854,6 +1855,27 @@ async function grantElolegekSajatOnce(pool) {
   );
   await pool.query(`insert into alkalmazott_javitasok (kod) values ($1)`, [JAVITAS_KOD]);
   console.log("[migrate] BodoganGabor és VadonGabor megkapták a saját előlegek jogot.");
+}
+
+// Egyszeri (2026-10-01): mostantól a bérből levont előleget (auto_key-es,
+// negatív sor) is nyugtáznia kell a dolgozónak. A korábbi levonásoknál ez nem
+// volt kérés, ezért mind elfogadatlan — Budaházi Zoltán döntése: ezek
+// számítsanak elfogadottnak, csak az újakat kelljen okézni.
+async function fogadjaElRegiLevonasokatOnce(pool) {
+  const JAVITAS_KOD = "regi-eloleg-levonasok-elfogadva-2026-10-01";
+  const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [JAVITAS_KOD]);
+  if (mar.length > 0) return;
+
+  const { rows } = await pool.query(
+    `update alkalmazott_elolegek
+     set accepted_at = now(), accepted_by = 'rendszer (régi levonás)'
+     where auto_key is not null and accepted_at is null
+     returning id`
+  );
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1) on conflict (kod) do nothing`, [
+    JAVITAS_KOD,
+  ]);
+  console.log(`[migrate] régi bérből levont előleg elfogadottnak jelölve: ${rows.length} sor.`);
 }
 
 // Fuvarozás 2 (2026-09-19, E3): Szabina hatóköre = elszámolás (díjjal,
