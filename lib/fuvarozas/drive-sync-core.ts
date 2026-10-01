@@ -217,6 +217,14 @@ async function fajlSzovege(
   return { szoveg: parsed.value, pdfBuffer: null };
 }
 
+/** Egy Drive-fájl bájtjai (a partner-adat kiolvasáshoz, lib/fuvarozas2/partner-javaslat.ts). */
+export async function letoltDriveFajlt(fileId: string): Promise<{ buffer: Buffer; mimeType: string | null; nev: string | null }> {
+  const drive = driveClient();
+  const meta = await drive.files.get({ fileId, fields: "mimeType, name" });
+  const res = await drive.files.get({ fileId, alt: "media" }, { responseType: "arraybuffer" });
+  return { buffer: Buffer.from(res.data as ArrayBuffer), mimeType: meta.data.mimeType ?? null, nev: meta.data.name ?? null };
+}
+
 function driveViewUrl(fileId: string): string {
   return `https://drive.google.com/file/d/${fileId}/view`;
 }

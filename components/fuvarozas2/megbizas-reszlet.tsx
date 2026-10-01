@@ -9,6 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { valtAllapot, setSzamlaSzam, setMegjegyzes, torolMegbizast } from "@/lib/fuvarozas2/megbizasok";
 import type { MegbizasSor, Megallo, Esemeny, Dokumentum } from "@/lib/fuvarozas2/megbizasok";
 import type { Allapot } from "@/lib/fuvarozas/allapot";
+import type { PartnerAdatJavaslat } from "@/lib/fuvarozas2/partnerek";
+import { AdatJavaslatSor, PostacimBevitel } from "@/components/fuvarozas2/partner-adat-javaslat";
 import { ALLAPOT_CIMKE, LepesBadge, JellegBadge, formatFt, formatIdo, formatNap } from "@/components/fuvarozas2/kozos";
 
 const GOMB_CIMKE: Partial<Record<Allapot, string>> = {
@@ -28,9 +30,10 @@ const VISSZA: Partial<Record<string, string>> = {
 };
 
 export function MegbizasReszlet({
-  sor, megallok, esemenyek, dokumentumok, celok, szerkeszthet, elszamolasJog, fuvarozasJog, egyOszlop = false,
+  sor, megallok, esemenyek, dokumentumok, celok, partnerJavaslatok = [], szerkeszthet, elszamolasJog, fuvarozasJog, egyOszlop = false,
 }: {
   sor: MegbizasSor; megallok: Megallo[]; esemenyek: Esemeny[]; dokumentumok: Dokumentum[]; celok: Allapot[];
+  partnerJavaslatok?: PartnerAdatJavaslat[];
   szerkeszthet: boolean; elszamolasJog: boolean;
   /** A megjegyzés és a törlés csak a Fuvarozás szerkesztőjéé (setMegjegyzes, torolMegbizast) — az elszámolás-jog ehhez kevés. */
   fuvarozasJog: boolean;
@@ -159,7 +162,24 @@ export function MegbizasReszlet({
               </div>
               {sor.email_elment_at ? <div className="flex items-center justify-between gap-2"><span>E-mail elment</span><span className="text-muted-foreground">{formatIdo(sor.email_elment_at)}</span></div> : null}
               <div className="flex items-center justify-between gap-2"><span>Postázva</span><span className="text-muted-foreground">{sor.postazva_at ? formatIdo(sor.postazva_at) : "—"}</span></div>
-              <div className="flex flex-col gap-0.5"><span>Postázási cím</span><span className="text-muted-foreground">{sor.postazasi_cim ?? "—"}</span></div>
+              <div className="flex flex-col gap-1">
+                <span>Postázási cím</span>
+                {sor.postazasi_cim ? (
+                  <span className="text-muted-foreground">{sor.postazasi_cim}</span>
+                ) : partnerJavaslatok.some((j) => j.mezo === "postazasi_cim") ? (
+                  partnerJavaslatok.filter((j) => j.mezo === "postazasi_cim").map((j) => <AdatJavaslatSor key={j.id} j={j} szerkeszthet={fuvarozasJog} mezoNelkul />)
+                ) : sor.partner_id && fuvarozasJog ? (
+                  <PostacimBevitel partnerId={sor.partner_id} />
+                ) : (
+                  <span className="text-muted-foreground">—</span>
+                )}
+              </div>
+              {partnerJavaslatok.some((j) => j.mezo !== "postazasi_cim") ? (
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs text-muted-foreground">A partner további hiányzó adatai — javaslat:</span>
+                  {partnerJavaslatok.filter((j) => j.mezo !== "postazasi_cim").map((j) => <AdatJavaslatSor key={j.id} j={j} szerkeszthet={fuvarozasJog} />)}
+                </div>
+              ) : null}
               <div className="flex items-center justify-between gap-2"><span>Fizetési határidő</span><span className="text-muted-foreground">{sor.fizetesi_hatarido_nap != null ? `${sor.fizetesi_hatarido_nap} nap` : "—"}</span></div>
               {sor.partner_id ? <a href={`/fuvarozas2/partnerek?nyit=${sor.partner_id}#p-${sor.partner_id}`} className="text-xs font-semibold text-[var(--f2-blue)] hover:underline">A partner adatainak szerkesztése →</a> : null}
             </CardContent>
