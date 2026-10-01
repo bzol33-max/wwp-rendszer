@@ -1,0 +1,67 @@
+Click here!
+Szállítási megbízás
+Dátum: 01.10.2026 Oldal: 1 / 3
+Vállalat/ág.: 010/051 CTF
+Hiv.Sz.: 10001
+Megrendelo leányvállalat:
+KUEHNE + NAGEL (AG & CO.) KG
+ZWEIGNIEDERLASSUNG LANGENBACH
+R & R LOGISTICS MUENCHEN
+FREISINGER STRAssE 7
+DE 85386 ECHING
+MINTA UGYINTEZO
+ugyintezo@kuehne-nagel.com
+Szállítási vállalkozó 50000000
+WELL-WORN PALLET KFT
+RÁKÓCZI UTCA 26
+HU 4234 SZAKOLY
+info@example.hu
+A megállapodás szerint vegye át fixen, szigorúan semlegesen a nevünkben az alábbiak
+Jármu típusa: MEGA-TRAILER Megállapodott fuvardíj: 900,00 EUR
+Tehergépkocsi rendszáma: NMZ-492 Pótkocsi/utánfutó rendszáma: XZV-926
+További követelmények:
+Feszítoszíjak, Feszítotáblák, Seperje tisztára és szagmentesen
+Jóváírást kap a megállapodás szerinti fuvardíjért. Kérjük, ne küldjön nekünk számlát.
+Figyelem: A raklaputalványokat (pl. a DPL-től, PAKI-tól és másoktól) a digitalizált átvételi folyamat
+mellett EREDETI formában kell benyújtani a megrendelő K+N fiókhoz.
+További információk a szállító számára:
+Megállás dátuma/idopontja: 01.10.2026 7:00 - 15:0
+PELDA KFT. UM_10000001 Teljes súly: 7200 kg
+PELDA UT 5
+HU 9600 SARVAR
+MegállásTp Áruk	Rendelésszám./ Darabszáma Súly Ldm Címzett
+VP in KG
+Rakodás 80000001 96 EP 3100000 7.200 MINTA ZRT.
+BMW LEERGUT
+Megjegyzések
+Ref. 80000001
+
+-- 1 of 3 --
+
+Kuehne + Nagel ( AG & Co. ) KG
+Szállítási megbízás
+Dátum: 01.10.2026 Oldal: 2 / 3
+Vállalat/ág.: 010/051 CTF
+Hiv.Sz.: 10001
+Megrendelo leányvállalat:
+KUEHNE + NAGEL (AG & CO.) KG
+ZWEIGNIEDERLASSUNG LANGENBACH
+R & R LOGISTICS MUENCHEN
+FREISINGER STRAssE 7
+DE 85386 ECHING
+MINTA UGYINTEZO
+ugyintezo@kuehne-nagel.com
+Megállás dátuma/idopontja: 02.10.2026 7:00 - 15:0
+MINTA ZRT. 30000000 Teljes súly: 7200 kg
+MINTA UTCA 3
+HU 4031 DEBRECEN
+MegállásTp Áruk	Rendelésszám./ Darabszáma Súly Ldm Címzett
+VP in KG
+Kirakodás 80000001 96 EP 3100000 7.200
+BMW LEERGUT
+Megjegyzések
+
+-- 2 of 3 --
+
+Szerződés-alap
+Szállítási szerződés A dokumentum fejlécében megnevezett fuvarozó …

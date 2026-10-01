@@ -45,6 +45,7 @@ import type { KivontFuvar } from "./ellenorzes";
 import type { SzovegElem } from "./pdf-elemek";
 import { kivonSpediTransMezoket } from "./speditrans";
 import { kivonGhibliMezoket } from "./ghibli";
+import { kivonKuehneNagelMezoket } from "./kuehne-nagel";
 
 export type Partner = {
   /** Belső azonosító (napló, mintafájlok neve). */
@@ -315,6 +316,20 @@ export const PARTNEREK: readonly Partner[] = [
     postazasiCim: "1601 Budapest, Pf. 131.",
     fizetesiHataridoNap: 60,
     hivatkozasNeve: "Rendelési szám",
+  },
+  {
+    kod: "kuehne-nagel",
+    // A megbízásokon (és a meglévő fuvarokon) ez a név áll.
+    nev: "KUEHNE + NAGEL (AG & CO.) KG",
+    ujjlenyomat: [/kuehne-nagel\.com/i, /KUEHNE\s*\+\s*NAGEL\s*\(\s*AG\s*&\s*CO/i],
+    torzsVege: [/Szerz[őo]d[ée]s-alap/],
+    // „Eltérő megállapodás hiányában a fizetési határidő a jóváírás napjától
+    // számított 60 nap.” Számlát nem kérnek (jóváírás), postázási cím nincs.
+    fizetesiHataridoNap: 60,
+    hivatkozasNeve: "Hiv.Sz.",
+    // A rakodóhely cégét a modell cím helyett a felrakó/lerakó mezőbe írta
+    // (36998, 2026-10-01) — a címeket a sablonból olvassuk (kuehne-nagel.ts).
+    kivon: (nyersSzoveg) => kivonKuehneNagelMezoket(nyersSzoveg),
   },
 ] as const;
 
