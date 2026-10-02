@@ -132,6 +132,12 @@ export const ATMENETEK: readonly Atmenet[] = [
   { szam: 15, honnan: "szamlazhato", hova: "teljesitve", kivalto: "fotó visszavonása (téves párosítás)", forrasok: ["ember"] },
   { szam: 15, honnan: "szamlazva", hova: "teljesitve", kivalto: "számla visszavonása (téves párosítás)", forrasok: ["ember"] },
   { szam: 16, honnan: "lezart", hova: "postazva", kivalto: "Visszaállítás a lezárt sor részletén", forrasok: ["ember"] },
+  // Téves „Postázva” (BHS Trans 330031897, 2026-10-02): a papír nem ment el,
+  // a fuvar vissza a postára várók közé.
+  {
+    szam: 17, honnan: "postazva", hova: "szamlazva", kivalto: "Postázás visszavonása (nem ment el)", forrasok: ["ember"],
+    feltetel: (k) => kell(k.szamlaVan, "nincs számla"),
+  },
 ];
 
 /** Az 1–2. él: új megbízás induló állapota. */

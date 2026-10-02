@@ -27,6 +27,7 @@ const VISSZA: Partial<Record<string, string>> = {
   "szamlazhato>teljesitve": "Fotó visszavonása",
   "szamlazva>teljesitve": "Számla visszavonása",
   "lezart>postazva": "Visszaállítás (lezárt → postázva)",
+  "postazva>szamlazva": "Postázás visszavonása (nem ment el)",
 };
 
 export function MegbizasReszlet({

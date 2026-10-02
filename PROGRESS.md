@@ -1,5 +1,24 @@
 # PROGRESS
 
+## 2026-10-02 — Téves „Postázva”: visszavonható, és számla előtt nem számít
+
+- **Probléma:** a BHS Trans 330031897 (Budapest → Nyíregyháza) nem ment
+  postára, mégsem volt a Posta-listán. 09-30-án a régi Posta-listán
+  (akkor még a számlázatlanokat is mutatta) postázottnak jelölték; számla
+  nélkül ez nem látszott. 10-01 13:16-kor megjött a számla, és a 002-es
+  trigger (számla + 5 percnél régebbi postázás) egyből lezárta.
+  A „Postázva” állapotból visszalépni sem lehetett.
+- **Javítás:**
+  - 17. él: postazva → szamlazva („Postázás visszavonása (nem ment el)”,
+    csak ember, számlával) — gomb a megbízás részletén; a régi jelölőt és
+    az elszámolás postazva_at-ját is törli.
+  - `015_postazas_szamla_elott_torlodik.sql`: ha a számlaszám most érkezik
+    és a „Postázva” már előtte ott állt, a jelölés törlődik (postára csak
+    kiszámlázott fuvar megy) — a fuvar a postára várók közé kerül.
+  - `migrate.mjs` csak-olvasó napló: az elmúlt 30 nap ilyen módon lezárt
+    bér fuvarjai.
+- **Teszt:** teszt-allapotgep 54/0, teszt-backfill-allapot 18/0, typecheck.
+
 ## 2026-10-01 — K+N-megbízás: a felrakó/lerakó címe a sablonból
 
 - **Probléma:** a Kuehne + Nagel 36998-as megbízásán (Micó, BMW Leergut) a
