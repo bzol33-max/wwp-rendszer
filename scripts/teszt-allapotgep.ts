@@ -147,6 +147,11 @@ utvonal("partner nem kér e-mailt/postát", [
   ["lezart", "rendszer", { partnerNemKerEmailt: true, partnerNemKerPostat: true }],
 ], "tervezett");
 
+// Téves „Postázva” visszavonása (17. él): csak ember, és csak számlával.
+eq("postázva → számlázva (ember, számlával)", ellenorizAtmenet("postazva", "szamlazva", "ember", { szamlaVan: true }).ok, true);
+eq("postázva → számlázva rendszer nem indíthatja", ellenorizAtmenet("postazva", "szamlazva", "rendszer", { szamlaVan: true }).ok, false);
+eq("postázva → számlázva számla nélkül nem", ellenorizAtmenet("postazva", "szamlazva", "ember", {}).ok, false);
+
 // lehetsegesCelok az UI-hoz: a sofőr a teljesített fuvaron nem lát gombot.
 eq("sofőr céljai teljesítve-n", lehetsegesCelok("teljesitve", "sofor", teljes), []);
 eq("ember céljai számlázva-n (teljes ctx)", lehetsegesCelok("szamlazva", "ember", { ...teljes, partnerNemKerEmailt: true, partnerNemKerPostat: true }).sort(), ["lezart", "postazva", "teljesitve"]);

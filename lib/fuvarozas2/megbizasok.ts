@@ -251,6 +251,11 @@ export async function valtAllapot(
       case "szamlazhato":
         set("teljesitve = true, teljesitve_at = coalesce(teljesitve_at, now())");
         break;
+      case "szamlazva":
+        // Téves „Postázva” visszavonása (17. él): a régi jelölő is törlődik,
+        // különben a régi besorolás továbbra is feladottnak látná.
+        if (sor.allapot === "postazva") set("postazva = false, postazva_at = null");
+        break;
       case "postazva":
         // A feladott papír a kézben volt: a beérkezés dátuma is beíródik.
         set("postazva = true, postazva_at = coalesce(postazva_at, now()), papirok_beerkeztek_at = coalesce(papirok_beerkeztek_at, now())");
@@ -267,6 +272,7 @@ export async function valtAllapot(
     if (sor.jelleg === "ber") {
       await client.query(`insert into fuvar_elszamolas (megbizas_id) values ($1) on conflict (megbizas_id) do nothing`, [id]);
       if (hova === "postazva") await client.query(`update fuvar_elszamolas set postazva_at = coalesce(postazva_at, now()), postazva_by = $2, papirok_beerkeztek_at = coalesce(papirok_beerkeztek_at, now()), papirok_beerkeztek_by = coalesce(papirok_beerkeztek_by, $2), frissitve_at = now() where megbizas_id = $1`, [id, par[2]]);
+      if (hova === "szamlazva" && sor.allapot === "postazva") await client.query(`update fuvar_elszamolas set postazva_at = null, postazva_by = null, frissitve_at = now() where megbizas_id = $1`, [id]);
       if (hova === "email_elment") await client.query(`update fuvar_elszamolas set email_elment_at = coalesce(email_elment_at, now()), email_elment_by = $2, frissitve_at = now() where megbizas_id = $1`, [id, par[2]]);
       if (hova === "teljesitve" && sor.allapot === "szamlazva") await client.query(`update fuvar_elszamolas set szamla_id = null, szamla_szam = null, szamla_kelte = null, frissitve_at = now() where megbizas_id = $1`, [id]);
     }
@@ -274,6 +280,7 @@ export async function valtAllapot(
       hova === "teljesitve" && ["szamlazhato", "szamlazva"].includes(sor.allapot) ? "visszaallitas"
       : hova === "tervezett" && sor.allapot === "folyamatban" ? "visszaallitas"
       : hova === "postazva" && sor.allapot === "lezart" ? "visszaallitas"
+      : hova === "szamlazva" && sor.allapot === "postazva" ? "visszaallitas"
       : hova === "tervezett" ? "jovahagyva"
       : hova === "folyamatban" ? "megerkezett"
       : hova === "teljesitve" ? "teljesitve"

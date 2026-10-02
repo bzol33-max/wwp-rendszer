@@ -282,6 +282,7 @@ async function main() {
   await javitsaHuncargoMegrendelotOnce(pool);
   await aktualizaldMicoEucargoNapjatOnce(pool);
   await naplozFuvarHelyEllenorzest(pool);
+  await naplozPostazasNelkulLezartat(pool);
   await naplozBerCsempeHetet(pool);
   await ellenorizSoforFiokokat(pool);
 
@@ -1511,6 +1512,33 @@ async function naplozBerCsempeHetet(pool) {
     for (const r of rows) console.log(`[migrate]   ${sor(r)}`);
   } catch (err) {
     console.log(`[migrate] heti bérfuvar-csempe napló hiba: ${err instanceof Error ? err.message : err}`);
+  }
+}
+
+// Csak napló, NEM javít (BHS Trans 330031897, 2026-10-02): bér fuvar, amit a
+// régi jelölőkből a trigger a számla megjöttekor egyből lezárt, mert a
+// „Postázva” jelölés már a számla ELŐTT ott állt — postázás nélkül tűnt el
+// a Posta-listáról. A 015-ös migráció óta ilyen nem keletkezik; a régieket a
+// megbízás részletén a „Visszaállítás”, majd „Postázás visszavonása” hozza vissza.
+async function naplozPostazasNelkulLezartat(pool) {
+  try {
+    const { rows } = await pool.query(
+      `select m.id, m.megrendelo, m.szamla_szam,
+              to_char(m.postazva_at at time zone 'Europe/Budapest', 'YYYY-MM-DD HH24:MI') as postazva,
+              to_char(e.mikor at time zone 'Europe/Budapest', 'YYYY-MM-DD HH24:MI') as lezarva
+         from fuvar_megbizasok m
+         join fuvar_megbizas_esemeny e on e.megbizas_id = m.id
+        where m.statusz <> 'torolt' and m.tipus = 'sajat' and m.allapot = 'lezart'
+          and e.allapot_utan = 'lezart' and e.allapot_elott in ('teljesitve', 'szamlazhato', 'szamlazva')
+          and (e.reszletek->>'forras_trigger')::boolean is true
+          and m.postazva_at is not null and m.postazva_at < e.mikor - interval '5 minutes'
+          and e.mikor > now() - interval '30 days'
+        order by e.mikor desc`
+    );
+    console.log(`[migrate] számla előtt postázottnak jelölt, a számlával egyből lezárt bér fuvar (30 nap): ${rows.length}`);
+    for (const r of rows) console.log(`[migrate]   #${r.id} ${r.megrendelo ?? "-"} ${r.szamla_szam ?? "-"} postázva ${r.postazva} → lezárva ${r.lezarva}`);
+  } catch (err) {
+    console.log(`[migrate] postázás nélküli lezárás napló hiba: ${err instanceof Error ? err.message : err}`);
   }
 }
 
