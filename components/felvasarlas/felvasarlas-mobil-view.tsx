@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
@@ -8,6 +9,7 @@ import { logout } from "@/lib/auth/actions";
 import { addPurchases, type PriceRow } from "@/lib/keszlet/actions";
 import { MOBIL_THEME } from "@/lib/mobil-theme";
 import { PullToRefresh } from "@/components/mobil/pull-to-refresh";
+import { useSzelHuzas } from "@/components/mobil/use-szel-huzas";
 
 function todayLabel() {
   const raw = new Date().toLocaleDateString("hu-HU", {
@@ -18,7 +20,21 @@ function todayLabel() {
   return raw;
 }
 
-export function FelvasarlasMobilView({ prices }: { prices: PriceRow[] }) {
+export function FelvasarlasMobilView({
+  prices,
+  vissza = false,
+}: {
+  prices: PriceRow[];
+  /**
+   * Van-e hova visszalépni: igaz, ha a bejelentkezett felhasználónak van
+   * dolgozói kezdőlapja (/erkezes), ahonnan a Felvásárlás csempével jött.
+   * Vissza nyíl nincs — Budaházi Zoltán kérése (2026-10-02) —, a visszalépés
+   * a bal szélről behúzás, ugyanaz a mozdulat, mint a többi mobil képernyőn.
+   * Aki csak felvásárol (önálló fiók), annál a mozdulat nem is élesedik.
+   */
+  vissza?: boolean;
+}) {
+  const router = useRouter();
   const [qty, setQty] = useState<Record<string, string>>({});
   const [submitting, startSubmit] = useTransition();
 
@@ -30,6 +46,22 @@ export function FelvasarlasMobilView({ prices }: { prices: PriceRow[] }) {
 
   const entries = Object.entries(qty).filter(([, v]) => Number(v) > 0);
   const total = entries.reduce((sum, [type, v]) => sum + Number(v) * (priceMap[type] ?? 0), 0);
+
+  // A behúzás elnavigál az oldalról, a beírt darabszámok pedig csak a
+  // Rögzítés gombbal mennek be — ezért ha van nem mentett tétel, rákérdezünk.
+  const huzas = useSzelHuzas(
+    vissza
+      ? () => {
+          if (
+            entries.length > 0 &&
+            !window.confirm("Van beírt darabszám, ami még nincs rögzítve. Elhagyod az oldalt?")
+          ) {
+            return;
+          }
+          router.push("/erkezes");
+        }
+      : undefined
+  );
 
   function submit() {
     if (entries.length === 0) {
@@ -65,6 +97,7 @@ export function FelvasarlasMobilView({ prices }: { prices: PriceRow[] }) {
     <div
       style={MOBIL_THEME}
       className="flex h-dvh flex-col overflow-hidden bg-[var(--mob-bg)] text-[var(--mob-text)]"
+      {...huzas}
     >
       <div className="flex shrink-0 items-center justify-between border-b border-[var(--mob-border)] bg-[var(--mob-card)] px-4 py-3">
         <div>

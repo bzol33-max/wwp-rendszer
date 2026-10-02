@@ -6,10 +6,10 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useRef,
   useState,
   useTransition,
 } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -20,6 +20,7 @@ import {
   IdCard,
   LogOut,
   Package,
+  ShoppingCart,
   Truck,
   Undo2,
 } from "lucide-react";
@@ -31,6 +32,7 @@ import { cn } from "@/lib/utils";
 import { logout } from "@/lib/auth/actions";
 import { MOBIL_THEME } from "@/lib/mobil-theme";
 import { PullToRefresh } from "@/components/mobil/pull-to-refresh";
+import { useSzelHuzas } from "@/components/mobil/use-szel-huzas";
 import { EditPermissionProvider } from "@/components/auth/edit-permission-context";
 import {
   getSzabadsagKeret,
@@ -96,34 +98,15 @@ function ElolegSav() {
 // Közös keret minden képernyőhöz: Menta-antracit színséma + lehúzásra
 // frissítés (ld. AGENTS.md "Mobil felület — kötelező konvenciók").
 function Shell({ children, onBack }: { children: React.ReactNode; onBack?: () => void }) {
-  // Visszalépés lapozással: a képernyő BAL SZÉLÉRŐL jobbra húzva ugyanaz
-  // történik, mint a fejléc nyilával — natív app-szerű mozdulat, kesztyűben
-  // is eltalálható. Csak a szélső sávból (48 px) indulhat, hogy a listák
-  // görgetését és a lehúzásra frissítést ne zavarja.
-  const huzasKezdet = useRef<{ x: number; y: number } | null>(null);
-
-  function touchStart(e: React.TouchEvent) {
-    const t = e.touches[0];
-    huzasKezdet.current = t && t.clientX <= 48 ? { x: t.clientX, y: t.clientY } : null;
-  }
-
-  function touchEnd(e: React.TouchEvent) {
-    const kezdet = huzasKezdet.current;
-    huzasKezdet.current = null;
-    if (!kezdet || !onBack) return;
-    const t = e.changedTouches[0];
-    if (!t) return;
-    const dx = t.clientX - kezdet.x;
-    const dy = Math.abs(t.clientY - kezdet.y);
-    if (dx > 70 && dy < 60) onBack();
-  }
+  // A bal szélről behúzás ugyanaz, mint a fejléc nyila — a mozdulat közös,
+  // lásd components/mobil/use-szel-huzas.ts.
+  const huzas = useSzelHuzas(onBack);
 
   return (
     <div
       style={MOBIL_THEME}
       className="mx-auto flex h-dvh max-w-md flex-col overflow-hidden bg-[var(--mob-bg)] text-[var(--mob-text)]"
-      onTouchStart={onBack ? touchStart : undefined}
-      onTouchEnd={onBack ? touchEnd : undefined}
+      {...huzas}
     >
       <PullToRefresh className="flex-1 overflow-y-auto">
         <div className="flex flex-col gap-4 px-4 py-4">
@@ -176,6 +159,7 @@ function Header({ employeeName, onBack }: { employeeName: string; onBack?: () =>
 
 function HomeScreen({
   employeeName,
+  showFelvasarlas,
   showJelenlet,
   showFeladatok,
   showKeszlet,
@@ -184,6 +168,13 @@ function HomeScreen({
   onSelect,
 }: {
   employeeName: string;
+  /**
+   * A Felvásárlás NEM ezen a nézeten belüli képernyő, hanem a már meglévő
+   * önálló /felvasarlas oldal — ezért Link, nem gomb. Oszlánszki Tamás
+   * mobil fiókja ezt és a Profilt kapja, semmi mást (Budaházi Zoltán,
+   * 2026-10-02).
+   */
+  showFelvasarlas: boolean;
   showJelenlet: boolean;
   showFeladatok: boolean;
   showKeszlet: boolean;
@@ -195,6 +186,15 @@ function HomeScreen({
     <Shell>
       <Header employeeName={employeeName} />
       <div className="flex flex-1 flex-col gap-3 pt-4">
+        {showFelvasarlas && (
+          <Link
+            href="/felvasarlas"
+            className="flex flex-col items-center justify-center gap-2 rounded-xl border-2 border-[var(--mob-border)] bg-[var(--mob-card)] py-10 transition-colors active:bg-[var(--mob-tile)]"
+          >
+            <ShoppingCart className="h-7 w-7" />
+            <span className="text-base font-semibold">Felvásárlás</span>
+          </Link>
+        )}
         {showFuvarok && (
           <button
             type="button"
@@ -922,22 +922,37 @@ export function ErkezesSajatView({
   employeeId,
   employeeName,
   role,
+  jelenletAktiv,
   keszletPermission,
   fuvarozasPermission,
   elolegekPermission,
+  felvasarlasPermission,
 }: {
   employeeId: string;
   employeeName: string;
   role: string;
+  /**
+   * A dolgozó szerepel-e a jelenléti nyilvántartásban (alkalmazottak.
+   * jelenlet_aktiv). Ettől függ a Jelenléti és a Feladatok csempe: akit nem
+   * tartunk nyilván, annak a gombnyomása az admin Jelenléti oldalán meg sem
+   * jelenne (ott jelenlet_aktiv-ra szűrünk), tehát a csempét sem adjuk meg.
+   */
+  jelenletAktiv: boolean;
   keszletPermission: ModulePermission;
   fuvarozasPermission: ModulePermission;
   elolegekPermission: ModulePermission;
+  felvasarlasPermission: ModulePermission;
 }) {
   const [screen, setScreen] = useState<Screen>("home");
   // Sofőr fiók (Vadon Gergő, Takács Micó) csak a Fuvarok és a Profil
   // csempét kapja — Budaházi Zoltán kérése (2026-09-22). A jelenlétet és a
   // feladatokat nem a telefonon intézik, vezetés közben csak zaj volt.
   const sofor = role === "sofor";
+  // A Jelenléti és a Feladatok csempét mostantól nem a szerepkör, hanem a
+  // nyilvántartás-jelölés dönti el (2026-10-02). A sofőröknél ez ugyanaz az
+  // eredmény, viszont így Oszlánszki Tamás mobil fiókja is helyesen jár el:
+  // ő nem szerepel a jelenlétiben, csak felvásárol.
+  const jelenletiCsempek = jelenletAktiv;
   const [elolegek, setElolegek] = useState<EmployeeElolegekOsszesito | null>(null);
   const [keret, setKeret] = useState<SzabadsagKeret | null>(null);
   const [profilLoading, setProfilLoading] = useState(true);
@@ -976,7 +991,7 @@ export function ErkezesSajatView({
   );
 
   let tartalom: React.ReactNode;
-  if (screen === "jelenlet" && !sofor) {
+  if (screen === "jelenlet" && jelenletiCsempek) {
     tartalom = (
       <JelenletiScreen
         employeeId={employeeId}
@@ -984,7 +999,7 @@ export function ErkezesSajatView({
         onBack={() => setScreen("home")}
       />
     );
-  } else if (screen === "feladatok" && !sofor) {
+  } else if (screen === "feladatok" && jelenletiCsempek) {
     tartalom = <FeladatokScreen employeeName={employeeName} onBack={() => setScreen("home")} />;
   } else if (screen === "keszlet" && keszletPermission.view) {
     tartalom = (
@@ -1018,8 +1033,9 @@ export function ErkezesSajatView({
     tartalom = (
       <HomeScreen
         employeeName={employeeName}
-        showJelenlet={!sofor}
-        showFeladatok={!sofor}
+        showFelvasarlas={felvasarlasPermission.view}
+        showJelenlet={jelenletiCsempek}
+        showFeladatok={jelenletiCsempek}
         showKeszlet={!sofor && keszletPermission.view}
         showFuvarok={fuvarozasPermission.view}
         showProfil

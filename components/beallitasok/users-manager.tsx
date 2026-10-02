@@ -45,8 +45,78 @@ import {
   updateUserPermissions,
   type UserRow,
 } from "@/lib/auth/users-actions";
+import { ROLES, ROLE_LABEL, type Role } from "@/lib/auth/roles";
 
-type Role = "admin" | "felhasznalo";
+type EmployeeOption = { id: string; name: string };
+
+const NINCS_DOLGOZO = "-";
+
+/**
+ * A fiók melyik dolgozóhoz tartozik. Ebből tudja a mobil nézet (/erkezes),
+ * kinek a jelenlétét, előlegét és szabadságát írja — enélkül a dolgozói
+ * fiókok semmilyen saját adatot nem látnak.
+ */
+function DolgozoValaszto({
+  value,
+  employees,
+  onChange,
+}: {
+  value: string | null;
+  employees: EmployeeOption[];
+  onChange: (next: string | null) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label>Dolgozó (mobil nézethez: kinek az adatait látja)</Label>
+      <Select
+        value={value ?? NINCS_DOLGOZO}
+        onValueChange={(v) => onChange(v === NINCS_DOLGOZO ? null : v)}
+      >
+        <SelectTrigger>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={NINCS_DOLGOZO}>— nincs hozzárendelve —</SelectItem>
+          {employees.map((e) => (
+            <SelectItem key={e.id} value={e.id}>
+              {e.name}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+function RoleValaszto({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: Role;
+  onChange: (next: Role) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label>Szerepkör</Label>
+      <Select value={value} onValueChange={(v) => onChange(v as Role)} disabled={disabled}>
+        <SelectTrigger>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {ROLES.map((r) => (
+            <SelectItem key={r.value} value={r.value}>
+              {r.label}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
+
 
 function emptyPermissions(): Permissions {
   const p: Permissions = {};
@@ -103,12 +173,19 @@ function PermissionGrid({
   );
 }
 
-function NewUserDialog({ onCreated }: { onCreated: () => void }) {
+function NewUserDialog({
+  employees,
+  onCreated,
+}: {
+  employees: EmployeeOption[];
+  onCreated: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [role, setRole] = useState<Role>("felhasznalo");
+  const [employeeId, setEmployeeId] = useState<string | null>(null);
   const [permissions, setPermissions] = useState<Permissions>(emptyPermissions());
   const [pending, startTransition] = useTransition();
 
@@ -117,13 +194,14 @@ function NewUserDialog({ onCreated }: { onCreated: () => void }) {
     setPassword("");
     setName("");
     setRole("felhasznalo");
+    setEmployeeId(null);
     setPermissions(emptyPermissions());
   }
 
   function handleSubmit() {
     startTransition(async () => {
       try {
-        await createUser({ username, password, name, role, permissions });
+        await createUser({ username, password, name, role, permissions, employeeId });
         toast.success("Felhasználó létrehozva.");
         reset();
         setOpen(false);
@@ -165,19 +243,9 @@ function NewUserDialog({ onCreated }: { onCreated: () => void }) {
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Szerepkör</Label>
-            <Select value={role} onValueChange={(v) => setRole(v as Role)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="felhasznalo">Felhasználó (jogosultságok alább)</SelectItem>
-                <SelectItem value="admin">Admin (mindent lát és szerkeszthet)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {role === "felhasznalo" && (
+          <RoleValaszto value={role} onChange={setRole} />
+          <DolgozoValaszto value={employeeId} employees={employees} onChange={setEmployeeId} />
+          {role !== "admin" && (
             <PermissionGrid permissions={permissions} onChange={setPermissions} />
           )}
         </div>
@@ -194,17 +262,24 @@ function NewUserDialog({ onCreated }: { onCreated: () => void }) {
 
 function EditUserDialog({
   user,
+  employees,
   onClose,
   onSaved,
   currentUserId,
 }: {
   user: UserRow;
+  employees: EmployeeOption[];
   onClose: () => void;
   onSaved: () => void;
   currentUserId: string;
 }) {
   const [name, setName] = useState(user.name);
-  const [role, setRole] = useState<Role>(user.role === "admin" ? "admin" : "felhasznalo");
+  // A meglévő szerepkört megtartjuk — korábban minden nem-admin fiók
+  // "felhasznalo"-ra esett vissza, és a mentés csendben átírta a sofőröket.
+  const [role, setRole] = useState<Role>(
+    (ROLES.find((r) => r.value === user.role)?.value ?? "felhasznalo") as Role
+  );
+  const [employeeId, setEmployeeId] = useState<string | null>(user.employee_id);
   const [active, setActive] = useState(user.active);
   const [permissions, setPermissions] = useState<Permissions>({
     ...emptyPermissions(),
@@ -217,8 +292,8 @@ function EditUserDialog({
   function handleSaveBasic() {
     startTransition(async () => {
       try {
-        await updateUserBasic({ id: user.id, name, role, active });
-        if (role === "felhasznalo") {
+        await updateUserBasic({ id: user.id, name, role, active, employeeId });
+        if (role !== "admin") {
           await updateUserPermissions({ id: user.id, permissions });
         }
         toast.success("Mentve.");
@@ -268,22 +343,8 @@ function EditUserDialog({
             <Label>Név</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Label>Szerepkör</Label>
-            <Select
-              value={role}
-              onValueChange={(v) => setRole(v as Role)}
-              disabled={isSelf}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="felhasznalo">Felhasználó (jogosultságok alább)</SelectItem>
-                <SelectItem value="admin">Admin (mindent lát és szerkeszthet)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <RoleValaszto value={role} onChange={setRole} disabled={isSelf} />
+          <DolgozoValaszto value={employeeId} employees={employees} onChange={setEmployeeId} />
           <label className="flex items-center gap-2 text-sm">
             <Checkbox
               checked={active}
@@ -292,7 +353,7 @@ function EditUserDialog({
             />
             Aktív (kikapcsolva nem tud bejelentkezni)
           </label>
-          {role === "felhasznalo" && (
+          {role !== "admin" && (
             <PermissionGrid permissions={permissions} onChange={setPermissions} />
           )}
           <div className="flex flex-col gap-1.5 border-t pt-3">
@@ -338,9 +399,11 @@ function EditUserDialog({
 
 export function UsersManager({
   initialUsers,
+  employees,
   currentUserId,
 }: {
   initialUsers: UserRow[];
+  employees: EmployeeOption[];
   currentUserId: string;
 }) {
   const [users] = useState(initialUsers);
@@ -358,7 +421,7 @@ export function UsersManager({
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-sm">Felhasználók ({users.length})</CardTitle>
-        <NewUserDialog onCreated={refresh} />
+        <NewUserDialog employees={employees} onCreated={refresh} />
       </CardHeader>
       <CardContent>
         <Table>
@@ -367,6 +430,7 @@ export function UsersManager({
               <TableHead>Felhasználónév</TableHead>
               <TableHead>Név</TableHead>
               <TableHead>Szerepkör</TableHead>
+              <TableHead>Dolgozó</TableHead>
               <TableHead>Állapot</TableHead>
               <TableHead />
             </TableRow>
@@ -380,8 +444,11 @@ export function UsersManager({
                   {u.role === "admin" ? (
                     <Badge>Admin</Badge>
                   ) : (
-                    <Badge variant="secondary">Felhasználó</Badge>
+                    <Badge variant="secondary">{ROLE_LABEL[u.role] ?? u.role}</Badge>
                   )}
+                </TableCell>
+                <TableCell className="text-xs">
+                  {u.employee_name ?? <span className="text-muted-foreground">—</span>}
                 </TableCell>
                 <TableCell>
                   {u.active ? (
@@ -403,6 +470,7 @@ export function UsersManager({
       {editing && (
         <EditUserDialog
           user={editing}
+          employees={employees}
           currentUserId={currentUserId}
           onClose={() => setEditing(null)}
           onSaved={refresh}

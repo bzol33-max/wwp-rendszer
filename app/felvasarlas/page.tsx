@@ -18,5 +18,8 @@ export default async function FelvasarlasPage() {
 
   const prices = await getNyiregyhazaPurchasePrices();
 
-  return <FelvasarlasMobilView prices={prices} />;
+  // Akinek van dolgozói kezdőlapja, az a Felvásárlás csempéről jött ide, és a
+  // bal szélről behúzva tud visszalépni (vissza nyíl nincs). Aki csak
+  // felvásárol, annál a mozdulat nem élesedik — nincs hova vinnie.
+  return <FelvasarlasMobilView prices={prices} vissza={session.can("erkezes").view} />;
 }
