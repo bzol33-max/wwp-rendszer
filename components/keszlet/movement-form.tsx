@@ -84,6 +84,9 @@ export function MovementForm({
   const [partnerek, setPartnerek] = useState<string[]>([]);
   const [javaslatNyitva, setJavaslatNyitva] = useState(false);
   const [afa, setAfa] = useState(false);
+  // Eladásnál: készpénz (az összeg a kasszába kerül) vagy átutalás (számlára
+  // megy, a kassza nem mozdul — az ár ettől még rögzül).
+  const [fizetesiMod, setFizetesiMod] = useState<"keszpenz" | "atutalas">("keszpenz");
   const [submitting, setSubmitting] = useState(false);
 
   // Legfeljebb 8 találat: a névvel kezdődők előre, utána a névben bárhol
@@ -202,6 +205,7 @@ export function MovementForm({
         items,
         partner: direction === "mozgatas" ? undefined : partner,
         afa: eladasLehet ? afa : undefined,
+        fizetesiMod: eladasLehet ? fizetesiMod : undefined,
       });
       setSorok([ujSor(types[0] ?? "", otherSites[0] ?? "")]);
       setPartner("");
@@ -374,10 +378,34 @@ export function MovementForm({
                 </span>
               </div>
             )}
+            {netto > 0 && (
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  ["keszpenz", "Készpénz — kasszába"],
+                  ["atutalas", "Átutalás — számlára"],
+                ] as const).map(([ertek, cimke]) => (
+                  <button
+                    key={ertek}
+                    type="button"
+                    onClick={() => setFizetesiMod(ertek)}
+                    className={cn(
+                      "rounded-md border px-2 py-2 text-xs font-medium transition-colors max-md:min-h-11",
+                      fizetesiMod === ertek
+                        ? "border-primary bg-accent text-accent-foreground"
+                        : "border-border text-muted-foreground hover:bg-muted"
+                    )}
+                  >
+                    {cimke}
+                  </button>
+                ))}
+              </div>
+            )}
             <p className="text-[11px] text-muted-foreground">
-              {netto > 0
-                ? `A készletből levonjuk, ${brutto.toLocaleString("hu-HU")} Ft pedig bevételként a kasszába kerül.`
-                : "Ár nélkül ez sima kiszállítás — a kassza nem változik."}
+              {netto === 0
+                ? "Ár nélkül ez sima kiszállítás — a kassza nem változik."
+                : fizetesiMod === "keszpenz"
+                  ? `A készletből levonjuk, ${brutto.toLocaleString("hu-HU")} Ft pedig bevételként a kasszába kerül.`
+                  : `A készletből levonjuk. Az ${netto.toLocaleString("hu-HU")} Ft${afa ? " + ÁFA" : ""} számlára megy, a kassza nem változik.`}
             </p>
           </div>
         )}

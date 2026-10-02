@@ -877,6 +877,17 @@ create index if not exists idx_kassza_movements_group on kassza_movements (movem
 -- ottani okézás (elfogadva_at) után számít bele a készletbe — ld. getStock és
 -- getOsszkeszlet. A küldő telepen a mennyiség továbbra is azonnal lekerül
 -- (ami felment a kocsira, az már nincs ott), tehát az okézásig a tétel "úton" van.
+-- Eladás (Kiszállítás / Eladás Ft/db árral): az egységár és a fizetés módja a
+-- mozgáson is rögzül (2026-10-02). Készpénzes eladásnál az ellenérték a
+-- kasszába kerül — ott a kassza_movements sor a nyoma —, átutalásos
+-- (számlás) eladásnál viszont a kassza nem mozdul, és enélkül az eladás
+-- értéke sehol nem látszana.
+alter table keszlet_movements add column if not exists elad_egysegar integer;
+alter table keszlet_movements add column if not exists elad_fizmod text;
+alter table keszlet_movements drop constraint if exists keszlet_movements_elad_fizmod_check;
+alter table keszlet_movements add constraint keszlet_movements_elad_fizmod_check
+  check (elad_fizmod is null or elad_fizmod in ('keszpenz', 'atutalas'));
+
 alter table keszlet_movements add column if not exists elfogadva_at timestamptz;
 alter table keszlet_movements add column if not exists elfogadva_by text;
 -- A bevezetés ELŐTTI mozgatások át vannak véve (eddig azonnal a készletben

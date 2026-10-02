@@ -207,15 +207,18 @@ async function addMovement(q: Querier, input: {
   purchaseId?: string;
   createdBy?: string;
   movementGroup?: string;
+  /** Eladási egységár (Ft/db) és fizetési mód — csak eladásnál (ki + ár). */
+  eladAr?: number;
+  eladFizmod?: "keszpenz" | "atutalas";
 }) {
   await q(
-    `insert into keszlet_movements (site_id, type_id, direction, qty, partner, target_site_id, purchase_id, created_by, movement_group)
+    `insert into keszlet_movements (site_id, type_id, direction, qty, partner, target_site_id, purchase_id, created_by, movement_group, elad_egysegar, elad_fizmod)
      values (
        (select id from sites where name = $1),
        (select id from pallet_types where name = $2),
        $3, $4, $5,
        (select id from sites where name = $6),
-       $7, $8, $9
+       $7, $8, $9, $10, $11
      )`,
     [
       input.site,
@@ -227,6 +230,8 @@ async function addMovement(q: Querier, input: {
       input.purchaseId ?? null,
       input.createdBy ?? null,
       input.movementGroup ?? null,
+      input.eladAr ?? null,
+      input.eladFizmod ?? null,
     ]
   );
 }
@@ -265,6 +270,12 @@ const AFA_KULCS = 0.27;
 
 export async function recordMovements(input: {
   site: string;
+  /**
+   * Eladásnál a fizetés módja. "keszpenz" (alapértelmezés): az ellenérték a
+   * kasszába kerül. "atutalas": számlára megy, a kassza NEM mozdul — az ár
+   * ettől még rögzül a mozgáson, hogy az eladás értéke megmaradjon.
+   */
+  fizetesiMod?: "keszpenz" | "atutalas";
   direction: Direction;
   items: { type: string; qty: number; targetSite?: string; unitPrice?: number }[];
   partner?: string;
@@ -297,7 +308,13 @@ export async function recordMovements(input: {
       throw new Error("Eladás csak Nyíregyházán rögzíthető — kassza csak ott van.");
     }
   }
+  const fizetesiMod = input.fizetesiMod ?? "keszpenz";
+  if (fizetesiMod !== "keszpenz" && fizetesiMod !== "atutalas") {
+    throw new Error(`Érvénytelen fizetési mód: ${String(input.fizetesiMod)}`);
+  }
   const bruttoOsszeg = input.afa ? Math.round(nettoOsszeg * (1 + AFA_KULCS)) : nettoOsszeg;
+  // Átutalásos (számlás) eladásnál a pénz nem a kasszán keresztül jön be.
+  const kasszaba = nettoOsszeg > 0 && fizetesiMod === "keszpenz";
   if (input.items.length === 0) return;
 
   const movementGroup = randomUUID();
@@ -312,6 +329,8 @@ export async function recordMovements(input: {
         targetSite: input.direction === "mozgatas" ? item.targetSite : undefined,
         createdBy: createdBy ?? undefined,
         movementGroup,
+        eladAr: (item.unitPrice ?? 0) > 0 ? item.unitPrice : undefined,
+        eladFizmod: (item.unitPrice ?? 0) > 0 ? fizetesiMod : undefined,
       });
     }
     if (input.direction === "mozgatas") {
@@ -350,11 +369,15 @@ export async function recordMovements(input: {
       // Eladásnál a pénz is látszik az eseményen, hogy a "Legutóbbi mozgások"
       // listából egyben olvasható legyen, mi ment ki és mennyiért.
       const penzText =
-        nettoOsszeg > 0
-          ? ` · kassza +${bruttoOsszeg.toLocaleString("hu-HU")} Ft${
-              input.afa ? ` (nettó ${nettoOsszeg.toLocaleString("hu-HU")} + 27% ÁFA)` : ""
-            }`
-          : "";
+        nettoOsszeg === 0
+          ? ""
+          : kasszaba
+            ? ` · kassza +${bruttoOsszeg.toLocaleString("hu-HU")} Ft${
+                input.afa ? ` (nettó ${nettoOsszeg.toLocaleString("hu-HU")} + 27% ÁFA)` : ""
+              }`
+            : ` · átutalásra ${nettoOsszeg.toLocaleString("hu-HU")} Ft${
+                input.afa ? " + ÁFA" : ""
+              } (a kassza nem változik)`;
       await q(
         `insert into keszlet_events (site_id, kind, details, effect, created_by, movement_group)
          values ((select id from sites where name = 'Nyíregyháza'), 'mozgas', $1, $2, $3, $4)`,
@@ -362,7 +385,7 @@ export async function recordMovements(input: {
       );
     }
 
-    if (nettoOsszeg > 0) {
+    if (kasszaba) {
       const tetelek = eladottTetelek
         .map((i) => `${i.qty} db ${i.type} × ${(i.unitPrice ?? 0).toLocaleString("hu-HU")} Ft`)
         .join(", ");
