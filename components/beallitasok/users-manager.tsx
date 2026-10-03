@@ -339,45 +339,42 @@ function EditUserDialog({
   // belépni vele. Ilyenkor a jelszó az első dolog, nem a jogosultságok.
   const jelszoKell = user.jelszo_hianyzik && !jelszoBeallitva;
 
+  /**
+   * EGY mentés mindenre, a jelszót is beleértve. Korábban a jelszónak külön
+   * "Csere" gombja volt: ha valaki beírta a jelszót és a Mentést nyomta meg,
+   * a beírt jelszó csendben eldobódott, a fiók pedig bekapcsolt állapotban,
+   * de használhatatlan jelszóval maradt — pontosan ez történt az OT fiókkal
+   * (2026-10-03). Két mentő gomb egy párbeszédben csapda.
+   */
   function handleSaveBasic() {
-    startTransition(async () => {
-      try {
-        await updateUserBasic({ id: user.id, name, role, active, employeeId });
-        if (role !== "admin") {
-          await updateUserPermissions({ id: user.id, permissions });
-        }
-        toast.success("Mentve.");
-        onSaved();
-        onClose();
-      } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Nem sikerült menteni.");
-      }
-    });
-  }
-
-  function handleResetPassword() {
-    if (newPassword.length < 6) {
-      // A szerver is ellenőrzi, de itt azonnal szólunk: a rövid jelszó a
-      // leggyakoribb oka annak, hogy "nem lehet jelszót beállítani".
+    const jelszot = newPassword.trim();
+    if (jelszot !== "" && jelszot.length < 6) {
       toast.error("A jelszónak legalább 6 karakternek kell lennie.");
+      return;
+    }
+    // Bekapcsolt fiók jelszó nélkül nem tud belépni — ne menjen így ki.
+    if (jelszoKell && jelszot === "") {
+      toast.error(
+        "Ennek a fióknak még nincs jelszava: add meg felül, különben nem fog tudni belépni."
+      );
       return;
     }
     startTransition(async () => {
       try {
-        await resetUserPassword({ id: user.id, password: newPassword });
-        setNewPassword("");
-        setJelszoBeallitva(true);
-        if (jelszoKell && !active) {
-          // Egy jelszó nélküli fiók mindig ki van kapcsolva. A jelszó
-          // beállítása után az egyetlen értelmes következő lépés a
-          // bekapcsolás — bepipáljuk, de a mentés marad a felhasználón.
-          setActive(true);
-          toast.success("Jelszó beállítva. Most nyomd meg a Mentést a bekapcsoláshoz.");
-        } else {
-          toast.success("Jelszó módosítva.");
+        if (jelszot !== "") {
+          await resetUserPassword({ id: user.id, password: jelszot });
+          setJelszoBeallitva(true);
         }
+        await updateUserBasic({ id: user.id, name, role, active, employeeId });
+        if (role !== "admin") {
+          await updateUserPermissions({ id: user.id, permissions });
+        }
+        setNewPassword("");
+        toast.success(jelszot !== "" ? "Mentve, a jelszó beállítva." : "Mentve.");
+        onSaved();
+        onClose();
       } catch (e) {
-        toast.error(e instanceof Error ? e.message : "Nem sikerült módosítani.");
+        toast.error(e instanceof Error ? e.message : "Nem sikerült menteni.");
       }
     });
   }
@@ -405,30 +402,21 @@ function EditUserDialog({
         <div className="flex min-h-0 flex-col gap-3 overflow-y-auto pr-1">
           {jelszoKell && (
             <div className="rounded-lg border border-warning bg-warning/10 px-3 py-2 text-xs text-foreground">
-              <b>Ennek a fióknak még nincs jelszava, ezért nem lehet vele belépni.</b> Adj meg
-              egyet alább, nyomd meg a Cserét, aztán a Mentést.
+              <b>Ennek a fióknak még nincs jelszava, ezért nem lehet vele belépni.</b> Írd be
+              alább, aztán nyomd meg a Mentést.
             </div>
           )}
 
           {/* A jelszó a párbeszéd TETEJÉN van, nem a jogosultság-rács alatt:
-              egy új fióknál ez az első dolog, és ott nem kell hozzá görgetni. */}
+              egy új fióknál ez az első dolog, és ott nem kell hozzá görgetni.
+              Külön mentő gombja NINCS — a Mentés ezt is elmenti. */}
           <div className="flex flex-col gap-1.5">
-            <Label>{jelszoKell ? "Jelszó megadása" : "Új jelszó megadása (opcionális)"}</Label>
-            <div className="flex gap-2">
-              <Input
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Legalább 6 karakter"
-              />
-              <Button
-                type="button"
-                variant={jelszoKell ? "default" : "outline"}
-                disabled={pending || !newPassword}
-                onClick={handleResetPassword}
-              >
-                Csere
-              </Button>
-            </div>
+            <Label>{jelszoKell ? "Jelszó megadása" : "Új jelszó (üresen hagyva marad a régi)"}</Label>
+            <Input
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Legalább 6 karakter"
+            />
           </div>
 
           <div className="flex flex-col gap-1.5 border-t pt-3">
