@@ -36,7 +36,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { MODULES, type Permissions } from "@/lib/auth/permissions";
+import { MODULES, type ModuleKey, type Permissions } from "@/lib/auth/permissions";
 import {
   createUser,
   deleteUser,
@@ -124,6 +124,29 @@ function emptyPermissions(): Permissions {
   return p;
 }
 
+function csakEzek(kulcsok: ModuleKey[]): Permissions {
+  const p: Permissions = {};
+  for (const m of MODULES) {
+    const be = kulcsok.includes(m.key);
+    p[m.key] = { view: be, edit: be };
+  }
+  return p;
+}
+
+/**
+ * Szerepkör-választáskor felkínált kiinduló jogosultság ÚJ fióknál. A mobil
+ * fiókoknak alig pár modul kell, végigpipálni mind a tizenkilencet pedig
+ * hosszú és könnyű elvéteni — a meglévő fiókok (Vadon Gábor, Bodogán Gabi,
+ * a két sofőr) pontosan ezekkel a jogokkal futnak. Szerkesztésnél NEM
+ * nyúlunk hozzá, ott a meglévő beállítás marad.
+ */
+function szerepkorAlap(role: Role): Permissions {
+  if (role === "admin") return emptyPermissions();
+  if (role === "dolgozo") return csakEzek(["erkezes", "elolegek_sajat", "keszlet_sajat"]);
+  if (role === "sofor") return csakEzek(["erkezes", "elolegek_sajat", "fuvarozas_sajat"]);
+  return emptyPermissions();
+}
+
 function PermissionGrid({
   permissions,
   onChange,
@@ -133,8 +156,25 @@ function PermissionGrid({
   onChange: (next: Permissions) => void;
   disabled?: boolean;
 }) {
+  function mind(view: boolean) {
+    const next: Permissions = {};
+    for (const m of MODULES) next[m.key] = { view, edit: view };
+    onChange(next);
+  }
+
   return (
     <div className="flex flex-col gap-2 rounded-md border p-3">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium">Jogosultságok</span>
+        <div className="flex gap-1.5">
+          <Button type="button" size="xs" variant="outline" disabled={disabled} onClick={() => mind(true)}>
+            Összes be
+          </Button>
+          <Button type="button" size="xs" variant="outline" disabled={disabled} onClick={() => mind(false)}>
+            Összes ki
+          </Button>
+        </div>
+      </div>
       <div className="grid grid-cols-[1fr_auto_auto] items-center gap-x-4 gap-y-1.5 text-xs">
         <span className="text-muted-foreground">Modul</span>
         <span className="text-muted-foreground">Látja</span>
@@ -221,11 +261,11 @@ function NewUserDialog({
       }}
     >
       <Button onClick={() => setOpen(true)}>Új felhasználó</Button>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] sm:max-w-md max-h-[88dvh]">
         <DialogHeader>
           <DialogTitle>Új felhasználó</DialogTitle>
         </DialogHeader>
-        <div className="flex flex-col gap-3">
+        <div className="flex min-h-0 flex-col gap-3 overflow-y-auto pr-1">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="new-username">Felhasználónév</Label>
             <Input id="new-username" value={username} onChange={(e) => setUsername(e.target.value)} />
@@ -243,7 +283,13 @@ function NewUserDialog({
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
-          <RoleValaszto value={role} onChange={setRole} />
+          <RoleValaszto
+            value={role}
+            onChange={(r) => {
+              setRole(r);
+              setPermissions(szerepkorAlap(r));
+            }}
+          />
           <DolgozoValaszto value={employeeId} employees={employees} onChange={setEmployeeId} />
           {role !== "admin" && (
             <PermissionGrid permissions={permissions} onChange={setPermissions} />
@@ -334,11 +380,11 @@ function EditUserDialog({
 
   return (
     <Dialog open onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="grid-rows-[auto_minmax(0,1fr)_auto] sm:max-w-md max-h-[88dvh]">
         <DialogHeader>
           <DialogTitle>{user.username}</DialogTitle>
         </DialogHeader>
-        <div className="flex flex-col gap-3">
+        <div className="flex min-h-0 flex-col gap-3 overflow-y-auto pr-1">
           <div className="flex flex-col gap-1.5">
             <Label>Név</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
