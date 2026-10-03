@@ -2,6 +2,7 @@ import { AlertCircle } from "lucide-react";
 import { PageHeader } from "@/components/layout/page-header";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requireSession } from "@/lib/auth/dal";
+import { getJelenletAktiv } from "@/lib/jelenlet/actions";
 import { ErkezesSajatView } from "@/components/erkezes/erkezes-sajat-view";
 
 export default async function ErkezesPage() {
@@ -34,14 +35,21 @@ export default async function ErkezesPage() {
     );
   }
 
+  // A Jelenléti/Feladatok csempét a nyilvántartás-jelölés dönti el, nem a
+  // szerepkör — így a csak felvásárló mobil fiók (Oszlánszki Tamás) nem kap
+  // olyan gombot, aminek a nyomát az admin oldalon nem is látnánk.
+  const jelenletAktiv = await getJelenletAktiv(session.employeeId);
+
   return (
     <ErkezesSajatView
       employeeId={session.employeeId}
       employeeName={session.name}
       role={session.role}
+      jelenletAktiv={jelenletAktiv}
       keszletPermission={session.can("keszlet_sajat")}
       fuvarozasPermission={session.can("fuvarozas_sajat")}
       elolegekPermission={session.can("elolegek_sajat")}
+      felvasarlasPermission={session.can("felvasarlas_mobil")}
     />
   );
 }

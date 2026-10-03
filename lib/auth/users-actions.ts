@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { query } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth/dal";
 import { MODULES, type Permissions } from "@/lib/auth/permissions";
+import { normalizeRole, type Role } from "@/lib/auth/roles";
 
 // Minden ebben a fájlban lévő akció admin-jogosultsághoz kötött
 // (requireAdmin — átirányít, ha a hívó nem admin). Ez a Felhasználók
@@ -20,15 +21,40 @@ export type UserRow = {
   active: boolean;
   permissions: Permissions;
   created_at: string;
+  /** A hozzárendelt dolgozó (alkalmazottak) sora, ha van — lásd assignEmployee. */
+  employee_id: string | null;
+  employee_name: string | null;
 };
 
 export async function listUsers(): Promise<UserRow[]> {
   await requireAdmin();
   return query<UserRow>(
-    `select id, username, name, role, active, permissions, created_at
-     from users
-     order by created_at asc`
+    `select u.id, u.username, u.name, u.role, u.active, u.permissions, u.created_at,
+       u.employee_id::text as employee_id, a.name as employee_name
+     from users u
+     left join alkalmazottak a on a.id = u.employee_id
+     order by u.created_at asc`
   );
+}
+
+/**
+ * A dolgozó-választó tartalma. A mobil nézetek (/erkezes, Profil, jelenlét,
+ * előlegek) a users.employee_id-ból tudják, kinek a sorát írják — ezt eddig
+ * csak migrációval lehetett beállítani, ezért maradt összekötetlen például
+ * Oszlánszki Tamás fiókja.
+ */
+export async function listEmployeeOptions(): Promise<{ id: string; name: string }[]> {
+  await requireAdmin();
+  return query<{ id: string; name: string }>(
+    `select id::text, name from alkalmazottak where active order by position, id`
+  );
+}
+
+/** Üres/"nincs" választás esetén null, egyébként a dolgozó azonosítója. */
+function normalizeEmployeeId(input: unknown): string | null {
+  if (typeof input !== "string") return null;
+  const t = input.trim();
+  return t === "" || t === "-" ? null : t;
 }
 
 function normalizePermissions(input: unknown): Permissions {
@@ -49,10 +75,13 @@ export async function createUser(input: {
   username: string;
   password: string;
   name: string;
-  role: "admin" | "felhasznalo";
+  role: Role;
   permissions: unknown;
+  employeeId?: string | null;
 }) {
   await requireAdmin();
+  const role = normalizeRole(input.role);
+  const employeeId = normalizeEmployeeId(input.employeeId);
 
   const username = input.username.trim();
   const name = input.name.trim();
@@ -62,12 +91,12 @@ export async function createUser(input: {
   }
 
   const passwordHash = await bcrypt.hash(input.password, 12);
-  const permissions = input.role === "admin" ? {} : normalizePermissions(input.permissions);
+  const permissions = role === "admin" ? {} : normalizePermissions(input.permissions);
 
   await query(
-    `insert into users (username, password_hash, name, role, permissions)
-     values ($1, $2, $3, $4, $5::jsonb)`,
-    [username, passwordHash, name, input.role, JSON.stringify(permissions)]
+    `insert into users (username, password_hash, name, role, permissions, employee_id)
+     values ($1, $2, $3, $4, $5::jsonb, $6)`,
+    [username, passwordHash, name, role, JSON.stringify(permissions), employeeId]
   );
 
   revalidatePath("/beallitasok/felhasznalok");
@@ -76,17 +105,20 @@ export async function createUser(input: {
 export async function updateUserBasic(input: {
   id: string;
   name: string;
-  role: "admin" | "felhasznalo";
+  role: Role;
   active: boolean;
+  employeeId?: string | null;
 }) {
   await requireAdmin();
 
   const name = input.name.trim();
   if (!name) throw new Error("A név megadása kötelező.");
+  const role = normalizeRole(input.role);
+  const employeeId = normalizeEmployeeId(input.employeeId);
 
   await query(
-    `update users set name = $2, role = $3, active = $4 where id = $1`,
-    [input.id, name, input.role, input.active]
+    `update users set name = $2, role = $3, active = $4, employee_id = $5 where id = $1`,
+    [input.id, name, role, input.active, employeeId]
   );
 
   revalidatePath("/beallitasok/felhasznalok");

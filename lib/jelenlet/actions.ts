@@ -448,6 +448,27 @@ export async function getSzabadsagKeret(employeeId: string): Promise<SzabadsagKe
   };
 }
 
+/**
+ * Szerepel-e a dolgozó a jelenléti nyilvántartásban (alkalmazottak.
+ * jelenlet_aktiv). A mobil kezdőlap ezzel dönti el, hogy ott van-e a
+ * Jelenléti és a Feladatok csempe: akit nem tartunk nyilván (sofőrök,
+ * Oszlánszki Tamás), annak a gombnyomása az admin Jelenléti oldalán meg sem
+ * jelenne, mert ott erre a jelölésre szűrünk — lásd getTodayJelenletek.
+ */
+export async function getJelenletAktiv(employeeId: string): Promise<boolean> {
+  await requireSajatVagyModulJog({
+    employeeId,
+    sajatModule: "erkezes",
+    modul: "jelenlet",
+    kind: "view",
+  });
+  const rows = await query<{ aktiv: boolean }>(
+    `select jelenlet_aktiv as aktiv from alkalmazottak where id = $1`,
+    [employeeId]
+  );
+  return rows[0]?.aktiv ?? false;
+}
+
 // --- Feladatok (üzenőfal) ---
 
 export async function getSites(): Promise<Site[]> {
