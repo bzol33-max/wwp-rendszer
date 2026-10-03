@@ -1101,3 +1101,34 @@ create table if not exists fuvar_partner_kiolvasas (
   hiba          text,
   futott_at     timestamptz not null default now()
 );
+
+-- Szabadság-igénylés (2026-10-03). A dolgozó a telefonján beadja, mikor
+-- szeretne szabadságra menni, az admin a Jelenléti oldalon jóváhagyja vagy
+-- elutasítja. Amíg "kert" állapotban van, a napok NEM fogyasztják a keretet
+-- (a keret-számítás a jelenletek szabadság-sorait összegzi, lásd
+-- lib/jelenlet/actions.ts getSzabadsagKeret) — a jóváhagyás írja be a
+-- jelenletek-sorokat, egy tranzakcióban, hétvége nélkül.
+--
+-- Az admin maga is rögzíthet bárkinek: olyankor az igény azonnal
+-- "jovahagyva" állapotban keletkezik, hogy a nyoma meglegyen (ki vitte fel
+-- és mikor), és a jelenletek-sorok ugyanazon az úton jönnek létre.
+create table if not exists szabadsag_igenyek (
+  id           bigserial primary key,
+  employee_id  bigint not null references alkalmazottak(id) on delete cascade,
+  tol          date not null,
+  ig           date not null,
+  tipus        text not null default 'szabadsag' check (tipus in ('szabadsag', 'beteg')),
+  allapot      text not null default 'kert' check (allapot in ('kert', 'jovahagyva', 'elutasitva', 'visszavonva')),
+  megjegyzes   text,
+  -- Ki adta be: a dolgozó neve a telefonról, vagy az adminé, ha ő rögzítette.
+  bekuldte     text,
+  bekuldve_at  timestamptz not null default now(),
+  dontes_at    timestamptz,
+  dontes_by    text,
+  dontes_oka   text,
+  check (ig >= tol)
+);
+create index if not exists idx_szabadsag_igenyek_emp on szabadsag_igenyek (employee_id, tol desc);
+-- A jóváhagyásra váró kérések listája a Jelenléti oldal láblécében: ez a
+-- részleges index tartja gyorsnak, bármennyi lezárt igény mellett is.
+create index if not exists idx_szabadsag_igenyek_nyitott on szabadsag_igenyek (tol) where allapot = 'kert';
