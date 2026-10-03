@@ -445,3 +445,190 @@ export type HaviArchivumHonap = {
 export function formatOra(minutes: number): string {
   return (minutes / 60).toLocaleString("hu-HU", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 }
+
+// --- Szabadság-igénylés (2026-10-03) ---
+
+export type SzabadsagTipus = "szabadsag" | "beteg";
+export type SzabadsagAllapot = "kert" | "jovahagyva" | "elutasitva" | "visszavonva";
+
+export const SZABADSAG_ALLAPOT_LABELS: Record<SzabadsagAllapot, string> = {
+  kert: "Jóváhagyásra vár",
+  jovahagyva: "Jóváhagyva",
+  elutasitva: "Elutasítva",
+  visszavonva: "Visszavonva",
+};
+
+export type SzabadsagIgeny = {
+  id: string;
+  employee_id: string;
+  employee_name: string;
+  tol: string;
+  ig: string;
+  tipus: SzabadsagTipus;
+  allapot: SzabadsagAllapot;
+  megjegyzes: string | null;
+  bekuldte: string | null;
+  bekuldve: string;
+  dontes_at: string | null;
+  dontes_by: string | null;
+  dontes_oka: string | null;
+};
+
+/** Egy dolgozó éves szabadság-mérlege a Jelenléti oldal fejlécében. */
+export type SzabadsagMerleg = {
+  employeeId: string;
+  name: string;
+  /** Null, ha a dolgozóhoz nincs keret beállítva. */
+  keret: number | null;
+  fordulonap: string | null;
+  /** Jóváhagyott (a jelenletek-ben rögzített) szabadság-napok a fordulónap után. */
+  kivett: number;
+  /** Még jóvá nem hagyott kérések munkanapjai — ezek nem fogyasztják a keretet. */
+  kert: number;
+  /** keret - kivett; null, ha nincs keret. Nem megy nulla alá. */
+  maradek: number | null;
+};
+
+export function hetvege(iso: string): boolean {
+  const d = new Date(`${iso}T12:00:00Z`).getUTCDay();
+  return d === 0 || d === 6;
+}
+
+/**
+ * Egy szakasz MUNKANAPJAI, ISO dátumokként. A hétvége kimarad: szabadságot
+ * csak munkanapra írunk, és a keretből sem vonhat le szombat-vasárnap.
+ * Visszafelé megadott szakaszra üres listát ad.
+ */
+export function munkanapok(tol: string, ig: string): string[] {
+  if (ig < tol) return [];
+  const out: string[] = [];
+  const veg = new Date(`${ig}T12:00:00Z`);
+  const kurzor = new Date(`${tol}T12:00:00Z`);
+  // Biztonsági felső korlát: egy igény legfeljebb egy évet fedhet.
+  let orszem = 0;
+  while (kurzor <= veg && orszem++ < 400) {
+    const iso = kurzor.toISOString().slice(0, 10);
+    if (!hetvege(iso)) out.push(iso);
+    kurzor.setUTCDate(kurzor.getUTCDate() + 1);
+  }
+  return out;
+}
+
+/** Egy nap egy emberének bejegyzése az éves rácsban. */
+export type RacsBejegyzes = {
+  employeeId: string;
+  tipus: SzabadsagTipus;
+  /** Csak a "kert" és a "jovahagyva" kerül a rácsba. */
+  allapot: Extract<SzabadsagAllapot, "kert" | "jovahagyva">;
+};
+
+/**
+ * Az éves rács adata: ISO nap -> kik vannak aznap távol, a megadott
+ * dolgozó-sorrendben (így a cella csíkjainak sorrendje minden napon
+ * ugyanaz, és a szem tudja követni, melyik szín kihez tartozik).
+ * Az elutasított és visszavont igények nem szerepelnek, a hétvége sem.
+ */
+export function szabadsagRacs(
+  igenyek: SzabadsagIgeny[],
+  sorrend: string[]
+): Map<string, RacsBejegyzes[]> {
+  const nap = new Map<string, RacsBejegyzes[]>();
+  for (const i of igenyek) {
+    if (i.allapot !== "kert" && i.allapot !== "jovahagyva") continue;
+    for (const d of munkanapok(i.tol, i.ig)) {
+      const lista = nap.get(d) ?? [];
+      lista.push({ employeeId: i.employee_id, tipus: i.tipus, allapot: i.allapot });
+      nap.set(d, lista);
+    }
+  }
+  for (const lista of nap.values()) {
+    lista.sort((a, b) => sorrend.indexOf(a.employeeId) - sorrend.indexOf(b.employeeId));
+  }
+  return nap;
+}
+
+/** Kivel és hány napon ütközik egy kérés. A saját napjait nem számolja. */
+export type Utkozes = { employeeId: string; name: string; napok: string[] };
+
+export function igenyUtkozesei(igeny: SzabadsagIgeny, mind: SzabadsagIgeny[]): Utkozes[] {
+  const sajat = new Set(munkanapok(igeny.tol, igeny.ig));
+  const talalat = new Map<string, Utkozes>();
+  for (const m of mind) {
+    if (m.id === igeny.id || m.employee_id === igeny.employee_id) continue;
+    if (m.allapot !== "kert" && m.allapot !== "jovahagyva") continue;
+    for (const d of munkanapok(m.tol, m.ig)) {
+      if (!sajat.has(d)) continue;
+      const be = talalat.get(m.employee_id) ?? {
+        employeeId: m.employee_id,
+        name: m.employee_name,
+        napok: [],
+      };
+      if (!be.napok.includes(d)) be.napok.push(d);
+      talalat.set(m.employee_id, be);
+    }
+  }
+  return [...talalat.values()].map((u) => ({ ...u, napok: u.napok.sort() }));
+}
+
+/**
+ * Mennyi marad a keretből, ha ezt a kérést jóváhagyjuk. Null, ha a
+ * dolgozónak nincs beállított kerete (olyankor nem tudunk nyilatkozni).
+ * Negatív érték = a kérés túllépi a keretet; ez nem tiltás, csak jelzés,
+ * mert lehet rá ok (előző évi maradék, fizetés nélküli megállapodás).
+ */
+export function keretJovahagyasUtan(
+  merleg: SzabadsagMerleg | undefined,
+  igeny: SzabadsagIgeny
+): number | null {
+  if (!merleg || merleg.maradek === null) return null;
+  // Betegszabadság nem fogyaszt keretet — lásd getSzabadsagKeret.
+  if (igeny.tipus === "beteg") return merleg.maradek;
+  return merleg.maradek - munkanapok(igeny.tol, igeny.ig).length;
+}
+
+/**
+ * Hét elkülönülő szín a szabadság-rácshoz, dolgozó-sorrendben kiosztva. A
+ * piros szándékosan NEM szerepel: az kizárólag a torlódást jelöli. Hétnél
+ * több dolgozónál körbefordul — olyankor a sorrend dönt, ki kap ismétlést.
+ */
+export const SZABADSAG_SZINEK = [
+  "bg-teal-600",
+  "bg-indigo-600",
+  "bg-pink-600",
+  "bg-yellow-600",
+  "bg-sky-700",
+  "bg-violet-600",
+  "bg-lime-700",
+] as const;
+
+export function szabadsagSzin(index: number): string {
+  return SZABADSAG_SZINEK[index % SZABADSAG_SZINEK.length];
+}
+
+/**
+ * Rövid nevek a rács celláihoz. Egy ember esetén a cellába kiírjuk a nevét,
+ * kettő-háromnál már csak egy betűjelet — ezért mindkettőre kell egy olyan
+ * változat, ami a csapatban egyedi.
+ *
+ * A rövid név a keresztnév, kivéve ha abból több is ugyanaz (két Gábor):
+ * olyankor a családnév azonosít. A betűjel a rövid név első két karaktere,
+ * és ha az egyezne valakivel, addig hosszabbodik, amíg el nem válik.
+ */
+export function rovidNevek(nevek: string[]): { rovid: string; betu: string }[] {
+  const darabok = nevek.map((n) => n.trim().split(/\s+/));
+  const keresztnevek = darabok.map((d) => d[d.length - 1] ?? "");
+  const rovidek = darabok.map((d, i) => {
+    const keresztnev = keresztnevek[i];
+    const tobbszor = keresztnevek.filter((k) => k === keresztnev).length > 1;
+    return tobbszor ? (d[0] ?? keresztnev) : keresztnev;
+  });
+
+  // Betűjel: a legrövidebb előtag, ami már mindenkit elválaszt egymástól.
+  let hossz = 2;
+  let betuk = rovidek.map((r) => r.slice(0, hossz));
+  while (hossz < 6 && new Set(betuk).size < new Set(rovidek).size) {
+    hossz += 1;
+    betuk = rovidek.map((r) => r.slice(0, hossz));
+  }
+  return rovidek.map((rovid, i) => ({ rovid, betu: betuk[i] }));
+}

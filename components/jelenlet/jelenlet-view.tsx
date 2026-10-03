@@ -197,6 +197,12 @@ export function JelenletView() {
               ))}
             </div>
             <Link
+              href="/jelenlet/szabadsag"
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              Szabadság
+            </Link>
+            <Link
               href="/jelenlet/archivum"
               className={buttonVariants({ variant: "outline", size: "sm" })}
             >

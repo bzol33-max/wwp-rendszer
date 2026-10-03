@@ -35,6 +35,7 @@ import { PullToRefresh } from "@/components/mobil/pull-to-refresh";
 import { useSzelHuzas } from "@/components/mobil/use-szel-huzas";
 import { EditPermissionProvider } from "@/components/auth/edit-permission-context";
 import {
+  getSajatSzabadsagIgenyek,
   getSzabadsagKeret,
   getTodayJelenletek,
   recordAbszenciaNow,
@@ -44,11 +45,14 @@ import {
 } from "@/lib/jelenlet/actions";
 import {
   formatDiff,
+  munkanapok,
   sumWorkedMinutes,
   type JelenletSession,
+  type SzabadsagIgeny,
   type SzabadsagKeret,
 } from "@/lib/jelenlet/shared";
 import { FeladatokMobilCsempe } from "@/components/erkezes/feladatok-mobil-csempe";
+import { SzabadsagKeres } from "@/components/erkezes/szabadsag-keres";
 import { getSiteSnapshot, type IncomingRow } from "@/lib/keszlet/actions";
 import { MovementForm } from "@/components/keszlet/movement-form";
 import { BejovoSzallitmanyok } from "@/components/keszlet/bejovo-szallitmanyok";
@@ -542,6 +546,7 @@ function ProfilScreen({
   employeeName,
   elolegek,
   keret,
+  igenyek,
   loading,
   onReload,
   onBack,
@@ -550,11 +555,21 @@ function ProfilScreen({
   employeeName: string;
   elolegek: EmployeeElolegekOsszesito | null;
   keret: SzabadsagKeret | null;
+  igenyek: SzabadsagIgeny[];
   loading: boolean;
   onReload: () => Promise<void>;
   onBack: () => void;
 }) {
   const [pending, startTransition] = useTransition();
+
+  // Hány munkanap vár még jóváhagyásra — ennyi NEM fogyott még a keretből.
+  const kertNapok = useMemo(
+    () =>
+      igenyek
+        .filter((i) => i.allapot === "kert" && i.tipus === "szabadsag")
+        .reduce((sum, i) => sum + munkanapok(i.tol, i.ig).length, 0),
+    [igenyek]
+  );
 
   const honapok = useMemo(() => {
     if (!elolegek) return [];
@@ -606,10 +621,20 @@ function ProfilScreen({
                 <p className="text-3xl font-bold text-[var(--mob-accent)]">{keret.maradek} nap</p>
                 <p className="mt-1 text-[11px] text-[var(--mob-muted)]">
                   {keret.fordulonap} óta {keret.felhasznalt} napot vettél ki.
+                  {/* A kért nap még nem fogy a keretből — ha nem írjuk ki, a
+                      dolgozó azt hiszi, hogy a beadott kérése már levonódott. */}
+                  {kertNapok > 0 && (
+                    <>
+                      {" "}
+                      Jóváhagyásra vár még <b>{kertNapok} nap</b>, ez ebből még nem fogyott el.
+                    </>
+                  )}
                 </p>
               </CardContent>
             </Card>
           )}
+
+          <SzabadsagKeres employeeId={employeeId} igenyek={igenyek} onReload={onReload} />
 
           <div className="rounded-xl bg-[var(--mob-text)] p-4 text-[var(--mob-bg)]">
             <p className="text-xs opacity-70">Aktuális, el nem számolt előleg</p>
@@ -955,17 +980,20 @@ export function ErkezesSajatView({
   const jelenletiCsempek = jelenletAktiv;
   const [elolegek, setElolegek] = useState<EmployeeElolegekOsszesito | null>(null);
   const [keret, setKeret] = useState<SzabadsagKeret | null>(null);
+  const [igenyek, setIgenyek] = useState<SzabadsagIgeny[]>([]);
   const [profilLoading, setProfilLoading] = useState(true);
 
   // A Profil adatait a gyökér tölti be, nem a képernyő: az elfogadásra váró
   // előleg sávjának minden képernyőn látszania kell, nem csak a Profilon.
   const loadProfil = useCallback(async () => {
-    const [e, k] = await Promise.all([
+    const [e, k, i] = await Promise.all([
       elolegekPermission.view ? getEmployeeElolegek(employeeId) : Promise.resolve(null),
       getSzabadsagKeret(employeeId).catch(() => null),
+      getSajatSzabadsagIgenyek(employeeId).catch(() => [] as SzabadsagIgeny[]),
     ]);
     setElolegek(e);
     setKeret(k);
+    setIgenyek(i);
   }, [employeeId, elolegekPermission.view]);
 
   useEffect(() => {
@@ -1024,6 +1052,7 @@ export function ErkezesSajatView({
         employeeName={employeeName}
         elolegek={elolegek}
         keret={keret}
+        igenyek={igenyek}
         loading={profilLoading}
         onReload={loadProfil}
         onBack={() => setScreen("home")}

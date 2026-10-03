@@ -12,6 +12,7 @@ import {
 } from "@/lib/auth/require-permission";
 import {
   kovetkezoEsedekesseg,
+  munkanapok,
   summarizeByDay,
   type DayType,
   type HaviArchivumHonap,
@@ -21,7 +22,10 @@ import {
   type JelenletSession,
   type RepeatFreq,
   type Site,
+  type SzabadsagIgeny,
   type SzabadsagKeret,
+  type SzabadsagMerleg,
+  type SzabadsagTipus,
 } from "@/lib/jelenlet/shared";
 
 // A Railway-konténer (és a hozzá tartozó Postgres session) alapértelmezett
@@ -776,4 +780,336 @@ export async function getHaviJelenletArchivum(): Promise<HaviArchivumHonap[]> {
     });
     return { monthKey: month_key, year, month, sorok };
   });
+}
+
+// --- Szabadság-igénylés (2026-10-03) ---
+//
+// A dolgozó a telefonján beadja, mikor szeretne szabadságra menni; az admin a
+// Jelenléti oldalon jóváhagyja vagy elutasítja. A kért nap NEM fogyasztja a
+// keretet: a keret-számítás a jelenletek szabadság-sorait összegzi
+// (getSzabadsagKeret), és azokat a jóváhagyás írja be, hétvége nélkül, egy
+// tranzakcióban. Az admin maga is rögzíthet bárkinek — olyankor az igény
+// azonnal jóváhagyottan keletkezik, hogy a nyoma meglegyen.
+
+const IGENY_COLS = `i.id::text, i.employee_id::text,
+  a.name as employee_name,
+  to_char(i.tol, 'YYYY-MM-DD') as tol,
+  to_char(i.ig, 'YYYY-MM-DD') as ig,
+  i.tipus, i.allapot, i.megjegyzes, i.bekuldte,
+  to_char(i.bekuldve_at at time zone 'Europe/Budapest', 'YYYY-MM-DD HH24:MI') as bekuldve,
+  to_char(i.dontes_at at time zone 'Europe/Budapest', 'YYYY-MM-DD HH24:MI') as dontes_at,
+  i.dontes_by, i.dontes_oka`;
+
+/** Egy év összes igénye (a rácshoz és a jóváhagyó listához). */
+export async function getSzabadsagIgenyek(ev: number): Promise<SzabadsagIgeny[]> {
+  await requireViewPermission("jelenlet");
+  return query<SzabadsagIgeny>(
+    `select ${IGENY_COLS}
+       from szabadsag_igenyek i
+       join alkalmazottak a on a.id = i.employee_id
+      where i.ig >= make_date($1, 1, 1) and i.tol <= make_date($1, 12, 31)
+      order by i.tol, a.position, a.id`,
+    [ev]
+  );
+}
+
+/**
+ * A fejléc mérlege dolgozónként: keret, mennyi van kivéve (jóváhagyott, a
+ * jelenletek-ben lévő szabadság a fordulónap után), és mennyi van még
+ * jóváhagyásra várva. Minden AKTÍV dolgozó szerepel benne, nem csak akinek
+ * jelenléti nyilvántartása van: a sofőrök és Oszlánszki Tamás szabadsága is
+ * kell, pedig ők nem nyomnak érkezést.
+ */
+export async function getSzabadsagMerlegek(): Promise<SzabadsagMerleg[]> {
+  await requireViewPermission("jelenlet");
+  const rows = await query<{
+    employee_id: string;
+    name: string;
+    keret: number | null;
+    fordulonap: string | null;
+    kivett: string;
+  }>(
+    `select a.id::text as employee_id, a.name,
+       a.szabadsag_keret_nap as keret,
+       to_char(a.szabadsag_keret_datum, 'YYYY-MM-DD') as fordulonap,
+       (select count(distinct j.work_date) from jelenletek j
+         where j.employee_id = a.id and j.day_type = 'szabadsag'
+           and (a.szabadsag_keret_datum is null or j.work_date > a.szabadsag_keret_datum)) as kivett
+     from alkalmazottak a
+     where a.active
+     order by a.position, a.id`
+  );
+  // A még jóvá nem hagyott kérések munkanapjait külön számoljuk: ezek nem
+  // fogyasztják a keretet, de a fejlécben látni akarjuk, mi van folyamatban.
+  const kertek = await query<{ employee_id: string; tol: string; ig: string }>(
+    `select employee_id::text,
+       to_char(tol, 'YYYY-MM-DD') as tol, to_char(ig, 'YYYY-MM-DD') as ig
+     from szabadsag_igenyek where allapot = 'kert' and tipus = 'szabadsag'`
+  );
+  const kertNapok = new Map<string, number>();
+  for (const k of kertek) {
+    kertNapok.set(
+      k.employee_id,
+      (kertNapok.get(k.employee_id) ?? 0) + munkanapok(k.tol, k.ig).length
+    );
+  }
+  return rows.map((r) => {
+    // A pg a count()-ot (bigint) szövegként adja vissza — lásd CLAUDE.md.
+    const kivett = Number(r.kivett);
+    const keret = r.keret === null ? null : Number(r.keret);
+    return {
+      employeeId: r.employee_id,
+      name: r.name,
+      keret,
+      fordulonap: r.fordulonap,
+      kivett,
+      kert: kertNapok.get(r.employee_id) ?? 0,
+      maradek: keret === null ? null : Math.max(0, keret - kivett),
+    };
+  });
+}
+
+/** A dolgozó saját igényei a mobil Profil oldalra, a legújabb elöl. */
+export async function getSajatSzabadsagIgenyek(employeeId: string): Promise<SzabadsagIgeny[]> {
+  await requireSajatVagyModulJog({
+    employeeId,
+    sajatModule: "erkezes",
+    modul: "jelenlet",
+    kind: "view",
+  });
+  return query<SzabadsagIgeny>(
+    `select ${IGENY_COLS}
+       from szabadsag_igenyek i
+       join alkalmazottak a on a.id = i.employee_id
+      where i.employee_id = $1
+      order by i.tol desc
+      limit 30`,
+    [employeeId]
+  );
+}
+
+function ellenorizdSzakaszt(tol: string, ig: string): void {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(tol) || !/^\d{4}-\d{2}-\d{2}$/.test(ig)) {
+    throw new Error("Hibás dátum.");
+  }
+  if (ig < tol) throw new Error("A vége nem lehet korábban, mint a kezdete.");
+  if (munkanapok(tol, ig).length === 0) {
+    throw new Error("A megadott szakaszra egyetlen munkanap sem esik (csak hétvége).");
+  }
+}
+
+/**
+ * A dolgozó beadja a kérését a telefonján. Átfedést nem tiltunk: lehet, hogy
+ * a saját korábbi kérését szeretné bővíteni, és a döntés az adminé — a
+ * Jelenléti oldal viszont kiírja, kivel ütközik.
+ */
+export async function createSzabadsagIgeny(input: {
+  employeeId: string;
+  tol: string;
+  ig: string;
+  megjegyzes?: string | null;
+}): Promise<void> {
+  await requireSajatVagyModulJog({
+    employeeId: input.employeeId,
+    sajatModule: "erkezes",
+    modul: "jelenlet",
+    kind: "edit",
+  });
+  ellenorizdSzakaszt(input.tol, input.ig);
+  const session = await requireSession();
+  await query(
+    `insert into szabadsag_igenyek (employee_id, tol, ig, tipus, allapot, megjegyzes, bekuldte)
+     values ($1, $2, $3, 'szabadsag', 'kert', $4, $5)`,
+    [input.employeeId, input.tol, input.ig, input.megjegyzes?.trim() || null, session.name]
+  );
+  revalidateJelenlet();
+}
+
+/** A dolgozó visszavonja a SAJÁT, még el nem döntött kérését. */
+export async function visszavonSzabadsagIgeny(input: {
+  igenyId: string;
+  employeeId: string;
+}): Promise<void> {
+  await requireSajatVagyModulJog({
+    employeeId: input.employeeId,
+    sajatModule: "erkezes",
+    modul: "jelenlet",
+    kind: "edit",
+  });
+  const rows = await query<{ id: string }>(
+    `update szabadsag_igenyek set allapot = 'visszavonva'
+      where id = $1 and employee_id = $2 and allapot = 'kert'
+      returning id::text`,
+    [input.igenyId, input.employeeId]
+  );
+  if (rows.length === 0) {
+    throw new Error("Ez a kérés már nincs nyitva — nem lehet visszavonni.");
+  }
+  revalidateJelenlet();
+}
+
+/**
+ * Jóváhagyás: az igény állapota átáll, és a szakasz MINDEN munkanapjára
+ * bekerül egy jelenletek-sor a megfelelő nap-típussal. Egy tranzakcióban,
+ * mert a félig beírt szabadság hamis keret-egyenleget adna.
+ *
+ * Az adott napon már meglévő sorokat felülírja (ugyanaz a logika, mint a
+ * setJelenletNapTipus-nál): a jóváhagyott szabadság erősebb, mint egy
+ * korábban rögzített munkanap vagy egy másik távollét.
+ */
+export async function jovahagySzabadsagIgeny(igenyId: string): Promise<void> {
+  await requireEditPermission("jelenlet");
+  const session = await requireSession();
+  await withTransaction(async (q) => {
+    const rows = await q<{
+      employee_id: string;
+      tol: string;
+      ig: string;
+      tipus: SzabadsagTipus;
+    }>(
+      `update szabadsag_igenyek
+          set allapot = 'jovahagyva', dontes_at = now(), dontes_by = $2, dontes_oka = null
+        where id = $1 and allapot = 'kert'
+        returning employee_id::text,
+          to_char(tol, 'YYYY-MM-DD') as tol, to_char(ig, 'YYYY-MM-DD') as ig, tipus`,
+      [igenyId, session.name]
+    );
+    const r = rows[0];
+    if (!r) throw new Error("Ez a kérés már el van döntve.");
+    for (const nap of munkanapok(r.tol, r.ig)) {
+      await q(`delete from jelenletek where employee_id = $1 and work_date = $2`, [
+        r.employee_id,
+        nap,
+      ]);
+      await q(
+        `insert into jelenletek (employee_id, work_date, day_type, note)
+         values ($1, $2, $3, $4)`,
+        [r.employee_id, nap, r.tipus, "Jóváhagyott szabadság-kérés"]
+      );
+    }
+  });
+  revalidateJelenlet();
+}
+
+/** Elutasítás: a napok nem kerülnek be, az ok a dolgozó telefonján látszik. */
+export async function elutasitSzabadsagIgeny(input: {
+  igenyId: string;
+  oka?: string | null;
+}): Promise<void> {
+  await requireEditPermission("jelenlet");
+  const session = await requireSession();
+  const rows = await query<{ id: string }>(
+    `update szabadsag_igenyek
+        set allapot = 'elutasitva', dontes_at = now(), dontes_by = $2, dontes_oka = $3
+      where id = $1 and allapot = 'kert'
+      returning id::text`,
+    [input.igenyId, session.name, input.oka?.trim() || null]
+  );
+  if (rows.length === 0) throw new Error("Ez a kérés már el van döntve.");
+  revalidateJelenlet();
+}
+
+/**
+ * Az admin rögzít bárkinek. Ez nem kérés, hanem kész döntés: azonnal
+ * jóváhagyottan keletkezik, és a napok rögtön bekerülnek. Ugyanazon az úton
+ * megy, mint a jóváhagyás, hogy egy helyen legyen a nap-írás logikája.
+ */
+export async function rogzitSzabadsag(input: {
+  employeeId: string;
+  tol: string;
+  ig: string;
+  tipus: SzabadsagTipus;
+  megjegyzes?: string | null;
+}): Promise<void> {
+  await requireEditPermission("jelenlet");
+  ellenorizdSzakaszt(input.tol, input.ig);
+  const session = await requireSession();
+  await withTransaction(async (q) => {
+    await q(
+      `insert into szabadsag_igenyek
+         (employee_id, tol, ig, tipus, allapot, megjegyzes, bekuldte, dontes_at, dontes_by)
+       values ($1, $2, $3, $4, 'jovahagyva', $5, $6, now(), $6)`,
+      [
+        input.employeeId,
+        input.tol,
+        input.ig,
+        input.tipus,
+        input.megjegyzes?.trim() || null,
+        session.name,
+      ]
+    );
+    for (const nap of munkanapok(input.tol, input.ig)) {
+      await q(`delete from jelenletek where employee_id = $1 and work_date = $2`, [
+        input.employeeId,
+        nap,
+      ]);
+      await q(
+        `insert into jelenletek (employee_id, work_date, day_type, note)
+         values ($1, $2, $3, $4)`,
+        [input.employeeId, nap, input.tipus, input.megjegyzes?.trim() || null]
+      );
+    }
+  });
+  revalidateJelenlet();
+}
+
+/**
+ * Egy jóváhagyott (vagy admin által rögzített) szabadság visszavonása: az
+ * igény állapota "visszavonva", és a hozzá tartozó jelenletek-sorok eltűnnek,
+ * tehát a keret is visszakapja a napokat. Csak azokat a napokat törli, amiken
+ * tényleg ez a távollét-típus van — egy közben beírt munkanapot nem bánt.
+ */
+export async function torolSzabadsag(igenyId: string): Promise<void> {
+  await requireEditPermission("jelenlet");
+  await withTransaction(async (q) => {
+    const rows = await q<{
+      employee_id: string;
+      tol: string;
+      ig: string;
+      tipus: SzabadsagTipus;
+    }>(
+      `update szabadsag_igenyek set allapot = 'visszavonva'
+        where id = $1 and allapot = 'jovahagyva'
+        returning employee_id::text,
+          to_char(tol, 'YYYY-MM-DD') as tol, to_char(ig, 'YYYY-MM-DD') as ig, tipus`,
+      [igenyId]
+    );
+    const r = rows[0];
+    if (!r) throw new Error("Ez a szabadság nincs jóváhagyott állapotban.");
+    const napok = munkanapok(r.tol, r.ig);
+    if (napok.length > 0) {
+      await q(
+        `delete from jelenletek
+          where employee_id = $1 and day_type = $2 and work_date = any($3::date[])`,
+        [r.employee_id, r.tipus, napok]
+      );
+    }
+  });
+  revalidateJelenlet();
+}
+
+/**
+ * A szabadságkeret beállítása. Eddig csak adatbázis-migrációval lehetett —
+ * így minden új ember egy telepítést igényelt. A fordulónap az a nap,
+ * AMI UTÁN rögzített szabadság-napok fogyasztják a keretet (a bérjegyzék
+ * dátuma), a napszám pedig az akkor még kivehető napok száma.
+ */
+export async function setSzabadsagKeret(input: {
+  employeeId: string;
+  keret: number | null;
+  fordulonap: string | null;
+}): Promise<void> {
+  await requireEditPermission("jelenlet");
+  if (input.keret !== null && (!Number.isInteger(input.keret) || input.keret < 0)) {
+    throw new Error("A keret csak nulla vagy annál nagyobb egész szám lehet.");
+  }
+  if (input.keret !== null && input.fordulonap === null) {
+    throw new Error("A kerethez fordulónapot is meg kell adni.");
+  }
+  await query(
+    `update alkalmazottak set szabadsag_keret_nap = $2, szabadsag_keret_datum = $3 where id = $1`,
+    [input.employeeId, input.keret, input.fordulonap]
+  );
+  revalidateJelenlet();
+  revalidatePath("/dolgozok");
 }
