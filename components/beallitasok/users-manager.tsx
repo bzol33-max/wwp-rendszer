@@ -332,8 +332,12 @@ function EditUserDialog({
     ...user.permissions,
   });
   const [newPassword, setNewPassword] = useState("");
+  const [jelszoBeallitva, setJelszoBeallitva] = useState(false);
   const [pending, startTransition] = useTransition();
   const isSelf = user.id === currentUserId;
+  // Migrációval előkészített fiók: létezik, de jelszó nélkül senki nem tud
+  // belépni vele. Ilyenkor a jelszó az első dolog, nem a jogosultságok.
+  const jelszoKell = user.jelszo_hianyzik && !jelszoBeallitva;
 
   function handleSaveBasic() {
     startTransition(async () => {
@@ -352,12 +356,26 @@ function EditUserDialog({
   }
 
   function handleResetPassword() {
-    if (!newPassword) return;
+    if (newPassword.length < 6) {
+      // A szerver is ellenőrzi, de itt azonnal szólunk: a rövid jelszó a
+      // leggyakoribb oka annak, hogy "nem lehet jelszót beállítani".
+      toast.error("A jelszónak legalább 6 karakternek kell lennie.");
+      return;
+    }
     startTransition(async () => {
       try {
         await resetUserPassword({ id: user.id, password: newPassword });
-        toast.success("Jelszó módosítva.");
         setNewPassword("");
+        setJelszoBeallitva(true);
+        if (jelszoKell && !active) {
+          // Egy jelszó nélküli fiók mindig ki van kapcsolva. A jelszó
+          // beállítása után az egyetlen értelmes következő lépés a
+          // bekapcsolás — bepipáljuk, de a mentés marad a felhasználón.
+          setActive(true);
+          toast.success("Jelszó beállítva. Most nyomd meg a Mentést a bekapcsoláshoz.");
+        } else {
+          toast.success("Jelszó módosítva.");
+        }
       } catch (e) {
         toast.error(e instanceof Error ? e.message : "Nem sikerült módosítani.");
       }
@@ -385,7 +403,35 @@ function EditUserDialog({
           <DialogTitle>{user.username}</DialogTitle>
         </DialogHeader>
         <div className="flex min-h-0 flex-col gap-3 overflow-y-auto pr-1">
+          {jelszoKell && (
+            <div className="rounded-lg border border-warning bg-warning/10 px-3 py-2 text-xs text-foreground">
+              <b>Ennek a fióknak még nincs jelszava, ezért nem lehet vele belépni.</b> Adj meg
+              egyet alább, nyomd meg a Cserét, aztán a Mentést.
+            </div>
+          )}
+
+          {/* A jelszó a párbeszéd TETEJÉN van, nem a jogosultság-rács alatt:
+              egy új fióknál ez az első dolog, és ott nem kell hozzá görgetni. */}
           <div className="flex flex-col gap-1.5">
+            <Label>{jelszoKell ? "Jelszó megadása" : "Új jelszó megadása (opcionális)"}</Label>
+            <div className="flex gap-2">
+              <Input
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Legalább 6 karakter"
+              />
+              <Button
+                type="button"
+                variant={jelszoKell ? "default" : "outline"}
+                disabled={pending || !newPassword}
+                onClick={handleResetPassword}
+              >
+                Csere
+              </Button>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5 border-t pt-3">
             <Label>Név</Label>
             <Input value={name} onChange={(e) => setName(e.target.value)} />
           </div>
@@ -402,24 +448,6 @@ function EditUserDialog({
           {role !== "admin" && (
             <PermissionGrid permissions={permissions} onChange={setPermissions} />
           )}
-          <div className="flex flex-col gap-1.5 border-t pt-3">
-            <Label>Új jelszó megadása (opcionális)</Label>
-            <div className="flex gap-2">
-              <Input
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Új jelszó"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                disabled={pending || !newPassword}
-                onClick={handleResetPassword}
-              >
-                Csere
-              </Button>
-            </div>
-          </div>
         </div>
         <DialogFooter className="gap-2 sm:justify-between">
           <Button
@@ -497,15 +525,26 @@ export function UsersManager({
                   {u.employee_name ?? <span className="text-muted-foreground">—</span>}
                 </TableCell>
                 <TableCell>
-                  {u.active ? (
-                    <span className="text-xs text-muted-foreground">Aktív</span>
-                  ) : (
-                    <Badge variant="destructive">Kikapcsolva</Badge>
-                  )}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {u.active ? (
+                      <span className="text-xs text-muted-foreground">Aktív</span>
+                    ) : (
+                      <Badge variant="destructive">Kikapcsolva</Badge>
+                    )}
+                    {/* Jelszó nélkül a fiók akkor sem használható, ha aktív —
+                        enélkül csak annyi látszik, hogy "nem lehet belépni". */}
+                    {u.jelszo_hianyzik && (
+                      <Badge className="bg-warning text-warning-foreground">Nincs jelszava</Badge>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell className="text-right">
-                  <Button size="sm" variant="outline" onClick={() => setEditing(u)}>
-                    Szerkesztés
+                  <Button
+                    size="sm"
+                    variant={u.jelszo_hianyzik ? "default" : "outline"}
+                    onClick={() => setEditing(u)}
+                  >
+                    {u.jelszo_hianyzik ? "Jelszót adok" : "Szerkesztés"}
                   </Button>
                 </TableCell>
               </TableRow>

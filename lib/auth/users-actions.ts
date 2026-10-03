@@ -24,13 +24,25 @@ export type UserRow = {
   /** A hozzárendelt dolgozó (alkalmazottak) sora, ha van — lásd assignEmployee. */
   employee_id: string | null;
   employee_name: string | null;
+  /**
+   * Nincs használható jelszava: a tárolt érték nem bcrypt-lenyomat, tehát
+   * semmilyen beírt jelszóval nem lehet belépni. Így keletkezik a migrációval
+   * előkészített fiók (db/migrations/016), aminek a tulajdonosa még nem adott
+   * jelszót. A felület ezért figyelmeztet, hogy a fiók félig kész —
+   * különben csak annyi látszik, hogy „nem lehet belépni”.
+   */
+  jelszo_hianyzik: boolean;
 };
 
 export async function listUsers(): Promise<UserRow[]> {
   await requireAdmin();
   return query<UserRow>(
     `select u.id, u.username, u.name, u.role, u.active, u.permissions, u.created_at,
-       u.employee_id::text as employee_id, a.name as employee_name
+       u.employee_id::text as employee_id, a.name as employee_name,
+       -- A bcrypt-lenyomat 60 karakter és "$"-ra kezdődik; bármi más nem
+       -- jelszó. (Nem "$2%"-ra illesztünk, hogy a dollár-jel semmilyen
+       -- paraméter-feldolgozóval ne keveredjen össze.)
+       (length(u.password_hash) < 60 or left(u.password_hash, 1) <> '$') as jelszo_hianyzik
      from users u
      left join alkalmazottak a on a.id = u.employee_id
      order by u.created_at asc`
