@@ -45,8 +45,13 @@ select 'OT', 'nincs-jelszo', 'Oszlánszki Tamás', 'dolgozo', false, a.id, '{
  where a.name = 'Oszlánszki Tamás'
    and not exists (select 1 from users u where lower(u.username) = 'ot');
 
--- 2. A két sofőr szabadságkerete 13-13 nap, 2026-08-31-i fordulónappal —
---    ugyanaz a logika, mint a két Gabinál (db/migrations/006): a Profil
---    ebből vonja le a fordulónap UTÁN rögzített szabadság-napokat.
+-- 2. Szabadságkeret a még hiányzó három dolgozónak, 2026-08-31-i
+--    fordulónappal — ugyanaz a logika, mint a két Gabinál
+--    (db/migrations/006): a Profil ebből vonja le a fordulónap UTÁN
+--    rögzített szabadság-napokat. A két sofőrnek 13-13, Oszlánszki
+--    Tamásnak 15 nap (Budaházi Zoltán, 2026-10-03). A keret-feltétel miatt
+--    a már beállított értéket (Vadon Gabi 15, Bodogán Gabi 14) nem írja át.
 update alkalmazottak set szabadsag_keret_nap = 13, szabadsag_keret_datum = date '2026-08-31'
  where name in ('Vadon Gergő', 'Takács Miklós') and szabadsag_keret_nap is null;
+update alkalmazottak set szabadsag_keret_nap = 15, szabadsag_keret_datum = date '2026-08-31'
+ where name = 'Oszlánszki Tamás' and szabadsag_keret_nap is null;
