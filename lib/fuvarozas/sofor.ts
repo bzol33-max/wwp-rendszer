@@ -24,6 +24,7 @@ import { mozogE, toroljGeokodCachet } from "@/lib/fuvarozas/erintes-felismeres";
 import { ceglNevKanonikusan, normalizaltCegKulcs } from "@/lib/fuvarozas/fuvar-constants";
 import { megalloReszlete, type MegalloReszlet } from "@/lib/fuvarozas/sofor-adatok";
 import { szkennelj } from "@/lib/fuvarozas/doksi-kivagas";
+import { sajatFuvarE } from "@/lib/fuvarozas/irat-jog";
 
 function budapestMaIso(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Budapest" });
@@ -52,6 +53,23 @@ export type SoforTura = {
   /** Az első még nem kész megálló indexe a megallok tömbben — ez a képernyőn kiemelt "jelenlegi" megálló. Null, ha minden állomás kész. */
   aktualisIndex: number | null;
 };
+
+/**
+ * A sofőri írók közös őre: a teljes Fuvarozás jog bármelyik fuvarra írhat, a
+ * sofőri önkiszolgáló jog ("fuvarozas_sajat") viszont csak a SAJÁT kocsija
+ * fuvarjára — ugyanaz az összerendelés, mint az irat-végpontnál (irat-jog.ts).
+ * Enélkül egy sofőr tetszőleges fuvarId-val lezárhatta más fuvarjának
+ * megállóját, fotót csatolhatott hozzá, várakozást indíthatott (audit
+ * 2026-10-04, SEC-1).
+ */
+async function requireFuvarIrasJog(fuvarId: string): Promise<void> {
+  const kulcs = await requireAnyEditPermission(["fuvarozas", "fuvarozas_sajat"]);
+  if (kulcs === "fuvarozas") return;
+  const session = await requireSession();
+  if (!(await sajatFuvarE(session.employeeId, fuvarId))) {
+    throw new Error("Ez a fuvar nem a te fuvarod.");
+  }
+}
 
 /**
  * A bejelentkezett sofőr aktuális fuvarja — a mai vagy legközelebbi
@@ -145,7 +163,7 @@ export async function getSoforAktualisTura(employeeId: string): Promise<SoforTur
  * a kliens által küldött szövegből, hogy a napló ne legyen hamisítható.
  */
 export async function markMegalloKesz(fuvarId: string, megalloIndex: number): Promise<{ fuvarLezarva: boolean }> {
-  await requireAnyEditPermission(["fuvarozas", "fuvarozas_sajat"]);
+  await requireFuvarIrasJog(fuvarId);
   const soforNev = (await requireSession()).name;
   await query(
     `insert into fuvar_megallo_allapot (fuvar_id, megallo_index, kesz, kesz_at, kesz_by)
@@ -544,7 +562,7 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
  * írja felül), mert az érkezés egy pillanat, nem állapot.
  */
 export async function jelolMegerkeztem(fuvarId: string, megalloIndex: number): Promise<void> {
-  await requireAnyEditPermission(["fuvarozas", "fuvarozas_sajat"]);
+  await requireFuvarIrasJog(fuvarId);
   const soforNev = (await requireSession()).name;
   await query(
     `insert into fuvar_megallo_allapot (fuvar_id, megallo_index, kesz, kezi_erkezes, kesz_by)
@@ -574,7 +592,7 @@ export async function rogzitMegalloHelyet(
   fuvarId: string,
   megalloIndex: number
 ): Promise<{ cim: string; lat: number; lon: number }> {
-  await requireAnyEditPermission(["fuvarozas", "fuvarozas_sajat"]);
+  await requireFuvarIrasJog(fuvarId);
   const session = await requireSession();
 
   const sorok = await query<{ felrako: string | null; lerako: string; jarmu: string | null; sofor: string | null }>(
@@ -624,6 +642,8 @@ export async function rogzitMegalloHelyet(
 
 /** Ennél nagyobb fotót nem fogadunk el — a telefon oldalán amúgy is kicsinyítünk (lásd sofor-fuvar-nap.tsx). */
 const FOTO_MAX_BAJT = 8 * 1024 * 1024;
+/** Fuvaronkénti felső korlát, hogy a DB-tárhelyet egy hibás kliens se tölthesse tele. */
+const FOTO_MAX_DB_FUVARONKENT = 40;
 
 /**
  * A sofőr lefotózza a fuvarlevelet/CMR-t a lerakásnál. A kép az adatbázisba
@@ -635,7 +655,7 @@ const FOTO_MAX_BAJT = 8 * 1024 * 1024;
  * számlázunk, de az elveszett fuvarlevél nem két hét múlva derül ki.
  */
 export async function feltoltFuvarlevelFoto(fuvarId: string, form: FormData): Promise<{ dokId: string }> {
-  await requireAnyEditPermission(["fuvarozas", "fuvarozas_sajat"]);
+  await requireFuvarIrasJog(fuvarId);
   const session = await requireSession();
   const fajl = form.get("foto");
   if (!(fajl instanceof File) || fajl.size === 0) throw new Error("Nincs kép.");
@@ -648,6 +668,11 @@ export async function feltoltFuvarlevelFoto(fuvarId: string, form: FormData): Pr
   );
   const fuvar = sorok[0];
   if (!fuvar) throw new Error("Nincs ilyen fuvar.");
+  const [{ db }] = await query<{ db: number }>(
+    `select count(*)::int as db from fuvar_dokumentumok where fuvar_id = $1 and tipus = 'fuvarlevel'`,
+    [fuvarId]
+  );
+  if (db >= FOTO_MAX_DB_FUVARONKENT) throw new Error(`Ehhez a fuvarhoz már ${db} fotó van — többet nem lehet feltölteni.`);
 
   const hivatkozas = (fuvar.reise_id ?? fuvar.pozicioszam ?? `fuvar${fuvarId}`).replace(/[^A-Za-z0-9_-]+/g, "_");
   const rendszam = (fuvar.jarmu ?? "").replace(/[^A-Za-z0-9]+/g, "").toUpperCase() || "kocsi";
@@ -690,7 +715,7 @@ export async function feltoltFuvarlevelFoto(fuvarId: string, form: FormData): Pr
  * a meglévő csatornán érkezik.
  */
 export async function jelezGondot(fuvarId: string, szoveg: string): Promise<void> {
-  await requireAnyEditPermission(["fuvarozas", "fuvarozas_sajat"]);
+  await requireFuvarIrasJog(fuvarId);
   const session = await requireSession();
   const tiszta = szoveg.trim();
   if (!tiszta) throw new Error("Írd le röviden, mi a gond.");
@@ -724,7 +749,7 @@ export async function jelezGondot(fuvarId: string, szoveg: string): Promise<void
  * számot a sofőr nem ír felül, az a diszpécser dolga.
  */
 export async function rogzitPozicioszamot(fuvarId: string, szam: string): Promise<void> {
-  await requireAnyEditPermission(["fuvarozas", "fuvarozas_sajat"]);
+  await requireFuvarIrasJog(fuvarId);
   const session = await requireSession();
   const tiszta = szam.trim();
   if (!tiszta) throw new Error("Üres a szám.");
@@ -750,7 +775,7 @@ export async function rogzitPozicioszamot(fuvarId: string, szam: string): Promis
  * megbízás részletei), nem automatikus számlázás.
  */
 export async function jelolVarakozast(fuvarId: string, megalloIndex: number, muvelet: "kezd" | "befejez"): Promise<void> {
-  await requireAnyEditPermission(["fuvarozas", "fuvarozas_sajat"]);
+  await requireFuvarIrasJog(fuvarId);
   const soforNev = (await requireSession()).name;
   if (muvelet === "kezd") {
     await query(

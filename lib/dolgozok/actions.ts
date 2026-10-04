@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { query } from "@/lib/db";
+import { requireSession } from "@/lib/auth/dal";
 import {
   requireEditPermission,
   requireSajatVagyModulJog,
@@ -346,10 +347,12 @@ export async function addAdvance(input: {
 }) {
   await requireEditPermission("dolgozok");
   if (!input.amount) throw new Error("Az összeg megadása kötelező.");
+  // A rögzítő neve a munkamenetből jön, nem a klienstől (audit SEC-7).
+  const rogzito = (await requireSession()).name;
   await query(
     `insert into alkalmazott_elolegek (employee_id, advance_date, amount, note, created_by)
      values ($1, $2, $3, $4, $5)`,
-    [input.employeeId, input.date, input.amount, input.note ?? null, input.createdBy ?? null]
+    [input.employeeId, input.date, input.amount, input.note ?? null, rogzito]
   );
   revalidatePath("/dolgozok");
 }
@@ -424,18 +427,27 @@ export async function getEmployeeElolegek(employeeId: string): Promise<EmployeeE
 // A dolgozó nyugtázza a rá kirótt előleget — napló-bejegyzés, ezért csak
 // akkor ír, ha még nincs elfogadva (utólag nem módosítható), és csak a saját
 // (employeeId) tételét fogadhatja el.
-export async function acceptAdvance(id: string, employeeId: string, acceptedByName: string) {
+// Az acceptedByName paramétert a régi kliens még küldi, de nem használjuk: a
+// nyugtázásnak bizonyító ereje van, ezért csak a dolgozó maga nyugtázhat, a
+// saját nevével a munkamenetből (audit SEC-7).
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function acceptAdvance(id: string, employeeId: string, acceptedByName?: string) {
   await requireSajatVagyModulJog({
     employeeId,
     sajatModule: "elolegek_sajat",
     modul: "dolgozok",
     kind: "edit",
   });
+  const session = await requireSession();
+  if (session.employeeId !== employeeId) {
+    throw new Error("Előleget csak a dolgozó maga nyugtázhat.");
+  }
+  const nyugtazo = session.name;
   await query(
     `update alkalmazott_elolegek
      set accepted_at = now(), accepted_by = $3
      where id = $1 and employee_id = $2 and accepted_at is null`,
-    [id, employeeId, acceptedByName]
+    [id, employeeId, nyugtazo]
   );
   revalidatePath("/erkezes");
   revalidatePath("/dolgozok");

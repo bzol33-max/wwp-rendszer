@@ -47,7 +47,8 @@ export async function fuvarIratGuard(
   return NextResponse.json({ hiba: "Ez az irat nem a te fuvarodhoz tartozik." }, { status: 403 });
 }
 
-async function sajatFuvarE(employeeId: string | null, fuvarId: string): Promise<boolean> {
+/** Igaz, ha a fuvar a bejelentkezett sofőr (employeeId) kocsijáé — a sofőri írók (sofor.ts) is ezt használják. */
+export async function sajatFuvarE(employeeId: string | null, fuvarId: string): Promise<boolean> {
   if (!employeeId) return false;
   const [emp] = await query<{ name: string }>(`select name from alkalmazottak where id = $1`, [employeeId]);
   if (!emp?.name) return false;

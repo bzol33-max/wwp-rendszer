@@ -557,7 +557,7 @@ export async function createFeladat(input: {
       description,
       input.urgency,
       input.repeatFreq,
-      input.createdBy ?? null,
+      (await requireSession()).name,
     ]
   );
   revalidateJelenlet();
@@ -683,7 +683,8 @@ export async function addFeladatComment(input: {
   if (!comment) throw new Error("A megjegyzés nem lehet üres.");
   await query(
     `insert into feladat_megjegyzesek (feladat_id, author, comment) values ($1, $2, $3)`,
-    [input.feladatId, input.author ?? null, comment]
+    // A szerző neve a munkamenetből jön, nem a klienstől (audit SEC-7).
+    [input.feladatId, (await requireSession()).name, comment]
   );
   revalidateJelenlet();
 }
