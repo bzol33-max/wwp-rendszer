@@ -23,6 +23,7 @@
 
 import { query } from "@/lib/db";
 import { requireAnyViewPermission } from "@/lib/auth/require-permission";
+import { napiKmBontas } from "@/lib/fuvarozas2/km-bontas";
 import { getUtvonalJelentes, rendszamKulcs } from "@/lib/fuvarozas/ecofleet";
 import { gazolajArKedvezmennyel } from "@/lib/fuvarozas/gazolaj";
 import { NAPI_KOLTSEG_FT } from "@/lib/fuvarozas2/kalkulator-alap";
@@ -168,14 +169,7 @@ export async function getKimutatas(idoszak: KimutatasIdoszak = "het", nap?: stri
     }
     for (const [nap, x] of napiKm) {
       km += x.km; liter += x.liter;
-      const aznap = sajatMegb.filter((m) => m.nap === nap);
-      const ber = aznap.some((m) => m.jelleg === "ber");
-      const saj = aznap.some((m) => m.jelleg === "sajat");
-      let b = 0, s = 0, u2 = 0;
-      if (ber && saj) { b = x.km / 2; s = x.km / 2; }
-      else if (ber) b = x.km;
-      else if (saj) s = x.km;
-      else u2 = x.km;
+      const { ber: b, sajat: s, ures: u2 } = napiKmBontas(x.km, sajatMegb.filter((m) => m.nap === nap).map((m) => m.jelleg));
       berKm += b; sajatKm += s; uresKm += u2;
       const n = napok.get(nap) ?? { nap, km: 0, berKm: 0, sajatKm: 0, uresKm: 0, bevetelFt: 0 };
       n.km += x.km; n.berKm += b; n.sajatKm += s; n.uresKm += u2;

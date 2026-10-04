@@ -20,6 +20,7 @@ import { geokodolCachelve } from "@/lib/fuvarozas/erintes-felismeres";
 import { SAJAT_TELEPHELYEK } from "@/lib/fuvarozas/telephelyek";
 import { varosNev } from "@/lib/fuvarozas/varos";
 import { napiSorrend } from "@/lib/fuvarozas2/napi-sorrend";
+import { napiKmBontas } from "@/lib/fuvarozas2/km-bontas";
 import type { Allapot } from "@/lib/fuvarozas/allapot";
 
 // A "use server" fájl csak async függvényt exportálhat — ezek belső konstansok.
@@ -207,8 +208,8 @@ export async function getTervHet(hetKezdet?: string): Promise<TervHet> {
   const bevetel = berHetiek.reduce((a, s) => a + (s.fuvardij ?? 0), 0);
 
   // GPS: a hét km-e rakott/üres bontásban, és sofőrönként a vezetett idő.
-  // A bontás NAPI szintű közelítés (ugyanaz a szabály, mint a Kimutatásban):
-  // egy nap km-je rakott, ha aznap futott megbízás azon a kocsin.
+  // A bontás NAPI szintű közelítés, a Kimutatással közös szabály (km-bontas.ts):
+  // a nap km-je rakott, ha aznap ért véget (lerakás) megbízás azon a kocsin.
   let km: number | null = null, rakottKm: number | null = null, uresKm: number | null = null;
   const soforKeret: { sofor: string; ora: number; keret: number }[] = [];
   try {
@@ -232,8 +233,8 @@ export async function getTervHet(hetKezdet?: string): Promise<TervHet> {
       }
       for (const [nap, tav] of napiKm) {
         km += tav;
-        const volt = sorok.some((s) => s.jarmu_kod === o.kod && aznap(s, nap));
-        if (volt) rakottKm += tav; else uresKm += tav;
+        const b = napiKmBontas(tav, sorok.filter((s) => s.jarmu_kod === o.kod && s.lerakasNap === nap).map((s) => s.jelleg));
+        rakottKm += b.ber + b.sajat; uresKm += b.ures;
       }
       if (o.sofor && percek > 0) soforKeret.push({ sofor: o.sofor, ora: Math.round(percek / 60), keret: 56 });
     }
