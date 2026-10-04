@@ -131,7 +131,7 @@ export async function getTervHet(hetKezdet?: string): Promise<TervHet> {
      from fuvar_megbizasok m
      left join fuvar_partnerek p on p.id = m.partner_id
      left join fuvar_jarmuvek j on j.id = m.jarmu_id
-     where m.torolt_at is null and m.allapot is not null and m.allapot <> 'lezart'
+     where m.torolt_at is null and m.allapot is not null
        and coalesce(m.lerakas_datum, m.datum) >= $1::date - 10 and m.datum <= $2::date
      order by m.datum`,
     [kezdet, veg]
@@ -258,7 +258,8 @@ export async function getTervHet(hetKezdet?: string): Promise<TervHet> {
     napok,
     sorok: sorokKi,
     uresSlotok,
-    kocsiNelkul: sorok.filter((s) => !s.jarmu_kod && napok.some((n) => aznap(s, n))),
+    // A lezárt fuvar a rácsban marad (a múlt hét is látsszon), de teendőnek már nem számít.
+    kocsiNelkul: sorok.filter((s) => !s.jarmu_kod && s.allapot !== "lezart" && napok.some((n) => aznap(s, n))),
     osszesites,
     soforKeret,
     hetKezdet: kezdet,
