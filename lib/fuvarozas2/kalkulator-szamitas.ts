@@ -6,6 +6,7 @@ import "server-only";
 // is ezt hívja. Leírás: lib/fuvarozas2/kalkulator.ts fejléce.
 
 import { query } from "@/lib/db";
+import { budapestNapISO } from "@/lib/fuvarozas/idozona";
 import { calculateToll, geocodeAddress, TollCalcError, FIXED_VEHICLE, type GeocodedAddress, type TollRoute } from "@/lib/fuvarozas/utdijkalkulacio";
 import { gazolajArKedvezmennyel } from "@/lib/fuvarozas/gazolaj";
 import { getUtvonalJelentes, rendszamKulcs } from "@/lib/fuvarozas/ecofleet";
@@ -26,8 +27,10 @@ async function mertFogyasztas(jarmuKod?: string): Promise<{ l100: number; forras
     const cel = jarmuKod ? jarmuvek.filter((j) => j.kod === jarmuKod) : jarmuvek;
     if (cel.length === 0) return { l100: ALAP_FOGYASZTAS_L100, forras: "alapérték" };
     const ma = new Date();
-    const kezdet = new Date(ma.getTime() - 13 * 86400000).toISOString().slice(0, 10);
-    const sorok = await getUtvonalJelentes(cel.map((j) => j.ecofleet_object_id!), kezdet, ma.toISOString().slice(0, 10));
+    // Budapesti nap (a konténer UTC-ben fut — éjfél és 2 óra között a
+    // toISOString még a tegnapot adta; audit BIZ-10).
+    const kezdet = budapestNapISO(new Date(ma.getTime() - 13 * 86400000));
+    const sorok = await getUtvonalJelentes(cel.map((j) => j.ecofleet_object_id!), kezdet, budapestNapISO(ma));
     const kulcsok = new Set(cel.map((j) => rendszamKulcs(j.vontato_rendszam ?? j.kod)));
     const sajat = sorok.filter((s) => kulcsok.has(s.rendszamKulcs));
     const km = sajat.reduce((a, s) => a + s.tavKm, 0);

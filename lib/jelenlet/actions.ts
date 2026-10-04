@@ -246,21 +246,27 @@ export async function recordArrivalNow(employeeId: string, note?: string) {
   // Kétszer megnyomott gomb ellen: 2026-09-08-án azonos percre nyitott-zárt
   // szakaszok keletkeztek, mert a képernyő nem mondta meg, hogy már bent van.
   // A felület mostantól tiltja a gombot, a szerver pedig visszautasítja.
-  const nyitott = await query<{ id: string }>(
-    `select id::text from jelenletek
-     where employee_id = $1 and work_date = ${BUDAPEST_NOW_DATE}
-       and day_type = 'munka' and arrival_time is not null and departure_time is null
-     limit 1`,
-    [employeeId]
-  );
-  if (nyitott.length > 0) {
-    throw new Error("Már bent vagy — előbb a távozást rögzítsd.");
-  }
-  await query(
-    `insert into jelenletek (employee_id, work_date, arrival_time, note)
-     values ($1, ${BUDAPEST_NOW_DATE}, ${BUDAPEST_NOW_TIME}, $2)`,
-    [employeeId, note?.trim() || null]
-  );
+  // Az ellenőrzés és a beszúrás dolgozónkénti tranzakciós zár alatt fut: két
+  // szinte egyidejű kérés (dupla koppintás, mobilhálózati újraküldés) különben
+  // mindkettő "nincs nyitott szakasz"-t látott (audit 2026-10-04, RACE-6).
+  await withTransaction(async (q) => {
+    await q(`select pg_advisory_xact_lock(hashtext('jelenlet-erkezes:' || $1::text))`, [employeeId]);
+    const nyitott = await q<{ id: string }>(
+      `select id::text from jelenletek
+       where employee_id = $1 and work_date = ${BUDAPEST_NOW_DATE}
+         and day_type = 'munka' and arrival_time is not null and departure_time is null
+       limit 1`,
+      [employeeId]
+    );
+    if (nyitott.length > 0) {
+      throw new Error("Már bent vagy — előbb a távozást rögzítsd.");
+    }
+    await q(
+      `insert into jelenletek (employee_id, work_date, arrival_time, note)
+       values ($1, ${BUDAPEST_NOW_DATE}, ${BUDAPEST_NOW_TIME}, $2)`,
+      [employeeId, note?.trim() || null]
+    );
+  });
   revalidateJelenlet();
 }
 

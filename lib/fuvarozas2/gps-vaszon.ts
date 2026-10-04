@@ -77,7 +77,7 @@ export async function getGpsVaszon(): Promise<GpsVaszon> {
   // Fogyasztás: mai és 14 napos átlag egy lekérdezésből (Ecofleet útvonal-jelentés).
   let utak: { rendszamKulcs: string; nap: string; km: number; liter: number }[] = [];
   try {
-    const tizennegyNapja = new Date(most.getTime() - 13 * 86400000).toISOString().slice(0, 10);
+    const tizennegyNapja = budapestNapISO(new Date(most.getTime() - 13 * 86400000));
     const sorok = await getUtvonalJelentes(jarmuvek.map((j) => j.ecofleet_object_id!).filter(Boolean), tizennegyNapja, ma);
     utak = sorok.map((s) => ({ rendszamKulcs: s.rendszamKulcs, nap: s.indulas.slice(0, 10), km: s.tavKm, liter: s.uzemanyagL }));
   } catch {
