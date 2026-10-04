@@ -33,6 +33,8 @@ import { berFuvarHiba, berSzam, valtozottMezok, type BerFuvarAdat } from "@/lib/
 export type MegbizasSor = {
   id: string;
   jelleg: "ber" | "sajat";
+  /** HU-GO rakott km (rakott-km.ts) — a saját fuvarnál ebből a „bérben mennyi lett volna”. */
+  rakott_km: number | null;
   allapot: Allapot;
   allapot_at: string | null;
   partner_id: string | null;
@@ -79,7 +81,7 @@ export type MegbizasSor = {
 };
 
 const SOR_SQL = `
-  select m.id::text, m.jelleg, m.allapot, m.allapot_at::text, m.partner_id::text,
+  select m.id::text, m.jelleg, m.allapot, m.allapot_at::text, m.partner_id::text, m.rakott_km::float8 as rakott_km,
     coalesce(p.nev, m.megrendelo) as partner_nev, m.kitol,
     coalesce(m.hivatkozas_kanonikus, m.pozicioszam, m.reise_id) as hivatkozas, m.hivatkozas_nincs,
     j.kod as jarmu_kod, coalesce(j.cimke, m.jarmu) as jarmu_cimke, coalesce(a.name, m.sofor) as sofor,

@@ -1,4 +1,5 @@
-// Fuvarozás 2 — a bérfuvarok rakott km-e (Budaházi Zoltán, 2026-09-29).
+// Fuvarozás 2 — a fuvarok rakott km-e (Budaházi Zoltán, 2026-09-29; a saját
+// fuvarokra is 2026-10-04 óta, a „bérben mennyibe került volna” számításhoz).
 //
 // A Ma oldal 3. csempéje (havi átlag km-díj) = fuvardíj ÷ rakott km. A rakott
 // km a felrakótól a megállókon át az utolsó lerakóig tartó útvonal hossza a
@@ -11,6 +12,9 @@
 // felrakója/lerakója változik, újraszámoljuk. Ha egy cím nem geokódolható
 // vagy az útvonaltervező hibázik, a rakott_km_hiba-ba kerül az ok, és addig
 // nem próbáljuk újra, amíg az útvonal szövege nem változik.
+//
+// Útvonal-tár (fuvar_utvonal_km): egy útvonalat egyszer számolunk; a többi
+// ugyanilyen fuvar a tárból kapja, külső hívás nélkül.
 
 import { query } from "@/lib/db";
 import { calculateToll, geocodeAddress, TollCalcError } from "@/lib/fuvarozas/utdijkalkulacio";
@@ -53,6 +57,11 @@ export function rakottKmKulcs(felrako: string | null, lerako: string | null): st
   return [...bontsMegallokra(felrako), "→", ...bontsMegallokra(lerako)].join(" | ");
 }
 
+/** Az útvonal-tár kulcsa: kis-nagybetű és szóközök nélküli útvonal-szöveg. */
+export function utvonalTarKulcs(felrako: string | null, lerako: string | null): string {
+  return rakottKmKulcs(felrako, lerako).toLowerCase().replace(/\s+/g, " ").trim();
+}
+
 /** A településre visszaesés (a zárójeles cégnév levágásával) óta írt hibaüzenet eleje — a régebbi „nem található cím…” hibás sorokat egyszer újrapróbáljuk. Ha a visszaesés szabálya változik, ezt is át kell írni. */
 const NEM_TALALHATO = "nem található cím (település szerint sem):";
 
@@ -83,31 +92,47 @@ async function szamoljRakottKmet(felrako: string | null, lerako: string | null, 
 }
 
 /**
- * A bérfuvarok hiányzó (vagy elavult útvonalú) rakott km-e, az előző hónap
- * elejétől, legfeljebb `korlat` fuvar egy körben. Átmeneti (hálózati) hibánál
- * a kör megáll, a következő újra próbálja.
+ * A fuvarok hiányzó (vagy elavult útvonalú) rakott km-e — bérfuvar az előző
+ * hónap elejétől, saját fuvar visszamenőleg mind. A tárban lévő útvonal nem
+ * számít bele a `korlat`-ba (nincs külső hívás); újat legfeljebb ennyit egy
+ * körben. Átmeneti (hálózati) hibánál a kör megáll, a következő újra próbálja.
  */
 export async function potoldRakottKmet(korlat = 30, sz: RakottKmSzolgaltatas = ALAP): Promise<{ szamolt: number; hibas: number }> {
   const sorok = await query<{ id: string; felrako: string | null; lerako: string | null; rakott_km_kulcs: string | null; rakott_km_hiba: string | null }>(
     `select m.id::text, m.felrako, m.lerako, m.rakott_km_kulcs, m.rakott_km_hiba
      from fuvar_megbizasok m
-     where m.torolt_at is null and m.jelleg = 'ber'
-       and m.datum >= date_trunc('month', (now() at time zone 'Europe/Budapest')::date) - interval '1 month'
+     where m.torolt_at is null
+       and (m.jelleg = 'sajat'
+            or m.datum >= date_trunc('month', (now() at time zone 'Europe/Budapest')::date) - interval '1 month')
      order by m.datum desc, m.id desc`
   );
-  let szamolt = 0, hibas = 0;
+  let szamolt = 0, hibas = 0, hivas = 0;
   for (const s of sorok) {
-    if (szamolt + hibas >= korlat) break;
     const kulcs = rakottKmKulcs(s.felrako, s.lerako);
     const regiCimHiba = s.rakott_km_hiba?.startsWith("nem található cím") && !s.rakott_km_hiba.startsWith(NEM_TALALHATO);
     if (s.rakott_km_kulcs === kulcs && !regiCimHiba) continue;
     let eredmeny: Awaited<ReturnType<typeof szamoljRakottKmet>>;
-    try {
-      eredmeny = await szamoljRakottKmet(s.felrako, s.lerako, sz);
-    } catch (err) {
-      // Átmeneti (hálózati) hiba: valószínűleg a többinél is az lenne — a kör itt megáll, a következő újrapróbálja.
-      console.error(`[rakott-km] #${s.id} átmeneti hiba, a következő kör újrapróbálja:`, err instanceof Error ? err.message : err);
-      break;
+    const tarKulcs = utvonalTarKulcs(s.felrako, s.lerako);
+    const [tarbol] = regiCimHiba ? [] : await query<{ km: number | null; hiba: string | null }>(
+      `select km, hiba from fuvar_utvonal_km where kulcs = $1`, [tarKulcs]
+    );
+    if (tarbol) {
+      eredmeny = tarbol.km != null ? { km: Number(tarbol.km) } : { hiba: tarbol.hiba ?? "nem számolható" };
+    } else {
+      if (hivas >= korlat) break;
+      hivas++;
+      try {
+        eredmeny = await szamoljRakottKmet(s.felrako, s.lerako, sz);
+      } catch (err) {
+        // Átmeneti (hálózati) hiba: valószínűleg a többinél is az lenne — a kör itt megáll, a következő újrapróbálja.
+        console.error(`[rakott-km] #${s.id} átmeneti hiba, a következő kör újrapróbálja:`, err instanceof Error ? err.message : err);
+        break;
+      }
+      await query(
+        `insert into fuvar_utvonal_km (kulcs, km, hiba) values ($1, $2, $3)
+         on conflict (kulcs) do update set km = excluded.km, hiba = excluded.hiba, szamolva_at = now()`,
+        [tarKulcs, "km" in eredmeny ? eredmeny.km : null, "hiba" in eredmeny ? eredmeny.hiba : null]
+      );
     }
     if ("km" in eredmeny) {
       await query(`update fuvar_megbizasok set rakott_km = $2, rakott_km_kulcs = $3, rakott_km_hiba = null where id = $1`, [s.id, eredmeny.km, kulcs]);

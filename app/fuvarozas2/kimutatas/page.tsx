@@ -74,7 +74,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ i
         <Mezo cim="Megtett km" ertek={`${k.ossz.km.toLocaleString("hu-HU")} km`} alcim={`rakott ${(k.ossz.berKm + k.ossz.sajatKm).toLocaleString("hu-HU")} · üres ${k.ossz.uresKm.toLocaleString("hu-HU")}`} />
         <Mezo cim="Bevétel (bér fuvar)" ertek={formatFt(k.ossz.bevetelFt)} alcim={k.ossz.bevetelEur > 0 ? `+ ${k.ossz.bevetelEur.toLocaleString("hu-HU")} EUR (nincs átváltva)` : undefined} szin="text-[var(--f2-mint)]" />
         <Mezo cim="Bér Ft/km" ertek={k.ossz.berFtKm ? `${k.ossz.berFtKm.toLocaleString("hu-HU")} Ft/km` : "—"} alcim="bér bevétel ÷ bér km" />
-        <Mezo cim="Saját fuvar megtakarítás" ertek={formatFt(k.ossz.megtakaritasFt)} alcim="saját km × bér Ft/km — becslés" szin="text-[var(--f2-blue)]" />
+        <Mezo cim="Saját fuvar megtakarítás" ertek={formatFt(k.ossz.megtakaritasFt)} alcim="saját rakott km × 550 Ft/km" szin="text-[var(--f2-blue)]" />
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <Mezo cim="Üzemanyag" ertek={formatFt(k.ossz.uzemanyagFt)} alcim={k.gazolajAr ? `${k.ossz.liter.toLocaleString("hu-HU")} l × ${k.gazolajAr} Ft (${k.gazolajCimke})` : "nincs ár"} />

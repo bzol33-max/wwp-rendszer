@@ -16,8 +16,9 @@
 //     a lerakóig (bérnél a HU-GO-s rakott_km), üres a lerakótól a következő
 //     felrakóig. Ahol nincs HU-GO km, légvonal × 1,3 — becslés. A megtett km
 //     (GPS) ettől külön, tény.
-//   • saját fuvar megtakarítás: saját km × bér Ft/km — BECSLÉS, a felület
-//     így is írja.
+//   • saját fuvar megtakarítás: a saját fuvarok rakott km-e (HU-GO, ahol már
+//     ki van számolva) × SAJAT_FUVAR_KM_DIJ_FT (fix 550 Ft/km) — mennyit
+//     fizettünk volna, ha bérbe adjuk ki.
 //   • útdíj: csak akkor szerepel, ha van importált HU-GO tranzakció az
 //     időszakra (utdij_tranzakcio); nem becsüljük.
 
@@ -27,7 +28,7 @@ import { becsultTavolsag, lancKm } from "@/lib/fuvarozas2/ures-km";
 import { SAJAT_TELEPHELYEK } from "@/lib/fuvarozas/telephelyek";
 import { getUtvonalJelentes, rendszamKulcs } from "@/lib/fuvarozas/ecofleet";
 import { gazolajArKedvezmennyel } from "@/lib/fuvarozas/gazolaj";
-import { NAPI_KOLTSEG_FT } from "@/lib/fuvarozas2/kalkulator-alap";
+import { NAPI_KOLTSEG_FT, SAJAT_FUVAR_KM_DIJ_FT } from "@/lib/fuvarozas2/kalkulator-alap";
 
 export type KimutatasIdoszak = "nap" | "het" | "ho";
 
@@ -231,7 +232,7 @@ export async function getKimutatas(idoszak: KimutatasIdoszak = "het", nap?: stri
       berDb: berSorok.length,
       sajatDb: sajatMegb.filter((m) => m.jelleg === "sajat").length,
       bevetelFt, bevetelEur,
-      megtakaritasFt: 0, // lent, a flotta Ft/km ismeretében
+      megtakaritasFt: 0, // lent
       uzemanyagFt: gazolajAr ? Math.round(liter * gazolajAr) : 0,
       utdijFt: vanUtdij ? (utdijSorok.find((u) => u.jarmu_id === j.id)?.osszeg ?? 0) : null,
       ftKm: berKm > 0 && bevetelFt > 0 ? Math.round(bevetelFt / berKm) : null,
@@ -242,7 +243,7 @@ export async function getKimutatas(idoszak: KimutatasIdoszak = "het", nap?: stri
   const bevetelFtOssz = ki.reduce((a, j) => a + j.bevetelFt, 0);
   const berFtKm = berKmOssz > 0 && bevetelFtOssz > 0 ? Math.round(bevetelFtOssz / berKmOssz) : null;
   for (const j of ki) {
-    j.megtakaritasFt = berFtKm ? Math.round(j.sajatKm * berFtKm) : 0;
+    j.megtakaritasFt = Math.round(j.sajatKm * SAJAT_FUVAR_KM_DIJ_FT);
     j.eredmenyFt = j.bevetelFt + j.megtakaritasFt - j.uzemanyagFt - (j.utdijFt ?? 0) - j.napiKoltsegFt;
     j.eredmenyFtKm = j.km > 0 ? Math.round(j.eredmenyFt / j.km) : null;
   }

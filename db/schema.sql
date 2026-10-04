@@ -1042,6 +1042,17 @@ alter table fuvar_megbizasok add column if not exists rakott_km double precision
 alter table fuvar_megbizasok add column if not exists rakott_km_kulcs text;
 alter table fuvar_megbizasok add column if not exists rakott_km_hiba text;
 
+-- Útvonal-tár (2026-10-04): egy útvonal HU-GO km-ét egyszer számoljuk, a
+-- többi ugyanilyen fuvar innen kapja (Szakoly → Tompaládony havonta sokszor).
+-- A kulcs az útvonal normalizált szövege (rakott-km.ts utvonalTarKulcs); a
+-- hiba a végleges ok, ha nem számolható (átmeneti hibát nem tárolunk).
+create table if not exists fuvar_utvonal_km (
+  kulcs text primary key,
+  km double precision,
+  hiba text,
+  szamolva_at timestamptz not null default now()
+);
+
 -- Készre jelentés nyoma (2026-09-29): eddig csak az elvegzes_datum (nap)
 -- rögzült, tehát nem lehetett tudni, ki és pontosan mikor jelentette készre
 -- a feladatot. A Jelenlét oldal az elvégzett tételeket néhány napig a lista

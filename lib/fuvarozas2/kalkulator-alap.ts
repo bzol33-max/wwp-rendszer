@@ -9,6 +9,11 @@
 // kocsira, csak ez a konstans változik.
 export const NAPI_KOLTSEG_FT = 50_000;
 
+// Saját fuvar „bérben mennyibe került volna”: rakott km × ez a díj. Zoltán
+// döntése (2026-10-04): egyelőre fix 550 Ft/km, a régi fuvarokra is; később
+// az előző havi átlagos bér km-díj váltja.
+export const SAJAT_FUVAR_KM_DIJ_FT = 550;
+
 /** Ha nincs mért fogyasztás (nincs Ecofleet-adat), ezzel számolunk. */
 export const ALAP_FOGYASZTAS_L100 = 30;
 

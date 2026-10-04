@@ -12,6 +12,7 @@ import type { Allapot } from "@/lib/fuvarozas/allapot";
 import type { PartnerAdatJavaslat } from "@/lib/fuvarozas2/partnerek";
 import { AdatJavaslatSor, PostacimBevitel } from "@/components/fuvarozas2/partner-adat-javaslat";
 import { ALLAPOT_CIMKE, LepesBadge, JellegBadge, formatFt, formatIdo, formatNap } from "@/components/fuvarozas2/kozos";
+import { SAJAT_FUVAR_KM_DIJ_FT } from "@/lib/fuvarozas2/kalkulator-alap";
 
 const GOMB_CIMKE: Partial<Record<Allapot, string>> = {
   tervezett: "Jóváhagyás → Tervezett",
@@ -76,7 +77,15 @@ export function MegbizasReszlet({
           </CardHeader>
           <CardContent className={egyOszlop ? "grid gap-y-2 text-sm" : "grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2"}>
             <div><span className="text-muted-foreground">Kocsi:</span> {sor.jarmu_cimke ?? "kocsi nélkül"}{sor.sofor ? ` · ${sor.sofor}` : ""}</div>
-            <div><span className="text-muted-foreground">Díj:</span> {sor.jelleg === "ber" ? formatFt(sor.fuvardij, sor.fuvardij_penznem) : "saját fuvar"}</div>
+            <div><span className="text-muted-foreground">Díj:</span> {sor.jelleg === "ber" ? formatFt(sor.fuvardij, sor.fuvardij_penznem) : "saját fuvar"}
+              {sor.jelleg === "sajat" ? (
+                <span className="text-muted-foreground">
+                  {" · "}
+                  {sor.rakott_km != null
+                    ? `bérben kb. ${formatFt(Math.round(sor.rakott_km * SAJAT_FUVAR_KM_DIJ_FT))} (${Math.round(sor.rakott_km)} km × ${SAJAT_FUVAR_KM_DIJ_FT} Ft/km)`
+                    : "bérben: a km még számolódik"}
+                </span>
+              ) : null}</div>
             <div><span className="text-muted-foreground">Áru:</span> {sor.aru ?? "—"}{sor.mennyiseg ? ` · ${sor.mennyiseg}` : ""}</div>
             {sor.kitol ? <div><span className="text-muted-foreground">Kitől:</span> {sor.kitol} → {sor.partner_nev ?? "?"}</div> : null}
             {sor.jelleg === "sajat" ? <div><span className="text-muted-foreground">Szállítólevél:</span> {sor.szallitolevel ?? "még nincs párosítva"}</div> : null}
