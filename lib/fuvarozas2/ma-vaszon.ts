@@ -37,7 +37,7 @@ import { SAJAT_JARMUVEK, type JarmuSzin } from "@/lib/fuvarozas/vehicles";
 import type { MegalloReszlet } from "@/lib/fuvarozas/sofor-adatok";
 import type { Allapot } from "@/lib/fuvarozas/allapot";
 import { tukorSorok, type TukorSor } from "@/lib/fuvarozas2/ma-tukor";
-import { napiSorrend } from "@/lib/fuvarozas2/napi-sorrend";
+import { berUtkozes, napiSorrend } from "@/lib/fuvarozas2/napi-sorrend";
 
 export type CsempeSzin = "normal" | "amber" | "red" | "mint";
 export type Csempe = { kulcs: string; cimke: string; ertek: string; also: string | null; szin: CsempeSzin; href: string | null };
@@ -672,7 +672,8 @@ export async function getMaVaszon(): Promise<MaVaszon> {
 
   const holnapiak = sorok.filter((s) => aznap(s, holnap));
   const holnapKocsiNelkul = holnapiak.filter((s) => !s.jarmu_kod);
-  const utkozes = jarmuvek.filter((j) => holnapiak.filter((s) => s.jarmu_kod === j.kod).length > 1).length;
+  // Csak két bérfuvar ugyanarra a kocsira és napra ütközés; a köré tervezett saját fuvar nem.
+  const utkozes = jarmuvek.filter((j) => berUtkozes(holnapiak.filter((s) => s.jarmu_kod === j.kod))).length;
   const holnapDoboz: { cimke: string; ertek: string; szin: CsempeSzin }[] = [
     { cimke: `${holnapCimke}i megbízás`, ertek: String(holnapiak.length), szin: "normal" },
     { cimke: `${holnapCimke} kocsi nélkül`, ertek: String(holnapKocsiNelkul.length), szin: holnapKocsiNelkul.length > 0 ? "red" : "normal" },

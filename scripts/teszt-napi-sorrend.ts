@@ -4,7 +4,7 @@
 // Valós minta: Gergő (AOPU-427) 2026-10-05 — a Lösung-fuvar (#293) korábban
 // lett rögzítve, mint a két saját fuvar, mégis az a nap utolsó fuvarja.
 
-import { napiSorrend, type SorrendAdat } from "@/lib/fuvarozas2/napi-sorrend";
+import { berUtkozes, napiSorrend, type SorrendAdat } from "@/lib/fuvarozas2/napi-sorrend";
 
 let ok = 0, bad = 0;
 function eq(nev: string, kapott: unknown, vart: unknown) {
@@ -25,6 +25,9 @@ eq("körbeérő lánc nem akad meg", ids([
   { id: "2", felrakasNap: "2026-10-05", lerakasNap: "2026-10-05", felrako: "Győr", lerako: "Tata" },
 ]).length, 2);
 eq("korábbi lerakás-nap mindig előrébb", ids([losung, { ...palFerr, felrakasNap: "2026-10-04", lerakasNap: "2026-10-04" }]), ["294", "293"]);
+
+eq("ütközés: Gergő 10.05. (1 bér + 2 saját) nem az", berUtkozes([{ jelleg: "ber" }, { jelleg: "sajat" }, { jelleg: "sajat" }]), false);
+eq("ütközés: két bérfuvar egy napon az", berUtkozes([{ jelleg: "ber" }, { jelleg: "ber" }]), true);
 
 console.log(`napi sorrend: ${ok} ok, ${bad} hiba`);
 if (bad) process.exit(1);

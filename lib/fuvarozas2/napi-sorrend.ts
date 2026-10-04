@@ -60,3 +60,13 @@ export function napiSorrend<T>(lista: T[], adat: (t: T) => SorrendAdat): T[] {
   }
   return elemek.map((e) => e.t);
 }
+
+/**
+ * Ütközés-e egy kocsi egy napja: legalább két BÉRFUVAR esik rá. A saját
+ * fuvarokat mi tervezzük a bérfuvar köré (Gergő 10.05.: két saját + egy
+ * Lösung egymás után), azok nem ütköznek — két külön megbízó viszont
+ * ugyanarra a kocsira és napra már kettős foglalás lehet, azt nézni kell.
+ */
+export function berUtkozes(fuvarok: { jelleg: "ber" | "sajat" }[]): boolean {
+  return fuvarok.filter((f) => f.jelleg === "ber").length > 1;
+}
