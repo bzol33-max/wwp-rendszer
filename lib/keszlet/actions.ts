@@ -198,15 +198,17 @@ async function getMovements(site: string, limit = 20): Promise<MovementRow[]> {
 // A `q` a hívó tranzakciója (withTransaction), hogy a mozgás a többi
 // összetartozó írással együtt rögzüljön vagy maradjon el.
 /**
- * Telephely+típus szerinti tranzakciós zár. A leltár a nyilvántartott
- * készletet olvassa, és abból számol korrekciót — ha közben egy másik
- * mozgás (vagy egy másik leltár) ugyanarra a telep/típus párra beírt, a
- * korrekció elavult összegből készült (audit 2026-10-04, Codex F-04). Minden
- * mozgás-írás és a leltár ugyanezt a zárat veszi, így sorban futnak; a zár
- * a tranzakció végén magától oldódik.
+ * A készletírások közös tranzakciós zára. A leltár a nyilvántartott készletet
+ * olvassa, és abból számol korrekciót — ha közben egy másik mozgás (vagy
+ * leltár) beírt, a korrekció elavult összegből készült (audit 2026-10-04,
+ * Codex F-04). Minden mozgás-írás és a leltár ugyanezt az EGY zárat veszi,
+ * így sorban futnak. Szándékosan egyetlen kulcs, nem telep+típusonként: egy
+ * mozgatás két telepet, egy szétválogatás több típust érint, és az eltérő
+ * sorrendben vett zárak holtpontot okozhattak (Codex-review). A forgalom
+ * kicsi, a sorba állás nem érezhető. A zár a tranzakció végén oldódik.
  */
-async function zaroljKeszletet(q: Querier, site: string, type: string): Promise<void> {
-  await q(`select pg_advisory_xact_lock(hashtext('keszlet:' || $1 || ':' || $2))`, [site, type]);
+async function zaroljKeszletet(q: Querier): Promise<void> {
+  await q(`select pg_advisory_xact_lock(hashtext('keszlet-iras'))`);
 }
 
 async function addMovement(q: Querier, input: {
@@ -223,7 +225,7 @@ async function addMovement(q: Querier, input: {
   eladAr?: number;
   eladFizmod?: "keszpenz" | "atutalas";
 }) {
-  await zaroljKeszletet(q, input.site, input.type);
+  await zaroljKeszletet(q);
   await q(
     `insert into keszlet_movements (site_id, type_id, direction, qty, partner, target_site_id, purchase_id, created_by, movement_group, elad_egysegar, elad_fizmod)
      values (
@@ -1366,7 +1368,7 @@ export async function recordInventoryCount(input: {
   ellenorizdTelephely(input.site);
   ellenorizdDarabszam(input.countedQty, input.type, true);
   return withTransaction(async (q) => {
-    await zaroljKeszletet(q, input.site, input.type);
+    await zaroljKeszletet(q);
     const stockRows = await q<{ qty: string }>(
       `select coalesce(sum(case
          when direction = 'be' then qty
