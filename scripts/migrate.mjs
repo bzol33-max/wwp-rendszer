@@ -13,6 +13,7 @@ import { readFileSync, readdirSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import pg from "pg";
+import { createHash } from "node:crypto";
 import bcrypt from "bcryptjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -108,12 +109,12 @@ async function main() {
     },
   });
 
-  await applyKapcsolatokUpdates(pool, dbDir);
+  await egyszerFajlonkent(pool, "kapcsolatok-updates.json", () => applyKapcsolatokUpdates(pool, dbDir));
   await applyPoziciszamUpdates(pool, dbDir);
-  await applyFuvarCorrections(pool, dbDir);
+  await egyszerFajlonkent(pool, "fuvar-corrections.json", () => applyFuvarCorrections(pool, dbDir));
   await applyPostazasiCimUpdates(pool, dbDir);
   await resetSzamlaRosszTotalosszMezok(pool);
-  await applySzamlaFizetveImport(pool, dbDir);
+  await egyszerFajlonkent(pool, "szamla-fizetve-import.json", () => applySzamlaFizetveImport(pool, dbDir));
   await applyKontokivonatEvesImportOnce(pool, dbDir);
   await backfillMozgatasBe(pool);
   await seedAlkalmazottakOnce(pool);
@@ -2299,6 +2300,33 @@ async function backfillMozgatasBe(pool) {
 // "new" (új sor, cég+e-mail / cég+kapcsolattartó alapján duplikáció-védett)
 // bejegyzést — a tábla ettől kézi lépés nélkül, automatikusan bővül minden
 // deploykor.
+// Az adatfájl-alapú javítások (db/*.json) eddig MINDEN induláskor lefutottak,
+// és felülírták a felületen azóta kézzel javított értékeket — pl. a kézzel
+// visszavont "Fizetve" jelölést a következő deploy visszaállította (audit
+// 2026-10-04, DB-1). Mostantól egy fájl adott tartalma egyszer fut le: a
+// kódot az alkalmazott_javitasok jegyzi a tartalom kivonatával, így ha a
+// fájl módosul (új tétel kerül bele), az új változat ismét lefut egyszer.
+async function egyszerFajlonkent(pool, fajlnev, fn) {
+  let tartalom;
+  try {
+    tartalom = readFileSync(path.join(dbDir, fajlnev));
+  } catch {
+    return fn(); // a függvény maga naplózza, hogy a fájl hiányzik
+  }
+  const kod = `adatfajl:${fajlnev}:${createHash("sha256").update(tartalom).digest("hex").slice(0, 16)}`;
+  const { rows: mar } = await pool.query(`select 1 from alkalmazott_javitasok where kod = $1`, [kod]);
+  if (mar.length > 0) return;
+  // Átálláskor: a jelölés bevezetése előtt a fájl MINDEN induláskor lefutott,
+  // tehát a mostani tartalma már alkalmazva van — újra lefuttatni pont a
+  // kézzel visszavont jelöléseket állítaná vissza még egyszer. Ilyenkor csak
+  // jelöljük; a fájl következő módosítása már lefut.
+  const { rows: korabbi } = await pool.query(`select 1 from alkalmazott_javitasok where kod like $1`, [
+    `adatfajl:${fajlnev}:%`,
+  ]);
+  if (korabbi.length > 0) await fn();
+  await pool.query(`insert into alkalmazott_javitasok (kod) values ($1) on conflict (kod) do nothing`, [kod]);
+}
+
 async function applyKapcsolatokUpdates(pool, dbDir) {
   let data;
   try {
@@ -2469,11 +2497,10 @@ async function applyPostazasiCimUpdates(pool, dbDir) {
 // fizetettségi státuszt, ezért ez kézi ("Fizetve" gomb) workflow lenne
 // egyenként — a felhasználó viszont adott egy teljes, könyvelésből/
 // Számlázz.hu-ból származó listát a ténylegesen kifizetett számlákról
-// (dátummal, ahol ismert). A db/szamla-fizetve-import.json a forrás —
-// minden induláskor lefut, biztonságosan újrafuttatható (csak azokat a
-// sorokat érinti, amik a `szamla` táblában MÉG "nincs fizetve" állapotúak,
-// tehát egy már kézzel "Fizetve"-ként megjelölt/visszavont sort nem ír
-// felül). Ha a listában nem szerepelt pontos kifizetés-dátum, a számla
+// (dátummal, ahol ismert). A db/szamla-fizetve-import.json a forrás — a
+// fájl adott tartalma egyszer fut le (egyszerFajlonkent), mert a "csak a még
+// nem fizetett sorokat érinti" feltétel a kézzel VISSZAVONT jelölést nem
+// védte: azt a következő induláskor újra fizetettre állította. Ha a listában nem szerepelt pontos kifizetés-dátum, a számla
 // kiállítás-dátumát használjuk helyette (csak becslés, de a "Visszavon"
 // 5 perces ablakot nem nyitja fel feleslegesen, mert ez már régi dátum).
 async function applySzamlaFizetveImport(pool, dbDir) {

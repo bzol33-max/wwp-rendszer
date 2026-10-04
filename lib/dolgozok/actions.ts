@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { query } from "@/lib/db";
+import { query, withTransaction, type Querier } from "@/lib/db";
 import { requireSession } from "@/lib/auth/dal";
 import {
   requireEditPermission,
@@ -242,11 +242,11 @@ export async function setHetiPaid(id: string, paid: boolean, paidBy?: string) {
 
 // --- Napi / fix havi bér ---
 
-async function syncEloleg(employeeId: string, year: number, month: number, eloleg: number) {
+async function syncEloleg(q: Querier, employeeId: string, year: number, month: number, eloleg: number) {
   const autoKey = `auto:${employeeId}:${year}:${month}`;
   if (eloleg > 0) {
     const note = `bérből levonva (${HU_MONTHS[month - 1]} ${year})`;
-    await query(
+    await q(
       `insert into alkalmazott_elolegek (employee_id, advance_date, amount, note, auto_key)
        values ($1, make_date($2, $3, 1), $4, $5, $6)
        on conflict (auto_key) do update set amount = excluded.amount, note = excluded.note,
@@ -258,7 +258,14 @@ async function syncEloleg(employeeId: string, year: number, month: number, elole
       [employeeId, year, month, -eloleg, note, autoKey]
     );
   } else {
-    await query(`delete from alkalmazott_elolegek where auto_key = $1`, [autoKey]);
+    // A dolgozó által már nyugtázott levonást nem töröljük (Budaházi Zoltán
+    // szabálya, audit 2026-10-04, DB-5) — a hiba a bérsor mentését is
+    // visszagörgeti, hogy a kártya és az előleg-lista ne térjen el.
+    await q(`delete from alkalmazott_elolegek where auto_key = $1 and accepted_at is null`, [autoKey]);
+    const [maradt] = await q<{ id: string }>(`select id::text from alkalmazott_elolegek where auto_key = $1`, [autoKey]);
+    if (maradt) {
+      throw new Error("Ezt az előleg-levonást a dolgozó már nyugtázta, ezért nem nullázható ki.");
+    }
   }
 }
 
@@ -268,13 +275,16 @@ export async function saveNapiBer(
 ) {
   await requireEditPermission("dolgozok");
   const pointer = await getPointer();
-  await query(
-    `update alkalmazott_napi_havi_ber
-     set days_count = $4, utalas = $5, eloleg = $6
-     where employee_id = $1 and year = $2 and month = $3`,
-    [employeeId, pointer.year, pointer.month, input.daysCount, input.utalas, input.eloleg]
-  );
-  await syncEloleg(employeeId, pointer.year, pointer.month, input.eloleg);
+  // A bérsor és az előleg-tétel együtt rögzül, vagy egyik sem.
+  await withTransaction(async (q) => {
+    await q(
+      `update alkalmazott_napi_havi_ber
+       set days_count = $4, utalas = $5, eloleg = $6
+       where employee_id = $1 and year = $2 and month = $3`,
+      [employeeId, pointer.year, pointer.month, input.daysCount, input.utalas, input.eloleg]
+    );
+    await syncEloleg(q, employeeId, pointer.year, pointer.month, input.eloleg);
+  });
   revalidatePath("/dolgozok");
 }
 
@@ -284,13 +294,16 @@ export async function saveHaviBer(
 ) {
   await requireEditPermission("dolgozok");
   const pointer = await getPointer();
-  await query(
-    `update alkalmazott_napi_havi_ber
-     set letiltas = $4, uzemanyag = $5, utalas = $6, eloleg = $7
-     where employee_id = $1 and year = $2 and month = $3`,
-    [employeeId, pointer.year, pointer.month, input.letiltas, input.uzemanyag, input.utalas, input.eloleg]
-  );
-  await syncEloleg(employeeId, pointer.year, pointer.month, input.eloleg);
+  // A bérsor és az előleg-tétel együtt rögzül, vagy egyik sem.
+  await withTransaction(async (q) => {
+    await q(
+      `update alkalmazott_napi_havi_ber
+       set letiltas = $4, uzemanyag = $5, utalas = $6, eloleg = $7
+       where employee_id = $1 and year = $2 and month = $3`,
+      [employeeId, pointer.year, pointer.month, input.letiltas, input.uzemanyag, input.utalas, input.eloleg]
+    );
+    await syncEloleg(q, employeeId, pointer.year, pointer.month, input.eloleg);
+  });
   revalidatePath("/dolgozok");
 }
 
@@ -367,7 +380,14 @@ export async function deleteAdvance(id: string) {
   if (rows[0].auto_key) {
     throw new Error("Ez a tétel a bérkártya „Előleg” mezőjéből szinkronizálódik — ott módosítsd.");
   }
-  await query(`delete from alkalmazott_elolegek where id = $1`, [id]);
+  // Nyugtázott tételt nem törlünk (audit 2026-10-04, DB-5).
+  const torolt = await query<{ id: string }>(
+    `delete from alkalmazott_elolegek where id = $1 and accepted_at is null returning id::text`,
+    [id]
+  );
+  if (torolt.length === 0) {
+    throw new Error("Ezt az előleget a dolgozó már nyugtázta, ezért nem törölhető.");
+  }
   revalidatePath("/dolgozok");
 }
 

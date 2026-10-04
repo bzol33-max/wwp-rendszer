@@ -618,6 +618,25 @@ export async function setMegalloKesz(fuvarId: string, megalloIndex: number): Pro
  * Számla/Posta fülre — a valós dátumot NEM módosítja, csak ezt a külön
  * jelölőt. Lásd getSzamlaPostaFuvarok.
  */
+/**
+ * A GPS-figyelő teljesítés-jelölése: csak akkor ír, ha a fuvar még nincs
+ * teljesítve és nincs számlája. A figyelő perccel korábban beolvasott sorokból
+ * dolgozik — a feltétel nélküli írás felülírta a közben kézzel visszavont vagy
+ * már számlázott sort, és a teljesitve_at-t is újraírta (audit 2026-10-04,
+ * RACE-4). Igazat ad, ha tényleg írt.
+ */
+export async function jelolTeljesitveGpsAlapjan(id: string): Promise<boolean> {
+  await requireEditPermission("fuvarozas");
+  const irt = await query<{ id: string }>(
+    `update fuvar_megbizasok set teljesitve = true, teljesitve_at = coalesce(teljesitve_at, now())
+     where id = $1 and not teljesitve and coalesce(szamla_szam, '') = ''
+     returning id::text`,
+    [id]
+  );
+  if (irt.length > 0) toroljIdovonalCachet();
+  return irt.length > 0;
+}
+
 export async function setFuvarTeljesitve(id: string, teljesitve: boolean) {
   await requireEditPermission("fuvarozas");
   await query(

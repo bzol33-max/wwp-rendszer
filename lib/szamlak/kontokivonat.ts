@@ -19,7 +19,7 @@
 // utalás zárja le. A kerekítés/banki költség miatti pár forintos maradékot a
 // REST_TOLERANCIA nyeli el.
 
-import { query } from "@/lib/db";
+import { query, withTransaction } from "@/lib/db";
 import { requireEditPermission } from "@/lib/auth/require-permission";
 import { requireSession } from "@/lib/auth/dal";
 import { olvasKivonatot, parositKivonatot, type ParositasSzamla } from "./kontokivonat-parositas";
@@ -104,62 +104,74 @@ export async function fogadjaElParositasokat(
 
   for (const { tranzakcio: t, szamlaIdk } of tetelek) {
     if (szamlaIdk.length === 0) continue;
-    const felirva = await query<{ kulcs: string }>(
-      `insert into kontokivonat_konyvelt (kulcs, datum, osszeg, penznem, partner_nev, kozlemeny, szamla_idk, konyvelte)
-       values ($1, $2::date, $3, $4, $5, $6, $7::bigint[], $8)
-       on conflict (kulcs) do nothing
-       returning kulcs`,
-      [t.kulcs, t.datum, t.osszeg, t.penznem, t.partnerNev, t.memo, szamlaIdk, session.username]
-    );
-    if (felirva.length === 0) {
-      marKonyvelt++;
-      continue;
-    }
-
-    // Részfizetés — egyetlen nyitott számla, amelynek hátralékát ez az utalás
-    // nem futja (a pár forintos maradékot a tolerancia elnyeli: az ilyen
-    // utalás már a teljes kiegyenlítésnek számít, lentebb).
-    if (szamlaIdk.length === 1) {
-      const nyitott = await query<{ hatralek: number }>(
-        `select (brutto + helyesbites_osszeg - fizetett_osszeg)::float8 as hatralek
-         from szamla
-         where id = $1::bigint and not fizetve`,
-        [szamlaIdk[0]]
+    // Tételenként egy tranzakció: a "könyvelve" bejegyzés és a számlák
+    // frissítése vagy együtt rögzül, vagy egyik sem. Korábban a bejegyzés
+    // után elhasaló lépés a tételt "már könyveltként" hagyta, a számlát pedig
+    // fizetetlenül — az újrafeltöltés ezt átugrotta, a befizetés elveszett
+    // (audit 2026-10-04, RACE-1). A számlasorokat a hátralék olvasása előtt
+    // zároljuk, hogy két egyidejű részfizetés ne számoljon ugyanabból.
+    const eredmeny = await withTransaction(async (q) => {
+      const felirva = await q<{ kulcs: string }>(
+        `insert into kontokivonat_konyvelt (kulcs, datum, osszeg, penznem, partner_nev, kozlemeny, szamla_idk, konyvelte)
+         values ($1, $2::date, $3, $4, $5, $6, $7::bigint[], $8)
+         on conflict (kulcs) do nothing
+         returning kulcs`,
+        [t.kulcs, t.datum, t.osszeg, t.penznem, t.partnerNev, t.memo, szamlaIdk, session.username]
       );
-      if (nyitott.length > 0 && t.osszeg < nyitott[0].hatralek - restTolerancia(t.penznem)) {
-        await query(
-          `update szamla set fizetett_osszeg = fizetett_osszeg + $2 where id = $1::bigint`,
-          [szamlaIdk[0], t.osszeg]
+      if (felirva.length === 0) return { tipus: "marKonyvelt" as const };
+
+      await q(`select id from szamla where id = any($1::bigint[]) order by id for update`, [szamlaIdk]);
+
+      // Részfizetés — egyetlen nyitott számla, amelynek hátralékát ez az utalás
+      // nem futja (a pár forintos maradékot a tolerancia elnyeli: az ilyen
+      // utalás már a teljes kiegyenlítésnek számít, lentebb).
+      if (szamlaIdk.length === 1) {
+        const nyitott = await q<{ hatralek: number }>(
+          `select (brutto + helyesbites_osszeg - fizetett_osszeg)::float8 as hatralek
+           from szamla
+           where id = $1::bigint and not fizetve`,
+          [szamlaIdk[0]]
         );
-        reszfizetes++;
-        continue;
+        if (nyitott.length > 0 && t.osszeg < nyitott[0].hatralek - restTolerancia(t.penznem)) {
+          await q(`update szamla set fizetett_osszeg = fizetett_osszeg + $2 where id = $1::bigint`, [
+            szamlaIdk[0],
+            t.osszeg,
+          ]);
+          return { tipus: "reszfizetes" as const };
+        }
       }
+
+      const ujFizetve = await q<{ id: string }>(
+        `update szamla
+         set fizetve = true,
+             fizetve_datum = ($2::date)::timestamp at time zone 'Europe/Budapest'
+         where id = any($1::bigint[]) and not fizetve
+         returning id::text as id`,
+        [szamlaIdk, t.datum]
+      );
+
+      const frissitett = await q<{ id: string }>(
+        `update szamla s
+         set fizetve_datum = ($2::date)::timestamp at time zone 'Europe/Budapest'
+         where s.id = any($1::bigint[])
+           and s.fizetve
+           and not (s.id = any($3::bigint[]))
+           and not exists (
+             select 1 from kontokivonat_konyvelt k
+             where s.id = any(k.szamla_idk) and k.kulcs <> $4
+           )
+         returning s.id::text as id`,
+        [szamlaIdk, t.datum, ujFizetve.map((r) => r.id), t.kulcs]
+      );
+      return { tipus: "fizetve" as const, sikeres: ujFizetve.length, datumFrissitve: frissitett.length };
+    });
+
+    if (eredmeny.tipus === "marKonyvelt") marKonyvelt++;
+    else if (eredmeny.tipus === "reszfizetes") reszfizetes++;
+    else {
+      sikeres += eredmeny.sikeres;
+      datumFrissitve += eredmeny.datumFrissitve;
     }
-
-    const ujFizetve = await query<{ id: string }>(
-      `update szamla
-       set fizetve = true,
-           fizetve_datum = ($2::date)::timestamp at time zone 'Europe/Budapest'
-       where id = any($1::bigint[]) and not fizetve
-       returning id::text as id`,
-      [szamlaIdk, t.datum]
-    );
-    sikeres += ujFizetve.length;
-
-    const frissitett = await query<{ id: string }>(
-      `update szamla s
-       set fizetve_datum = ($2::date)::timestamp at time zone 'Europe/Budapest'
-       where s.id = any($1::bigint[])
-         and s.fizetve
-         and not (s.id = any($3::bigint[]))
-         and not exists (
-           select 1 from kontokivonat_konyvelt k
-           where s.id = any(k.szamla_idk) and k.kulcs <> $4
-         )
-       returning s.id::text as id`,
-      [szamlaIdk, t.datum, ujFizetve.map((r) => r.id), t.kulcs]
-    );
-    datumFrissitve += frissitett.length;
   }
 
   return { sikeres, datumFrissitve, reszfizetes, marKonyvelt };

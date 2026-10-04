@@ -265,10 +265,18 @@ export async function valtAllapot(
         else set("teljesitve = true, teljesitve_at = coalesce(teljesitve_at, now())");
         break;
     }
-    await client.query(
-      `update fuvar_megbizasok set allapot = $2, allapot_at = now()${regi.length ? ", " + regi.join(", ") : ""} where id = $1`,
-      [id, hova]
+    // Optimista zár: csak akkor írunk, ha az állapot azóta sem változott,
+    // amióta a fenti ellenőrzés beolvasta. Két egyidejű váltás (dupla
+    // koppintás, mobil + asztali, a GPS-figyelő) különben érvénytelen láncot
+    // és dupla mellékhatást írhatott (audit 2026-10-04, RACE-2).
+    const irt = await client.query(
+      `update fuvar_megbizasok set allapot = $2, allapot_at = now()${regi.length ? ", " + regi.join(", ") : ""} where id = $1 and allapot = $3`,
+      [id, hova, sor.allapot]
     );
+    if (irt.rowCount === 0) {
+      await client.query("rollback");
+      return { ok: false, hiba: "A megbízás állapota közben megváltozott — frissítsd az oldalt, és próbáld újra." };
+    }
     if (sor.jelleg === "ber") {
       await client.query(`insert into fuvar_elszamolas (megbizas_id) values ($1) on conflict (megbizas_id) do nothing`, [id]);
       if (hova === "postazva") await client.query(`update fuvar_elszamolas set postazva_at = coalesce(postazva_at, now()), postazva_by = $2, papirok_beerkeztek_at = coalesce(papirok_beerkeztek_at, now()), papirok_beerkeztek_by = coalesce(papirok_beerkeztek_by, $2), frissitve_at = now() where megbizas_id = $1`, [id, par[2]]);

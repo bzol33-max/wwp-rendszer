@@ -29,7 +29,7 @@
 
 import { getFleetLastPositions, getVehicleTrips, parseEcofleetTimestamp, EcofleetError, type EcofleetPosition } from "./ecofleet";
 import { SAJAT_JARMUVEK, resolveJarmu } from "./vehicles";
-import { getSajatFuvarokErinteshez, setFuvarTeljesitve } from "./megbizasok";
+import { getSajatFuvarokErinteshez, jelolTeljesitveGpsAlapjan } from "./megbizasok";
 import { cimSugarKm, epitsIdovonal, fuvarKeszGpsSzerint, haversineKm, jelolMegallokat, kiegesziteloAllapottal } from "./idovonal";
 import { epitsErintesMegallokat, mozogE } from "./erintes-felismeres";
 import { rogzitGpsErinteseket } from "./megallo-naplo";
@@ -187,8 +187,7 @@ export async function futtatTeljesitesFigyeles(): Promise<TeljesitesFigyelesEred
             .join(" | ")}`
         );
         if (!kesz) continue;
-        await setFuvarTeljesitve(sor.id, true);
-        eredmeny.automatikusanTeljesitve++;
+        if (await jelolTeljesitveGpsAlapjan(sor.id)) eredmeny.automatikusanTeljesitve++;
       }
     } catch (err) {
       eredmeny.hibak.push(
