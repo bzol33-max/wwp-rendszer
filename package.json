@@ -12,12 +12,12 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
+    "@googleapis/drive": "^26.0.2",
     "bcryptjs": "^3.0.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "exceljs": "^4.4.0",
     "fast-xml-parser": "^5.11.1",
-    "googleapis": "^180.0.0",
     "jose": "^6.2.12",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.39.0",

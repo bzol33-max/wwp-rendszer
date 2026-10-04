@@ -25,7 +25,8 @@
 // mammoth importokat és sok segédfüggvényt tartalmaz (a "use server" fájlok
 // kizárólag async függvényeket exportálhatnak).
 
-import { google } from "googleapis";
+// Csak a Drive v3 kliens (audit DEP-4: a teljes googleapis csomag 209 MB volt).
+import { auth as googleAuth, drive as googleDrive } from "@googleapis/drive";
 import { egyetlenPeldanyban, query, ZAR_KULCS } from "@/lib/db";
 import {
   addFuvar,
@@ -94,7 +95,7 @@ function driveClient() {
     );
   }
   const credentials = JSON.parse(raw);
-  const auth = new google.auth.GoogleAuth({
+  const auth = new googleAuth.GoogleAuth({
     credentials,
     // Teljes Drive-jog (2026-09-17): az e-mailből jött megbízás-iratok ide
     // töltődnek fel (feltoltMegbizasIratot). A "drive.file" nem lenne elég,
@@ -102,7 +103,7 @@ function driveClient() {
     // nem. A service account a Fuvarmegbizások mappán Szerkesztő.
     scopes: ["https://www.googleapis.com/auth/drive"],
   });
-  return google.drive({ version: "v3", auth });
+  return googleDrive({ version: "v3", auth });
 }
 
 type DriveFile = {

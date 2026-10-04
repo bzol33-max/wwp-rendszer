@@ -1,5 +1,5 @@
 import { getFuvarFulAdatok } from "@/lib/attekintes/actions";
-import { getIdovonalak } from "@/lib/fuvarozas/actions";
+import { getIdovonalak } from "@/lib/fuvarozas/idovonal-akciok";
 import { getFogyasztas } from "@/lib/fuvarozas/fogyasztas";
 import { budapestNapISO } from "@/lib/fuvarozas/idozona";
 import { MegbizasReszlet } from "@/components/attekintes/jarmu-kartya";
