@@ -223,7 +223,7 @@ export async function valtAllapot(
   if (opciok.kezi && hova === "szamlazhato") k.fotoVan = true;
   // Saját fuvar kézi lezárása szállítólevél-párosítás nélkül (amíg a K2 kör
   // — szállítólevél-import — nincs meg): naplózva `kezi: true`-val.
-  if (opciok.kezi && hova === "lezart" && sor.jelleg === "sajat") k.szallitolevelParositva = true;
+  if (opciok.kezi && hova === "lezart" && sor.jelleg === "sajat") k.fotoVan = true;
   const forras: AtmenetForras = "ember";
   const e = ellenorizAtmenet(sor.allapot, hova, forras, k);
   if (!e.ok) return { ok: false, hiba: e.hiba };

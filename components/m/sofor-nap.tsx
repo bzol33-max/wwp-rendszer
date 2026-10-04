@@ -175,8 +175,12 @@ function FuvarKartya({ f, ma }: { f: SoforFuvarBlokk; ma: boolean }) {
         <>
           {utolsoLerakoKesz ? (
             <div className="flex flex-col gap-2 rounded-xl border border-[var(--m-mint)] p-3">
-              <div className="text-sm font-bold">Fuvarlevél / CMR fotó{oldalak > 0 ? ` · ✓ ${oldalak} oldal feltöltve` : ""}</div>
-              <div className="text-xs text-[var(--m-muted)]">Minden oldalt külön fotózz le. A fotó a diszpécsernek szól — ettől lesz számlázható. Az eredeti papírt hozd haza.</div>
+              <div className="text-sm font-bold">{f.sajatFuvar ? "Leigazolt szállítólevél fotó" : "Fuvarlevél / CMR fotó"}{oldalak > 0 ? ` · ✓ ${oldalak} oldal feltöltve` : ""}</div>
+              <div className="text-xs text-[var(--m-muted)]">
+                {f.sajatFuvar
+                  ? "Fotózd le az átvevő által aláírt szállítólevelet, minden oldalt külön — ettől zárul le a fuvar. Az eredeti papírt hozd haza."
+                  : "Minden oldalt külön fotózz le. A fotó a diszpécsernek szól — ettől lesz számlázható. Az eredeti papírt hozd haza."}
+              </div>
               <input ref={fotoRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={fotok} />
               <input ref={tarRef} type="file" accept="image/*" multiple className="hidden" onChange={fotok} />
               {haladas ? <div className="text-sm font-semibold">Feltöltés {haladas}…</div> : null}

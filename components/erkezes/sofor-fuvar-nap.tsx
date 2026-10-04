@@ -243,9 +243,10 @@ function fotoOldalak(blokk: SoforFuvarBlokk): number {
  * Lerakás után a papír lefotózása — eddig egy csukott "Részletek" sor mögött
  * volt, és semmi nem kérte (Budaházi Zoltán, 2026-09-24):
  *  - bér fuvar: az aláírt fuvarlevél / CMR — enélkül nem számlázunk;
- *  - saját fuvar: a BEFELÉ kapott szállítólevél. A kifelé menőt a
- *    Számlázz.hu állítja ki, ott nincs mit fotózni — erre való a
- *    "Nem kaptam" gomb.
+ *  - saját fuvar: az átvevő által aláírt (leigazolt) szállítólevél — ettől
+ *    zárul le a fuvar (Budaházi Zoltán, 2026-10-04). Ha nincs papír, a
+ *    "Nem kaptam" gomb eltünteti a kártyát; a fuvar ilyenkor az irodában
+ *    zárható le kézzel.
  */
 function PapirKeres({
   blokk,
@@ -280,10 +281,10 @@ function PapirKeres({
       {oldalak === 0 ? (
         <>
           <span className="text-base font-bold leading-tight">
-            {blokk.sajatFuvar ? "Kaptál szállítólevelet? Fotózd le." : "Fotózd le az aláírt fuvarlevelet (CMR)."}
+            {blokk.sajatFuvar ? "Fotózd le az aláírt szállítólevelet." : "Fotózd le az aláírt fuvarlevelet (CMR)."}
           </span>
           <span className="text-xs">
-            {blokk.sajatFuvar ? "" : "Enélkül nem tudjuk kiszámlázni a fuvart. "}Minden oldalt külön fotózz le.
+            {blokk.sajatFuvar ? "Ettől zárul le a fuvar. " : "Enélkül nem tudjuk kiszámlázni a fuvart. "}Minden oldalt külön fotózz le.
           </span>
         </>
       ) : (

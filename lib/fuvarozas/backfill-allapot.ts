@@ -53,10 +53,14 @@ export function regiHelyUjAllapot(sor: BackfillBemenet, ma: string, most: Date =
       return { allapot: "teljesitve", regiHely, indok: "munka kész, fotó nincs" };
     }
     case "archiv": {
+      // Saját fuvar csak a sofőr fotójával zárul (019-es migráció, 2026-10-04).
+      if (jelleg === "sajat" && !sor.fotoVan) {
+        return { allapot: "teljesitve", regiHely, indok: "saját fuvar, munka kész, szállítólevél-fotó nincs" };
+      }
       return {
         allapot: "lezart",
         regiHely,
-        indok: jelleg === "sajat" ? "saját fuvar, munka kész (12. él, migráció)" : "számla + postázva, ablak lejárt",
+        indok: jelleg === "sajat" ? "saját fuvar, szállítólevél-fotóval (12. él)" : "számla + postázva, ablak lejárt",
       };
     }
   }

@@ -118,8 +118,10 @@ export const ATMENETEK: readonly Atmenet[] = [
     feltetel: (k) => kell(k.szamlaVan && k.postazva, "lezáráshoz kell: számla + postázva"),
   },
   {
-    szam: 12, honnan: "teljesitve", hova: "lezart", kivalto: "saját fuvar: szállítólevél párosítva (rövid út)", forrasok: ["rendszer", "ember", "migracio"],
-    feltetel: (k) => (k.sajatFuvar ? kell(k.szallitolevelParositva, "nincs párosított szállítólevél") : "csak saját fuvarnál"),
+    // A sofőr lefotózza a leigazolt szállítólevelet, ettől zárul (Budaházi
+    // Zoltán, 2026-10-04). A Számlázz.hu-s szállítólevél-párosítás nem zár le.
+    szam: 12, honnan: "teljesitve", hova: "lezart", kivalto: "saját fuvar: a sofőr lefotózta a leigazolt szállítólevelet", forrasok: ["rendszer", "ember", "migracio"],
+    feltetel: (k) => (k.sajatFuvar ? kell(k.fotoVan, "nincs lefotózott (leigazolt) szállítólevél") : "csak saját fuvarnál"),
   },
   {
     szam: 13, honnan: "szamlazva", hova: "lezart", kivalto: "partner nem kér postát (törzs-kapcsoló)", forrasok: ["rendszer", "ember", "migracio"],

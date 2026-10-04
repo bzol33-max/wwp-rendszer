@@ -50,7 +50,8 @@ enged("8. számla párosítva → számlázva", "szamlazhato", "szamlazva", "ren
 enged("9. e-mail elment", "szamlazva", "email_elment", "rendszer");
 enged("10. postázva (Szabina feladta) — külön papír-jelölés nem kell", "email_elment", "postazva", "ember", {});
 enged("11. lezárás mind a négy feltétellel", "postazva", "lezart", "rendszer", teljes);
-enged("12. saját fuvar rövid út", "teljesitve", "lezart", "rendszer", { sajatFuvar: true, szallitolevelParositva: true });
+enged("12. saját fuvar: fotóval lezárható", "teljesitve", "lezart", "rendszer", { sajatFuvar: true, fotoVan: true });
+tilt("12. saját fuvar: szállítólevél-párosítás magában nem zár", "teljesitve", "lezart", "rendszer", { sajatFuvar: true, szallitolevelParositva: true });
 enged("13. partner nem kér e-mailt/postát", "szamlazva", "lezart", "rendszer", { partnerNemKerEmailt: true, partnerNemKerPostat: true });
 enged("14. visszaállítás tervezettre GPS nélkül", "folyamatban", "tervezett", "ember", { gpsErintesVolt: false });
 enged("15. fotó visszavonása", "szamlazhato", "teljesitve", "ember");
@@ -75,7 +76,7 @@ enged("10. postázva közvetlenül számlázottból", "szamlazva", "postazva", "
 tilt("9. e-mail jelölés nem kézi gomb", "szamlazva", "email_elment", "ember");
 tilt("7. kézi számlázható nincs", "teljesitve", "szamlazhato", "ember", { fotoVan: true });
 enged("11. lezárás külön papír-jelölés nélkül (a postázás jelenti)", "postazva", "lezart", "rendszer", { ...teljes, papirBeerkezett: false });
-tilt("12. bér fuvarnak nincs rövid út", "teljesitve", "lezart", "rendszer", { szallitolevelParositva: true });
+tilt("12. bér fuvarnak nincs rövid út", "teljesitve", "lezart", "rendszer", { fotoVan: true });
 tilt("12. saját fuvar szállítólevél nélkül nem zárható", "teljesitve", "lezart", "rendszer", { sajatFuvar: true });
 tilt("13. ha csak az e-mailt nem kéri", "szamlazva", "lezart", "rendszer", { partnerNemKerEmailt: true });
 enged("13. ha csak a postát nem kéri", "szamlazva", "lezart", "rendszer", { partnerNemKerPostat: true });
@@ -94,7 +95,7 @@ for (const h of ALLAPOTOK)
     if (h === c || tablaban.has(`${h}>${c}`)) continue;
     for (const f of ["rendszer", "ember", "gps", "sofor", "migracio"] as const) {
       parok++;
-      if (ellenorizAtmenet(h, c, f, { ...teljes, sajatFuvar: true, szallitolevelParositva: true, partnerNemKerEmailt: true, partnerNemKerPostat: true }).ok) {
+      if (ellenorizAtmenet(h, c, f, { ...teljes, sajatFuvar: true, partnerNemKerEmailt: true, partnerNemKerPostat: true }).ok) {
         bad++;
         console.log(`  HIBA  táblán kívüli él átment: ${h} → ${c} (${f})`);
       }
@@ -130,7 +131,7 @@ utvonal("bér fuvar teljes út", [
 utvonal("saját fuvar rövid út", [
   ["folyamatban", "sofor", {}],
   ["teljesitve", "sofor", {}],
-  ["lezart", "rendszer", { sajatFuvar: true, szallitolevelParositva: true }],
+  ["lezart", "rendszer", { sajatFuvar: true, fotoVan: true }],
 ], "tervezett");
 utvonal("egyszerű út: fotó nélkül számlaszám, feladva", [
   ["folyamatban", "sofor", {}],

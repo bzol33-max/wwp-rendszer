@@ -47,7 +47,8 @@ eq("bér: postázva számla NÉLKÜL → nem lezárt (S1), teljesitve", sor({ da
 // Saját fuvar (tipus='ber').
 eq("saját: jövő → tervezett", sor({ tipus: "ber", datum_iso: "2026-09-21" }).allapot, "tervezett");
 eq("saját: ma → folyamatban", sor({ tipus: "ber" }).allapot, "folyamatban");
-eq("saját: elmúlt → lezart (12. él)", sor({ tipus: "ber", datum_iso: "2026-09-17" }).allapot, "lezart");
+eq("saját: elmúlt, fotó nélkül → teljesitve (fotóra vár)", sor({ tipus: "ber", datum_iso: "2026-09-17" }).allapot, "teljesitve");
+eq("saját: elmúlt, szállítólevél-fotóval → lezart (12. él)", sor({ tipus: "ber", datum_iso: "2026-09-17", fotoVan: true }).allapot, "lezart");
 eq("saját: ellenorzott=false → ellenorzesre_var", sor({ tipus: "ber", ellenorzott: false, datum_iso: "2026-09-21" }).allapot, "ellenorzesre_var");
 // Törölt: az állapot ugyanaz, mint törlés nélkül.
 eq("törölt sor állapota független a törléstől", sor({ statusz: "torolt", datum_iso: "2026-09-21" }).allapot, "tervezett");
