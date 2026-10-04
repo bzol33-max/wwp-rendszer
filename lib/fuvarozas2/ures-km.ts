@@ -38,9 +38,25 @@ function megallok(f: Pick<LancFuvar, "felrako" | "lerako">): { fel: string[]; le
  * `kezdoHely` ahol a kocsi a lánc előtt állt (előző lerakó vagy telephely).
  */
 export async function lancKm(fuvarok: LancFuvar[], kezdoHely: string | null, tav: Tavolsag): Promise<LancKm[]> {
+  // Egy lerakás-napon belül a legközelebbi felrakó jön (Gergő 09.29.: Nyíregyháza
+  // után a téglási RBT, nem a szigetszentmiklósi Fabrika — az id-sorrend két
+  // fölösleges, ~250 és ~400 km-es üres szakaszt adott). Egyezésnél a
+  // napi-sorrend dönt.
+  const rendezett = napiSorrend(fuvarok, (x) => x);
   const ki: LancKm[] = [];
   let hol = kezdoHely;
-  for (const f of napiSorrend(fuvarok, (x) => x)) {
+  while (rendezett.length > 0) {
+    const nap = rendezett[0].lerakasNap ?? rendezett[0].felrakasNap ?? "";
+    let legjobb = 0;
+    if (hol) {
+      let legjobbKm = Infinity;
+      for (let i = 0; i < rendezett.length && (rendezett[i].lerakasNap ?? rendezett[i].felrakasNap ?? "") === nap; i++) {
+        const elso = megallok(rendezett[i]).fel[0];
+        const km = elso ? (await tav(hol, elso)) ?? Infinity : Infinity;
+        if (km < legjobbKm) { legjobbKm = km; legjobb = i; }
+      }
+    }
+    const [f] = rendezett.splice(legjobb, 1);
     const { fel, le } = megallok(f);
     const pontok = [...fel, ...le];
     let ures = 0;

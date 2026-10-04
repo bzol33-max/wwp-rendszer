@@ -16,9 +16,11 @@ function eq(nev: string, kapott: unknown, vart: unknown) {
 const TAV: Record<string, number> = {
   "Szakoly|Tata": 310, "Tata|Tata": 0, "Tata|Tompaládony": 125, "Tompaládony|Sárvár": 15,
   "Sárvár|Székesfehérvár": 140, "Székesfehérvár|Debrecen": 300,
+  "Nyíregyháza|Téglás": 30, "Nyíregyháza|Szigetszentmiklós": 250, "Budapest|Szigetszentmiklós": 20,
+  "Téglás|Budapest": 220, "Szigetszentmiklós|Tompaládony": 220, "Tompaládony|Téglás": 400,
 };
-const varos = (c: string) => ["Szakoly", "Tata", "Tompaládony", "Sárvár", "Székesfehérvár", "Debrecen"].find((v) => c.includes(v)) ?? c;
-const tav: Tavolsag = async (a, b) => TAV[`${varos(a)}|${varos(b)}`] ?? null;
+const varos = (c: string) => ["Szakoly", "Tata", "Tompaládony", "Sárvár", "Székesfehérvár", "Debrecen", "Nyíregyháza", "Téglás", "Szigetszentmiklós", "Budapest"].find((v) => c.includes(v)) ?? c;
+const tav: Tavolsag = async (a, b) => (varos(a) === varos(b) ? 0 : TAV[`${varos(a)}|${varos(b)}`] ?? null);
 
 const losung: LancFuvar = { id: "293", jelleg: "ber", felrakasNap: "2026-10-05", lerakasNap: "2026-10-06", felrako: "HU-9600 Sárvár, Ikervári út 42. + H-8000 Székesfehérvár, Holland fasor 4.", lerako: "HU-4031 Debrecen", rakottKm: null };
 const palFerr: LancFuvar = { id: "294", jelleg: "sajat", felrakasNap: "2026-10-05", lerakasNap: "2026-10-05", felrako: "Szakoly, Rákóczi utca 26", lerako: "2890 Tata, Agráripari telep", rakottKm: null };
@@ -35,6 +37,12 @@ const huGo = await lancKm([{ ...losung, rakottKm: 452 }], "Tompaládony", tav);
 eq("bérfuvarnál a HU-GO-s rakott km az irányadó", huGo[0].rakott, 452);
 const telep = await lancKm([fabrika], "Szakoly", tav);
 eq("előző lerakó nélkül a telephelyről üres", telep[0].ures, 310);
+
+// Gergő 09.29.: Nyíregyházáról a közeli Téglás jön, nem a korábban rögzített Szigetszentmiklós.
+const nap29 = (id: string, fel: string, le: string): LancFuvar => ({ id, jelleg: "ber", felrakasNap: "2026-09-29", lerakasNap: "2026-09-29", felrako: fel, lerako: le, rakottKm: null });
+const l29 = await lancKm([nap29("275", "Szigetszentmiklós", "Tompaládony"), nap29("284", "Téglás", "Budapest X"), ], "Nyíregyháza", tav);
+eq("egy napon belül a legközelebbi felrakó jön", l29.map((x) => x.id), ["284", "275"]);
+eq("így az üres km 30 + 20, nem 250 + 400", l29.reduce((a, x) => a + x.ures, 0), 50);
 
 console.log(`üres km: ${ok} ok, ${bad} hiba`);
 if (bad) process.exit(1);
