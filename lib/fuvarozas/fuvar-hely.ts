@@ -47,13 +47,6 @@ import type { FuvarTipus } from "@/lib/fuvarozas/fuvar-constants";
 
 export type FuvarHely = "ber_folyamatban" | "sajat_folyamatban" | "szamla_posta" | "archiv";
 
-export const FUVAR_HELYEK: readonly FuvarHely[] = [
-  "ber_folyamatban",
-  "sajat_folyamatban",
-  "szamla_posta",
-  "archiv",
-];
-
 /** A fül UI-címkéje (lásd a tipus/fülnév csere megjegyzését fent). */
 export const FUVAR_HELY_CIMKE: Record<FuvarHely, string> = {
   ber_folyamatban: "Bér fuvarok (folyamatban)",

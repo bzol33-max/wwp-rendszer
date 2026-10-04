@@ -13,7 +13,6 @@ import { kiegAlap, parositKiegSzamlakat, parositSzamlakat } from "@/lib/fuvaroza
 import { requireSession } from "@/lib/auth/dal";
 import type {
   FuvarTipus,
-  FuvarStatusz,
   FuvarRow,
   MaiFuvarSor,
   AddFuvarInput,
@@ -383,11 +382,6 @@ export async function addFuvar(input: AddFuvarInput): Promise<string | null> {
   return id;
 }
 
-export async function updateFuvarStatus(id: string, statusz: FuvarStatusz) {
-  await requireEditPermission("fuvarozas");
-  await query(`update fuvar_megbizasok set statusz = $2 where id = $1`, [id, statusz]);
-}
-
 export async function deleteFuvar(id: string) {
   await requireEditPermission("fuvarozas");
   // Nem töröljük fizikailag — "Törölt" státuszba kerül, hogy a naplózás megmaradjon.
@@ -531,25 +525,6 @@ export async function getMaPostazottFuvarok(): Promise<{ id: string; megrendelo:
        and postazva_at >= ((now() at time zone 'Europe/Budapest')::date) at time zone 'Europe/Budapest'
      order by postazva_at desc
      limit 50`
-  );
-}
-
-/**
- * A fuvar eredeti papírjainak (CMR, fuvarlevél) beérkezése a telephelyre.
- * Ez a Számla/Posta fülön a "Papírra vár" és a "Számlázható" csoport közti
- * határ — papír nélkül nem állítunk ki számlát.
- *
- * Több fuvart egyszerre fogad, mert a sofőr egy fordulóból jellemzően több
- * megbízás papírját hozza be egyszerre (lásd PapirNyugtazoSav).
- */
-export async function setFuvarokPapirokBeerkeztek(ids: string[], beerkezett: boolean) {
-  await requireEditPermission("fuvarozas");
-  if (ids.length === 0) return;
-  await query(
-    `update fuvar_megbizasok
-     set papirok_beerkeztek_at = case when $2 then now() else null end
-     where id = any($1::bigint[])`,
-    [ids, beerkezett]
   );
 }
 

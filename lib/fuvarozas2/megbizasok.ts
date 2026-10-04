@@ -324,34 +324,6 @@ export async function valtAllapot(
   }
 }
 
-/** Szabina: az eredeti papír beérkezett / visszavonva (B7). Nem állapotváltás — a 10. él feltétele. */
-export async function setPapirBeerkezett(id: string, be: boolean): Promise<void> {
-  await requireAnyEditPermission(["elszamolas", "fuvarozas"]);
-  const session = await requireSession();
-  const ki = session.name ?? session.username;
-  const client = await pool.connect();
-  try {
-    await client.query("begin");
-    await client.query(`insert into fuvar_elszamolas (megbizas_id) values ($1) on conflict (megbizas_id) do nothing`, [id]);
-    await client.query(
-      `update fuvar_elszamolas set papirok_beerkeztek_at = case when $2 then coalesce(papirok_beerkeztek_at, now()) else null end,
-         papirok_beerkeztek_by = case when $2 then $3 else null end, frissitve_at = now() where megbizas_id = $1`,
-      [id, be, ki]
-    );
-    await client.query(`update fuvar_megbizasok set papirok_beerkeztek_at = case when $2 then coalesce(papirok_beerkeztek_at, now()) else null end where id = $1`, [id, be]);
-    await client.query(
-      `insert into fuvar_megbizas_esemeny (megbizas_id, esemeny, forras, ki, reszletek) values ($1, 'papir_beerkezett', 'ember', $2, $3)`,
-      [id, ki, JSON.stringify({ beerkezett: be })]
-    );
-    await client.query("commit");
-  } catch (err) {
-    await client.query("rollback").catch(() => {});
-    throw err;
-  } finally {
-    client.release();
-  }
-}
-
 /** Kézi számlaszám (a Számlázz.hu-szinkron helyett/mellett). Számlázható → számlázva átmenettel. */
 export async function setSzamlaSzam(id: string, szamlaSzam: string | null): Promise<{ ok: true } | { ok: false; hiba: string }> {
   await requireAnyEditPermission(["elszamolas", "fuvarozas"]);

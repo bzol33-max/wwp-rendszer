@@ -184,11 +184,6 @@ export function lehetsegesCelok(honnan: Allapot, forras: AtmenetForras, k: Atmen
   return [...celok];
 }
 
-/** Nyitott = még nem lezárt (a listák és a GPS-figyelő szűrője). */
-export const NYITOTT_ALLAPOTOK: readonly Allapot[] = ALLAPOTOK.filter((a) => a !== "lezart");
-/** Elszámolás-oszlopok (asztali Elszámolás fül és Szabina Teendői). */
-export const ELSZAMOLAS_ALLAPOTOK: readonly Allapot[] = ["teljesitve", "szamlazhato", "szamlazva", "email_elment", "postazva"];
-
 /**
  * A megbízás útja öt lépésben (Budaházi Zoltán, 2026-09-25): megérkezik →
  * a sofőr viszi → visszaért, számlázni kell → számlázva, postára vár → kész.

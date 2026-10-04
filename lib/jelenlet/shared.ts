@@ -174,11 +174,6 @@ export function summarizeByDay(sessions: JelenletSession[]): DaySummary[] {
     .sort((a, b) => b.date.localeCompare(a.date));
 }
 
-/** A hónap összes napi eltérésének összege ("mennyi plusz/mínusz van a hónapban"). */
-export function monthlyTotalDiff(days: DaySummary[]): number {
-  return days.reduce((sum, d) => sum + (d.diffMinutes ?? 0), 0);
-}
-
 export function currentYearMonth(): { year: number; month: number } {
   const d = new Date();
   return { year: d.getFullYear(), month: d.getMonth() + 1 };
@@ -450,13 +445,6 @@ export function formatOra(minutes: number): string {
 
 export type SzabadsagTipus = "szabadsag" | "beteg";
 export type SzabadsagAllapot = "kert" | "jovahagyva" | "elutasitva" | "visszavonva";
-
-export const SZABADSAG_ALLAPOT_LABELS: Record<SzabadsagAllapot, string> = {
-  kert: "Jóváhagyásra vár",
-  jovahagyva: "Jóváhagyva",
-  elutasitva: "Elutasítva",
-  visszavonva: "Visszavonva",
-};
 
 export type SzabadsagIgeny = {
   id: string;

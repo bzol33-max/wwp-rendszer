@@ -45,13 +45,6 @@ export const SAJAT_JARMUVEK: SajatJarmu[] = [
   { sofor: "Jani", label: "DAF XG (Gyártás alatt)", rendszamok: [], szin: "green", ecofleetObjectId: null },
 ];
 
-/** Szín -> Tailwind badge osztályok (a projektben már használt "bg-x-100 text-x-700" mintát követve). */
-export const JARMU_SZIN_CLASS: Record<JarmuSzin, string> = {
-  blue: "bg-blue-100 text-blue-700 hover:bg-blue-100",
-  yellow: "bg-yellow-100 text-yellow-800 hover:bg-yellow-100",
-  green: "bg-green-100 text-green-700 hover:bg-green-100",
-};
-
 /** Szín -> tömör pötty osztály (pl. legördülő listákban, ahol nincs hely egy teljes Badge-nek). */
 export const JARMU_SZIN_DOT_CLASS: Record<JarmuSzin, string> = {
   blue: "bg-blue-500",
@@ -233,8 +226,3 @@ export function resolveJarmu(value: string): SajatJarmu | null {
   );
 }
 
-/** Egy rendszámhoz (vagy már elmentett "Sofőr — rendszám/rendszám" szöveghez) a megjelenítendő címke. */
-export function labelForPlateOrText(value: string): string {
-  const match = findJarmuByPlate(value);
-  return match ? jarmuLabel(match) : value;
-}

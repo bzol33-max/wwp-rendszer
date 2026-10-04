@@ -478,13 +478,6 @@ async function getIncoming(site: string): Promise<IncomingRow[]> {
   );
 }
 
-export async function getIncomingMovements(site: string): Promise<IncomingRow[]> {
-  const jog = await requireAnyViewPermission(["keszlet", "keszlet_sajat"]);
-  ellenorizdSajatKeszletHatokor(jog, site);
-  ellenorizdTelephely(site);
-  return getIncoming(site);
-}
-
 // Átvétel ("okézás") a fogadó telepen: ettől a pillanattól számít bele a
 // mennyiség a telep készletébe. Azt is rögzítjük, ki és mikor vette át.
 export async function acceptIncomingMovement(id: string) {

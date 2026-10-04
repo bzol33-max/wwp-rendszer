@@ -100,60 +100,6 @@ export async function getNapJelenletek(workDate: string): Promise<JelenletSessio
   );
 }
 
-export async function getJelenletHistory(
-  employeeId: string,
-  days = 14
-): Promise<JelenletSession[]> {
-  await requireViewPermission("jelenlet");
-  return query<JelenletSession>(
-    `select ${SESSION_COLS}
-     from jelenletek
-     where employee_id = $1 and work_date >= ${BUDAPEST_NOW_DATE} - $2::int
-     order by work_date desc, id`,
-    [employeeId, days]
-  );
-}
-
-export async function getMonthJelenletek(
-  employeeId: string,
-  year: number,
-  month: number
-): Promise<JelenletSession[]> {
-  await requireViewPermission("jelenlet");
-  return query<JelenletSession>(
-    `select ${SESSION_COLS}
-     from jelenletek
-     where employee_id = $1
-       and work_date >= make_date($2, $3, 1)
-       and work_date < (make_date($2, $3, 1) + interval '1 month')
-     order by work_date, id`,
-    [employeeId, year, month]
-  );
-}
-
-/**
- * Egy teljes hónap MINDEN jelenlét-aktív dolgozóval, egyetlen lekérdezésben —
- * a havi nézet (hetekre bontott napló) ezt használja. Korábban dolgozónként
- * indult külön lekérdezés, ami két embernél is két kör volt, és minden új
- * dolgozóval eggyel több.
- */
-export async function getMonthJelenletekMind(
-  year: number,
-  month: number
-): Promise<JelenletSession[]> {
-  await requireViewPermission("jelenlet");
-  return query<JelenletSession>(
-    `select ${SESSION_COLS}
-     from jelenletek j
-     where work_date >= make_date($1, $2, 1)
-       and work_date < (make_date($1, $2, 1) + interval '1 month')
-       and exists (select 1 from alkalmazottak a
-                    where a.id = j.employee_id and a.jelenlet_aktiv and a.active)
-     order by work_date, employee_id, arrival_time nulls last, id`,
-    [year, month]
-  );
-}
-
 /**
  * A javításra váró napok: ahol van hiányos munkaszakasz (érkezés távozás
  * nélkül, vagy távozás érkezés nélkül). A Jelenlét oldal figyelmeztető sávja
@@ -688,7 +634,6 @@ export async function addFeladatComment(input: {
   );
   revalidateJelenlet();
 }
-
 
 /**
  * Egy tetszőleges időszak jelenlét-sorai, minden jelenlét-aktív dolgozóval.

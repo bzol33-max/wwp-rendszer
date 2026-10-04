@@ -61,36 +61,6 @@ async function ecofleetGet<T>(
   return (nodes.response ?? {}) as T;
 }
 
-type RawVehicle = {
-  id?: number | string;
-  name?: string;
-  plate?: string;
-  info?: { make?: string; model?: string };
-  status?: string;
-};
-
-export type EcofleetVehicle = {
-  id: string;
-  name: string;
-  plate: string;
-  make: string | null;
-  model: string | null;
-  active: boolean;
-};
-
-export async function getVehicles(): Promise<EcofleetVehicle[]> {
-  const response = await ecofleetGet<{ node?: RawVehicle[] }>("Vehicles/get");
-  const nodes = response.node ?? [];
-  return nodes.map((n) => ({
-    id: String(n.id ?? ""),
-    name: String(n.name ?? ""),
-    plate: String(n.plate ?? ""),
-    make: n.info?.make ? String(n.info.make) : null,
-    model: n.info?.model ? String(n.info.model) : null,
-    active: n.status === "A",
-  }));
-}
-
 type RawLastData = {
   objectId?: number | string;
   objectName?: string;

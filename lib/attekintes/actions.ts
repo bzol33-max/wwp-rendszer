@@ -9,11 +9,11 @@
 
 import { query } from "@/lib/db";
 import { requireViewPermission } from "@/lib/auth/require-permission";
-import { getFleetPositions, getIdovonalak } from "@/lib/fuvarozas/actions";
+import { getIdovonalak } from "@/lib/fuvarozas/actions";
 import { getFuvarHelye } from "@/lib/fuvarozas/fuvar-hely";
 import { budapestNapISO } from "@/lib/fuvarozas/idozona";
 import { getFuvarok } from "@/lib/fuvarozas/megbizasok";
-import { SAJAT_JARMUVEK, resolveJarmu, findJarmuByPlate, jarmuLabel, type SajatJarmu } from "@/lib/fuvarozas/vehicles";
+import { SAJAT_JARMUVEK, resolveJarmu, jarmuLabel, type SajatJarmu } from "@/lib/fuvarozas/vehicles";
 import { getSzamlaLista } from "@/lib/szamlak/actions";
 import type { SzamlaRow } from "@/lib/szamlak/szamla-constants";
 import type { FuvardijPenznem, FuvarRow } from "@/lib/fuvarozas/fuvar-constants";
@@ -215,24 +215,6 @@ export type JarmuPoziciSor = {
   /** null, ha nincs GPS-adat — nem tudjuk, fut-e a motor. */
   motorFut: boolean | null;
 };
-
-/** A "Fuvar" fülön: saját járművenként az utolsó ismert hely, sebesség és motorállapot. */
-export async function getJarmuPoziciok(): Promise<JarmuPoziciSor[]> {
-  await requireViewPermission("attekintes");
-  const result = await getFleetPositions();
-  const positions = result.ok ? result.positions : [];
-
-  return SAJAT_JARMUVEK.map((jarmu) => {
-    const pos = positions.find((p) => findJarmuByPlate(p.plate) === jarmu);
-    return {
-      jarmu,
-      cim: pos?.cim ?? null,
-      sebesseg: pos?.speed ?? null,
-      frissitve: pos?.timestamp ?? null,
-      motorFut: pos?.engineOn ?? null,
-    };
-  });
-}
 
 function jarmuMatch(jarmu: SajatJarmu, row: FuvarRow): boolean {
   if (row.jarmu && resolveJarmu(row.jarmu) === jarmu) return true;

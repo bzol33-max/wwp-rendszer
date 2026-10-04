@@ -30,8 +30,6 @@ export const FUVAR_STATUSZ_LABEL: Record<FuvarStatusz, string> = {
   torolt: "Törölt",
 };
 
-export const FUVAR_STATUSZOK = Object.keys(FUVAR_STATUSZ_LABEL) as FuvarStatusz[];
-
 /**
  * Cégnév-aliasok — amikor a Drive/Gmail-automatika ugyanazt a partnert
  * eltérő, TARTALMILAG is eltérő (nem csak kis/nagybetűs, szóköz- vagy

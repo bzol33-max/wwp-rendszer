@@ -345,27 +345,6 @@ export type EmployeeAlapadatok = {
   wageAmount: number;
 };
 
-/** A dolgozói mobil nézet (Profil > Alapadatok) saját, szűkített lekérdezése. */
-export async function getEmployeeAlapadatok(employeeId: string): Promise<EmployeeAlapadatok | null> {
-  await requireSajatVagyModulJog({
-    employeeId,
-    sajatModule: "erkezes",
-    modul: "dolgozok",
-    kind: "view",
-  });
-  const rows = await query<Employee>(
-    `select id::text, name, position, weekly_wage, daily_wage, monthly_wage,
-       fixed_deduction, show_letiltas, show_uzemanyag, active
-     from alkalmazottak where id = $1`,
-    [employeeId]
-  );
-  const e = rows[0];
-  if (!e) return null;
-  const mode = wageMode(e);
-  const wageAmount = mode === "heti" ? e.weekly_wage : mode === "napi" ? e.daily_wage : mode === "havi" ? e.monthly_wage : 0;
-  return { name: e.name, wageMode: mode, wageAmount };
-}
-
 // --- Előlegek ---
 
 export async function addAdvance(input: {

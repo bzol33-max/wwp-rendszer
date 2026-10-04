@@ -105,10 +105,6 @@ export function ft(n: number): string {
   return `${n.toLocaleString("hu-HU")} Ft`;
 }
 
-export function calcHetiTotal(rows: HetiRow[]): number {
-  return rows.reduce((sum, r) => sum + r.amount, 0);
-}
-
 export function calcNapiGross(row: Pick<NapiHaviRow, "days_count">, employee: Pick<Employee, "daily_wage">): number {
   return row.days_count * employee.daily_wage;
 }
