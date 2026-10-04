@@ -125,3 +125,104 @@ export function calcHaviNetto(
     employee.monthly_wage - employee.fixed_deduction - row.letiltas - row.uzemanyag - row.utalas - row.eloleg
   );
 }
+
+// --- Előleg-bontás a dolgozói Profil oldalra (2026-10-04) ---
+//
+// A telefonon egy hosszú tétel-lista követhetetlen: Budaházi Zoltán kérése,
+// hogy felül az össz egyenleg álljon, alatta a részletek év és hónap szerint,
+// hónaponként a felvett (+) és a visszafizetett (−) összeggel. A hónapra
+// koppintva nyílnak ki a tételei, így a visszakövetés megmarad.
+
+export type ElolegTetel = {
+  id: string;
+  /** YYYY-MM-DD */
+  date: string;
+  /** Pozitív: felvett előleg. Negatív: visszafizetés / bérből levonás. */
+  amount: number;
+  note: string | null;
+  acceptedAt: string | null;
+  acceptedBy: string | null;
+};
+
+export type ElolegHonap = {
+  /** "2026-09" */
+  kulcs: string;
+  ev: number;
+  /** 1-12 */
+  honap: number;
+  /** A hónapban felvett összeg (a pozitív tételek összege). */
+  felvett: number;
+  /** A hónapban visszafizetett összeg, NEGATÍV számként. */
+  vissza: number;
+  /** A tartozás a hónap VÉGÉN — ezért fogy felülről lefelé olvasva. */
+  zaroEgyenleg: number;
+  /** A hónap tételei, a legfrissebb elöl. */
+  tetelek: ElolegTetel[];
+};
+
+export type ElolegEv = {
+  ev: number;
+  felvett: number;
+  vissza: number;
+  /** A hónapok a legfrissebbel kezdve. */
+  honapok: ElolegHonap[];
+};
+
+/**
+ * Év → hónap bontás, hónaponkénti felvett/visszafizetett összeggel és a hónap
+ * végi egyenleggel. A legfrissebb év és hónap van elöl.
+ *
+ * MINDEN tétel beleszámít, a még nem nyugtázott is: az összesítő (a kártyán
+ * látható tartozás) szintén mindet összegzi, és ha a bontás ettől eltérne, a
+ * két szám nem jönne ki ugyanarra. A nyugtázatlan tétel emellett külön, a
+ * lista tetején is megjelenik, hogy el lehessen fogadni.
+ */
+export function elolegBontas(tetelek: ElolegTetel[]): ElolegEv[] {
+  if (tetelek.length === 0) return [];
+
+  const honapSzerint = new Map<string, ElolegTetel[]>();
+  for (const t of tetelek) {
+    const kulcs = t.date.slice(0, 7);
+    const lista = honapSzerint.get(kulcs) ?? [];
+    lista.push(t);
+    honapSzerint.set(kulcs, lista);
+  }
+
+  // A záró egyenleget a MAI tartozásból számoljuk visszafelé: a legfrissebb
+  // hónap zárója maga a teljes egyenleg, az azt megelőzőé pedig annyival
+  // kevesebb, amennyi abban a hónapban mozgott.
+  let futo = tetelek.reduce((sum, t) => sum + t.amount, 0);
+  const kulcsok = [...honapSzerint.keys()].sort().reverse();
+
+  const honapok: ElolegHonap[] = kulcsok.map((kulcs) => {
+    const sajat = [...(honapSzerint.get(kulcs) ?? [])].sort((a, b) =>
+      a.date === b.date ? Number(b.id) - Number(a.id) : a.date < b.date ? 1 : -1
+    );
+    const felvett = sajat.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+    const vissza = sajat.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0);
+    const zaroEgyenleg = futo;
+    futo -= felvett + vissza;
+    return {
+      kulcs,
+      ev: Number(kulcs.slice(0, 4)),
+      honap: Number(kulcs.slice(5)),
+      felvett,
+      vissza,
+      zaroEgyenleg,
+      tetelek: sajat,
+    };
+  });
+
+  const evek: ElolegEv[] = [];
+  for (const h of honapok) {
+    let ev = evek.find((e) => e.ev === h.ev);
+    if (!ev) {
+      ev = { ev: h.ev, felvett: 0, vissza: 0, honapok: [] };
+      evek.push(ev);
+    }
+    ev.felvett += h.felvett;
+    ev.vissza += h.vissza;
+    ev.honapok.push(h);
+  }
+  return evek;
+}

@@ -53,6 +53,7 @@ import {
 } from "@/lib/jelenlet/shared";
 import { FeladatokMobilCsempe } from "@/components/erkezes/feladatok-mobil-csempe";
 import { SzabadsagKeres } from "@/components/erkezes/szabadsag-keres";
+import { ElolegSzakasz } from "@/components/erkezes/eloleg-szakasz";
 import { getSiteSnapshot, type IncomingRow } from "@/lib/keszlet/actions";
 import { MovementForm } from "@/components/keszlet/movement-form";
 import { BejovoSzallitmanyok } from "@/components/keszlet/bejovo-szallitmanyok";
@@ -571,22 +572,6 @@ function ProfilScreen({
     [igenyek]
   );
 
-  const honapok = useMemo(() => {
-    if (!elolegek) return [];
-    const groups: { key: string; label: string; tetelek: EmployeeElolegekOsszesito["tetelek"] }[] = [];
-    for (const t of elolegek.tetelek) {
-      const [yearStr, monthStr] = t.date.split("-");
-      const key = `${yearStr}-${monthStr}`;
-      let group = groups.find((g) => g.key === key);
-      if (!group) {
-        group = { key, label: `${HU_MONTHS[Number(monthStr) - 1]} ${yearStr}`, tetelek: [] };
-        groups.push(group);
-      }
-      group.tetelek.push(t);
-    }
-    return groups;
-  }, [elolegek]);
-
   function accept(id: string, osszeg: number) {
     if (
       !window.confirm(
@@ -613,87 +598,56 @@ function ProfilScreen({
       {loading ? (
         <p className="text-sm text-[var(--mob-muted)]">Betöltés…</p>
       ) : (
-        <div className="flex flex-col gap-4">
-          {keret && (
-            <Card className="border border-[var(--mob-border)] bg-[var(--mob-card)] ring-0">
-              <CardContent className="py-4">
-                <p className="text-xs text-[var(--mob-muted)]">Kivehető szabadság</p>
-                <p className="text-3xl font-bold text-[var(--mob-accent)]">{keret.maradek} nap</p>
-                <p className="mt-1 text-[11px] text-[var(--mob-muted)]">
-                  {keret.fordulonap} óta {keret.felhasznalt} napot vettél ki.
-                  {/* A kért nap még nem fogy a keretből — ha nem írjuk ki, a
-                      dolgozó azt hiszi, hogy a beadott kérése már levonódott. */}
-                  {kertNapok > 0 && (
-                    <>
-                      {" "}
-                      Jóváhagyásra vár még <b>{kertNapok} nap</b>, ez ebből még nem fogyott el.
-                    </>
-                  )}
-                </p>
-              </CardContent>
-            </Card>
+        <div className="flex flex-col gap-3">
+          {/* Felül a két szám, amiért a Profilt megnyitja: mennyi szabadsága
+              van még, és mennyivel tartozik. Budaházi Zoltán választása
+              (2026-10-04, "1-es terv"). */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-xl bg-[var(--mob-accent)] p-2.5 text-white">
+              <p className="text-[10.5px] opacity-80">Kivehető szabadság</p>
+              {keret ? (
+                <>
+                  <p className="text-[25px] leading-tight font-extrabold">
+                    {keret.maradek}
+                    <span className="ml-1 text-xs font-semibold">nap</span>
+                  </p>
+                  <p className="text-[10px] opacity-75">
+                    {keret.keret} napból {keret.felhasznalt} elhasználva
+                  </p>
+                </>
+              ) : (
+                <p className="mt-1 text-[11px] opacity-85">Nincs beállítva keret.</p>
+              )}
+            </div>
+            <div className="rounded-xl bg-[var(--mob-text)] p-2.5 text-[var(--mob-bg)]">
+              <p className="text-[10.5px] opacity-70">Előleg tartozás</p>
+              <p className="text-base leading-tight font-extrabold text-[var(--mob-accent)]">
+                {ft(elolegek?.osszesen ?? 0)}
+              </p>
+              <p className="text-[10px] opacity-70">
+                {(elolegek?.tetelek.length ?? 0) === 0
+                  ? "nincs tétel"
+                  : `${elolegek?.tetelek.length} tétel`}
+              </p>
+            </div>
+          </div>
+
+          {/* A kért nap még nem fogy a keretből — ha nem írjuk ki, a dolgozó
+              azt hiszi, hogy a beadott kérése már levonódott. */}
+          {keret && kertNapok > 0 && (
+            <p className="-mt-1 px-1 text-[11px] text-[var(--mob-muted)]">
+              Jóváhagyásra vár még <b>{kertNapok} nap</b> — ez a keretből még nem fogyott el.
+            </p>
           )}
 
           <SzabadsagKeres employeeId={employeeId} igenyek={igenyek} onReload={onReload} />
 
-          <div className="rounded-xl bg-[var(--mob-text)] p-4 text-[var(--mob-bg)]">
-            <p className="text-xs opacity-70">Aktuális, el nem számolt előleg</p>
-            <p className="text-2xl font-bold text-[var(--mob-accent)]">
-              {ft(elolegek?.osszesen ?? 0)}
-            </p>
-          </div>
-
-          {honapok.length === 0 && (
-            <p className="text-sm text-[var(--mob-muted)]">Nincs rögzített előleged.</p>
-          )}
-
-          {honapok.map((honap) => (
-            <div key={honap.key} className="flex flex-col gap-2">
-              <p className="text-xs font-semibold tracking-wide text-[var(--mob-muted)] uppercase">
-                {honap.label}
-              </p>
-              {honap.tetelek.map((t) => (
-                <Card key={t.id} className="border border-[var(--mob-border)] bg-[var(--mob-card)] ring-0">
-                  <CardContent className="flex flex-col gap-2 py-4">
-                    <div className="flex items-center justify-between">
-                      <div className="min-w-0">
-                        <p className="text-base font-semibold">{ft(t.amount)}</p>
-                        <p className="text-xs text-[var(--mob-muted)]">{t.date}</p>
-                        {/* Az adminisztrátor megjegyzése eddig sehol nem
-                            jelent meg a telefonon, pedig a lekérdezés lehozta. */}
-                        {t.note && <p className="text-xs text-[var(--mob-muted)]">{t.note}</p>}
-                      </div>
-                      {t.acceptedAt ? (
-                        <span className="shrink-0 rounded-full bg-[var(--mob-accent)]/15 px-2.5 py-1 text-xs font-semibold text-[var(--mob-positive)]">
-                          Elfogadva
-                        </span>
-                      ) : (
-                        <span className="shrink-0 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-700">
-                          Megerősítésre vár
-                        </span>
-                      )}
-                    </div>
-                    {t.acceptedAt ? (
-                      <p className="text-xs text-[var(--mob-muted)]">
-                        Elfogadva: {t.acceptedAt} · {t.acceptedBy}
-                      </p>
-                    ) : (
-                      // A bérből levont (negatív) tételt is nyugtáznia kell —
-                      // Budaházi Zoltán kérése (2026-10-01).
-                      <Button
-                        size="sm"
-                        disabled={pending}
-                        onClick={() => accept(t.id, t.amount)}
-                        className="bg-[var(--mob-accent)] text-white hover:bg-[var(--mob-accent)]/90"
-                      >
-                        ELFOGADOM
-                      </Button>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ))}
+          <ElolegSzakasz
+            osszesen={elolegek?.osszesen ?? 0}
+            tetelek={elolegek?.tetelek ?? []}
+            pending={pending}
+            onAccept={accept}
+          />
         </div>
       )}
     </Shell>
