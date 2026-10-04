@@ -26,6 +26,7 @@ type UserRow = {
   active: boolean;
   permissions: Permissions;
   employee_id: string | null;
+  session_verzio: number;
 };
 
 export const verifySession = cache(async () => {
@@ -35,12 +36,16 @@ export const verifySession = cache(async () => {
   }
 
   const rows = await query<UserRow>(
-    `select id, username, name, role, active, permissions, employee_id::text as employee_id
+    `select id, username, name, role, active, permissions, employee_id::text as employee_id, session_verzio
      from users where id = $1`,
     [payload.userId]
   );
   const user = rows[0];
   if (!user || !user.active) {
+    return { isAuth: false as const };
+  }
+  // Jelszócsere után a korábban kiadott sütik érvénytelenek (audit SEC-8).
+  if ((payload.v ?? 0) !== user.session_verzio) {
     return { isAuth: false as const };
   }
 

@@ -18,6 +18,8 @@ import { cookies } from "next/headers";
 
 export type SessionPayload = {
   userId: string;
+  /** A users.session_verzio a belépés pillanatában — jelszócsere után a régi süti érvénytelen. */
+  v?: number;
 };
 
 const COOKIE_NAME = "wwp_session";
@@ -54,9 +56,9 @@ export async function decrypt(token: string | undefined) {
   }
 }
 
-export async function createSession(userId: string, displayName: string) {
+export async function createSession(userId: string, displayName: string, verzio = 0) {
   const expiresAt = new Date(Date.now() + SESSION_DURATION_MS);
-  const token = await encrypt({ userId }, expiresAt);
+  const token = await encrypt({ userId, v: verzio }, expiresAt);
   const cookieStore = await cookies();
 
   cookieStore.set(COOKIE_NAME, token, {

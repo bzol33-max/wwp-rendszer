@@ -21,6 +21,7 @@ type UserRow = {
   name: string;
   role: string;
   active: boolean;
+  session_verzio: number;
 };
 
 export async function login(
@@ -46,7 +47,7 @@ export async function login(
   }
 
   const rows = await query<UserRow>(
-    `select id, username, password_hash, name, role, active
+    `select id, username, password_hash, name, role, active, session_verzio
      from users
      where lower(username) = lower($1)`,
     [username]
@@ -63,7 +64,7 @@ export async function login(
     return { error: "Hibás felhasználónév vagy jelszó." };
   }
 
-  await createSession(user.id, user.name);
+  await createSession(user.id, user.name, user.session_verzio);
 
   redirect("/");
 }

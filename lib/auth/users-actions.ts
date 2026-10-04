@@ -155,7 +155,11 @@ export async function resetUserPassword(input: { id: string; password: string })
   }
 
   const passwordHash = await bcrypt.hash(input.password, 12);
-  await query(`update users set password_hash = $2 where id = $1`, [input.id, passwordHash]);
+  // A verzió növelése a fiók minden korábbi munkamenetét kilépteti (audit SEC-8).
+  await query(`update users set password_hash = $2, session_verzio = session_verzio + 1 where id = $1`, [
+    input.id,
+    passwordHash,
+  ]);
 
   revalidatePath("/beallitasok/felhasznalok");
 }
