@@ -9,7 +9,6 @@ import { SITES } from "@/lib/nav";
 import { MODULES } from "@/lib/modules";
 import { requireSession } from "@/lib/auth/dal";
 import { getAttekintesProfil } from "@/lib/attekintes/tabs";
-import type { ModuleKey } from "@/lib/auth/permissions";
 
 export default async function Home() {
   const session = await requireSession();
@@ -27,7 +26,7 @@ export default async function Home() {
   }
 
   const visibleModules = MODULES.filter(
-    (mod) => session.can(mod.key as ModuleKey).view
+    (mod) => session.can(mod.key).view
   );
 
   // Aki egyelőre csak egy önálló, korlátozott nézethez (mobil összefoglaló,

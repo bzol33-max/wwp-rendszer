@@ -229,8 +229,14 @@ export type EcofleetUtSor = {
 };
 
 /** Rendszám összehasonlító kulcsa: "AO PU-427" / "AOPU-427" -> "AOPU427". */
+/**
+ * Rendszám-kulcs összevetéshez: minden nem betű/szám karakter ki (szóköz,
+ * kötőjel, pont, perjel) — ugyanaz a szabály, mint a lib/fuvarozas/vehicles.ts
+ * normalizePlate-jé (audit BIZ-13: eddig csak a szóközt és a kötőjelet vette ki,
+ * így egy „AOPU.427” írásmódot az egyik út felismert, a másik nem).
+ */
 export function rendszamKulcs(rendszam: string): string {
-  return rendszam.replace(/[\s-]/g, "").toUpperCase();
+  return rendszam.replace(/[^A-Z0-9]/gi, "").toUpperCase();
 }
 
 function csvMezok(sor: string): string[] {

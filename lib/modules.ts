@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import type { ModuleKey } from "@/lib/auth/permissions";
 import { Truck, Package, Receipt, Users, Car, MessageSquare } from "lucide-react";
 
 // Központi modul-nyilvántartás a főoldal (Info) számára.
@@ -16,7 +17,8 @@ export const MODULE_STATUS_LABEL: Record<ModuleStatus, string> = {
 };
 
 export type ModuleInfo = {
-  key: string;
+  /** Jogosultsági kulcs — ModuleKey, hogy egy elírt kulcs fordításkor kiderüljön (audit BIZ-14). */
+  key: ModuleKey;
   label: string;
   href: string;
   icon: LucideIcon;
