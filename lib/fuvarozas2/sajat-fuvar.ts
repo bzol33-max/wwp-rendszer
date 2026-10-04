@@ -10,7 +10,9 @@
 // van, a kocsi az `elokeszites_jarmu`-ban vár és a `jarmu` üres — a sofőr
 // appja és a GPS-figyelő a `jarmu` szerint válogat, ezért egyik sem látja.
 //
-// Elnevezés: a `tipus = 'ber'` a felületen „Saját fuvar” (jelleg = 'sajat').
+// Elnevezés: saját fuvar = jelleg 'sajat' (a régi, fordított `tipus` oszlopban
+// 'ber' — azt csak beszúráskor írjuk, a jelleg-et a 001-es trigger tölti; a
+// lekérdezések a helyes irányú jelleg-et használják, audit BIZ-3).
 
 import { query } from "@/lib/db";
 import { requireSession } from "@/lib/auth/dal";
@@ -96,7 +98,7 @@ export async function mentSajatFuvart(id: string | null, nyers: SajatFuvarAdat):
     `update fuvar_megbizasok set datum = $2, felrako = $3, lerako = $4, megrendelo = $5, megjegyzes = $6, elokeszites_jarmu = $7, kitol = $9,
        partner_id = case when exists (select 1 from fuvar_partnerek p where p.id = partner_id and p.nev_kulcs = $8::text)
                          then partner_id end
-     where id = $1 and elokeszites and tipus = 'ber' and torolt_at is null returning id::text`,
+     where id = $1 and elokeszites and jelleg = 'sajat' and torolt_at is null returning id::text`,
     [id, a.datum, a.honnan, a.hova, a.kinek, a.megjegyzes, a.jarmuKod, a.kinek ? normalizaltCegKulcs(a.kinek) : null, a.kitol]
   );
   if (frissitve.length === 0) return { ok: false, hiba: "Ez a fuvar már nincs előkészítésben — előbb vedd vissza." };
@@ -113,7 +115,7 @@ export async function kocsiraAdom(id: string): Promise<Eredmeny> {
   await requireEditPermission("fuvarozas");
   const [sor] = await query<{ datum: string | null; elokeszites_jarmu: string | null; felrako: string; lerako: string; elokeszites: boolean }>(
     `select to_char(datum, 'YYYY-MM-DD') as datum, elokeszites_jarmu, felrako, lerako, elokeszites
-     from fuvar_megbizasok where id = $1 and tipus = 'ber' and torolt_at is null`,
+     from fuvar_megbizasok where id = $1 and jelleg = 'sajat' and torolt_at is null`,
     [id]
   );
   if (!sor) return { ok: false, hiba: "Nincs ilyen saját fuvar." };
@@ -153,7 +155,7 @@ export async function visszaveszem(id: string): Promise<Eredmeny> {
     `update fuvar_megbizasok m set elokeszites = true,
        elokeszites_jarmu = coalesce(elokeszites_jarmu, (select j.kod from fuvar_jarmuvek j where j.id = m.jarmu_id)),
        jarmu = null, jarmu_id = null, kocsira_adva_at = null
-     where id = $1 and tipus = 'ber' and not elokeszites and torolt_at is null and not coalesce(teljesitve, false)
+     where id = $1 and jelleg = 'sajat' and not elokeszites and torolt_at is null and not coalesce(teljesitve, false)
      returning id::text`,
     [id]
   );
@@ -191,9 +193,9 @@ export async function getSajatFuvarSegedlet(): Promise<SajatFuvarSegedlet> {
   const [cimek, partnerek] = await Promise.all([
     query<{ cim: string }>(
       `select cim from (
-         select felrako as cim, max(datum) as utolso from fuvar_megbizasok where tipus = 'ber' and felrako <> '' group by felrako
+         select felrako as cim, max(datum) as utolso from fuvar_megbizasok where jelleg = 'sajat' and felrako <> '' group by felrako
          union all
-         select lerako, max(datum) from fuvar_megbizasok where tipus = 'ber' and lerako <> '' group by lerako
+         select lerako, max(datum) from fuvar_megbizasok where jelleg = 'sajat' and lerako <> '' group by lerako
        ) x group by cim order by max(utolso) desc limit 40`
     ),
     query<{ nev: string }>(`select nev from fuvar_partnerek order by nev limit 300`),

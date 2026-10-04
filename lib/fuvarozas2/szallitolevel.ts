@@ -16,7 +16,7 @@ export async function szinkronizalSzallitoleveleket(): Promise<number> {
   );
   if (szallitolevelek.length === 0) return 0;
 
-  // Saját fuvar = tipus 'ber' (a felületen „Saját fuvar”). Az előkészítés
+  // Saját fuvar = jelleg 'sajat'. Az előkészítés
   // alattiak is: a szállítólevelet előre állítják ki.
   const fuvarok = await query<{ id: string; datum: string; jarmu_rendszam: string | null; kinek: string | null; hova: string | null }>(
     `select m.id::text, to_char(m.datum, 'YYYY-MM-DD') as datum,
@@ -25,7 +25,7 @@ export async function szinkronizalSzallitoleveleket(): Promise<number> {
      from fuvar_megbizasok m
      left join fuvar_jarmuvek j on j.id = m.jarmu_id
      left join fuvar_partnerek p on p.id = m.partner_id
-     where m.tipus = 'ber' and m.torolt_at is null and m.statusz <> 'torolt' and m.datum >= current_date - 60
+     where m.jelleg = 'sajat' and m.torolt_at is null and m.datum >= current_date - 60
        and not exists (select 1 from szallitolevel_import s where s.megbizas_id = m.id and s.parositas_allapot = 'parositva')`
   );
 
