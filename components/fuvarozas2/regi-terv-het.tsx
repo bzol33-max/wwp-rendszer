@@ -31,10 +31,11 @@ export async function RegiTervHet({ het }: { het?: string }) {
       <span className="rounded-lg bg-[var(--f2-red-l)] px-3 py-1.5 text-[var(--f2-red)]">Üres munkanap: <b>{h.osszesites.ures}</b></span>
       <span className="rounded-lg bg-card px-3 py-1.5 ring-1 ring-foreground/10">Bér {h.osszesites.berDb} · saját {h.osszesites.sajatDb}</span>
       <span className="rounded-lg bg-card px-3 py-1.5 ring-1 ring-foreground/10">Heti bevétel (Ft-os): <b>{formatFt(h.osszesites.bevetel)}</b></span>
-      {h.osszesites.km != null ? (
+      {h.osszesites.rakottKm != null && h.osszesites.uresKm != null ? (
         <span className="rounded-lg bg-card px-3 py-1.5 ring-1 ring-foreground/10">
           Rakott / üres km: <b>{h.osszesites.rakottKm} / {h.osszesites.uresKm}</b>
-          {h.osszesites.km > 0 ? <span className="text-muted-foreground"> ({Math.round(((h.osszesites.uresKm ?? 0) / h.osszesites.km) * 100)} % üres)</span> : null}
+          {h.osszesites.rakottKm + h.osszesites.uresKm > 0 ? <span className="text-muted-foreground"> ({Math.round((h.osszesites.uresKm / (h.osszesites.rakottKm + h.osszesites.uresKm)) * 100)} % üres)</span> : null}
+          {h.osszesites.km != null ? <span className="text-muted-foreground"> · GPS {h.osszesites.km} km</span> : null}
         </span>
       ) : null}
       {h.osszesites.potencialFt != null && h.uresSlotok.length > 0 ? (

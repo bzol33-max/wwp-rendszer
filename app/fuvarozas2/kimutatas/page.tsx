@@ -153,9 +153,9 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ i
       ) : null}
 
       <p className="text-xs text-muted-foreground">
-        A km és a liter az Ecofleet útvonal-jelentéséből jön (tény). A rakott/üres bontás napi szintű: egy nap km-je ahhoz a
-        jelleghez tartozik, amilyen megbízás aznap futott (ha bér és saját is, felezve). A megállónkénti pontos bontás akkor jön,
-        amikor a megállók GPS-adatai minden soron megvannak. Az EUR-os díjak nincsenek átváltva.
+        A km és a liter az Ecofleet útvonal-jelentéséből jön (tény). Rakott km: a felrakótól a lerakóig (bérfuvarnál
+        HU-GO szerint); üres km: a lerakótól a következő felrakóig. Ahol nincs HU-GO km, légvonal × 1,3 — becslés, ezért a
+        rakott + üres nem pontosan a megtett km. Az EUR-os díjak nincsenek átváltva.
         A sofőr és a kocsi napi fix költsége 50 000 Ft/nap (Zoltán, 2026-09-20), annyi napra számolva, ahányon a kocsi
         a GPS szerint mozgott.
       </p>

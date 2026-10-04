@@ -20,7 +20,7 @@ import { geokodolCachelve } from "@/lib/fuvarozas/erintes-felismeres";
 import { SAJAT_TELEPHELYEK } from "@/lib/fuvarozas/telephelyek";
 import { varosNev } from "@/lib/fuvarozas/varos";
 import { napiSorrend } from "@/lib/fuvarozas2/napi-sorrend";
-import { napiKmBontas } from "@/lib/fuvarozas2/km-bontas";
+import { becsultTavolsag, lancKm } from "@/lib/fuvarozas2/ures-km";
 import type { Allapot } from "@/lib/fuvarozas/allapot";
 
 // A "use server" fájl csak async függvényt exportálhat — ezek belső konstansok.
@@ -121,14 +121,14 @@ export async function getTervHet(hetKezdet?: string): Promise<TervHet> {
   );
 
   // A hét megbízásai + az azt megelőző 10 nap (hogy tudjuk, hol áll a kocsi a hét elején).
-  const sorok = await query<TervMegbizas & { jarmu_kod: string | null }>(
+  const sorok = await query<TervMegbizas & { jarmu_kod: string | null; rakott_km: number | null }>(
     `select m.id::text, m.allapot, m.jelleg, coalesce(p.nev, m.megrendelo) as partner,
        coalesce(m.hivatkozas_kanonikus, m.pozicioszam, m.reise_id) as hivatkozas,
        coalesce((select g.cim_nyers from fuvar_megallok g where g.megbizas_id = m.id and g.tipus = 'felrako' order by g.sorszam limit 1), m.felrako) as felrako,
        coalesce((select g.cim_nyers from fuvar_megallok g where g.megbizas_id = m.id and g.tipus = 'lerako' order by g.sorszam desc limit 1), m.lerako) as lerako,
        to_char(m.datum, 'YYYY-MM-DD') as "felrakasNap",
        to_char(coalesce(m.lerakas_datum, m.datum), 'YYYY-MM-DD') as "lerakasNap",
-       m.fuvardij, m.fuvardij_penznem as penznem, j.kod as jarmu_kod
+       m.fuvardij, m.fuvardij_penznem as penznem, j.kod as jarmu_kod, m.rakott_km::float8 as rakott_km
      from fuvar_megbizasok m
      left join fuvar_partnerek p on p.id = m.partner_id
      left join fuvar_jarmuvek j on j.id = m.jarmu_id
@@ -207,10 +207,27 @@ export async function getTervHet(hetKezdet?: string): Promise<TervHet> {
   const berHetiek = hetiek.filter((s) => s.jelleg === "ber" && s.penznem === "Ft");
   const bevetel = berHetiek.reduce((a, s) => a + (s.fuvardij ?? 0), 0);
 
-  // GPS: a hét km-e rakott/üres bontásban, és sofőrönként a vezetett idő.
-  // A bontás NAPI szintű közelítés, a Kimutatással közös szabály (km-bontas.ts):
-  // a nap km-je rakott, ha aznap ért véget (lerakás) megbízás azon a kocsin.
-  let km: number | null = null, rakottKm: number | null = null, uresKm: number | null = null;
+  // Rakott/üres km a fuvarláncból, a Kimutatással közös szabály (ures-km.ts):
+  // lerakótól a következő felrakóig üres. A lánc a hét előtti utolsó
+  // lerakóból (vagy a telephelyről) indul; a hét lerakás-napjai számítanak.
+  let rakottKm = 0, uresKm = 0;
+  const tav = becsultTavolsag();
+  for (const j of jarmuvek) {
+    const kocsie = napiSorrend(sorok.filter((s) => s.jarmu_kod === j.kod), (s) => s);
+    const elotte = kocsie.filter((s) => (s.lerakasNap ?? "") < kezdet);
+    const lanc = await lancKm(
+      kocsie
+        .filter((s) => napok.includes(s.lerakasNap ?? ""))
+        .map((s) => ({ ...s, rakottKm: s.rakott_km != null ? Number(s.rakott_km) : null })),
+      elotte.at(-1)?.lerako ?? telephely,
+      tav
+    );
+    for (const l of lanc) { rakottKm += l.rakott; uresKm += l.ures; }
+  }
+  rakottKm = Math.round(rakottKm); uresKm = Math.round(uresKm);
+
+  // GPS: a hét megtett km-e és sofőrönként a vezetett idő.
+  let km: number | null = null;
   const soforKeret: { sofor: string; ora: number; keret: number }[] = [];
   try {
     const objectIds = await query<{ kod: string; ecofleet_object_id: string | null; vontato_rendszam: string | null; sofor: string | null }>(
@@ -219,28 +236,22 @@ export async function getTervHet(hetKezdet?: string): Promise<TervHet> {
        where j.aktiv and j.ecofleet_object_id is not null order by j.id`
     );
     const utak = await getUtvonalJelentes(objectIds.map((o) => o.ecofleet_object_id!).filter(Boolean), kezdet, veg);
-    km = 0; rakottKm = 0; uresKm = 0;
+    km = 0;
     for (const o of objectIds) {
       const kulcs = rendszamKulcs(o.vontato_rendszam ?? o.kod);
       const sajat = utak.filter((u) => u.rendszamKulcs === kulcs);
       let percek = 0;
-      const napiKm = new Map<string, number>();
       for (const u of sajat) {
-        napiKm.set(u.indulas.slice(0, 10), (napiKm.get(u.indulas.slice(0, 10)) ?? 0) + u.tavKm);
+        km += u.tavKm;
         const i = new Date(u.indulas.replace(" ", "T"));
         const e = new Date(u.erkezes.replace(" ", "T"));
         if (!Number.isNaN(i.getTime()) && !Number.isNaN(e.getTime()) && e > i) percek += (e.getTime() - i.getTime()) / 60000;
       }
-      for (const [nap, tav] of napiKm) {
-        km += tav;
-        const b = napiKmBontas(tav, sorok.filter((s) => s.jarmu_kod === o.kod && s.lerakasNap === nap).map((s) => s.jelleg));
-        rakottKm += b.ber + b.sajat; uresKm += b.ures;
-      }
       if (o.sofor && percek > 0) soforKeret.push({ sofor: o.sofor, ora: Math.round(percek / 60), keret: 56 });
     }
-    km = Math.round(km); rakottKm = Math.round(rakottKm); uresKm = Math.round(uresKm);
+    km = Math.round(km);
   } catch {
-    km = null; rakottKm = null; uresKm = null;
+    km = null;
   }
 
   const atlagDij = berHetiek.length > 0 ? Math.round(bevetel / berHetiek.length) : null;

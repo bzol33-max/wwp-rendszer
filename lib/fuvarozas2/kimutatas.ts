@@ -12,10 +12,10 @@
 //   • bevétel: a bér megbízások számlázott/megbízási díja — TÉNY.
 //     Az EUR-os díjakat NEM váltjuk át (nincs árfolyam-tábla feltöltve),
 //     külön soron jelennek meg.
-//   • rakott/üres bontás: v1-ben NAPI szinten — egy nap km-je ahhoz a
-//     jelleghez tartozik, amilyen megbízás aznap futott (ha bér és saját is,
-//     felezve; ha semmi, üres). A megállónkénti GPS-alapú pontos bontás
-//     akkor jön, amikor a megállók GPS-adatai minden soron megvannak.
+//   • rakott/üres bontás: a fuvarláncból (ures-km.ts) — rakott a felrakótól
+//     a lerakóig (bérnél a HU-GO-s rakott_km), üres a lerakótól a következő
+//     felrakóig. Ahol nincs HU-GO km, légvonal × 1,3 — becslés. A megtett km
+//     (GPS) ettől külön, tény.
 //   • saját fuvar megtakarítás: saját km × bér Ft/km — BECSLÉS, a felület
 //     így is írja.
 //   • útdíj: csak akkor szerepel, ha van importált HU-GO tranzakció az
@@ -23,7 +23,8 @@
 
 import { query } from "@/lib/db";
 import { requireAnyViewPermission } from "@/lib/auth/require-permission";
-import { napiKmBontas } from "@/lib/fuvarozas2/km-bontas";
+import { becsultTavolsag, lancKm } from "@/lib/fuvarozas2/ures-km";
+import { SAJAT_TELEPHELYEK } from "@/lib/fuvarozas/telephelyek";
 import { getUtvonalJelentes, rendszamKulcs } from "@/lib/fuvarozas/ecofleet";
 import { gazolajArKedvezmennyel } from "@/lib/fuvarozas/gazolaj";
 import { NAPI_KOLTSEG_FT } from "@/lib/fuvarozas2/kalkulator-alap";
@@ -106,15 +107,31 @@ export async function getKimutatas(idoszak: KimutatasIdoszak = "het", nap?: stri
   );
 
   // Megbízások az időszakban, naponta és kocsinként.
-  const megbizasok = await query<{ jarmu_id: string | null; nap: string; jelleg: "ber" | "sajat"; fuvardij: number | null; penznem: string }>(
-    `select m.jarmu_id::text, to_char(coalesce(m.lerakas_datum, m.datum), 'YYYY-MM-DD') as nap, m.jelleg,
-       m.fuvardij, m.fuvardij_penznem as penznem
+  const megbizasok = await query<{
+    id: string; jarmu_id: string | null; nap: string; felrakas_nap: string; jelleg: "ber" | "sajat"; fuvardij: number | null; penznem: string;
+    felrako: string | null; lerako: string | null; rakott_km: number | null;
+  }>(
+    `select m.id::text, m.jarmu_id::text, to_char(coalesce(m.lerakas_datum, m.datum), 'YYYY-MM-DD') as nap,
+       to_char(m.datum, 'YYYY-MM-DD') as felrakas_nap, m.jelleg,
+       m.fuvardij, m.fuvardij_penznem as penznem, m.felrako, m.lerako, m.rakott_km::float8 as rakott_km
      from fuvar_megbizasok m
      where m.torolt_at is null and m.allapot is not null
        and coalesce(m.lerakas_datum, m.datum) between $1::date and $2::date`,
     [kezdet, veg]
   );
   const kocsiNelkul = megbizasok.filter((m) => !m.jarmu_id).length;
+
+  // Hol állt a kocsi az időszak előtt: az utolsó korábbi lerakó (a lánc első
+  // üres szakasza innen indul), ha nincs, a telephely.
+  const elozoLerako = await query<{ jarmu_id: string; lerako: string | null }>(
+    `select distinct on (m.jarmu_id) m.jarmu_id::text, m.lerako
+     from fuvar_megbizasok m
+     where m.torolt_at is null and m.allapot is not null and m.jarmu_id is not null
+       and coalesce(m.lerakas_datum, m.datum) < $1::date and coalesce(m.lerakas_datum, m.datum) >= $1::date - 30
+     order by m.jarmu_id, coalesce(m.lerakas_datum, m.datum) desc, m.id desc`,
+    [kezdet]
+  );
+  const tav = becsultTavolsag();
 
   // GPS km és liter — tény.
   let utak: { rendszamKulcs: string; nap: string; km: number; liter: number }[] = [];
@@ -160,7 +177,7 @@ export async function getKimutatas(idoszak: KimutatasIdoszak = "het", nap?: stri
     const sajatMegb = megbizasok.filter((m) => m.jarmu_id === j.id);
     let km = 0, berKm = 0, sajatKm = 0, uresKm = 0, liter = 0;
 
-    // Napi bontás: a nap km-je a napon futó megbízás jellegéhez tartozik.
+    // GPS: a megtett km és liter naponta — tény.
     const napiKm = new Map<string, { km: number; liter: number }>();
     for (const u of sajatUtak) {
       const x = napiKm.get(u.nap) ?? { km: 0, liter: 0 };
@@ -169,11 +186,27 @@ export async function getKimutatas(idoszak: KimutatasIdoszak = "het", nap?: stri
     }
     for (const [nap, x] of napiKm) {
       km += x.km; liter += x.liter;
-      const { ber: b, sajat: s, ures: u2 } = napiKmBontas(x.km, sajatMegb.filter((m) => m.nap === nap).map((m) => m.jelleg));
-      berKm += b; sajatKm += s; uresKm += u2;
       const n = napok.get(nap) ?? { nap, km: 0, berKm: 0, sajatKm: 0, uresKm: 0, bevetelFt: 0 };
-      n.km += x.km; n.berKm += b; n.sajatKm += s; n.uresKm += u2;
+      n.km += x.km;
       napok.set(nap, n);
+    }
+
+    // Rakott/üres a fuvarláncból: lerakótól a következő felrakóig üres.
+    const lanc = await lancKm(
+      sajatMegb.map((m) => ({
+        id: m.id, jelleg: m.jelleg, felrakasNap: m.felrakas_nap, lerakasNap: m.nap,
+        felrako: m.felrako, lerako: m.lerako, rakottKm: m.rakott_km != null ? Number(m.rakott_km) : null,
+      })),
+      elozoLerako.find((e) => e.jarmu_id === j.id)?.lerako ?? SAJAT_TELEPHELYEK[0].cim,
+      tav
+    );
+    for (const l of lanc) {
+      const b = l.jelleg === "ber" ? l.rakott : 0;
+      const s = l.jelleg === "sajat" ? l.rakott : 0;
+      berKm += b; sajatKm += s; uresKm += l.ures;
+      const n = napok.get(l.nap) ?? { nap: l.nap, km: 0, berKm: 0, sajatKm: 0, uresKm: 0, bevetelFt: 0 };
+      n.berKm += b; n.sajatKm += s; n.uresKm += l.ures;
+      napok.set(l.nap, n);
     }
 
     const berSorok = sajatMegb.filter((m) => m.jelleg === "ber");
