@@ -5,16 +5,8 @@ import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, Fuel } from "lucide-react";
-import {
-  getIdovonalak,
-  getKovetkezoNapokElonezet,
-  type ElakadtFuvar,
-  type FuvarBlokk,
-  type GondJelzes,
-  type JarmuIdovonalEredmeny,
-  type KovetkezoNap,
-  type MegalloBejegyzes,
-} from "@/lib/fuvarozas/actions";
+import { getIdovonalak, getKovetkezoNapokElonezet } from "@/lib/fuvarozas/idovonal-akciok";
+import type { ElakadtFuvar, FuvarBlokk, GondJelzes, JarmuIdovonalEredmeny, KovetkezoNap, MegalloBejegyzes } from "@/lib/fuvarozas/actions";
 import { setMegalloKesz } from "@/lib/fuvarozas/megbizasok";
 import { getFogyasztas, type FogyasztasEredmeny, type FogyasztasOsszeg, type JarmuFogyasztas } from "@/lib/fuvarozas/fogyasztas";
 import { SAJAT_JARMUVEK, JARMU_SZIN_DOT_CLASS, type JarmuSzin } from "@/lib/fuvarozas/vehicles";

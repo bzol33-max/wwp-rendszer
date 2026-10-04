@@ -1,7 +1,13 @@
-"use server";
+import "server-only";
+
+// A GPS-idővonal és a kalkulátor szerveroldali magja. 2026-10-04-től NEM
+// "use server": a felület a lib/fuvarozas/idovonal-akciok.ts jogosultság-
+// ellenőrzött akcióin át éri el, a szerveroldali hívók (GPS-vászon, Ma,
+// Áttekintés, sofőr mobil napja, ütemező) közvetlenül — ők maguk ellenőrzik
+// a jogot. Így a sofőr nem kérheti le közvetlenül a teljes flotta idővonalát.
 
 import { query } from "@/lib/db";
-import { requireAnyViewPermission, requireViewPermission } from "@/lib/auth/require-permission";
+import { getMaiSajatFuvarok, getMaiValodiSajatFuvarok, getMegalloAllapotok } from "@/lib/fuvarozas/napi-fuvarok";
 import { betoltEloElozmenyt, getEloElozmeny, rogzitEloMegfigyelest } from "./elo-elozmeny";
 import { getFleetLastPositions, getVehicleTrips, parseEcofleetTimestamp, EcofleetError, type EcofleetPosition, type EcofleetTrip } from "./ecofleet";
 import {
@@ -38,9 +44,6 @@ import { geokodolCachelve, megalloAblakKezdet, megalloAblakTagithato, mozogE } f
 import { cachelve } from "./idovonal-cache";
 import {
   getFuvarokIdoszakban,
-  getMaiSajatFuvarok,
-  getMegalloAllapotok,
-  getMaiValodiSajatFuvarok,
   getPapirraVaroFuvarok,
   type PapirraVaroFuvar,
 } from "./megbizasok";
@@ -549,7 +552,6 @@ export type KovetkezoNap = {
  * elérkezett és van élő GPS-pozíció, lásd getIdovonalak).
  */
 export async function getKovetkezoNapokElonezet(napokSzama = 3): Promise<Record<string, KovetkezoNap[]>> {
-  await requireViewPermission("fuvarozas");
   const maiNapISO = budapestNapISO();
   const elsoNap = napIsoEltolva(maiNapISO, 1);
   const utolsoNap = napIsoEltolva(maiNapISO, napokSzama);
@@ -930,7 +932,6 @@ export type PapirNyugtazasJavaslat = {
  * azoknál nincs mit figyelni, amíg meg nem kapják az azonosítót.
  */
 export async function getPapirNyugtazasJavaslat(): Promise<PapirNyugtazasJavaslat[]> {
-  await requireViewPermission("fuvarozas");
   const [papirraVarok, poziciok, telephelyek] = await Promise.all([
     getPapirraVaroFuvarok().catch(() => [] as PapirraVaroFuvar[]),
     getFleetLastPositions().catch(() => [] as EcofleetPosition[]),
@@ -957,7 +958,6 @@ const IDOVONAL_CACHE_MA_MS = 60 * 1000;
 const IDOVONAL_CACHE_MULT_MS = 10 * 60 * 1000;
 
 export async function getIdovonalak(nap?: string): Promise<IdovonalNap> {
-  await requireAnyViewPermission(["fuvarozas", "elszamolas", "attekintes", "fuvarozas_sajat"]);
   const { napISO, maiNap } = budapestNapHatarok(nap);
   return cachelve(`idovonal:${napISO}`, maiNap ? IDOVONAL_CACHE_MA_MS : IDOVONAL_CACHE_MULT_MS, () => szamitsIdovonalakat(napISO));
 }
@@ -1264,7 +1264,6 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
 
 // Jogosultság (2026-09-30): a HU-GO-hívó akciók eddig nem ellenőriztek jogot.
 export async function searchAddressSuggestions(query: string): Promise<GeocodedAddress[]> {
-  await requireViewPermission("fuvarozas");
   try {
     return await suggestAddresses(query);
   } catch {

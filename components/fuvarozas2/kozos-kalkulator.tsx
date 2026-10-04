@@ -10,7 +10,7 @@
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { toast } from "sonner";
-import { searchAddressSuggestions } from "@/lib/fuvarozas/actions";
+import { searchAddressSuggestions } from "@/lib/fuvarozas/idovonal-akciok";
 import { szamoljKozosKalkulaciot, type KozosEredmeny } from "@/lib/fuvarozas2/kalkulator";
 import type { GeocodedAddress } from "@/lib/fuvarozas/utdijkalkulacio";
 import { cn } from "@/lib/utils";

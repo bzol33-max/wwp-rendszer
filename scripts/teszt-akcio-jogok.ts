@@ -23,7 +23,6 @@ const GYOKER = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const ENGEDETT: Record<string, string> = {
   "lib/auth/actions.ts:login": "a bejelentkezés maga, munkamenet előtt fut",
   "lib/auth/actions.ts:logout": "a saját munkamenet törlése",
-  "lib/fuvarozas/actions.ts:getGazolajAr": "nyilvános NAV-üzemanyagár, gyorsítótárazva",
   "lib/fuvarozas2/sajat-fuvar.ts:hianyzoMezok": "tiszta függvény, adatot nem ér el",
   "lib/fuvarozas2/tervezes.ts:hetKezdete": "tiszta függvény, adatot nem ér el",
 };
