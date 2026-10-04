@@ -35,6 +35,7 @@ async function kiolvasPdfbol(pdf: Buffer, nev: string): Promise<NyersKiolvasas |
   if (!apiKey) throw new Error("Hiányzik az OPENROUTER_API_KEY környezeti változó.");
   const model = process.env.OPENROUTER_PDF_MODEL || "google/gemini-2.5-flash";
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    signal: AbortSignal.timeout(60_000),
     method: "POST",
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
     body: JSON.stringify({

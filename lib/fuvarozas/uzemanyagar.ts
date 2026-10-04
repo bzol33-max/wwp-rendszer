@@ -60,6 +60,7 @@ function extractCells(rowHtml: string): string[] {
 /** Lekéri a NAV oldaláról a legfrissebb hónap "Gázolaj (piaci árszabás)" árát. */
 export async function fetchGazolajAr(): Promise<GazolajAr> {
   const res = await fetch(NAV_URL, {
+    signal: AbortSignal.timeout(20_000),
     headers: { "User-Agent": "Mozilla/5.0" },
     // A NAV havonta egyszer frissíti — napi újralekérdezés bőven elég, de nem
     // terheli feleslegesen az oldalukat minden egyes kalkulátor-betöltésnél.

@@ -26,7 +26,7 @@
 // kizárólag async függvényeket exportálhatnak).
 
 import { google } from "googleapis";
-import { query } from "@/lib/db";
+import { egyetlenPeldanyban, query, ZAR_KULCS } from "@/lib/db";
 import {
   addFuvar,
   setFuvarFuvardij,
@@ -339,6 +339,8 @@ async function kivonatolFuvarAdatot(szoveg: string): Promise<LlmValasz | null> {
   const model = process.env.OPENROUTER_MODEL || "google/gemini-2.5-flash-lite";
 
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    // Időkorlát: egy beakadt hívás ne tartsa fel a teljes Drive-szinkront (audit PERF-1).
+    signal: AbortSignal.timeout(90_000),
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
@@ -1079,6 +1081,15 @@ async function cimekHelyesbitese(
  * belső HTTP loopback), és Claude helyett egy olcsó OpenRouter-modellel.
  */
 export async function vegrehajtDriveSync(): Promise<DriveSyncEredmeny> {
+  // Az óránkénti cron és a „Frissítés” gomb ne fusson egyszerre: mindkettő
+  // ugyanazokat a fájlokat látta volna újnak (dupla letöltés, dupla
+  // OpenRouter-költség — audit RACE-5).
+  const zar = await egyetlenPeldanyban(ZAR_KULCS.driveSync, vegrehajtDriveSyncBelso);
+  if (!zar.futott) throw new Error("A Drive-szinkron épp fut — próbáld újra pár perc múlva.");
+  return zar.eredmeny;
+}
+
+async function vegrehajtDriveSyncBelso(): Promise<DriveSyncEredmeny> {
   const hibak: string[] = [];
   const drive = driveClient();
   const [uj, potoltSorok] = await Promise.all([

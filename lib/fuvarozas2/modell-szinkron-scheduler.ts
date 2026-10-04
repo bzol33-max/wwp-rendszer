@@ -11,6 +11,7 @@
 import { potoldAHianyzoModelleket } from "@/lib/fuvarozas2/modell-szinkron";
 import { potoldRakottKmet } from "@/lib/fuvarozas2/rakott-km";
 import { futtatRendszerkent } from "@/lib/auth/system-context";
+import { egyetlenPeldanyban, ZAR_KULCS } from "@/lib/db";
 import { frissitsKalkulaciokat, tervezettBerMegbizasok } from "@/lib/fuvarozas2/kalkulacio-tar";
 import { futtatPartnerJavaslatokat } from "@/lib/fuvarozas2/partner-javaslat";
 
@@ -20,6 +21,15 @@ const KORLAT = 50;
 let inditva = false;
 
 async function tick() {
+  // Az óránkénti kör egy példányban fut, és nem fut rá a még tartó előzőre.
+  const zar = await egyetlenPeldanyban(ZAR_KULCS.modellSzinkron, tickBelso).catch((err) => {
+    console.error("[modell-szinkron] zár hiba:", err);
+    return null;
+  });
+  if (zar && !zar.futott) console.log("[modell-szinkron] az előző kör még fut, ez kimarad.");
+}
+
+async function tickBelso() {
   try {
     const eredmeny = await futtatRendszerkent("modell-szinkron", () => potoldAHianyzoModelleket(KORLAT));
     if (eredmeny.erintett > 0) {

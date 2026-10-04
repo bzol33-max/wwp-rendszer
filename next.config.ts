@@ -18,6 +18,25 @@ const nextConfig: NextConfig = {
     // base64-többlettel) szűk lehet.
     serverActions: { bodySizeLimit: "10mb" },
   },
+  // Biztonsági fejlécek minden válaszra (audit 2026-10-04, SEC-9). CSP
+  // szándékosan még nincs: a Leaflet-csempék és az inline stílusok miatt
+  // előbb Report-Only módban kellene kipróbálni.
+  poweredByHeader: false,
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          { key: "Strict-Transport-Security", value: "max-age=31536000" },
+          // SAMEORIGIN, nem DENY: a saját oldalaink beágyazhatják a saját
+          // irat-végpontunkat (PDF-előnézet), más oldal viszont nem kerethez.
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

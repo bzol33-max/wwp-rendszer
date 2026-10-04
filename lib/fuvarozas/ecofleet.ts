@@ -41,7 +41,7 @@ async function ecofleetGet<T>(
     if (v !== undefined && v !== "") url.searchParams.set(k, v);
   }
 
-  const res = await fetch(url.toString(), { cache: "no-store" });
+  const res = await fetch(url.toString(), { cache: "no-store", signal: AbortSignal.timeout(20_000) });
   const xml = await res.text();
 
   let parsed: EcofleetEnvelope;
@@ -289,7 +289,7 @@ export async function getUtvonalJelentes(objectIds: string[], kezdetNapISO: stri
   url.searchParams.set("endTimestamp", `${vegNapISO} 23:59:59`);
   for (const id of objectIds) url.searchParams.append("objectIds[]", id);
 
-  const res = await fetch(url.toString(), { cache: "no-store" });
+  const res = await fetch(url.toString(), { cache: "no-store", signal: AbortSignal.timeout(20_000) });
   const szoveg = (await res.text()).replace(/\r/g, "");
   if (/^\s*<\?xml/.test(szoveg)) {
     const uzenet = szoveg.match(/<errormessage>([^<]*)<\/errormessage>/)?.[1];

@@ -7,6 +7,7 @@
 
 import { futtatTeljesitesFigyeles } from "./teljesites-figyeles";
 import { futtatRendszerkent } from "@/lib/auth/system-context";
+import { egyetlenPeldanyban, ZAR_KULCS } from "@/lib/db";
 
 const INTERVALL_MS = 5 * 60 * 1000;
 
@@ -14,7 +15,11 @@ let inditva = false;
 
 async function tick() {
   try {
-    const eredmeny = await futtatRendszerkent("teljesites-figyeles", futtatTeljesitesFigyeles);
+    const zar = await egyetlenPeldanyban(ZAR_KULCS.teljesitesFigyeles, () =>
+      futtatRendszerkent("teljesites-figyeles", futtatTeljesitesFigyeles)
+    );
+    if (!zar.futott) return; // az előző kör (vagy a másik példány) még fut
+    const eredmeny = zar.eredmeny;
     if (eredmeny.automatikusanTeljesitve || eredmeny.hibak.length) {
       console.log(
         `[teljesites-figyeles] vizsgált: ${eredmeny.vizsgalt}, automatikusan teljesítve: ${eredmeny.automatikusanTeljesitve}, hibák: ${

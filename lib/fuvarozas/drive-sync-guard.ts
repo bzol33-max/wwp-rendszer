@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 
 /**
@@ -39,11 +40,11 @@ export function requireBearerSecret(req: Request, envNev: string, queryEngedett 
       { status: 503 }
     );
   }
-  const fejlecOk = req.headers.get("authorization") === `Bearer ${titok}`;
+  const fejlecOk = egyezik(req.headers.get("authorization"), `Bearer ${titok}`);
   let queryOk = false;
   if (queryEngedett) {
     try {
-      queryOk = new URL(req.url).searchParams.get("token") === titok;
+      queryOk = egyezik(new URL(req.url).searchParams.get("token"), titok);
     } catch {
       queryOk = false;
     }
@@ -52,4 +53,12 @@ export function requireBearerSecret(req: Request, envNev: string, queryEngedett 
     return NextResponse.json({ hiba: "Érvénytelen vagy hiányzó Authorization fejléc." }, { status: 401 });
   }
   return null;
+}
+
+/** Konstans idejű összevetés: a válaszidőből ne lehessen karakterenként kitalálni a titkot (audit SEC-10). */
+function egyezik(kapott: string | null, vart: string): boolean {
+  if (kapott === null) return false;
+  const a = Buffer.from(kapott);
+  const b = Buffer.from(vart);
+  return a.length === b.length && timingSafeEqual(a, b);
 }

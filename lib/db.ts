@@ -9,7 +9,20 @@ export const pool =
   global._wwpPool ??
   new Pool({
     connectionString: process.env.DATABASE_URL,
+    max: 10,
+    // Ne várjon a végtelenségig szabad kapcsolatra, és egy elakadt lekérdezés
+    // vagy félbehagyott tranzakció se fogja a kapcsolatot örökre (audit PERF-4).
+    connectionTimeoutMillis: 10_000,
+    idleTimeoutMillis: 30_000,
+    statement_timeout: 60_000,
+    idle_in_transaction_session_timeout: 60_000,
   });
+
+// Egy tétlen kapcsolat hálózati hibája kezeletlen 'error' eseményként a
+// teljes folyamatot leállítaná — itt csak naplózzuk, a pool új kapcsolatot nyit.
+if (!global._wwpPool) {
+  pool.on("error", (err) => console.error("[db] tétlen kapcsolat hibája:", err.message));
+}
 
 if (process.env.NODE_ENV !== "production") {
   global._wwpPool = pool;
@@ -41,3 +54,35 @@ export async function withTransaction<R>(fn: (q: Querier) => Promise<R>): Promis
     client.release();
   }
 }
+
+/**
+ * A `fn` csak akkor fut, ha egyetlen másik folyamat (vagy ugyanennek egy
+ * korábbi, még futó köre) sem tartja ugyanazt a `kulcs`-ot — Postgres
+ * advisory lockkal. Az ütemezők körei így nem futnak egymásra, és Railway
+ * deploy-átfedésnél (két példány) sem duplázódnak (audit RACE-3/5).
+ */
+export async function egyetlenPeldanyban<T>(
+  kulcs: number,
+  fn: () => Promise<T>
+): Promise<{ futott: true; eredmeny: T } | { futott: false }> {
+  const client = await pool.connect();
+  try {
+    const { rows } = await client.query<{ ok: boolean }>("select pg_try_advisory_lock($1) as ok", [kulcs]);
+    if (!rows[0]?.ok) return { futott: false };
+    try {
+      return { futott: true, eredmeny: await fn() };
+    } finally {
+      await client.query("select pg_advisory_unlock($1)", [kulcs]).catch(() => {});
+    }
+  } finally {
+    client.release();
+  }
+}
+
+/** Az egyetlenPeldanyban kulcsai — egy helyen, hogy ne ütközzenek. */
+export const ZAR_KULCS = {
+  teljesitesFigyeles: 72_001,
+  szamlaSzinkron: 72_002,
+  modellSzinkron: 72_003,
+  driveSync: 72_004,
+} as const;

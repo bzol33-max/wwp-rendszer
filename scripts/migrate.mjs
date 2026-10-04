@@ -21,6 +21,12 @@ const dbDir = path.join(__dirname, "..", "db");
 
 async function main() {
   if (!process.env.DATABASE_URL) {
+    // Élesben ez konfigurációs hiba: csendes kihagyás után az app adatbázis
+    // nélkül indulna el, és minden oldal hibát adna (audit CFG-5).
+    if (process.env.NODE_ENV === "production") {
+      console.error("[migrate] DATABASE_URL nincs beállítva — leállás.");
+      process.exit(1);
+    }
     console.warn("[migrate] DATABASE_URL nincs beállítva, kihagyva.");
     return;
   }

@@ -5,6 +5,7 @@
 
 import { futtatSzamlaSzinkron } from "./poll";
 import { futtatRendszerkent } from "@/lib/auth/system-context";
+import { egyetlenPeldanyban, ZAR_KULCS } from "@/lib/db";
 
 const INTERVALL_MS = 15 * 60 * 1000;
 const KEZDET_ORA = 6;
@@ -26,7 +27,11 @@ async function tick() {
   const ora = budapestOra();
   if (ora < KEZDET_ORA || ora >= VEG_ORA) return;
   try {
-    const eredmeny = await futtatRendszerkent("szamla-szinkron", futtatSzamlaSzinkron);
+    const zar = await egyetlenPeldanyban(ZAR_KULCS.szamlaSzinkron, () =>
+      futtatRendszerkent("szamla-szinkron", futtatSzamlaSzinkron)
+    );
+    if (!zar.futott) return; // a másik példány épp szinkronizál
+    const eredmeny = zar.eredmeny;
     if (
       eredmeny.ujMegtalalt ||
       eredmeny.pendingMegoldva ||

@@ -42,7 +42,7 @@ async function fuzzySearch(query: string): Promise<GeocodedAddress[]> {
   url.searchParams.set("types", "hnum,road,cos,admin,poi");
 
   return cachelveHiv("hugo", ["fuzzy", query], CACHE_CIM_PERC, async () => {
-    const res = await fetch(url.toString(), { cache: "no-store" });
+    const res = await fetch(url.toString(), { cache: "no-store", signal: AbortSignal.timeout(20_000) });
     if (!res.ok) {
       if (ujraprobalhatoE(res.status)) throw new UjrapobalhatoHiba(`Címkeresés sikertelen (HTTP ${res.status}).`, res.status);
       throw new TollCalcError(`Címkeresés sikertelen (HTTP ${res.status}).`);
@@ -115,6 +115,7 @@ async function reverseGeocodeNyers(lat: number, lon: number): Promise<string | n
 
   const res = await fetch(url.toString(), {
     cache: "no-store",
+    signal: AbortSignal.timeout(20_000),
     headers: {
       // A Nominatim használati feltételei megkövetelik az azonosító
       // User-Agentet (nem böngésző-alapértelmezettet).
@@ -350,6 +351,7 @@ export async function calculateToll(params: TollCalcParams): Promise<TollRoute> 
 
 async function calculateTollNyers(params: TollCalcParams): Promise<TollRoute> {
   const res = await fetch(`${BASE}/route-planner`, {
+    signal: AbortSignal.timeout(30_000),
     method: "POST",
     headers: { "Content-Type": "application/json" },
     cache: "no-store",

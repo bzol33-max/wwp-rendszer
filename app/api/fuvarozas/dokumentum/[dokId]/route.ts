@@ -46,9 +46,10 @@ export async function GET(
   if (dok.tarolas === "db" && dok.tartalom) {
     return new NextResponse(new Uint8Array(dok.tartalom), {
       headers: {
-        "Content-Type": dok.mime_type ?? "image/jpeg",
-        "Content-Disposition": `inline; filename="${(dok.fajlnev ?? `dokumentum-${dokId}.jpg`).replace(/"/g, "")}"`,
+        "Content-Type": biztonsagosMime(dok.mime_type ?? "image/jpeg"),
+        "Content-Disposition": inlineFajlnev(dok.fajlnev ?? `dokumentum-${dokId}.jpg`),
         "Cache-Control": "private, max-age=300",
+        "X-Content-Type-Options": "nosniff",
       },
     });
   }
@@ -61,14 +62,33 @@ export async function GET(
     const nev = dok.fajlnev ?? fajl.nev;
     return new NextResponse(new Uint8Array(fajl.buffer), {
       headers: {
-        "Content-Type": fajl.mimeType,
+        "Content-Type": biztonsagosMime(fajl.mimeType),
         // inline: a telefon a beépített PDF-nézőben nyitja meg, nem letölti.
-        "Content-Disposition": `inline; filename="${nev.replace(/"/g, "")}"`,
+        "Content-Disposition": inlineFajlnev(nev),
         "Cache-Control": "private, max-age=300",
+        "X-Content-Type-Options": "nosniff",
       },
     });
   } catch (err) {
     console.error("[dokumentum] Drive-letöltés hiba:", err);
     return NextResponse.json({ hiba: "A dokumentum most nem érhető el." }, { status: 502 });
   }
+}
+
+/**
+ * A Content-Disposition fejléc csak ASCII-t engedhet (a Node fejléc-ellenőrzése
+ * az ő/ű betűre kivételt dobott, a sofőr 500/502-t kapott — audit FE-2): ASCII
+ * tartalék-név + RFC 5987 szerinti UTF-8 név, amit a böngészők előnyben részesítenek.
+ */
+function inlineFajlnev(nev: string): string {
+  const ascii = nev.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "");
+  return `inline; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(nev)}`;
+}
+
+/** Csak ismert, ártalmatlan típus megy ki inline; minden más letöltendő bináris (audit SEC-11). */
+function biztonsagosMime(mime: string): string {
+  const m = mime.toLowerCase().split(";")[0].trim();
+  if (m === "application/pdf" || m.startsWith("image/") && m !== "image/svg+xml") return m;
+  if (m.startsWith("application/vnd.openxmlformats") || m === "application/msword") return m;
+  return "application/octet-stream";
 }

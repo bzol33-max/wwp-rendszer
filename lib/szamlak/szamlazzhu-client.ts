@@ -135,7 +135,9 @@ export async function lekerdezSzamla(
     "action-szamla_agent_xml.xml"
   );
 
-  const res = await fetch(AGENT_URL, { method: "POST", body: form });
+  // Időkorlát: egy beakadt hívás különben újraindításig leállította a
+  // számla-szinkront (a futtatSzamlaSzinkron promise sosem teljesült — audit PERF-1).
+  const res = await fetch(AGENT_URL, { method: "POST", body: form, signal: AbortSignal.timeout(30_000) });
   const bodyText = await res.text();
 
   const parser = new XMLParser({ ignoreAttributes: false, trimValues: true });
