@@ -73,8 +73,8 @@ export const MODULES: ModuleInfo[] = [
     label: "Jelenléti/üzenőfal",
     href: "/jelenlet",
     icon: MessageSquare,
-    status: "fejlesztes-alatt",
+    status: "elkeszult",
     description:
-      "Napi érkezés és távozás (naponta többször is), havi napló hetekre bontva a 9 órás mércéhez mért eltéréssel, telephelyi feladat-üzenőfal ismétlődéssel. Dolgozói mobil: jelenlét, feladatok, Profil (kivehető szabadság, előleg-elfogadás); sofőröknél saját fuvar-nézet is.",
+      "Napi érkezés és távozás (naponta többször is), havi napló hetekre bontva a 9 órás mércéhez mért eltéréssel, telephelyi feladat-üzenőfal ismétlődéssel. Szabadság: a dolgozó a telefonján kéri, az admin a Szabadság oldalon hagyja jóvá vagy rögzíti bárkinek, éves rácson látszik, ki mikor van távol és hol torlódnak. Dolgozói mobil: jelenlét, feladatok, Profil (kivehető szabadság, szabadság-kérés, előleg év/hónap bontásban); sofőröknél saját fuvar-nézet is.",
   },
 ];
