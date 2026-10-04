@@ -35,11 +35,19 @@ export type Javaslat = { mezo: JavaslatMezo; ertek: string };
 
 const szoveg = (x: unknown): string | null => (typeof x === "string" && x.trim() ? x.trim().replace(/\s+/g, " ") : null);
 
-/** A mi címünk (a megbízás címzettje) sosem lehet a megbízó postacíme. */
+/**
+ * A mi címünk (a megbízás címzettje) sosem lehet a megbízó postacíme. Mindhárom
+ * telephelyünk saját cím (Budaházi Zoltán, 2026-10-04): Szakoly és Balkány
+ * települése egészében, Nyíregyházán csak a telephely utcája — ott sok
+ * megbízónk is van.
+ */
 export function sajatCimE(cim: string): boolean {
   const k = cim.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-  return /szakoly/.test(k) || /well\s*-?\s*worn/.test(k);
+  return /szakoly|balkany/.test(k) || /well\s*-?\s*worn/.test(k) || NYIREGYHAZI_TELEP.some((r) => r.test(k));
 }
+
+/** A nyíregyházi telephely címének mintái (ékezet nélkül, kisbetűvel). */
+const NYIREGYHAZI_TELEP: RegExp[] = [];
 
 /** Hihető postacím: van benne település-szerű szó és házszám vagy irányítószám, nem a miénk. */
 export function hihetoCim(cim: string): boolean {

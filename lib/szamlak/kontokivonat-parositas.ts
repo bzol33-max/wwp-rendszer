@@ -253,14 +253,34 @@ function normalizeCegNev(nev: string): string {
     .trim();
 }
 
+/** Gyakori, megkülönböztetésre alkalmatlan szavak a cégnevekben. */
+const ALTALANOS_SZO = new Set([
+  "EURO", "EUROPE", "TRANS", "TRANSZ", "HUNGARY", "HUNGARIA", "MAGYAR", "MAGYARORSZAG", "INTER", "INTERNATIONAL",
+  "LOGISTIC", "LOGISTICS", "LOGISZTIKA", "LOGISZTIKAI", "SPEDITION", "SPED", "SZALLITMANYOZASI", "SZALLITMANYOZO",
+  "FUVAROZO", "FUVAROZASI", "KERESKEDELMI", "SZOLGALTATO", "ES", "AND", "CO", "KG", "AG", "SE", "HU", "THE",
+]);
+
+/**
+ * Bankkivonat-partner ↔ számla-vevő névegyezés. Korábban az első szó egyezése
+ * is elég volt (pl. „EURO …” – „EURO …”), ami téves vevőt adhatott (audit
+ * BIZ-9, Budaházi Zoltán döntése 2026-10-04: szigorítani). Most egyezik, ha:
+ * - az egyik név (cégforma nélkül) tartalmazza a másikat (szóközökkel vagy
+ *   anélkül — a bank gyakran összevonja: „ABSPEED” – „ÁB SPEED”), vagy
+ * - a rövidebb név minden szava megvan a hosszabbikban, és van köztük
+ *   legalább egy 4+ betűs, nem általános szó.
+ */
 export function nevEgyezik(bankNev: string, dbNev: string): boolean {
   const a = normalizeCegNev(bankNev);
   const b = normalizeCegNev(dbNev);
   if (!a || !b) return false;
   if (a.includes(b) || b.includes(a)) return true;
-  const aElso = a.split(" ")[0] ?? "";
-  const bElso = b.split(" ")[0] ?? "";
-  return aElso.length >= 3 && aElso === bElso;
+  const aT = a.replace(/[^A-Z0-9]/g, "");
+  const bT = b.replace(/[^A-Z0-9]/g, "");
+  if (Math.min(aT.length, bT.length) >= 5 && (aT.includes(bT) || bT.includes(aT))) return true;
+  const szavak = (x: string) => x.split(/[^A-Z0-9]+/).filter((w) => w.length >= 2);
+  const [rovid, hosszu] = szavak(a).length <= szavak(b).length ? [szavak(a), new Set(szavak(b))] : [szavak(b), new Set(szavak(a))];
+  if (rovid.length === 0 || !rovid.every((w) => hosszu.has(w))) return false;
+  return rovid.some((w) => w.length >= 4 && !ALTALANOS_SZO.has(w));
 }
 
 /** A bank "HUF"-ot, a Számlázz.hu "Ft"-ot ír ugyanarra. */

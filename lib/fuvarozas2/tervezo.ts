@@ -12,6 +12,7 @@ import { varosNev } from "@/lib/fuvarozas/varos";
 import { findJarmuByPlate } from "@/lib/fuvarozas/vehicles";
 import { geokodolCachelve } from "@/lib/fuvarozas/erintes-felismeres";
 import { SAJAT_TELEPHELYEK } from "@/lib/fuvarozas/telephelyek";
+import { GAZOLAJ_AR_TARTALEK, TANKOLASI_KEDVEZMENY_FT_PER_LITER } from "@/lib/fuvarozas/gazolaj";
 import { NAPI_KOLTSEG_FT, ALAP_FOGYASZTAS_L100, type AjanlatMinosites } from "@/lib/fuvarozas2/kalkulator-alap";
 import { frissitsKalkulaciokat, getTaroltKalkulaciok, szamoldEsTarold, type TaroltKalkulacio } from "@/lib/fuvarozas2/kalkulacio-tar";
 import { celar, elozmenyElteres, hetHatas, legjobbKocsi, type HetEredmeny, type HetFuvar, type HetParam, type Pont } from "@/lib/fuvarozas2/tervezo-alap";
@@ -119,7 +120,7 @@ export async function getTervezo(szuro: { m?: string; kocsi?: string }): Promise
   // A becslés paraméterei a tárolt kalkulációkból (hálózat nélkül); ha nincs, alapérték.
   const eredmenyek = [...tar.values()].map((t) => t.eredmeny).filter((e): e is NonNullable<typeof e> => !!e);
   const fogyasztasL100 = eredmenyek.length ? Math.round((eredmenyek.reduce((a, e) => a + e.fogyasztasL100, 0) / eredmenyek.length) * 10) / 10 : ALAP_FOGYASZTAS_L100;
-  const gazolajFt = eredmenyek.length ? eredmenyek[eredmenyek.length - 1].gazolaj.ar : 617;
+  const gazolajFt = eredmenyek.length ? eredmenyek[eredmenyek.length - 1].gazolaj.ar : GAZOLAJ_AR_TARTALEK.ar - TANKOLASI_KEDVEZMENY_FT_PER_LITER;
   const kmOssz = eredmenyek.reduce((a, e) => a + e.rakottKm, 0);
   const utdijPerKm = kmOssz > 0 ? Math.round(eredmenyek.reduce((a, e) => a + e.rakottUtdijFt, 0) / kmOssz) : 120;
   const telephelyGeo = await geokodolCachelve(SAJAT_TELEPHELYEK[0].cim).catch(() => null);

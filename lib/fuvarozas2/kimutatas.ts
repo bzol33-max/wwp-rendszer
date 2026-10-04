@@ -24,7 +24,7 @@
 import { query } from "@/lib/db";
 import { requireAnyViewPermission } from "@/lib/auth/require-permission";
 import { getUtvonalJelentes, rendszamKulcs } from "@/lib/fuvarozas/ecofleet";
-import { fetchGazolajAr } from "@/lib/fuvarozas/uzemanyagar";
+import { gazolajArKedvezmennyel } from "@/lib/fuvarozas/gazolaj";
 import { NAPI_KOLTSEG_FT } from "@/lib/fuvarozas2/kalkulator-alap";
 
 export type KimutatasIdoszak = "nap" | "het" | "ho";
@@ -131,10 +131,13 @@ export async function getKimutatas(idoszak: KimutatasIdoszak = "het", nap?: stri
 
   let gazolajAr: number | null = null;
   let gazolajCimke: string | null = null;
+  // A kalkulátorral azonos, kedvezményes ár (NAV − 50 Ft), mert a flotta
+  // ezen tankol (Budaházi Zoltán, 2026-10-04 — eddig a Kimutatás a teljes
+  // NAV-árral számolt, kb. 7–8%-kal több üzemanyag-költséget mutatott).
   try {
-    const ar = await fetchGazolajAr();
+    const ar = await gazolajArKedvezmennyel();
     gazolajAr = ar.ar;
-    gazolajCimke = ar.cimke;
+    gazolajCimke = `${ar.cimke} · NAV − ${ar.kedvezmeny} Ft`;
   } catch {
     gazolajAr = null;
   }

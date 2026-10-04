@@ -1,5 +1,6 @@
 "use client";
 
+import { SZETVALOGATAS_FORRASOK, VEGYES_EUR_CELOK } from "@/lib/keszlet/szetvalogatas";
 import {
   createContext,
   useCallback,
@@ -679,7 +680,6 @@ function FuvarokScreen({
 // szétválogatás, külön gomb nélkül. A leltár és a szétválogatás saját, ujjra
 // méretezett párbeszédet kap (keszlet-mobil.tsx); a Be/Ki rögzítés a desktop
 // Készlet modullal közös MovementForm, rögzített iránnyal.
-const VEGYES_FORRASOK = ["Vegyes EUR", "Vegyes"];
 
 // Telephelyek közti mozgatás célja a telepi nézetről: a másik két telep,
 // Nyíregyházát is beleértve. A forrás mindig a kiválasztott saját telep — a
@@ -688,7 +688,6 @@ const MOZGATAS_CELOK: Record<KeszletSite, string[]> = {
   Szakoly: ["Balkány", "Nyíregyháza"],
   Balkány: ["Szakoly", "Nyíregyháza"],
 };
-const VEGYES_EUR_CELOK = ["EUR világos", "EUR szürke", "EUR törött"];
 
 function KeszletScreen({
   employeeName,
@@ -729,13 +728,13 @@ function KeszletScreen({
   // A képernyőn csak az látszik, amiből van készlet — a telepen sok típus
   // aktív, de a legtöbbje általában üres. A 0 darabos típusok a leltárban és
   // a rögzítő űrlapon továbbra is elérhetők, így új típus is bevihető.
-  const vegyesek = VEGYES_FORRASOK.filter((v) => (stock[v] ?? 0) !== 0);
-  const tobbi = Object.entries(stock).filter(([t, q]) => !VEGYES_FORRASOK.includes(t) && q !== 0);
+  const vegyesek = SZETVALOGATAS_FORRASOK.filter((v) => (stock[v] ?? 0) !== 0);
+  const tobbi = Object.entries(stock).filter(([t, q]) => !SZETVALOGATAS_FORRASOK.includes(t) && q !== 0);
   // Szétválogatás céljai: a telepen aktív típusok — a Vegyes EUR csak a három
   // EUR-válogatásra bomlik, a Vegyes bármire, ami itt aktív.
   const celok = (forras: string) =>
     types.filter(
-      (t) => !VEGYES_FORRASOK.includes(t) && (forras === "Vegyes" || VEGYES_EUR_CELOK.includes(t))
+      (t) => !SZETVALOGATAS_FORRASOK.includes(t) && (forras === "Vegyes" || VEGYES_EUR_CELOK.includes(t))
     );
 
   return (

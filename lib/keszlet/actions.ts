@@ -1,5 +1,6 @@
 "use server";
 
+import { SZETVALOGATAS_FORRASOK, szetvalogathatoCelra } from "@/lib/keszlet/szetvalogatas";
 import { randomUUID } from "node:crypto";
 import { query, withTransaction, type Querier } from "@/lib/db";
 import type { ModuleKey } from "@/lib/auth/permissions";
@@ -1246,13 +1247,7 @@ export async function getNyiregyhazaFoSnapshot() {
   return { stock, events, incoming };
 }
 
-// Szétválogatható ("vegyes") készlettételek. A "Vegyes EUR" a klasszikus
-// EUR-vegyes — abból világos/szürke/törött lesz. A "Vegyes" a mindenes
-// halom (Szakoly/Balkány): olyan szállítmány, amiben EUR-on kívül színes,
-// egyutas is van — ezért bármelyik, a telepen aktív típusra bontható.
-// (Nem exportálható: a "use server" fájl csak async függvényeket adhat ki —
-// a kliensoldali párja a telephelyek-view VEGYES_FORRASOK listája.)
-const SZETVALOGATAS_FORRASOK = ["Vegyes EUR", "Vegyes"];
+// A szétválogatás szabálya: lib/keszlet/szetvalogatas.ts.
 
 /**
  * Szétválogatás: a forrás-típusból levont mennyiség a megadott típusokra
@@ -1297,6 +1292,10 @@ export async function recordSzetvalogatas(input: {
   for (const type of darabok.keys()) {
     if (!aktiv.includes(type)) {
       throw new Error(`Ez a típus nincs aktiválva ezen a telephelyen: ${type}`);
+    }
+    // A szabályt eddig csak a felület tartotta be (audit BIZ-8).
+    if (!szetvalogathatoCelra(source, type)) {
+      throw new Error(`${source}-ből nem lehet ${type} lesz.`);
     }
   }
 

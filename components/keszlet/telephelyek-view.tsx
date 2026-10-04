@@ -1,5 +1,6 @@
 "use client";
 
+import { SZETVALOGATAS_FORRASOK, VEGYES_EUR_CELOK } from "@/lib/keszlet/szetvalogatas";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -70,8 +71,6 @@ function Tile({ name, qty }: { name: string; qty: number }) {
 // Szétválogatható ("vegyes") készlettételek — ld. lib/keszlet/actions.ts
 // SZETVALOGATAS_FORRASOK. A "Vegyes EUR"-ból EUR-válogatás lesz, a
 // "Vegyes"-ből bármi, ami a telepen aktív (színes, egyutas, …).
-const VEGYES_FORRASOK = ["Vegyes EUR", "Vegyes"];
-const VEGYES_EUR_CELOK = ["EUR világos", "EUR szürke", "EUR törött"];
 
 const SITE_ORDER = ["Nyíregyháza", "Balkány", "Szakoly"];
 const SITE_OPACITY_CLASS = ["bg-foreground/55", "bg-foreground/30", "bg-foreground/15"];
@@ -198,7 +197,7 @@ export function TelephelyekView({ site: active }: { site: SiteKey }) {
   const isSummary = active === "Összkészlet";
   const isNyiregyhaza = active === "Nyíregyháza";
   // A vegyes tételek nem csempeként, hanem szétválogatható sorként jelennek meg.
-  const tileEntries = Object.entries(stock).filter(([t]) => !VEGYES_FORRASOK.includes(t));
+  const tileEntries = Object.entries(stock).filter(([t]) => !SZETVALOGATAS_FORRASOK.includes(t));
 
   return (
     <div className="space-y-4">
@@ -337,12 +336,12 @@ export function TelephelyekView({ site: active }: { site: SiteKey }) {
                   <Tile key={type} name={type} qty={qty} />
                 ))}
               </div>
-              {VEGYES_FORRASOK.filter((forras) => forras in stock).map((forras) => {
+              {SZETVALOGATAS_FORRASOK.filter((forras) => forras in stock).map((forras) => {
                 // Célok: a telepen aktív típusok — a Vegyes EUR-t csak a három
                 // EUR-válogatásra bontjuk, a Vegyest bármire, ami itt aktív.
                 const celok = types.filter(
                   (t) =>
-                    !VEGYES_FORRASOK.includes(t) &&
+                    !SZETVALOGATAS_FORRASOK.includes(t) &&
                     (forras === "Vegyes" || VEGYES_EUR_CELOK.includes(t))
                 );
                 return canEdit && celok.length > 0 ? (
