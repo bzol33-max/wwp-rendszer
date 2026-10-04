@@ -8,7 +8,6 @@ import { cn } from "@/lib/utils";
 import { useCanEdit } from "@/components/auth/edit-permission-context";
 import { HU_MONTHS } from "@/lib/dolgozok/shared";
 import {
-  DAY_TYPE_LABELS,
   DAY_TYPE_STYLES,
   currentYearMonth,
   formatDiff,
@@ -18,8 +17,7 @@ import {
   weekInfo,
   type DaySummary,
   type JelenletEmployee,
-  type JelenletSession,
-} from "@/lib/jelenlet/shared";
+  type JelenletSession } from "@/lib/jelenlet/shared";
 import { getJelenletEmployees, getJelenletekIdoszak } from "@/lib/jelenlet/actions";
 import { NapSzerkeszto } from "@/components/jelenlet/nap-szerkeszto";
 

@@ -841,7 +841,7 @@ export function NyiregyhazaHaviTab() {
               ))}
               <p className="text-xs text-muted-foreground">
                 Nyitvatartáson túl/hétvégén leadott tétel — a darabszám azonnal a készletben van,
-                a kassza csak a "Kifizetés" gombra kattintva, a tényleges kifizetéskor csökken.
+                a kassza csak a „Kifizetés” gombra kattintva, a tényleges kifizetéskor csökken.
               </p>
             </CardContent>
           )}

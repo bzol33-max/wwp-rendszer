@@ -7,7 +7,6 @@ import { Pool, types } from "pg";
 types.setTypeParser(1700, (v) => (v === null ? null : parseFloat(v)));
 
 declare global {
-  // eslint-disable-next-line no-var
   var _wwpPool: Pool | undefined;
 }
 
