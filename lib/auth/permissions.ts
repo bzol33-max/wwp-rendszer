@@ -12,7 +12,6 @@ export type ModuleKey =
   | "jelenlet"
   | "jarmuvek"
   | "beallitasok"
-  | "mobil"
   | "posta"
   | "erkezes"
   | "keszlet_sajat"
@@ -32,7 +31,6 @@ export const MODULES: { key: ModuleKey; label: string }[] = [
   { key: "jelenlet", label: "Jelenléti/üzenőfal" },
   { key: "jarmuvek", label: "Járművek" },
   { key: "beallitasok", label: "Beállítások (típusok és árak)" },
-  { key: "mobil", label: "Mobil összefoglaló (önálló, korlátozott nézet)" },
   { key: "posta", label: "Posta (bér fuvarok postázása — önálló, korlátozott nézet)" },
   { key: "erkezes", label: "Saját érkezés (dolgozói mobil nézet)" },
   {
@@ -65,7 +63,6 @@ export const MODULES: { key: ModuleKey; label: string }[] = [
 
 /** Modulok, amik utólag, opt-in jelleggel lettek bevezetve — ld. resolvePermission. */
 const OPT_IN_MODULES: ModuleKey[] = [
-  "mobil",
   "posta",
   "erkezes",
   "keszlet_sajat",
@@ -83,9 +80,8 @@ export type Permissions = Partial<Record<ModuleKey, ModulePermission>>;
 // Hiányzó modulbejegyzés = alapértelmezetten teljes hozzáférés. Az admin
 // felhasználó ettől függetlenül mindig mindent lát/szerkeszthet.
 //
-// Az OPT_IN_MODULES tagjai (pl. "mobil", "posta", "erkezes") kivételek:
-// ezek utólag bevezetett, szándékosan opt-in jogok (ld. app/mobil/page.tsx,
-// app/posta/page.tsx, app/erkezes/page.tsx), nem a többi modullal
+// Az OPT_IN_MODULES tagjai (pl. "posta", "erkezes") kivételek:
+// ezek utólag bevezetett, szándékosan opt-in jogok (ld. app/posta/page.tsx, app/erkezes/page.tsx), nem a többi modullal
 // egyenrangú, eredettől fogva létező jogosultságok. Ha a default-true
 // szabályt rájuk is alkalmaznánk, minden, a modul bevezetése ELŐTT
 // létrehozott felhasználó (akinek a permissions JSON-ja még nem
