@@ -1,5 +1,6 @@
 "use server";
 
+import { requireAnyViewPermission } from "@/lib/auth/require-permission";
 import { EcofleetError, getUtvonalJelentes, rendszamKulcs, type EcofleetUtSor } from "./ecofleet";
 import { SAJAT_JARMUVEK } from "./vehicles";
 import { budapestNapISO } from "./idozona";
@@ -96,6 +97,7 @@ async function szamitsFogyasztast(napISO: string): Promise<FogyasztasEredmeny> {
  * A sikertelen lekérés nem kerül a gyorsítótárba (lásd cachelve).
  */
 export async function getFogyasztas(nap?: string): Promise<FogyasztasEredmeny> {
+  await requireAnyViewPermission(["fuvarozas", "attekintes"]);
   const napISO = nap ?? budapestNapISO();
   try {
     return await cachelve(`fogyasztas:${napISO}`, FOGYASZTAS_CACHE_MS, () => szamitsFogyasztast(napISO));

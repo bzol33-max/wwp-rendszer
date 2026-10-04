@@ -1,7 +1,7 @@
 "use server";
 
 import { query } from "@/lib/db";
-import { requireViewPermission } from "@/lib/auth/require-permission";
+import { requireAnyViewPermission, requireViewPermission } from "@/lib/auth/require-permission";
 import { betoltEloElozmenyt, getEloElozmeny, rogzitEloMegfigyelest } from "./elo-elozmeny";
 import { getFleetLastPositions, getVehicleTrips, parseEcofleetTimestamp, EcofleetError, type EcofleetPosition, type EcofleetTrip } from "./ecofleet";
 import {
@@ -71,6 +71,7 @@ export type FleetPositionResult =
   | { ok: false; error: string };
 
 export async function getFleetPositions(): Promise<FleetPositionResult> {
+  await requireAnyViewPermission(["fuvarozas", "attekintes"]);
   try {
     const positions = await getFleetLastPositions();
     // Rendszám szerint, hogy a felület mindig ugyanabban a sorrendben mutassa.
@@ -586,6 +587,7 @@ export type KovetkezoNap = {
  * elérkezett és van élő GPS-pozíció, lásd getIdovonalak).
  */
 export async function getKovetkezoNapokElonezet(napokSzama = 3): Promise<Record<string, KovetkezoNap[]>> {
+  await requireViewPermission("fuvarozas");
   const maiNapISO = budapestNapISO();
   const elsoNap = napIsoEltolva(maiNapISO, 1);
   const utolsoNap = napIsoEltolva(maiNapISO, napokSzama);
@@ -966,6 +968,7 @@ export type PapirNyugtazasJavaslat = {
  * azoknál nincs mit figyelni, amíg meg nem kapják az azonosítót.
  */
 export async function getPapirNyugtazasJavaslat(): Promise<PapirNyugtazasJavaslat[]> {
+  await requireViewPermission("fuvarozas");
   const [papirraVarok, poziciok, telephelyek] = await Promise.all([
     getPapirraVaroFuvarok().catch(() => [] as PapirraVaroFuvar[]),
     getFleetLastPositions().catch(() => [] as EcofleetPosition[]),
@@ -992,6 +995,7 @@ const IDOVONAL_CACHE_MA_MS = 60 * 1000;
 const IDOVONAL_CACHE_MULT_MS = 10 * 60 * 1000;
 
 export async function getIdovonalak(nap?: string): Promise<IdovonalNap> {
+  await requireAnyViewPermission(["fuvarozas", "elszamolas", "attekintes", "fuvarozas_sajat"]);
   const { napISO, maiNap } = budapestNapHatarok(nap);
   return cachelve(`idovonal:${napISO}`, maiNap ? IDOVONAL_CACHE_MA_MS : IDOVONAL_CACHE_MULT_MS, () => szamitsIdovonalakat(napISO));
 }

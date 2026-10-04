@@ -2,7 +2,7 @@
 
 import { query } from "@/lib/db";
 import { frissitsdFuvarozas2Modellt } from "@/lib/fuvarozas2/modell-szinkron";
-import { requireAnyEditPermission, requireAnyViewPermission, requireEditPermission } from "@/lib/auth/require-permission";
+import { requireAnyEditPermission, requireAnyViewPermission, requireEditPermission, requireViewPermission } from "@/lib/auth/require-permission";
 import { PARTNEREK } from "@/lib/fuvarozas/import/partnerek";
 import { ceglNevKanonikusan, normalizaltCegKulcs } from "@/lib/fuvarozas/fuvar-constants";
 import { kanonikusMegrendeloNev } from "@/lib/fuvarozas/megrendelo-nev";
@@ -72,6 +72,7 @@ const FUVAR_ROW_COLUMNS = `
 `;
 
 export async function getFuvarok(tipus: FuvarTipus): Promise<FuvarRow[]> {
+  await requireAnyViewPermission(["fuvarozas", "attekintes", "fuvarozas_sajat"]);
   // A "sajat" tipus mögött (megjelenítve: "Bér fuvarok") a megbízás beérkezési
   // dátuma a fő rendezési szempont — a "fuvar_megbizasok." előtag azért kell,
   // mert az erkezett_datum alias a select-listában már formázott szöveg, a
@@ -101,6 +102,7 @@ export async function getFuvarok(tipus: FuvarTipus): Promise<FuvarRow[]> {
  * dátuma) még nem múlt el.
  */
 export async function getFolyamatbanSajatFuvarok(): Promise<FuvarRow[]> {
+  await requireViewPermission("fuvarozas");
   return query<FuvarRow>(
     `select ${FUVAR_ROW_COLUMNS}
      from fuvar_megbizasok
@@ -120,6 +122,7 @@ export async function getFolyamatbanSajatFuvarok(): Promise<FuvarRow[]> {
  * célú szállítás).
  */
 export async function getFolyamatbanValodiSajatFuvarok(): Promise<FuvarRow[]> {
+  await requireViewPermission("fuvarozas");
   return query<FuvarRow>(
     `select ${FUVAR_ROW_COLUMNS}
      from fuvar_megbizasok
@@ -144,6 +147,7 @@ export async function getFolyamatbanValodiSajatFuvarok(): Promise<FuvarRow[]> {
  * mutatja, így a kettő nem ugyanazt látta.
  */
 export async function getSajatFuvarokErinteshez(kezdetNapISO: string): Promise<FuvarErintesSor[]> {
+  await requireViewPermission("fuvarozas");
   return query<FuvarErintesSor>(
     `select id::text, tipus, jarmu, felrako, lerako,
        to_char(datum, 'YYYY-MM-DD') as datum,
@@ -205,6 +209,7 @@ const CSUSZO_NYITOTT_VAGY_AZNAP_KESZ_SQL = `(not teljesitve
  * GPS lap mai nézetéhez — lásd CSUSZO_NYITOTT_VAGY_AZNAP_KESZ_SQL).
  */
 export async function getMaiSajatFuvarok(nap?: string, csuszokIs = false): Promise<MaiFuvarSor[]> {
+  await requireAnyViewPermission(["fuvarozas", "elszamolas", "attekintes", "fuvarozas_sajat"]);
   return query<MaiFuvarSor>(
     `select
        id::text, megrendelo, felrako, lerako, idopont,
@@ -243,6 +248,7 @@ export async function getMaiSajatFuvarok(nap?: string, csuszokIs = false): Promi
  * fuvarok" fül) tisztázásához.
  */
 export async function getMaiValodiSajatFuvarok(nap?: string, csuszokIs = false): Promise<MaiFuvarSor[]> {
+  await requireAnyViewPermission(["fuvarozas", "elszamolas", "attekintes", "fuvarozas_sajat"]);
   return query<MaiFuvarSor>(
     `select
        id::text, megrendelo, felrako, lerako, idopont,
@@ -280,6 +286,7 @@ export async function getMaiValodiSajatFuvarok(nap?: string, csuszokIs = false):
  * városnév kell, geokódolás/útvonalszámítás nélkül.
  */
 export async function getFuvarokIdoszakban(kezdetNapISO: string, vegNapISO: string): Promise<(MaiFuvarSor & { tipus: FuvarTipus })[]> {
+  await requireViewPermission("fuvarozas");
   return query<MaiFuvarSor & { tipus: FuvarTipus }>(
     `select
        id::text, tipus, megrendelo, felrako, lerako, idopont,
@@ -302,6 +309,7 @@ export async function getFuvarokIdoszakban(kezdetNapISO: string, vegNapISO: stri
 
 /** A PDF-ből előkészített, még jóvá nem hagyott fuvarok — típustól függetlenül. */
 export async function getElokeszitettFuvarok(): Promise<FuvarRow[]> {
+  await requireViewPermission("fuvarozas");
   return query<FuvarRow>(
     `select ${FUVAR_ROW_COLUMNS}
      from fuvar_megbizasok
@@ -560,6 +568,7 @@ export async function getMegalloAllapotok(fuvarIds: string[]): Promise<
     varakozas_vege: Date | null;
   }[]
 > {
+  await requireAnyViewPermission(["fuvarozas", "elszamolas", "attekintes", "fuvarozas_sajat"]);
   if (fuvarIds.length === 0) return [];
   // Nem csak a kész sorok: a várakozás-jelölés és a "Megérkeztem" kész
   // megálló nélkül is létezik — a GPS lap táblázata mindkettőt mutatja.
@@ -661,6 +670,7 @@ export async function visszaallitFuvarArchivbol(id: string): Promise<FuvarHely |
  * ezek helyette az Archív fülön (getArchivFuvarok) jelennek meg.
  */
 export async function getSzamlaPostaFuvarok(): Promise<FuvarRow[]> {
+  await requireAnyViewPermission(["fuvarozas", "posta"]);
   const rows = await query<FuvarRow>(
     `select ${FUVAR_ROW_COLUMNS}
      from fuvar_megbizasok
@@ -678,6 +688,7 @@ export async function getSzamlaPostaFuvarok(): Promise<FuvarRow[]> {
  * a legutóbbi fuvarján rögzített cím. Null, ha egyik sem ismert.
  */
 export async function getMegbizoCime(megrendelo: string | null | undefined): Promise<string | null> {
+  await requireAnyViewPermission(["fuvarozas", "posta"]);
   const nev = megrendelo?.trim();
   if (!nev) return null;
   const kulcs = normalizaltCegKulcs(ceglNevKanonikusan(nev));
@@ -744,6 +755,7 @@ export type PapirraVaroFuvar = {
  * hazaért kocsi fuvarjait egy listából lehet kipipálni.
  */
 export async function getPapirraVaroFuvarok(): Promise<PapirraVaroFuvar[]> {
+  await requireViewPermission("fuvarozas");
   return query<PapirraVaroFuvar>(
     `select id::text, megrendelo, felrako, lerako, jarmu, sofor,
        to_char(coalesce(lerakas_datum, datum), 'YYYY-MM-DD') as datum
@@ -767,6 +779,7 @@ export async function getPapirraVaroFuvarok(): Promise<PapirraVaroFuvar[]> {
  * csoportba kerülnek.
  */
 export async function getArchivFuvarok(): Promise<FuvarRow[]> {
+  await requireViewPermission("fuvarozas");
   return query<FuvarRow>(
     `select ${FUVAR_ROW_COLUMNS}
      from fuvar_megbizasok
@@ -787,6 +800,7 @@ export async function getArchivFuvarok(): Promise<FuvarRow[]> {
  * kimutatásban.
  */
 export async function getKimutatasJarmuFuvarok(): Promise<KimutatasJarmuSor[]> {
+  await requireViewPermission("fuvarozas");
   return query<KimutatasJarmuSor>(
     `select id::text, tipus,
        to_char(datum, 'YYYY-MM-DD') as datum,
@@ -810,6 +824,7 @@ export async function getKimutatasJarmuFuvarok(): Promise<KimutatasJarmuSor[]> {
  * és az átfedés-vizsgálatot, mert a "jarmu" mező szabad szöveg.
  */
 export async function getAktivFuvarokUtkozeshez(): Promise<UtkozesJelolt[]> {
+  await requireViewPermission("fuvarozas");
   return query<UtkozesJelolt>(
     `select id::text, jarmu, sofor,
        to_char(datum, 'YYYY-MM-DD') as datum,
@@ -1005,6 +1020,7 @@ export async function setFuvarSzamlaSzam(id: string, szamlaSzam: string | null) 
  * rendelkezésre áll, ne kérje be újra").
  */
 export async function getPostazasiCimJavaslat(megrendelo: string): Promise<string | null> {
+  await requireViewPermission("fuvarozas");
   if (!megrendelo.trim()) return null;
   // A "megrendelo" mezőt a Drive-automatika tölti ki, dokumentumonként
   // újra kiolvasva a partner nevét — ugyanaz a cég két megbízáson akár

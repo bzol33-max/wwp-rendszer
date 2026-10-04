@@ -16,6 +16,7 @@
 // nem írják felül egymást — a sofőr megerősítése mindig erősebb bizonyíték,
 // a GPS pedig akkor is ad adatot, ha a sofőr nem jelölt semmit.
 
+import { requireEditPermission } from "@/lib/auth/require-permission";
 import { query } from "@/lib/db";
 
 export type GpsErintes = {
@@ -39,10 +40,12 @@ export type GpsErintes = {
  * ablakú, rosszabb újraszámolás, ami felülírhatná. A sofőr kézi jelölését
  * (kesz/kesz_at/kesz_by) nem érinti.
  *
- * Megfigyelés-naplózás, nem felhasználói művelet: nincs jogosultság-ellenőrzés,
- * mert kizárólag gépi adatot ír, felhasználói bemenet nélkül.
+ * Megfigyelés-naplózás, nem felhasználói művelet — de mivel "use server"
+ * fájlban van, kívülről is hívható akció: a jogosultság-ellenőrzés ezért kell
+ * (audit 2026-10-04). Az ütemező rendszerjogon (futtatRendszerkent) átmegy.
  */
 export async function rogzitGpsErinteseket(erintesek: GpsErintes[]): Promise<void> {
+  await requireEditPermission("fuvarozas");
   if (erintesek.length === 0) return;
   await query(
     `insert into fuvar_megallo_allapot (fuvar_id, megallo_index, gps_erkezes, gps_tavozas)

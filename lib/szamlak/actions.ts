@@ -4,7 +4,7 @@
 // lib/fuvarozas/megbizasok.ts mintáját. Típusok: szamla-constants.ts.
 
 import { query } from "@/lib/db";
-import { requireEditPermission } from "@/lib/auth/require-permission";
+import { requireAnyViewPermission, requireEditPermission, requireViewPermission } from "@/lib/auth/require-permission";
 import { futtatSzamlaSzinkron, type PollEredmeny } from "./poll";
 import type {
   KeresesJavaslatok,
@@ -86,6 +86,7 @@ export type SzamlaListaSzuro = {
  * sztornózott számla-párok (lib/szamlak/sztorno.ts) ki vannak zárva.
  */
 export async function getSzamlaLista(szuro: SzamlaListaSzuro): Promise<SzamlaRow[]> {
+  await requireAnyViewPermission(["szamlak", "attekintes", "fuvarozas", "elszamolas"]);
   const feltetelek: string[] = ["not sztorno", "not sztornozva"];
   const parameterek: unknown[] = [];
 
@@ -155,6 +156,7 @@ export type SzamlaFejlecSor = {
 
 /** A Számlák oldal felső 3 csempéjéhez (Nyitott / Lejárt / 7 napon belül esedékes), pénznemenként. */
 export async function getSzamlaFejlec(): Promise<SzamlaFejlecSor[]> {
+  await requireViewPermission("szamlak");
   return query<SzamlaFejlecSor>(
     `select
        penznem,
@@ -183,6 +185,7 @@ export type SzamlaTeendok = {
  * kétoszlopos Teendők blokkhoz — a sztornó-párok itt is ki vannak zárva.
  */
 export async function getSzamlaTeendok(kategoria: SzamlaKategoria): Promise<SzamlaTeendok> {
+  await requireViewPermission("szamlak");
   const [kovetkezo, lejart] = await Promise.all([
     query<SzamlaRow>(
       `select ${SZAMLA_COLUMNS}
@@ -214,6 +217,7 @@ export async function getSzamlaTeendok(kategoria: SzamlaKategoria): Promise<Szam
  * "Számlák" csempéjéhez és a hozzá tartozó részletes listához.
  */
 export async function getOsszesLejartSzamla(): Promise<SzamlaRow[]> {
+  await requireViewPermission("szamlak");
   return query<SzamlaRow>(
     `select ${SZAMLA_COLUMNS}
      from szamla
@@ -228,6 +232,7 @@ export async function getOsszesLejartSzamla(): Promise<SzamlaRow[]> {
 
 /** Kategóriánkénti (Raklapnál alkategóriánkénti) kintlévőség-összesítő, pénznemenként külön — a sztornó-párok nélkül. */
 export async function getSzamlaOsszesito(): Promise<SzamlaOsszesitoSor[]> {
+  await requireViewPermission("szamlak");
   return query<SzamlaOsszesitoSor>(
     `select
        kategoria, alkategoria, penznem,
@@ -253,6 +258,7 @@ function budapestHonap(): number {
  * hónapokra (nincs kitalált előrejelzés a jövőbeli hónapokra).
  */
 export async function getSzamlaHaviBevetel(): Promise<SzamlaHaviBevetelSor[]> {
+  await requireViewPermission("szamlak");
   const sorok = await query<{ honap: number; kategoria: SzamlaKategoria; osszeg: number }>(
     `select
        extract(month from kiallitas_datum)::int as honap,
@@ -283,6 +289,7 @@ export async function getSzamlaHaviBevetel(): Promise<SzamlaHaviBevetelSor[]> {
 
 /** A diagram alatti statisztika-sorhoz és a Nyitott csempe "legnagyobb vevő" sorához — csak HUF adatok. */
 export async function getSzamlaKiemeltStatisztika(): Promise<SzamlaKiemeltStatisztika> {
+  await requireViewPermission("szamlak");
   const legnagyobbVevo = await query<{ vevo_nev: string; osszeg: number }>(
     `select vevo_nev, sum(${HATRALEK_SQL})::float8 as osszeg
      from szamla
@@ -337,6 +344,7 @@ export type SzamlaKifizetettOsszesitoSor = {
 
 /** A "Kifizetve" összecsukott szekció fejlécéhez — darabszám és összeg pénznemenként. */
 export async function getKifizetettOsszesito(): Promise<SzamlaKifizetettOsszesitoSor[]> {
+  await requireViewPermission("szamlak");
   return query<SzamlaKifizetettOsszesitoSor>(
     `select penznem, sum(${BRUTTO_SQL})::float8 as osszeg, count(*)::int as darab
      from szamla
@@ -383,6 +391,7 @@ export type SzamlaAllapot = {
 
 /** A Kezdőlap/Számlák fejlécéhez: mikor futott le legutóbb a szinkron, hol tart — minden ismert előtagra. */
 export async function getSzamlaSzinkronAllapot(): Promise<SzamlaAllapot> {
+  await requireViewPermission("szamlak");
   const elotagok = await query<SzamlaElotagAllapot>(
     `select elotag, utolso_futas_at::text, ev, utolso_sorszam from szamlak_poll_allapot order by elotag`
   );
@@ -411,6 +420,7 @@ export async function getSzamlaSzinkronAllapot(): Promise<SzamlaAllapot> {
  * ráillő vevők a nyitott tételeikkel. Két karakter alatt nem keres.
  */
 export async function keresJavaslatok(q: string): Promise<KeresesJavaslatok> {
+  await requireViewPermission("szamlak");
   const minta = q.trim();
   if (minta.length < 2) return { szamlak: [], vevok: [], szamlaOsszes: 0 };
   const parameter = [`%${minta}%`];

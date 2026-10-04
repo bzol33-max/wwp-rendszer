@@ -1,5 +1,6 @@
 "use server";
 
+import { requireEditPermission, requireViewPermission } from "@/lib/auth/require-permission";
 import { query } from "@/lib/db";
 import type { KapcsolatRow, AddKapcsolatInput } from "@/lib/fuvarozas/kapcsolatok-constants";
 
@@ -8,6 +9,7 @@ import type { KapcsolatRow, AddKapcsolatInput } from "@/lib/fuvarozas/kapcsolato
 // Ez a fájl csak a UI-ból használt CRUD-műveleteket tartalmazza.
 
 export async function getKapcsolatok(): Promise<KapcsolatRow[]> {
+  await requireViewPermission("fuvarozas");
   return query<KapcsolatRow>(
     `select id::text, ceg, kapcsolattarto, telefon, email, megjegyzes, forras
      from fuvar_kapcsolatok
@@ -16,6 +18,7 @@ export async function getKapcsolatok(): Promise<KapcsolatRow[]> {
 }
 
 export async function addKapcsolat(input: AddKapcsolatInput) {
+  await requireEditPermission("fuvarozas");
   await query(
     `insert into fuvar_kapcsolatok (ceg, kapcsolattarto, telefon, email, megjegyzes, forras)
      values ($1, $2, $3, $4, $5, $6)`,
@@ -31,5 +34,6 @@ export async function addKapcsolat(input: AddKapcsolatInput) {
 }
 
 export async function deleteKapcsolat(id: string) {
+  await requireEditPermission("fuvarozas");
   await query(`delete from fuvar_kapcsolatok where id = $1`, [id]);
 }
