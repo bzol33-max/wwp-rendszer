@@ -9,6 +9,7 @@ import { SITES } from "@/lib/nav";
 import { MODULES } from "@/lib/modules";
 import { regiFuvarozasAktiv } from "@/lib/fuvarozas2/flag";
 import { requireSession } from "@/lib/auth/dal";
+import { getAttekintesProfil } from "@/lib/attekintes/tabs";
 import type { ModuleKey } from "@/lib/auth/permissions";
 
 export default async function Home() {
@@ -22,7 +23,8 @@ export default async function Home() {
   // hozzáférése van — mobilon ez az ő kezdőképernyője, nem az Info.
   const isMobileDevice = (await cookies()).get("wwp_device")?.value === "mobile";
   if (isMobileDevice && session.can("attekintes").view) {
-    redirect("/attekintes");
+    // Szabinának a Posta a kezdőlapja (2026-10-04).
+    redirect(getAttekintesProfil(session.name) === "szabina" ? "/attekintes/posta" : "/attekintes");
   }
 
   const visibleModules = MODULES.filter(
@@ -36,7 +38,7 @@ export default async function Home() {
   if (visibleModules.length === 0) {
     // Irodai (elszámolás) fiók — Szabina: az új mobil Posta, ahol csak a
     // kiszámlázott fuvarok látszanak (a régi /posta a számlázatlanokat is mutatta).
-    if (session.can("elszamolas").view) redirect("/m/posta");
+    if (session.can("elszamolas").view) redirect(session.can("attekintes").view ? "/attekintes/posta" : "/m/posta");
     if (session.can("erkezes").view) redirect("/erkezes");
     if (session.can("felvasarlas_mobil").view) redirect("/felvasarlas");
     // Ha egyik nézet sem elérhető, kijelentkeztess (nincs hozzáférés)

@@ -16,10 +16,10 @@ const TABS_BY_PROFIL: Record<
     { href: "/attekintes/fuvar", label: "Fuvar", icon: Truck },
     { href: "/attekintes/keszlet", label: "Készlet", icon: Package },
   ],
+  // Szabina munkájához két lap kell (2026-10-04): a fuvarok és a postázás.
   szabina: [
-    { href: "/attekintes", label: "Nyíregyháza", icon: Building2 },
-    { href: "/m/posta", label: "Posta", icon: Mail },
     { href: "/attekintes/fuvar", label: "Fuvar", icon: Truck },
+    { href: "/attekintes/posta", label: "Posta", icon: Mail },
   ],
 };
 

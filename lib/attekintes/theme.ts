@@ -3,7 +3,7 @@ import { normalizeNev } from "@/lib/attekintes/nev";
 
 // Az Áttekintés (/attekintes) színsémái — a felhasználók a bemutatott 20
 // mockup közül választottak (BudahaziZoltan: #14 Menta-antracit,
-// BudahaziSzabina: #9 Óceánturkiz) — kizárólag az /attekintes szekcióra
+// BudahaziSzabina: #9 Óceánturkiz, 2026-10-04-től ő is a Menta-antracitot) — kizárólag az /attekintes szekcióra
 // korlátozva, CSS egyéni tulajdonságokként a layout gyökerén
 // (app/attekintes/layout.tsx). Szándékosan NEM a globals.css megosztott
 // design tokenjeit (--card, --muted, stb.) írja felül, hogy ne hasson ki
@@ -23,24 +23,13 @@ const MENTA_ANTRACIT = {
   "--at-accent": "#1f9c73",
 } as CSSProperties;
 
-const OCEANTURKIZ = {
-  "--at-bg": "#eaf2f1",
-  "--at-card": "#ffffff",
-  "--at-tile": "#dfeceb",
-  "--at-border": "#d3e2e0",
-  "--at-text": "#0f2422",
-  "--at-muted": "#597370",
-  "--at-positive": "#12706a",
-  "--at-negative": "#b0402f",
-  "--at-accent": "#12706a",
-} as CSSProperties;
-
 // Felhasználónkénti színséma-választás — a bejelentkezett felhasználó
 // megjelenítendő neve (session.name) alapján. Akinek nincs itt
 // bejegyzése, az alapértelmezett (Menta-antracit) sémát kapja.
 const THEME_BY_USER: Record<string, CSSProperties> = {
   [normalizeNev("Budaházi Zoltán")]: MENTA_ANTRACIT,
-  [normalizeNev("Budaházi Szabina")]: OCEANTURKIZ,
+  // Szabina 2026-10-04-től szintén a Menta-antracitot kapja (a kérése szerint).
+  [normalizeNev("Budaházi Szabina")]: MENTA_ANTRACIT,
 };
 
 export function getAttekintesTheme(userName: string): CSSProperties {

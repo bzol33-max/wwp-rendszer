@@ -1,3 +1,6 @@
+import { redirect } from "next/navigation";
+import { requireSession } from "@/lib/auth/dal";
+import { getAttekintesProfil } from "@/lib/attekintes/tabs";
 import {
   getFelvasarlasOsszefoglalo,
   getHaviFelvasarlasOsszefoglalo,
@@ -31,6 +34,9 @@ function formatMaiDatum() {
 }
 
 export default async function NyiregyhazaPage() {
+  // Szabina fülsávjában nincs Nyíregyháza lap — neki a Posta a kezdőlap.
+  const session = await requireSession();
+  if (getAttekintesProfil(session.name) === "szabina") redirect("/attekintes/posta");
   const [osszefoglalo, kiadasok, havi, haviTipusok, penz] = await Promise.all([
     getFelvasarlasOsszefoglalo(),
     getMaiKiadasok(),
