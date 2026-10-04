@@ -22,6 +22,14 @@ const nextConfig: NextConfig = {
   // szándékosan még nincs: a Leaflet-csempék és az inline stílusok miatt
   // előbb Report-Only módban kellene kipróbálni.
   poweredByHeader: false,
+  // A régi Posta-oldalak (2026-10-04-én kivezetve) könyvjelzői, kezdőképernyő-
+  // ikonjai az új /m/posta-ra vigyenek, ne 404-re (Szabina telefonja).
+  async redirects() {
+    return [
+      { source: "/attekintes/posta", destination: "/m/posta", permanent: false },
+      { source: "/posta", destination: "/m/posta", permanent: false },
+    ];
+  },
   async headers() {
     return [
       {
