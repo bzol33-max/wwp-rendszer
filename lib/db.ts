@@ -1,4 +1,10 @@
-import { Pool } from "pg";
+import { Pool, types } from "pg";
+
+// A numeric (pénz) oszlopok számként jöjjenek, ne szövegként: a fuvardíj
+// 2026-10-04-től numeric(12,2) (020-as migráció), és a kód eddig is mindenhol
+// Number()-rel olvasta a numeric értékeket. Ahol szöveg kell, a lekérdezés
+// kifejezetten ::text-re alakít — azt ez nem érinti.
+types.setTypeParser(1700, (v) => (v === null ? null : parseFloat(v)));
 
 declare global {
   // eslint-disable-next-line no-var

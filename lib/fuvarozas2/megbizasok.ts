@@ -410,10 +410,10 @@ const BER_SQL = `
   from fuvar_megbizasok m left join fuvar_elszamolas e on e.megbizas_id = m.id
   where m.id = $1 and m.jelleg = 'ber' and m.torolt_at is null`;
 
-/** A fuvardíj és a költség oszlop egész szám (integer): kerekítve, hibás/üres → null. */
+/** A fuvardíj és a költség két tizedessel tárolódik (020-as migráció) — az EUR-centek megmaradnak. Hibás/üres → null. */
 function egesz(s: string): number | null {
   const n = berSzam(s);
-  return typeof n === "number" ? Math.round(n) : null;
+  return typeof n === "number" ? Math.round(n * 100) / 100 : null;
 }
 
 export async function getBerFuvarAdat(id: string): Promise<BerFuvarAdat | null> {

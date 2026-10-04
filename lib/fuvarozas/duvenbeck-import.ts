@@ -195,7 +195,7 @@ export async function mentDuvenbeckDokumentumot(
     // A fuvardij oszlop egész szám — a Duvenbeck EUR-összegei a gyakorlatban
     // kerek értékek ("500,00"), de a kerekítés itt explicit, hogy egy
     // tizedesjegyes ár se dobjon adatbázis-hibát a cron-futásban.
-    fuvardij: dok.fuvardij == null ? null : Math.round(dok.fuvardij),
+    fuvardij: dok.fuvardij == null ? null : Math.round(dok.fuvardij * 100) / 100,
     penznem: dok.penznem,
     suly: dok.sulyKg ? `${dok.sulyKg} kg` : null,
     sofor: nyersRendszam,
