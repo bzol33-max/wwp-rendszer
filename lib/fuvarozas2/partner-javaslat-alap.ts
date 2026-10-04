@@ -46,8 +46,12 @@ export function sajatCimE(cim: string): boolean {
   return /szakoly|balkany/.test(k) || /well\s*-?\s*worn/.test(k) || NYIREGYHAZI_TELEP.some((r) => r.test(k));
 }
 
-/** A nyíregyházi telephely címének mintái (ékezet nélkül, kisbetűvel). */
-const NYIREGYHAZI_TELEP: RegExp[] = [];
+/**
+ * A nyíregyházi telephely (Tünde út 20/A) mintái, ékezet nélkül, kisbetűvel.
+ * Szándékosan a házszámmal együtt: ugyanabban az utcában, a Tünde út 2.-n
+ * megbízó (Dunapack) is van.
+ */
+const NYIREGYHAZI_TELEP: RegExp[] = [/tunde\s*(?:ut|u\.?|utca)\s*20\s*\/?\s*a?\b/];
 
 /** Hihető postacím: van benne település-szerű szó és házszám vagy irányítószám, nem a miénk. */
 export function hihetoCim(cim: string): boolean {

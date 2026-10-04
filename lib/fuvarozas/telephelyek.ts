@@ -17,6 +17,7 @@ export type SajatTelephely = {
 export const SAJAT_TELEPHELYEK: SajatTelephely[] = [
   { nev: "Szakoly (telephely)", cim: "Szakoly, Rákóczi utca 26" },
   { nev: "Balkány (telephely)", cim: "Balkány, Bocskai utca 11" },
+  { nev: "Nyíregyháza (telephely)", cim: "Nyíregyháza, Tünde út 20/A" },
   // Külön parkolóhely Szakolyban (nem a telephely) — ide szokott állni Gergő kamionja.
   { nev: "Szakoly (parkoló)", cim: "Szakoly, Létai utca" },
 ];
