@@ -37,6 +37,7 @@ import { SAJAT_JARMUVEK, type JarmuSzin } from "@/lib/fuvarozas/vehicles";
 import type { MegalloReszlet } from "@/lib/fuvarozas/sofor-adatok";
 import type { Allapot } from "@/lib/fuvarozas/allapot";
 import { tukorSorok, type TukorSor } from "@/lib/fuvarozas2/ma-tukor";
+import { napiSorrend } from "@/lib/fuvarozas2/napi-sorrend";
 
 export type CsempeSzin = "normal" | "amber" | "red" | "mint";
 export type Csempe = { kulcs: string; cimke: string; ertek: string; also: string | null; szin: CsempeSzin; href: string | null };
@@ -594,7 +595,11 @@ export async function getMaVaszon(): Promise<MaVaszon> {
     const sajat = sorok.filter((s) => s.jarmu_kod === j.kod && s.allapot !== "ellenorzesre_var");
     // Ma: a mai napra eső, és a korábbról csúszó, még folyamatban lévő fuvarok.
     const maiak = sajat.filter((s) => aznap(s, ma) || ((s.lerakas_nap ?? "") < ma && s.allapot === "folyamatban"));
-    const holnapiak = sajat.filter((s) => aznap(s, holnap) && !maiak.includes(s));
+    // A holnapi fuvarok a menet sorrendjében, nem a rögzítésében (napi-sorrend.ts).
+    const holnapiak = napiSorrend(
+      sajat.filter((s) => aznap(s, holnap) && !maiak.includes(s)),
+      (s) => ({ id: s.id, felrakasNap: s.felrakas_nap, lerakasNap: s.lerakas_nap, felrako: s.felrako, lerako: s.lerako })
+    );
     const elo = becenev ? idovonal?.jarmuvek.find((x) => x.sofor === becenev) : undefined;
 
     // Vezetési idő becslés: 4,5 óra vezetés után kötelező 45 perc szünet.

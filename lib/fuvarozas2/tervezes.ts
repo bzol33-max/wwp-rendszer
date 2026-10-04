@@ -19,6 +19,7 @@ import { requireAnyViewPermission } from "@/lib/auth/require-permission";
 import { geokodolCachelve } from "@/lib/fuvarozas/erintes-felismeres";
 import { SAJAT_TELEPHELYEK } from "@/lib/fuvarozas/telephelyek";
 import { varosNev } from "@/lib/fuvarozas/varos";
+import { napiSorrend } from "@/lib/fuvarozas2/napi-sorrend";
 import type { Allapot } from "@/lib/fuvarozas/allapot";
 
 // A "use server" fájl csak async függvényt exportálhat — ezek belső konstansok.
@@ -156,7 +157,9 @@ export async function getTervHet(hetKezdet?: string): Promise<TervHet> {
   let ures = 0;
 
   for (const j of jarmuvek) {
-    const sajat = sorok.filter((s) => s.jarmu_kod === j.kod);
+    // A menet sorrendjében (napi-sorrend.ts): így a több napra nyúló fuvar
+    // a nap végére kerül, és az üres nap „itt áll”-ja a valóban utolsó lerakó.
+    const sajat = napiSorrend(sorok.filter((s) => s.jarmu_kod === j.kod), (s) => s);
     const cellak: TervCella[] = [];
     let utolsoHely = telephely;
     let uresOta = 0;
