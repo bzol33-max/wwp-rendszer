@@ -269,12 +269,18 @@ function SzamlaLista({
   const [loading, setLoading] = useState(true);
   const [nyitottCegek, setNyitottCegek] = useState<Set<string>>(new Set());
 
+  // Szűrőváltáskor csak a legutóbbi kérés válasza kerülhet a listába (audit FE-3).
+  const keresRef = useRef(0);
   const load = useCallback(async () => {
+    const sajat = ++keresRef.current;
     setLoading(true);
     try {
-      setRows(await getSzamlaLista(szuro));
+      const uj = await getSzamlaLista(szuro);
+      if (sajat === keresRef.current) setRows(uj);
+    } catch (err) {
+      console.error("[szamlak] lista betöltése:", err);
     } finally {
-      setLoading(false);
+      if (sajat === keresRef.current) setLoading(false);
     }
   }, [szuro]);
 

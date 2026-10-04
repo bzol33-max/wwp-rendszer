@@ -43,20 +43,25 @@ async function getActiveEmployees(): Promise<Employee[]> {
 }
 
 async function isMonthFullyPaid(year: number, month: number): Promise<boolean> {
-  const employees = await getActiveEmployees();
+  // Két lekérdezés a hónap összes sorára, dolgozónkénti körök helyett (audit PERF-2).
+  const [employees, heti, napiHavi] = await Promise.all([
+    getActiveEmployees(),
+    query<{ employee_id: string; paid: boolean }>(
+      `select employee_id::text, paid from alkalmazott_heti_ber where year = $1 and month = $2`,
+      [year, month]
+    ),
+    query<{ employee_id: string; paid: boolean }>(
+      `select employee_id::text, paid from alkalmazott_napi_havi_ber where year = $1 and month = $2`,
+      [year, month]
+    ),
+  ]);
   for (const e of employees) {
     const mode = wageMode(e);
     if (mode === "heti") {
-      const rows = await query<{ paid: boolean }>(
-        `select paid from alkalmazott_heti_ber where employee_id = $1 and year = $2 and month = $3`,
-        [e.id, year, month]
-      );
+      const rows = heti.filter((r) => r.employee_id === String(e.id));
       if (rows.length < 4 || rows.some((r) => !r.paid)) return false;
     } else if (mode === "napi" || mode === "havi") {
-      const rows = await query<{ paid: boolean }>(
-        `select paid from alkalmazott_napi_havi_ber where employee_id = $1 and year = $2 and month = $3`,
-        [e.id, year, month]
-      );
+      const rows = napiHavi.filter((r) => r.employee_id === String(e.id));
       if (rows.length === 0 || !rows[0].paid) return false;
     }
   }
@@ -106,26 +111,38 @@ async function checkAndAdvancePointer() {
 // alapértelmezett sor(oka)t — így a felület mindig stabil id-kkal
 // dolgozhat, nincs külön "hozz létre, ha nincs" ág a mentéseknél.
 async function ensureMonthRows(year: number, month: number) {
+  // Minden oldalbetöltéskor fut — dolgozónként 1–4 külön insert helyett két
+  // kötegelt insert (audit PERF-2). A bérmód-döntés marad a wageMode-ban.
   const employees = await getActiveEmployees();
+  const hetiIdk: string[] = [];
+  const hetiOsszegek: (number | null)[] = [];
+  const napiHaviIdk: string[] = [];
   for (const e of employees) {
     const mode = wageMode(e);
     if (mode === "heti") {
-      for (let week = 1; week <= 4; week++) {
-        await query(
-          `insert into alkalmazott_heti_ber (employee_id, year, month, week_index, amount)
-           values ($1, $2, $3, $4, $5)
-           on conflict (employee_id, year, month, week_index) do nothing`,
-          [e.id, year, month, week, e.weekly_wage]
-        );
-      }
+      hetiIdk.push(String(e.id));
+      hetiOsszegek.push(e.weekly_wage);
     } else if (mode === "napi" || mode === "havi") {
-      await query(
-        `insert into alkalmazott_napi_havi_ber (employee_id, year, month)
-         values ($1, $2, $3)
-         on conflict (employee_id, year, month) do nothing`,
-        [e.id, year, month]
-      );
+      napiHaviIdk.push(String(e.id));
     }
+  }
+  if (hetiIdk.length > 0) {
+    await query(
+      `insert into alkalmazott_heti_ber (employee_id, year, month, week_index, amount)
+       select d.id, $1, $2, h.week, d.amount
+       from unnest($3::bigint[], $4::integer[]) as d(id, amount)
+       cross join generate_series(1, 4) as h(week)
+       on conflict (employee_id, year, month, week_index) do nothing`,
+      [year, month, hetiIdk, hetiOsszegek]
+    );
+  }
+  if (napiHaviIdk.length > 0) {
+    await query(
+      `insert into alkalmazott_napi_havi_ber (employee_id, year, month)
+       select id, $1, $2 from unnest($3::bigint[]) as id
+       on conflict (employee_id, year, month) do nothing`,
+      [year, month, napiHaviIdk]
+    );
   }
 }
 

@@ -701,11 +701,22 @@ export function GpsStatus() {
   const [aktivKocsi, setAktivKocsi] = useState(0);
   const maiNap = napISO === maiNapISO;
 
+  // Csak a legutóbbi kérés válasza írhat az állapotba: gyors napváltásnál (vagy
+  // ha az 5 perces frissítés közben vált nap) egy későn érkező régi válasz
+  // különben más nap adatát tette a táblázatba (audit FE-3).
+  const keresRef = useRef(0);
   const load = useCallback(async (nap: string) => {
+    const sajat = ++keresRef.current;
+    const friss = () => sajat === keresRef.current;
     // A fogyasztás külön, nem blokkolja a táblázatot (saját hibaüzenete van).
-    getFogyasztas(nap).then(setFogyasztas);
-    getKovetkezoNapokElonezet(3).then(setKovetkezoNapok);
+    getFogyasztas(nap)
+      .then((f) => friss() && setFogyasztas(f))
+      .catch((err) => console.error("[idovonal] fogyasztás:", err));
+    getKovetkezoNapokElonezet(3)
+      .then((k) => friss() && setKovetkezoNapok(k))
+      .catch((err) => console.error("[idovonal] következő napok:", err));
     const res = await getIdovonalak(nap);
+    if (!friss()) return;
     setAdatok(res.jarmuvek);
     setElakadtak(res.elakadtak);
     setBetoltve(Date.now());
@@ -713,7 +724,9 @@ export function GpsStatus() {
 
   useEffect(() => {
     setLoading(true);
-    load(napISO).finally(() => setLoading(false));
+    load(napISO)
+      .catch((err) => console.error("[idovonal] betöltés:", err))
+      .finally(() => setLoading(false));
     // A múltbeli (lezárt) napok adata nem változik — csak a mai napi nézetet frissítjük periodikusan.
     if (napISO !== budapestNapISO()) return;
     const interval = setInterval(() => load(napISO), 5 * 60 * 1000);

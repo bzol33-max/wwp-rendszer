@@ -19,6 +19,9 @@ const tar = new Map<string, Bejegyzes>();
 /** A `kulcs`-hoz tartozó, még érvényes eredmény; ha nincs, az `fn` futtatása és az eredmény tárolása `ervenyesMs` ideig. Sikertelen (elutasított) eredményt nem tárol. */
 export function cachelve<T>(kulcs: string, ervenyesMs: number, fn: () => Promise<T>): Promise<T> {
   const most = Date.now();
+  // A lejárt bejegyzések söprése: a kulcsok naponként újak (idovonal:<nap>),
+  // söprés nélkül a tár a folyamat élettartama alatt korlátlanul nőtt (audit PERF-6).
+  for (const [k, b] of tar) if (b.lejar <= most) tar.delete(k);
   const meglevo = tar.get(kulcs);
   if (meglevo && meglevo.lejar > most) return meglevo.ertek as Promise<T>;
   const ertek = fn();

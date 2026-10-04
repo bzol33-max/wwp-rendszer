@@ -11,7 +11,7 @@
 import { potoldAHianyzoModelleket } from "@/lib/fuvarozas2/modell-szinkron";
 import { potoldRakottKmet } from "@/lib/fuvarozas2/rakott-km";
 import { futtatRendszerkent } from "@/lib/auth/system-context";
-import { egyetlenPeldanyban, ZAR_KULCS } from "@/lib/db";
+import { egyetlenPeldanyban, query, ZAR_KULCS } from "@/lib/db";
 import { frissitsKalkulaciokat, tervezettBerMegbizasok } from "@/lib/fuvarozas2/kalkulacio-tar";
 import { futtatPartnerJavaslatokat } from "@/lib/fuvarozas2/partner-javaslat";
 
@@ -51,6 +51,15 @@ async function tickBelso() {
     if (k.szamolt + k.hibas > 0) console.log(`[kalkulacio-tar] ${k.szamolt} kalkuláció frissítve, ${k.hibas} nem számolható.`);
   } catch (err) {
     console.error("[kalkulacio-tar] váratlan hiba:", err);
+  }
+  // Elavult gyorsítótár- és megfigyelés-sorok takarítása (audit PERF-7/8):
+  // a lejárt külső válaszokat eddig semmi nem törölte, az élő megfigyeléseket
+  // csak a folyamat első használata.
+  try {
+    await query(`delete from kulso_valasz_cache where lejar_at < now() - interval '7 days'`);
+    await query(`delete from fuvar_elo_megfigyeles where idobelyeg < now() - interval '2 days'`);
+  } catch (err) {
+    console.error("[takaritas] váratlan hiba:", err);
   }
   // A partnerek hiányzó adatai (postacím, számlázási e-mail, határidők) — javaslatként.
   try {

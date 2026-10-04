@@ -21,8 +21,9 @@ const FOTO_JPEG_MINOSEG = 0.82;
  * az eredeti megy.
  */
 export async function kicsinyitFotot(fajl: File): Promise<Blob> {
+  let kep: ImageBitmap | null = null;
   try {
-    const kep = await createImageBitmap(fajl);
+    kep = await createImageBitmap(fajl);
     const arany = Math.min(1, FOTO_MAX_OLDAL_PX / Math.max(kep.width, kep.height));
     if (arany === 1 && fajl.size < 1_500_000) return fajl;
     const vaszon = document.createElement("canvas");
@@ -35,6 +36,10 @@ export async function kicsinyitFotot(fajl: File): Promise<Blob> {
     return blob ?? fajl;
   } catch {
     return fajl;
+  } finally {
+    // A dekódolt kép memóriája azonnal felszabadul — tízoldalas sorozatnál
+    // gyenge telefonon ez számít (audit FE-8).
+    kep?.close();
   }
 }
 

@@ -105,7 +105,9 @@ export async function geokodolCachelve(cim: string): Promise<GeocodedAddress | n
     if (!(err instanceof TollCalcError)) {
       console.error("[erintes-felismeres] geokódolási hiba:", err);
     }
-    geokodCache.set(cim, null);
+    // Hibát (hálózat, időkorlát, szolgáltatói hiba) NEM tárolunk: a "nem
+    // található" eredményt a try ág már eltárolta, egy átmeneti hiba miatt
+    // viszont a cím deployig "nincs érintés" maradt volna (audit PERF-5).
     return null;
   }
 }
