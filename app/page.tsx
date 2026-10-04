@@ -37,7 +37,6 @@ export default async function Home() {
     // Irodai (elszámolás) fiók — Szabina: az új mobil Posta, ahol csak a
     // kiszámlázott fuvarok látszanak (a régi /posta a számlázatlanokat is mutatta).
     if (session.can("elszamolas").view) redirect("/m/posta");
-    if (session.can("posta").view) redirect("/posta");
     if (session.can("erkezes").view) redirect("/erkezes");
     if (session.can("felvasarlas_mobil").view) redirect("/felvasarlas");
     // Ha egyik nézet sem elérhető, kijelentkeztess (nincs hozzáférés)
@@ -100,13 +99,13 @@ export default async function Home() {
       </div>
 
       <div className="flex flex-col gap-2">
-        {(session.can("fuvarozas").view || session.can("posta").view) && (
+        {(session.can("fuvarozas").view || session.can("elszamolas").view) && (
           <Link
-            href="/posta"
+            href="/m/posta"
             className="flex items-center gap-2 self-start rounded-md border border-dashed px-3 py-2 text-xs text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
           >
             <Mail className="h-3.5 w-3.5" />
-            Posta nézet (bér fuvarok postázásra várva, csempénként)
+            Posta nézet (kiszámlázott bér fuvarok postázásra várva)
           </Link>
         )}
       </div>

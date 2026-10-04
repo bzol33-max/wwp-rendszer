@@ -41,7 +41,6 @@ export function AppShell({
   // könnyű fejlécet rajzolnak.
   if (
     pathname === "/login" ||
-    pathname === "/posta" ||
     pathname === "/erkezes" ||
     pathname === "/m" ||
     pathname.startsWith("/m/") ||

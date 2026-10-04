@@ -18,7 +18,7 @@ const TABS_BY_PROFIL: Record<
   ],
   szabina: [
     { href: "/attekintes", label: "Nyíregyháza", icon: Building2 },
-    { href: "/attekintes/posta", label: "Posta", icon: Mail },
+    { href: "/m/posta", label: "Posta", icon: Mail },
     { href: "/attekintes/fuvar", label: "Fuvar", icon: Truck },
   ],
 };
