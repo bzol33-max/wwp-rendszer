@@ -61,34 +61,11 @@ export const MODULES: { key: ModuleKey; label: string }[] = [
   { key: "rendszer", label: "Rendszer-egészség (Fuvarozás — figyelők, keretek, hibák)" },
 ];
 
-/** Modulok, amik utólag, opt-in jelleggel lettek bevezetve — ld. resolvePermission. */
-const OPT_IN_MODULES: ModuleKey[] = [
-  "posta",
-  "erkezes",
-  "keszlet_sajat",
-  "attekintes",
-  "felvasarlas_mobil",
-  "fuvarozas_sajat",
-  "elolegek_sajat",
-  "elszamolas",
-  "rendszer",
-];
-
 export type ModulePermission = { view: boolean; edit: boolean };
 export type Permissions = Partial<Record<ModuleKey, ModulePermission>>;
 
-// Hiányzó modulbejegyzés = alapértelmezetten teljes hozzáférés. Az admin
-// felhasználó ettől függetlenül mindig mindent lát/szerkeszthet.
-//
-// Az OPT_IN_MODULES tagjai (pl. "posta", "erkezes") kivételek:
-// ezek utólag bevezetett, szándékosan opt-in jogok (ld. app/posta/page.tsx, app/erkezes/page.tsx), nem a többi modullal
-// egyenrangú, eredettől fogva létező jogosultságok. Ha a default-true
-// szabályt rájuk is alkalmaznánk, minden, a modul bevezetése ELŐTT
-// létrehozott felhasználó (akinek a permissions JSON-ja még nem
-// tartalmazza az adott kulcsot) visszamenőleg megkapná ezt a jogot — az
-// önálló nézeteken keresztül pedig ez felülírná a teljes modulra
-// szándékosan beállított tiltásukat is. Ezért itt hiányzó bejegyzésnél
-// false az alapértelmezés.
+// Az admin felhasználó mindig mindent lát/szerkeszthet. Mindenki más csak
+// azt, amit a permissions JSON-ja kifejezetten megad.
 export function resolvePermission(
   role: string,
   permissions: Permissions | null | undefined,
@@ -96,10 +73,11 @@ export function resolvePermission(
 ): ModulePermission {
   if (role === "admin") return { view: true, edit: true };
   const p = permissions?.[module];
-  if (OPT_IN_MODULES.includes(module)) {
-    return { view: p?.view ?? false, edit: p?.edit ?? false };
-  }
-  return { view: p?.view ?? true, edit: p?.edit ?? true };
+  // 2026-10-04-től MINDEN modulnál hiányzó bejegyzés = nincs hozzáférés
+  // (audit SEC-12) — a meglévő felhasználók jogait a 021-es migráció
+  // kifejezetten beírta, így ez senkinek nem vett el semmit; egy jövőbeli
+  // modul viszont már nem nyílik meg magától mindenkinek.
+  return { view: p?.view ?? false, edit: p?.edit ?? false };
 }
 
 export function isAdmin(role: string | undefined | null): boolean {

@@ -28,8 +28,11 @@ for (const m of ["elszamolas", "rendszer", "fuvarozas_sajat", "posta", "attekint
   eq(`${m}: hiányzó bejegyzés → nem látja`, lat({}, m), false);
   eq(`${m}: null permissions → nem látja`, lat(null, m), false);
 }
-// A régi, teljes értékű modulok maradnak default-true (ezt NEM változtattuk).
-eq("fuvarozas: hiányzó bejegyzés → látja (régi szabály)", lat({}, "fuvarozas"), true);
+// 2026-10-04-től (audit SEC-12) a régi modulok is: hiányzó bejegyzés = nincs
+// hozzáférés; a meglévő felhasználók jogait a 021-es migráció kifejezetten beírta.
+eq("fuvarozas: hiányzó bejegyzés → nem látja", lat({}, "fuvarozas"), false);
+eq("keszlet: null permissions → nem látja", lat(null, "keszlet"), false);
+eq("fuvarozas: kifejezett jog → látja", lat({ fuvarozas: { view: true, edit: false } }, "fuvarozas"), true);
 // Admin mindent.
 eq("admin: elszamolas", resolvePermission("admin", null, "elszamolas"), { view: true, edit: true });
 eq("admin: rendszer", resolvePermission("admin", {}, "rendszer"), { view: true, edit: true });

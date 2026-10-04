@@ -120,7 +120,8 @@ function RoleValaszto({
 
 function emptyPermissions(): Permissions {
   const p: Permissions = {};
-  for (const m of MODULES) p[m.key] = { view: true, edit: true };
+  // Új felhasználó alapból semmit nem lát — a jogot kifejezetten kell adni (audit SEC-12).
+  for (const m of MODULES) p[m.key] = { view: false, edit: false };
   return p;
 }
 
@@ -180,7 +181,7 @@ function PermissionGrid({
         <span className="text-muted-foreground">Látja</span>
         <span className="text-muted-foreground">Szerkesztheti</span>
         {MODULES.map((mod) => {
-          const p = permissions[mod.key] ?? { view: true, edit: true };
+          const p = permissions[mod.key] ?? { view: false, edit: false };
           return (
             <div key={mod.key} className="contents">
               <span className="py-1">{mod.label}</span>
