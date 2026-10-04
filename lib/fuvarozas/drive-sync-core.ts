@@ -33,7 +33,7 @@ import {
   setFuvarFizetesiHatarido,
   setFuvarPostazasiCim,
 } from "@/lib/fuvarozas/megbizasok";
-import { normalizaltCegKulcs, sajatCegunkE, type FuvardijPenznem } from "@/lib/fuvarozas/fuvar-constants";
+import { normalizaltCegKulcs, type FuvardijPenznem } from "@/lib/fuvarozas/fuvar-constants";
 import { findJarmuInSzoveg, jarmuLabel } from "@/lib/fuvarozas/vehicles";
 import {
   mentDuvenbeckDokumentumot,

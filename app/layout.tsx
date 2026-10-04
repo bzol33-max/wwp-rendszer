@@ -4,7 +4,6 @@ import { AppShell } from "@/components/layout/app-shell";
 import { Toaster } from "@/components/ui/sonner";
 import { verifySession } from "@/lib/auth/dal";
 import type { ModuleKey } from "@/lib/auth/permissions";
-import { ujFuvarozasMenu, regiFuvarozasAktiv } from "@/lib/fuvarozas2/flag";
 import "./globals.css";
 
 const MODULES_FOR_NAV: ModuleKey[] = [
@@ -39,10 +38,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   const visibleModuleKeys = session.isAuth
     ? MODULES_FOR_NAV.filter((key) => session.can(key).view)
     : [];
-  const hiddenHrefs = [
-    ...(ujFuvarozasMenu() ? [] : ["/fuvarozas2"]),
-    ...(regiFuvarozasAktiv() ? [] : ["/fuvarozas"]),
-  ];
+  const hiddenHrefs: string[] = [];
 
   return (
     <html

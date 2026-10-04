@@ -704,7 +704,7 @@ export async function feltoltFuvarlevelFoto(fuvarId: string, form: FormData): Pr
       `${szken.kivagva ? "lap kivágva" : `vágatlan (${szken.ok ?? "?"})`} (${session.name})`
   );
   revalidatePath("/erkezes");
-  revalidatePath("/fuvarozas");
+  revalidatePath("/fuvarozas2");
   return { dokId: beszurt[0].id };
 }
 
@@ -764,7 +764,7 @@ export async function rogzitPozicioszamot(fuvarId: string, szam: string): Promis
   console.log(`[sofor] pozíciószám rögzítve: fuvar #${fuvarId} → ${tiszta} (${session.name})`);
   toroljIdovonalCachet();
   revalidatePath("/erkezes");
-  revalidatePath("/fuvarozas");
+  revalidatePath("/fuvarozas2");
 }
 
 /**
@@ -798,5 +798,5 @@ export async function jelolVarakozast(fuvarId: string, megalloIndex: number, muv
   console.log(`[sofor] várakozás ${muvelet === "kezd" ? "kezdete" : "vége"}: fuvar #${fuvarId}/${megalloIndex} (${soforNev})`);
   toroljIdovonalCachet();
   revalidatePath("/erkezes");
-  revalidatePath("/fuvarozas");
+  revalidatePath("/fuvarozas2");
 }

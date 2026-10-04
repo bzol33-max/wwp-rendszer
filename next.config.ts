@@ -24,7 +24,11 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   // A régi /posta könyvjelzője Szabina Posta-lapjára vigyen, ne 404-re.
   async redirects() {
-    return [{ source: "/posta", destination: "/attekintes/posta", permanent: false }];
+    return [
+      { source: "/posta", destination: "/attekintes/posta", permanent: false },
+      // A régi Fuvarozás felület 2026-10-04-én törölve — a könyvjelzők az újra vigyenek.
+      { source: "/fuvarozas", destination: "/fuvarozas2", permanent: false },
+    ];
   },
   async headers() {
     return [

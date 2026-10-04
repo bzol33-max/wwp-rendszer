@@ -21,9 +21,8 @@ export type NavItem = {
 
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Info", icon: LayoutDashboard, key: "info" },
-  { href: "/fuvarozas", label: "Fuvarozás", icon: Truck, key: "fuvarozas" },
-  // Fuvarozás 2 — a flag (lib/fuvarozas2/flag.ts) dönti, látszik-e; az
-  // AppShell a hiddenHrefs alapján rejti. Szabina az "elszamolas" kulccsal látja.
+  // Fuvarozás (a régi felület 2026-10-04-én törölve) — Szabina az
+  // "elszamolas" kulccsal is látja.
   { href: "/fuvarozas2", label: "Fuvarozás", icon: Truck, key: "fuvarozas", altKeys: ["elszamolas"] },
   { href: "/keszlet", label: "Készlet", icon: Package, key: "keszlet" },
   { href: "/szamlak", label: "Számlák", icon: Receipt, key: "szamlak" },

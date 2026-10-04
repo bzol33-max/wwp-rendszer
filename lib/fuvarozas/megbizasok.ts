@@ -3,10 +3,8 @@
 import { query } from "@/lib/db";
 import { frissitsdFuvarozas2Modellt } from "@/lib/fuvarozas2/modell-szinkron";
 import { requireAnyEditPermission, requireAnyViewPermission, requireEditPermission, requireViewPermission } from "@/lib/auth/require-permission";
-import { PARTNEREK } from "@/lib/fuvarozas/import/partnerek";
-import { ceglNevKanonikusan, normalizaltCegKulcs } from "@/lib/fuvarozas/fuvar-constants";
 import { kanonikusMegrendeloNev } from "@/lib/fuvarozas/megrendelo-nev";
-import { FUVAR_HELY_SQL, FUVAR_MA_SQL, type FuvarHely } from "@/lib/fuvarozas/fuvar-hely";
+import { FUVAR_HELY_SQL, FUVAR_MA_SQL } from "@/lib/fuvarozas/fuvar-hely";
 import { toroljIdovonalCachet } from "@/lib/fuvarozas/idovonal-cache";
 import { bontsMegallokra } from "@/lib/fuvarozas/varos";
 import { kiegAlap, parositKiegSzamlakat, parositSzamlakat } from "@/lib/fuvarozas/szamla-parositas";
@@ -18,10 +16,7 @@ import type {
   AddFuvarInput,
   ApproveFuvarInput,
   FuvarErintesSor,
-  FuvardijPenznem,
-  KimutatasJarmuSor,
-  UtkozesJelolt,
-} from "@/lib/fuvarozas/fuvar-constants";
+  FuvardijPenznem } from "@/lib/fuvarozas/fuvar-constants";
 
 // FIGYELEM: ez egy "use server" fájl — Next.js-ben ez KIZÁRÓLAG async
 // függvényeket exportálhat. Típusokat, konstans objektumokat/tömböket NE
@@ -87,47 +82,6 @@ export async function getFuvarok(tipus: FuvarTipus): Promise<FuvarRow[]> {
      order by ${orderBy}
      limit 200`,
     [tipus]
-  );
-}
-
-/**
- * A "Bér fuvarok" fül logikája: a Drive-ból (fuvarmegbízás-figyelő
- * automatika) érkező, "sajat" típusú fuvarok itt jelennek meg, amíg a munka
- * (a lerakás) folyamatban van. Amint a lerakás dátuma elmúlt, a fuvar innen
- * eltűnik, és onnantól csak a Számla/Posta fülön látszik (lásd
- * getSzamlaPostaFuvarok) — ott intézhető a számlázás/postázás, majd
- * (postázás + 5 perc) után automatikusan archiválódik (getArchivFuvarok).
- * "Folyamatban" = a lerakás dátuma (vagy ha nincs külön megadva, a felrakás
- * dátuma) még nem múlt el.
- */
-export async function getFolyamatbanSajatFuvarok(): Promise<FuvarRow[]> {
-  await requireViewPermission("fuvarozas");
-  return query<FuvarRow>(
-    `select ${FUVAR_ROW_COLUMNS}
-     from fuvar_megbizasok
-     where statusz <> 'torolt' and ${FUVAR_HELY_SQL} = 'ber_folyamatban'
-     order by ellenorzott asc, coalesce(lerakas_datum, datum) asc, id asc
-     limit 200`
-  );
-}
-
-/**
- * A "Saját fuvarok" fül (tipus='ber') aktív listája — ugyanaz a
- * "folyamatban" logika, mint getFolyamatbanSajatFuvarok-nál (nem
- * "Kész"-re jelölve, és a lerakás/felrakás dátuma még nem múlt el), csak a
- * másik fuvar-típusra. A teljesítettek innen eltűnnek és az Archívba
- * kerülnek (lásd getArchivFuvarok) — nincs külön Számla/Posta köztes
- * állapotuk, mert nincs postázási/számlázási munkafolyamatuk (belső, saját
- * célú szállítás).
- */
-export async function getFolyamatbanValodiSajatFuvarok(): Promise<FuvarRow[]> {
-  await requireViewPermission("fuvarozas");
-  return query<FuvarRow>(
-    `select ${FUVAR_ROW_COLUMNS}
-     from fuvar_megbizasok
-     where statusz <> 'torolt' and ${FUVAR_HELY_SQL} = 'sajat_folyamatban'
-     order by coalesce(lerakas_datum, datum) asc, id asc
-     limit 200`
   );
 }
 
@@ -306,18 +260,6 @@ export async function getFuvarokIdoszakban(kezdetNapISO: string, vegNapISO: stri
   );
 }
 
-/** A PDF-ből előkészített, még jóvá nem hagyott fuvarok — típustól függetlenül. */
-export async function getElokeszitettFuvarok(): Promise<FuvarRow[]> {
-  await requireViewPermission("fuvarozas");
-  return query<FuvarRow>(
-    `select ${FUVAR_ROW_COLUMNS}
-     from fuvar_megbizasok
-     where ellenorzott = false and statusz <> 'torolt'
-     order by datum desc, id desc
-     limit 200`
-  );
-}
-
 /**
  * A "dokumentum_url"-en lévő egyedi index (lásd db/schema.sql) miatt egy már
  * ismert Drive-dokumentum ismételt beküldése (pl. ha a drive-allapot
@@ -428,21 +370,6 @@ export async function felszabaditFuvarDokumentumot(id: string): Promise<void> {
   toroljIdovonalCachet();
 }
 
-/** A lista soron belüli, azonnali javítás: a hivatkozási szám kitöltése vagy "nincs" jelölése. */
-export async function setFuvarPoziciszam(
-  id: string,
-  input: { pozicioszam?: string | null; nincs?: boolean }
-) {
-  await requireEditPermission("fuvarozas");
-  await query(
-    `update fuvar_megbizasok set
-       pozicioszam = $2,
-       pozicioszam_nincs = $3
-     where id = $1`,
-    [id, input.pozicioszam || null, input.nincs ?? false]
-  );
-}
-
 /**
  * A Számla/Posta nézet soron belüli, azonnali javítása: postázási cím kitöltése.
  * A "posta" jog önmagában is feljogosít rá — a /posta nézet felhasználója
@@ -507,24 +434,6 @@ export async function setFuvarPostazva(id: string, postazva: boolean) {
   await query(
     `update fuvar_megbizasok set postazva = $2, postazva_at = case when $2 then now() else null end where id = $1`,
     [id, postazva]
-  );
-}
-
-/**
- * A ma „Postázva”-nak jelölt bér fuvarok — a Posta nézet alján, hogy egy
- * véletlen pipa visszavonható legyen (Budaházi Zoltán, 2026-10-01: a
- * Flexlog #286-ot tévedésből jelölték, és a sor azonnal eltűnt).
- */
-export async function getMaPostazottFuvarok(): Promise<{ id: string; megrendelo: string | null; pozicioszam: string | null; felrako: string | null; lerako: string | null; szamla_szam: string | null; mikor: string }[]> {
-  await requireAnyViewPermission(["fuvarozas", "posta"]);
-  return query(
-    `select id::text, megrendelo, pozicioszam, felrako, lerako, szamla_szam,
-       to_char(postazva_at at time zone 'Europe/Budapest', 'HH24:MI') as mikor
-     from fuvar_megbizasok
-     where statusz <> 'torolt' and postazva and tipus = 'sajat'
-       and postazva_at >= ((now() at time zone 'Europe/Budapest')::date) at time zone 'Europe/Budapest'
-     order by postazva_at desc
-     limit 50`
   );
 }
 
@@ -621,116 +530,10 @@ export async function setFuvarTeljesitve(id: string, teljesitve: boolean) {
   toroljIdovonalCachet();
 }
 
-/**
- * Az Archív fül "Visszaállítás" gombja: azt nullázza, ami a sort TÉNYLEGESEN
- * az Archívban tartja (lásd FUVAR_HELY_SQL), nem a statusz-t — a statusz a
- * besorolásban nem játszik, ezért a korábbi, csak-statusz-író változat a
- * saját fuvaroknál (tipus='ber') nem mozdította el a sort.
- *   - tipus='sajat' (Bér fuvarok): a postázás visszavonása → Számla/Posta.
- *   - tipus='ber' (Saját fuvarok): a "Kész" jelölés (és egy esetleges
- *     postázás) visszavonása → Saját fuvarok (folyamatban).
- * Visszaadja a sor ÚJ helyét, hogy a UI őszintén jelezhesse, ha a sor mégis
- * archív maradt — ez akkor fordul elő, ha a lerakás/felrakás dátuma már
- * elmúlt, vagy van számlaszáma: ezeket csak szerkesztéssel lehet módosítani,
- * a gomb nem hamisítja meg őket.
- */
-export async function visszaallitFuvarArchivbol(id: string): Promise<FuvarHely | null> {
-  await requireEditPermission("fuvarozas");
-  const rows = await query<{ hely: FuvarHely }>(
-    `update fuvar_megbizasok
-     set postazva = false,
-         postazva_at = null,
-         teljesitve = case when tipus = 'ber' then false else teljesitve end,
-         teljesitve_at = case when tipus = 'ber' then null else teljesitve_at end
-     where id = $1
-     returning ${FUVAR_HELY_SQL} as hely`,
-    [id]
-  );
-  return rows[0]?.hely ?? null;
-}
-
 // Az "effektíve archivált" (postázva + 5 perc) és a "munka kész" feltétel,
 // valamint a fülek közti besorolás EGY helyen él: lib/fuvarozas/fuvar-hely.ts
 // (FUVAR_HELY_SQL). Az alábbi lekérdezések csak azt szűrik, hogy a sor helye
 // melyik fül — a szabályt ott módosítsd, ne itt.
-
-/**
- * A Számla/Posta lista: a Bér fuvarok, DE csak azok, amiknek a munkája már
- * befejeződött — akár mert a lerakás dátuma elmúlt, akár mert kézzel
- * "Teljesítve"-nek lett jelölve a rögzített dátum előtt (lásd
- * setFuvarTeljesitve; amíg egyik sem igaz, a "Bér fuvarok" fülön látszik,
- * lásd getFolyamatbanSajatFuvarok) —, és amik még nem "effektíve"
- * archiváltak (postázva, és az 5 perces visszavonási ablak már lejárt) —
- * ezek helyette az Archív fülön (getArchivFuvarok) jelennek meg.
- */
-export async function getSzamlaPostaFuvarok(): Promise<FuvarRow[]> {
-  await requireAnyViewPermission(["fuvarozas", "posta"]);
-  const rows = await query<FuvarRow>(
-    `select ${FUVAR_ROW_COLUMNS}
-     from fuvar_megbizasok
-     where statusz <> 'torolt' and ${FUVAR_HELY_SQL} = 'szamla_posta'
-     order by ellenorzott asc, fuvar_megbizasok.erkezett_datum desc nulls last, datum desc, id desc
-     limit 200`
-  );
-  return potolHianyzoPostazasiCimeket(rows);
-}
-
-/**
- * A megbízó (megrendelő) címe, ha a fuvarhoz nincs külön postázási cím
- * megadva: először a partner-sablonban rögzített székhely/postacím (lib/
- * fuvarozas/import/partnerek.ts), annak hiányában ugyanannak a megbízónak
- * a legutóbbi fuvarján rögzített cím. Null, ha egyik sem ismert.
- */
-export async function getMegbizoCime(megrendelo: string | null | undefined): Promise<string | null> {
-  await requireAnyViewPermission(["fuvarozas", "posta"]);
-  const nev = megrendelo?.trim();
-  if (!nev) return null;
-  const kulcs = normalizaltCegKulcs(ceglNevKanonikusan(nev));
-  const sablon = PARTNEREK.find(
-    (p) => p.postazasiCim && normalizaltCegKulcs(ceglNevKanonikusan(p.nev)) === kulcs
-  );
-  if (sablon?.postazasiCim) return sablon.postazasiCim;
-  // A Fuvarozás partner-törzse (Partnerek fül, ill. az elfogadott
-  // javaslat): név vagy névváltozat szerint. Enélkül a Partnereknél
-  // rögzített cím (pl. Flexlog, 2026-10-01) a Posta-listán nem jelent meg.
-  const [torzs] = await query<{ postazasi_cim: string }>(
-    `select postazasi_cim from fuvar_partnerek
-     where postazasi_cim is not null and (nev_kulcs = any(array[$1, $3]) or $2 = any(nevvaltozatok))
-     limit 1`,
-    [kulcs, nev, normalizaltCegKulcs(nev)]
-  );
-  if (torzs?.postazasi_cim) return torzs.postazasi_cim;
-  return getPostazasiCimJavaslat(nev);
-}
-
-/**
- * Minden Számla/Posta sornak legyen postázási címe: ahol a dokumentumból
- * nem került be külön cím, ott a megbízó címét írjuk be (getMegbizoCime),
- * és el is mentjük, hogy a desktop lista és a /posta nézet ugyanazt
- * mutassa, és a Számla/Posta füzet később is visszakereshető legyen. Csak
- * üres mezőt tölt — kézzel beírt címet sosem ír felül. Egy megbízóhoz
- * egyszer keresünk címet, hogy a lista betöltése ne lassuljon.
- */
-async function potolHianyzoPostazasiCimeket(rows: FuvarRow[]): Promise<FuvarRow[]> {
-  const gyorsitotar = new Map<string, string | null>();
-  for (const row of rows) {
-    if (row.postazasi_cim?.trim() || !row.megrendelo?.trim()) continue;
-    const kulcs = normalizaltCegKulcs(ceglNevKanonikusan(row.megrendelo));
-    let cim = gyorsitotar.get(kulcs);
-    if (cim === undefined) {
-      cim = await getMegbizoCime(row.megrendelo);
-      gyorsitotar.set(kulcs, cim);
-    }
-    if (!cim) continue;
-    await query(
-      `update fuvar_megbizasok set postazasi_cim = $2
-        where id = $1 and coalesce(trim(postazasi_cim), '') = ''`,
-      [row.id, cim]
-    );
-    row.postazasi_cim = cim;
-  }
-  return rows;
-}
 
 /** Egy papírra váró fuvar minimális adatai a nyugtázó sávhoz. */
 export type PapirraVaroFuvar = {
@@ -758,78 +561,6 @@ export async function getPapirraVaroFuvarok(): Promise<PapirraVaroFuvar[]> {
        and papirok_beerkeztek_at is null
      order by coalesce(lerakas_datum, datum) asc, id asc
      limit 100`
-  );
-}
-
-/**
- * Archív fül: a postázott (és az 5 perces visszavonási ablakon már
- * túljutott) BÉR fuvarok (tipus='sajat'), ÉS a teljesített SAJÁT fuvarok
- * (tipus='ber') — utóbbiaknak nincs postázási/számlázási munkafolyamatuk
- * (belső, saját célú szállítás, nincs mindig valódi külső megrendelőjük),
- * ezért náluk ugyanaz a "teljesítve" feltétel jelenti az archiválást, mint
- * getFolyamatbanValodiSajatFuvarok "folyamatban" feltételének az ellentéte
- * (kézzel "Kész"-re jelölve, vagy a lerakás/felrakás dátuma már elmúlt). A
- * UI-n (ArchivLista) a saját fuvarok mind egy közös "Well-worn Pallet"
- * csoportba kerülnek.
- */
-export async function getArchivFuvarok(): Promise<FuvarRow[]> {
-  await requireViewPermission("fuvarozas");
-  return query<FuvarRow>(
-    `select ${FUVAR_ROW_COLUMNS}
-     from fuvar_megbizasok
-     where statusz <> 'torolt' and ${FUVAR_HELY_SQL} = 'archiv'
-     order by postazva_at desc nulls last, datum desc
-     limit 200`
-  );
-}
-
-/**
- * A Megbízások "Kimutatás" füléhez: mindkét fuvar-típus (Bér fuvarok ÉS
- * Saját fuvarok, lásd a fordított UI-címkézésről szóló megjegyzést
- * getMaiSajatFuvarok-nál) fuvarjai jármű szerint, nyers (YYYY-MM-DD)
- * dátummal — a jármű-egyeztetést (resolveJarmu, fuzzy: rendszám vagy
- * sofőrnév is elfogadott) és a heti/havi csoportosítást a kliens végzi,
- * mert a "jarmu" mező szabad szöveg. Csak a hozzárendelt kocsival
- * rendelkező sorokat adja vissza — kocsi nélkül nincs hova sorolni a
- * kimutatásban.
- */
-export async function getKimutatasJarmuFuvarok(): Promise<KimutatasJarmuSor[]> {
-  await requireViewPermission("fuvarozas");
-  return query<KimutatasJarmuSor>(
-    `select id::text, tipus,
-       to_char(datum, 'YYYY-MM-DD') as datum,
-       jarmu, megrendelo, felrako, lerako, fuvardij, fuvardij_penznem
-     from fuvar_megbizasok
-     where statusz <> 'torolt' and tipus in ('sajat', 'ber')
-       and jarmu is not null and jarmu <> ''
-     order by datum desc
-     limit 1000`
-  );
-}
-
-/**
- * Minden még aktív (a lerakás — vagy ha nincs külön megadva, a felrakás —
- * dátuma még nem múlt el) saját ÉS bér fuvar jármű-ütközés kereséshez. Két
- * fuvar "ütközik", ha ugyanahhoz a járműhöz van rendelve, és a [datum,
- * lerakas_datum] dátumtartományuk átfedi egymást — egy kocsi fizikailag
- * nem lehet egyszerre két helyen (lásd a konkrét esetet: egy fuvar Sopronból
- * indul, egy másik ugyanaznap Debrecenből — ugyanarra a kocsira rögzítve).
- * A kliens (talalJarmuUtkozeseket) végzi a jármű-egyeztetést (resolveJarmu)
- * és az átfedés-vizsgálatot, mert a "jarmu" mező szabad szöveg.
- */
-export async function getAktivFuvarokUtkozeshez(): Promise<UtkozesJelolt[]> {
-  await requireViewPermission("fuvarozas");
-  return query<UtkozesJelolt>(
-    `select id::text, jarmu, sofor,
-       to_char(datum, 'YYYY-MM-DD') as datum,
-       to_char(lerakas_datum, 'YYYY-MM-DD') as lerakas_datum,
-       felrako, lerako, megrendelo
-     from fuvar_megbizasok
-     where statusz <> 'torolt' and tipus in ('sajat', 'ber')
-       and jarmu is not null and jarmu <> ''
-       and coalesce(lerakas_datum, datum) >= ${FUVAR_MA_SQL}
-     order by datum asc
-     limit 500`
   );
 }
 
@@ -1005,36 +736,6 @@ export async function setFuvarSzamlaSzam(id: string, szamlaSzam: string | null) 
     id,
     szamlaSzam || null,
   ]);
-}
-
-/**
- * Javaslat a postázási címhez: az adott megrendelőnél korábban már rögzített,
- * legutóbbi postázási cím (ha van) — hogy jóváhagyáskor ne kelljen újra
- * beírni egy már ismert partner címét (lásd 20. pont: "ha egy adat már
- * rendelkezésre áll, ne kérje be újra").
- */
-export async function getPostazasiCimJavaslat(megrendelo: string): Promise<string | null> {
-  await requireViewPermission("fuvarozas");
-  if (!megrendelo.trim()) return null;
-  // A "megrendelo" mezőt a Drive-automatika tölti ki, dokumentumonként
-  // újra kiolvasva a partner nevét — ugyanaz a cég két megbízáson akár
-  // eltérő írásmóddal is szerepelhet (extra szóköz, nagybetűzés, "Kft."
-  // után pont vagy anélkül). Az eredeti, egyszerű "ilike $1" (wildcard
-  // nélkül, tehát valójában kis-nagybetű-független EGZAKT egyezés) emiatt
-  // hamisan üresnek látta a javaslatot már ismert partnereknél is —
-  // whitespace-normalizálással (trim + belső szóközök összevonása)
-  // egyeztetünk, hogy ez a tipikus eltérés ne törje meg az egyezést.
-  const rows = await query<{ postazasi_cim: string }>(
-    `select postazasi_cim
-       from fuvar_megbizasok
-      where lower(regexp_replace(trim(megrendelo), '\\s+', ' ', 'g'))
-              = lower(regexp_replace(trim($1), '\\s+', ' ', 'g'))
-        and postazasi_cim is not null
-      order by created_at desc
-      limit 1`,
-    [megrendelo]
-  );
-  return rows[0]?.postazasi_cim ?? null;
 }
 
 /** A "Jóváhagy" / "Módosít" gomb: a mezőket (esetleg módosítva) menti, és ellenorzott = true. */

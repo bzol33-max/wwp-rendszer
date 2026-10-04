@@ -37,7 +37,7 @@ export const MODULES: ModuleInfo[] = [
   {
     key: "fuvarozas",
     label: "Fuvarozás",
-    href: "/fuvarozas",
+    href: "/fuvarozas2",
     icon: Truck,
     status: "elkeszult",
     description: "Megbízások (bér- és saját fuvarok két oszlopban, szakaszonként), kalkulátor (útdíj, üzemanyag, önköltség, ajánlat), tervezés, élő GPS és kimutatás.",
