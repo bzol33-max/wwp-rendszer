@@ -41,6 +41,26 @@ const nextConfig: NextConfig = {
           { key: "X-Frame-Options", value: "SAMEORIGIN" },
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          // Próba üzemmód: semmit nem tilt, csak jelent (/api/csp-jelentes →
+          // Railway-napló). Ha néhány napig nincs váratlan jelentés, a
+          // fejléc neve "Content-Security-Policy"-ra cserélhető.
+          {
+            key: "Content-Security-Policy-Report-Only",
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline'",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: blob: https://*.tile.openstreetmap.org",
+              "font-src 'self' data:",
+              "connect-src 'self'",
+              "frame-src 'self'",
+              "frame-ancestors 'self'",
+              "object-src 'none'",
+              "base-uri 'self'",
+              "form-action 'self'",
+              "report-uri /api/csp-jelentes",
+            ].join("; "),
+          },
         ],
       },
     ];
