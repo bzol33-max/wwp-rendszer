@@ -64,9 +64,9 @@ export const MODULES: ModuleInfo[] = [
     label: "Dolgozók",
     href: "/dolgozok",
     icon: Users,
-    status: "fejlesztes-alatt",
+    status: "elkeszult",
     description:
-      "Alkalmazottak bérszámolása (heti/napi/fix havi bérmód), kifizetés-jelölés, előlegek, archívum.",
+      "Alkalmazottak bérszámolása (heti/napi/fix havi bérmód), kifizetés-jelölés, archívum. Előlegek: a felvett összeget itt rögzíted, a fizetéskori levonás a bérkártya Előleg mezőjéből keletkezik, és mindkettőt a dolgozó nyugtázza a telefonján.",
   },
   {
     key: "jelenlet",
