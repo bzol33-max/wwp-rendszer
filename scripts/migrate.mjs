@@ -32,8 +32,15 @@ async function main() {
   }
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 
+  // Egyszerre csak egy példány migráljon (Railway deploy-átfedés), és a séma
+  // ne várjon végtelenül egy táblazárra, miközben mögötte minden kérés sorban
+  // áll (audit DB-2). A zár a munkamenet végén magától oldódik.
+  // A zár a teljes migráció végéig (pool.end) él.
+  const zarKliens = await pool.connect();
+  await zarKliens.query("select pg_advisory_lock(72000)");
+  await zarKliens.query("set lock_timeout = '30s'");
   const schema = readFileSync(path.join(dbDir, "schema.sql"), "utf8");
-  await pool.query(schema);
+  await zarKliens.query(schema);
   console.log("[migrate] séma alkalmazva.");
   await futtasdSqlMigraciokatOnce(pool);
 
@@ -293,6 +300,8 @@ async function main() {
   await naplozBerCsempeHetet(pool);
   await ellenorizSoforFiokokat(pool);
 
+  await zarKliens.query("select pg_advisory_unlock(72000)").catch(() => {});
+  zarKliens.release();
   await pool.end();
 }
 

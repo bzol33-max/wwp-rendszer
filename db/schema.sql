@@ -108,9 +108,14 @@ create index if not exists idx_keszlet_movements_site on keszlet_movements (site
 -- egyszerre két sorral kerül rögzítésre — a forrásnál "mozgatas" (levonás),
 -- a célnál "mozgatas_be" (jóváírás), a target_site_id mindkét soron a
 -- másik telepre mutat.
-alter table keszlet_movements drop constraint if exists keszlet_movements_direction_check;
-alter table keszlet_movements add constraint keszlet_movements_direction_check
-  check (direction in ('be', 'ki', 'mozgatas', 'mozgatas_be'));
+-- Csak ha még nincs: a minden induláskor lefutó drop+add a teljes táblát
+-- zárolta és végigolvasta (audit DB-2). A szabály módosítása migrációba való.
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'keszlet_movements_direction_check') then
+    alter table keszlet_movements add constraint keszlet_movements_direction_check
+      check (direction in ('be', 'ki', 'mozgatas', 'mozgatas_be'));
+  end if;
+end $$;
 
 -- Nyíregyháza Havi fül: készpénzes felvásárlás.
 create table if not exists nyiregyhaza_purchases (
@@ -858,9 +863,14 @@ alter table fuvar_megallo_allapot add column if not exists varakozas_vege timest
 -- szétválogatáshoz) tartozó keszlet_movements-sorokat a közös
 -- movement_group köti az eseményhez, hogy egy törlés az egész tételt
 -- vonja vissza — ld. lib/keszlet/actions.ts deleteMovementEvent.
-alter table keszlet_events drop constraint if exists keszlet_events_kind_check;
-alter table keszlet_events add constraint keszlet_events_kind_check
-  check (kind in ('csere', 'szet', 'havi-zaras', 'mozgas', 'leltar'));
+-- Csak ha még nincs: a minden induláskor lefutó drop+add a teljes táblát
+-- zárolta és végigolvasta (audit DB-2). A szabály módosítása migrációba való.
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'keszlet_events_kind_check') then
+    alter table keszlet_events add constraint keszlet_events_kind_check
+      check (kind in ('csere', 'szet', 'havi-zaras', 'mozgas', 'leltar'));
+  end if;
+end $$;
 
 -- Készlet, 2026-09-18: raklap-eladás a telepen. A Nyíregyháza fül "Mozgás
 -- rögzítése" kártyáján a Kiszállítás / Eladás irányhoz soronként megadható
@@ -884,9 +894,14 @@ create index if not exists idx_kassza_movements_group on kassza_movements (movem
 -- értéke sehol nem látszana.
 alter table keszlet_movements add column if not exists elad_egysegar integer;
 alter table keszlet_movements add column if not exists elad_fizmod text;
-alter table keszlet_movements drop constraint if exists keszlet_movements_elad_fizmod_check;
-alter table keszlet_movements add constraint keszlet_movements_elad_fizmod_check
-  check (elad_fizmod is null or elad_fizmod in ('keszpenz', 'atutalas'));
+-- Csak ha még nincs: a minden induláskor lefutó drop+add a teljes táblát
+-- zárolta és végigolvasta (audit DB-2). A szabály módosítása migrációba való.
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'keszlet_movements_elad_fizmod_check') then
+    alter table keszlet_movements add constraint keszlet_movements_elad_fizmod_check
+      check (elad_fizmod is null or elad_fizmod in ('keszpenz', 'atutalas'));
+  end if;
+end $$;
 
 alter table keszlet_movements add column if not exists elfogadva_at timestamptz;
 alter table keszlet_movements add column if not exists elfogadva_by text;
