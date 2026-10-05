@@ -56,7 +56,7 @@ export function useConfirm(): [
         <DialogHeader>
           <DialogTitle>{state?.title}</DialogTitle>
         </DialogHeader>
-        <p className="text-sm">{state?.message}</p>
+        <p className="text-sm whitespace-pre-line">{state?.message}</p>
         <div className="flex justify-end gap-2">
           <Button variant="outline" onClick={() => close(false)}>
             Mégse

@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { CalendarPlus, Check, Clock, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
 import { createSzabadsagIgeny, visszavonSzabadsagIgeny } from "@/lib/jelenlet/actions";
 import { munkanapok, type SzabadsagIgeny } from "@/lib/jelenlet/shared";
@@ -71,6 +72,7 @@ export function SzabadsagKeres({
   const [ig, setIg] = useState("");
   const [megjegyzes, setMegjegyzes] = useState("");
   const [pending, startTransition] = useTransition();
+  const [confirm, confirmDialog] = useConfirm();
 
   const napok = tol && ig ? munkanapok(tol, ig).length : 0;
   // A lezárt (elutasított, visszavont) kéréseket nem visszük a végtelenbe:
@@ -96,8 +98,8 @@ export function SzabadsagKeres({
     });
   }
 
-  function visszavon(igeny: SzabadsagIgeny) {
-    if (!window.confirm(`Visszavonod? ${szakaszCimke(igeny.tol, igeny.ig)}`)) return;
+  async function visszavon(igeny: SzabadsagIgeny) {
+    if (!(await confirm(`Visszavonod? ${szakaszCimke(igeny.tol, igeny.ig)}`))) return;
     startTransition(async () => {
       try {
         await visszavonSzabadsagIgeny({ igenyId: igeny.id, employeeId });
@@ -224,6 +226,7 @@ export function SzabadsagKeres({
           ))}
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 }

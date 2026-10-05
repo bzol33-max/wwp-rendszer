@@ -6,6 +6,7 @@ import { Check, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
 import {
   DAY_TYPE_LABELS,
@@ -33,6 +34,7 @@ function SzakaszSor({
   const [departure, setDeparture] = useState(session.departure_time ?? "");
   const [note, setNote] = useState(session.note ?? "");
   const [pending, startTransition] = useTransition();
+  const [confirm, confirmDialog] = useConfirm();
 
   const dirty =
     arrival !== (session.arrival_time ?? "") ||
@@ -56,8 +58,8 @@ function SzakaszSor({
     });
   }
 
-  function remove() {
-    if (!window.confirm("Törlöd ezt a szakaszt?")) return;
+  async function remove() {
+    if (!(await confirm("Törlöd ezt a szakaszt?"))) return;
     startTransition(async () => {
       await deleteJelenletSession(session.id);
       await onReload();
@@ -105,6 +107,7 @@ function SzakaszSor({
         placeholder="Megjegyzés"
         className="h-7 text-xs"
       />
+      {confirmDialog}
     </div>
   );
 }
@@ -194,21 +197,22 @@ function DolgozoNapja({
   onReload: () => void | Promise<void>;
 }) {
   const [pending, startTransition] = useTransition();
+  const [confirm, confirmDialog] = useConfirm();
   const munkak = sessions.filter((s) => s.day_type === "munka");
   const abszencia = sessions.find((s) => s.day_type !== "munka") ?? null;
 
-  function tipust(dayType: "szabadsag" | "beteg" | null) {
+  async function tipust(dayType: "szabadsag" | "beteg" | null) {
     const cimke = dayType ? DAY_TYPE_LABELS[dayType] : null;
     if (dayType && munkak.length > 0) {
       if (
-        !window.confirm(
+        !(await confirm(
           `${cimke} erre a napra?\n\nA napon rögzített ${munkak.length} szakasz törlődik.`
-        )
+        ))
       ) {
         return;
       }
     }
-    if (!dayType && !window.confirm("Törlöd a távollétet erről a napról?")) return;
+    if (!dayType && !(await confirm("Törlöd a távollétet erről a napról?"))) return;
     startTransition(async () => {
       try {
         await setJelenletNapTipus({ employeeId: employee.id, workDate, dayType });
@@ -269,6 +273,7 @@ function DolgozoNapja({
           </div>
         </>
       )}
+      {confirmDialog}
     </div>
   );
 }

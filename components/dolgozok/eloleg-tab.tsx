@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
 import { ft, type Employee, type AdvanceRow } from "@/lib/dolgozok/shared";
 import { addAdvance, deleteAdvance } from "@/lib/dolgozok/actions";
@@ -19,9 +20,10 @@ function todayIso() {
 function ElolegRow({ advance, canEdit, onReload }: { advance: AdvanceRow; canEdit: boolean; onReload: () => void | Promise<void> }) {
   const [pending, startTransition] = useTransition();
   const auto = !!advance.auto_key;
+  const [confirm, confirmDialog] = useConfirm();
 
-  function remove() {
-    if (!window.confirm(`Törlöd ezt az előleget? ${advance.advance_date} — ${ft(advance.amount)}`)) return;
+  async function remove() {
+    if (!(await confirm(`Törlöd ezt az előleget? ${advance.advance_date} — ${ft(advance.amount)}`))) return;
     startTransition(async () => {
       try {
         await deleteAdvance(advance.id);
@@ -63,6 +65,7 @@ function ElolegRow({ advance, canEdit, onReload }: { advance: AdvanceRow; canEdi
           <X />
         </Button>
       )}
+      {confirmDialog}
     </div>
   );
 }

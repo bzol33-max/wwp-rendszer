@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { valtAllapot, setSzamlaSzam, setMegjegyzes, torolMegbizast } from "@/lib/fuvarozas2/megbizasok";
 import type { MegbizasSor, Megallo, Esemeny, Dokumentum } from "@/lib/fuvarozas2/megbizasok";
@@ -44,6 +45,7 @@ export function MegbizasReszlet({
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
+  const [confirm, confirmDialog] = useConfirm();
   const [szamla, setSzamla] = useState(sor.szamla_szam ?? "");
   const [megj, setMegj] = useState(sor.megjegyzes ?? "");
   const fuvarlevelek = dokumentumok.filter((d) => d.tipus === "fuvarlevel");
@@ -244,8 +246,8 @@ export function MegbizasReszlet({
             <button
               type="button"
               disabled={pending}
-              onClick={() => {
-                if (!confirm(`Biztosan törlöd? (#${sor.id} · ${sor.partner_nev ?? "megbízó nélkül"} · ${formatNap(sor.felrakas_nap)})`)) return;
+              onClick={async () => {
+                if (!(await confirm(`Biztosan törlöd? (#${sor.id} · ${sor.partner_nev ?? "megbízó nélkül"} · ${formatNap(sor.felrakas_nap)})`))) return;
                 start(async () => {
                   const r = await torolMegbizast(sor.id).catch(() => ({ ok: false as const, hiba: "A törlés nem sikerült." }));
                   if (!r.ok) { toast.error(r.hiba); return; }
@@ -261,6 +263,7 @@ export function MegbizasReszlet({
           )
         ) : null}
       </div>
+      {confirmDialog}
     </div>
   );
 }

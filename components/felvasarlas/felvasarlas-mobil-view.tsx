@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { logout } from "@/lib/auth/actions";
 import { addPurchases, type PriceRow } from "@/lib/keszlet/actions";
 import { MOBIL_THEME } from "@/lib/mobil-theme";
@@ -37,6 +38,7 @@ export function FelvasarlasMobilView({
   const router = useRouter();
   const [qty, setQty] = useState<Record<string, string>>({});
   const [submitting, startSubmit] = useTransition();
+  const [confirm, confirmDialog] = useConfirm();
 
   const priceMap = useMemo(() => {
     const m: Record<string, number> = {};
@@ -51,10 +53,10 @@ export function FelvasarlasMobilView({
   // Rögzítés gombbal mennek be — ezért ha van nem mentett tétel, rákérdezünk.
   const huzas = useSzelHuzas(
     vissza
-      ? () => {
+      ? async () => {
           if (
             entries.length > 0 &&
-            !window.confirm("Van beírt darabszám, ami még nincs rögzítve. Elhagyod az oldalt?")
+            !(await confirm("Van beírt darabszám, ami még nincs rögzítve. Elhagyod az oldalt?"))
           ) {
             return;
           }
@@ -164,6 +166,7 @@ export function FelvasarlasMobilView({
           {submitting ? "Mentés…" : "Rögzítés a mai napra"}
         </button>
       </div>
+      {confirmDialog}
     </div>
   );
 }

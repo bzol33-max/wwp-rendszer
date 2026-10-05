@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
 import {
   wageMode,
@@ -84,10 +85,8 @@ function KifizetveButton({
 
 // Egy koppintás pénzt jelöl kifizetettnek (az utolsó le is zárja a hónapot),
 // ezért mindkét irányba rákérdezünk — telefonon könnyű mellényomni.
-function confirmPaid(mit: string, paid: boolean, osszeg: string): boolean {
-  return window.confirm(
-    paid ? `Visszavonod a kifizetést? ${mit} (${osszeg})` : `Kifizetettnek jelölöd? ${mit} — ${osszeg}`
-  );
+function confirmPaidMessage(mit: string, paid: boolean, osszeg: string): string {
+  return paid ? `Visszavonod a kifizetést? ${mit} (${osszeg})` : `Kifizetettnek jelölöd? ${mit} — ${osszeg}`;
 }
 
 type Tab = "ber" | "eloleg";
@@ -165,10 +164,11 @@ function HetiCard({
   onReload: () => void | Promise<void>;
 }) {
   const [pending, startTransition] = useTransition();
+  const [confirm, confirmDialog] = useConfirm();
   const locked = readonly || !canEdit || pending;
 
-  function toggle(row: HetiRow) {
-    if (!confirmPaid(`${employee.name}, ${row.week_index}. hét`, row.paid, ft(row.amount))) return;
+  async function toggle(row: HetiRow) {
+    if (!(await confirm(confirmPaidMessage(`${employee.name}, ${row.week_index}. hét`, row.paid, ft(row.amount))))) return;
     startTransition(async () => {
       try {
         await setHetiPaid(row.id, !row.paid, getCurrentUser() || undefined);
@@ -204,6 +204,7 @@ function HetiCard({
           );
         })}
       </div>
+      {confirmDialog}
     </CardShell>
   );
 }
@@ -226,6 +227,7 @@ function NapiCard({
   const [eloleg, setEloleg] = useState(String(row.eloleg));
   const [saving, startSaving] = useTransition();
   const [toggling, startToggling] = useTransition();
+  const [confirm, confirmDialog] = useConfirm();
   const locked = readonly || !canEdit;
 
   function save() {
@@ -254,12 +256,12 @@ function NapiCard({
     (Number(utalas) || 0) !== row.utalas ||
     (Number(eloleg) || 0) !== row.eloleg;
 
-  function toggle() {
+  async function toggle() {
     if (!row.paid && dirty) {
       toast.error("Előbb mentsd a módosított mezőket.");
       return;
     }
-    if (!confirmPaid(employee.name, row.paid, ft(netto))) return;
+    if (!(await confirm(confirmPaidMessage(employee.name, row.paid, ft(netto))))) return;
     startToggling(async () => {
       try {
         await setNapiHaviPaid(row.id, !row.paid, getCurrentUser() || undefined);
@@ -299,6 +301,7 @@ function NapiCard({
         </div>
         <KifizetveButton paid={row.paid} disabled={readonly || !canEdit || toggling} onToggle={toggle} />
       </div>
+      {confirmDialog}
     </CardShell>
   );
 }
@@ -322,6 +325,7 @@ function HaviCard({
   const [eloleg, setEloleg] = useState(String(row.eloleg));
   const [saving, startSaving] = useTransition();
   const [toggling, startToggling] = useTransition();
+  const [confirm, confirmDialog] = useConfirm();
   const locked = readonly || !canEdit;
 
   function save() {
@@ -356,12 +360,12 @@ function HaviCard({
     (Number(utalas) || 0) !== row.utalas ||
     (Number(eloleg) || 0) !== row.eloleg;
 
-  function toggle() {
+  async function toggle() {
     if (!row.paid && dirty) {
       toast.error("Előbb mentsd a módosított mezőket.");
       return;
     }
-    if (!confirmPaid(employee.name, row.paid, ft(netto))) return;
+    if (!(await confirm(confirmPaidMessage(employee.name, row.paid, ft(netto))))) return;
     startToggling(async () => {
       try {
         await setNapiHaviPaid(row.id, !row.paid, getCurrentUser() || undefined);
@@ -410,6 +414,7 @@ function HaviCard({
         </div>
         <KifizetveButton paid={row.paid} disabled={readonly || !canEdit || toggling} onToggle={toggle} />
       </div>
+      {confirmDialog}
     </CardShell>
   );
 }

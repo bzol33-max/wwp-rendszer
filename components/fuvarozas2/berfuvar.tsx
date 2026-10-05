@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { frissitsDriveBol } from "@/lib/fuvarozas/drive-sync";
 import { felszabaditFuvarDokumentumot } from "@/lib/fuvarozas/megbizasok";
 import { modositBerFuvart, ujBerFuvar } from "@/lib/fuvarozas2/megbizasok";
@@ -64,9 +65,10 @@ export function DriveFrissitesGomb() {
 export function UjraolvasasGomb({ id, utanaHref }: { id: string; utanaHref: string }) {
   const router = useRouter();
   const [fut, setFut] = useState(false);
+  const [confirm, confirmDialog] = useConfirm();
 
   async function ujraolvas() {
-    if (!window.confirm("A sor törlődik, és a Drive-irat a jelenlegi olvasóval újra beolvasásra kerül. Folytatod?")) return;
+    if (!(await confirm("A sor törlődik, és a Drive-irat a jelenlegi olvasóval újra beolvasásra kerül. Folytatod?"))) return;
     setFut(true);
     try {
       await felszabaditFuvarDokumentumot(id);
@@ -83,15 +85,18 @@ export function UjraolvasasGomb({ id, utanaHref }: { id: string; utanaHref: stri
   }
 
   return (
-    <button
-      type="button"
-      onClick={ujraolvas}
-      disabled={fut}
-      title="Újraolvasás a Drive-iratból (a sor törlődik, és újra beolvassuk)"
-      className="rounded-lg border border-foreground/15 bg-card px-3 py-1.5 text-xs font-semibold hover:bg-muted disabled:opacity-60"
-    >
-      {fut ? "Újraolvasás…" : "↻ Újraolvasás az iratból"}
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={ujraolvas}
+        disabled={fut}
+        title="Újraolvasás a Drive-iratból (a sor törlődik, és újra beolvassuk)"
+        className="rounded-lg border border-foreground/15 bg-card px-3 py-1.5 text-xs font-semibold hover:bg-muted disabled:opacity-60"
+      >
+        {fut ? "Újraolvasás…" : "↻ Újraolvasás az iratból"}
+      </button>
+      {confirmDialog}
+    </>
   );
 }
 

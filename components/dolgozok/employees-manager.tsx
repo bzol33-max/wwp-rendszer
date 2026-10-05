@@ -20,6 +20,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   Select,
   SelectContent,
@@ -211,6 +212,7 @@ function EditEmployeeDialog({
 }) {
   const [form, setForm] = useState<FormState>(() => formFromEmployee(employee));
   const [pending, startTransition] = useTransition();
+  const [confirm, confirmDialog] = useConfirm();
 
   function handleSave() {
     startTransition(async () => {
@@ -225,8 +227,8 @@ function EditEmployeeDialog({
     });
   }
 
-  function handleDeactivate() {
-    if (!window.confirm(`Deaktiválod: ${employee.name}? Eltűnik a bérkártyák és az előlegek közül.`)) return;
+  async function handleDeactivate() {
+    if (!(await confirm(`Deaktiválod: ${employee.name}? Eltűnik a bérkártyák és az előlegek közül.`))) return;
     startTransition(async () => {
       try {
         await deactivateEmployee(employee.id);
@@ -257,6 +259,7 @@ function EditEmployeeDialog({
             </Button>
           </div>
         </DialogFooter>
+        {confirmDialog}
       </DialogContent>
     </Dialog>
   );

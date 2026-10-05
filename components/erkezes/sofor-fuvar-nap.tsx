@@ -40,6 +40,7 @@ import {
   Truck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
 import {
   getSoforNap,
@@ -712,6 +713,7 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
   // nem külön setState-tel az effektben (react-hooks/set-state-in-effect).
   const [betoltottNap, setBetoltottNap] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [confirm, confirmDialog] = useConfirm();
   const [haladas, setHaladas] = useState<{ fuvarId: string; szoveg: string } | null>(null);
   // Csak kliensen olvasható; a lista a betöltés UTÁN jelenik meg, így a
   // szerveres első képpel nem ütközik.
@@ -786,8 +788,8 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
     });
   }
 
-  function hely(m: SoforMegalloSor) {
-    if (!window.confirm(`A kocsi mostani helyét jegyezzük fel ehhez a címhez?\n\n${m.cim}\n\nCsak akkor koppints Igent, ha a rakodóhelyen állsz.`)) return;
+  async function hely(m: SoforMegalloSor) {
+    if (!(await confirm(`A kocsi mostani helyét jegyezzük fel ehhez a címhez?\n\n${m.cim}\n\nCsak akkor koppints Igent, ha a rakodóhelyen állsz.`))) return;
     startTransition(async () => {
       try {
         await rogzitMegalloHelyet(m.fuvarId, m.megalloIndex);
@@ -910,6 +912,7 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
       )}
 
       {kovetkezoBlokk && <MegbizasElonezet blokk={kovetkezoBlokk} cimke={kovetkezoCimke} />}
+      {confirmDialog}
     </div>
   );
 }

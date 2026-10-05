@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { setFuvarJarmu, torolMegbizast, valtAllapot } from "@/lib/fuvarozas2/megbizasok";
 
 // A Tervezés döntés-sávja: jóváhagyás a kiválasztott kocsira, ajánlat-szöveg
@@ -22,6 +23,7 @@ export function DontesSav({ id, allapot, kocsiKod, kocsiNev, felrakasNap, celarF
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
+  const [confirm, confirmDialog] = useConfirm();
   const [ar, setAr] = useState(celarFt ? String(celarFt) : "");
   const [szovegNyitva, setSzovegNyitva] = useState(false);
   const nap = NAPNEV[new Date(`${felrakasNap}T12:00:00Z`).getUTCDay()];
@@ -50,8 +52,8 @@ export function DontesSav({ id, allapot, kocsiKod, kocsiNev, felrakasNap, celarF
     });
   }
 
-  function elutasit() {
-    if (!window.confirm("Biztosan elutasítod? A megbízás törlődik (a napló megmarad).")) return;
+  async function elutasit() {
+    if (!(await confirm("Biztosan elutasítod? A megbízás törlődik (a napló megmarad)."))) return;
     start(async () => {
       const r = await torolMegbizast(id).catch(() => ({ ok: false as const, hiba: "Nem sikerült a törlés." }));
       if (!r.ok) { toast.error(r.hiba); return; }
@@ -97,6 +99,7 @@ export function DontesSav({ id, allapot, kocsiKod, kocsiNev, felrakasNap, celarF
           <button type="button" onClick={masol} className="self-start rounded-lg bg-[var(--f2-blue)] px-3 py-1.5 text-sm font-bold text-white">Másolás a vágólapra</button>
         </div>
       ) : null}
+      {confirmDialog}
     </div>
   );
 }

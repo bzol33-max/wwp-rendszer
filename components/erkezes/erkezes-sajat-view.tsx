@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
 import { logout } from "@/lib/auth/actions";
 import { MOBIL_THEME } from "@/lib/mobil-theme";
@@ -330,6 +331,7 @@ function JelenletiScreen({
   const [note, setNote] = useState("");
   const [utolsoMuvelet, setUtolsoMuvelet] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [confirm, confirmDialog] = useConfirm();
 
   const load = useCallback(async () => {
     const rows = await getTodayJelenletek();
@@ -367,22 +369,22 @@ function JelenletiScreen({
     });
   }
 
-  function betegszabadsag() {
+  async function betegszabadsag() {
     const figyelmeztetes =
       munkak.length > 0
         ? "\n\nMa már van rögzített munkaidőd — az a mai napról törlődik."
         : "";
-    if (!window.confirm(`Betegszabadság a mai napra?${figyelmeztetes}`)) return;
+    if (!(await confirm(`Betegszabadság a mai napra?${figyelmeztetes}`))) return;
     futtat(() => recordAbszenciaNow(employeeId, "beteg", note), "Betegszabadság rögzítve.");
   }
 
   // A szabadság a keretből fogy, ezért jóváhagyás kell hozzá (2026-10-05):
   // a gomb a mai napra kérést ad be, nem írja be közvetlenül a napot.
-  function szabadsagKeres() {
+  async function szabadsagKeres() {
     if (
-      !window.confirm(
+      !(await confirm(
         "Szabadságot kérsz a mai napra?\n\nA kérés jóváhagyásra kerül az irodába; a Profil oldalon követheted."
-      )
+      ))
     ) {
       return;
     }
@@ -536,6 +538,7 @@ function JelenletiScreen({
         A betegszabadság az egész napra szól. A szabadság kérésként megy az irodába, jóváhagyás
         után fogy a keretből.
       </p>
+      {confirmDialog}
     </Shell>
   );
 }
@@ -581,6 +584,7 @@ function ProfilScreen({
   onBack: () => void;
 }) {
   const [pending, startTransition] = useTransition();
+  const [confirm, confirmDialog] = useConfirm();
 
   // Hány munkanap vár még jóváhagyásra — ennyi NEM fogyott még a keretből.
   const kertNapok = useMemo(
@@ -591,11 +595,11 @@ function ProfilScreen({
     [igenyek]
   );
 
-  function accept(id: string, osszeg: number) {
+  async function accept(id: string, osszeg: number) {
     if (
-      !window.confirm(
+      !(await confirm(
         `${osszeg < 0 ? `Elfogadod a béredből levont ${ft(-osszeg)} előleget?` : `Elfogadod a(z) ${ft(osszeg)} előleget?`}\n\nAz elfogadás a nevedet és a pontos időpontot rögzíti, és utólag nem vonható vissza.`
-      )
+      ))
     ) {
       return;
     }
@@ -671,6 +675,7 @@ function ProfilScreen({
           />
         </div>
       )}
+      {confirmDialog}
     </Shell>
   );
 }

@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCanEdit } from "@/components/auth/edit-permission-context";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
 import {
   elutasitSzabadsagIgeny,
@@ -559,6 +560,7 @@ function KozelgoSor({
   onElutasit: (id: string, oka: string | null) => void;
   onVisszavon: (id: string) => void;
 }) {
+  const [confirm, confirmDialog] = useConfirm();
   const nev = nezet.nev.get(tetel.employeeId) ?? tetel.igeny?.employee_name ?? "?";
   const napok = munkanapok(tetel.tol, tetel.ig).length;
   const igeny = tetel.igeny;
@@ -631,12 +633,12 @@ function KozelgoSor({
               size="xs"
               disabled={pending}
               className="bg-success text-success-foreground hover:bg-success/90"
-              onClick={() => {
+              onClick={async () => {
                 if (
                   munkasNapok.length > 0 &&
-                  !window.confirm(
+                  !(await confirm(
                     `${nev}: ${munkasNapok.length} napon már van rögzített munkaidő (${munkasNapok.map(datumCimke).join(", ")}).\n\nJóváhagyáskor ezek a munkaszakaszok törlődnek. Folytatod?`
-                  )
+                  ))
                 ) {
                   return;
                 }
@@ -671,11 +673,11 @@ function KozelgoSor({
             type="button"
             disabled={pending}
             className="mt-1 text-[11px] font-semibold text-muted-foreground underline hover:text-foreground disabled:opacity-50"
-            onClick={() => {
+            onClick={async () => {
               if (
-                !window.confirm(
+                !(await confirm(
                   `Visszavonod? ${nev}: ${szakaszCimke(tetel.tol, tetel.ig)}\n\nA napok törlődnek a jelenlétiből, és a keretbe visszakerülnek.`
-                )
+                ))
               ) {
                 return;
               }
@@ -686,6 +688,7 @@ function KozelgoSor({
           </button>
         )}
       </div>
+      {confirmDialog}
     </div>
   );
 }
@@ -716,6 +719,7 @@ function RogzitoSor({
   const [tipus, setTipus] = useState<SzabadsagTipus>("szabadsag");
   const [megjegyzes, setMegjegyzes] = useState("");
   const [ellenoriz, setEllenoriz] = useState(false);
+  const [confirm, confirmDialog] = useConfirm();
 
   const napok = tol && ig ? munkanapok(tol, ig).length : 0;
 
@@ -733,9 +737,9 @@ function RogzitoSor({
     }
     if (
       munkas.length > 0 &&
-      !window.confirm(
+      !(await confirm(
         `${munkas.length} napon már van rögzített munkaidő (${munkas.map(datumCimke).join(", ")}).\n\nA rögzítéskor ezek a munkaszakaszok törlődnek. Folytatod?`
-      )
+      ))
     ) {
       return;
     }
@@ -816,6 +820,7 @@ function RogzitoSor({
             : ` ${napok} munkanap, a hétvége és az ünnep nem számol.`
           : " A hétvége és az ünnep nem számol bele."}
       </p>
+      {confirmDialog}
     </div>
   );
 }

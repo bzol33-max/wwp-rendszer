@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,9 +23,10 @@ export function PartnerekNezet({ partnerek, javaslatok, adatJavaslatok = [], sze
   // A munkaasztal részletéből „?nyit=<id>” paraméterrel jövünk: a partner sora nyitva.
   const [nyitott, setNyitott] = useState<string | null>(nyit ?? null);
   const [kijelolt, setKijelolt] = useState<Set<string>>(new Set());
+  const [confirm, confirmDialog] = useConfirm();
 
-  function osszevon(celId: string, forrasIds: string[]) {
-    if (!confirm("Összevonod? A beolvasztott partner megbízásai a megtartott partnerre kerülnek, a neve névváltozat lesz. Nem visszavonható.")) return;
+  async function osszevon(celId: string, forrasIds: string[]) {
+    if (!(await confirm("Összevonod? A beolvasztott partner megbízásai a megtartott partnerre kerülnek, a neve névváltozat lesz. Nem visszavonható."))) return;
     start(async () => {
       const r = await osszevonPartnereket(celId, forrasIds);
       toast.success(`Összevonva — ${r.megbizasok} megbízás átírva`);
@@ -36,6 +38,7 @@ export function PartnerekNezet({ partnerek, javaslatok, adatJavaslatok = [], sze
   const javasoltPartnerek = [...new Set(adatJavaslatok.map((j) => j.partner_id))];
   return (
     <div className="flex flex-col gap-4">
+      {confirmDialog}
       {javasoltPartnerek.length > 0 ? (
         <Card>
           <CardHeader><CardTitle className="text-base">Hiányzó partner-adatok — javaslatok a megbízásokból és a számlákból</CardTitle></CardHeader>

@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   Table,
   TableBody,
@@ -126,6 +127,7 @@ export function TelephelyekView({ site: active }: { site: SiteKey }) {
   const [osszHavi, setOsszHavi] = useState<OsszkeszletHaviRow[]>([]);
   const [incoming, setIncoming] = useState<IncomingRow[]>([]);
   const [inventoryOpen, setInventoryOpen] = useState(false);
+  const [confirm, confirmDialog] = useConfirm();
 
   const load = useCallback(async () => {
     if (active === "Összkészlet") {
@@ -173,7 +175,7 @@ export function TelephelyekView({ site: active }: { site: SiteKey }) {
         : m.partner === "Szétválogatás"
           ? "ez a szétválogatás, a hozzá tartozó összes sorral"
           : `${m.qty} db ${m.type} (${m.date})`;
-    if (!window.confirm(`Biztosan törlöd? ${mit}`)) return;
+    if (!(await confirm(`Biztosan törlöd? ${mit}`))) return;
     try {
       await deleteMovement(m.id);
       await load();
@@ -184,7 +186,7 @@ export function TelephelyekView({ site: active }: { site: SiteKey }) {
   }
 
   async function handleDeleteEvent(e: EventRow) {
-    if (!window.confirm(`Biztosan törlöd? ${e.details} (${e.date})`)) return;
+    if (!(await confirm(`Biztosan törlöd? ${e.details} (${e.date})`))) return;
     try {
       await deleteMovementEvent(e.id);
       await load();
@@ -496,6 +498,7 @@ export function TelephelyekView({ site: active }: { site: SiteKey }) {
           />
         </div>
       )}
+      {confirmDialog}
     </div>
   );
 }
