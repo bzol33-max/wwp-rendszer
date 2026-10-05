@@ -38,6 +38,7 @@ import type { MegalloReszlet } from "@/lib/fuvarozas/sofor-adatok";
 import type { Allapot } from "@/lib/fuvarozas/allapot";
 import { tukorSorok, type TukorSor } from "@/lib/fuvarozas2/ma-tukor";
 import { berUtkozes, napiSorrend } from "@/lib/fuvarozas2/napi-sorrend";
+import { hetCellak, hetMost, hetNapjai, hetSzama, type HetFuvar, type HetKartya, type HetMegallo, type HetMost, type HetNap } from "@/lib/fuvarozas2/ma-het";
 
 export type CsempeSzin = "normal" | "amber" | "red" | "mint";
 export type Csempe = { kulcs: string; cimke: string; ertek: string; also: string | null; szin: CsempeSzin; href: string | null };
@@ -76,6 +77,15 @@ export type MaBlokk = {
 export type MaKocsiAllapot = { szoveg: string; szin: "mint" | "amber" | "red" | "normal"; hely: string | null };
 
 export type { TukorSor, TukorAllas } from "@/lib/fuvarozas2/ma-tukor";
+export type { HetKartya, HetMost, HetNap } from "@/lib/fuvarozas2/ma-het";
+
+/** A heti rács (R2, 2026-10-05): kocsinként a „Most” és hétfőtől péntekig a fuvarok. */
+export type MaHet = {
+  cim: string;
+  napok: HetNap[];
+  sorok: { kod: string | null; sofor: string | null; cimke: string; helykitolto: string | null; allapot: MaKocsiAllapot | null; most: HetMost; cellak: HetKartya[][] }[];
+  kocsiNelkul: HetKartya[][];
+};
 
 export type MaKocsi = {
   kod: string | null;
@@ -115,6 +125,7 @@ export type MaVaszon = {
   /** Az adat előállításának ideje, „10:42” — a felület kiírja, mikor frissült. */
   frissitve: string;
   kocsik: MaKocsi[];
+  het: MaHet;
   kocsiNelkul: { id: string; partner: string; utvonal: string; nap: string | null; allapot: Allapot }[];
   teendok: { cimke: string; ertek: string; also: string | null; href: string }[];
   holnapDoboz: { cimke: string; ertek: string; szin: CsempeSzin }[];
@@ -659,6 +670,48 @@ export async function getMaVaszon(): Promise<MaVaszon> {
     });
   }
 
+  // ---------------------------------------------------------------- heti rács (R2)
+  const napok = hetNapjai(ma);
+  const hetFuvarok = await query<HetFuvar>(
+    `select m.id::text, m.allapot, m.jelleg, coalesce(p.nev, m.megrendelo) as partner,
+       coalesce(m.hivatkozas_kanonikus, m.pozicioszam, m.reise_id) as hivatkozas, j.kod as jarmu_kod,
+       to_char(m.datum, 'YYYY-MM-DD') as felrakas_nap,
+       to_char(coalesce(m.lerakas_datum, m.datum), 'YYYY-MM-DD') as lerakas_nap,
+       m.felrako, m.lerako
+     from fuvar_megbizasok m
+     left join fuvar_partnerek p on p.id = m.partner_id
+     left join fuvar_jarmuvek j on j.id = m.jarmu_id
+     where m.torolt_at is null and m.allapot is not null
+       and m.datum <= $2::date and coalesce(m.lerakas_datum, m.datum) >= $1::date
+     order by m.datum, m.id`,
+    [napok[0].nap, napok[4].nap]
+  );
+  const hetMegalloSorok = hetFuvarok.length
+    ? await query<{ megbizas_id: string; tipus: "felrako" | "lerako"; cim_nyers: string; tervezett_nap: string | null; ott: boolean; kesz: boolean }>(
+        `select megbizas_id::text, tipus, cim_nyers, tervezett_nap::text,
+           (gps_erkezes is not null or sofor_megerkezett_at is not null) as ott,
+           (gps_tavozas is not null or sofor_kesz_at is not null) as kesz
+         from fuvar_megallok where megbizas_id = any($1::bigint[]) order by megbizas_id, sorszam`,
+        [hetFuvarok.map((f) => f.id)]
+      )
+    : [];
+  const hetMegallok = new Map<string, HetMegallo[]>();
+  for (const g of hetMegalloSorok) {
+    const lista = hetMegallok.get(g.megbizas_id) ?? [];
+    lista.push({ tipus: g.tipus, varos: varosNev(g.cim_nyers) ?? g.cim_nyers, nap: g.tervezett_nap, ott: g.ott, kesz: g.kesz });
+    hetMegallok.set(g.megbizas_id, lista);
+  }
+  const het: MaHet = {
+    cim: `${hetSzama(napok[0].nap)}. hét`,
+    napok,
+    sorok: kocsik.map((k) => ({
+      kod: k.kod, sofor: k.sofor, cimke: k.cimke, helykitolto: k.helykitolto, allapot: k.allapot,
+      most: hetMost(k.sorok),
+      cellak: hetCellak(k.kod ? hetFuvarok.filter((f) => f.jarmu_kod === k.kod) : [], hetMegallok, napok),
+    })),
+    kocsiNelkul: hetCellak(hetFuvarok.filter((f) => !f.jarmu_kod), hetMegallok, napok),
+  };
+
   // ---------------------------------------------------------------- teendők, holnap, rendszer
   const teendok = [
     {
@@ -686,6 +739,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
     frissitve: ORA(most),
     elteresek: elteresek.sort((a, b) => (a.szin === b.szin ? 0 : a.szin === "red" ? -1 : 1)),
     kocsik,
+    het,
     kocsiNelkul: sorok.filter((s) => !s.jarmu_kod && (aznap(s, ma) || aznap(s, holnap))).map((s) => ({
       id: s.id, partner: s.partner ?? "(nincs megbízó)",
       utvonal: `${varosNev(s.felrako ?? "") ?? s.felrako ?? "—"} → ${varosNev(s.lerako ?? "") ?? s.lerako ?? "—"}`,

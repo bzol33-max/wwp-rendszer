@@ -4,6 +4,7 @@ import { AllasRogzitesGomb } from "@/components/fuvarozas2/allas-rogzites";
 import { NyugtaGomb, VisszavonGomb } from "@/components/fuvarozas2/elteres-nyugta";
 import { AutoFrissites } from "@/components/fuvarozas2/auto-frissites";
 import { Csempesor } from "@/components/fuvarozas2/csempesor";
+import { HetRacs } from "@/components/fuvarozas2/het-racs";
 
 // A „Ma" képernyő (Budaházi Zoltán, 2026-09-28): négy kocsi-oszlop egymás
 // mellett, mindegyik ugyanabban a sorrendben — fejléc (hol van most),
@@ -308,6 +309,8 @@ export function MaVaszonNezet({ adat }: { adat: MaVaszon }) {
           <NyugtazottLista adat={adat} />
         </div>
       )}
+
+      <HetRacs het={adat.het} />
 
       <div className="grid items-start gap-3 md:grid-cols-2 xl:grid-cols-4">
         {adat.kocsik.map((k, i) => <KocsiOszlop key={k.kod ?? `hely-${i}`} k={k} holnapCimke={adat.holnapCimke} />)}
