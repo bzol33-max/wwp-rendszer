@@ -44,6 +44,7 @@ import {
 } from "@/lib/keszlet/actions";
 import { kbNav } from "@/lib/keszlet/kbnav";
 import { useCanEdit } from "@/components/auth/edit-permission-context";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 function todayLabel() {
   const raw = new Date().toLocaleDateString("hu-HU", {
@@ -96,6 +97,7 @@ function dayGroupLabel(dayKey: string) {
 
 export function NyiregyhazaHaviTab() {
   const canEdit = useCanEdit();
+  const [confirm, confirmDialog] = useConfirm();
   const [loading, setLoading] = useState(true);
   const [purchases, setPurchases] = useState<PurchaseRow[]>([]);
   const [typeCounters, setTypeCounters] = useState<
@@ -248,9 +250,9 @@ export function NyiregyhazaHaviTab() {
   // ezért minden törlés előtt rákérdezünk, mi tűnik el pontosan.
   async function handleDelete(p: PurchaseRow) {
     if (
-      !window.confirm(
+      !(await confirm(
         `Biztosan törlöd? ${p.qty} db ${p.type}, ${p.total.toLocaleString("hu-HU")} Ft (${p.date})`
-      )
+      ))
     ) {
       return;
     }
@@ -265,10 +267,10 @@ export function NyiregyhazaHaviTab() {
 
   async function handleDeleteGroup(dayKey: string, line: { type: string; qty: number; ids: string[] }) {
     if (
-      !window.confirm(
+      !(await confirm(
         `Biztosan törlöd? ${dayGroupLabel(dayKey)} — ${line.type}, összesen ${line.qty} db ` +
           `(${line.ids.length} tétel). A készletből és a kasszából is visszaíródik.`
-      )
+      ))
     ) {
       return;
     }
@@ -386,9 +388,9 @@ export function NyiregyhazaHaviTab() {
 
   async function handlePaySeller(seller: string, total: number) {
     if (
-      !window.confirm(
+      !(await confirm(
         `${seller} kifizetése: ${total.toLocaleString("hu-HU")} Ft kerül ki a kasszából. Mehet?`
-      )
+      ))
     ) {
       return;
     }
@@ -1128,6 +1130,7 @@ export function NyiregyhazaHaviTab() {
           </div>
         </DialogContent>
       </Dialog>
+      {confirmDialog}
       </div>
     </div>
     </fieldset>
