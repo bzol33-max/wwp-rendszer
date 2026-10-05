@@ -320,6 +320,8 @@ export type SoforMegalloSor = {
   kontakt: string | null;
   /** Ezen a megállón fel-/lerakandó áru ("2 t 1.fok Titus"), ha a megbízás megállónként adja. */
   rakomany: string | null;
+  /** A megállón kért bejelentkezési / lerakodási kód (sofor-adatok.ts), ha a megbízás megadja. */
+  kod: string | null;
 };
 
 export type SoforDokumentum = {
@@ -639,6 +641,7 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
           null,
         kontakt: reszletek[i]?.kontakt ?? null,
         rakomany: reszletek[i]?.rakomany ?? null,
+        kod: reszletek[i]?.kod ?? null,
       })),
     };
   });

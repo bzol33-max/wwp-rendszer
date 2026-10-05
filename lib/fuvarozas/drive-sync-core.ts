@@ -278,7 +278,8 @@ const KIVONATOLASI_UTASITAS = `Egy fuvarmegbízás-dokumentum szövege következ
       "nap": string|null, // ISO dátum ÉÉÉÉ-HH-NN, ha erre a megállóra meg van adva
       "ido": string|null, // időpont vagy időablak röviden, szó szerint (pl. "8:00-20:00", "15:00-ig", "15 órás időkapu")
       "kontakt": string|null, // a HELYSZÍNEN hívható személy neve és telefonszáma, ha meg van adva — NEM a megbízó ügyintézője
-      "rakomany": string|null // ezen a megállón fel- vagy lerakandó áru és mennyiség röviden (pl. "2 t 1.fok Titus", "33 raklap"), ha megállónként meg van adva
+      "rakomany": string|null, // ezen a megállón fel- vagy lerakandó áru és mennyiség röviden (pl. "2 t 1.fok Titus", "33 raklap"), ha megállónként meg van adva
+      "kod": string|null // az EZEN a megállón kért bejelentkezési / lerakodási / foglalási kód vagy időkapu-szám szó szerint (pl. "Lerakodási kód: HEJ-061026361" -> "HEJ-061026361", "Booking 4471"), egyébként null
     }
   ],
   "referencia": string|null, // a felrakón/kapuban kért szám, ha KÜLÖNBÖZIK a pozíciószámtól (pl. "Ref.: 80066185", "Transporeon 1153460", rakodási szám, ORDER) — egyébként null

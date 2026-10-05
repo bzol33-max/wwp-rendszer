@@ -16,6 +16,7 @@ import type { SoforNap, SoforMegalloSor, SoforFuvarBlokk, SoforLezartFuvar } fro
 import { jelolMegerkeztem, markMegalloKesz, jelolVarakozast, jelezGondot, rogzitPozicioszamot, visszavonMegalloKesz } from "@/lib/fuvarozas/sofor";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { feltoltOldalakat, feltoltesUzenet } from "@/lib/fuvarozas/fuvarlevel-feltoltes";
+import { kontaktNev, kontaktTelefon } from "@/lib/fuvarozas/sofor-adatok";
 
 async function ujraprobal<T>(fn: () => Promise<T>): Promise<T> {
   let hiba: unknown;
@@ -129,6 +130,34 @@ function LezartKartya({ l }: { l: SoforLezartFuvar }) {
   );
 }
 
+/** „2026-10-06” → „10.06.” */
+const napRovid = (nap: string | null) => (nap && /^\d{4}-\d{2}-\d{2}$/.test(nap) ? `${nap.slice(5, 7)}.${nap.slice(8, 10)}.` : null);
+
+/**
+ * A megbízásból kiolvasott megálló-adatok (Micó, 2026-10-05: az időkapu és a
+ * lerakodási kód a papíron volt, a telefonon nem): időkapu, rakodóhely
+ * cége, a kapuban kért kód, rakomány, helyszíni kontakt. A Duvenbeck-ablak
+ * (ablakTol/ablakIg) külön jelenik meg; az időkapu ilyenkor csak kiegészítés.
+ */
+function MegalloAdatok({ m, teljes }: { m: SoforMegalloSor; teljes: boolean }) {
+  const idokapu = [napRovid(m.nap), m.ido].filter(Boolean).join(" ");
+  const telefon = kontaktTelefon(m.kontakt);
+  if (!idokapu && !m.kod && !(teljes && (m.ceg || m.rakomany || m.kontakt))) return null;
+  return (
+    <div className="flex flex-col gap-0.5 text-sm">
+      {idokapu ? <div><span className="text-[var(--m-muted)]">Időkapu:</span> <b>{idokapu}</b></div> : null}
+      {m.kod ? <div><span className="text-[var(--m-muted)]">Kód:</span> <b className="font-mono tracking-wide">{m.kod}</b></div> : null}
+      {teljes && m.ceg ? <div className="font-semibold">{m.ceg}</div> : null}
+      {teljes && m.rakomany ? <div>{m.tipus === "felrako" ? "Fel: " : "Le: "}{m.rakomany}</div> : null}
+      {teljes && m.kontakt ? (
+        telefon ? (
+          <a href={`tel:${telefon}`} className="font-semibold text-[var(--m-mint)]">📞 {[kontaktNev(m.kontakt), telefon].filter(Boolean).join(" · ")}</a>
+        ) : <div className="text-[var(--m-muted)]">{m.kontakt}</div>
+      ) : null}
+    </div>
+  );
+}
+
 function KovetkezoKartya({ m, f }: { m: SoforMegalloSor; f: SoforFuvarBlokk }) {
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -148,6 +177,10 @@ function KovetkezoKartya({ m, f }: { m: SoforMegalloSor; f: SoforFuvarBlokk }) {
         {!m.becslesElavult ? <span className="text-3xl font-bold">{ora(m.idopont)}</span> : null}
         <span className="text-sm text-[var(--m-muted)]">{f.megrendelo ?? ""}{f.reiseId ? ` · Út ID ${f.reiseId}` : f.pozicioszam ? ` · ${f.pozicioszam}` : ""}</span>
       </div>
+      <MegalloAdatok m={m} teljes />
+      {f.referencia || f.jarmuEloiras ? (
+        <div className="text-sm">{f.referencia ? <><span className="text-[var(--m-muted)]">Referencia:</span> <b className="font-mono">{f.referencia}</b></> : null}{f.referencia && f.jarmuEloiras ? " · " : ""}{f.jarmuEloiras ?? ""}</div>
+      ) : null}
       {varakozik ? <div className="rounded-xl bg-[var(--m-amb-d)] px-3 py-2 text-sm text-[var(--m-amb)]"><b>Várakozol</b> {ora(m.varakozasKezdete)} óta</div> : null}
       <div className="flex gap-2">
         <Gomb disabled={pending} onClick={() => window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(m.cim)}&travelmode=driving`, "_blank")}>Navigáció</Gomb>
@@ -201,7 +234,7 @@ function FuvarKartya({ f, ma }: { f: SoforFuvarBlokk; ma: boolean }) {
         {kesz ? <Pill>kész</Pill> : f.masRendszam ? <Pill szin="amb">a papíron: {f.masRendszam}</Pill> : null}
       </div>
       <div className="text-base font-bold">{elso?.varos ?? "—"} → {utolso?.varos ?? "—"}</div>
-      <div className="text-sm text-[var(--m-muted)]">{f.megrendelo ?? "—"}{f.reiseId ? ` · Út ID ${f.reiseId}` : ""}{f.pozicioszam ? ` · ${f.pozicioszam}` : ""}</div>
+      <div className="text-sm text-[var(--m-muted)]">{f.megrendelo ?? "—"}{f.reiseId ? ` · Út ID ${f.reiseId}` : ""}{f.pozicioszam ? ` · ${f.pozicioszam}` : ""}{f.referencia ? ` · Ref. ${f.referencia}` : ""}</div>
       <div className="flex flex-col gap-1.5">
         {f.megallok.map((m) => (
           <div key={m.megalloIndex} className="flex items-start gap-2 rounded-xl bg-[var(--m-surf2)] px-3 py-2 text-sm">
@@ -214,6 +247,7 @@ function FuvarKartya({ f, ma }: { f: SoforFuvarBlokk; ma: boolean }) {
                 {m.kesz ? `kész ${ora(m.idopont)}${m.keszForras === "gps" ? " (GPS)" : m.keszBy ? ` (${m.keszBy})` : ""}` : m.becslesElavult ? "" : `kb. ${ora(m.idopont)}`}
                 {m.helyBizonytalan && !m.helyRogzitve ? " · cím bizonytalan" : ""}
               </div>
+              {!m.kesz ? <MegalloAdatok m={m} teljes={false} /> : null}
             </div>
             {ma && m.visszavonhato ? (
               <button

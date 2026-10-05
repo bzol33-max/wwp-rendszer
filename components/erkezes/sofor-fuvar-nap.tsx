@@ -539,6 +539,7 @@ function AktualisMegbizas({
             <span className={cn(aktiv.ceg ? "text-xs text-[var(--mob-muted)]" : "text-sm font-semibold")}>{aktiv.cim}</span>
           </div>
           {aktiv.rakomany && <span className="text-sm font-semibold">{aktiv.tipus === "felrako" ? "Fel: " : "Le: "}{aktiv.rakomany}</span>}
+          {aktiv.kod && <span className="text-sm">Kód: <b className="font-mono tracking-wide">{aktiv.kod}</b></span>}
           {aktiv.kontakt &&
             (telefon ? (
               <a
@@ -709,6 +710,7 @@ function MegbizasElonezet({ blokk, cimke }: { blokk: SoforFuvarBlokk; cimke: str
               {m.ceg && <span className="text-sm font-semibold">{m.ceg}</span>}
               <span className="text-xs text-[var(--mob-muted)]">{m.cim}</span>
               {m.rakomany && <span className="text-xs font-semibold">{m.tipus === "felrako" ? "Fel: " : "Le: "}{m.rakomany}</span>}
+              {m.kod && <span className="text-xs">Kód: <b className="font-mono tracking-wide">{m.kod}</b></span>}
               {m.kontakt && <KontaktSor kontakt={m.kontakt} />}
             </div>
           ))}

@@ -35,6 +35,12 @@ export type MegalloReszlet = {
   kontakt: string | null;
   /** Ezen a megállón fel-/lerakandó áru és mennyiség röviden ("2 t 1.fok Titus"). */
   rakomany?: string | null;
+  /**
+   * Az ezen a megállón kért bejelentkezési / lerakodási / foglalási kód
+   * („HEJ-061026361”, Lidl Hejőkürt). Micó 2026-10-05: a papíron ott volt,
+   * a telefonján nem — a kapuban ezt kérik.
+   */
+  kod?: string | null;
 };
 
 export type SoforAdatok = {
@@ -79,6 +85,7 @@ export function soforAdatokKivonatbol(nyers: unknown): SoforAdatok {
         ido: szoveg(r.ido, 60),
         kontakt: szoveg(r.kontakt, 80),
         rakomany: szoveg(r.rakomany, 80),
+        kod: szoveg(r.kod, 60),
       };
     })
     .filter((m): m is MegalloReszlet => m !== null)
@@ -96,7 +103,7 @@ export function vanSoforAdat(a: SoforAdatok): boolean {
   return (
     a.referencia !== null ||
     a.jarmuEloiras !== null ||
-    a.megallok.some((m) => m.ceg || m.ido || m.kontakt || m.nap || m.rakomany)
+    a.megallok.some((m) => m.ceg || m.ido || m.kontakt || m.nap || m.rakomany || m.kod)
   );
 }
 
