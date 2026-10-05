@@ -19,10 +19,10 @@ import {
   torolSzabadsag,
 } from "@/lib/jelenlet/actions";
 import {
-  hetvege,
   igenyUtkozesei,
   keretJovahagyasUtan,
   ledolgozosSzombat,
+  munkanap,
   munkanapok,
   munkaszunetiNap,
   rovidNevek,
@@ -34,6 +34,13 @@ import {
   type TavolletNap,
 } from "@/lib/jelenlet/shared";
 
+// Szabadság oldal — "4B, kompakt" elrendezés (Budaházi Zoltán választása,
+// 2026-10-05): balra az éves létszám-hőtérkép (hány ember hiányzik naponta),
+// jobbra egy panelben a keretek és az elkövetkező szabadságok, ahol a kérés
+// helyben jóváhagyható. A rögzítés a hőtérkép alatt egy sorban.
+
+const HO_ROVID = ["jan", "febr", "márc", "ápr", "máj", "jún", "júl", "aug", "szept", "okt", "nov", "dec"];
+
 // A betegszabadság a dolgozó színét tartja (ki az), de fehér csíkozást kap
 // (mi az) — azonos színnel a sima szabadságtól nem lehetett megkülönböztetni.
 const BETEG_CSIKOS = {
@@ -41,7 +48,9 @@ const BETEG_CSIKOS = {
     "repeating-linear-gradient(135deg, rgba(255,255,255,0.55) 0 3px, transparent 3px 6px)",
 };
 
-const HO_ROVID = ["jan", "febr", "márc", "ápr", "máj", "jún", "júl", "aug", "szept", "okt", "nov", "dec"];
+function budapestMa(): string {
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Budapest" }).format(new Date());
+}
 
 function honapNapjai(ev: number, honap: number): number {
   return new Date(Date.UTC(ev, honap, 0)).getUTCDate();
@@ -60,28 +69,104 @@ function szakaszCimke(tol: string, ig: string): string {
   return tol === ig ? datumCimke(tol) : `${datumCimke(tol)} – ${datumCimke(ig)}`;
 }
 
-/** Színes négyzet a dolgozó betűjelével — a jelmagyarázathoz és a listákhoz. */
-function Jel({ szin, betu }: { szin: string; betu: string }) {
+function napKulonbseg(tol: string, ig: string): number {
+  return Math.round(
+    (new Date(`${ig}T12:00:00Z`).getTime() - new Date(`${tol}T12:00:00Z`).getTime()) / 86_400_000
+  );
+}
+
+function mikor(tol: string, ig: string, ma: string): string {
+  if (ig < ma) return "lezajlott";
+  if (tol <= ma) return tol === ig ? "ma" : "folyamatban";
+  const n = napKulonbseg(ma, tol);
+  return n === 1 ? "holnap" : `${n} nap múlva`;
+}
+
+/** Színes négyzet a dolgozó betűjelével. */
+function Jel({
+  szin,
+  betu,
+  beteg,
+  halvany,
+  nagy,
+}: {
+  szin: string;
+  betu: string;
+  beteg?: boolean;
+  halvany?: boolean;
+  nagy?: boolean;
+}) {
   return (
     <span
+      style={beteg ? BETEG_CSIKOS : undefined}
       className={cn(
-        "inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded px-0.5 text-[9px] font-extrabold text-white",
-        szin
+        "inline-flex shrink-0 items-center justify-center rounded font-extrabold text-white",
+        nagy ? "h-[22px] min-w-[26px] px-1 text-[11px]" : "h-4 min-w-4 px-0.5 text-[9px]",
+        szin,
+        halvany && "opacity-50"
       )}
     >
+      {beteg && "✚"}
       {betu}
     </span>
   );
 }
 
 type Nezet = {
-  /** Dolgozó-sorrend: ez adja a színeket és a cellák csíksorrendjét. */
+  /** Dolgozó-sorrend: ez adja a színeket. */
   sorrend: string[];
   szin: Map<string, string>;
-  rovid: Map<string, string>;
   betu: Map<string, string>;
+  nev: Map<string, string>;
   merleg: Map<string, SzabadsagMerleg>;
 };
+
+/** Egy sor a közelgő-listában: egy igény, vagy kérés nélküli távollét-napok. */
+type Tetel = {
+  kulcs: string;
+  employeeId: string;
+  tol: string;
+  ig: string;
+  tipus: SzabadsagTipus;
+  allapot: "kert" | "jovahagyva";
+  /** Hiányzik, ha a napok a jelenléti naplóból jönnek (nincs mögöttük kérés). */
+  igeny?: SzabadsagIgeny;
+};
+
+/**
+ * A kérés nélküli távollét-napok (régi adat, nap-szerkesztő, telefonos
+ * betegszabadság) szakaszokká fűzve: két nap egy szakasz, ha köztük csak
+ * hétvége vagy ünnep van.
+ */
+function tavolletSzakaszok(tavolletek: TavolletNap[]): Tetel[] {
+  const rendezett = [...tavolletek].sort((a, b) =>
+    a.employee_id === b.employee_id
+      ? a.work_date.localeCompare(b.work_date)
+      : a.employee_id.localeCompare(b.employee_id)
+  );
+  const out: Tetel[] = [];
+  for (const t of rendezett) {
+    const elozo = out[out.length - 1];
+    if (
+      elozo &&
+      elozo.employeeId === t.employee_id &&
+      elozo.tipus === t.day_type &&
+      munkanapok(elozo.ig, t.work_date).length <= 2
+    ) {
+      elozo.ig = t.work_date;
+      continue;
+    }
+    out.push({
+      kulcs: `t-${t.employee_id}-${t.work_date}`,
+      employeeId: t.employee_id,
+      tol: t.work_date,
+      ig: t.work_date,
+      tipus: t.day_type,
+      allapot: "jovahagyva",
+    });
+  }
+  return out;
+}
 
 export function SzabadsagView({
   ev,
@@ -98,6 +183,8 @@ export function SzabadsagView({
   const canEdit = useCanEdit();
   const [pending, startTransition] = useTransition();
   const [keretSzerk, setKeretSzerk] = useState<SzabadsagMerleg | null>(null);
+  const [mindet, setMindet] = useState(false);
+  const ma = budapestMa();
 
   const nezet: Nezet = useMemo(() => {
     const sorrend = merlegek.map((m) => m.employeeId);
@@ -105,8 +192,8 @@ export function SzabadsagView({
     return {
       sorrend,
       szin: new Map(sorrend.map((id, i) => [id, szabadsagSzin(i)])),
-      rovid: new Map(sorrend.map((id, i) => [id, nevek[i].rovid])),
       betu: new Map(sorrend.map((id, i) => [id, nevek[i].betu])),
+      nev: new Map(merlegek.map((m) => [m.employeeId, m.name])),
       merleg: new Map(merlegek.map((m) => [m.employeeId, m])),
     };
   }, [merlegek]);
@@ -115,11 +202,33 @@ export function SzabadsagView({
     () => szabadsagRacs(igenyek, nezet.sorrend, tavolletek),
     [igenyek, nezet.sorrend, tavolletek]
   );
-  const varakozo = useMemo(() => igenyek.filter((i) => i.allapot === "kert"), [igenyek]);
-  const jovahagyott = useMemo(
-    () => igenyek.filter((i) => i.allapot === "jovahagyva"),
-    [igenyek]
-  );
+
+  const tetelek = useMemo(() => {
+    const igenyTetelek: Tetel[] = igenyek
+      .filter((i) => i.allapot === "kert" || i.allapot === "jovahagyva")
+      .map((i) => ({
+        kulcs: `i-${i.id}`,
+        employeeId: i.employee_id,
+        tol: i.tol,
+        ig: i.ig,
+        tipus: i.tipus,
+        allapot: i.allapot as "kert" | "jovahagyva",
+        igeny: i,
+      }));
+    return [...igenyTetelek, ...tavolletSzakaszok(tavolletek)].sort(
+      (a, b) =>
+        a.tol.localeCompare(b.tol) ||
+        nezet.sorrend.indexOf(a.employeeId) - nezet.sorrend.indexOf(b.employeeId)
+    );
+  }, [igenyek, tavolletek, nezet.sorrend]);
+
+  // Az idei évnél alapból csak ami még előttünk van (vagy döntésre vár); egy
+  // korábbi év megnyitásakor nincs "közelgő", ott az egész év látszik.
+  const csakKozelgo = !mindet && ev >= Number(ma.slice(0, 4));
+  const lathato = csakKozelgo
+    ? tetelek.filter((t) => t.ig >= ma || t.allapot === "kert")
+    : tetelek;
+  const varakozo = tetelek.filter((t) => t.allapot === "kert").length;
 
   function futtat(mit: () => Promise<void>, siker: string, utana?: () => void) {
     startTransition(async () => {
@@ -135,25 +244,11 @@ export function SzabadsagView({
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      {/* --- Fent: kinek mennyi kerete van és mennyit használt --- */}
-      <div className="flex flex-wrap gap-2">
-        {merlegek.map((m) => (
-          <MerlegKartya
-            key={m.employeeId}
-            merleg={m}
-            szin={nezet.szin.get(m.employeeId) ?? "bg-muted"}
-            betu={nezet.betu.get(m.employeeId) ?? "?"}
-            canEdit={canEdit}
-            onKeret={() => setKeretSzerk(m)}
-          />
-        ))}
-      </div>
-
-      {/* --- Középen: az éves rács --- */}
-      <div className="rounded-xl border bg-card p-3">
-        <div className="mb-2.5 flex items-center justify-between gap-2">
-          <p className="text-sm font-semibold">Szabadságok — {ev}</p>
+    <div className="flex flex-wrap items-start gap-4">
+      {/* --- Balra: az éves hőtérkép és a rögzítés --- */}
+      <div className="flex min-w-0 flex-[999_1_720px] flex-col gap-3 rounded-xl border bg-card p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-sm font-semibold">Hány ember hiányzik naponta — {ev}</p>
           <div className="flex items-center gap-1">
             <Button size="xs" variant="outline" onClick={() => router.push(`?ev=${ev - 1}`)}>
               <ChevronLeft className="size-3" />
@@ -168,107 +263,81 @@ export function SzabadsagView({
             </Button>
           </div>
         </div>
-        <EvesRacs ev={ev} racs={racs} nezet={nezet} />
-        <Jelmagyarazat nezet={nezet} merlegek={merlegek} />
+        <Jelmagyarazat />
+        <Hoterkep ev={ev} ma={ma} racs={racs} nezet={nezet} />
+        {canEdit && (
+          <RogzitoSor
+            merlegek={merlegek}
+            pending={pending}
+            onRogzit={(adat, utana) =>
+              futtat(() => rogzitSzabadsag(adat), "Szabadság rögzítve.", utana)
+            }
+          />
+        )}
       </div>
 
-      {/* --- Alul: balra a jóváhagyás, jobbra a rögzítés --- */}
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-        <div className="overflow-hidden rounded-xl border bg-card">
-          <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-2">
-            <span className="text-sm font-semibold">Jóváhagyásra vár</span>
-            <span
-              className={cn(
-                "rounded-full px-2 py-0.5 text-[11px] font-bold",
-                varakozo.length > 0
-                  ? "bg-warning text-warning-foreground"
-                  : "border bg-card text-muted-foreground"
-              )}
-            >
-              {varakozo.length}
+      {/* --- Jobbra: keret és közelgő, helyben döntéssel --- */}
+      <div className="flex min-w-0 flex-[1_1_340px] flex-col rounded-xl border bg-card p-4">
+        <p className="pb-2.5 text-sm font-semibold">Keret és közelgő</p>
+        <div className="flex flex-col gap-2 pb-3">
+          {merlegek.map((m) => (
+            <KeretSor
+              key={m.employeeId}
+              merleg={m}
+              szin={nezet.szin.get(m.employeeId) ?? "bg-muted"}
+              betu={nezet.betu.get(m.employeeId) ?? "?"}
+              canEdit={canEdit}
+              onKeret={() => setKeretSzerk(m)}
+            />
+          ))}
+        </div>
+        <div className="flex items-center justify-between gap-2 border-t pt-2.5">
+          <span className="text-[11px] font-extrabold tracking-wide text-muted-foreground uppercase">
+            {csakKozelgo ? "Közelgő" : `Az év szabadságai`}
+          </span>
+          {varakozo > 0 && (
+            <span className="rounded-full bg-warning px-2 py-0.5 text-[11px] font-bold text-warning-foreground">
+              {varakozo} döntésre vár
             </span>
-          </div>
-          {varakozo.length === 0 ? (
-            <p className="px-3 py-3 text-xs text-muted-foreground">
-              Nincs elbírálásra váró kérés.
-            </p>
-          ) : (
-            varakozo.map((i) => (
-              <KerelemSor
-                key={i.id}
-                igeny={i}
-                mind={igenyek}
-                nezet={nezet}
-                canEdit={canEdit}
-                pending={pending}
-                onJovahagy={() =>
-                  futtat(() => jovahagySzabadsagIgeny(i.id), "Szabadság jóváhagyva.")
-                }
-                onElutasit={(oka) =>
-                  futtat(
-                    () => elutasitSzabadsagIgeny({ igenyId: i.id, oka }),
-                    "A kérés elutasítva."
-                  )
-                }
-              />
-            ))
           )}
         </div>
-
-        <RogzitoDoboz
-          merlegek={merlegek}
-          canEdit={canEdit}
-          pending={pending}
-          onRogzit={(adat, utana) =>
-            futtat(() => rogzitSzabadsag(adat), "Szabadság rögzítve.", utana)
-          }
-        />
+        {lathato.length === 0 ? (
+          <p className="py-3 text-xs text-muted-foreground">
+            {csakKozelgo ? "Nincs előttünk álló szabadság." : "Ebben az évben nincs szabadság."}
+          </p>
+        ) : (
+          lathato.map((t) => (
+            <KozelgoSor
+              key={t.kulcs}
+              tetel={t}
+              ma={ma}
+              mind={igenyek}
+              nezet={nezet}
+              canEdit={canEdit}
+              pending={pending}
+              onJovahagy={(id) =>
+                futtat(() => jovahagySzabadsagIgeny(id), "Szabadság jóváhagyva.")
+              }
+              onElutasit={(id, oka) =>
+                futtat(() => elutasitSzabadsagIgeny({ igenyId: id, oka }), "A kérés elutasítva.")
+              }
+              onVisszavon={(id) =>
+                futtat(() => torolSzabadsag(id), "Visszavonva, a napok felszabadultak.")
+              }
+            />
+          ))
+        )}
+        {ev >= Number(ma.slice(0, 4)) && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="mt-2.5 self-start"
+            onClick={() => setMindet((v) => !v)}
+          >
+            {mindet ? "Csak a közelgők" : "Korábbiak megjelenítése"}
+          </Button>
+        )}
       </div>
-
-      {/* Jóváhagyott szakaszok — egy elkattintott jóváhagyás vagy egy elírt
-          dátum csak itt vonható vissza, és a napok is visszakerülnek. */}
-      {jovahagyott.length > 0 && (
-        <details className="overflow-hidden rounded-xl border bg-card">
-          <summary className="cursor-pointer border-b bg-muted/40 px-3 py-2 text-sm font-semibold">
-            Jóváhagyott szakaszok ({jovahagyott.length})
-          </summary>
-          {jovahagyott.map((i) => (
-            <div
-              key={i.id}
-              className="flex flex-wrap items-center gap-2 border-b px-3 py-1.5 text-xs last:border-b-0"
-            >
-              <Jel szin={nezet.szin.get(i.employee_id) ?? "bg-muted"} betu={nezet.betu.get(i.employee_id) ?? "?"} />
-              <span className="flex-1">
-                <b>{szakaszCimke(i.tol, i.ig)}</b> · {i.employee_name} ·{" "}
-                {munkanapok(i.tol, i.ig).length} munkanap
-                {i.tipus === "beteg" && " · betegszabadság"}
-                {i.dontes_by && (
-                  <span className="text-muted-foreground"> · {i.dontes_by}</span>
-                )}
-              </span>
-              {canEdit && (
-                <Button
-                  size="xs"
-                  variant="outline"
-                  disabled={pending}
-                  onClick={() => {
-                    if (
-                      !window.confirm(
-                        `Visszavonod? ${i.employee_name}: ${szakaszCimke(i.tol, i.ig)}\n\nA napok törlődnek a jelenlétiből, és a keretbe visszakerülnek.`
-                      )
-                    ) {
-                      return;
-                    }
-                    futtat(() => torolSzabadsag(i.id), "Visszavonva, a napok felszabadultak.");
-                  }}
-                >
-                  Visszavonom
-                </Button>
-              )}
-            </div>
-          ))}
-        </details>
-      )}
 
       {keretSzerk && (
         <KeretDialog
@@ -289,9 +358,125 @@ export function SzabadsagView({
   );
 }
 
-// --- Fejléc-kártya egy dolgozóról ---
+// --- Jelmagyarázat ---
 
-function MerlegKartya({
+function Jelmagyarazat() {
+  const elem = (szin: string, szoveg: string, extra?: string) => (
+    <span className="inline-flex items-center gap-1.5">
+      <span className={cn("h-3 w-4 rounded-[2px]", szin, extra)} />
+      {szoveg}
+    </span>
+  );
+  return (
+    <div className="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-[11px] text-muted-foreground">
+      {elem("bg-secondary", "senki")}
+      {elem("bg-blue-200", "1 fő")}
+      {elem("bg-amber-500", "2 fő")}
+      {elem("bg-red-600", "3+ fő")}
+      {elem("bg-zinc-300 dark:bg-zinc-700", "hétvége / ünnep (Ü)")}
+      {elem("bg-secondary", "ma", "ring-2 ring-blue-600 ring-inset")}
+      <span className="inline-flex items-center gap-1.5">
+        <span className="relative h-3 w-4 rounded-[2px] bg-blue-200">
+          <span className="absolute top-0.5 right-0.5 size-1 rounded-full bg-foreground/70" />
+        </span>
+        van köztük döntésre váró kérés
+      </span>
+    </div>
+  );
+}
+
+// --- Az éves hőtérkép: hónapok sorban, napok oszlopban, a szín a létszám ---
+
+function Hoterkep({
+  ev,
+  ma,
+  racs,
+  nezet,
+}: {
+  ev: number;
+  ma: string;
+  racs: ReturnType<typeof szabadsagRacs>;
+  nezet: Nezet;
+}) {
+  return (
+    <div className="overflow-x-auto">
+      <div className="grid min-w-[720px] grid-cols-[40px_repeat(31,minmax(0,1fr))] gap-[3px]">
+        <span />
+        {Array.from({ length: 31 }, (_, i) => (
+          <span key={i} className="text-center text-[10px] text-muted-foreground">
+            {i + 1}
+          </span>
+        ))}
+        {Array.from({ length: 12 }, (_, h) => {
+          const honap = h + 1;
+          const napokSzama = honapNapjai(ev, honap);
+          return (
+            <div key={honap} className="contents">
+              <span className="flex items-center text-[11px] font-bold text-muted-foreground">
+                {HO_ROVID[h]}
+              </span>
+              {Array.from({ length: 31 }, (_, n) => {
+                const nap = n + 1;
+                if (nap > napokSzama) return <span key={nap} />;
+                const napIso = iso(ev, honap, nap);
+                const unnep = munkaszunetiNap(napIso);
+                const szabadnap = !munkanap(napIso);
+                // A hőtérkép csak munkanapon számol: hétvégén senki nem "hiányzik".
+                const lista = szabadnap ? [] : (racs.get(napIso) ?? []);
+                const db = lista.length;
+                const kert = lista.some((b) => b.allapot === "kert");
+                const cimke = [
+                  napIso,
+                  unnep ? `(${unnep})` : ledolgozosSzombat(napIso) ? "(ledolgozós szombat)" : "",
+                  db > 0
+                    ? `— ${lista
+                        .map(
+                          (b) =>
+                            `${nezet.nev.get(b.employeeId) ?? "?"}${b.tipus === "beteg" ? " [beteg]" : ""}${
+                              b.allapot === "kert" ? " (kért)" : ""
+                            }`
+                        )
+                        .join(", ")}`
+                    : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ");
+                return (
+                  <span
+                    key={nap}
+                    title={cimke}
+                    className={cn(
+                      "relative flex h-8 items-center justify-center rounded-[4px] text-xs font-extrabold",
+                      szabadnap
+                        ? "bg-zinc-300 text-[9px] text-zinc-600 dark:bg-zinc-700 dark:text-zinc-300"
+                        : db === 0
+                          ? "bg-secondary"
+                          : db === 1
+                            ? "bg-blue-200 text-blue-900"
+                            : db === 2
+                              ? "bg-amber-500 text-amber-950"
+                              : "bg-red-600 text-white",
+                      napIso === ma && "ring-2 ring-blue-600 ring-inset"
+                    )}
+                  >
+                    {unnep ? "Ü" : db > 0 ? db : ""}
+                    {kert && (
+                      <span className="absolute top-0.5 right-0.5 size-1 rounded-full bg-foreground/70" />
+                    )}
+                  </span>
+                );
+              })}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// --- Keret egy sorban ---
+
+function KeretSor({
   merleg,
   szin,
   betu,
@@ -305,374 +490,214 @@ function MerlegKartya({
   onKeret: () => void;
 }) {
   const keret = merleg.keret;
-  // A sáv három szakasza: ami elment, ami jóváhagyásra vár, és ami szabad.
   const szazalek = (n: number) => (keret && keret > 0 ? `${Math.min(100, (n / keret) * 100)}%` : "0%");
-  const szabad = keret === null ? 0 : Math.max(0, keret - merleg.kivett - merleg.kert);
+  const tullepve = merleg.maradek !== null && merleg.maradek < 0;
 
   return (
-    <div className="min-w-[164px] flex-1 rounded-xl border bg-card px-3 py-2">
-      <div className="flex items-center gap-1.5 text-xs font-semibold">
-        <Jel szin={szin} betu={betu} />
-        <span className="truncate">{merleg.name}</span>
-        {canEdit && (
-          <button
-            type="button"
-            onClick={onKeret}
-            title="Keret beállítása"
-            className="ml-auto shrink-0 text-muted-foreground hover:text-foreground"
-          >
-            <Pencil className="size-3" />
-          </button>
-        )}
-      </div>
-
+    <div className="flex items-center gap-2 text-[13px]">
+      <Jel szin={szin} betu={betu} />
+      <span className="min-w-0 flex-1 truncate">{merleg.name}</span>
       {keret === null ? (
-        <>
-          <p className="mt-1 text-[11px] text-muted-foreground">Keret nincs beállítva.</p>
-          {canEdit && (
-            <Button size="xs" variant="outline" className="mt-1" onClick={onKeret}>
-              Beállítom
-            </Button>
-          )}
-        </>
+        canEdit ? (
+          <Button size="xs" variant="outline" onClick={onKeret}>
+            Keret beállítása
+          </Button>
+        ) : (
+          <span className="text-xs text-muted-foreground">nincs keret</span>
+        )
       ) : (
         <>
-          {merleg.maradek !== null && merleg.maradek < 0 ? (
-            <p className="text-xl leading-tight font-extrabold text-destructive">
-              {Math.abs(merleg.maradek)}
-              <span className="ml-1 text-[11px] font-semibold">nappal túllépve</span>
-            </p>
-          ) : (
-            <p className="text-xl leading-tight font-extrabold">
-              {merleg.maradek}
-              <span className="ml-1 text-[11px] font-semibold text-muted-foreground">
-                nap maradt
-              </span>
-            </p>
-          )}
-          <div className="my-1 flex h-1.5 overflow-hidden rounded-full bg-secondary">
+          <div
+            className="flex h-1.5 w-[70px] overflow-hidden rounded-full bg-secondary"
+            title={`kivéve ${merleg.kivett}, kért ${merleg.kert}`}
+          >
             <span className="block bg-success" style={{ width: szazalek(merleg.kivett) }} />
             <span className="block bg-warning" style={{ width: szazalek(merleg.kert) }} />
-            <span className="block bg-border" style={{ width: szazalek(szabad) }} />
           </div>
-          <p className="text-[10px] text-muted-foreground">
-            keret {keret} · <b className="text-foreground">kivéve {merleg.kivett}</b>
-            {merleg.kert > 0 && <b className="text-warning"> · kért {merleg.kert}</b>}
-          </p>
+          <b
+            className={cn("w-[54px] text-right", tullepve && "text-destructive")}
+            title={tullepve ? "Túllépte a keretet" : `${keret} napos keretből`}
+          >
+            {merleg.maradek} / {keret}
+          </b>
+          {canEdit && (
+            <button
+              type="button"
+              onClick={onKeret}
+              aria-label={`${merleg.name} keretének beállítása`}
+              className="shrink-0 text-muted-foreground hover:text-foreground"
+            >
+              <Pencil className="size-3" />
+            </button>
+          )}
         </>
       )}
     </div>
   );
 }
 
-// --- Az éves rács: hónapok sorban, napok oszlopban, osztott cellával ---
+// --- Egy sor a közelgő-listában ---
 
-function EvesRacs({
-  ev,
-  racs,
-  nezet,
-}: {
-  ev: number;
-  racs: ReturnType<typeof szabadsagRacs>;
-  nezet: Nezet;
-}) {
-  return (
-    <div className="overflow-x-auto">
-      <div className="min-w-[760px]">
-        <div className="grid grid-cols-[34px_repeat(31,minmax(0,1fr))] gap-[2px]">
-          <span />
-          {Array.from({ length: 31 }, (_, i) => (
-            <span key={i} className="text-center text-[7.5px] text-muted-foreground">
-              {i + 1}
-            </span>
-          ))}
-        </div>
-        <div className="grid grid-cols-[34px_repeat(31,minmax(0,1fr))] gap-[2px]">
-          {Array.from({ length: 12 }, (_, h) => {
-            const honap = h + 1;
-            const napokSzama = honapNapjai(ev, honap);
-            return (
-              <div key={honap} className="contents">
-                <span className="flex items-center text-[10px] font-bold text-muted-foreground">
-                  {HO_ROVID[h]}
-                </span>
-                {Array.from({ length: 31 }, (_, n) => {
-                  const nap = n + 1;
-                  if (nap > napokSzama) {
-                    return <span key={nap} className="h-8 rounded-[3px]" />;
-                  }
-                  const napIso = iso(ev, honap, nap);
-                  const lista = racs.get(napIso) ?? [];
-                  const tobben = lista.length >= 2;
-                  const unnep = munkaszunetiNap(napIso);
-                  const hetvegi = hetvege(napIso);
-                  const ledolgozos = ledolgozosSzombat(napIso);
-                  const napCimke = unnep
-                    ? `${napIso} (${unnep})`
-                    : ledolgozos
-                      ? `${napIso} (ledolgozós szombat)`
-                      : napIso;
-                  // Üres cellába kiírjuk, miért nem munkanap — a szürke
-                  // árnyalat önmagában alig vált el a hétköznaptól.
-                  const jelzes = unnep
-                    ? "ünnep"
-                    : ledolgozos
-                      ? "Szo ✱"
-                      : hetvegi
-                        ? new Date(`${napIso}T12:00:00Z`).getUTCDay() === 6
-                          ? "Szo"
-                          : "V"
-                        : null;
-                  const cimke =
-                    lista.length === 0
-                      ? napCimke
-                      : `${napCimke} — ${lista
-                          .map(
-                            (b) =>
-                              `${nezet.merleg.get(b.employeeId)?.name ?? "?"}${
-                                b.allapot === "kert" ? " (kért)" : ""
-                              }${b.tipus === "beteg" ? " [beteg]" : ""}`
-                          )
-                          .join(", ")}`;
-                  return (
-                    <span
-                      key={nap}
-                      title={cimke}
-                      className={cn(
-                        "relative flex h-8 flex-col gap-px overflow-hidden rounded-[3px] p-px",
-                        unnep
-                          ? "bg-orange-200 dark:bg-orange-900/50"
-                          : hetvegi && !ledolgozos
-                            ? "bg-zinc-300 dark:bg-zinc-700"
-                            : "bg-secondary",
-                        ledolgozos && "ring-1 ring-zinc-400 ring-inset",
-                        tobben && "ring-2 ring-destructive ring-inset"
-                      )}
-                    >
-                      {lista.length === 0 && jelzes && (
-                        <span
-                          className={cn(
-                            "m-auto text-[7.5px] leading-none font-semibold",
-                            unnep
-                              ? "text-orange-800 dark:text-orange-200"
-                              : "text-zinc-600 dark:text-zinc-300"
-                          )}
-                        >
-                          {jelzes}
-                        </span>
-                      )}
-                      {/* Négy fő fölött a betűjel sem fér ki — ott a sarokba
-                          kerül a létszám, és csak a színek beszélnek. */}
-                      {lista.length >= 3 && (
-                        <b className="absolute top-0 right-0 z-10 rounded-bl-[3px] bg-card px-px text-[7.5px] leading-[8px] font-black text-destructive">
-                          {lista.length}
-                        </b>
-                      )}
-                      {lista.map((b, idx) => (
-                        <i
-                          key={`${b.employeeId}-${idx}`}
-                          className={cn(
-                            "flex min-h-[3px] w-full flex-1 items-center justify-center overflow-hidden rounded-[2px] text-[8px] leading-none font-extrabold text-white not-italic",
-                            nezet.szin.get(b.employeeId) ?? "bg-muted",
-                            // A még jóvá nem hagyott kérés halvány, és sötét
-                            // szegélyt kap, hogy ne lehessen összekeverni a
-                            // kész döntéssel.
-                            b.allapot === "kert" && "opacity-55 ring-1 ring-foreground/30 ring-inset"
-                          )}
-                          style={b.tipus === "beteg" ? BETEG_CSIKOS : undefined}
-                        >
-                          {b.tipus === "beteg" && lista.length <= 3 && "✚"}
-                          {lista.length === 1
-                            ? nezet.rovid.get(b.employeeId)
-                            : lista.length <= 3
-                              ? nezet.betu.get(b.employeeId)
-                              : ""}
-                        </i>
-                      ))}
-                    </span>
-                  );
-                })}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Jelmagyarazat({ nezet, merlegek }: { nezet: Nezet; merlegek: SzabadsagMerleg[] }) {
-  return (
-    <div className="mt-2.5 flex flex-wrap items-center gap-x-3.5 gap-y-1 text-[10.5px] text-muted-foreground">
-      <span className="inline-flex items-center gap-1.5">
-        <span className="h-2.5 w-3.5 rounded-[2px] bg-success" />
-        jóváhagyott
-      </span>
-      <span className="inline-flex items-center gap-1.5">
-        <span className="h-2.5 w-3.5 rounded-[2px] bg-success opacity-55 ring-1 ring-foreground/30 ring-inset" />
-        kért, még nincs döntés
-      </span>
-      <span className="inline-flex items-center gap-1.5">
-        <span className="h-2.5 w-3.5 rounded-[2px] bg-success" style={BETEG_CSIKOS} />
-        ✚ betegszabadság (csíkos, nem fogyaszt)
-      </span>
-      <span className="inline-flex items-center gap-1.5">
-        <span className="h-2.5 w-3.5 rounded-[2px] bg-secondary ring-2 ring-destructive ring-inset" />
-        többen egyszerre
-      </span>
-      <span className="inline-flex items-center gap-1.5">
-        <span className="h-2.5 w-3.5 rounded-[2px] bg-zinc-300 dark:bg-zinc-700" />
-        hétvége (nem fogyaszt)
-      </span>
-      <span className="inline-flex items-center gap-1.5">
-        <span className="h-2.5 w-3.5 rounded-[2px] bg-orange-200 dark:bg-orange-900/50" />
-        ünnep, pihenőnap (nem fogyaszt)
-      </span>
-      <span className="inline-flex items-center gap-1.5">
-        <span className="h-2.5 w-3.5 rounded-[2px] bg-secondary ring-1 ring-zinc-400 ring-inset" />
-        ledolgozós szombat (fogyaszt)
-      </span>
-      {merlegek.map((m) => (
-        <span key={m.employeeId} className="inline-flex items-center gap-1.5">
-          <Jel szin={nezet.szin.get(m.employeeId) ?? "bg-muted"} betu={nezet.betu.get(m.employeeId) ?? "?"} />
-          {m.name}
-        </span>
-      ))}
-    </div>
-  );
-}
-
-// --- Egy jóváhagyásra váró kérés ---
-
-function KerelemSor({
-  igeny,
+function KozelgoSor({
+  tetel,
+  ma,
   mind,
   nezet,
   canEdit,
   pending,
   onJovahagy,
   onElutasit,
+  onVisszavon,
 }: {
-  igeny: SzabadsagIgeny;
+  tetel: Tetel;
+  ma: string;
   mind: SzabadsagIgeny[];
   nezet: Nezet;
   canEdit: boolean;
   pending: boolean;
-  onJovahagy: () => void;
-  onElutasit: (oka: string | null) => void;
+  onJovahagy: (id: string) => void;
+  onElutasit: (id: string, oka: string | null) => void;
+  onVisszavon: (id: string) => void;
 }) {
-  const napok = munkanapok(igeny.tol, igeny.ig).length;
-  const utkozesek = igenyUtkozesei(igeny, mind);
-  const merleg = nezet.merleg.get(igeny.employee_id);
-  const utana = keretJovahagyasUtan(merleg, igeny);
-  const tulnyul = utana !== null && utana < 0;
+  const nev = nezet.nev.get(tetel.employeeId) ?? tetel.igeny?.employee_name ?? "?";
+  const napok = munkanapok(tetel.tol, tetel.ig).length;
+  const igeny = tetel.igeny;
+  const kert = tetel.allapot === "kert";
+
+  const utkozesek = igeny ? igenyUtkozesei(igeny, mind) : [];
+  const utana = igeny && kert ? keretJovahagyasUtan(nezet.merleg.get(tetel.employeeId), igeny) : null;
   // Csak a ténylegesen felülírt napok: hétvégi/ünnepi munkát a jóváhagyás nem bánt.
-  const szakaszNapjai = new Set(munkanapok(igeny.tol, igeny.ig));
-  const munkasNapok = igeny.munka_napok.filter((d) => szakaszNapjai.has(d)).sort();
+  const szakaszNapjai = new Set(munkanapok(tetel.tol, tetel.ig));
+  const munkasNapok =
+    igeny && kert ? igeny.munka_napok.filter((d) => szakaszNapjai.has(d)).sort() : [];
 
   return (
-    <div
-      className={cn(
-        "flex flex-wrap items-center gap-2 border-b px-3 py-2 text-xs last:border-b-0",
-        (utkozesek.length > 0 || tulnyul || munkasNapok.length > 0) && "bg-destructive/5"
-      )}
-    >
-      <Jel szin={nezet.szin.get(igeny.employee_id) ?? "bg-muted"} betu={nezet.betu.get(igeny.employee_id) ?? "?"} />
-      <div className="min-w-[220px] flex-1">
-        <p>
-          <b>{szakaszCimke(igeny.tol, igeny.ig)}</b> · {igeny.employee_name}
-          <span className="text-muted-foreground">
-            {" "}· {napok} munkanap · beadva {igeny.bekuldve}
-          </span>
+    <div className="flex gap-2.5 border-t py-2.5">
+      <Jel
+        szin={nezet.szin.get(tetel.employeeId) ?? "bg-muted"}
+        betu={nezet.betu.get(tetel.employeeId) ?? "?"}
+        beteg={tetel.tipus === "beteg"}
+        halvany={kert}
+        nagy
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between gap-2">
+          <span className="text-sm font-bold">{szakaszCimke(tetel.tol, tetel.ig)}</span>
+          <span className="shrink-0 text-xs text-muted-foreground">{mikor(tetel.tol, tetel.ig, ma)}</span>
+        </div>
+        <p className="text-[13px] text-foreground/80">
+          {nev} · {napok} munkanap
+          {tetel.tipus === "beteg" && " · betegszabadság"}
         </p>
-        <p className="text-[11px]">
-          {utana === null ? (
-            <span className="text-muted-foreground">nincs beállított keret</span>
-          ) : tulnyul ? (
-            <b className="text-destructive">
-              nincs rá elég keret — {Math.abs(utana)} nappal több a maradéknál
-            </b>
-          ) : (
-            <span className="text-muted-foreground">
-              jóváhagyás után marad: <b className="text-foreground">{utana} nap</b>
+        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+          <span
+            className={cn(
+              "rounded-full px-2 py-0.5 text-[11px] font-bold",
+              kert
+                ? "bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200"
+                : igeny
+                  ? "bg-green-100 text-green-900 dark:bg-green-900/40 dark:text-green-200"
+                  : "bg-secondary text-muted-foreground"
+            )}
+          >
+            {kert ? "jóváhagyásra vár" : igeny ? "jóváhagyva" : "jelenléti naplóból"}
+          </span>
+          {utkozesek.length > 0 && (
+            <span className="text-xs font-semibold text-destructive">
+              ütközik: {utkozesek.map((u) => u.name).join(", ")}
             </span>
           )}
-          {" — "}
-          {utkozesek.length === 0 ? (
-            <span className="text-success">nincs ütközés</span>
-          ) : (
-            <b className="text-destructive">
-              <AlertTriangle className="mr-0.5 inline size-3 align-[-2px]" />
-              ütközik: {utkozesek.map((u) => `${u.name} (${u.napok.length} nap)`).join(", ")}
-            </b>
-          )}
-        </p>
-        {munkasNapok.length > 0 && (
-          <p className="text-[11px] font-semibold text-destructive">
-            <AlertTriangle className="mr-0.5 inline size-3 align-[-2px]" />
-            {munkasNapok.length} napon már van rögzített munkaidő (
-            {munkasNapok.map(datumCimke).join(", ")}) — jóváhagyáskor törlődik.
+        </div>
+        {kert && utana !== null && (
+          <p className={cn("mt-1 text-xs", utana < 0 ? "font-semibold text-destructive" : "text-muted-foreground")}>
+            {utana < 0
+              ? `nincs rá elég keret — ${Math.abs(utana)} nappal több a maradéknál`
+              : `jóváhagyás után marad: ${utana} nap`}
           </p>
         )}
-        {igeny.megjegyzes && (
-          <p className="text-[11px] text-muted-foreground italic">„{igeny.megjegyzes}”</p>
+        {munkasNapok.length > 0 && (
+          <p className="mt-1 text-xs font-semibold text-destructive">
+            <AlertTriangle className="mr-0.5 inline size-3 align-[-2px]" />
+            {munkasNapok.length} napon már van munkaidő ({munkasNapok.map(datumCimke).join(", ")}) —
+            jóváhagyáskor törlődik.
+          </p>
         )}
-      </div>
-      {canEdit && (
-        <div className="flex shrink-0 gap-1.5">
-          <Button
-            size="xs"
+        {igeny?.megjegyzes && (
+          <p className="mt-0.5 text-xs text-muted-foreground italic">„{igeny.megjegyzes}”</p>
+        )}
+        {canEdit && igeny && kert && (
+          <div className="mt-1.5 flex gap-1.5">
+            <Button
+              size="xs"
+              disabled={pending}
+              className="bg-success text-success-foreground hover:bg-success/90"
+              onClick={() => {
+                if (
+                  munkasNapok.length > 0 &&
+                  !window.confirm(
+                    `${nev}: ${munkasNapok.length} napon már van rögzített munkaidő (${munkasNapok.map(datumCimke).join(", ")}).\n\nJóváhagyáskor ezek a munkaszakaszok törlődnek. Folytatod?`
+                  )
+                ) {
+                  return;
+                }
+                onJovahagy(igeny.id);
+              }}
+            >
+              <Check className="size-3" />
+              Jóváhagyom
+            </Button>
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={pending}
+              className="text-destructive"
+              onClick={() => {
+                const oka = window.prompt(
+                  `Miért nem jó? (a dolgozó telefonján meg fog jelenni — üresen is elutasítható)\n\n${nev}: ${szakaszCimke(tetel.tol, tetel.ig)}`,
+                  ""
+                );
+                // A Mégse null-t ad, az üres szöveg viszont vállalt döntés.
+                if (oka === null) return;
+                onElutasit(igeny.id, oka);
+              }}
+            >
+              <X className="size-3" />
+              Elutasítom
+            </Button>
+          </div>
+        )}
+        {canEdit && igeny && !kert && (
+          <button
+            type="button"
             disabled={pending}
+            className="mt-1 text-[11px] font-semibold text-muted-foreground underline hover:text-foreground disabled:opacity-50"
             onClick={() => {
               if (
-                munkasNapok.length > 0 &&
                 !window.confirm(
-                  `${igeny.employee_name}: ${munkasNapok.length} napon már van rögzített munkaidő (${munkasNapok.map(datumCimke).join(", ")}).\n\nJóváhagyáskor ezek a munkaszakaszok törlődnek. Folytatod?`
+                  `Visszavonod? ${nev}: ${szakaszCimke(tetel.tol, tetel.ig)}\n\nA napok törlődnek a jelenlétiből, és a keretbe visszakerülnek.`
                 )
               ) {
                 return;
               }
-              onJovahagy();
-            }}
-            className="bg-success text-success-foreground hover:bg-success/90"
-          >
-            <Check className="size-3" />
-            Jóváhagyom
-          </Button>
-          <Button
-            size="xs"
-            variant="outline"
-            disabled={pending}
-            className="text-destructive"
-            onClick={() => {
-              const oka = window.prompt(
-                `Miért nem jó? (a dolgozó telefonján meg fog jelenni — üresen is elutasítható)\n\n${igeny.employee_name}: ${szakaszCimke(igeny.tol, igeny.ig)}`,
-                ""
-              );
-              // A Mégse null-t ad, az üres szöveg viszont vállalt döntés.
-              if (oka === null) return;
-              onElutasit(oka);
+              onVisszavon(igeny.id);
             }}
           >
-            <X className="size-3" />
-            Elutasítom
-          </Button>
-        </div>
-      )}
+            Visszavonom
+          </button>
+        )}
+      </div>
     </div>
   );
 }
 
-// --- Rögzítés bárkinek ---
+// --- Rögzítés bárkinek, egy sorban a hőtérkép alatt ---
 
-function RogzitoDoboz({
+function RogzitoSor({
   merlegek,
-  canEdit,
   pending,
   onRogzit,
 }: {
   merlegek: SzabadsagMerleg[];
-  canEdit: boolean;
   pending: boolean;
   onRogzit: (
     adat: {
@@ -722,76 +747,67 @@ function RogzitoDoboz({
     });
   }
 
+  const mezo = "h-8 rounded-lg border bg-card px-2 text-xs";
+
   return (
-    <div className="overflow-hidden rounded-xl border bg-card">
-      <div className="border-b bg-muted/40 px-3 py-2">
-        <span className="text-sm font-semibold">Szabadság rögzítése — bárkinek</span>
-      </div>
-      <div className="flex flex-wrap items-end gap-2 px-3 py-2.5">
-        <div className="flex min-w-[150px] flex-1 flex-col gap-1">
-          <Label className="text-[10px] tracking-wide uppercase">Dolgozó</Label>
-          <select
-            value={employeeId}
-            onChange={(e) => setEmployeeId(e.target.value)}
-            className="h-8 rounded-lg border bg-card px-2 text-xs"
-          >
-            {merlegek.map((m) => (
-              <option key={m.employeeId} value={m.employeeId}>
-                {m.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="flex flex-col gap-1">
-          <Label className="text-[10px] tracking-wide uppercase">Ettől</Label>
-          <Input
-            type="date"
-            value={tol}
-            onChange={(e) => {
-              setTol(e.target.value);
-              // Egy napos szabadság a leggyakoribb: a "meddig" magától követi.
-              if (!ig || ig < e.target.value) setIg(e.target.value);
-            }}
-            className="h-8 w-[140px]"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <Label className="text-[10px] tracking-wide uppercase">Eddig</Label>
-          <Input
-            type="date"
-            value={ig}
-            onChange={(e) => setIg(e.target.value)}
-            className="h-8 w-[140px]"
-          />
-        </div>
-        <div className="flex flex-col gap-1">
-          <Label className="text-[10px] tracking-wide uppercase">Típus</Label>
-          <select
-            value={tipus}
-            onChange={(e) => setTipus(e.target.value as SzabadsagTipus)}
-            className="h-8 rounded-lg border bg-card px-2 text-xs"
-          >
-            <option value="szabadsag">Szabadság</option>
-            <option value="beteg">Betegszabadság</option>
-          </select>
-        </div>
-        <div className="flex min-w-[150px] flex-1 flex-col gap-1">
-          <Label className="text-[10px] tracking-wide uppercase">Megjegyzés</Label>
-          <Input
-            value={megjegyzes}
-            onChange={(e) => setMegjegyzes(e.target.value)}
-            placeholder="pl. telefonon kérte"
-            className="h-8"
-          />
-        </div>
+    <div className="flex flex-col gap-1.5 border-t pt-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[13px] font-bold">Szabadság rögzítése:</span>
+        <select
+          aria-label="Dolgozó"
+          value={employeeId}
+          onChange={(e) => setEmployeeId(e.target.value)}
+          className={mezo}
+        >
+          {merlegek.map((m) => (
+            <option key={m.employeeId} value={m.employeeId}>
+              {m.name}
+            </option>
+          ))}
+        </select>
+        <Input
+          type="date"
+          aria-label="Ettől"
+          value={tol}
+          onChange={(e) => {
+            setTol(e.target.value);
+            // Egy napos szabadság a leggyakoribb: a "meddig" magától követi.
+            if (!ig || ig < e.target.value) setIg(e.target.value);
+          }}
+          className="h-8 w-[140px]"
+        />
+        <Input
+          type="date"
+          aria-label="Eddig"
+          value={ig}
+          onChange={(e) => setIg(e.target.value)}
+          className="h-8 w-[140px]"
+        />
+        <select
+          aria-label="Típus"
+          value={tipus}
+          onChange={(e) => setTipus(e.target.value as SzabadsagTipus)}
+          className={mezo}
+        >
+          <option value="szabadsag">Szabadság</option>
+          <option value="beteg">Betegszabadság</option>
+        </select>
+        <Input
+          aria-label="Megjegyzés"
+          value={megjegyzes}
+          onChange={(e) => setMegjegyzes(e.target.value)}
+          placeholder="Megjegyzés (pl. telefonon kérte)"
+          className="h-8 min-w-[150px] flex-1"
+        />
         <Button
-          disabled={!canEdit || pending || ellenoriz || !tol || !ig || napok === 0}
+          size="sm"
+          disabled={pending || ellenoriz || !tol || !ig || napok === 0}
           onClick={rogzit}
         >
           Rögzítem
         </Button>
       </div>
-      <p className="px-3 pb-2.5 text-[11px] text-muted-foreground">
+      <p className="text-[11px] text-muted-foreground">
         Amit te viszel fel, az azonnal jóváhagyott: rögtön fogyasztja a keretet, és a dolgozó
         telefonján is megjelenik.
         {tol && ig

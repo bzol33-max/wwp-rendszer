@@ -758,14 +758,19 @@ const IGENY_COLS = `i.id::text, i.employee_id::text,
     where j.employee_id = i.employee_id and j.day_type = 'munka'
       and j.work_date between i.tol and i.ig) as munka_napok`;
 
-/** Egy év összes igénye (a rácshoz és a jóváhagyó listához). */
+/**
+ * Egy év összes igénye (a hőtérképhez és a közelgő-listához), plus minden
+ * még el nem bírált kérés évtől függetlenül — egy jövő januári kérés is
+ * döntésre vár, akkor is, ha az idei évet nézzük.
+ */
 export async function getSzabadsagIgenyek(ev: number): Promise<SzabadsagIgeny[]> {
   await requireViewPermission("jelenlet");
   return query<SzabadsagIgeny>(
     `select ${IGENY_COLS}
        from szabadsag_igenyek i
        join alkalmazottak a on a.id = i.employee_id
-      where i.ig >= make_date($1, 1, 1) and i.tol <= make_date($1, 12, 31)
+      where (i.ig >= make_date($1, 1, 1) and i.tol <= make_date($1, 12, 31))
+         or i.allapot = 'kert'
       order by i.tol, a.position, a.id`,
     [ev]
   );
