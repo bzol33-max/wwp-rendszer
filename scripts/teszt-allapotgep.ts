@@ -153,6 +153,16 @@ eq("postázva → számlázva (ember, számlával)", ellenorizAtmenet("postazva"
 eq("postázva → számlázva rendszer nem indíthatja", ellenorizAtmenet("postazva", "szamlazva", "rendszer", { szamlaVan: true }).ok, false);
 eq("postázva → számlázva számla nélkül nem", ellenorizAtmenet("postazva", "szamlazva", "ember", {}).ok, false);
 
+// Téves „Kész” visszavonása (18. él): csak a visszavonó akcióval, fotó és számla előtt.
+enged("18. sofőr visszavonja a téves Kész-t", "teljesitve", "folyamatban", "sofor", { keziKeszVisszavonas: true });
+enged("18. iroda visszavonja a téves Kész-t", "teljesitve", "folyamatban", "ember", { keziKeszVisszavonas: true });
+tilt("18. a visszavonó akció nélkül nem (részlet-gombok)", "teljesitve", "folyamatban", "ember", {});
+tilt("18. fotó után nem", "teljesitve", "folyamatban", "sofor", { keziKeszVisszavonas: true, fotoVan: true });
+tilt("18. számla után nem", "teljesitve", "folyamatban", "sofor", { keziKeszVisszavonas: true, szamlaVan: true });
+tilt("18. GPS nem vonhatja vissza", "teljesitve", "folyamatban", "gps", { keziKeszVisszavonas: true });
+tilt("18. számlázható → folyamatban nincs", "szamlazhato", "folyamatban", "sofor", { keziKeszVisszavonas: true });
+eq("ember céljai teljesítve-n: nincs „Folyamatban” gomb", lehetsegesCelok("teljesitve", "ember", {}).includes("folyamatban"), false);
+
 // lehetsegesCelok az UI-hoz: a sofőr a teljesített fuvaron nem lát gombot.
 eq("sofőr céljai teljesítve-n", lehetsegesCelok("teljesitve", "sofor", teljes), []);
 eq("ember céljai számlázva-n (teljes ctx)", lehetsegesCelok("szamlazva", "ember", { ...teljes, partnerNemKerEmailt: true, partnerNemKerPostat: true }).sort(), ["lezart", "postazva", "teljesitve"]);

@@ -12,8 +12,9 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import type { SoforNap, SoforMegalloSor, SoforFuvarBlokk } from "@/lib/fuvarozas/sofor";
-import { jelolMegerkeztem, markMegalloKesz, jelolVarakozast, jelezGondot, rogzitPozicioszamot } from "@/lib/fuvarozas/sofor";
+import type { SoforNap, SoforMegalloSor, SoforFuvarBlokk, SoforLezartFuvar } from "@/lib/fuvarozas/sofor";
+import { jelolMegerkeztem, markMegalloKesz, jelolVarakozast, jelezGondot, rogzitPozicioszamot, visszavonMegalloKesz } from "@/lib/fuvarozas/sofor";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { feltoltOldalakat, feltoltesUzenet } from "@/lib/fuvarozas/fuvarlevel-feltoltes";
 
 async function ujraprobal<T>(fn: () => Promise<T>): Promise<T> {
@@ -63,6 +64,7 @@ export function SoforNapNezet({ nap, ma, cim }: { nap: SoforNap | null; ma: bool
       {nap.fuvarok.length === 0 ? (
         <div className="rounded-xl bg-[var(--m-surf)] p-4 text-sm text-[var(--m-muted)]">Nincs megbízás erre a napra — a diszpécser még keresi.</div>
       ) : null}
+      {ma ? (nap.nemregLezartak ?? []).map((l) => <LezartKartya key={l.fuvarId} l={l} />) : null}
       {nap.fuvarok.map((f) => <FuvarKartya key={f.fuvarId} f={f} ma={ma} />)}
 
       <p className="text-center text-xs text-[var(--m-muted)]">Térerő nélkül a gombok újrapróbálják magukat, amíg el nem mennek.</p>
@@ -78,6 +80,53 @@ function Pill({ children, szin = "mint" }: { children: React.ReactNode; szin?: "
 function Gomb({ children, onClick, primary, danger, disabled }: { children: React.ReactNode; onClick?: () => void; primary?: boolean; danger?: boolean; disabled?: boolean }) {
   const c = primary ? "bg-[var(--m-mint)] text-[#0f2a22]" : danger ? "border border-[var(--m-red)] text-[var(--m-red)]" : "border border-[var(--m-line)] text-[var(--m-txt)]";
   return <button type="button" onClick={onClick} disabled={disabled} className={`flex-1 rounded-xl py-3 text-sm font-semibold disabled:opacity-50 ${c}`}>{children}</button>;
+}
+
+/**
+ * Téves „Felrakva ✓ / Lerakva ✓” visszavonása (2026-10-05, Micó): megerősítés
+ * után a megálló újra nyitott, és ha ez zárta le a fuvart, a fuvar is.
+ * Nem próbálkozik újra magától: a visszautasítás (pl. 12 óránál régebbi
+ * jelölés) üzenete azonnal látsszon.
+ */
+function useVisszavonas() {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [confirm, confirmDialog] = useConfirm();
+  const visszavon = async (fuvarId: string, megalloIndex: number, mit: string) => {
+    if (!(await confirm(`${mit}\n\nA megálló újra nyitott lesz, a fuvar visszakerül a napodba.`, { title: "Visszavonod a Kész jelölést?", confirmLabel: "Visszavonom" }))) return;
+    start(async () => {
+      try {
+        const { fuvarVisszanyitva } = await visszavonMegalloKesz(fuvarId, megalloIndex);
+        toast.success(fuvarVisszanyitva ? "Visszavonva — a fuvar újra folyamatban." : "Visszavonva.");
+        router.refresh();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Nem sikerült — próbáld újra.");
+      }
+    });
+  };
+  return { pending, visszavon, confirmDialog };
+}
+
+function LezartKartya({ l }: { l: SoforLezartFuvar }) {
+  const { pending, visszavon, confirmDialog } = useVisszavonas();
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border border-dashed border-[var(--m-line)] bg-[var(--m-surf)] p-3 text-sm">
+      <div className="min-w-0 flex-1">
+        <div className="text-xs font-semibold text-[var(--m-muted)]">LEZÁRTAD {ora(l.keszAt)}-KOR</div>
+        <div className="truncate font-semibold">{l.honnan ?? "—"} → {l.hova ?? "—"}</div>
+        <div className="truncate text-xs text-[var(--m-muted)]">{l.megrendelo ?? ""}</div>
+      </div>
+      <button
+        type="button"
+        disabled={pending}
+        onClick={() => visszavon(l.fuvarId, l.megalloIndex, `${l.honnan ?? "—"} → ${l.hova ?? "—"} (${l.megrendelo ?? "megbízás"})`)}
+        className="shrink-0 rounded-xl border border-[var(--m-line)] px-3 py-2 text-xs font-semibold disabled:opacity-50"
+      >
+        {pending ? "küldés…" : "Visszavonom"}
+      </button>
+      {confirmDialog}
+    </div>
+  );
 }
 
 function KovetkezoKartya({ m, f }: { m: SoforMegalloSor; f: SoforFuvarBlokk }) {
@@ -121,6 +170,7 @@ function FuvarKartya({ f, ma }: { f: SoforFuvarBlokk; ma: boolean }) {
   const fotoRef = useRef<HTMLInputElement>(null);
   const tarRef = useRef<HTMLInputElement>(null);
   const [haladas, setHaladas] = useState<string | null>(null);
+  const visszavonas = useVisszavonas();
   // Többoldalas papír (2026-09-28): minden oldal külön fotó; a „Megbízás PDF” a megbízás irata, nem a fotó.
   const oldalak = f.dokumentumok.filter((d) => d.tipus === "fuvarlevel").length;
   const megbizasIrat = f.dokumentumok.find((d) => d.tipus === "megbizas") ?? f.dokumentumok.find((d) => d.tipus !== "fuvarlevel") ?? null;
@@ -165,6 +215,16 @@ function FuvarKartya({ f, ma }: { f: SoforFuvarBlokk; ma: boolean }) {
                 {m.helyBizonytalan && !m.helyRogzitve ? " · cím bizonytalan" : ""}
               </div>
             </div>
+            {ma && m.visszavonhato ? (
+              <button
+                type="button"
+                disabled={visszavonas.pending}
+                onClick={() => visszavonas.visszavon(m.fuvarId, m.megalloIndex, `${m.tipus === "felrako" ? "Felrakó" : "Lerakó"} · ${m.varos} — kész ${ora(m.keszAt)}`)}
+                className="shrink-0 self-center rounded-lg border border-[var(--m-line)] px-2.5 py-1.5 text-xs font-semibold text-[var(--m-muted)] disabled:opacity-50"
+              >
+                Visszavonom
+              </button>
+            ) : null}
           </div>
         ))}
       </div>
@@ -212,6 +272,7 @@ function FuvarKartya({ f, ma }: { f: SoforFuvarBlokk; ma: boolean }) {
       ) : megbizasIrat ? (
         <div className="flex gap-2"><Gomb onClick={() => window.open(`/api/fuvarozas/dokumentum/${megbizasIrat.id}`, "_blank")}>Megbízás PDF</Gomb></div>
       ) : null}
+      {visszavonas.confirmDialog}
     </div>
   );
 }

@@ -14,6 +14,7 @@ import type { PartnerAdatJavaslat } from "@/lib/fuvarozas2/partnerek";
 import { AdatJavaslatSor, PostacimBevitel } from "@/components/fuvarozas2/partner-adat-javaslat";
 import { ALLAPOT_CIMKE, LepesBadge, JellegBadge, formatFt, formatIdo, formatNap } from "@/components/fuvarozas2/kozos";
 import { SAJAT_FUVAR_KM_DIJ_FT } from "@/lib/fuvarozas2/kalkulator-alap";
+import { visszavonMegalloKesz } from "@/lib/fuvarozas/sofor";
 
 const GOMB_CIMKE: Partial<Record<Allapot, string>> = {
   tervezett: "Jóváhagyás → Tervezett",
@@ -56,6 +57,22 @@ export function MegbizasReszlet({
       const r = await valtAllapot(sor.id, hova, { kezi, kliensUuid: crypto.randomUUID() });
       if (r.ok) { toast.success(`${ALLAPOT_CIMKE[hova]}`); router.refresh(); }
       else toast.error(r.hiba);
+    });
+  }
+
+  // Téves sofőri (vagy GPS lapos) „Kész” visszavonása a megálló-soron — ha
+  // ez zárta le a fuvart, az is visszanyílik (lib/fuvarozas/sofor.ts).
+  // A megálló indexe a sorszám szerinti pozíció (003-as trigger leképezése).
+  async function keszVisszavon(m: Megallo, index: number) {
+    if (!(await confirm(`${m.sorszam}. ${m.tipus === "felrako" ? "felrakó" : "lerakó"}: ${m.cim_nyers}\nkész ${formatIdo(m.sofor_kesz_at)} (${m.sofor_kesz_by ?? "sofőr"})\n\nHa ez zárta le a fuvart, a fuvar visszakerül Folyamatban állapotba.`, { title: "Kész jelölés visszavonása?", confirmLabel: "Visszavonom" }))) return;
+    start(async () => {
+      try {
+        const r = await visszavonMegalloKesz(sor.id, index);
+        toast.success(r.fuvarVisszanyitva ? "Visszavonva — a fuvar újra folyamatban." : "Kész jelölés visszavonva.");
+        router.refresh();
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Nem sikerült visszavonni.");
+      }
     });
   }
 
@@ -102,7 +119,7 @@ export function MegbizasReszlet({
           <CardHeader><CardTitle className="text-base">Megállók</CardTitle></CardHeader>
           <CardContent className="flex flex-col gap-2 text-sm">
             {megallok.length === 0 ? <p className="text-muted-foreground">Nincs megálló rögzítve — {sor.felrako ?? "—"} → {sor.lerako ?? "—"}</p> : null}
-            {megallok.map((m) => (
+            {megallok.map((m, i) => (
               <div key={m.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-lg bg-muted/40 px-3 py-2">
                 <span className="w-16 shrink-0 text-xs font-medium uppercase text-muted-foreground">{m.sorszam}. {m.tipus === "felrako" ? "felrakó" : "lerakó"}</span>
                 <span className="min-w-0 flex-1">{m.cim_nyers}</span>
@@ -111,6 +128,11 @@ export function MegbizasReszlet({
                   {m.gps_erkezes ? ` · GPS érk ${formatIdo(m.gps_erkezes)}` : ""}{m.gps_tavozas ? ` táv ${formatIdo(m.gps_tavozas)}` : ""}
                   {m.sofor_kesz_at ? ` · kész ${formatIdo(m.sofor_kesz_at)} (${m.sofor_kesz_by ?? "sofőr"})` : ""}
                 </span>
+                {m.sofor_kesz_at && szerkeszthet && fuvarozasJog ? (
+                  <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" disabled={pending} onClick={() => keszVisszavon(m, i)}>
+                    Kész visszavonása
+                  </Button>
+                ) : null}
               </div>
             ))}
           </CardContent>

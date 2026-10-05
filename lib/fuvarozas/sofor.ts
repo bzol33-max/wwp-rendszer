@@ -10,12 +10,12 @@
 // explicit sofőri megerősítés.
 
 import { revalidatePath } from "next/cache";
-import { query } from "@/lib/db";
+import { query, withTransaction } from "@/lib/db";
 import { requireAnyEditPermission, requireSajatVagyModulJog } from "@/lib/auth/require-permission";
 import { requireSession } from "@/lib/auth/dal";
 import { getIdovonalak } from "@/lib/fuvarozas/actions";
 import { resolveJarmu } from "@/lib/fuvarozas/vehicles";
-import { findJarmuByEmployeeName } from "@/lib/fuvarozas/sofor-jarmu";
+import { findJarmuByEmployeeName, jarmuMatch } from "@/lib/fuvarozas/sofor-jarmu";
 import { bontsMegallokra, cimKulcs, cimPontossaga, varosNev } from "@/lib/fuvarozas/varos";
 import { toroljIdovonalCachet } from "@/lib/fuvarozas/idovonal-cache";
 import { getFleetLastPositions, parseEcofleetTimestamp } from "@/lib/fuvarozas/ecofleet";
@@ -24,6 +24,7 @@ import { ceglNevKanonikusan, normalizaltCegKulcs } from "@/lib/fuvarozas/fuvar-c
 import { megalloReszlete, type MegalloReszlet } from "@/lib/fuvarozas/sofor-adatok";
 import { szkennelj } from "@/lib/fuvarozas/doksi-kivagas";
 import { sajatFuvarE } from "@/lib/fuvarozas/irat-jog";
+import { ellenorizAtmenet } from "@/lib/fuvarozas/allapot";
 
 function budapestMaIso(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Budapest" });
@@ -61,13 +62,14 @@ export type SoforTura = {
  * megállóját, fotót csatolhatott hozzá, várakozást indíthatott (audit
  * 2026-10-04, SEC-1).
  */
-async function requireFuvarIrasJog(fuvarId: string): Promise<void> {
+async function requireFuvarIrasJog(fuvarId: string): Promise<"fuvarozas" | "fuvarozas_sajat"> {
   const kulcs = await requireAnyEditPermission(["fuvarozas", "fuvarozas_sajat"]);
-  if (kulcs === "fuvarozas") return;
+  if (kulcs === "fuvarozas") return "fuvarozas";
   const session = await requireSession();
   if (!(await sajatFuvarE(session.employeeId, fuvarId))) {
     throw new Error("Ez a fuvar nem a te fuvarod.");
   }
+  return "fuvarozas_sajat";
 }
 
 /**
@@ -107,6 +109,143 @@ export async function markMegalloKesz(fuvarId: string, megalloIndex: number): Pr
   return { fuvarLezarva };
 }
 
+/** Ennyi óráig vonhatja vissza a sofőr a saját kézi „Kész” jelölését (az iroda bármikor). */
+const VISSZAVONAS_ORA = 12;
+
+/**
+ * A fuvar lezárását EZ a kézi jelölés okozta-e: a markMegalloKesz (és a GPS
+ * lap pipája, megbizasok.ts setMegalloKesz) ugyanabban a hívásban írja a
+ * megálló kesz_at-ját és a fuvar teljesitve_at-ját, egymás után. A GPS-figyelő
+ * vagy az iroda „Teljesítve” gombja más időpontban zár — azt ez nem nyitja újra.
+ */
+function lezarastOkozta(keszAt: Date | string | null, teljesitveAt: Date | string | null): boolean {
+  if (!keszAt || !teljesitveAt) return false;
+  return Math.abs(new Date(teljesitveAt).getTime() - new Date(keszAt).getTime()) < 2 * 60_000;
+}
+
+/**
+ * A sofőr (vagy az iroda) visszavonja egy megálló TÉVES kézi „Felrakva ✓ /
+ * Lerakva ✓” jelölését (Micó, NMZ-492, 2026-10-05: véletlenül lezárta a
+ * fuvart, és eltűnt a telefonjáról a lerakó időkapuja és bejelentkezési
+ * száma).
+ *
+ * - Csak kézi jelölés vonható vissza (a GPS-felismerés nem a kesz oszlopba ír).
+ * - A sofőr csak 12 órán belül; az iroda (teljes Fuvarozás jog) bármikor.
+ * - Ha a jelölés az utolsó megállóé volt, és ez zárta le a fuvart, a fuvar
+ *   is visszanyílik: teljesitve → folyamatban (allapot.ts 18. él) — de csak
+ *   ha még nem lépett tovább (nincs fuvarlevél-fotó, számla, lezárás).
+ * - Ha a fuvar más okból (GPS, iroda) teljesített, a megálló jelölése sem
+ *   vonható vissza: a lezárt fuvar minden megállója késznek látszik, a
+ *   visszavonásnak nem lenne látható hatása — ilyenkor az iroda dönt.
+ *
+ * A megálló tükrét (fuvar_megallok.sofor_kesz_at) a 003-as trigger törli
+ * (kesz=false → null); itt a biztonság kedvéért közvetlenül is.
+ */
+export async function visszavonMegalloKesz(fuvarId: string, megalloIndex: number): Promise<{ fuvarVisszanyitva: boolean }> {
+  const kulcs = await requireFuvarIrasJog(fuvarId);
+  const session = await requireSession();
+  const ki = session.name ?? session.username;
+  const forras = kulcs === "fuvarozas" ? "ember" : "sofor";
+
+  const fuvarVisszanyitva = await withTransaction(async (q) => {
+    const [sor] = await q<{
+      felrako: string | null;
+      lerako: string;
+      teljesitve: boolean;
+      teljesitve_at: Date | null;
+      allapot: string | null;
+      jelleg: string | null;
+      szamla_szam: string | null;
+      torolt: boolean;
+      foto_van: boolean;
+    }>(
+      `select felrako, lerako, teljesitve, teljesitve_at, allapot, jelleg, szamla_szam,
+              (statusz = 'torolt' or torolt_at is not null) as torolt,
+              exists (select 1 from fuvar_dokumentumok d where d.fuvar_id = fuvar_megbizasok.id and d.tipus = 'fuvarlevel') as foto_van
+         from fuvar_megbizasok where id = $1 for update`,
+      [fuvarId]
+    );
+    if (!sor || sor.torolt) throw new Error("A fuvar nem található.");
+    const [jel] = await q<{ kesz: boolean; kesz_at: Date | null; megallo_id: string | null }>(
+      `select kesz, kesz_at, megallo_id::text from fuvar_megallo_allapot where fuvar_id = $1 and megallo_index = $2 for update`,
+      [fuvarId, megalloIndex]
+    );
+    if (!jel?.kesz) throw new Error("Ez a megálló nincs kézzel készre jelölve — nincs mit visszavonni.");
+    if (kulcs === "fuvarozas_sajat" && (!jel.kesz_at || Date.now() - new Date(jel.kesz_at).getTime() > VISSZAVONAS_ORA * 3600_000)) {
+      throw new Error(`A jelölés ${VISSZAVONAS_ORA} óránál régebbi — szólj az irodának.`);
+    }
+
+    // Visszanyíljon-e a fuvar? Csak ha EZ a jelölés zárta le.
+    let visszanyit = false;
+    if (sor.teljesitve) {
+      if (!lezarastOkozta(jel.kesz_at, sor.teljesitve_at)) {
+        throw new Error("A fuvart nem ez a jelölés zárta le (GPS vagy az iroda) — szólj az irodának.");
+      }
+      if (sor.allapot !== "teljesitve") {
+        throw new Error("A fuvar már továbblépett (fotó, számla vagy lezárás) — szólj az irodának.");
+      }
+      const e = ellenorizAtmenet("teljesitve", "folyamatban", forras, {
+        keziKeszVisszavonas: true,
+        sajatFuvar: sor.jelleg === "sajat",
+        fotoVan: sor.foto_van,
+        szamlaVan: !!sor.szamla_szam?.trim(),
+      });
+      if (!e.ok) throw new Error(`Nem vonható vissza: ${e.hiba}.`);
+      visszanyit = true;
+    }
+
+    await q(
+      `update fuvar_megallo_allapot set kesz = false, kesz_at = null, kesz_by = null
+        where fuvar_id = $1 and megallo_index = $2`,
+      [fuvarId, megalloIndex]
+    );
+    if (jel.megallo_id) {
+      await q(`update fuvar_megallok set sofor_kesz_at = null, sofor_kesz_by = null where id = $1`, [jel.megallo_id]);
+    }
+    // A 002-es napló-trigger ne duplázzon — a saját, részletesebb eseményünket írjuk.
+    await q(`select set_config('fuvarozas2.uj_kod', '1', true)`);
+    if (visszanyit) {
+      // Az allapot-ot ugyanaz az utasítás írja, így a 002-es követő trigger
+      // nem számolja újra a régi jelölőkből (lásd valtAllapot).
+      const irt = await q<{ id: string }>(
+        `update fuvar_megbizasok
+            set allapot = 'folyamatban', allapot_at = now(), teljesitve = false, teljesitve_at = null, ellenorzott = true
+          where id = $1 and allapot = 'teljesitve'
+          returning id::text`,
+        [fuvarId]
+      );
+      if (irt.length === 0) throw new Error("A fuvar állapota közben megváltozott — frissíts, és próbáld újra.");
+    }
+    await q(
+      `insert into fuvar_megbizas_esemeny (megbizas_id, megallo_id, esemeny, allapot_elott, allapot_utan, forras, ki, reszletek)
+       values ($1, $2, 'visszaallitas', $3, $4, $5, $6, $7)`,
+      [
+        fuvarId,
+        jel.megallo_id,
+        visszanyit ? "teljesitve" : null,
+        visszanyit ? "folyamatban" : null,
+        forras,
+        ki,
+        JSON.stringify({
+          atmenet: visszanyit ? 18 : null,
+          megallo_index: megalloIndex,
+          visszavont_kesz_at: jel.kesz_at,
+          indok: "téves Kész jelölés visszavonva",
+        }),
+      ]
+    );
+    return visszanyit;
+  });
+
+  console.log(
+    `[sofor] fuvar #${fuvarId} megálló ${megalloIndex}: kézi Kész visszavonva (${ki})${fuvarVisszanyitva ? " — a fuvar újra folyamatban" : ""}.`
+  );
+  toroljIdovonalCachet();
+  revalidatePath("/erkezes");
+  revalidatePath("/m");
+  return { fuvarVisszanyitva };
+}
+
 // ---------------------------------------------------------------------------
 // A sofőr TELJES napja (2026-09-17) — a getSoforAktualisTura egyetlen fuvart
 // mutat, ami a Duvenbeck-napokon kevés: egy kocsin 2-3 fuvar van (Pápa ↔
@@ -144,6 +283,14 @@ export type SoforMegalloSor = {
   /** Honnan tudjuk, hogy kész: "gps" megfigyelés vagy "kezi" megerősítés. */
   keszForras: "gps" | "kezi" | null;
   keszBy: string | null;
+  /** A kézi készre jelölés ideje (fuvar_megallo_allapot.kesz_at), ha volt. */
+  keszAt: Date | null;
+  /**
+   * Igaz, ha a megálló kézi „Kész” jelölése még visszavonható
+   * (visszavonMegalloKesz): kézi, 12 órán belüli, és ha a fuvart is lezárta,
+   * a fuvar még nem lépett tovább (fotó, számla).
+   */
+  visszavonhato: boolean;
   /** A kamion a GPS szerint MOST itt áll. */
   eppenItt: boolean;
   /** Hány nappal esik a megjelenített naptól (0 = aznap, -1 = tegnap, +1 = holnap). */
@@ -239,11 +386,27 @@ export type SoforFuvarBlokk = {
   dokumentumok: SoforDokumentum[];
 };
 
+/**
+ * Egy 12 órán belül kézzel lezárt fuvar, ami a mai napról kiesett (pl.
+ * tegnap este tévesen „Lerakva”, a lerakás ma lenne — a GPS lap szándékosan
+ * nem mutatja a nap előtt lezárt fuvart). A sofőr innen vonhatja vissza.
+ */
+export type SoforLezartFuvar = {
+  fuvarId: string;
+  megalloIndex: number;
+  megrendelo: string | null;
+  honnan: string | null;
+  hova: string | null;
+  keszAt: Date;
+};
+
 export type SoforNap = {
   napISO: string;
   sofor: string;
   jarmuLabel: string;
   fuvarok: SoforFuvarBlokk[];
+  /** Nemrég kézzel lezárt, a napról kiesett fuvarok — visszavonhatók (lásd SoforLezartFuvar). */
+  nemregLezartak: SoforLezartFuvar[];
   /** A soron következő megálló — az első, ami még nincs kész. */
   kovetkezo: { fuvarId: string; megalloIndex: number } | null;
   /** Hibaszöveg, ha az élő GPS-lekérdezés nem sikerült (a megbízások ettől függetlenül látszanak). */
@@ -271,7 +434,28 @@ type FuvarExtraSor = {
   megallo_reszletek: MegalloReszlet[] | null;
   referencia: string | null;
   jarmu_eloiras: string | null;
+  teljesitve: boolean;
+  teljesitve_at: Date | null;
+  allapot: string | null;
+  szamla_szam: string | null;
+  foto_van: boolean;
 };
+
+/** A getSoforNap megálló-sorához: visszavonható-e a kézi Kész (ugyanaz a szabály, mint a visszavonMegalloKesz-ben). */
+function visszavonhatoE(
+  m: { keszForras: "gps" | "kezi" | null; keszAt: Date | null },
+  extra: FuvarExtraSor | undefined
+): boolean {
+  if (m.keszForras !== "kezi" || !m.keszAt) return false;
+  if (Date.now() - new Date(m.keszAt).getTime() > VISSZAVONAS_ORA * 3600_000) return false;
+  if (!extra?.teljesitve) return true;
+  return (
+    lezarastOkozta(m.keszAt, extra.teljesitve_at) &&
+    extra.allapot === "teljesitve" &&
+    !extra.foto_van &&
+    !extra.szamla_szam?.trim()
+  );
+}
 
 /**
  * A bejelentkezett sofőr egy napjának teljes képe: a kocsijára ütemezett
@@ -322,7 +506,9 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
           `select id::text, reise_id, idopont, aru, mennyiseg, suly, megjegyzes, jarmu, tipus,
                   felrakas_ablak_tol, felrakas_ablak_ig, lerakas_ablak_tol, lerakas_ablak_ig,
                   to_char(datum, 'YYYY-MM-DD') as datum_iso, to_char(lerakas_datum, 'YYYY-MM-DD') as lerakas_datum_iso,
-                  megallo_reszletek, referencia, jarmu_eloiras
+                  megallo_reszletek, referencia, jarmu_eloiras,
+                  teljesitve, teljesitve_at, allapot, szamla_szam,
+                  exists (select 1 from fuvar_dokumentumok d where d.fuvar_id = fuvar_megbizasok.id and d.tipus = 'fuvarlevel') as foto_van
              from fuvar_megbizasok
             where id = any($1::bigint[])`,
           [fuvarIds]
@@ -435,6 +621,8 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
         kesz: m.keszForras !== null,
         keszForras: m.keszForras,
         keszBy: m.keszBy,
+        keszAt: m.keszAt,
+        visszavonhato: visszavonhatoE(m, extra),
         eppenItt: m.eppenItt,
         napElteres: m.napElteres,
         keziErkezes: erkezesByMegallo.get(`${m.fuvarId}/${m.megalloIndex}`) ?? null,
@@ -457,11 +645,52 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
 
   const kovetkezoMegallo = fuvarok.flatMap((f) => f.megallok).find((m) => !m.kesz);
 
+  // A mai napról kiesett, 12 órán belül kézzel lezárt fuvarok (a GPS lap a
+  // nap ELŐTT lezártat szándékosan kihagyja — szamitsIdovonalakat
+  // napElottKesz). Csak a mai nézetben, és csak a még vissza nem lépett,
+  // a jelöléssel lezárt fuvarok; a kocsi-egyezés ugyanaz, mint a sofőri
+  // írók jogánál (sofor-jarmu.ts jarmuMatch).
+  const nemregLezartak: SoforLezartFuvar[] = [];
+  if (nap === budapestMaIso()) {
+    const sorok = await query<{
+      id: string; megrendelo: string | null; felrako: string | null; lerako: string | null;
+      jarmu: string | null; sofor: string | null; megallo_index: number; kesz_at: Date;
+    }>(
+      `select distinct on (f.id) f.id::text, f.megrendelo, f.felrako, f.lerako, f.jarmu, f.sofor, a.megallo_index, a.kesz_at
+         from fuvar_megbizasok f
+         join fuvar_megallo_allapot a on a.fuvar_id = f.id and a.kesz
+        where f.teljesitve and f.allapot = 'teljesitve' and f.statusz <> 'torolt' and f.torolt_at is null
+          and coalesce(f.szamla_szam, '') = ''
+          and not exists (select 1 from fuvar_dokumentumok d where d.fuvar_id = f.id and d.tipus = 'fuvarlevel')
+          and a.kesz_at > now() - make_interval(hours => $3)
+          and abs(extract(epoch from (f.teljesitve_at - a.kesz_at))) < 120
+          and coalesce(f.lerakas_datum, f.datum) >= $1::date
+          and not (f.id = any($2::bigint[]))
+        order by f.id, a.kesz_at desc`,
+      [nap, fuvarIds, VISSZAVONAS_ORA]
+    ).catch((err) => {
+      console.error("[sofor] nemrég lezárt fuvarok:", err);
+      return [];
+    });
+    for (const s of sorok) {
+      if (!jarmuMatch(jarmu, s) && s.sofor?.trim().toLowerCase() !== employeeName.trim().toLowerCase()) continue;
+      nemregLezartak.push({
+        fuvarId: s.id,
+        megalloIndex: s.megallo_index,
+        megrendelo: s.megrendelo,
+        honnan: s.felrako ? varosNev(bontsMegallokra(s.felrako)[0] ?? s.felrako) : null,
+        hova: s.lerako ? varosNev(bontsMegallokra(s.lerako).at(-1) ?? s.lerako) : null,
+        keszAt: s.kesz_at,
+      });
+    }
+  }
+
   return {
     napISO: nap,
     sofor: jarmu.sofor,
     jarmuLabel: jarmu.label,
     fuvarok,
+    nemregLezartak,
     kovetkezo: kovetkezoMegallo
       ? { fuvarId: kovetkezoMegallo.fuvarId, megalloIndex: kovetkezoMegallo.megalloIndex }
       : null,

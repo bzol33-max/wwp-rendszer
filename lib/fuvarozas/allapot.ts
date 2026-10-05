@@ -66,6 +66,12 @@ export type AtmenetKontextus = {
   szallitolevelParositva?: boolean;
   /** `torolt_at` nem null — törölt soron semmilyen átmenet nincs. */
   torolt?: boolean;
+  /**
+   * A hívó a téves kézi „Kész” jelölést vonja vissza (18. él) — csak a
+   * visszavonó akció (lib/fuvarozas/sofor.ts visszavonMegalloKesz) állítja,
+   * így a részlet általános gombjai között nem jelenik meg „Folyamatban”.
+   */
+  keziKeszVisszavonas?: boolean;
 };
 
 export type Atmenet = {
@@ -139,6 +145,18 @@ export const ATMENETEK: readonly Atmenet[] = [
   {
     szam: 17, honnan: "postazva", hova: "szamlazva", kivalto: "Postázás visszavonása (nem ment el)", forrasok: ["ember"],
     feltetel: (k) => kell(k.szamlaVan, "nincs számla"),
+  },
+  // Téves „Lerakva ✓” (Micó, NMZ-492, 2026-10-05): a sofőr véletlenül az
+  // utolsó megállót jelölte késznek, a fuvar lezárult, és a lerakó adatai
+  // (időkapu, bejelentkezési szám) eltűntek a telefonjáról. Csak amíg a
+  // fuvar nem lépett tovább: fotó vagy számla után az iroda dönt.
+  {
+    szam: 18, honnan: "teljesitve", hova: "folyamatban", kivalto: "sofőr visszavonta a téves Kész jelölést", forrasok: ["sofor", "ember"],
+    feltetel: (k) =>
+      !k.keziKeszVisszavonas ? "csak a téves Kész jelölés visszavonásával"
+      : k.fotoVan ? "már van fuvarlevél-fotó — szólj az irodának"
+      : k.szamlaVan ? "már van számla — szólj az irodának"
+      : true,
   },
 ];
 

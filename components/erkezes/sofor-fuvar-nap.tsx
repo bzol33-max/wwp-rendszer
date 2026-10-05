@@ -49,6 +49,7 @@ import {
   jelolVarakozast,
   markMegalloKesz,
   rogzitMegalloHelyet,
+  visszavonMegalloKesz,
   type SoforFuvarBlokk,
   type SoforMegalloSor,
   type SoforNap,
@@ -236,6 +237,32 @@ function papirraVar(blokk: SoforFuvarBlokk): boolean {
   return blokk.megallok.length > 0 && blokk.megallok.every((m) => m.kesz);
 }
 
+/** A blokk legutóbb kézzel készre jelölt, még visszavonható megállója (visszavonMegalloKesz). */
+function utolsoVisszavonhato(blokk: SoforFuvarBlokk): SoforMegalloSor | null {
+  return (
+    blokk.megallok
+      .filter((m) => m.visszavonhato && m.keszAt)
+      .sort((a, b) => new Date(b.keszAt!).getTime() - new Date(a.keszAt!).getTime())[0] ?? null
+  );
+}
+
+type VisszavonFn = (fuvarId: string, megalloIndex: number, leiras: string) => void;
+
+/** Halk szöveg-gomb a téves Kész jelölés visszavonására — szándékosan nem hangsúlyos. */
+function VisszavonGomb({ m, pending, onVisszavon, className }: { m: SoforMegalloSor; pending: boolean; onVisszavon: VisszavonFn; className?: string }) {
+  const leiras = `${TIPUS_CIMKE[m.tipus]} · ${m.varos}${m.keszAt ? ` — kész ${formatIdo(m.keszAt)}` : ""}`;
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      onClick={() => onVisszavon(m.fuvarId, m.megalloIndex, leiras)}
+      className={cn("w-fit text-left text-xs underline underline-offset-2 disabled:opacity-50", className)}
+    >
+      Tévesen jelölted késznek ({m.varos})? Visszavonom
+    </button>
+  );
+}
+
 function fotoOldalak(blokk: SoforFuvarBlokk): number {
   return blokk.dokumentumok.filter((d) => d.tipus === "fuvarlevel").length;
 }
@@ -255,6 +282,7 @@ function PapirKeres({
   haladas,
   onFoto,
   onKesz,
+  onVisszavon,
 }: {
   blokk: SoforFuvarBlokk;
   pending: boolean;
@@ -262,6 +290,7 @@ function PapirKeres({
   haladas: string | null;
   onFoto: (fuvarId: string, fajlok: File[]) => void;
   onKesz: (fuvarId: string) => void;
+  onVisszavon: VisszavonFn;
 }) {
   const kamera = useRef<HTMLInputElement>(null);
   const tar = useRef<HTMLInputElement>(null);
@@ -333,6 +362,10 @@ function PapirKeres({
           </Button>
         ) : null}
       </div>
+      {(() => {
+        const v = utolsoVisszavonhato(blokk);
+        return v ? <VisszavonGomb m={v} pending={pending} onVisszavon={onVisszavon} className="text-amber-900" /> : null;
+      })()}
     </div>
   );
 }
@@ -399,6 +432,7 @@ function AktualisMegbizas({
   onHely,
   onFoto,
   onGond,
+  onVisszavon,
 }: {
   blokk: SoforFuvarBlokk;
   aktivMegalloIndex: number | null;
@@ -408,6 +442,7 @@ function AktualisMegbizas({
   onHely: (m: SoforMegalloSor) => void;
   onFoto: (fuvarId: string, fajlok: File[]) => void;
   onGond: (fuvarId: string) => void;
+  onVisszavon: VisszavonFn;
 }) {
   const fotoInput = useRef<HTMLInputElement>(null);
   const [reszletekNyitva, setReszletekNyitva] = useState(false);
@@ -419,6 +454,7 @@ function AktualisMegbizas({
   const pdf = megbizasPdf(blokk);
   const telefon = kontaktTelefon(aktiv?.kontakt);
   const tobbiIrat = blokk.dokumentumok.filter((d) => d.id !== pdf?.id);
+  const visszavonhato = utolsoVisszavonhato(blokk);
 
   return (
     <div className="flex flex-col overflow-hidden rounded-2xl border-2 border-[var(--mob-accent)] bg-[var(--mob-card)]">
@@ -434,6 +470,9 @@ function AktualisMegbizas({
             <AlertTriangle className="h-3.5 w-3.5" />
             A megbízáson más rendszám áll: {blokk.masRendszam}
           </span>
+        )}
+        {visszavonhato && (
+          <VisszavonGomb m={visszavonhato} pending={pending} onVisszavon={onVisszavon} className="text-[var(--mob-muted)]" />
         )}
 
         <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-end gap-2">
@@ -827,6 +866,27 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
     });
   }
 
+  // Téves „Indulok” (kész jelölés) visszavonása — megerősítés után; ha ez
+  // zárta le a fuvart, a fuvar is újra nyitott (lib/fuvarozas/sofor.ts).
+  async function visszavon(fuvarId: string, megalloIndex: number, leiras: string) {
+    if (
+      !(await confirm(`${leiras}\n\nA megálló újra nyitott lesz, a fuvar visszakerül a napodba.`, {
+        title: "Visszavonod a Kész jelölést?",
+        confirmLabel: "Visszavonom",
+      }))
+    )
+      return;
+    startTransition(async () => {
+      try {
+        const { fuvarVisszanyitva } = await visszavonMegalloKesz(fuvarId, megalloIndex);
+        await load();
+        toast.success(fuvarVisszanyitva ? "Visszavonva — a fuvar újra folyamatban." : "Visszavonva.");
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Nem sikerült visszavonni.");
+      }
+    });
+  }
+
   function papirNemKaptam(fuvarId: string) {
     const uj = [...nemKaptam.filter((id) => id !== fuvarId), fuvarId];
     setNemKaptam(uj);
@@ -887,7 +947,32 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
           haladas={haladas?.fuvarId === b.fuvarId ? haladas.szoveg || "" : null}
           onFoto={foto}
           onKesz={papirNemKaptam}
+          onVisszavon={visszavon}
         />
+      ))}
+
+      {(nap.nemregLezartak ?? []).map((l) => (
+        <div
+          key={l.fuvarId}
+          className="flex items-center gap-3 rounded-xl border border-dashed border-[var(--mob-border)] bg-[var(--mob-card)] px-3 py-3"
+        >
+          <span className="flex min-w-0 flex-1 flex-col">
+            <span className="text-[10px] font-semibold uppercase tracking-wide text-[var(--mob-muted)]">
+              Lezártad {formatIdo(l.keszAt)}-kor
+            </span>
+            <span className="truncate text-sm font-semibold">{l.honnan ?? "—"} → {l.hova ?? "—"}</span>
+            {l.megrendelo && <span className="truncate text-[11px] text-[var(--mob-muted)]">{l.megrendelo}</span>}
+          </span>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={pending}
+            className="h-9 shrink-0 border-[var(--mob-border)]"
+            onClick={() => visszavon(l.fuvarId, l.megalloIndex, `${l.honnan ?? "—"} → ${l.hova ?? "—"} (${l.megrendelo ?? "megbízás"})`)}
+          >
+            Visszavonom
+          </Button>
+        </div>
       ))}
 
       {blokkok.length === 0 ? (
@@ -907,6 +992,7 @@ export function SoforFuvarNap({ employeeId }: { employeeId: string }) {
             onHely={hely}
             onFoto={foto}
             onGond={gond}
+            onVisszavon={visszavon}
           />
         </>
       )}
