@@ -349,7 +349,7 @@ export type SzabadsagKeret = {
   fordulonap: string;
   /** A fordulónap óta jelentett szabadság-napok száma. */
   felhasznalt: number;
-  /** Ennyi vehető még ki (nem megy nulla alá). */
+  /** Ennyi vehető még ki. Negatív = túllépte a keretet. */
   maradek: number;
 };
 
@@ -460,7 +460,20 @@ export type SzabadsagIgeny = {
   dontes_at: string | null;
   dontes_by: string | null;
   dontes_oka: string | null;
+  /**
+   * A szakasz azon napjai, amikre már munkaidő van rögzítve. A jóváhagyás
+   * ezeket felülírja, ezért az admin előtte figyelmeztetést kap.
+   */
+  munka_napok: string[];
 };
+
+/**
+ * Távollét-nap a jelenletek táblából, amihez NEM tartozik jóváhagyott igény
+ * (a kérés-rendszer előtti adat, vagy amit az admin a nap-szerkesztőben
+ * állított be). A rács ezeket is mutatja, különben a fejléc "kivéve" száma
+ * és a rács nem egyezne.
+ */
+export type TavolletNap = { employee_id: string; work_date: string; day_type: SzabadsagTipus };
 
 /** Egy dolgozó éves szabadság-mérlege a Jelenléti oldal fejlécében. */
 export type SzabadsagMerleg = {
@@ -473,7 +486,7 @@ export type SzabadsagMerleg = {
   kivett: number;
   /** Még jóvá nem hagyott kérések munkanapjai — ezek nem fogyasztják a keretet. */
   kert: number;
-  /** keret - kivett; null, ha nincs keret. Nem megy nulla alá. */
+  /** keret - kivett; null, ha nincs keret. Negatív = túllépte a keretet. */
   maradek: number | null;
 };
 
@@ -482,9 +495,107 @@ export function hetvege(iso: string): boolean {
   return d === 0 || d === 6;
 }
 
+// --- Munkaszüneti napok (2026-10-05) ---
+//
+// Eddig csak a hétvége esett ki a szabadságból, így pl. egy okt. 19–23-i
+// szabadság 5 napot vont le, pedig okt. 23. ünnep (4 a helyes). A törvényes
+// ünnepek (Mt. 102. §) évről évre számolhatók; az áthelyezett pihenő- és
+// ledolgozós munkanapokat viszont minden évre a minisztérium rendelete adja
+// meg — ezeket ÉVENTE ide kell felvenni, amint a rendelet megjelenik.
+
+const FIX_UNNEPEK: Record<string, string> = {
+  "01-01": "Újév",
+  "03-15": "Nemzeti ünnep",
+  "05-01": "A munka ünnepe",
+  "08-20": "Államalapítás ünnepe",
+  "10-23": "Nemzeti ünnep",
+  "11-01": "Mindenszentek",
+  "12-25": "Karácsony",
+  "12-26": "Karácsony",
+};
+
+/** Áthelyezett pihenőnapok (hétköznap, amikor nem kell dolgozni). */
+const ATHELYEZETT_PIHENONAPOK: Record<string, string> = {
+  "2025-05-02": "Áthelyezett pihenőnap",
+  "2025-10-24": "Áthelyezett pihenőnap",
+  "2025-12-24": "Szenteste (áthelyezett pihenőnap)",
+  "2026-01-02": "Áthelyezett pihenőnap",
+  "2026-08-21": "Áthelyezett pihenőnap",
+  "2026-12-24": "Szenteste (áthelyezett pihenőnap)",
+};
+
+/** Ledolgozós szombatok: ezek munkanapok, tehát a szabadság fogyaszt rajtuk. */
+const ATHELYEZETT_MUNKANAPOK = new Set([
+  "2025-05-17",
+  "2025-10-18",
+  "2025-12-13",
+  "2026-01-10",
+  "2026-08-08",
+  "2026-12-12",
+]);
+
+/** Húsvétvasárnap (Gauss–Meeus-féle gregorián algoritmus), ISO dátumként. */
+function husvetVasarnap(ev: number): Date {
+  const a = ev % 19;
+  const b = Math.floor(ev / 100);
+  const c = ev % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const honap = Math.floor((h + l - 7 * m + 114) / 31);
+  const nap = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(Date.UTC(ev, honap - 1, nap, 12));
+}
+
+const mozgoCache = new Map<number, Map<string, string>>();
+
+function mozgoUnnepek(ev: number): Map<string, string> {
+  let m = mozgoCache.get(ev);
+  if (m) return m;
+  const husvet = husvetVasarnap(ev);
+  const eltolva = (napok: number) => {
+    const d = new Date(husvet);
+    d.setUTCDate(d.getUTCDate() + napok);
+    return d.toISOString().slice(0, 10);
+  };
+  m = new Map([
+    [eltolva(-2), "Nagypéntek"],
+    [eltolva(1), "Húsvéthétfő"],
+    [eltolva(50), "Pünkösdhétfő"],
+  ]);
+  mozgoCache.set(ev, m);
+  return m;
+}
+
 /**
- * Egy szakasz MUNKANAPJAI, ISO dátumokként. A hétvége kimarad: szabadságot
- * csak munkanapra írunk, és a keretből sem vonhat le szombat-vasárnap.
+ * Ha a nap munkaszüneti nap (ünnep vagy áthelyezett pihenőnap), a neve;
+ * különben null. A hétvégét nem jelzi — arra ott a hetvege().
+ */
+export function munkaszunetiNap(iso: string): string | null {
+  return (
+    FIX_UNNEPEK[iso.slice(5)] ??
+    mozgoUnnepek(Number(iso.slice(0, 4))).get(iso) ??
+    ATHELYEZETT_PIHENONAPOK[iso] ??
+    null
+  );
+}
+
+/** Munkanap-e: hétköznap és nem ünnep, vagy ledolgozós szombat. */
+export function munkanap(iso: string): boolean {
+  if (ATHELYEZETT_MUNKANAPOK.has(iso)) return true;
+  return !hetvege(iso) && munkaszunetiNap(iso) === null;
+}
+
+/**
+ * Egy szakasz MUNKANAPJAI, ISO dátumokként. A hétvége és a munkaszüneti nap
+ * kimarad (a ledolgozós szombat benne van): szabadságot csak munkanapra
+ * írunk, és a keretből sem vonhat le más.
  * Visszafelé megadott szakaszra üres listát ad.
  */
 export function munkanapok(tol: string, ig: string): string[] {
@@ -496,7 +607,7 @@ export function munkanapok(tol: string, ig: string): string[] {
   let orszem = 0;
   while (kurzor <= veg && orszem++ < 400) {
     const iso = kurzor.toISOString().slice(0, 10);
-    if (!hetvege(iso)) out.push(iso);
+    if (munkanap(iso)) out.push(iso);
     kurzor.setUTCDate(kurzor.getUTCDate() + 1);
   }
   return out;
@@ -514,13 +625,21 @@ export type RacsBejegyzes = {
  * Az éves rács adata: ISO nap -> kik vannak aznap távol, a megadott
  * dolgozó-sorrendben (így a cella csíkjainak sorrendje minden napon
  * ugyanaz, és a szem tudja követni, melyik szín kihez tartozik).
- * Az elutasított és visszavont igények nem szerepelnek, a hétvége sem.
+ * Az elutasított és visszavont igények nem szerepelnek, a hétvége és az
+ * ünnep sem. A kérés nélküli távollét-napok (TavolletNap) jóváhagyottként
+ * kerülnek be.
  */
 export function szabadsagRacs(
   igenyek: SzabadsagIgeny[],
-  sorrend: string[]
+  sorrend: string[],
+  tavolletek: TavolletNap[] = []
 ): Map<string, RacsBejegyzes[]> {
   const nap = new Map<string, RacsBejegyzes[]>();
+  for (const t of tavolletek) {
+    const lista = nap.get(t.work_date) ?? [];
+    lista.push({ employeeId: t.employee_id, tipus: t.day_type, allapot: "jovahagyva" });
+    nap.set(t.work_date, lista);
+  }
   for (const i of igenyek) {
     if (i.allapot !== "kert" && i.allapot !== "jovahagyva") continue;
     for (const d of munkanapok(i.tol, i.ig)) {

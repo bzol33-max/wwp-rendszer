@@ -164,9 +164,9 @@ export function SzabadsagKeres({
           <p className="text-[11px] text-[var(--mob-muted)]">
             {tol && ig
               ? napok === 0
-                ? "A megadott napokra csak hétvége esik — abból nem fogy szabadság."
-                : `${napok} munkanap. A hétvége nem számol bele.`
-              : "A hétvége nem számol bele."}
+                ? "A megadott napokra csak hétvége vagy ünnep esik — abból nem fogy szabadság."
+                : `${napok} munkanap. A hétvége és az ünnep nem számol bele.`
+              : "A hétvége és az ünnep nem számol bele."}
           </p>
           <div className="flex gap-2">
             <Button

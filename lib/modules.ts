@@ -77,6 +77,6 @@ export const MODULES: ModuleInfo[] = [
     icon: MessageSquare,
     status: "elkeszult",
     description:
-      "Napi érkezés és távozás (naponta többször is), havi napló hetekre bontva a 9 órás mércéhez mért eltéréssel, telephelyi feladat-üzenőfal ismétlődéssel. Szabadság: a dolgozó a telefonján kéri, az admin a Szabadság oldalon hagyja jóvá vagy rögzíti bárkinek, éves rácson látszik, ki mikor van távol és hol torlódnak. Dolgozói mobil: jelenlét, feladatok, Profil (kivehető szabadság, szabadság-kérés, előleg év/hónap bontásban); sofőröknél saját fuvar-nézet is.",
+      "Napi érkezés és távozás (naponta többször is), havi napló hetekre bontva a 9 órás mércéhez mért eltéréssel, telephelyi feladat-üzenőfal ismétlődéssel. Szabadság: a dolgozó a telefonján kéri (a mai napra is), az admin a Szabadság oldalon hagyja jóvá vagy rögzíti bárkinek, éves rácson látszik, ki mikor van távol és hol torlódnak; az ünnepnapok és áthelyezett pihenőnapok nem fogyasztják a keretet. Dolgozói mobil: jelenlét, feladatok, Profil (kivehető szabadság, szabadság-kérés, előleg év/hónap bontásban); sofőröknél saját fuvar-nézet is.",
   },
 ];

@@ -14,6 +14,8 @@ import {
   szabadsagRacs,
   szabadsagSzin,
   hetvege,
+  munkanap,
+  munkaszunetiNap,
   type SzabadsagIgeny,
   type SzabadsagMerleg,
 } from "@/lib/jelenlet/shared";
@@ -52,6 +54,7 @@ function igeny(
     dontes_at: null,
     dontes_by: null,
     dontes_oka: null,
+    munka_napok: [],
   };
 }
 
@@ -76,12 +79,32 @@ eq(
   munkanapok("2026-10-05", "2026-10-16").includes("2026-10-10"),
   false
 );
-// Karácsonyi szakasz: dec. 21. hétfő – dec. 31. csütörtök, két hétvégi nap
-// (26-27.) kimarad, tehát 9 munkanap.
-eq("dec. 21–31. = 9 munkanap", munkanapok("2026-12-21", "2026-12-31").length, 9);
+// Karácsonyi szakasz: dec. 21. hétfő – dec. 31. csütörtök. Kimarad a 24.
+// (áthelyezett pihenőnap), a 25. (ünnep) és a 26–27. hétvége: 7 munkanap.
+eq("dec. 21–31. = 7 munkanap", munkanapok("2026-12-21", "2026-12-31").length, 7);
 eq("visszafelé megadott szakasz üres", munkanapok("2026-10-09", "2026-10-05"), []);
-// Évhatár: a szakasz átlóghat a következő évbe.
-eq("évhatáron átnyúló szakasz", munkanapok("2026-12-30", "2027-01-04").length, 4);
+// Évhatár: a szakasz átlóghat a következő évbe. Jan. 1. ünnep.
+eq("évhatáron átnyúló szakasz", munkanapok("2026-12-30", "2027-01-04").length, 3);
+
+// --- munkaszüneti napok ---
+// A hibajegy esete: okt. 19–23. 4 nap, mert okt. 23. péntek ünnep.
+eq("okt. 19–23. = 4 munkanap (okt. 23. ünnep)", munkanapok("2026-10-19", "2026-10-23").length, 4);
+eq("okt. 23. ünnep", munkaszunetiNap("2026-10-23"), "Nemzeti ünnep");
+eq("márc. 15. ünnep", munkaszunetiNap("2027-03-15") !== null, true);
+// Húsvét 2026-ban ápr. 5., 2027-ben márc. 28. — a mozgó ünnepek ebből jönnek.
+eq("2026 nagypéntek", munkaszunetiNap("2026-04-03"), "Nagypéntek");
+eq("2026 húsvéthétfő", munkaszunetiNap("2026-04-06"), "Húsvéthétfő");
+eq("2026 pünkösdhétfő", munkaszunetiNap("2026-05-25"), "Pünkösdhétfő");
+eq("2027 húsvéthétfő", munkaszunetiNap("2027-03-29"), "Húsvéthétfő");
+eq("2027 pünkösdhétfő", munkaszunetiNap("2027-05-17"), "Pünkösdhétfő");
+eq("húsvéti hét: ápr. 1–7. = 3 munkanap", munkanapok("2026-04-01", "2026-04-07").length, 3);
+// Áthelyezett pihenőnap és ledolgozós szombat (2026-os rendelet).
+eq("2026. jan. 2. pihenőnap", munkanap("2026-01-02"), false);
+eq("2026. jan. 10. szombat munkanap", munkanap("2026-01-10"), true);
+eq("2026. aug. 21. pihenőnap", munkanap("2026-08-21"), false);
+eq("ledolgozós szombat a szakaszban számít", munkanapok("2026-08-08", "2026-08-09"), ["2026-08-08"]);
+eq("sima hétköznap munkanap", munkanap("2026-10-22"), true);
+eq("sima hétköznap nem ünnep", munkaszunetiNap("2026-10-22"), null);
 // Szökőnap (2028. febr. 29. kedd) nem veszhet el.
 eq(
   "szökőnap benne van",
@@ -113,6 +136,19 @@ eq(
   ["kert", "jovahagyva"]
 );
 eq("hétvége nincs a rácsban", racs.has("2026-12-26"), false);
+eq("ünnep nincs a rácsban", racs.has("2026-12-25"), false);
+
+// Kérés nélküli távollét-napok (régi adat, nap-szerkesztő) jóváhagyottként.
+const racsT = szabadsagRacs([igeny("2", "2026-11-09", "2026-11-09")], SORREND, [
+  { employee_id: "1", work_date: "2026-11-09", day_type: "szabadsag" },
+  { employee_id: "3", work_date: "2026-11-10", day_type: "beteg" },
+]);
+eq(
+  "távollét-nap és kérés egy napon, sorrendben",
+  racsT.get("2026-11-09")?.map((b) => [b.employeeId, b.allapot]),
+  [["1", "jovahagyva"], ["2", "kert"]]
+);
+eq("betegszabadság-nap a rácsban", racsT.get("2026-11-10")?.[0]?.tipus, "beteg");
 eq("elutasított igény nincs a rácsban", racs.has("2026-11-02"), false);
 eq("visszavont igény nincs a rácsban", racs.has("2026-11-09"), false);
 
@@ -122,12 +158,12 @@ eq("dec. 21–31. két emberrel ütközik", utk.length, 2);
 eq(
   "a 2-es dolgozóval három napon",
   utk.find((u) => u.employeeId === "2")?.napok,
-  ["2026-12-22", "2026-12-23", "2026-12-24"]
+  ["2026-12-22", "2026-12-23"]
 );
 eq(
-  "a 3-as dolgozóval két napon",
+  "a 3-as dolgozóval egy napon (dec. 24. pihenőnap)",
   utk.find((u) => u.employeeId === "3")?.napok.length,
-  2
+  1
 );
 // Aki egyedül van, annak nincs ütközése — és a saját másik igénye sem az.
 const magaban = igeny("1", "2026-07-06", "2026-07-07");
@@ -154,7 +190,7 @@ function merleg(keret: number | null, kivett: number): SzabadsagMerleg {
     fordulonap: "2026-08-31",
     kivett,
     kert: 0,
-    maradek: keret === null ? null : Math.max(0, keret - kivett),
+    maradek: keret === null ? null : keret - kivett,
   };
 }
 eq(
@@ -170,6 +206,11 @@ eq(
 eq(
   "keret-túllépés negatív számot ad (nem tiltás, jelzés)",
   keretJovahagyasUtan(merleg(2, 0), igeny("1", "2026-10-05", "2026-10-09")),
+  -3
+);
+eq(
+  "már túllépett keretnél a kérés tovább mélyíti",
+  keretJovahagyasUtan(merleg(2, 4), igeny("1", "2026-10-05", "2026-10-05")),
   -3
 );
 eq(

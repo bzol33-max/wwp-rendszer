@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { query, withTransaction } from "@/lib/db";
+import { query, withTransaction, type Querier } from "@/lib/db";
 import { requireSession } from "@/lib/auth/dal";
 import {
   requireAnyEditPermission,
@@ -26,6 +26,7 @@ import {
   type SzabadsagKeret,
   type SzabadsagMerleg,
   type SzabadsagTipus,
+  type TavolletNap,
 } from "@/lib/jelenlet/shared";
 
 // A Railway-konténer (és a hozzá tartozó Postgres session) alapértelmezett
@@ -294,16 +295,16 @@ export async function recordDepartureNow(employeeId: string, note?: string) {
   revalidateJelenlet();
 }
 
-// Szabadság / Betegszabadság: az egész napot távollétnek jelöli (nincs
-// érkezés/távozás-idő), és a nap minden más bejegyzését felváltja — egy napra
-// nem kerülhet egyszerre munka, szabadság és betegszabadság. A felület
-// megerősítést kér, mielőtt ezt hívja.
-export async function recordAbszenciaNow(
-  employeeId: string,
-  dayType: "szabadsag" | "beteg",
-  note?: string
-) {
+// Betegszabadság: az egész napot távollétnek jelöli (nincs érkezés/távozás-
+// idő), és a nap minden más bejegyzését felváltja — egy napra nem kerülhet
+// egyszerre munka és távollét. A felület megerősítést kér, mielőtt ezt hívja.
+//
+// Szabadságot ez az út NEM ír (2026-10-05): korábban a telefon "Szabadság"
+// gombja jóváhagyás nélkül fogyasztotta a keretet, és a nap a szabadság-
+// rácson sem látszott. A gomb azóta kérést ad be (createSzabadsagIgeny).
+export async function recordAbszenciaNow(employeeId: string, dayType: "beteg", note?: string) {
   await sajatJelenletJog(employeeId);
+  if (dayType !== "beteg") throw new Error("Szabadságot kérésként lehet beadni.");
   await withTransaction(async (q) => {
     await q(
       `delete from jelenletek where employee_id = $1 and work_date = ${BUDAPEST_NOW_DATE}`,
@@ -400,7 +401,8 @@ export async function getSzabadsagKeret(employeeId: string): Promise<SzabadsagKe
     keret,
     fordulonap: r.fordulonap,
     felhasznalt,
-    maradek: Math.max(0, keret - felhasznalt),
+    // Nem vágjuk nullánál: a túllépést látni kell (negatív szám).
+    maradek: keret - felhasznalt,
   };
 }
 
@@ -716,7 +718,7 @@ export async function getHaviJelenletArchivum(): Promise<HaviArchivumHonap[]> {
         const felhasznalt = osszes.filter(
           (n) => n.dayType === "szabadsag" && n.date > e.fordulonap! && n.date <= honapVege
         ).length;
-        keretMaradek = Math.max(0, Number(e.keret) - felhasznalt);
+        keretMaradek = Number(e.keret) - felhasznalt;
       }
       return {
         employeeId: e.id,
@@ -750,7 +752,11 @@ const IGENY_COLS = `i.id::text, i.employee_id::text,
   i.tipus, i.allapot, i.megjegyzes, i.bekuldte,
   to_char(i.bekuldve_at at time zone 'Europe/Budapest', 'YYYY-MM-DD HH24:MI') as bekuldve,
   to_char(i.dontes_at at time zone 'Europe/Budapest', 'YYYY-MM-DD HH24:MI') as dontes_at,
-  i.dontes_by, i.dontes_oka`;
+  i.dontes_by, i.dontes_oka,
+  (select coalesce(array_agg(distinct to_char(j.work_date, 'YYYY-MM-DD')), '{}')
+     from jelenletek j
+    where j.employee_id = i.employee_id and j.day_type = 'munka'
+      and j.work_date between i.tol and i.ig) as munka_napok`;
 
 /** Egy év összes igénye (a rácshoz és a jóváhagyó listához). */
 export async function getSzabadsagIgenyek(ev: number): Promise<SzabadsagIgeny[]> {
@@ -763,6 +769,51 @@ export async function getSzabadsagIgenyek(ev: number): Promise<SzabadsagIgeny[]>
       order by i.tol, a.position, a.id`,
     [ev]
   );
+}
+
+/**
+ * A jelenletek távollét-napjai az adott évben, amikhez NINCS jóváhagyott
+ * igény (régi adat, vagy az admin a nap-szerkesztőben állította be, vagy
+ * telefonos betegszabadság). A rács ezeket is mutatja, hogy egyezzen a
+ * fejléc "kivéve" számával.
+ */
+export async function getSzabadsagTavolletek(ev: number): Promise<TavolletNap[]> {
+  await requireViewPermission("jelenlet");
+  return query<TavolletNap>(
+    `select j.employee_id::text, to_char(j.work_date, 'YYYY-MM-DD') as work_date, j.day_type
+       from jelenletek j
+       join alkalmazottak a on a.id = j.employee_id and a.active
+      where j.day_type in ('szabadsag', 'beteg')
+        and j.work_date between make_date($1, 1, 1) and make_date($1, 12, 31)
+        and not exists (
+          select 1 from szabadsag_igenyek i
+           where i.employee_id = j.employee_id and i.allapot = 'jovahagyva'
+             and i.tipus = j.day_type and j.work_date between i.tol and i.ig)
+      group by j.employee_id, j.work_date, j.day_type
+      order by j.work_date`,
+    [ev]
+  );
+}
+
+/**
+ * Azok a munkanapok a szakaszban, amikre már munkaidő van rögzítve. Az admin
+ * rögzítés előtt ezzel kérdez rá, mert a szabadság felülírja őket.
+ */
+export async function getMunkasNapok(input: {
+  employeeId: string;
+  tol: string;
+  ig: string;
+}): Promise<string[]> {
+  await requireViewPermission("jelenlet");
+  ellenorizdSzakaszt(input.tol, input.ig);
+  const rows = await query<{ nap: string }>(
+    `select distinct to_char(work_date, 'YYYY-MM-DD') as nap from jelenletek
+      where employee_id = $1 and day_type = 'munka' and work_date between $2 and $3
+      order by 1`,
+    [input.employeeId, input.tol, input.ig]
+  );
+  const munkanapSet = new Set(munkanapok(input.tol, input.ig));
+  return rows.map((r) => r.nap).filter((d) => munkanapSet.has(d));
 }
 
 /**
@@ -793,17 +844,19 @@ export async function getSzabadsagMerlegek(): Promise<SzabadsagMerleg[]> {
   );
   // A még jóvá nem hagyott kérések munkanapjait külön számoljuk: ezek nem
   // fogyasztják a keretet, de a fejlécben látni akarjuk, mi van folyamatban.
+  // A kivett-hez hasonlóan csak a fordulónap utáni napok számítanak — egy
+  // tavalyi, ott felejtett kérés nem a mostani keretből megy.
   const kertek = await query<{ employee_id: string; tol: string; ig: string }>(
     `select employee_id::text,
        to_char(tol, 'YYYY-MM-DD') as tol, to_char(ig, 'YYYY-MM-DD') as ig
      from szabadsag_igenyek where allapot = 'kert' and tipus = 'szabadsag'`
   );
+  const fordulonapok = new Map(rows.map((r) => [r.employee_id, r.fordulonap]));
   const kertNapok = new Map<string, number>();
   for (const k of kertek) {
-    kertNapok.set(
-      k.employee_id,
-      (kertNapok.get(k.employee_id) ?? 0) + munkanapok(k.tol, k.ig).length
-    );
+    const fordulonap = fordulonapok.get(k.employee_id) ?? null;
+    const napok = munkanapok(k.tol, k.ig).filter((d) => !fordulonap || d > fordulonap);
+    kertNapok.set(k.employee_id, (kertNapok.get(k.employee_id) ?? 0) + napok.length);
   }
   return rows.map((r) => {
     // A pg a count()-ot (bigint) szövegként adja vissza — lásd CLAUDE.md.
@@ -816,7 +869,7 @@ export async function getSzabadsagMerlegek(): Promise<SzabadsagMerleg[]> {
       fordulonap: r.fordulonap,
       kivett,
       kert: kertNapok.get(r.employee_id) ?? 0,
-      maradek: keret === null ? null : Math.max(0, keret - kivett),
+      maradek: keret === null ? null : keret - kivett,
     };
   });
 }
@@ -846,14 +899,45 @@ function ellenorizdSzakaszt(tol: string, ig: string): void {
   }
   if (ig < tol) throw new Error("A vége nem lehet korábban, mint a kezdete.");
   if (munkanapok(tol, ig).length === 0) {
-    throw new Error("A megadott szakaszra egyetlen munkanap sem esik (csak hétvége).");
+    throw new Error("A megadott szakaszra egyetlen munkanap sem esik (csak hétvége vagy ünnep).");
   }
 }
 
 /**
- * A dolgozó beadja a kérését a telefonján. Átfedést nem tiltunk: lehet, hogy
- * a saját korábbi kérését szeretné bővíteni, és a döntés az adminé — a
- * Jelenléti oldal viszont kiírja, kivel ütközik.
+ * Egy dolgozónak ne legyen két élő (kért vagy jóváhagyott) igénye ugyanarra
+ * a napra: a "kért" napok duplán számolódtak a fejlécben, és két átfedő
+ * jóváhagyott szakasz közül az egyik visszavonása a másik napjait is vitte.
+ * Bővíteni a régit visszavonva és újat beadva lehet.
+ */
+async function ellenorizdAtfedest(
+  q: Querier,
+  employeeId: string,
+  tol: string,
+  ig: string
+): Promise<void> {
+  const utkozo = await q<{ tol: string; ig: string; allapot: string }>(
+    `select to_char(tol, 'YYYY-MM-DD') as tol, to_char(ig, 'YYYY-MM-DD') as ig, allapot
+       from szabadsag_igenyek
+      where employee_id = $1 and allapot in ('kert', 'jovahagyva')
+        and tol <= $3 and ig >= $2
+      order by tol limit 1`,
+    [employeeId, tol, ig]
+  );
+  const u = utkozo[0];
+  if (u) {
+    const szakasz = u.tol === u.ig ? u.tol : `${u.tol} – ${u.ig}`;
+    throw new Error(
+      u.allapot === "kert"
+        ? `Erre az időre már van elbírálásra váró kérés (${szakasz}). Előbb azt kell visszavonni vagy elbírálni.`
+        : `Erre az időre már van jóváhagyott szabadság (${szakasz}).`
+    );
+  }
+}
+
+/**
+ * A dolgozó beadja a kérését a telefonján. Múltbeli napra nem kérhet (azt az
+ * admin rögzíti, ha kell), és a saját élő kéréseivel nem fedhet át. Más
+ * dolgozóval ütközhet — a döntés az adminé, a Szabadság oldal kiírja.
  */
 export async function createSzabadsagIgeny(input: {
   employeeId: string;
@@ -869,11 +953,24 @@ export async function createSzabadsagIgeny(input: {
   });
   ellenorizdSzakaszt(input.tol, input.ig);
   const session = await requireSession();
-  await query(
-    `insert into szabadsag_igenyek (employee_id, tol, ig, tipus, allapot, megjegyzes, bekuldte)
-     values ($1, $2, $3, 'szabadsag', 'kert', $4, $5)`,
-    [input.employeeId, input.tol, input.ig, input.megjegyzes?.trim() || null, session.name]
-  );
+  await withTransaction(async (q) => {
+    // Dolgozónkénti zár: két gyors beküldés ne csússzon el egymás mellett.
+    await q(`select pg_advisory_xact_lock(hashtext('szabadsag-igeny:' || $1::text))`, [
+      input.employeeId,
+    ]);
+    const [{ ma }] = await q<{ ma: string }>(
+      `select to_char(${BUDAPEST_NOW_DATE}, 'YYYY-MM-DD') as ma`
+    );
+    if (input.tol < ma) {
+      throw new Error("Múltbeli napra nem lehet kérni — szólj az irodában.");
+    }
+    await ellenorizdAtfedest(q, input.employeeId, input.tol, input.ig);
+    await q(
+      `insert into szabadsag_igenyek (employee_id, tol, ig, tipus, allapot, megjegyzes, bekuldte)
+       values ($1, $2, $3, 'szabadsag', 'kert', $4, $5)`,
+      [input.employeeId, input.tol, input.ig, input.megjegyzes?.trim() || null, session.name]
+    );
+  });
   revalidateJelenlet();
 }
 
@@ -977,6 +1074,10 @@ export async function rogzitSzabadsag(input: {
   ellenorizdSzakaszt(input.tol, input.ig);
   const session = await requireSession();
   await withTransaction(async (q) => {
+    await q(`select pg_advisory_xact_lock(hashtext('szabadsag-igeny:' || $1::text))`, [
+      input.employeeId,
+    ]);
+    await ellenorizdAtfedest(q, input.employeeId, input.tol, input.ig);
     await q(
       `insert into szabadsag_igenyek
          (employee_id, tol, ig, tipus, allapot, megjegyzes, bekuldte, dontes_at, dontes_by)
@@ -1009,7 +1110,9 @@ export async function rogzitSzabadsag(input: {
  * Egy jóváhagyott (vagy admin által rögzített) szabadság visszavonása: az
  * igény állapota "visszavonva", és a hozzá tartozó jelenletek-sorok eltűnnek,
  * tehát a keret is visszakapja a napokat. Csak azokat a napokat törli, amiken
- * tényleg ez a távollét-típus van — egy közben beírt munkanapot nem bánt.
+ * tényleg ez a távollét-típus van — egy közben beírt munkanapot nem bánt, és
+ * egy másik, ugyanazt a napot fedő jóváhagyott igény napjait sem (régi,
+ * az átfedés-tiltás előtti adat).
  */
 export async function torolSzabadsag(igenyId: string): Promise<void> {
   await requireEditPermission("jelenlet");
@@ -1031,9 +1134,13 @@ export async function torolSzabadsag(igenyId: string): Promise<void> {
     const napok = munkanapok(r.tol, r.ig);
     if (napok.length > 0) {
       await q(
-        `delete from jelenletek
-          where employee_id = $1 and day_type = $2 and work_date = any($3::date[])`,
-        [r.employee_id, r.tipus, napok]
+        `delete from jelenletek j
+          where j.employee_id = $1 and j.day_type = $2 and j.work_date = any($3::date[])
+            and not exists (
+              select 1 from szabadsag_igenyek o
+               where o.employee_id = j.employee_id and o.id <> $4 and o.allapot = 'jovahagyva'
+                 and o.tipus = j.day_type and j.work_date between o.tol and o.ig)`,
+        [r.employee_id, r.tipus, napok, igenyId]
       );
     }
   });

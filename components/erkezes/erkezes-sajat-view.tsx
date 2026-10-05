@@ -36,6 +36,7 @@ import { PullToRefresh } from "@/components/mobil/pull-to-refresh";
 import { useSzelHuzas } from "@/components/mobil/use-szel-huzas";
 import { EditPermissionProvider } from "@/components/auth/edit-permission-context";
 import {
+  createSzabadsagIgeny,
   getSajatSzabadsagIgenyek,
   getSzabadsagKeret,
   getTodayJelenletek,
@@ -366,14 +367,30 @@ function JelenletiScreen({
     });
   }
 
-  function abszenciat(dayType: "szabadsag" | "beteg") {
-    const cimke = dayType === "szabadsag" ? "Szabadság" : "Betegszabadság";
+  function betegszabadsag() {
     const figyelmeztetes =
       munkak.length > 0
         ? "\n\nMa már van rögzített munkaidőd — az a mai napról törlődik."
         : "";
-    if (!window.confirm(`${cimke} a mai napra?${figyelmeztetes}`)) return;
-    futtat(() => recordAbszenciaNow(employeeId, dayType, note), `${cimke} rögzítve.`);
+    if (!window.confirm(`Betegszabadság a mai napra?${figyelmeztetes}`)) return;
+    futtat(() => recordAbszenciaNow(employeeId, "beteg", note), "Betegszabadság rögzítve.");
+  }
+
+  // A szabadság a keretből fogy, ezért jóváhagyás kell hozzá (2026-10-05):
+  // a gomb a mai napra kérést ad be, nem írja be közvetlenül a napot.
+  function szabadsagKeres() {
+    if (
+      !window.confirm(
+        "Szabadságot kérsz a mai napra?\n\nA kérés jóváhagyásra kerül az irodába; a Profil oldalon követheted."
+      )
+    ) {
+      return;
+    }
+    const ma = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Budapest" }).format(new Date());
+    futtat(
+      () => createSzabadsagIgeny({ employeeId, tol: ma, ig: ma, megjegyzes: note || null }),
+      "Szabadság-kérés elküldve, jóváhagyásra vár."
+    );
   }
 
   function visszavon() {
@@ -500,7 +517,7 @@ function JelenletiScreen({
       <div className="grid grid-cols-2 gap-3">
         <Button
           variant="outline"
-          onClick={() => abszenciat("szabadsag")}
+          onClick={szabadsagKeres}
           disabled={pending || loading}
           className="border-[var(--mob-border)] bg-[var(--mob-card)] text-[var(--mob-text)]"
         >
@@ -508,7 +525,7 @@ function JelenletiScreen({
         </Button>
         <Button
           variant="outline"
-          onClick={() => abszenciat("beteg")}
+          onClick={betegszabadsag}
           disabled={pending || loading}
           className="border-[var(--mob-border)] bg-[var(--mob-card)] text-[var(--mob-text)]"
         >
@@ -516,7 +533,8 @@ function JelenletiScreen({
         </Button>
       </div>
       <p className="text-center text-[10px] text-[var(--mob-muted)]">
-        A szabadság és a betegszabadság az egész napra szól, és rákérdez, mielőtt rögzíti.
+        A betegszabadság az egész napra szól. A szabadság kérésként megy az irodába, jóváhagyás
+        után fogy a keretből.
       </p>
     </Shell>
   );
@@ -610,7 +628,9 @@ function ProfilScreen({
                 <>
                   <p className="text-[25px] leading-tight font-extrabold">
                     {keret.maradek}
-                    <span className="ml-1 text-xs font-semibold">nap</span>
+                    <span className="ml-1 text-xs font-semibold">
+                      {keret.maradek < 0 ? "nap (túllépve)" : "nap"}
+                    </span>
                   </p>
                   <p className="text-[10px] opacity-75">
                     {keret.keret} napból {keret.felhasznalt} elhasználva

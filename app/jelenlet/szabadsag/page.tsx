@@ -1,7 +1,11 @@
 import { ModuleGate } from "@/components/auth/module-gate";
 import { PageHeader } from "@/components/layout/page-header";
 import { SzabadsagView } from "@/components/jelenlet/szabadsag-view";
-import { getSzabadsagIgenyek, getSzabadsagMerlegek } from "@/lib/jelenlet/actions";
+import {
+  getSzabadsagIgenyek,
+  getSzabadsagMerlegek,
+  getSzabadsagTavolletek,
+} from "@/lib/jelenlet/actions";
 
 // Az évet keresés-paraméter hordozza (?ev=2027), nem kliens-állapot: így az
 // évváltás a szerveren szedi elő a másik év igényeit, és a link is megosztható.
@@ -30,9 +34,10 @@ export default async function SzabadsagPage({
 }
 
 async function SzabadsagAdat({ ev }: { ev: number }) {
-  const [igenyek, merlegek] = await Promise.all([
+  const [igenyek, merlegek, tavolletek] = await Promise.all([
     getSzabadsagIgenyek(ev),
     getSzabadsagMerlegek(),
+    getSzabadsagTavolletek(ev),
   ]);
-  return <SzabadsagView ev={ev} igenyek={igenyek} merlegek={merlegek} />;
+  return <SzabadsagView ev={ev} igenyek={igenyek} merlegek={merlegek} tavolletek={tavolletek} />;
 }
