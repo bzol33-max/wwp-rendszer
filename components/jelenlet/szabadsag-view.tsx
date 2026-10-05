@@ -34,6 +34,13 @@ import {
   type TavolletNap,
 } from "@/lib/jelenlet/shared";
 
+// A betegszabadság a dolgozó színét tartja (ki az), de fehér csíkozást kap
+// (mi az) — azonos színnel a sima szabadságtól nem lehetett megkülönböztetni.
+const BETEG_CSIKOS = {
+  backgroundImage:
+    "repeating-linear-gradient(135deg, rgba(255,255,255,0.55) 0 3px, transparent 3px 6px)",
+};
+
 const HO_ROVID = ["jan", "febr", "márc", "ápr", "máj", "jún", "júl", "aug", "szept", "okt", "nov", "dec"];
 
 function honapNapjai(ev: number, honap: number): number {
@@ -472,7 +479,9 @@ function EvesRacs({
                             // kész döntéssel.
                             b.allapot === "kert" && "opacity-55 ring-1 ring-foreground/30 ring-inset"
                           )}
+                          style={b.tipus === "beteg" ? BETEG_CSIKOS : undefined}
                         >
+                          {b.tipus === "beteg" && lista.length <= 3 && "✚"}
                           {lista.length === 1
                             ? nezet.rovid.get(b.employeeId)
                             : lista.length <= 3
@@ -502,6 +511,10 @@ function Jelmagyarazat({ nezet, merlegek }: { nezet: Nezet; merlegek: SzabadsagM
       <span className="inline-flex items-center gap-1.5">
         <span className="h-2.5 w-3.5 rounded-[2px] bg-success opacity-55 ring-1 ring-foreground/30 ring-inset" />
         kért, még nincs döntés
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-2.5 w-3.5 rounded-[2px] bg-success" style={BETEG_CSIKOS} />
+        ✚ betegszabadság (csíkos, nem fogyaszt)
       </span>
       <span className="inline-flex items-center gap-1.5">
         <span className="h-2.5 w-3.5 rounded-[2px] bg-secondary ring-2 ring-destructive ring-inset" />
