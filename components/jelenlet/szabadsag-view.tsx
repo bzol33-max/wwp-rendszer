@@ -19,9 +19,10 @@ import {
   torolSzabadsag,
 } from "@/lib/jelenlet/actions";
 import {
+  hetvege,
   igenyUtkozesei,
   keretJovahagyasUtan,
-  munkanap,
+  ledolgozosSzombat,
   munkanapok,
   munkaszunetiNap,
   rovidNevek,
@@ -397,7 +398,24 @@ function EvesRacs({
                   const lista = racs.get(napIso) ?? [];
                   const tobben = lista.length >= 2;
                   const unnep = munkaszunetiNap(napIso);
-                  const napCimke = unnep ? `${napIso} (${unnep})` : napIso;
+                  const hetvegi = hetvege(napIso);
+                  const ledolgozos = ledolgozosSzombat(napIso);
+                  const napCimke = unnep
+                    ? `${napIso} (${unnep})`
+                    : ledolgozos
+                      ? `${napIso} (ledolgozós szombat)`
+                      : napIso;
+                  // Üres cellába kiírjuk, miért nem munkanap — a szürke
+                  // árnyalat önmagában alig vált el a hétköznaptól.
+                  const jelzes = unnep
+                    ? "ünnep"
+                    : ledolgozos
+                      ? "Szo ✱"
+                      : hetvegi
+                        ? new Date(`${napIso}T12:00:00Z`).getUTCDay() === 6
+                          ? "Szo"
+                          : "V"
+                        : null;
                   const cimke =
                     lista.length === 0
                       ? napCimke
@@ -415,10 +433,27 @@ function EvesRacs({
                       title={cimke}
                       className={cn(
                         "relative flex h-8 flex-col gap-px overflow-hidden rounded-[3px] p-px",
-                        munkanap(napIso) ? "bg-secondary" : "bg-accent",
+                        unnep
+                          ? "bg-orange-200 dark:bg-orange-900/50"
+                          : hetvegi && !ledolgozos
+                            ? "bg-zinc-300 dark:bg-zinc-700"
+                            : "bg-secondary",
+                        ledolgozos && "ring-1 ring-zinc-400 ring-inset",
                         tobben && "ring-2 ring-destructive ring-inset"
                       )}
                     >
+                      {lista.length === 0 && jelzes && (
+                        <span
+                          className={cn(
+                            "m-auto text-[7.5px] leading-none font-semibold",
+                            unnep
+                              ? "text-orange-800 dark:text-orange-200"
+                              : "text-zinc-600 dark:text-zinc-300"
+                          )}
+                        >
+                          {jelzes}
+                        </span>
+                      )}
                       {/* Négy fő fölött a betűjel sem fér ki — ott a sarokba
                           kerül a létszám, és csak a színek beszélnek. */}
                       {lista.length >= 3 && (
@@ -473,8 +508,16 @@ function Jelmagyarazat({ nezet, merlegek }: { nezet: Nezet; merlegek: SzabadsagM
         többen egyszerre
       </span>
       <span className="inline-flex items-center gap-1.5">
-        <span className="h-2.5 w-3.5 rounded-[2px] bg-accent" />
-        hétvége, ünnep (nem fogyaszt)
+        <span className="h-2.5 w-3.5 rounded-[2px] bg-zinc-300 dark:bg-zinc-700" />
+        hétvége (nem fogyaszt)
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-2.5 w-3.5 rounded-[2px] bg-orange-200 dark:bg-orange-900/50" />
+        ünnep, pihenőnap (nem fogyaszt)
+      </span>
+      <span className="inline-flex items-center gap-1.5">
+        <span className="h-2.5 w-3.5 rounded-[2px] bg-secondary ring-1 ring-zinc-400 ring-inset" />
+        ledolgozós szombat (fogyaszt)
       </span>
       {merlegek.map((m) => (
         <span key={m.employeeId} className="inline-flex items-center gap-1.5">

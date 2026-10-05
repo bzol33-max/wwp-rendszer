@@ -586,6 +586,11 @@ export function munkaszunetiNap(iso: string): string | null {
   );
 }
 
+/** Ledolgozós szombat-e (áthelyezett munkanap). */
+export function ledolgozosSzombat(iso: string): boolean {
+  return ATHELYEZETT_MUNKANAPOK.has(iso);
+}
+
 /** Munkanap-e: hétköznap és nem ünnep, vagy ledolgozós szombat. */
 export function munkanap(iso: string): boolean {
   if (ATHELYEZETT_MUNKANAPOK.has(iso)) return true;
