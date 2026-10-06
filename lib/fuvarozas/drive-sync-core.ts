@@ -49,6 +49,8 @@ import { EXCEL_MIME_TIPUSOK, excelMegbizasnakLatszik, excelSzovege } from "@/lib
 import { felismerPartner, partnerKodSzerint } from "@/lib/fuvarozas/import/partnerek";
 import { frissitsdFuvarozas2Modellt } from "@/lib/fuvarozas2/modell-szinkron";
 import { ellenorizKivontFuvart, type KivontFuvar } from "@/lib/fuvarozas/import/ellenorzes";
+import { dontsLerakasNapot, type LerakasNapDontes } from "@/lib/fuvarozas/import/lerakas-nap";
+import { becsultTavolsag } from "@/lib/fuvarozas2/ures-km";
 import { osszesFelrakoCime, osszesLerakoCime, soforAdatokKivonatbol, vanSoforAdat, type SoforAdatok } from "@/lib/fuvarozas/sofor-adatok";
 import {
   rogzitNaplot,
@@ -252,6 +254,9 @@ function fileIdFromViewUrl(url: string): string | null {
  */
 type LlmValasz = KivontFuvar & {
   isFuvarmegbizas: boolean;
+  // Igaz, ha a megbízás kifejezetten megadja a lerakás napját. Régebbi
+  // (mezőt nem ismerő) válasznál hiányzik — lásd lerakasNapMegadva.
+  lerakasDatumMegadva?: unknown;
   // A sofőrnek szóló mezők (lib/fuvarozas/sofor-adatok.ts) — nyersen, a
   // soforAdatokKivonatbol tisztítja meg őket.
   megallok?: unknown;
@@ -267,7 +272,8 @@ const KIVONATOLASI_UTASITAS = `Egy fuvarmegbízás-dokumentum szövege következ
   "felrako": string|null, // felrakás helye (város vagy teljes cím)
   "felrakasDatum": string|null, // ISO dátum ÉÉÉÉ-HH-NN — a felrakás dátuma
   "lerako": string|null, // lerakás helye; ha több lerakó van, az UTOLSÓ
-  "lerakasDatum": string|null, // ISO dátum ÉÉÉÉ-HH-NN, CSAK ha eltér a felrakás dátumától, egyébként null
+  "lerakasDatum": string|null, // ISO dátum ÉÉÉÉ-HH-NN — a lerakás (érkezés) dátuma, HA a megbízás megadja; akkor is, ha a felrakás napjával azonos. Ha a megbízáson nincs lerakási nap, null — NE a felrakás dátumát írd be helyette
+  "lerakasDatumMegadva": boolean, // true, ha a megbízás KIFEJEZETTEN megadja a lerakás napját (dátummal, vagy pl. "aznapi lerakás", "felrakás napján"); false, ha csak felrakási dátum van, a lerakónál pedig legfeljebb nyitvatartás/fogadási idő (pl. "Hétfő-Péntek 6.00-15.30")
   "aru": string|null, // áru megnevezése
   "mennyiseg": string|null, // mennyiség/súly szövegesen
   "rendszamVagySofor": string|null, // a dokumentumban szereplő jármű rendszáma VAGY sofőr neve, szó szerint
@@ -373,6 +379,44 @@ async function kivonatolFuvarAdatot(szoveg: string): Promise<LlmValasz | null> {
   const tartalom = data.choices?.[0]?.message?.content;
   if (!tartalom) return null;
   return parseJsonValasz(tartalom);
+}
+
+/**
+ * A mentendő lerakási nap és az esetleges kifogás (lib/fuvarozas/import/lerakas-nap.ts).
+ *
+ * "Megadottnak" számít a lerakás napja, ha
+ *  - a partner determinisztikus olvasója kiolvasta (a kulcs ott van, a
+ *    null érték nála azt jelenti: aznap — lásd ghibli/speditrans/kuehne-nagel),
+ *  - a nyelvi modell lerakasDatumMegadva = true-t adott,
+ *  - a kiolvasott lerakási nap (a mezőben vagy az utolsó lerakó megállónál)
+ *    eltér a felrakásétól — ez csak kiírt dátumból jöhet.
+ * A régi, lerakasDatumMegadva nélküli válasznál a null tehát "nincs megadva".
+ * A távolságot csak a hiányzó esetben becsüljük (geokód-gyorsítótár), hiba esetén nélküle.
+ */
+async function lerakasNapDontes(
+  kivont: KivontFuvar,
+  llm: LlmValasz,
+  nyersDeterminisztikus: Partial<KivontFuvar>,
+  soforAdatok: SoforAdatok,
+  felrakoMezo: string | null,
+  lerakoMezo: string
+): Promise<LerakasNapDontes> {
+  const felrakasDatum = kivont.felrakasDatum!;
+  const utolsoLerako = [...soforAdatok.megallok].reverse().find((m) => m.tipus === "lerako");
+  const megalloNap = utolsoLerako?.nap && /^\d{4}-\d{2}-\d{2}$/.test(utolsoLerako.nap) ? utolsoLerako.nap : null;
+  const lerakasDatum = kivont.lerakasDatum ?? (megalloNap && megalloNap !== felrakasDatum ? megalloNap : null);
+  const megadva =
+    "lerakasDatum" in nyersDeterminisztikus ||
+    llm.lerakasDatumMegadva === true ||
+    (!!lerakasDatum && lerakasDatum !== felrakasDatum);
+  let tavKm: number | null = null;
+  if (!megadva) {
+    const honnan = bontsMegallokra(felrakoMezo)[0];
+    const hova = bontsMegallokra(lerakoMezo).at(-1);
+    if (honnan && hova) tavKm = await becsultTavolsag()(honnan, hova).catch(() => null);
+  }
+  const felrakasIdo = [...soforAdatok.megallok].reverse().find((m) => m.tipus === "felrako")?.ido ?? null;
+  return dontsLerakasNapot({ felrakasDatum, lerakasDatum, megadva, tavKm, felrakasIdo });
 }
 
 /**
@@ -618,8 +662,9 @@ async function ujFajlokFeldolgozasa(
       // lib/fuvarozas/import/speditrans.ts) felülírják a modell tippjét —
       // csak a ténylegesen kiolvasott (nem null) értékek.
       const elemek = partner?.kivon && pdfBuffer ? await pdfSzovegElemek(pdfBuffer).catch(() => null) : null;
+      const nyersDeterminisztikus = partner?.kivon?.(nyersSzoveg, elemek) ?? {};
       const determinisztikus = Object.fromEntries(
-        Object.entries(partner?.kivon?.(nyersSzoveg, elemek) ?? {}).filter(([, v]) => v !== null && v !== undefined)
+        Object.entries(nyersDeterminisztikus).filter(([, v]) => v !== null && v !== undefined)
       ) as Partial<KivontFuvar>;
       const kivont: KivontFuvar = {
         ...llm,
@@ -661,6 +706,15 @@ async function ujFajlokFeldolgozasa(
       const lerakoMezo = (determinisztikus.lerako ? null : osszesLerakoCime(soforAdatok)) ?? kivont.lerako!;
       const felrakoMezo = (determinisztikus.felrako ? null : osszesFelrakoCime(soforAdatok)) ?? kivont.felrako;
 
+      // A lerakás napja: "meg van adva (akár aznap)" vs. "nincs a megbízáson".
+      // Az utóbbit eddig csendben aznapinak vettük (Endo-Star #300/#301,
+      // 2026-10-06) — most javaslatot teszünk, és a sor ellenőrzésre megy.
+      const lerakasNap = await lerakasNapDontes(kivont, llm, nyersDeterminisztikus, soforAdatok, felrakoMezo, lerakoMezo);
+      if (lerakasNap.kifogas) {
+        kifogasok.push(lerakasNap.kifogas);
+        if (verdikt === "biztos") verdikt = "ellenorizendo";
+      }
+
       const fuvarId = await letrehoz({
         tipus: "sajat",
         datum: kivont.felrakasDatum!,
@@ -680,7 +734,7 @@ async function ujFajlokFeldolgozasa(
         // "nincs ilyen" jelölés eleve be van pipálva, nem kell kézzel.
         pozicioszamNincs: !kivont.pozicioszam && !!partner?.nincsHivatkozas,
         megjegyzes: kivont.megjegyzes || undefined,
-        lerakasDatum: kivont.lerakasDatum || undefined,
+        lerakasDatum: lerakasNap.lerakasDatum || undefined,
         dokumentumUrl: url,
         driveFileId: file.id,
         forras: "pdf_import",
