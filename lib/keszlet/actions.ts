@@ -226,6 +226,14 @@ async function addMovement(q: Querier, input: {
   eladAr?: number;
   eladFizmod?: "keszpenz" | "atutalas";
 }) {
+  // A "Csere" tranzakció, nem készlettétel: a hatása mindig világos +db /
+  // szürke −db (irjFelvasarlasKeszlethatast). Egy "Csere" típusú mozgás
+  // rejtett készletet hozna létre, amit a getStock kiszűr — a darabok így
+  // a világos/szürke számokból hiányoznának. 2026-09-18 előtt a kifizetésre
+  // váró Csere módosítása pont ilyet írt.
+  if (input.type === "Csere") {
+    throw new Error("A Csere nem készlettétel — a Havi fülön, vételként rögzíthető.");
+  }
   await zaroljKeszletet(q);
   await q(
     `insert into keszlet_movements (site_id, type_id, direction, qty, partner, target_site_id, purchase_id, created_by, movement_group, elad_egysegar, elad_fizmod)
