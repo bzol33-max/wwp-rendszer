@@ -122,7 +122,29 @@ const TAMOGATOTT_MIME_TIPUSOK = new Set([
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
   "application/vnd.google-apps.document", // Google Docs
+  // Excel-megbízás (2026-10-06: Endo-Star, régi .xls sablon)
+  "application/vnd.ms-excel", // .xls
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
 ]);
+const EXCEL_MIME_TIPUSOK = new Set(["application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]);
+
+/**
+ * Egy Excel-megbízás szövege: munkalaponként, soronként a nem üres cellák
+ * „ | ”-vel összefűzve — a nyelvi modell ugyanúgy olvassa, mint a PDF
+ * szövegét. A cellák a megjelenített formájukban jönnek (a dátum
+ * „2026-10-06”, nem az Excel-sorszám).
+ */
+export async function excelSzovege(buffer: Buffer): Promise<string> {
+  const XLSX = await import("xlsx");
+  const munkafuzet = XLSX.read(buffer, { type: "buffer", cellDates: false });
+  return munkafuzet.SheetNames.map((nev) => {
+    const sorok = XLSX.utils.sheet_to_json<unknown[]>(munkafuzet.Sheets[nev], { header: 1, raw: false, blankrows: false, defval: "" });
+    return sorok
+      .map((sor) => sor.map((c) => String(c ?? "").replace(/\s+/g, " ").trim()).filter(Boolean).join(" | "))
+      .filter(Boolean)
+      .join("\n");
+  }).filter(Boolean).join("\n\n");
+}
 
 async function listazDriveFajlok(drive: ReturnType<typeof driveClient>): Promise<DriveFile[]> {
   const res = await drive.files.list({
@@ -211,6 +233,10 @@ async function fajlSzovege(
     } finally {
       await parser.destroy();
     }
+  }
+
+  if (EXCEL_MIME_TIPUSOK.has(file.mimeType)) {
+    return { szoveg: await excelSzovege(buffer), pdfBuffer: null };
   }
 
   // .docx
