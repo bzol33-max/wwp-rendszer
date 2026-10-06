@@ -5,7 +5,8 @@ import * as actions from "@/lib/megbizasok/akciok";
 import { query, withTransaction } from "@/lib/db";
 import { megalloKeszTx } from "@/lib/megbizasok/megallo";
 import { requireAnyViewPermission, requireEditPermission, requireViewPermission } from "@/lib/auth/require-permission";
-import { FUVAR_HELY_SQL, FUVAR_MA_SQL } from "@/lib/fuvarozas/fuvar-hely";
+import { FUVAR_MA_SQL } from "@/lib/fuvarozas/fuvar-hely";
+import { fuvarHelyAllapotbol } from "@/lib/megbizasok/fuvar-hely-allapotbol";
 import { toroljIdovonalCachet } from "@/lib/fuvarozas/idovonal-cache";
 import { bontsMegallokra } from "@/lib/fuvarozas/varos";
 import { fuvarSzamlaTukor, kiegAlap, parositKiegSzamlakat, parositSzamlakat } from "@/lib/fuvarozas/szamla-parositas";
@@ -44,7 +45,7 @@ const LERAKAS_TENYLEGES_SQL = `(
 )`;
 
 const FUVAR_ROW_COLUMNS = `
-  id::text, tipus,
+  id::text, case when jelleg = 'ber' then 'sajat' else 'ber' end as tipus, jelleg, allapot,
   to_char(datum, '${TIME_FMT}') as date,
   to_char(datum, 'YYYY-MM-DD') as datum_iso,
   idopont, felrako, lerako, megrendelo, aru, mennyiseg, suly,
@@ -78,10 +79,10 @@ export async function getFuvarok(tipus: FuvarTipus): Promise<FuvarRow[]> {
   return query<FuvarRow>(
     `select ${FUVAR_ROW_COLUMNS}
      from fuvar_megbizasok
-     where tipus = $1 and statusz <> 'torolt'
+     where jelleg = $1 and torolt_at is null
      order by ${orderBy}
      limit 200`,
-    [tipus]
+    [tipus === "sajat" ? "ber" : "sajat"]
   );
 }
 
@@ -102,24 +103,23 @@ export async function getFuvarok(tipus: FuvarTipus): Promise<FuvarRow[]> {
 export async function getSajatFuvarokErinteshez(kezdetNapISO: string): Promise<FuvarErintesSor[]> {
   await requireViewPermission("fuvarozas");
   return query<FuvarErintesSor>(
-    `select id::text, tipus, jarmu, felrako, lerako,
+    `select id::text, case when jelleg = 'ber' then 'sajat' else 'ber' end as tipus, jelleg, allapot, jarmu, felrako, lerako,
        to_char(datum, 'YYYY-MM-DD') as datum,
        to_char(lerakas_datum, 'YYYY-MM-DD') as lerakas_datum,
        to_char(felrakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as felrakas_ablak_tol,
        to_char(lerakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as lerakas_ablak_tol,
        teljesitve,
        to_char(teljesitve_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as teljesitve_at,
-       (coalesce(szamla_szam, '') <> '') as szamlas,
-       ${FUVAR_HELY_SQL} as hely
+       (coalesce(szamla_szam, '') <> '') as szamlas
      from fuvar_megbizasok
-     where tipus in ('sajat', 'ber') and statusz <> 'torolt'
+     where torolt_at is null
        and jarmu is not null and jarmu <> ''
        and coalesce(lerakas_datum, datum) >= $1::date
        and datum <= ${FUVAR_MA_SQL}
      order by id asc
      limit 200`,
     [kezdetNapISO]
-  );
+  ).then((rows) => rows.map((r) => ({ ...r, hely: fuvarHelyAllapotbol(r.jelleg, r.allapot) })));
 }
 
 /**
@@ -129,11 +129,11 @@ export async function getSajatFuvarokErinteshez(kezdetNapISO: string): Promise<F
  * GPS lap "következő napok" előnézetéhez, ahol csak a napi bontás és a
  * városnév kell, geokódolás/útvonalszámítás nélkül.
  */
-export async function getFuvarokIdoszakban(kezdetNapISO: string, vegNapISO: string): Promise<(MaiFuvarSor & { tipus: FuvarTipus })[]> {
+export async function getFuvarokIdoszakban(kezdetNapISO: string, vegNapISO: string): Promise<(MaiFuvarSor & { tipus: FuvarTipus; jelleg: "ber" | "sajat"; allapot: import("@/lib/megbizasok/allapotgep").Allapot })[]> {
   await requireViewPermission("fuvarozas");
-  return query<MaiFuvarSor & { tipus: FuvarTipus }>(
+  return query<MaiFuvarSor & { tipus: FuvarTipus; jelleg: "ber" | "sajat"; allapot: import("@/lib/megbizasok/allapotgep").Allapot }>(
     `select
-       id::text, tipus, megrendelo, felrako, lerako, idopont,
+       id::text, case when jelleg = 'ber' then 'sajat' else 'ber' end as tipus, jelleg, allapot, megrendelo, felrako, lerako, idopont,
        to_char(datum, 'YYYY-MM-DD') as datum,
        to_char(lerakas_datum, 'YYYY-MM-DD') as lerakas_datum,
        jarmu, sofor, pozicioszam,
@@ -143,7 +143,7 @@ export async function getFuvarokIdoszakban(kezdetNapISO: string, vegNapISO: stri
        to_char(lerakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as lerakas_ablak_tol,
        teljesitve
      from fuvar_megbizasok
-     where tipus in ('sajat', 'ber') and statusz <> 'torolt'
+     where torolt_at is null
        and datum between $1::date and $2::date
      order by datum asc, idopont nulls last, id asc
      limit 200`,
@@ -223,7 +223,7 @@ export async function setMegalloKesz(fuvarId: string, megalloIndex: number): Pro
   await requireEditPermission("fuvarozas");
   const session = await requireSession();
   const sorok = await query<{ felrako: string | null; lerako: string; teljesitve: boolean }>(
-    `select felrako, lerako, teljesitve from fuvar_megbizasok where id = $1 and statusz <> 'torolt'`,
+    `select felrako, lerako, teljesitve from fuvar_megbizasok where id = $1 and torolt_at is null`,
     [fuvarId]
   );
   const sor = sorok[0];
@@ -270,8 +270,8 @@ export async function jelolTeljesitveGpsAlapjan(id: string): Promise<boolean> {
 
 // Az "effektíve archivált" (postázva + 5 perc) és a "munka kész" feltétel,
 // valamint a fülek közti besorolás EGY helyen él: lib/fuvarozas/fuvar-hely.ts
-// (FUVAR_HELY_SQL). Az alábbi lekérdezések csak azt szűrik, hogy a sor helye
-// melyik fül — a szabályt ott módosítsd, ne itt.
+// A futó olvasók jelleg/allapot/torolt_at szerint szűrnek; a régi fül-szabály
+// csak a backfill-ellenőrzés és az invariáns-szkript része.
 
 /**
  * A fuvaron álló számlaszám egy sztornózott (törölt/teljesen helyesbített)
@@ -308,7 +308,7 @@ export async function szinkronizalSzamlaSzamokat(): Promise<number> {
        m.felrako, m.lerako
      from fuvar_megbizasok m
      left join fuvar_partnerek p on p.id = m.partner_id
-     where m.jelleg = 'ber' and m.tipus = 'sajat' and m.statusz <> 'torolt' and m.torolt_at is null
+     where m.jelleg = 'ber' and m.torolt_at is null
        and (coalesce(m.szamla_szam, '') = '' or ${SZTORNOZOTT_SZAMLA_SQL})
        and coalesce(m.lerakas_datum, m.datum) >= current_date - 180`
   );
@@ -388,7 +388,7 @@ async function szinkronizalKiegSzamlakat(): Promise<number> {
     `select m.id::text, p.nev as partner_nev, m.megrendelo, m.pozicioszam, m.hivatkozas_kanonikus, m.reise_id, m.referencia
      from fuvar_megbizasok m
      left join fuvar_partnerek p on p.id = m.partner_id
-     where m.tipus = 'sajat' and m.statusz <> 'torolt' and m.torolt_at is null
+     where m.jelleg = 'ber' and m.torolt_at is null
        and coalesce(m.lerakas_datum, m.datum) >= current_date - 240`
   );
   const parok = parositKiegSzamlakat(

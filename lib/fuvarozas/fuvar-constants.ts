@@ -150,6 +150,8 @@ export type FuvarErintesSor = {
   id: string;
   /** Melyik fülről való (a DB-érték: 'sajat' = Bér fuvarok, 'ber' = Saját fuvarok fül). */
   tipus: FuvarTipus;
+  jelleg: "ber" | "sajat";
+  allapot: import("@/lib/megbizasok/allapotgep").Allapot;
   jarmu: string;
   felrako: string | null;
   lerako: string;
@@ -169,6 +171,8 @@ export type FuvarErintesSor = {
 export type FuvarRow = {
   id: string;
   tipus: FuvarTipus;
+  jelleg: "ber" | "sajat";
+  allapot: import("@/lib/megbizasok/allapotgep").Allapot;
   date: string;
   /** A "date" mező nyers (YYYY-MM-DD) alakja — szerkesztő űrlap dátum-inputjának előtöltéséhez, ahol a "mon. DD" formátum nem használható. */
   datum_iso: string;

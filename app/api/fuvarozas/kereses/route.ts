@@ -38,7 +38,7 @@ export async function GET(req: Request) {
        to_char(datum, 'YYYY-MM-DD') as datum,
        fuvardij, fuvardij_penznem, dokumentum_url, szamla_szam, postazasi_cim
      from fuvar_megbizasok
-     where tipus = 'sajat' and statusz <> 'torolt'
+     where jelleg = 'ber' and torolt_at is null
        and (megrendelo ilike '%' || $1 || '%' or pozicioszam ilike '%' || $1 || '%')
      order by id desc
      limit 50`,

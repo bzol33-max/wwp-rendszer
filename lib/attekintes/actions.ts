@@ -10,7 +10,7 @@
 import { query } from "@/lib/db";
 import { requireViewPermission } from "@/lib/auth/require-permission";
 import { getIdovonalak } from "@/lib/fuvarozas/actions";
-import { getFuvarHelye } from "@/lib/fuvarozas/fuvar-hely";
+import { fuvarHelyAllapotbol } from "@/lib/megbizasok/fuvar-hely-allapotbol";
 import { budapestNapISO } from "@/lib/fuvarozas/idozona";
 import { getFuvarok } from "@/lib/fuvarozas/megbizasok";
 import { SAJAT_JARMUVEK, resolveJarmu, jarmuLabel, type SajatJarmu } from "@/lib/fuvarozas/vehicles";
@@ -357,8 +357,8 @@ function idopontKulcs(idopont: string | null): string {
   return idopont?.trim() ? idopont.trim() : "99:99";
 }
 
-function folyamatban(row: FuvarRow, ma: string): boolean {
-  const hely = getFuvarHelye(row, ma);
+function folyamatban(row: FuvarRow): boolean {
+  const hely = fuvarHelyAllapotbol(row.jelleg, row.allapot);
   return hely === "ber_folyamatban" || hely === "sajat_folyamatban";
 }
 
@@ -369,7 +369,7 @@ function folyamatban(row: FuvarRow, ma: string): boolean {
  * (getIdovonalak) jön, fuvaronkénti blokkokban, ugyanazzal a kész / épp itt
  * / várakozik állapottal, amit a diszpécser a GPS lapon és a sofőr a
  * telefonján lát. A mai nap utáni megbízások és a kocsi nélküliek a
- * Megbízások modul közös "folyamatban" szabályával (getFuvarHelye) szűrve
+ * Megbízások modul közös "folyamatban" szabályával (fuvarHelyAllapotbol) szűrve
  * kerülnek ide — a lezárt, számlázott vagy Teljesítve-re tett fuvar itt nem
  * jelenik meg. Korábban a fül a `statusz <> 'lezarva'` feltételt használta,
  * amit a felület sehol nem állít, ezért a kocsi minden régi fuvarja
@@ -385,7 +385,7 @@ export async function getFuvarFulAdatok(): Promise<FuvarFulAdatok> {
   ]);
   const osszes = [...berTabRows, ...sajatTabRows];
   const rowById = new Map(osszes.map((r) => [r.id, r]));
-  const aktivak = osszes.filter((r) => folyamatban(r, ma));
+  const aktivak = osszes.filter((r) => folyamatban(r));
 
   const maiFuvarIds = new Set(idovonal.jarmuvek.flatMap((j) => j.fuvarok.map((f) => f.fuvarId)));
   const erintettIds = [...new Set([...maiFuvarIds, ...aktivak.map((r) => r.id)])];

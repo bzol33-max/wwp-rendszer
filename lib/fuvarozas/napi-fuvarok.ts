@@ -63,7 +63,7 @@ export async function getMaiSajatFuvarok(nap?: string, csuszokIs = false): Promi
        teljesitve,
        to_char(teljesitve_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as teljesitve_at
      from fuvar_megbizasok
-     where tipus = 'sajat' and statusz <> 'torolt'
+     where jelleg = 'ber' and torolt_at is null
        and (
          (datum <= coalesce($1::date, ${FUVAR_MA_SQL})
           and coalesce(lerakas_datum, datum) >= coalesce($1::date, ${FUVAR_MA_SQL}))
@@ -101,7 +101,7 @@ export async function getMaiValodiSajatFuvarok(nap?: string, csuszokIs = false):
        teljesitve,
        to_char(teljesitve_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as teljesitve_at
      from fuvar_megbizasok
-     where tipus = 'ber' and statusz <> 'torolt'
+     where jelleg = 'sajat' and torolt_at is null
        and (
          (datum <= coalesce($1::date, ${FUVAR_MA_SQL})
           and coalesce(lerakas_datum, datum) >= coalesce($1::date, ${FUVAR_MA_SQL}))

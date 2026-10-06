@@ -38,18 +38,29 @@ async function regiSorTx(tx: Querier, fuvarId: string, index: number, mezok: {
   const vals = ertekek;
   const names = ["fuvar_id", "megallo_index", "megallo_id", ...inserts];
   const params = [fuvarId, index, id, ...vals];
+  let paramIndex = 0;
+  const valueSql = params.map((value) => {
+    if (value === TX_NOW) return "now()";
+    return `$${++paramIndex}`;
+  });
+  const boundParams = params.filter((value) => value !== TX_NOW);
   await tx(
-    `insert into fuvar_megallo_allapot (${names.join(", ")}) values (${params.map((_, i) => `$${i + 1}`).join(", ")})
+    `insert into fuvar_megallo_allapot (${names.join(", ")}) values (${valueSql.join(", ")})
      on conflict (fuvar_id, megallo_index) do update set megallo_id = coalesce(excluded.megallo_id, fuvar_megallo_allapot.megallo_id), ${updates.join(", ")}`,
-    params
+    boundParams
   );
 }
 
+const TX_NOW = Symbol.for("megbizasok.tx-now");
+
 export async function megalloKeszTx(tx: Querier, fuvarId: string, index: number, nev: string | null) {
-  const [ido] = await tx<{ ido: Date }>(`select now() as ido`);
   await tx(`update fuvar_megallok set sofor_kesz_at = now(), sofor_kesz_by = coalesce($3, sofor_kesz_by) where megbizas_id = $1 and sorszam = $2`, [fuvarId, megalloSorszam(index), nev]);
-  await regiSorTx(tx, fuvarId, index, { kesz: true, keszAt: true, keszBy: true }, [true, ido?.ido ?? new Date(), nev]);
+  await regiSorTx(tx, fuvarId, index, { kesz: true, keszAt: true, keszBy: true }, [true, txNow(), nev]);
 }
+
+// A pg Date-té alakítva elveszíti a Postgres mikrosecundum pontosságát.
+// A now() szövegként pontosan megmarad, a céloszlop timestamptz típusa végzi a castot. (2026-10-06)
+function txNow(): typeof TX_NOW { return TX_NOW; }
 
 export async function megalloKeszVisszavonTx(tx: Querier, fuvarId: string, index: number) {
   const id = await megalloIdTx(tx, fuvarId, index);
@@ -58,18 +69,16 @@ export async function megalloKeszVisszavonTx(tx: Querier, fuvarId: string, index
 }
 
 export async function megerkezettTx(tx: Querier, fuvarId: string, index: number, nev: string | null) {
-  const [ido] = await tx<{ ido: Date }>(`select now() as ido`);
   const id = await megalloIdTx(tx, fuvarId, index);
   if (id) await tx(`update fuvar_megallok set sofor_megerkezett_at = coalesce(sofor_megerkezett_at, now()) where id = $1`, [id]);
-  await regiSorTx(tx, fuvarId, index, { kesz: true, erkezes: true, keszBy: true }, [false, ido?.ido ?? new Date(), nev], ["kesz", "keszBy"]);
+  await regiSorTx(tx, fuvarId, index, { kesz: true, erkezes: true, keszBy: true }, [false, txNow(), nev], ["kesz", "keszBy"]);
 }
 
 export async function varakozasTx(tx: Querier, fuvarId: string, index: number, muvelet: "kezd" | "vege", nev: string | null) {
   const id = await megalloIdTx(tx, fuvarId, index);
   if (muvelet === "kezd") {
-    const [ido] = await tx<{ ido: Date }>(`select now() as ido`);
     if (id) await tx(`update fuvar_megallok set varakozas_kezdete = coalesce(varakozas_kezdete, now()) where id = $1`, [id]);
-    await regiSorTx(tx, fuvarId, index, { kesz: true, varakozasKezdete: true, keszBy: true }, [false, ido?.ido ?? new Date(), nev], ["kesz", "keszBy"]);
+    await regiSorTx(tx, fuvarId, index, { kesz: true, varakozasKezdete: true, keszBy: true }, [false, txNow(), nev], ["kesz", "keszBy"]);
   } else {
     if (id) await tx(`update fuvar_megallok set varakozas_vege = now() where id = $1 and varakozas_kezdete is not null and varakozas_vege is null returning id`, [id]);
     const [regi] = await tx<{ id: string }>(`update fuvar_megallo_allapot set varakozas_vege = now() where fuvar_id = $1 and megallo_index = $2 and varakozas_kezdete is not null and varakozas_vege is null returning id`, [fuvarId, index]);

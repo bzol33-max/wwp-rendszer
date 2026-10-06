@@ -34,14 +34,15 @@ async function main() {
       union all select 'régi és új megállóállapot eltér', a.fuvar_id::text from fuvar_megallo_allapot a
         join fuvar_megbizasok m on m.id=a.fuvar_id
         left join fuvar_megallok g on g.megbizas_id=m.id and g.sorszam=a.megallo_index+1
+        -- Időbélyeg ezredmásodpercre: 2026-10-06 előtt a régi táblába JS Date (ms) került.
         -- A 003-as tükör: kesz/kesz_at → sofor_kesz_at, gps_* → gps_*. A GPS-
         -- érintés NEM kész-jelölés, a kettőt külön kell összevetni.
         where g.id is not null and (
           a.kesz is distinct from (g.sofor_kesz_at is not null)
-          or (a.kesz and a.kesz_at is distinct from g.sofor_kesz_at)
+          or (a.kesz and date_trunc('milliseconds', a.kesz_at) is distinct from date_trunc('milliseconds', g.sofor_kesz_at))
           or a.gps_erkezes is distinct from g.gps_erkezes
-          or (a.kezi_erkezes is not null and a.kezi_erkezes is distinct from g.sofor_megerkezett_at)
-          or (a.varakozas_kezdete is not null and a.varakozas_kezdete is distinct from g.varakozas_kezdete)
+          or (a.kezi_erkezes is not null and date_trunc('milliseconds', a.kezi_erkezes) is distinct from date_trunc('milliseconds', g.sofor_megerkezett_at))
+          or (a.varakozas_kezdete is not null and date_trunc('milliseconds', a.varakozas_kezdete) is distinct from date_trunc('milliseconds', g.varakozas_kezdete))
           or (a.varakozas_vege is not null and a.varakozas_vege is distinct from g.varakozas_vege)
           -- az új tábla lehet teljesebb (pl. utólag észlelt távozás), fordítva nem
           or (a.gps_tavozas is not null and a.gps_tavozas is distinct from g.gps_tavozas))

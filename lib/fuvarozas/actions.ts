@@ -964,8 +964,8 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
   // ma van) — kimarad, különben zölden, "készen" jelenne meg a mai listán.
   const napElottKesz = (row: MaiFuvarSor) =>
     row.teljesitve && row.teljesitve_at !== null && new Date(row.teljesitve_at).getTime() < kezdet.getTime();
-  // FIGYELEM: a DB tipus='sajat' sorok a "Bér fuvarok" fülön jelennek meg,
-  // tipus='ber' pedig a "Saját fuvarok" fülön — lásd megbizasok.ts.
+  // FIGYELEM: a jelleg='ber' a "Bér fuvarok", jelleg='sajat' a "Saját fuvarok" —
+  // a kompatibilitási tipus mezőt a jellegből számítjuk.
   const maiFuvarok: { row: MaiFuvarSor; tipus: FuvarTipus }[] = [
     ...berFuvarok.filter((row) => !napElottKesz(row)).map((row) => ({ row, tipus: "sajat" as const })),
     ...sajatFuvarok.filter((row) => !napElottKesz(row)).map((row) => ({ row, tipus: "ber" as const })),

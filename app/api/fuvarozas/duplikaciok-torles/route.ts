@@ -5,7 +5,7 @@ import { apiEditGuard } from "@/lib/auth/api-guard";
 /**
  * A /api/fuvarozas/duplikaciok végpont által feltárt duplikátum-sorok
  * törlésére — ugyanazt teszi, mint a felületen a "Törlés" gomb
- * (deleteFuvar): NEM töröl fizikailag, csak statusz='torolt'-ra állítja,
+ * (deleteFuvar): NEM töröl fizikailag, csak kitölti a torolt_at mezőt,
  * hogy a naplózás megmaradjon, és (a már javított drive-allapot
  * végpontnak köszönhetően) a dokumentuma többé ne importálódjon vissza.
  *
@@ -30,7 +30,7 @@ export async function POST(req: Request) {
   let torolve = 0;
   for (const id of ids) {
     const eredmeny = await query<{ id: string }>(
-      `update fuvar_megbizasok set statusz = 'torolt' where id = $1 and statusz <> 'torolt' returning id`,
+      `update fuvar_megbizasok set statusz = 'torolt', torolt_at = coalesce(torolt_at, now()) where id = $1 and torolt_at is null returning id`,
       [id]
     );
     torolve += eredmeny.length;

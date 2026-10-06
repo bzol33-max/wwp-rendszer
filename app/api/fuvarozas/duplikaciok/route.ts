@@ -46,7 +46,7 @@ export async function GET() {
        array_agg(postazva order by id) as postazva_flagek,
        array_agg(szamla_szam order by id) as szamla_szamok
      from fuvar_megbizasok
-     where tipus = 'sajat' and statusz <> 'torolt'
+     where jelleg = 'ber' and torolt_at is null
        and megrendelo is not null and trim(megrendelo) <> ''
        and pozicioszam is not null and trim(pozicioszam) <> ''
      group by 1
@@ -80,7 +80,7 @@ export async function GET() {
        array_agg(postazva order by id) as postazva_flagek,
        array_agg(szamla_szam order by id) as szamla_szamok
      from fuvar_megbizasok
-     where tipus = 'sajat' and statusz <> 'torolt'
+     where jelleg = 'ber' and torolt_at is null
        and megrendelo is not null and trim(megrendelo) <> ''
        and (pozicioszam is null or trim(pozicioszam) = '')
        and lerako is not null and trim(lerako) <> ''

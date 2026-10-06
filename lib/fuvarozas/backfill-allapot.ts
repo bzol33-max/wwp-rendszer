@@ -1,3 +1,4 @@
+// Csak migrációs/backfill-ellenőrzési és invariáns célra; futó olvasók nem használják (2026-10-06).
 // Régi fül → új `allapot` leképezés (Fuvarozás 2, E6). Az EGYETLEN forrás
 // arra, hogy egy mai `fuvar_megbizasok` sor a régi jelölőiből milyen új
 // állapotot kap — a claude/fuvarozas-atallas-ellenorzes.md 11.2 táblája.

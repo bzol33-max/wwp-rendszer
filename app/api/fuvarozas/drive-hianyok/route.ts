@@ -27,7 +27,7 @@ export async function GET() {
        (fizetesi_hatarido_nap is null) as hianyzik_fizetesi_hatarido,
        (postazasi_cim is null or trim(postazasi_cim) = '') as hianyzik_postazasi_cim
      from fuvar_megbizasok
-     where tipus = 'sajat' and statusz <> 'torolt'
+     where jelleg = 'ber' and torolt_at is null
        and dokumentum_url is not null
        and (fuvardij is null or fizetesi_hatarido_nap is null
             or postazasi_cim is null or trim(postazasi_cim) = '')

@@ -1,5 +1,8 @@
 /** Megálló-olvasók régi/új összevetése. Csak SELECT-eket futtat. (2026-10-06) */
 import pg from "pg";
+import { FUVAR_MA_SQL, getFuvarHelye } from "@/lib/fuvarozas/fuvar-hely";
+import { fuvarHelyAllapotbol } from "@/lib/megbizasok/fuvar-hely-allapotbol";
+import { regiHelyUjAllapot, type BackfillBemenet } from "@/lib/fuvarozas/backfill-allapot";
 
 const { Pool } = pg;
 
@@ -50,6 +53,87 @@ async function main() {
         and coalesce(datum, current_date) <= current_date + 365`
   )).rows.map((r) => r.id);
 try {
+  // Az allapot eltéréseiből pontosan ugyanazzal a tiszta leképezéssel
+  // származtatjuk a várt kivételeket, mint a megbizas-invarians.ts. (2026-10-06)
+  const ma = (await pool.query<{ ma: string }>(`select ${FUVAR_MA_SQL}::text ma`)).rows[0].ma;
+  const puhaSorok = await pool.query<BackfillBemenet & { id: string; allapot: string | null; ujKod: boolean }>(`
+    select m.id::text id, m.tipus, m.statusz, m.ellenorzott, m.postazva, m.postazva_at::text,
+      m.szamla_szam, m.teljesitve, to_char(m.datum,'YYYY-MM-DD') datum_iso,
+      to_char(m.lerakas_datum,'YYYY-MM-DD') lerakas_datum_iso, m.papirok_beerkeztek_at::text,
+      m.created_at::text, m.allapot,
+      exists(select 1 from fuvar_dokumentumok d where d.fuvar_id=m.id and d.tipus='fuvarlevel') "fotoVan",
+      exists(select 1 from fuvar_megbizas_esemeny e where e.megbizas_id=m.id and e.forras='ember' and e.allapot_utan=m.allapot) "ujKod"
+    from fuvar_megbizasok m
+  `);
+  const vártFülEltérés = new Set(puhaSorok.rows.filter((s) =>
+    s.allapot !== null && !s.ujKod && regiHelyUjAllapot(s, ma).allapot !== s.allapot
+  ).map((s) => s.id));
+  console.log(`Várt eltérés: régi fül ≠ új állapot: ${vártFülEltérés.size} fuvar`);
+  const regiAktiv = (hely: string) => hely === "ber_folyamatban" || hely === "sajat_folyamatban";
+  const ujAktiv = (hely: string) => hely === "ber_folyamatban" || hely === "sajat_folyamatban";
+  let fulekEgyeznek = 0, fulekVart = 0, fulekNemVart = 0;
+  const valtozoFulIds: string[] = [];
+  for (const s of puhaSorok.rows) {
+    if (!s.allapot) continue;
+    const regi = regiAktiv(getFuvarHelye(s, ma));
+    const uj = ujAktiv(fuvarHelyAllapotbol(s.tipus === "sajat" ? "ber" : "sajat", s.allapot as import("@/lib/megbizasok/allapotgep").Allapot));
+    if (regi === uj) { fulekEgyeznek++; continue; }
+    valtozoFulIds.push(s.id);
+    if (vártFülEltérés.has(s.id)) fulekVart++; else fulekNemVart++;
+  }
+  let gpsHelyEgyezik = 0, gpsHelyVart = 0, gpsHelyNemVart = 0;
+  const gpsHelyIds: string[] = [];
+  for (const s of puhaSorok.rows) {
+    if (!s.allapot) continue;
+    const regi = getFuvarHelye(s, ma);
+    const uj = fuvarHelyAllapotbol(s.tipus === "sajat" ? "ber" : "sajat", s.allapot as import("@/lib/megbizasok/allapotgep").Allapot);
+    if (regi === uj) { gpsHelyEgyezik++; continue; }
+    gpsHelyIds.push(s.id);
+    if (vártFülEltérés.has(s.id)) gpsHelyVart++; else gpsHelyNemVart++;
+  }
+  console.log(`megbizasok/getSajatFuvarokErinteshez.hely: egyező ${gpsHelyEgyezik}, várt eltérés: régi fül ≠ új állapot ${gpsHelyVart}, nem várt ${gpsHelyNemVart}`);
+  if (gpsHelyIds.length) console.log(`  Eltérő FuvarHely ID-k: ${gpsHelyIds.join(", ")}`);
+  varatlan += gpsHelyNemVart;
+  console.log(`attekintes/getFuvarFulAdatok: egyező ${fulekEgyeznek}, várt eltérés: régi fül ≠ új állapot ${fulekVart}, nem várt ${fulekNemVart}`);
+  if (valtozoFulIds.length) console.log(`  Változó láthatóságú fuvar ID-k: ${valtozoFulIds.join(", ")}`);
+  varatlan += fulekNemVart;
+
+  const olvasoParok = [
+    ...([['ber','sajat'], ['sajat','ber']] as const).map(([jelleg, regiTipus]) => ({
+      nev: `attekintes/getFuvarok/${jelleg}`,
+      regi: `select id::text fuvar_id, tipus from fuvar_megbizasok where tipus='${regiTipus}' and statusz <> 'torolt' and id=any($1::bigint[])`,
+      uj: `select id::text fuvar_id, case when jelleg='ber' then 'sajat' else 'ber' end tipus from fuvar_megbizasok where jelleg='${jelleg}' and torolt_at is null and id=any($1::bigint[])`,
+    })),
+    { nev: "napi-fuvarok/ber", regi: `select id::text fuvar_id from fuvar_megbizasok where tipus='sajat' and statusz <> 'torolt' and id=any($1::bigint[])`, uj: `select id::text fuvar_id from fuvar_megbizasok where jelleg='ber' and torolt_at is null and id=any($1::bigint[])` },
+    { nev: "napi-fuvarok/sajat", regi: `select id::text fuvar_id from fuvar_megbizasok where tipus='ber' and statusz <> 'torolt' and id=any($1::bigint[])`, uj: `select id::text fuvar_id from fuvar_megbizasok where jelleg='sajat' and torolt_at is null and id=any($1::bigint[])` },
+    { nev: "megbizasok/getSajatFuvarokErinteshez", regi: `select id::text fuvar_id, tipus from fuvar_megbizasok where tipus in ('sajat','ber') and statusz <> 'torolt' and jarmu is not null and jarmu<>'' and coalesce(lerakas_datum,datum)>=$2::date and datum<=${FUVAR_MA_SQL} and id=any($1::bigint[])`, uj: `select id::text fuvar_id, case when jelleg='ber' then 'sajat' else 'ber' end tipus from fuvar_megbizasok where torolt_at is null and jarmu is not null and jarmu<>'' and coalesce(lerakas_datum,datum)>=$2::date and datum<=${FUVAR_MA_SQL} and id=any($1::bigint[])` },
+    { nev: "megbizasok/getFuvarokIdoszakban", regi: `select id::text fuvar_id, tipus from fuvar_megbizasok where tipus in ('sajat','ber') and statusz <> 'torolt' and datum between $2::date and $3::date and id=any($1::bigint[])`, uj: `select id::text fuvar_id, case when jelleg='ber' then 'sajat' else 'ber' end tipus from fuvar_megbizasok where torolt_at is null and datum between $2::date and $3::date and id=any($1::bigint[])` },
+    { nev: "api/kereses", regi: `select id::text fuvar_id from fuvar_megbizasok where tipus='sajat' and statusz <> 'torolt' and (megrendelo is not null or pozicioszam is not null) and id=any($1::bigint[])`, uj: `select id::text fuvar_id from fuvar_megbizasok where jelleg='ber' and torolt_at is null and (megrendelo is not null or pozicioszam is not null) and id=any($1::bigint[])` },
+    { nev: "api/duplikaciok-pozicioszam", regi: `select id::text fuvar_id from fuvar_megbizasok where tipus='sajat' and statusz <> 'torolt' and megrendelo is not null and pozicioszam is not null and id=any($1::bigint[])`, uj: `select id::text fuvar_id from fuvar_megbizasok where jelleg='ber' and torolt_at is null and megrendelo is not null and pozicioszam is not null and id=any($1::bigint[])` },
+    { nev: "api/duplikaciok-pozicio-nelkul", regi: `select id::text fuvar_id from fuvar_megbizasok where tipus='sajat' and statusz <> 'torolt' and megrendelo is not null and (pozicioszam is null or trim(pozicioszam)='') and id=any($1::bigint[])`, uj: `select id::text fuvar_id from fuvar_megbizasok where jelleg='ber' and torolt_at is null and megrendelo is not null and (pozicioszam is null or trim(pozicioszam)='') and id=any($1::bigint[])` },
+    { nev: "api/drive-hianyok", regi: `select id::text fuvar_id from fuvar_megbizasok where tipus='sajat' and statusz <> 'torolt' and dokumentum_url is not null and id=any($1::bigint[])`, uj: `select id::text fuvar_id from fuvar_megbizasok where jelleg='ber' and torolt_at is null and dokumentum_url is not null and id=any($1::bigint[])` },
+  ];
+  for (const o of olvasoParok) {
+    // A fenti két olvasó dátumhatárai a szkript fuvar-időablakával azonosak.
+    const datumTol = new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10);
+    const datumIg = new Date(Date.now() + 365 * 86400000).toISOString().slice(0, 10);
+    const bind = o.nev === "megbizasok/getSajatFuvarokErinteshez"
+      ? [fuvarIds, datumTol]
+      : o.nev === "megbizasok/getFuvarokIdoszakban"
+        ? [fuvarIds, datumTol, datumIg]
+        : [fuvarIds];
+    const [regi, uj] = await Promise.all([pool.query(o.regi, bind), pool.query(o.uj, bind)]);
+    const a = new Map(regi.rows.map((r) => [r.fuvar_id as string, JSON.stringify(r)]));
+    const b = new Map(uj.rows.map((r) => [r.fuvar_id as string, JSON.stringify(r)]));
+    const ids = new Set([...a.keys(), ...b.keys()]);
+    let egyezik = 0, nemVart = 0, vart = 0;
+    for (const id of ids) {
+      if (a.get(id) === b.get(id)) { egyezik++; continue; }
+      if (vártFülEltérés.has(id)) vart++; else nemVart++;
+    }
+    console.log(`${o.nev}: egyező ${egyezik}, várt eltérés: régi fül ≠ új állapot ${vart}, nem várt ${nemVart}`);
+    varatlan += nemVart;
+  }
   for (const o of olvasok) {
     const [regi, uj] = await Promise.all([
       pool.query(o.regi, [fuvarIds]), pool.query(o.uj, [fuvarIds]),

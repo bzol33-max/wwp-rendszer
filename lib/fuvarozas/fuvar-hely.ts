@@ -1,4 +1,6 @@
 /**
+ * TÖRTÉNETI KOMPATIBILITÁSI SZABÁLY — futó olvasók már az allapot/jelleg modellt használják.
+ * A backfill-ellenőrzés és az invariáns-szkript továbbra is ezt a szabályt tartja meg.
  * EGYETLEN helyen eldöntve: egy fuvar (fuvar_megbizasok sor) melyik
  * Megbízások-fülön van. Korábban a hat fül lekérdezése (lib/fuvarozas/
  * megbizasok.ts több get*-függvénye) egymástól függetlenül, párhuzamosan

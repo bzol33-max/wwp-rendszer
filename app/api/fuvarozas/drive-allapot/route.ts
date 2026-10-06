@@ -6,7 +6,7 @@ import { apiViewGuard } from "@/lib/auth/api-guard";
  * A Drive-fuvarmegbízás-figyelő automatika (ütemezett Claude-feladat) ezzel
  * kérdezi le, mely Google Drive fájlok (dokumentum_url) vannak már a
  * rendszerben rögzítve — így egy új lefutáskor csak az újakat viszi fel,
- * nem duplikál. Csak a "sajat" típusú (saját fuvar) megbízásokat nézi,
+ * nem duplikál. A saját fuvarok dokumentumait nézi (jelleg='sajat'),
  * mert a Drive-mappa is ezeket tartalmazza.
  *
  * FONTOS (2026-09-09-i javítás): a "statusz <> 'torolt'" szűrő korábban itt
