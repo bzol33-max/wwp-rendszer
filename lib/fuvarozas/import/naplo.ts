@@ -144,6 +144,14 @@ export async function nyersSzoveggelNaplozottFileIdk(): Promise<Set<string>> {
   return new Set(sorok.map((s) => s.drive_file_id));
 }
 
+/** A „nem megbízás” ítéletű fájlok (a Drive-szinkron az Excel-táblázatokat ez alapján nem olvassa újra). */
+export async function nemMegbizasnakNaplozottFileIdk(): Promise<Set<string>> {
+  const sorok = await query<{ drive_file_id: string }>(
+    `select drive_file_id from fuvar_import_naplo where verdikt = 'nem_megbizas'`
+  );
+  return new Set(sorok.map((s) => s.drive_file_id));
+}
+
 export type NaploSor = {
   drive_file_id: string;
   fajlnev: string | null;

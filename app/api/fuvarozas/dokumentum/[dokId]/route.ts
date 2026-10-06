@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { fuvarIratGuard } from "@/lib/fuvarozas/irat-jog";
 import { letoltDriveFajl } from "@/lib/fuvarozas/drive-sync-core";
+import { EXCEL_MIME_TIPUSOK, excelHtml } from "@/lib/fuvarozas/import/excel";
 
 /**
  * Egy fuvar-dokumentum (Duvenbeck megbízás TA…, rakománylista FRALI…, vagy
@@ -20,7 +21,7 @@ import { letoltDriveFajl } from "@/lib/fuvarozas/drive-sync-core";
  * fülön a sofőr fuvarlevél-fotója innen nyílik meg.
  */
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ dokId: string }> }
 ) {
   const { dokId } = await params;
@@ -60,6 +61,33 @@ export async function GET(
   try {
     const fajl = await letoltDriveFajl(dok.drive_file_id);
     const nev = dok.fajlnev ?? fajl.nev;
+    // Excel-megbízás (lib/fuvarozas/import/excel.ts): a telefon a nyers
+    // .xls-t csak letöltené — olvasható táblázat-oldalt adunk, szkript
+    // nélkül (a CSP minden szkriptet tilt). ?letolt=1: az eredeti fájl.
+    const letolt = new URL(request.url).searchParams.get("letolt") === "1";
+    if (EXCEL_MIME_TIPUSOK.has(fajl.mimeType) && !letolt) {
+      const html = await excelHtml(fajl.buffer, nev, `/api/fuvarozas/dokumentum/${dokId}?letolt=1`).catch(() => null);
+      if (html) {
+        return new NextResponse(html, {
+          headers: {
+            "Content-Type": "text/html; charset=utf-8",
+            "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; form-action 'none'; frame-ancestors 'self'",
+            "Cache-Control": "private, max-age=300",
+            "X-Content-Type-Options": "nosniff",
+          },
+        });
+      }
+    }
+    if (EXCEL_MIME_TIPUSOK.has(fajl.mimeType)) {
+      return new NextResponse(new Uint8Array(fajl.buffer), {
+        headers: {
+          "Content-Type": "application/octet-stream",
+          "Content-Disposition": inlineFajlnev(nev).replace(/^inline/, "attachment"),
+          "Cache-Control": "private, max-age=300",
+          "X-Content-Type-Options": "nosniff",
+        },
+      });
+    }
     return new NextResponse(new Uint8Array(fajl.buffer), {
       headers: {
         "Content-Type": biztonsagosMime(fajl.mimeType),

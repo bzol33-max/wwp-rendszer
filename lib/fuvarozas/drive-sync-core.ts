@@ -44,6 +44,7 @@ import {
 import { normalizaltSzoveg, torzsSzoveg } from "@/lib/fuvarozas/import/normalizalas";
 import { bontsMegallokra, cimPontossaga } from "@/lib/fuvarozas/varos";
 import { pdfSzovegElemek } from "@/lib/fuvarozas/import/pdf-elemek";
+import { EXCEL_MIME_TIPUSOK, excelMegbizasnakLatszik, excelSzovege } from "@/lib/fuvarozas/import/excel";
 import { felismerPartner, partnerKodSzerint } from "@/lib/fuvarozas/import/partnerek";
 import { frissitsdFuvarozas2Modellt } from "@/lib/fuvarozas2/modell-szinkron";
 import { ellenorizKivontFuvart, type KivontFuvar } from "@/lib/fuvarozas/import/ellenorzes";
@@ -51,6 +52,7 @@ import { osszesFelrakoCime, osszesLerakoCime, soforAdatokKivonatbol, vanSoforAda
 import {
   rogzitNaplot,
   nyersSzoveggelNaplozottFileIdk,
+  nemMegbizasnakNaplozottFileIdk,
   azonosSzoveguIsmertIrat,
   csatolIratotFuvarhoz,
   hianyzoDuvenbeckParja,
@@ -122,30 +124,8 @@ const TAMOGATOTT_MIME_TIPUSOK = new Set([
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
   "application/vnd.google-apps.document", // Google Docs
-  // Excel-megbízás (2026-10-06: Endo-Star, régi .xls sablon)
-  "application/vnd.ms-excel", // .xls
-  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // .xlsx
+  ...EXCEL_MIME_TIPUSOK, // Excel-megbízás (2026-10-06: Endo-Star, régi .xls sablon) — lib/fuvarozas/import/excel.ts
 ]);
-const EXCEL_MIME_TIPUSOK = new Set(["application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"]);
-
-/**
- * Egy Excel-megbízás szövege: munkalaponként, soronként a nem üres cellák
- * „ | ”-vel összefűzve — a nyelvi modell ugyanúgy olvassa, mint a PDF
- * szövegét. A cellák a megjelenített formájukban jönnek (a dátum
- * „2026-10-06”, nem az Excel-sorszám).
- */
-export async function excelSzovege(buffer: Buffer): Promise<string> {
-  const XLSX = await import("xlsx");
-  const munkafuzet = XLSX.read(buffer, { type: "buffer", cellDates: false });
-  return munkafuzet.SheetNames.map((nev) => {
-    const sorok = XLSX.utils.sheet_to_json<unknown[]>(munkafuzet.Sheets[nev], { header: 1, raw: false, blankrows: false, defval: "" });
-    return sorok
-      .map((sor) => sor.map((c) => String(c ?? "").replace(/\s+/g, " ").trim()).filter(Boolean).join(" | "))
-      .filter(Boolean)
-      .join("\n");
-  }).filter(Boolean).join("\n\n");
-}
-
 async function listazDriveFajlok(drive: ReturnType<typeof driveClient>): Promise<DriveFile[]> {
   const res = await drive.files.list({
     q: `'${DRIVE_FOLDER_ID}' in parents and trashed = false`,
@@ -479,12 +459,13 @@ async function ujFajlokFeldolgozasa(
   elutasitottIratok: number;
   figyelmeztetesek: string[];
 }> {
-  const [fajlok, ismertUrlak, ismertFileIdk, ujUtonKeszek, naplozottak] = await Promise.all([
+  const [fajlok, ismertUrlak, ismertFileIdk, ujUtonKeszek, naplozottak, nemMegbizasok] = await Promise.all([
     listazDriveFajlok(drive),
     ismertDokumentumUrlak(),
     ismertDriveFileIdk(),
     ujUtonFeldolgozottFileIdk(),
     nyersSzoveggelNaplozottFileIdk(),
+    nemMegbizasnakNaplozottFileIdk(),
   ]);
   let ujFuvarok = 0;
   let osszefuzottDokumentumok = 0;
@@ -506,6 +487,9 @@ async function ujFajlokFeldolgozasa(
     // ismert fájlokat újra átugorjuk, tehát ez nem óránkénti letöltés.
     const naploraVar = !naplozottak.has(file.id);
     if (regiUtonIsmert && !duvenbeckUjrafeldolgozando && !naploraVar) continue;
+    // A mappába tévedt, nem megbízás táblázatot (kimutatás, lista) egyszer
+    // nézzük meg; utána minden körben csendben átugorjuk.
+    if (EXCEL_MIME_TIPUSOK.has(file.mimeType) && nemMegbizasok.has(file.id)) continue;
 
     try {
       const { szoveg: nyersSzoveg, pdfBuffer } = await fajlSzovege(drive, file);
@@ -527,6 +511,19 @@ async function ujFajlokFeldolgozasa(
           olvaso: null,
           verdikt: "hiba",
           kifogasok: ["A fájlból nem jött ki szöveg — valószínűleg beszkennelt kép, kézi rögzítés kell."],
+          fuvarId: null,
+        });
+        continue;
+      }
+
+      // Excel: olcsó előszűrő a nyelvi modell előtt — ami nem megbízásnak
+      // látszik, abból se fuvar, se figyelmeztetés nem lesz.
+      if (EXCEL_MIME_TIPUSOK.has(file.mimeType) && !excelMegbizasnakLatszik(nyersSzoveg)) {
+        await rogzitNaplot({
+          ...naploAlap,
+          olvaso: null,
+          verdikt: "nem_megbizas",
+          kifogasok: ["Excel-táblázat, de nem fuvarmegbízásnak látszik — kihagyva."],
           fuvarId: null,
         });
         continue;
