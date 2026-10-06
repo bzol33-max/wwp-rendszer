@@ -30,7 +30,7 @@
 import { getFleetLastPositions, getVehicleTrips, parseEcofleetTimestamp, EcofleetError, type EcofleetPosition } from "./ecofleet";
 import { SAJAT_JARMUVEK, resolveJarmu } from "./vehicles";
 import { getSajatFuvarokErinteshez, jelolTeljesitveGpsAlapjan } from "./megbizasok";
-import { cimSugarKm, epitsIdovonal, fuvarKeszGpsSzerint, haversineKm, jelolMegallokat, kiegesziteloAllapottal } from "./idovonal";
+import { cimSugarKm, epitsIdovonal, fuvarKeszGpsSzerint, haversineKm, jelolMegallokat, kiegesziteloAllapottal, megalloJeloltjei } from "./idovonal";
 import { epitsErintesMegallokat, mozogE } from "./erintes-felismeres";
 import { rogzitGpsErinteseket } from "./megallo-naplo";
 import { betoltEloElozmenyt, getEloElozmeny, rogzitEloMegfigyelest } from "./elo-elozmeny";
@@ -71,6 +71,26 @@ function legkozelebbiAllasNaplo(m: TervezettMegallo, szakaszok: IdovonalSzakasz[
   return `, legközelebbi állás ${tav.toFixed(1)} km (${ido(a.kezdet)}–${ido(a.veg)}, ${Math.round(a.idotartamSec / 60)} perc${a.cim ? `, ${a.cim}` : ""}), kör ${cimSugarKm(m.pontossag)} km`;
 }
 
+/**
+ * Egy nem érintett megálló ELVETETT jelöltjei az okkal (messze: X km / az
+ * ablakon kívül / túl rövid / másik megálló vitte) — legfeljebb 3, a
+ * legközelebbiek. A #293 debreceni és a #300 nyírjákói esetében (2026-10-06)
+ * csak annyi látszott, hogy "nincs érintés"; ebből a naplóból kiderül,
+ * melyik állást miért nem fogadta el a felismerés.
+ */
+function elvetettJeloltekNaplo(m: TervezettMegallo, szakaszok: IdovonalSzakasz[]): string {
+  const jeloltek = megalloJeloltjei(m, szakaszok)
+    .sort((a, b) => a.tavKm - b.tavKm)
+    .slice(0, 3);
+  if (jeloltek.length === 0) return "";
+  return `; jelöltek: ${jeloltek
+    .map((j) => {
+      const mi = `${ido(j.kezdet)}–${ido(j.veg)} ${Math.round(j.idotartamSec / 60)}p${j.szint === "varos" ? " város" : ""}`;
+      return `${mi} → ${j.dontes.elfogadva ? `másik megálló vitte (${j.tavKm.toFixed(1)} km)` : `${j.dontes.ok}: ${j.dontes.reszlet}`}`;
+    })
+    .join("; ")}`;
+}
+
 /** Egy megálló állapota egy sorban a naplóhoz: szerep, város, geokódolás, érkezés/távozás vagy "nincs érintés" (+ a legközelebbi állás). */
 function megalloNaplo(m: TervezettMegallo, szakaszok: IdovonalSzakasz[]): string {
   const szerep = m.tipus === "felrako" ? "Fel" : "Le";
@@ -78,11 +98,12 @@ function megalloNaplo(m: TervezettMegallo, szakaszok: IdovonalSzakasz[]): string
     m.lat == null || m.lon == null
       ? "geo ✗"
       : `${m.pontossag === "pontos" ? "geo ✓" : `geo ~${m.pontossag}`}${m.geoCimke ? ` "${m.geoCimke}"` : ""} ${m.lat.toFixed(4)},${m.lon.toFixed(4)}`;
+  const varosSzint = m.varosSzintuEgyezes ? " (város szintű egyezés)" : "";
   const allapot = m.elhagyva
-    ? `érk ${ido(m.tenylegesIdo)} táv ${ido(m.tenylegesTavozas)}`
+    ? `érk ${ido(m.tenylegesIdo)} táv ${ido(m.tenylegesTavozas)}${varosSzint}`
     : m.eppenItt
-      ? `érk ${ido(m.tenylegesIdo)}, itt áll`
-      : `nincs érintés (ablak ${ido(m.ablakKezdet)}-tól${legkozelebbiAllasNaplo(m, szakaszok)})`;
+      ? `érk ${ido(m.tenylegesIdo)}, itt áll${varosSzint}`
+      : `nincs érintés (ablak ${ido(m.ablakKezdet)}-tól${legkozelebbiAllasNaplo(m, szakaszok)}${elvetettJeloltekNaplo(m, szakaszok)})`;
   return `${szerep} ${m.cim || m.nyersCim.slice(0, 30)} [${geo}] ${allapot}`;
 }
 

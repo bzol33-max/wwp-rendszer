@@ -18,6 +18,7 @@ import { parseEcofleetTimestamp } from "./ecofleet";
 import type { FuvardijPenznem, FuvarTipus } from "./fuvar-constants";
 import type { CimPontossag } from "./varos";
 import { budapestNapISO } from "./idozona";
+import { erintesDontes, varosKorben, type ErintesDontes } from "./varos-erintes";
 
 /** Két koordináta közti távolság km-ben (haversine). */
 export function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -325,6 +326,12 @@ export type TervezettMegallo = {
    * a közelben történt megállás nem feltétlenül EZ a rakodás volt.
    */
   bizonytalanFelismeres: boolean;
+  /**
+   * Igaz, ha az érintés "város szintű egyezés": a cím csak települést ad, és
+   * a jármű a cím körén kívül, de a településen állt legalább 20 percet
+   * (lásd varos-erintes.ts). Ilyenkor bizonytalanFelismeres is igaz. (2026-10-06)
+   */
+  varosSzintuEgyezes?: boolean;
   /** A sofőr által jelölt várakozás kezdete/vége ezen a megállón (fuvar_megallok). (2026-10-06) */
   varakozasKezdete?: Date | null;
   varakozasVege?: Date | null;
@@ -613,22 +620,8 @@ export function idovonalPontjai(szakaszok: IdovonalSzakasz[]): { lat: number; lo
  */
 const TOVABBHALADAS_TAVOLSAG_KM = 3;
 
-/**
- * Ennél rövidebb állás nem számít fel-/lerakásnak — pusztán áthaladás
- * (lámpa, körforgalom, sorompó, egy cím melletti elhajtás). Rakodásnak
- * kategorizált állásnál (az a helyhez kötött, lásd allasKategoria) ez a
- * feltétel nem érvényes.
- */
-const ERINTES_MIN_IDOTARTAM_SEC = 10 * 60;
-
-/**
- * Ha az állás ennél közelebb (km) van a címhez, a rövid időtartam sem zárja
- * ki (a kapu előtt egy percre megállni is érintés). Ennél távolabb viszont
- * a 10 perces minimum kell — korábban a helyalapú "rakodás" kategória
- * bármilyen rövid állást átengedett a 2 km-es körön belül, így egy piros
- * lámpa vagy körforgalom a cím 1,9 km-es körzetében érkezésnek számított.
- */
-const KOZVETLEN_KOZELSEG_KM = 0.3;
+// Az érintés minimális időtartama és a közvetlen közelség küszöbe a
+// varos-erintes.ts-be költözött (erintesDontes), a város szintű egyezéssel együtt. (2026-10-06)
 
 /** A párosításnál ekkora (km) sávokban hasonlítjuk a távolságot — ezen belül nem a méterek, hanem a fuvarok sorrendje dönt (lásd jelolMegallokat). */
 const TAV_SAV_KM = 0.5;
@@ -671,6 +664,15 @@ type Latogatas = {
   idotartamSec: number;
   /** A legkisebb távolság (km) a címtől a látogatás állásai közül. */
   tav: number;
+  /**
+   * "cim": a cím felismerési körén belül; "varos": csak város szintű címnél,
+   * a településen belül, a körön kívül (lásd varos-erintes.ts). (2026-10-06)
+   */
+  szint: "cim" | "varos";
+  /** Az első állás helye és Ecofleet-címe — a város szintű látogatás ehhez képest "megy tovább". */
+  lat: number;
+  lon: number;
+  allasCim: string | null;
 };
 
 function latogatasok(
@@ -678,33 +680,73 @@ function latogatasok(
   allasok: Extract<IdovonalSzakasz, { tipus: "allas" }>[],
   pontok: { lat: number; lon: number; at: number }[]
 ): Latogatas[] {
-  const eredmeny: Latogatas[] = [];
-  let aktualis: Latogatas | null = null;
   const sugar = cimSugarKm(m.pontossag);
-  allasok.forEach((a, ai) => {
-    const tav = haversineKm(m.lat as number, m.lon as number, a.lat, a.lon);
-    if (tav >= sugar) return;
-    if (aktualis) {
-      const elozoVeg = aktualis.veg.getTime();
-      const elment = pontok.some(
-        (p) =>
-          p.at > elozoVeg &&
-          p.at < a.kezdet.getTime() &&
-          haversineKm(m.lat as number, m.lon as number, p.lat, p.lon) >= TOVABBHALADAS_TAVOLSAG_KM
-      );
-      if (!elment) {
-        aktualis.aik.push(ai);
-        aktualis.veg = a.veg;
-        aktualis.idotartamSec += a.idotartamSec;
-        aktualis.tav = Math.min(aktualis.tav, tav);
-        return;
+  // A két szint KÜLÖN gyűlik: a cím körében a régi szabály változatlan (a
+  // körön kívüli állás nem szakítja meg a látogatást), a város szintű
+  // jelöltek pedig a saját, körön kívüli állásaikból állnak össze.
+  const gyujt = (szint: Latogatas["szint"]): Latogatas[] => {
+    const eredmeny: Latogatas[] = [];
+    let aktualis: Latogatas | null = null;
+    allasok.forEach((a, ai) => {
+      const tav = haversineKm(m.lat as number, m.lon as number, a.lat, a.lon);
+      const ezASzint =
+        szint === "cim" ? tav < sugar : tav >= sugar && varosKorben({ pontossag: m.pontossag, varos: m.cim }, tav, a.cim);
+      if (!ezASzint) return;
+      if (aktualis) {
+        const elozoVeg = aktualis.veg.getTime();
+        // A cím körében a címtől, város szinten a látogatás első állásától mérjük a továbbhaladást.
+        const ref = szint === "cim" ? { lat: m.lat as number, lon: m.lon as number } : { lat: aktualis.lat, lon: aktualis.lon };
+        const elment = pontok.some(
+          (p) =>
+            p.at > elozoVeg &&
+            p.at < a.kezdet.getTime() &&
+            haversineKm(ref.lat, ref.lon, p.lat, p.lon) >= TOVABBHALADAS_TAVOLSAG_KM
+        );
+        if (!elment) {
+          aktualis.aik.push(ai);
+          aktualis.veg = a.veg;
+          aktualis.idotartamSec += a.idotartamSec;
+          aktualis.tav = Math.min(aktualis.tav, tav);
+          return;
+        }
+        eredmeny.push(aktualis);
       }
-      eredmeny.push(aktualis);
-    }
-    aktualis = { aik: [ai], kezdet: a.kezdet, veg: a.veg, idotartamSec: a.idotartamSec, tav };
-  });
-  if (aktualis) eredmeny.push(aktualis);
-  return eredmeny;
+      aktualis = { aik: [ai], kezdet: a.kezdet, veg: a.veg, idotartamSec: a.idotartamSec, tav, szint, lat: a.lat, lon: a.lon, allasCim: a.cim };
+    });
+    if (aktualis) eredmeny.push(aktualis);
+    return eredmeny;
+  };
+  return m.pontossag === "csak_varos" ? [...gyujt("cim"), ...gyujt("varos")] : gyujt("cim");
+}
+
+function latogatasDontes(m: TervezettMegallo, l: Latogatas): ErintesDontes {
+  return erintesDontes(
+    { pontossag: m.pontossag, varos: m.cim, sugarKm: cimSugarKm(m.pontossag), ablakKezdet: m.ablakKezdet, fuvarLezarva: m.fuvarLezarva ?? null },
+    { tavKm: l.tav, idotartamSec: l.idotartamSec, kezdet: l.kezdet, veg: l.veg, allasCim: l.allasCim }
+  );
+}
+
+/**
+ * Diagnosztika egy NEM érintett megállóhoz: a jelölt látogatásai (a cím
+ * körében vagy város szinten a településen) és a döntés róluk — ha
+ * elfogadott, akkor egy másik megálló vitte el a párosításban. A figyelő
+ * naplója írja ki (teljesites-figyeles.ts), hogy a "miért nincs érintés"
+ * kérdésre a naplóból lehessen válaszolni. (2026-10-06)
+ */
+export function megalloJeloltjei(
+  m: TervezettMegallo,
+  szakaszok: IdovonalSzakasz[]
+): { kezdet: Date; veg: Date; tavKm: number; idotartamSec: number; szint: "cim" | "varos"; dontes: ErintesDontes }[] {
+  if (m.lat == null || m.lon == null || m.pontossag === "ismeretlen") return [];
+  const allasok = szakaszok.filter((sz): sz is Extract<IdovonalSzakasz, { tipus: "allas" }> => sz.tipus === "allas");
+  return latogatasok(m, allasok, idovonalPontjai(szakaszok)).map((l) => ({
+    kezdet: l.kezdet,
+    veg: l.veg,
+    tavKm: l.tav,
+    idotartamSec: l.idotartamSec,
+    szint: l.szint,
+    dontes: latogatasDontes(m, l),
+  }));
 }
 
 export function jelolMegallokat(
@@ -752,11 +794,10 @@ function parositMegallokat(
     // Felismerhetetlen címnél nincs mihez hasonlítani — ilyet nem jelölünk késznek.
     if (m.lat == null || m.lon == null || m.pontossag === "ismeretlen") return;
     for (const l of latogatasok(m, allasok, pontok)) {
-      // Az időablak előtt véget ért látogatás nem ehhez a megállóhoz tartozik (lásd TervezettMegallo.ablakKezdet).
-      if (m.ablakKezdet && l.veg.getTime() < m.ablakKezdet.getTime()) continue;
-      // A fuvar lezárása után kezdődött látogatás sem (lásd TervezettMegallo.fuvarLezarva).
-      if (m.fuvarLezarva && l.kezdet.getTime() > m.fuvarLezarva.getTime()) continue;
-      if (l.idotartamSec < ERINTES_MIN_IDOTARTAM_SEC && l.tav >= KOZVETLEN_KOZELSEG_KM) continue;
+      // Az időablak előtt véget ért, a fuvar lezárása után kezdődött, a túl
+      // rövid és (város szinten) a településen kívüli látogatás nem ehhez a
+      // megállóhoz tartozik — a szabályok a varos-erintes.ts erintesDontes-ében.
+      if (!latogatasDontes(m, l).elfogadva) continue;
       parok.push({ fi, mi, latogatas: l, tav: l.tav });
     }
   });
@@ -799,10 +840,11 @@ function parositMegallokat(
       const erintes = parositas.get(`${fi}:${mi}`);
       if (!erintes) return m;
 
+      // Város szintű egyezésnél a látogatás maga is több km-re lehet a
+      // városközéptől — ott az állás helyétől kell 3 km-t távolodni.
+      const ref = erintes.szint === "varos" ? { lat: erintes.lat, lon: erintes.lon } : { lat: m.lat as number, lon: m.lon as number };
       const tovabbment = pontok.some(
-        (p) =>
-          p.at > erintes.veg.getTime() &&
-          haversineKm(m.lat as number, m.lon as number, p.lat, p.lon) >= TOVABBHALADAS_TAVOLSAG_KM
+        (p) => p.at > erintes.veg.getTime() && haversineKm(ref.lat, ref.lon, p.lat, p.lon) >= TOVABBHALADAS_TAVOLSAG_KM
       );
 
       return {
@@ -815,6 +857,7 @@ function parositMegallokat(
         // Csak városnév szintjén ismert címnél a koordináta a városközépre
         // mutat, tehát a közeli megállás nem bizonyíték, csak jel.
         bizonytalanFelismeres: m.pontossag !== "pontos",
+        varosSzintuEgyezes: erintes.szint === "varos",
       };
     })
   );

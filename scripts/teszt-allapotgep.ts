@@ -18,6 +18,7 @@ import {
   type AtmenetForras,
   type AtmenetKontextus,
 } from "@/lib/fuvarozas/allapot";
+import { readFileSync } from "node:fs";
 
 let ok = 0;
 let bad = 0;
@@ -166,6 +167,23 @@ eq("ember céljai teljesítve-n: nincs „Folyamatban” gomb", lehetsegesCelok(
 // lehetsegesCelok az UI-hoz: a sofőr a teljesített fuvaron nem lát gombot.
 eq("sofőr céljai teljesítve-n", lehetsegesCelok("teljesitve", "sofor", teljes), []);
 eq("ember céljai számlázva-n (teljes ctx)", lehetsegesCelok("szamlazva", "ember", { ...teljes, partnerNemKerEmailt: true, partnerNemKerPostat: true }).sort(), ["lezart", "postazva", "teljesitve"]);
+
+// Első érintés → folyamatban (db/migrations/025, 2026-10-06): a #293 végig
+// "tervezett" maradt, mert az 5. élt semmi nem hajtotta végre. A trigger a
+// gps/sofor forrással lépteti — ezeknek engedettnek kell lenniük, és a
+// trigger a megálló mind a négy tény-oszlopára (GPS-érkezés, Megérkeztem,
+// Kész, várakozás) figyeljen.
+for (const forras of ["gps", "sofor"] as const) {
+  eq(`első érintés (${forras}): tervezett → folyamatban`, ellenorizAtmenet("tervezett", "folyamatban", forras, {}).ok, true);
+  eq(`első érintés (${forras}): ellenőrzésre vár → folyamatban`, ellenorizAtmenet("ellenorzesre_var", "folyamatban", forras, {}).ok, true);
+}
+{
+  const sql = readFileSync(new URL("../db/migrations/025_elso_erintes_folyamatban.sql", import.meta.url), "utf8");
+  eq("025: trigger a megálló tény-oszlopaira", /after insert or update of gps_erkezes, sofor_megerkezett_at, sofor_kesz_at, varakozas_kezdete on fuvar_megallok/.test(sql), true);
+  eq("025: csak tervezett / ellenőrzésre vár állapotból léptet", sql.includes("a not in ('tervezett', 'ellenorzesre_var')"), true);
+  eq("025: a 002-es napló-jelzőt visszaállítja (a későbbi teljesítve naplózódjon)", sql.includes("set_config('fuvarozas2.uj_kod', coalesce(elozo, ''), true)"), true);
+  eq("025: 'megerkezett' esemény atmenet 5/4-gyel", sql.includes("'megerkezett', a, 'folyamatban'") && sql.includes("case when a = 'tervezett' then 5 else 4 end"), true);
+}
 
 console.log(`\nÁllapotgép teszt: ${ok} rendben, ${bad} hiba`);
 if (bad > 0) process.exit(1);

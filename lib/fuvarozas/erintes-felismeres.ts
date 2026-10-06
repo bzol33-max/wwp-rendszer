@@ -15,7 +15,7 @@
 // (geokódolás), de nem szerver-akciók.
 
 import { geocodeAddress, TollCalcError, type GeocodedAddress } from "./utdijkalkulacio";
-import { bontsMegallokra, cimKulcs, cimPontossaga, varosNev } from "./varos";
+import { bontsMegallokra, cimKulcs, cimPontossaga, varosNev, type CimPontossag } from "./varos";
 import { query } from "@/lib/db";
 import { budapestFalioraToInstant } from "./idozona";
 import type { EcofleetPosition } from "./ecofleet";
@@ -64,10 +64,25 @@ export function megalloAblakTagithato(sor: AblakosFuvarSor, tipus: "felrako" | "
 // sofőr a helyszínről rögzítette a kocsi tényleges pozícióját, az a
 // mérvadó, nem a bizonytalan geokódolás.
 const geokodCache = new Map<string, GeocodedAddress | null>();
+/** Azok a címek, amelyek koordinátája a helyszín-szótárból (a kocsi rögzített helyéről) jött. */
+const szotarbolJott = new Set<string>();
 
 /** A helyszín-szótár és a geokódolási gyorsítótár eldobása — új helyszín rögzítése után. */
 export function toroljGeokodCachet(): void {
   geokodCache.clear();
+  szotarbolJott.clear();
+}
+
+/**
+ * Egy megálló címének pontossága a felismeréshez: a helyszín-szótárban
+ * rögzített cím "pontos" (a koordináta a kocsi ott mért helye, nem a
+ * városközép), különben a szöveg szerinti cimPontossaga. Enélkül egy
+ * rögzített "4541 Nyírjákó, … külterület" is város szintű, tág kört és
+ * bizonytalan jelölést kapna (2026-10-06, a cimPontossaga szigorítása óta).
+ * A geokódolás (geokodolCachelve) UTÁN hívandó.
+ */
+export function megalloPontossaga(cim: string): CimPontossag {
+  return szotarbolJott.has(cim) ? "pontos" : cimPontossaga(cim);
 }
 
 async function helyszinSzotarbol(cim: string): Promise<GeocodedAddress | null> {
@@ -95,6 +110,7 @@ export async function geokodolCachelve(cim: string): Promise<GeocodedAddress | n
   const rogzitett = await helyszinSzotarbol(cim);
   if (rogzitett) {
     geokodCache.set(cim, rogzitett);
+    szotarbolJott.add(cim);
     return rogzitett;
   }
   try {
@@ -135,7 +151,7 @@ export async function epitsErintesMegallokat(
       tipus: m.tipus,
       cim: varosNev(m.szoveg),
       nyersCim: m.szoveg,
-      pontossag: cimPontossaga(m.szoveg),
+      pontossag: megalloPontossaga(m.szoveg),
       lat: koordinatak[i]?.lat ?? null,
       lon: koordinatak[i]?.lon ?? null,
       geoCimke: koordinatak[i]?.label ?? null,

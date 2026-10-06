@@ -149,7 +149,9 @@ export function sorAdatok(b: MegalloBejegyzes, f: FuvarBlokk, ctx: SorKornyezet)
 
   if ((b.elhagyva || b.eppenItt) && gpsLatta) {
     erkezes = `${bizonytalanJel}${formatIdoNapJelolessel(b.idopont, b.napElteres)}`;
-    erkezesCim = b.bizonytalanFelismeres
+    erkezesCim = b.varosSzintuEgyezes
+      ? "Város szintű egyezés: a megbízáson csak a település szerepel, a jármű a településen legalább 20 percet állt — nem biztos, hogy EZ a rakodás volt."
+      : b.bizonytalanFelismeres
       ? "A GPS szerint a jármű a város közelében állt meg — a megbízáson csak a város szerepel, ezért nem biztos, hogy EZ a rakodás volt."
       : "Tényleges érkezés (GPS)";
     if (b.tenylegesTavozas) {

@@ -171,8 +171,21 @@ export function cimPontossaga(value: string | null | undefined): CimPontossag {
   if (!value?.trim()) return "ismeretlen";
   const talalat = talalVaros(cimDarabok(value));
   if (!talalat) return "ismeretlen";
-  if (talalat.zip) return "pontos";
-  return UTCA_SZAVAK.test(value) ? "pontos" : "csak_varos";
+  if (UTCA_SZAVAK.test(value)) return "pontos";
+  // Az irányítószám önmagában NEM utcaszintű cím (2026-10-06): a "HU-4031
+  // Debrecen" és a "4541 Nyírjákó, Fermentáló üzem Nyírjákó külterület" is a
+  // település közepére geokódolódik, a 2 km-es "pontos" körrel pedig a
+  // Nyomdász utcai lerakás (Debrecen) és a nyírjákói rakodás sem látszott
+  // érintésnek. Pontos csak akkor, ha az irányítószámon kívül házszám (vagy
+  // más szám, pl. "Pelda Ut 5") is van — különben városszintű.
+  // Az ismert telephely-kód (BILK) maga a konkrét hely.
+  if (Object.keys(ISMERT_IRSZ_KULCSSZO).some((k) => value.includes(k))) return "pontos";
+  if (talalat.zip) {
+    // A SELEXPED-féle "1. …" tételsorszám nem házszám.
+    const maradek = cimDarabok(value).join(" ").replace(/^\s*\d{1,2}\.\s+/, "").replace(talalat.zip, "");
+    return /\d/.test(maradek) ? "pontos" : "csak_varos";
+  }
+  return "csak_varos";
 }
 
 /**

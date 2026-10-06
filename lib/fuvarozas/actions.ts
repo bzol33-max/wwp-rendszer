@@ -39,8 +39,8 @@ import {
   type TervezettMegallo,
 } from "./idovonal";
 import { SAJAT_JARMUVEK, resolveJarmu, type JarmuSzin, type SajatJarmu } from "./vehicles";
-import { bontsMegallokra, cimPontossaga, varosNev } from "./varos";
-import { geokodolCachelve, megalloAblakKezdet, megalloAblakTagithato, mozogE } from "./erintes-felismeres";
+import { bontsMegallokra, varosNev } from "./varos";
+import { geokodolCachelve, megalloAblakKezdet, megalloAblakTagithato, megalloPontossaga, mozogE } from "./erintes-felismeres";
 import { cachelve } from "./idovonal-cache";
 import { getFuvarokIdoszakban } from "./megbizasok";
 import type { FuvardijPenznem, FuvarTipus, MaiFuvarSor } from "./fuvar-constants";
@@ -75,6 +75,8 @@ export type MegalloBejegyzes = {
   nyersCim: string;
   /** A felismerés csak valószínűsítés (a cím csak városnév szintjén ismert) — lásd TervezettMegallo.bizonytalanFelismeres. */
   bizonytalanFelismeres: boolean;
+  /** Város szintű egyezés (a cím körén kívül, de a településen ≥ 20 perc) — lásd TervezettMegallo.varosSzintuEgyezes. (2026-10-06) */
+  varosSzintuEgyezes?: boolean;
   /** A megálló sorszáma a fuvar állomás-sorrendjében; az új tábla sorszáma egygyel nagyobb. (2026-10-06) */
   megalloIndex: number;
   /** Honnan tudjuk, hogy kész: GPS-felismerés vagy kézi jelölés (sofőr mobil, GPS lap pipa, fuvar Teljesítve). */
@@ -662,7 +664,7 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus, kali
     tipus: m.tipus,
     cim: varosNev(m.szoveg),
     nyersCim: m.szoveg,
-    pontossag: cimPontossaga(m.szoveg),
+    pontossag: megalloPontossaga(m.szoveg),
     lat: megallokKoordinatak[i]?.lat ?? null,
     lon: megallokKoordinatak[i]?.lon ?? null,
     geoCimke: megallokKoordinatak[i]?.label ?? null,
@@ -850,6 +852,7 @@ function fuvarBlokkok(
             eppenItt: m.eppenItt,
             nyersCim: m.nyersCim,
             bizonytalanFelismeres: m.bizonytalanFelismeres,
+            varosSzintuEgyezes: m.varosSzintuEgyezes ?? false,
             megalloIndex: m.index,
             keszForras: m.keszForras,
             keszBy: m.keszBy,
