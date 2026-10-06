@@ -20,6 +20,7 @@ import { query } from "@/lib/db";
 import { requireViewPermission } from "@/lib/auth/require-permission";
 import { SAJAT_JARMUVEK } from "@/lib/fuvarozas/vehicles";
 import { SAJAT_TELEPHELYEK } from "@/lib/fuvarozas/telephelyek";
+import type { DuplikatumJelolt } from "@/lib/fuvarozas2/sajat-duplikatum";
 
 export type SajatFuvarAdat = {
   datum: string;
@@ -32,7 +33,13 @@ export type SajatFuvarAdat = {
   megjegyzes: string | null;
 };
 
-export type Eredmeny = { ok: true; id: string } | { ok: false; hiba: string };
+/**
+ * `duplikatumok`: ha mentésnél már van ugyanannak látszó fuvar (lásd
+ * lib/fuvarozas2/sajat-duplikatum.ts), a szerver nem ment, hanem ezeket adja
+ * vissza; a felület megkérdezi, és „mégis mentem”-re `duplikatumOk: true`-val
+ * hívja újra.
+ */
+export type Eredmeny = { ok: true; id: string } | { ok: false; hiba: string; duplikatumok?: DuplikatumJelolt[] };
 
 const ISO_NAP = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -46,8 +53,12 @@ export async function hianyzoMezok(a: { datum: string | null; jarmuKod: string |
   return h;
 }
 
-/** Új előkészített saját fuvar, vagy egy előkészítés alatti módosítása. */
-export async function mentSajatFuvart(id: string | null, nyers: SajatFuvarAdat): Promise<Eredmeny> { return actions.mentSajatFuvart(id, nyers); }
+/**
+ * Új előkészített saját fuvar, vagy egy előkészítés alatti módosítása.
+ * Ha ugyanaz a kocsi ±1 napon ugyanazt az utat már viszi, `duplikatumOk`
+ * nélkül nem ment (2026-10-06, #274/#295).
+ */
+export async function mentSajatFuvart(id: string | null, nyers: SajatFuvarAdat, opciok: { duplikatumOk?: boolean } = {}): Promise<Eredmeny> { return actions.mentSajatFuvart(id, nyers, opciok); }
 
 /**
  * „Kocsira adom”: a kocsi a `jarmu` mezőbe kerül (a sofőr appja innen

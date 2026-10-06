@@ -19,6 +19,13 @@ export type SzlFuvar = {
   kinek: string | null;
   /** Hová (a lerakó szövege) — a vevő neve gyakran ebben áll („Fabrika, Tompaládony”). */
   hova: string | null;
+  /**
+   * Ha a fuvar 'lezart', a lezárás napja (ISO, `allapot_at`). Egy a
+   * szállítólevél kelte ELŐTT lezárt fuvar nem lehet a szállítólevélé
+   * (2026-10-06: a 10.01-én kézzel lezárt, előre beírt #274 kapta meg a
+   * 10.05-i út S-WLLWR-2026-165-ös szállítólevelét a valódi #295 helyett).
+   */
+  lezartNap?: string | null;
 };
 
 export type SzlSzallitolevel = { bizonylatszam: string; kelt: string; vevo: string | null; rendszam: string | null };
@@ -55,12 +62,22 @@ export function rendszamEgyezik(rendszam: string | null, jarmuRendszam: string |
   return !!a && a === b;
 }
 
+/** A fuvar a szállítólevél kelte előtti napon (vagy korábban) már le volt zárva. */
+export function lezartKeltElott(f: Pick<SzlFuvar, "lezartNap">, kelt: string): boolean {
+  return !!f.lezartNap && nap(f.lezartNap) < nap(kelt);
+}
+
+/**
+ * Csak egyértelmű párt ad: ha egy szállítólevélhez több fuvar illik (vagy egy
+ * fuvarhoz több szállítólevél), egyiket sem párosítja — ilyenkor kézzel kell.
+ */
 export function parositSzallitoleveleket(fuvarok: SzlFuvar[], szallitolevelek: SzlSzallitolevel[]): { fuvarId: string; bizonylatszam: string }[] {
   const parok: { fuvarId: string; bizonylatszam: string }[] = [];
   for (const sz of szallitolevelek) {
     for (const f of fuvarok) {
       if (
         Math.abs(nap(sz.kelt) - nap(f.datum)) <= MAX_NAP_ELTERES &&
+        !lezartKeltElott(f, sz.kelt) &&
         rendszamEgyezik(sz.rendszam, f.jarmuRendszam) &&
         vevoEgyezik(sz.vevo, f)
       ) parok.push({ fuvarId: f.id, bizonylatszam: sz.bizonylatszam });

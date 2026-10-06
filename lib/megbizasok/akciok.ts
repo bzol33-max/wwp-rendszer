@@ -15,6 +15,8 @@ import { toroljIdovonalCachet } from "@/lib/fuvarozas/idovonal-cache";
 import { fuvarSzamlaTukor } from "@/lib/fuvarozas/szamla-parositas";
 import { normalizaltCegKulcs } from "@/lib/fuvarozas/fuvar-constants";
 import type { SajatFuvarAdat, Eredmeny } from "@/lib/fuvarozas2/sajat-fuvar";
+import { ALLAPOT_CIMKE } from "@/lib/megbizasok/allapotgep";
+import { duplikatumSor, keresDuplikatumot, type DuplikatumJelolt } from "@/lib/fuvarozas2/sajat-duplikatum";
 
 
 function egesz(s: string): number | null {
@@ -320,11 +322,44 @@ export async function setFuvarSzamlaSzam(id: string, szamlaSzam: string | null) 
   });
 }
 
-export async function mentSajatFuvart(id: string | null, nyers: SajatFuvarAdat): Promise<Eredmeny> {
+/**
+ * Ugyanannak látszó, nem törölt saját fuvarok (ugyanaz a kocsi vagy kocsi
+ * nélkül, ±1 nap, ugyanaz a felrakó- és lerakó-város) — a szabály:
+ * lib/fuvarozas2/sajat-duplikatum.ts. Itt csak a ±1 napos jelöltek jönnek.
+ */
+async function sajatDuplikatumok(id: string | null, a: SajatFuvarAdat): Promise<DuplikatumJelolt[]> {
+  const sorok = await query<{ id: string; datum: string | null; jarmu: string | null; felrako: string | null; lerako: string | null; partner: string | null; allapot: string | null; elokeszites: boolean }>(
+    `select m.id::text, to_char(m.datum, 'YYYY-MM-DD') as datum,
+       coalesce(nullif(m.jarmu, ''), nullif(m.elokeszites_jarmu, ''), j.kod) as jarmu,
+       m.felrako, m.lerako, coalesce(p.nev, m.megrendelo) as partner, m.allapot, coalesce(m.elokeszites, false) as elokeszites
+     from fuvar_megbizasok m
+     left join fuvar_jarmuvek j on j.id = m.jarmu_id
+     left join fuvar_partnerek p on p.id = m.partner_id
+     where m.jelleg = 'sajat' and m.torolt_at is null
+       and m.datum between $1::date - 1 and $1::date + 1
+       and ($2::bigint is null or m.id <> $2::bigint)`,
+    [a.datum, id]
+  );
+  return keresDuplikatumot(
+    { datum: a.datum, jarmuKod: a.jarmuKod, honnan: a.honnan, hova: a.hova },
+    sorok.map((s) => ({
+      id: s.id, datum: s.datum, jarmu: s.jarmu, felrako: s.felrako, lerako: s.lerako, partner: s.partner,
+      allapot: s.elokeszites ? "Előkészítés" : (s.allapot && ALLAPOT_CIMKE[s.allapot as Allapot]) || s.allapot || "—",
+    }))
+  );
+}
+
+export async function mentSajatFuvart(id: string | null, nyers: SajatFuvarAdat, opciok: { duplikatumOk?: boolean } = {}): Promise<Eredmeny> {
   await requireEditPermission("fuvarozas");
   const a = tisztit(nyers);
   if (!ISO_NAP.test(a.datum)) return { ok: false, hiba: "A dátum kötelező." };
   if (a.jarmuKod && !findJarmuByPlate(a.jarmuKod)) return { ok: false, hiba: "Ismeretlen kocsi." };
+  if (opciok.duplikatumOk !== true) {
+    const dupl = await sajatDuplikatumok(id, a);
+    if (dupl.length > 0) {
+      return { ok: false, hiba: `Már van ilyen fuvar: ${dupl.map(duplikatumSor).join("; ")}`, duplikatumok: dupl };
+    }
+  }
   const session = await requireSession();
   if (!id) {
     // A set_config a 002-es napló-trigger kettőzését fojtja el: a saját,

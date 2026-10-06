@@ -4,11 +4,17 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { duplikatumSor } from "@/lib/fuvarozas2/sajat-duplikatum";
 import { kocsiraAdom, mentSajatFuvart, torolElokeszitettet, visszaveszem, type SajatFuvarAdat, type SajatFuvarSegedlet } from "@/lib/fuvarozas2/sajat-fuvar";
 
 // Saját fuvar előkészítése (2026-09-25): előre beírod, módosítod, és ha
 // minden biztos, „Kocsira adom” — onnantól megy a sofőrnek. Kötelező:
 // dátum, kocsi, honnan, hová.
+//
+// Duplikátum-védelem (2026-10-06, #274/#295): ha ugyanaz a kocsi ±1 napon
+// ugyanazt az utat már viszi, a szerver nem ment; itt megkérdezzük, és
+// „Mégis mentem”-re `duplikatumOk`-kal küldjük újra.
 
 function hianyzik(a: SajatFuvarAdat): string[] {
   const h: string[] = [];
@@ -39,6 +45,7 @@ export function SajatFuvarUrlap({
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
+  const [confirm, confirmDialog] = useConfirm();
   const [a, setA] = useState<SajatFuvarAdat>(kezdo);
   const hiany = hianyzik(a);
   const valtozott = JSON.stringify(a) !== JSON.stringify(kezdo);
@@ -48,7 +55,15 @@ export function SajatFuvarUrlap({
 
   function ment(utana?: "kocsira") {
     start(async () => {
-      const r = await mentSajatFuvart(id, a);
+      let r = await mentSajatFuvart(id, a);
+      if (!r.ok && r.duplikatumok?.length) {
+        const mehet = await confirm(
+          `Erre a napra (±1 nap) ugyanezzel a kocsival ugyanez az út már megvan:\n${r.duplikatumok.map((d) => `• ${duplikatumSor(d)}`).join("\n")}\n\nBiztosan új fuvar ez, nem ugyanaz?`,
+          { title: "Már van ilyen fuvar", confirmLabel: "Mégis mentem" }
+        );
+        if (!mehet) return;
+        r = await mentSajatFuvart(id, a, { duplikatumOk: true });
+      }
       if (!r.ok) { toast.error(r.hiba); return; }
       if (utana === "kocsira") {
         const k = await kocsiraAdom(r.id);
@@ -135,6 +150,7 @@ export function SajatFuvarUrlap({
       <p className="text-xs text-muted-foreground">
         {hiany.length > 0 ? `A „Kocsira adom”-hoz még kell: ${hiany.join(", ")}.` : "Minden megvan — kocsira adható."}
       </p>
+      {confirmDialog}
     </div>
   );
 }

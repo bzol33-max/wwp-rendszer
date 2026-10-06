@@ -18,10 +18,11 @@ export async function szinkronizalSzallitoleveleket(): Promise<number> {
 
   // Saját fuvar = jelleg 'sajat'. Az előkészítés
   // alattiak is: a szállítólevelet előre állítják ki.
-  const fuvarok = await query<{ id: string; datum: string; jarmu_rendszam: string | null; kinek: string | null; hova: string | null }>(
+  const fuvarok = await query<{ id: string; datum: string; jarmu_rendszam: string | null; kinek: string | null; hova: string | null; lezart_nap: string | null }>(
     `select m.id::text, to_char(m.datum, 'YYYY-MM-DD') as datum,
        coalesce(j.kod, nullif(m.elokeszites_jarmu, ''), nullif(m.jarmu, '')) as jarmu_rendszam,
-       coalesce(p.nev, m.megrendelo) as kinek, m.lerako as hova
+       coalesce(p.nev, m.megrendelo) as kinek, m.lerako as hova,
+       case when m.allapot = 'lezart' then to_char(m.allapot_at, 'YYYY-MM-DD') end as lezart_nap
      from fuvar_megbizasok m
      left join fuvar_jarmuvek j on j.id = m.jarmu_id
      left join fuvar_partnerek p on p.id = m.partner_id
@@ -30,7 +31,7 @@ export async function szinkronizalSzallitoleveleket(): Promise<number> {
   );
 
   const parok = parositSzallitoleveleket(
-    fuvarok.map((f) => ({ id: f.id, datum: f.datum, jarmuRendszam: f.jarmu_rendszam, kinek: f.kinek, hova: f.hova })),
+    fuvarok.map((f) => ({ id: f.id, datum: f.datum, jarmuRendszam: f.jarmu_rendszam, kinek: f.kinek, hova: f.hova, lezartNap: f.lezart_nap })),
     szallitolevelek
   );
   let db = 0;

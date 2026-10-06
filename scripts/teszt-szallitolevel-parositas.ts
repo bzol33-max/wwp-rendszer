@@ -4,7 +4,7 @@
 // Valós minta: S-WLLWR-2026-162 · FABRIKA + 2000 Kft. · 2026.09.23. ·
 // „Rendszám:NMZ-492,XZV-926” · Használt EUR Raklap 812 db.
 
-import { parositSzallitoleveleket, rendszamEgyezik, vevoEgyezik, type SzlFuvar, type SzlSzallitolevel } from "@/lib/fuvarozas2/szallitolevel-parositas";
+import { lezartKeltElott, parositSzallitoleveleket, rendszamEgyezik, vevoEgyezik, type SzlFuvar, type SzlSzallitolevel } from "@/lib/fuvarozas2/szallitolevel-parositas";
 
 let ok = 0, bad = 0;
 function eq(nev: string, kapott: unknown, vart: unknown) {
@@ -36,6 +36,19 @@ eq("két fuvar, két nap → mindkettő a sajátját",
   ).map((p) => `${p.fuvarId}=${p.bizonylatszam}`).sort(),
   ["1=S-WLLWR-2026-162", "2=S-WLLWR-2026-170"]
 );
+
+// Valós eset, 2026-10-05: #274 előre beírva, 10.01-én kézzel lezárva; #295 a
+// tényleges út. Az S-WLLWR-2026-165 a #295-é.
+const sz165: SzlSzallitolevel = { bizonylatszam: "S-WLLWR-2026-165", kelt: "2026-10-05", vevo: "FABRIKA + 2000 Kft.", rendszam: "AOPU-427" };
+const f274: SzlFuvar = { id: "274", datum: "2026-10-05", jarmuRendszam: "AOPU-427", kinek: "Fabrika 2000 Kft", hova: "Tompaládony", lezartNap: "2026-10-01" };
+const f295: SzlFuvar = { ...f274, id: "295", lezartNap: null };
+eq("lezárva a kelt előtt", lezartKeltElott(f274, "2026-10-05"), true);
+eq("lezárva a kelt napján nem számít korábbinak", lezartKeltElott({ lezartNap: "2026-10-05" }, "2026-10-05"), false);
+eq("nem lezárt", lezartKeltElott(f295, "2026-10-05"), false);
+eq("#274/#295: a kelt előtt lezárt kiesik, a valódi kapja", parositSzallitoleveleket([f274, f295], [sz165]), [{ fuvarId: "295", bizonylatszam: "S-WLLWR-2026-165" }]);
+eq("csak a korábban lezárt van → nem párosul", parositSzallitoleveleket([f274], [sz165]).length, 0);
+eq("a kelt után lezárt fuvar párosulhat", parositSzallitoleveleket([{ ...f295, lezartNap: "2026-10-06" }], [sz165]).length, 1);
+eq("két nyitott egyforma → egyiket sem", parositSzallitoleveleket([f295, { ...f295, id: "296" }], [sz165]).length, 0);
 
 console.log(`\nSzállítólevél-párosítás teszt: ${ok} rendben, ${bad} hiba`);
 if (bad > 0) process.exit(1);
