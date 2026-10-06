@@ -215,6 +215,9 @@ export async function ujBerFuvar(a: BerFuvarAdat): Promise<{ ok: true; id: strin
  */
 export async function torolMegbizast(id: string): Promise<{ ok: true } | { ok: false; hiba: string }> { return actions.torolMegbizast(id); }
 
+/** Törölt fuvar visszaállítása a részletből (a törlés párja). */
+export async function visszaallitTorolt(id: string): Promise<{ ok: true } | { ok: false; hiba: string }> { return actions.visszaallitTorolt(id); }
+
 // ---------------------------------------------------------------------------
 // Megbízások oldal (2026-09-30, Budaházi Zoltán: 1-es terv, „Bér | Saját”):
 // két oszlop, a bérfuvarok és a saját fuvarok szakaszonként, kereső

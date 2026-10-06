@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { valtAllapot, setSzamlaSzam, setMegjegyzes, torolMegbizast, forgatFuvarlevelOldalt } from "@/lib/fuvarozas2/megbizasok";
+import { valtAllapot, setSzamlaSzam, setMegjegyzes, torolMegbizast, visszaallitTorolt, forgatFuvarlevelOldalt } from "@/lib/fuvarozas2/megbizasok";
 import type { MegbizasSor, Megallo, Esemeny, Dokumentum } from "@/lib/fuvarozas2/megbizasok";
 import type { Allapot } from "@/lib/fuvarozas/allapot";
 import type { PartnerAdatJavaslat } from "@/lib/fuvarozas2/partnerek";
@@ -288,6 +288,27 @@ export function MegbizasReszlet({
               Fuvar törlése
             </button>
           )
+        ) : null}
+        {fuvarozasJog && sor.torolt ? (
+          <div className="flex items-center gap-3 rounded-xl bg-[var(--f2-red-l)] px-3 py-2 text-sm">
+            <span className="font-semibold text-[var(--f2-red)]">Ez a fuvar törölve van.</span>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={pending}
+              onClick={async () => {
+                if (!(await confirm(`Visszaállítod a #${sor.id} fuvart? (${sor.partner_nev ?? "megbízó nélkül"} · ${formatNap(sor.felrakas_nap)})`, { title: "Visszaállítás", confirmLabel: "Visszaállítom" }))) return;
+                start(async () => {
+                  const r = await visszaallitTorolt(sor.id).catch(() => ({ ok: false as const, hiba: "A visszaállítás nem sikerült." }));
+                  if (!r.ok) { toast.error(r.hiba); return; }
+                  toast.success("Fuvar visszaállítva");
+                  router.refresh();
+                });
+              }}
+            >
+              Visszaállítás törlésből
+            </Button>
+          </div>
         ) : null}
       </div>
       {confirmDialog}

@@ -235,6 +235,33 @@ export async function torolMegbizast(id: string): Promise<{ ok: true } | { ok: f
   return { ok: true };
 }
 
+/**
+ * Törölt fuvar visszaállítása (2026-10-06: a #274 duplikátum helyett
+ * tévedésből a valódi #295 lett törölve, és nem volt visszaút). A régi
+ * `statusz` az új állapotból jön vissza — a 001-es trigger ettől üríti a
+ * `torolt_at`-ot; az `allapot`-hoz nem nyúlunk (a törlés sem írta).
+ */
+export async function visszaallitTorolt(id: string): Promise<{ ok: true } | { ok: false; hiba: string }> {
+  await requireAnyEditPermission(["fuvarozas"]);
+  const session = await requireSession();
+  const ki = session.name ?? session.username;
+  const sorok = await query<{ id: string }>(
+    `update fuvar_megbizasok
+        set statusz = case allapot
+              when 'lezart' then 'lezarva'
+              when 'szamlazva' then 'szamlazva' when 'email_elment' then 'szamlazva' when 'postazva' then 'szamlazva'
+              when 'folyamatban' then 'uton' when 'tervezett' then 'tervezett'
+              else 'uj' end,
+            torolt_by = null
+      where id = $1 and torolt_at is not null
+      returning id::text`,
+    [id]
+  );
+  if (sorok.length === 0) return { ok: false, hiba: "Ez a fuvar nincs törölve." };
+  await query(`insert into fuvar_megbizas_esemeny (megbizas_id, esemeny, forras, ki, reszletek) values ($1, 'visszaallitva_torlesbol', 'ember', $2, '{}'::jsonb)`, [id, ki]);
+  return { ok: true };
+}
+
 export async function letrehoz(input: AddFuvarInput): Promise<string | null> {
   await requireEditPermission("fuvarozas");
   const id = await withTransaction(async (tx) => letrehozTx(tx, input));
