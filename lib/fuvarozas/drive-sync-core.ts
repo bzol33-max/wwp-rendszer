@@ -6,7 +6,7 @@
 // nem igényli Claude érvelését — ezért ez a modul közvetlenül, egy olcsó
 // LLM-mel (OpenRouter-en keresztül, pl. Gemini Flash) végzi ugyanezt:
 //
-//   Google Drive (service account) --text--> OpenRouter (Gemini) --JSON--> addFuvar()
+//   Google Drive (service account) --text--> OpenRouter (Gemini) --JSON--> letrehoz()
 //
 // KIVÉTEL: a Duvenbeck gépi sablonját NEM nyelvi modell olvassa, hanem a
 // lib/fuvarozas/duvenbeck.ts determinisztikus értelmezője. Két oka van: a
@@ -29,7 +29,7 @@
 import { auth as googleAuth, drive as googleDrive } from "@googleapis/drive";
 import { egyetlenPeldanyban, query, ZAR_KULCS } from "@/lib/db";
 import {
-  addFuvar,
+  letrehoz,
   setFuvarFuvardij,
   setFuvarFizetesiHatarido,
   setFuvarPostazasiCim,
@@ -660,7 +660,7 @@ async function ujFajlokFeldolgozasa(
       const lerakoMezo = (determinisztikus.lerako ? null : osszesLerakoCime(soforAdatok)) ?? kivont.lerako!;
       const felrakoMezo = (determinisztikus.felrako ? null : osszesFelrakoCime(soforAdatok)) ?? kivont.felrako;
 
-      const fuvarId = await addFuvar({
+      const fuvarId = await letrehoz({
         tipus: "sajat",
         datum: kivont.felrakasDatum!,
         lerako: lerakoMezo,

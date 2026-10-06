@@ -8,7 +8,8 @@
 // hívja, a jogosultság-ellenőrzés a cron-futásnál a rendszer-kontextuson
 // keresztül engedélyezett (lásd lib/auth/require-permission.ts).
 
-import { query } from "@/lib/db";
+import { query, withTransaction } from "@/lib/db";
+import { letrehozTx } from "@/lib/megbizasok/repo";
 import { frissitsdFuvarozas2Modellt } from "@/lib/fuvarozas2/modell-szinkron";
 import { requireEditPermission } from "@/lib/auth/require-permission";
 import { parseDuvenbeck, megalloCimek, type DuvenbeckDok } from "@/lib/fuvarozas/duvenbeck";
@@ -269,49 +270,24 @@ export async function mentDuvenbeckDokumentumot(
     // A pár két tagja ugyanabban a szinkron-körben érkezik, és a "Frissítés"
     // gomb a cronnal egyszerre is futhat. Az "on conflict do nothing" miatt a
     // versenyt vesztő ág nem hasal el, hanem az összefűzésre esik vissza.
-    const [beszurt] = await query<{ id: string }>(
-      `insert into fuvar_megbizasok
-         (tipus, datum, idopont, felrako, lerako, megrendelo, suly, jarmu, sofor,
-          fuvardij, fuvardij_penznem, dokumentum_url, drive_file_id, forras, ellenorzott,
-          lerakas_datum, pozicioszam, postazasi_cim, reise_id,
-          felrakas_ablak_tol, felrakas_ablak_ig, lerakas_ablak_tol, lerakas_ablak_ig)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23)
-       on conflict (reise_id) where reise_id is not null do nothing
-       returning id::text`,
-      [
-        "sajat",
-        uj.datum,
-        uj.idopont,
-        uj.felrako,
-        uj.lerako,
-        MEGRENDELO,
-        uj.suly,
-        uj.jarmu,
-        uj.sofor,
-        uj.fuvardij,
-        uj.penznem ?? "EUR",
-        file.url,
-        file.id,
-        "pdf_import",
-        false,
-        uj.lerakasDatum,
-        uj.pozicioszam,
-        uj.postazasiCim,
-        kulcs,
-        uj.felrakasAblakTol,
-        uj.felrakasAblakIg,
-        uj.lerakasAblakTol,
-        uj.lerakasAblakIg,
-      ]
-    );
-    if (beszurt) {
-      fuvarId = beszurt.id;
+    const ujId = await withTransaction((tx) => letrehozTx(tx, {
+      tipus: "sajat", datum: uj.datum!, lerako: uj.lerako!, felrako: uj.felrako!, idopont: uj.idopont ?? undefined,
+      megrendelo: MEGRENDELO, suly: uj.suly ?? undefined, jarmu: uj.jarmu ?? undefined, sofor: uj.sofor ?? undefined,
+      fuvardij: uj.fuvardij ?? undefined, fuvardijPenznem: uj.penznem ?? "EUR", dokumentumUrl: file.url,
+      driveFileId: file.id, forras: "pdf_import", ellenorzott: false, lerakasDatum: uj.lerakasDatum ?? undefined,
+      pozicioszam: uj.pozicioszam ?? undefined, postazasiCim: uj.postazasiCim ?? undefined, reiseId: kulcs,
+      felrakasAblakTol: uj.felrakasAblakTol, felrakasAblakIg: uj.felrakasAblakIg,
+      lerakasAblakTol: uj.lerakasAblakTol, lerakasAblakIg: uj.lerakasAblakIg, conflict: "reise",
+      letrehozasUt: "duvenbeck", kanonikusNev: false,
+    }));
+    if (ujId) {
+      fuvarId = ujId;
       statusz = "uj";
       // A Duvenbecktől elvileg nem jön több fuvar, ezért a sofőrnek szóló
       // BMW-adatok (ZF kapuidő, dokk, tárolószám) nincsenek beépítve — ha
       // mégis jön, a naplóban és az Áttekintés/Fuvar lapon is látszódjon.
       console.warn(
-        `[duvenbeck] FIGYELEM: új Duvenbeck-megbízás #${beszurt.id} (Reise ID ${kulcs ?? "?"}) — a ZF kapuidő és a dokk nem jut el a sofőr telefonjára.`
+        `[duvenbeck] FIGYELEM: új Duvenbeck-megbízás #${ujId} (Reise ID ${kulcs ?? "?"}) — a ZF kapuidő és a dokk nem jut el a sofőr telefonjára.`
       );
     } else {
       meglevo = await keresMeglevot();

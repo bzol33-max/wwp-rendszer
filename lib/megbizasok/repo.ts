@@ -1,5 +1,8 @@
 import "server-only";
 import { query, withTransaction, type Querier } from "@/lib/db";
+import type { AddFuvarInput } from "@/lib/fuvarozas/fuvar-constants";
+import { letrehozInsert } from "@/lib/megbizasok/letrehoz-parancs";
+import { kanonikusMegrendeloNev } from "@/lib/fuvarozas/megrendelo-nev";
 import type { AtmenetKontextus } from "@/lib/megbizasok/allapotgep";
 import type { Megallo, MegbizasSor } from "@/lib/fuvarozas2/megbizasok";
 
@@ -35,6 +38,25 @@ export async function elszamolasUpsert(tx: Querier, megbizasId: string, mezok: {
   );
 }
 
+/** Tranzakciós létrehozási mag, meghívható más importokból is (2026-10-06). */
+export async function letrehozTx(tx: Querier, input: AddFuvarInput & {
+  reiseId?: string; felrakasAblakTol?: Date | null; felrakasAblakIg?: Date | null;
+  lerakasAblakTol?: Date | null; lerakasAblakIg?: Date | null; referencia?: string;
+  jarmuEloiras?: string; elokeszites?: boolean; elokeszitesJarmu?: string | null;
+  kitol?: string | null; allapot?: string; conflict?: "dokumentum" | "reise";
+  kanonikusNev?: boolean; statusz?: string; allapotAtMost?: boolean; letrehozasUt?: "sajat-elokeszites" | "duvenbeck";
+}): Promise<string | null> {
+  // kanonikusNev: false — a saját fuvar és a Duvenbeck régi útja sem a
+  // név-alias szabályt használta, ott a megadott név kerül be változatlanul.
+  const megrendelo = input.kanonikusNev === false ? input.megrendelo : await kanonikusMegrendeloNev(input.megrendelo);
+  const { columns, values, expressions } = letrehozInsert(input, megrendelo ?? null);
+  const conflict = input.conflict === "reise"
+    ? "on conflict (reise_id) where reise_id is not null do nothing"
+    : "on conflict (dokumentum_url) where dokumentum_url is not null do nothing";
+  const rows = await tx<{ id: string }>(`insert into fuvar_megbizasok (${columns.join(",")}) values (${expressions.join(",")}) ${conflict} returning id::text`, values);
+  return rows[0]?.id ?? null;
+}
+
 export const SOR_SQL = `
   select m.id::text, m.jelleg, m.allapot, m.allapot_at::text, m.partner_id::text, m.rakott_km::float8 as rakott_km,
     coalesce(p.nev, m.megrendelo) as partner_nev, m.kitol,
@@ -65,12 +87,12 @@ export const SOR_SQL = `
 `;
 
 /** Az állapotgép-ellenőrzés DB-ből vett kontextusa (megállók, partner, szállítólevél). */
-export async function kontextus(sor: MegbizasSor, megallok?: Megallo[]): Promise<AtmenetKontextus> {
-  const m = megallok ?? (await query<Megallo>(`select gps_erkezes::text, sofor_kesz_at::text from fuvar_megallok where megbizas_id = $1`, [sor.id]));
+export async function kontextus(sor: MegbizasSor, megallok?: Megallo[], q: Querier = query): Promise<AtmenetKontextus> {
+  const m = megallok ?? (await q<Megallo>(`select gps_erkezes::text, sofor_kesz_at::text from fuvar_megallok where megbizas_id = $1`, [sor.id]));
   const [p] = sor.partner_id
-    ? await query<{ szamla_email_nem_kell: boolean; posta_nem_kell: boolean }>(`select szamla_email_nem_kell, posta_nem_kell from fuvar_partnerek where id = $1`, [sor.partner_id])
+    ? await q<{ szamla_email_nem_kell: boolean; posta_nem_kell: boolean }>(`select szamla_email_nem_kell, posta_nem_kell from fuvar_partnerek where id = $1`, [sor.partner_id])
     : [undefined];
-  const [sz] = await query<{ n: string }>(`select count(*) as n from szallitolevel_import where megbizas_id = $1 and parositas_allapot = 'parositva'`, [sor.id]);
+  const [sz] = await q<{ n: string }>(`select count(*) as n from szallitolevel_import where megbizas_id = $1 and parositas_allapot = 'parositva'`, [sor.id]);
   return {
     sajatFuvar: sor.jelleg === "sajat",
     gpsErintesVolt: m.some((x) => x.gps_erkezes || x.sofor_kesz_at),

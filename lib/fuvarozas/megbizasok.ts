@@ -163,6 +163,7 @@ export async function getFuvarokIdoszakban(kezdetNapISO: string, vegNapISO: stri
  * (tehát ezt a dokumentumot már felvittük). A Drive-import ebből tudja, hogy
  * VALÓBAN új fuvar lett-e — korábban a duplikátumot is új sornak számolta.
  */
+export async function letrehoz(input: AddFuvarInput): Promise<string | null> { return actions.letrehoz(input); }
 export async function addFuvar(input: AddFuvarInput): Promise<string | null> { return actions.letrehoz(input); }
 
 /**

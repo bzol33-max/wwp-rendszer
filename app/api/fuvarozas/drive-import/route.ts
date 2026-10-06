@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { addFuvar } from "@/lib/fuvarozas/megbizasok";
+import { letrehoz } from "@/lib/fuvarozas/megbizasok";
 import type { AddFuvarInput } from "@/lib/fuvarozas/fuvar-constants";
 import { requireDriveSyncSecret } from "@/lib/fuvarozas/drive-sync-guard";
 
@@ -44,7 +44,7 @@ export async function POST(req: Request) {
       continue;
     }
     try {
-      await addFuvar({
+      await letrehoz({
         ...f,
         tipus: f.tipus ?? "sajat",
         datum: f.datum,
