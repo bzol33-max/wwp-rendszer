@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireSession } from "@/lib/auth/dal";
+import { megbizasJogok } from "@/lib/megbizasok/jogok";
 import { getBerFuvarAdat, getKetOszlop, getMegbizas } from "@/lib/fuvarozas2/megbizasok";
 import { getParositatlanFuvarszamlak } from "@/lib/fuvarozas/megbizasok";
 import { Fuvarozas2Fulek } from "@/components/fuvarozas2/fulek";
@@ -32,7 +33,8 @@ export default async function Page({ searchParams }: {
   const szuro: MunkaasztalSzuro = { q, reszlet: reszletId, uj, szerk: sp.szerk === "1", ujBer: sp.ujber === "1" };
 
   const session = await requireSession();
-  const szerkeszthet = session.can("fuvarozas").edit;
+  const jogok = megbizasJogok(session);
+  const szerkeszthet = jogok.szerkeszti;
   const [asztal, reszlet, parositatlan] = await Promise.all([
     getKetOszlop({ q }),
     reszletId ? getMegbizas(reszletId) : Promise.resolve(null),
@@ -165,9 +167,9 @@ export default async function Page({ searchParams }: {
           <MegbizasReszlet
             {...lapon}
             egyOszlop
-            szerkeszthet={session.can("fuvarozas").edit || session.can("elszamolas").edit}
-            elszamolasJog={session.can("elszamolas").edit || session.can("fuvarozas").edit}
-            fuvarozasJog={szerkeszthet}
+            szerkeszthet={jogok.elszamol}
+            elszamolasJog={jogok.elszamol}
+            fuvarozasJog={jogok.szerkeszti}
           />
         </ReszletLap>
       ) : null}

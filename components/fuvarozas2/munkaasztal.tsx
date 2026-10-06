@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { varosNev } from "@/lib/fuvarozas/varos";
+import { varos, utolsoVaros, megalloDb, megbizasCim } from "@/lib/megbizasok/megjelenites";
 import { formatFt, formatIdo, formatNap } from "@/components/fuvarozas2/kozos";
 import { SZAKASZOK, utSzakaszai, type Szakasz } from "@/lib/fuvarozas2/munkaasztal";
 import { kovetkezoTeendo } from "@/lib/fuvarozas2/megbizas-szuro";
@@ -35,22 +35,6 @@ const SZAKASZ_SZIN: Record<Szakasz, string> = {
   archiv: "text-muted-foreground",
 };
 
-/** Rövid útvonal: az első felrakó és az utolsó lerakó városa. */
-function varos(cim: string | null): string {
-  if (!cim) return "—";
-  const elso = cim.split(/;|\s\+\s/)[0].trim();
-  const v = varosNev(elso).trim();
-  if (v && v.length <= 32) return v;
-  return elso.length > 32 ? `${elso.slice(0, 31)}…` : elso;
-}
-function utolsoVaros(cim: string | null): string {
-  if (!cim) return "—";
-  const reszek = cim.split(/;|\s\+\s/);
-  return varos(reszek[reszek.length - 1]);
-}
-function megalloDb(cim: string | null): number {
-  return cim ? cim.split(/;|\s\+\s/).filter((x) => x.trim()).length : 0;
-}
 
 function Csik({ s }: { s: MunkaasztalSor }) {
   const ut = utSzakaszai(s.jelleg, s.szakasz);
@@ -90,7 +74,7 @@ function Sor({ s, ma, szuro }: { s: MunkaasztalSor; ma: string; szuro: Munkaaszt
         )}
       >
         <span className="min-w-0">
-          <span className="block truncate font-semibold">{s.kitol ? `${s.kitol} → ${s.partner_nev ?? "?"}` : s.partner_nev ?? (s.jelleg === "sajat" ? "Saját fuvar" : "(nincs megbízó)")}</span>
+          <span className="block truncate font-semibold">{megbizasCim(s)}</span>
           <span className="block truncate font-mono text-[11px] text-muted-foreground">{s.hivatkozas ?? (s.jelleg === "sajat" ? "saját" : "—")}</span>
         </span>
         <span className="min-w-0">

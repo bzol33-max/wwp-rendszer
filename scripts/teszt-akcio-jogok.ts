@@ -67,6 +67,20 @@ for (const teljes of [...fajlok(path.join(GYOKER, "lib")), ...fajlok(path.join(G
         if (new RegExp(`\\b${seged}\\s*\\(`).test(torzs) && GUARD.test(segedTorzs)) vedett = true;
       }
     }
+    // Vékony kompatibilitási wrapper: a jogosultsági szabályt az általa
+    // meghívott közös Server Action törzsén ellenőrizzük (2026-10-06).
+    if (!vedett) {
+      const akcioImport = sf.statements.find((x) => ts.isImportDeclaration(x) && ts.isStringLiteral(x.moduleSpecifier) && /megbizasok\/akciok$/.test(x.moduleSpecifier.text));
+      const hivas = torzs.match(/\bactions\.(\w+)\s*\(/);
+      if (akcioImport && hivas && ts.isImportDeclaration(akcioImport) && ts.isStringLiteral(akcioImport.moduleSpecifier)) {
+        const akcioModul = akcioImport.moduleSpecifier.text;
+        const akcioUt = akcioModul.startsWith("@/") ? path.join(GYOKER, `${akcioModul.slice(2)}.ts`) : path.resolve(path.dirname(teljes), `${akcioModul}.ts`);
+        const akcioForras = readFileSync(akcioUt, "utf8");
+        const akcioSf = ts.createSourceFile(akcioUt, akcioForras, ts.ScriptTarget.Latest, true);
+        const akcioFuggveny = akcioSf.statements.find((x) => ts.isFunctionDeclaration(x) && x.name?.text === hivas[1]);
+        if (akcioFuggveny && ts.isFunctionDeclaration(akcioFuggveny)) vedett = GUARD.test(akcioFuggveny.body?.getText() ?? "");
+      }
+    }
     if (vedett) {
       ok++;
     } else if (ENGEDETT[kulcs]) {
