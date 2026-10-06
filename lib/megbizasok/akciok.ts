@@ -85,6 +85,23 @@ export async function setMegjegyzes(id: string, megjegyzes: string | null): Prom
   ]);
 }
 
+/** Fuvarlevél oldal megjelenítési forgatása; a tárolt képfájl változatlan marad. */
+export async function forgatFuvarlevelOldalt(dokId: string, irany: 90 | -90): Promise<void> {
+  await requireAnyEditPermission(["fuvarozas", "elszamolas"]);
+  if (!/^\d+$/.test(dokId) || (irany !== 90 && irany !== -90)) throw new Error("Érvénytelen forgatási kérés.");
+  const session = await requireSession();
+  const [dok] = await query<{ fuvar_id: string }>(
+    `select fuvar_id::text from fuvar_dokumentumok where id = $1 and tipus = 'fuvarlevel'`, [dokId]
+  );
+  if (!dok) throw new Error("Nincs ilyen fuvarlevél-oldal.");
+  await withTransaction(async (tx) => {
+    await tx(`update fuvar_dokumentumok set forgatas = ((forgatas + $2 + 360) % 360)::smallint where id = $1`, [dokId, irany]);
+    // Az esemény-típus zárt lista (001-es séma): a forgatás „modositva”-ként naplózódik.
+    await tx(`insert into fuvar_megbizas_esemeny (megbizas_id, esemeny, forras, ki, reszletek) values ($1, 'modositva', 'ember', $2, $3)`,
+      [dok.fuvar_id, session.name ?? session.username, JSON.stringify({ mezo: "fuvarlevel_forgatas", dok_id: dokId, irany })]);
+  });
+}
+
 export async function setFuvarJarmu(id: string, jarmuKod: string | null): Promise<{ ok: true; cimke: string | null } | { ok: false; hiba: string }> {
   await requireAnyEditPermission(["fuvarozas"]);
   const session = await requireSession();

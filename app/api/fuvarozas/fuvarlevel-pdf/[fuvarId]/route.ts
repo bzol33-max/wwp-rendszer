@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { PDFDocument } from "pdf-lib";
+import sharp from "sharp";
 import { query } from "@/lib/db";
 import { fuvarIratGuard } from "@/lib/fuvarozas/irat-jog";
 import { letoltDriveFajl } from "@/lib/fuvarozas/drive-sync-core";
@@ -39,8 +40,8 @@ export async function GET(
   );
   if (!fuvar) return NextResponse.json({ hiba: "Nincs ilyen fuvar." }, { status: 404 });
 
-  const oldalak = await query<{ id: string; tarolas: string; tartalom: Buffer | null; mime_type: string | null; drive_file_id: string | null }>(
-    `select id::text, tarolas, tartalom, mime_type, drive_file_id
+  const oldalak = await query<{ id: string; tarolas: string; tartalom: Buffer | null; mime_type: string | null; drive_file_id: string | null; forgatas: number }>(
+    `select id::text, tarolas, tartalom, mime_type, drive_file_id, forgatas
      from fuvar_dokumentumok where fuvar_id = $1 and tipus = 'fuvarlevel' order by created_at, id`,
     [fuvarId]
   );
@@ -64,6 +65,10 @@ export async function GET(
       } else {
         kimaradt++;
         continue;
+      }
+      if (o.forgatas) {
+        bajtok = await sharp(Buffer.from(bajtok)).rotate(o.forgatas).jpeg({ quality: 92 }).toBuffer();
+        mime = "image/jpeg";
       }
       const kep = mime === "image/png" ? await pdf.embedPng(bajtok) : mime === "image/jpeg" || mime === "image/jpg" ? await pdf.embedJpg(bajtok) : null;
       if (!kep) {

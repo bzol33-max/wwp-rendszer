@@ -10,6 +10,7 @@
 // explicit sofőri megerősítés.
 
 import { revalidatePath } from "next/cache";
+import sharp from "sharp";
 import { query, withTransaction } from "@/lib/db";
 import { megalloKeszTx, megalloKeszVisszavonTx, megerkezettTx, varakozasTx } from "@/lib/megbizasok/megallo";
 import { requireAnyEditPermission, requireSajatVagyModulJog } from "@/lib/auth/require-permission";
@@ -809,18 +810,23 @@ export async function feltoltFuvarlevelFoto(fuvarId: string, form: FormData): Pr
   // A fotóból szkennelt oldal lesz: a papír kivágva, egyenesbe hozva,
   // tisztítva (lib/fuvarozas/doksi-kivagas.ts). A kimenet mindig JPEG, ezért
   // a fájlnév is az. Ha a lap nem ismerhető fel, a kép tisztítva, de vágatlanul
-  // megy tovább — az EREDETIT nem tároljuk el külön (Budaházi Zoltán döntése,
-  // 2026-09-29), tehát a kivágás csak biztos kontúr esetén történik meg.
+  // megy tovább; a telefonon kicsinyített bemenet külön is megmarad eredetiként.
   const nev = `${fuvar.datum}_${rendszam}_${hivatkozas}_${Date.now()}.jpg`;
   const eredeti = Buffer.from(await fajl.arrayBuffer());
   const szken = await szkennelj(eredeti);
   const tartalom = szken.tartalom;
+  // Az eredeti is álló helyzetben tárolódjon: ha a telefon a forgatást csak
+  // EXIF-ben jelzi (pl. sikertelen böngészős tömörítésnél), beégetjük — de
+  // csak ilyenkor, hogy a már egyenes fotó ne veszítsen az újrakódolással.
+  const exif = await sharp(eredeti).metadata().then((m) => m.orientation ?? 1).catch(() => 1);
+  const eredetiAllo = exif > 1 ? await sharp(eredeti).rotate().jpeg({ quality: 92 }).toBuffer().catch(() => eredeti) : eredeti;
+  const eredetiMime = exif > 1 ? "image/jpeg" : fajl.type || "image/jpeg";
 
   const beszurt = await query<{ id: string }>(
-    `insert into fuvar_dokumentumok (fuvar_id, tipus, fajlnev, tarolas, tartalom, mime_type, meret_byte, feltoltotte)
-     values ($1, 'fuvarlevel', $2, 'db', $3, $4, $5, $6)
+    `insert into fuvar_dokumentumok (fuvar_id, tipus, fajlnev, tarolas, tartalom, mime_type, meret_byte, feltoltotte, eredeti, eredeti_mime_type)
+     values ($1, 'fuvarlevel', $2, 'db', $3, $4, $5, $6, $7, $8)
      returning id::text`,
-    [fuvarId, nev, tartalom, szken.mimeType, tartalom.length, session.name ?? session.username]
+    [fuvarId, nev, tartalom, szken.mimeType, tartalom.length, session.name ?? session.username, eredetiAllo, eredetiMime]
   );
   // A részletek-lista a dokumentum_url-t linkeli — a saját kiszolgálónkra mutat.
   await query(`update fuvar_dokumentumok set dokumentum_url = $2 where id = $1`, [beszurt[0].id, `/api/fuvarozas/dokumentum/${beszurt[0].id}`]);

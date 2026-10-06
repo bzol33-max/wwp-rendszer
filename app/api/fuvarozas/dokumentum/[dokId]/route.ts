@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import sharp from "sharp";
 import { query } from "@/lib/db";
 import { fuvarIratGuard } from "@/lib/fuvarozas/irat-jog";
 import { letoltDriveFajl } from "@/lib/fuvarozas/drive-sync-core";
@@ -31,8 +32,9 @@ export async function GET(
 
   // A jog a dokumentum FUVARJÁHOZ kötődik, ezért előbb a sor kell — a
   // lekérdezés maga nem ad ki semmit a hívónak.
-  const sorok = await query<{ fuvar_id: string; drive_file_id: string | null; fajlnev: string | null; tarolas: string; tartalom: Buffer | null; mime_type: string | null }>(
-    `select fuvar_id::text, drive_file_id, fajlnev, tarolas, tartalom, mime_type from fuvar_dokumentumok where id = $1`,
+  const eredetiKer = new URL(request.url).searchParams.get("eredeti") === "1";
+  const sorok = await query<{ fuvar_id: string; drive_file_id: string | null; fajlnev: string | null; tarolas: string; tartalom: Buffer | null; mime_type: string | null; eredeti: Buffer | null; eredeti_mime_type: string | null; forgatas: number }>(
+    `select fuvar_id::text, drive_file_id, fajlnev, tarolas, tartalom, mime_type, eredeti, eredeti_mime_type, forgatas from fuvar_dokumentumok where id = $1`,
     [dokId]
   );
   const dok = sorok[0];
@@ -45,9 +47,12 @@ export async function GET(
 
   // A sofőr fuvarlevél-fotója az adatbázisban van (014-es migráció).
   if (dok.tarolas === "db" && dok.tartalom) {
-    return new NextResponse(new Uint8Array(dok.tartalom), {
+    const adat = eredetiKer && dok.eredeti ? dok.eredeti : dok.tartalom;
+    const mime = eredetiKer && dok.eredeti ? dok.eredeti_mime_type ?? "image/jpeg" : dok.mime_type ?? "image/jpeg";
+    const forgatott = !eredetiKer && dok.forgatas ? await sharp(adat).rotate(dok.forgatas).toBuffer() : adat;
+    return new NextResponse(new Uint8Array(forgatott), {
       headers: {
-        "Content-Type": biztonsagosMime(dok.mime_type ?? "image/jpeg"),
+        "Content-Type": biztonsagosMime(mime),
         "Content-Disposition": inlineFajlnev(dok.fajlnev ?? `dokumentum-${dokId}.jpg`),
         "Cache-Control": "private, max-age=300",
         "X-Content-Type-Options": "nosniff",
@@ -88,7 +93,12 @@ export async function GET(
         },
       });
     }
-    return new NextResponse(new Uint8Array(fajl.buffer), {
+    // A Drive-on tárolt régi fuvarlevél-képre is érvényes a kért forgatás
+    // (a PDF-et nem forgatjuk, annak saját oldaltájolása van).
+    const forgatottDrive = !eredetiKer && dok.forgatas && fajl.mimeType.startsWith("image/")
+      ? await sharp(fajl.buffer).rotate(dok.forgatas).toBuffer().catch(() => fajl.buffer)
+      : fajl.buffer;
+    return new NextResponse(new Uint8Array(forgatottDrive), {
       headers: {
         "Content-Type": biztonsagosMime(fajl.mimeType),
         // inline: a telefon a beépített PDF-nézőben nyitja meg, nem letölti.

@@ -9,15 +9,17 @@
 // oldalak egy PDF-be fűzve is letölthetők (app/api/fuvarozas/fuvarlevel-pdf).
 
 import { feltoltFuvarlevelFoto } from "@/lib/fuvarozas/sofor";
+import { kovetkezoMinoseg } from "@/lib/fuvarozas/fuvarlevel-minoseg";
 
-/** A feltöltött kép leghosszabb oldala pixelben — a telefon 4000 px-es, 5-8 MB-os fotója így ~300-600 KB lesz. */
-const FOTO_MAX_OLDAL_PX = 1600;
-const FOTO_JPEG_MINOSEG = 0.82;
+/** 3000 px-en megmarad a kézírás részlete; 0,9-es JPEG többnyire 1,5–3,5 MB, a 8 MB-os feltöltési határ alatt. */
+const FOTO_MAX_OLDAL_PX = 3000;
+const FOTO_JPEG_MINOSEG = 0.9;
 
 /**
  * A fotó kicsinyítése a telefonon, feltöltés előtt. Mobilnetről egy 8 MB-os
- * kép lassú és a szerver-akció korlátjába is beleütközne; egy fuvarlevél
- * 1600 px-en tökéletesen olvasható. Ha a böngésző nem tudja (nincs canvas),
+ * kép lassú és a szerver-akció korlátjába is beleütközne; a 3000 px-es,
+ * 0,9-es JPEG jellemzően 1,5–3,5 MB. Ha 8 MB fölé kerül, fokozatosan
+ * csökkentjük a minőséget 0,85-re, majd 0,8-ra. Ha a böngésző nem tudja,
  * az eredeti megy.
  */
 export async function kicsinyitFotot(fajl: File): Promise<Blob> {
@@ -32,8 +34,15 @@ export async function kicsinyitFotot(fajl: File): Promise<Blob> {
     const ctx = vaszon.getContext("2d");
     if (!ctx) return fajl;
     ctx.drawImage(kep, 0, 0, vaszon.width, vaszon.height);
-    const blob = await new Promise<Blob | null>((ok) => vaszon.toBlob(ok, "image/jpeg", FOTO_JPEG_MINOSEG));
-    return blob ?? fajl;
+    let minoseg: number | null = FOTO_JPEG_MINOSEG;
+    while (minoseg !== null) {
+      const blob = await new Promise<Blob | null>((ok) => vaszon.toBlob(ok, "image/jpeg", minoseg ?? undefined));
+      if (!blob) break;
+      const kovetkezo = kovetkezoMinoseg(minoseg, blob.size);
+      if (kovetkezo === minoseg) return blob;
+      minoseg = kovetkezo;
+    }
+    throw new Error("A tömörített kép meghaladja a 8 MB-ot.");
   } catch {
     return fajl;
   } finally {

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { valtAllapot, setSzamlaSzam, setMegjegyzes, torolMegbizast } from "@/lib/fuvarozas2/megbizasok";
+import { valtAllapot, setSzamlaSzam, setMegjegyzes, torolMegbizast, forgatFuvarlevelOldalt } from "@/lib/fuvarozas2/megbizasok";
 import type { MegbizasSor, Megallo, Esemeny, Dokumentum } from "@/lib/fuvarozas2/megbizasok";
 import type { Allapot } from "@/lib/fuvarozas/allapot";
 import type { PartnerAdatJavaslat } from "@/lib/fuvarozas2/partnerek";
@@ -239,9 +239,14 @@ export function MegbizasReszlet({
               const oldal = d.tipus === "fuvarlevel" ? fuvarlevelek.indexOf(d) + 1 : 0;
               const felirat = oldal > 0 ? `Fuvarlevél ${oldal}/${fuvarlevelDb}` : d.fajlnev ?? d.dokumentum_url ?? "—";
               return (
-                <div key={d.id} className="flex gap-2">
+                <div key={d.id} className="flex items-center gap-2">
                   <span className="w-24 shrink-0 text-xs uppercase text-muted-foreground">{d.tipus ?? "egyéb"}</span>
-                  {d.dokumentum_url ? <a className="truncate underline" href={d.dokumentum_url} target="_blank" rel="noreferrer">{felirat}</a> : <span className="truncate">{felirat}</span>}
+                  {d.dokumentum_url ? <a className="truncate underline" href={d.forgatas ? `${d.dokumentum_url}?f=${d.forgatas}` : d.dokumentum_url} target="_blank" rel="noreferrer">{felirat}</a> : <span className="truncate">{felirat}</span>}
+                  {oldal > 0 && d.van_eredeti ? <a className="shrink-0 text-xs underline" href={`${d.dokumentum_url}?eredeti=1`} target="_blank" rel="noreferrer">eredeti</a> : null}
+                  {oldal > 0 && szerkeszthet ? <>
+                    <button type="button" aria-label={`${felirat} forgatása balra`} className="rounded border px-1.5 py-0.5" onClick={() => start(async () => { try { await forgatFuvarlevelOldalt(d.id, -90); router.refresh(); } catch (e) { toast.error(e instanceof Error ? e.message : "A forgatás nem sikerült."); } })}>↺</button>
+                    <button type="button" aria-label={`${felirat} forgatása jobbra`} className="rounded border px-1.5 py-0.5" onClick={() => start(async () => { try { await forgatFuvarlevelOldalt(d.id, 90); router.refresh(); } catch (e) { toast.error(e instanceof Error ? e.message : "A forgatás nem sikerült."); } })}>↻</button>
+                  </> : null}
                 </div>
               );
             })}
