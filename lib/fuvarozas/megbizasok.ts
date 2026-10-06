@@ -2,7 +2,8 @@
 
 import * as actions from "@/lib/megbizasok/akciok";
 
-import { query } from "@/lib/db";
+import { query, withTransaction } from "@/lib/db";
+import { megalloKeszTx } from "@/lib/megbizasok/megallo";
 import { requireAnyViewPermission, requireEditPermission, requireViewPermission } from "@/lib/auth/require-permission";
 import { FUVAR_HELY_SQL, FUVAR_MA_SQL } from "@/lib/fuvarozas/fuvar-hely";
 import { toroljIdovonalCachet } from "@/lib/fuvarozas/idovonal-cache";
@@ -227,18 +228,17 @@ export async function setMegalloKesz(fuvarId: string, megalloIndex: number): Pro
   );
   const sor = sorok[0];
   if (!sor) throw new Error("A fuvar nem található.");
-  await query(
-    `insert into fuvar_megallo_allapot (fuvar_id, megallo_index, kesz, kesz_at, kesz_by)
-     values ($1, $2, true, now(), $3)
-     on conflict (fuvar_id, megallo_index) do update set kesz = true, kesz_at = now(), kesz_by = $3`,
-    [fuvarId, megalloIndex, session.name]
-  );
   const utolsoIndex = bontsMegallokra(sor.felrako).length + bontsMegallokra(sor.lerako).length - 1;
   let fuvarLezarva = false;
-  if (megalloIndex === utolsoIndex && !sor.teljesitve) {
-    await query(`update fuvar_megbizasok set teljesitve = true, teljesitve_at = now() where id = $1`, [fuvarId]);
-    fuvarLezarva = true;
-  }
+  // Az eddigi két külön írás most a megálló kettős írásával együtt atomikus.
+  fuvarLezarva = await withTransaction(async (tx) => {
+    await megalloKeszTx(tx, fuvarId, megalloIndex, session.name);
+    if (megalloIndex === utolsoIndex && !sor.teljesitve) {
+      await tx(`update fuvar_megbizasok set teljesitve = true, teljesitve_at = now() where id = $1`, [fuvarId]);
+      return true;
+    }
+    return false;
+  });
   toroljIdovonalCachet();
   return { fuvarLezarva };
 }
@@ -258,12 +258,12 @@ export async function setMegalloKesz(fuvarId: string, megalloIndex: number): Pro
  */
 export async function jelolTeljesitveGpsAlapjan(id: string): Promise<boolean> {
   await requireEditPermission("fuvarozas");
-  const irt = await query<{ id: string }>(
+  const irt = await withTransaction(async (tx) => tx<{ id: string }>(
     `update fuvar_megbizasok set teljesitve = true, teljesitve_at = coalesce(teljesitve_at, now())
      where id = $1 and not teljesitve and coalesce(szamla_szam, '') = ''
      returning id::text`,
     [id]
-  );
+  ));
   if (irt.length > 0) toroljIdovonalCachet();
   return irt.length > 0;
 }

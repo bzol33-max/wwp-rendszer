@@ -11,6 +11,7 @@
 
 import { revalidatePath } from "next/cache";
 import { query, withTransaction } from "@/lib/db";
+import { megalloKeszTx, megalloKeszVisszavonTx, megerkezettTx, varakozasTx } from "@/lib/megbizasok/megallo";
 import { requireAnyEditPermission, requireSajatVagyModulJog } from "@/lib/auth/require-permission";
 import { requireSession } from "@/lib/auth/dal";
 import { getIdovonalak } from "@/lib/fuvarozas/actions";
@@ -80,29 +81,25 @@ async function requireFuvarIrasJog(fuvarId: string): Promise<"fuvarozas" | "fuva
 export async function markMegalloKesz(fuvarId: string, megalloIndex: number): Promise<{ fuvarLezarva: boolean }> {
   await requireFuvarIrasJog(fuvarId);
   const soforNev = (await requireSession()).name;
-  await query(
-    `insert into fuvar_megallo_allapot (fuvar_id, megallo_index, kesz, kesz_at, kesz_by)
-     values ($1, $2, true, now(), $3)
-     on conflict (fuvar_id, megallo_index) do update set kesz = true, kesz_at = now(), kesz_by = $3`,
-    [fuvarId, megalloIndex, soforNev]
-  );
   // Az UTOLSÓ megálló "Indulok"-ja a fuvart is lezárja — ugyanúgy, mint a
   // GPS lap pipája (megbizasok.ts setMegalloKesz). Eddig csak a GPS vagy az
   // iroda zárta le, így a sofőr hiába jelezte, a fuvar "folyamatban" maradt
   // (Budaházi Zoltán, 2026-09-24).
-  const [sor] = await query<{ felrako: string | null; lerako: string; teljesitve: boolean }>(
-    `select felrako, lerako, teljesitve from fuvar_megbizasok where id = $1 and statusz <> 'torolt'`,
-    [fuvarId]
-  );
-  let fuvarLezarva = false;
-  if (sor && !sor.teljesitve) {
+  // A megálló kettős írása és az ebből következő teljesítésjelölő együtt atomikus.
+  const fuvarLezarva = await withTransaction(async (tx) => {
+    await megalloKeszTx(tx, fuvarId, megalloIndex, soforNev);
+    const [sor] = await tx<{ felrako: string | null; lerako: string; teljesitve: boolean }>(`select felrako, lerako, teljesitve from fuvar_megbizasok where id = $1 and statusz <> 'torolt'`, [fuvarId]);
+    let lezarva = false;
+    if (sor && !sor.teljesitve) {
     const utolsoIndex = bontsMegallokra(sor.felrako).length + bontsMegallokra(sor.lerako).length - 1;
     if (megalloIndex === utolsoIndex) {
-      await query(`update fuvar_megbizasok set teljesitve = true, teljesitve_at = now() where id = $1`, [fuvarId]);
-      fuvarLezarva = true;
-      console.log(`[sofor] fuvar #${fuvarId} lezárva a sofőr utolsó "Indulok" jelölésével (${soforNev}).`);
+      await tx(`update fuvar_megbizasok set teljesitve = true, teljesitve_at = now() where id = $1`, [fuvarId]);
+      lezarva = true;
     }
-  }
+    }
+    return lezarva;
+  });
+  if (fuvarLezarva) console.log(`[sofor] fuvar #${fuvarId} lezárva a sofőr utolsó "Indulok" jelölésével (${soforNev}).`);
   // A GPS lap is ezt a jelölést mutatja (kézi kész) — a gyorsítótárazott idővonal frissüljön.
   toroljIdovonalCachet();
   revalidatePath("/erkezes");
@@ -194,14 +191,7 @@ export async function visszavonMegalloKesz(fuvarId: string, megalloIndex: number
       visszanyit = true;
     }
 
-    await q(
-      `update fuvar_megallo_allapot set kesz = false, kesz_at = null, kesz_by = null
-        where fuvar_id = $1 and megallo_index = $2`,
-      [fuvarId, megalloIndex]
-    );
-    if (jel.megallo_id) {
-      await q(`update fuvar_megallok set sofor_kesz_at = null, sofor_kesz_by = null where id = $1`, [jel.megallo_id]);
-    }
+    await megalloKeszVisszavonTx(q, fuvarId, megalloIndex);
     // A 002-es napló-trigger ne duplázzon — a saját, részletesebb eseményünket írjuk.
     await q(`select set_config('fuvarozas2.uj_kod', '1', true)`);
     if (visszanyit) {
@@ -709,13 +699,7 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
 export async function jelolMegerkeztem(fuvarId: string, megalloIndex: number): Promise<void> {
   await requireFuvarIrasJog(fuvarId);
   const soforNev = (await requireSession()).name;
-  await query(
-    `insert into fuvar_megallo_allapot (fuvar_id, megallo_index, kesz, kezi_erkezes, kesz_by)
-     values ($1, $2, false, now(), $3)
-     on conflict (fuvar_id, megallo_index)
-     do update set kezi_erkezes = coalesce(fuvar_megallo_allapot.kezi_erkezes, now())`,
-    [fuvarId, megalloIndex, soforNev]
-  );
+  await withTransaction((tx) => megerkezettTx(tx, fuvarId, megalloIndex, soforNev));
   toroljIdovonalCachet();
   revalidatePath("/erkezes");
 }
@@ -922,24 +906,7 @@ export async function rogzitPozicioszamot(fuvarId: string, szam: string): Promis
 export async function jelolVarakozast(fuvarId: string, megalloIndex: number, muvelet: "kezd" | "befejez"): Promise<void> {
   await requireFuvarIrasJog(fuvarId);
   const soforNev = (await requireSession()).name;
-  if (muvelet === "kezd") {
-    await query(
-      `insert into fuvar_megallo_allapot (fuvar_id, megallo_index, kesz, varakozas_kezdete, kesz_by)
-       values ($1, $2, false, now(), $3)
-       on conflict (fuvar_id, megallo_index)
-       do update set varakozas_kezdete = coalesce(fuvar_megallo_allapot.varakozas_kezdete, now())`,
-      [fuvarId, megalloIndex, soforNev]
-    );
-  } else {
-    const eredmeny = await query<{ id: string }>(
-      `update fuvar_megallo_allapot
-          set varakozas_vege = now()
-        where fuvar_id = $1 and megallo_index = $2 and varakozas_kezdete is not null and varakozas_vege is null
-        returning id::text`,
-      [fuvarId, megalloIndex]
-    );
-    if (eredmeny.length === 0) throw new Error("Nincs folyamatban lévő várakozás ezen a megállón.");
-  }
+  await withTransaction((tx) => varakozasTx(tx, fuvarId, megalloIndex, muvelet === "kezd" ? "kezd" : "vege", soforNev));
   console.log(`[sofor] várakozás ${muvelet === "kezd" ? "kezdete" : "vége"}: fuvar #${fuvarId}/${megalloIndex} (${soforNev})`);
   toroljIdovonalCachet();
   revalidatePath("/erkezes");

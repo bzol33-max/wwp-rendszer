@@ -17,7 +17,8 @@
 // a GPS pedig akkor is ad adatot, ha a sofőr nem jelölt semmit.
 
 import { requireEditPermission } from "@/lib/auth/require-permission";
-import { query } from "@/lib/db";
+import { withTransaction } from "@/lib/db";
+import { gpsErintesTx } from "@/lib/megbizasok/megallo";
 
 export type GpsErintes = {
   fuvarId: string;
@@ -47,17 +48,8 @@ export type GpsErintes = {
 export async function rogzitGpsErinteseket(erintesek: GpsErintes[]): Promise<void> {
   await requireEditPermission("fuvarozas");
   if (erintesek.length === 0) return;
-  await query(
-    `insert into fuvar_megallo_allapot (fuvar_id, megallo_index, gps_erkezes, gps_tavozas)
-     select * from unnest($1::bigint[], $2::int[], $3::timestamptz[], $4::timestamptz[])
-     on conflict (fuvar_id, megallo_index) do update set
-       gps_erkezes = excluded.gps_erkezes,
-       gps_tavozas = excluded.gps_tavozas`,
-    [
-      erintesek.map((e) => e.fuvarId),
-      erintesek.map((e) => e.index),
-      erintesek.map((e) => e.erkezes.toISOString()),
-      erintesek.map((e) => e.tavozas?.toISOString() ?? null),
-    ]
-  );
+  // A korábbi tömbös upsert helyett az új és a régi sorok együtt, egy tranzakcióban íródnak.
+  await withTransaction(async (tx) => {
+    for (const e of erintesek) await gpsErintesTx(tx, e.fuvarId, e.index, e.erkezes, e.tavozas);
+  });
 }

@@ -862,7 +862,8 @@ async function levelSzovegPotlasa(hibak: string[]): Promise<number> {
         and coalesce(m.szamla_szam, '') = '' and not coalesce(m.postazva, false)
         and coalesce(m.allapot, '') not in ('szamlazva', 'email_elment', 'postazva', 'lezart')
         and not exists (select 1 from fuvar_megallo_allapot a where a.fuvar_id = m.id and (a.kesz or a.kezi_erkezes is not null))
-        and not exists (select 1 from fuvar_megallok g where g.megbizas_id = m.id and (g.gps_erkezes is not null or g.sofor_kesz_at is not null))
+        and not exists (select 1 from fuvar_megallok g where g.megbizas_id = m.id and
+          (g.gps_erkezes is not null or g.sofor_kesz_at is not null or g.sofor_megerkezett_at is not null or g.varakozas_kezdete is not null))
       order by m.id, l.erkezett desc
       limit 3`
   );
@@ -889,7 +890,14 @@ async function levelSzovegPotlasa(hibak: string[]): Promise<number> {
         );
         await mentsSoforAdatokat(sor.fuvar_id, adatok);
         // Az új modell megállói a felrakó/lerakó szövegből épülnek újra.
-        if (felrako || lerako) await query(`delete from fuvar_megallok where megbizas_id = $1`, [sor.fuvar_id]);
+        if (felrako || lerako) {
+          // A levelezésből újraépítés csak tény nélküli megállókat érinthet; a régi
+          // indexes hivatkozást is leválasztjuk, az újraszinkron sorszám szerint köti vissza.
+          await query(`delete from fuvar_megallok g where g.megbizas_id = $1
+            and not exists (select 1 from fuvar_megallok x where x.id = g.id and
+              (x.gps_erkezes is not null or x.sofor_kesz_at is not null or x.sofor_megerkezett_at is not null or x.varakozas_kezdete is not null))`, [sor.fuvar_id]);
+          await query(`update fuvar_megallo_allapot set megallo_id = null where fuvar_id = $1`, [sor.fuvar_id]);
+        }
         await frissitsdFuvarozas2Modellt(sor.fuvar_id);
         console.log(`[level-potlas] #${sor.fuvar_id}: ${adatok.megallok.length} megálló a kísérő levélből`);
         db++;

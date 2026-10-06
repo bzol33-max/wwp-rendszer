@@ -40,6 +40,9 @@ async function main() {
           a.kesz is distinct from (g.sofor_kesz_at is not null)
           or (a.kesz and a.kesz_at is distinct from g.sofor_kesz_at)
           or a.gps_erkezes is distinct from g.gps_erkezes
+          or (a.kezi_erkezes is not null and a.kezi_erkezes is distinct from g.sofor_megerkezett_at)
+          or (a.varakozas_kezdete is not null and a.varakozas_kezdete is distinct from g.varakozas_kezdete)
+          or (a.varakozas_vege is not null and a.varakozas_vege is distinct from g.varakozas_vege)
           -- az új tábla lehet teljesebb (pl. utólag észlelt távozás), fordítva nem
           or (a.gps_tavozas is not null and a.gps_tavozas is distinct from g.gps_tavozas))
       union all select 'megállók hiányoznak', m.id::text from fuvar_megbizasok m
