@@ -75,7 +75,7 @@ export type MegalloBejegyzes = {
   nyersCim: string;
   /** A felismerés csak valószínűsítés (a cím csak városnév szintjén ismert) — lásd TervezettMegallo.bizonytalanFelismeres. */
   bizonytalanFelismeres: boolean;
-  /** A megálló sorszáma a fuvar állomás-sorrendjében — a kézi "kész" jelölés ide ír (fuvar_megallo_allapot.megallo_index). */
+  /** A megálló sorszáma a fuvar állomás-sorrendjében; az új tábla sorszáma egygyel nagyobb. (2026-10-06) */
   megalloIndex: number;
   /** Honnan tudjuk, hogy kész: GPS-felismerés vagy kézi jelölés (sofőr mobil, GPS lap pipa, fuvar Teljesítve). */
   keszForras: "gps" | "kezi" | null;
@@ -656,7 +656,7 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus, kali
   // A megallokSzovegei sorrendje (felrakó(k), majd lerakó(k)) adja az
   // index-et — pontosan ugyanaz a sorrend, amit a sofőr kézi jelölése is
   // használ (lib/fuvarozas/sofor.ts), ezért a két nyilvántartás ugyanarra a
-  // fuvar_megallo_allapot sorra írható.
+    // fuvar_megallok.sorszam mezőhöz igazodik. (2026-10-06)
   const megallok: TervezettMegallo[] = megallokSzovegei.map((m, i) => ({
     index: i,
     tipus: m.tipus,
@@ -1110,7 +1110,7 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
           sajatSorok
         );
 
-        // Az érintés-naplót (fuvar_megallo_allapot.gps_*) NEM innen írjuk:
+        // Az érintés-naplót (fuvar_megallok.gps_*) NEM innen írjuk: (2026-10-06)
         // ez a nézet egyetlen nap trip-ablakával dolgozik, ami egy éjszakán
         // átnyúló látogatást csonkán látna, és felülírná a figyelő 3 napos
         // ablakkal számolt, teljes értékét — a naplót a figyelő vezeti

@@ -277,7 +277,7 @@ export type TervezettMegallo = {
   /**
    * A megálló sorszáma a fuvar teljes állomás-sorrendjében (0 = az első
    * felrakó, utána a lerakók) — UGYANAZ az indexelés, amit a sofőr kézi
-   * jelölése is használ (fuvar_megallo_allapot.megallo_index, lásd
+   * jelölése is használ (fuvar_megallok.sorszam - 1, lásd
    * lib/fuvarozas/sofor.ts). Mindkét oldal a bontsMegallokra(felrako) +
    * bontsMegallokra(lerako) sorrendből származik, ezért a két nyilvántartás
    * (kézi megerősítés és GPS-érintés) ugyanarra a sorra írható.
@@ -325,7 +325,7 @@ export type TervezettMegallo = {
    * a közelben történt megállás nem feltétlenül EZ a rakodás volt.
    */
   bizonytalanFelismeres: boolean;
-  /** A sofőr által jelölt várakozás kezdete/vége ezen a megállón (fuvar_megallo_allapot). */
+  /** A sofőr által jelölt várakozás kezdete/vége ezen a megállón (fuvar_megallok). (2026-10-06) */
   varakozasKezdete?: Date | null;
   varakozasVege?: Date | null;
   /**
@@ -347,11 +347,11 @@ export type TervezettMegallo = {
   ablakTagithato?: boolean;
   /** Honnan tudjuk, hogy a megálló kész: GPS-felismerés, vagy kézi jelölés (sofőr a mobilon, vagy iroda a GPS lapon / a fuvar Teljesítve gombja). */
   keszForras: "gps" | "kezi" | null;
-  /** Kézi jelölésnél a jelölő neve (fuvar_megallo_allapot.kesz_by), ha ismert. */
+  /** Kézi jelölésnél a jelölő neve (fuvar_megallok.sofor_kesz_by), ha ismert. (2026-10-06) */
   keszBy: string | null;
-  /** Kézi készre jelölés ideje (fuvar_megallo_allapot.kesz_at), ha volt. */
+  /** Kézi készre jelölés ideje (fuvar_megallok.sofor_kesz_at), ha volt. (2026-10-06) */
   keszAt?: Date | null;
-  /** A sofőr "Megérkeztem" koppintásának ideje (fuvar_megallo_allapot.kezi_erkezes), ha volt. */
+  /** A sofőr "Megérkeztem" koppintásának ideje (fuvar_megallok.sofor_megerkezett_at), ha volt. (2026-10-06) */
   keziErkezes?: Date | null;
 };
 

@@ -115,7 +115,7 @@ export async function geokodolCachelve(cim: string): Promise<GeocodedAddress | n
 /**
  * Egy fuvar állomásai a felismeréshez: a felrakó + az összes lerakó,
  * útvonal-sorrendben, állomásonként geokódolva, időablakkal. Az index
- * UGYANAZ, amit a sofőr kézi jelölése (fuvar_megallo_allapot.megallo_index)
+ * UGYANAZ, amit a sofőr kézi jelölése (fuvar_megallok.sorszam - 1)
  * és a GPS lap is használ. Az `idopont` itt csak helykitöltő (az ablak
  * kezdete) — a GPS lap a saját menetidő-becslésével írja felül.
  */

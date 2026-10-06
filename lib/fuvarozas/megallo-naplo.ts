@@ -6,12 +6,12 @@
 // Miért kell eltárolni, ha a GPS-idővonalból amúgy is kiszámolható? Mert az
 // Ecofleet trip-előzménye nem marad meg örökre, a számlázás viszont napokkal
 // — a papír beérkezésétől függően akár hetekkel — a lerakás után történik
-// (lásd db/schema.sql, fuvar_megallo_allapot). A "mióta várunk a papírra"
+// (lásd db/migrations/001_fuvarozas2_sema.sql, fuvar_megallok). (2026-10-06) A "mióta várunk a papírra"
 // kérdéshez tehát egy tartós, a GPS-lekérdezéstől független tényleges
 // lerakás-időpont kell.
 //
-// A tábla a sofőr kézi megerősítésével közös (fuvar_megallo_allapot): ott a
-// kesz/kesz_at/kesz_by oszlopok az emberi jelölést tartják, itt a
+// A tábla a sofőr kézi megerősítésével közös (fuvar_megallok): ott a
+// sofor_kesz_at/sofor_kesz_by oszlopok az emberi jelölést tartják, itt a
 // gps_erkezes/gps_tavozas a gépi megfigyelést. A kettő szándékosan külön áll,
 // nem írják felül egymást — a sofőr megerősítése mindig erősebb bizonyíték,
 // a GPS pedig akkor is ad adatot, ha a sofőr nem jelölt semmit.

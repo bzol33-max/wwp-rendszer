@@ -12,6 +12,11 @@ export async function megalloIdTx(tx: Querier, fuvarId: string, megalloIndex: nu
   return sor?.id ?? null;
 }
 
+/** A régi sor hivatkozását a megállók törlése előtt bontja fel az FK miatt. (2026-10-06) */
+export async function regiMegalloHivatkozasokTorlese(tx: Querier, fuvarId: string): Promise<void> {
+  await tx(`update fuvar_megallo_allapot set megallo_id = null where fuvar_id = $1`, [fuvarId]);
+}
+
 async function regiSorTx(tx: Querier, fuvarId: string, index: number, mezok: {
   kesz?: boolean; keszAt?: boolean; keszBy?: boolean; erkezes?: boolean;
   varakozasKezdete?: boolean; varakozasVege?: boolean; gpsErkezes?: boolean; gpsTavozas?: boolean;

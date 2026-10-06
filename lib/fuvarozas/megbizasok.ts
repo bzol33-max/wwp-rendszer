@@ -28,7 +28,7 @@ const TIME_FMT = "mon. DD";
 
 /**
  * A fuvar TÉNYLEGES befejezése — a legkésőbbi állomás-érintés a
- * fuvar_megallo_allapot naplóból: a sofőr kézi jelölése (kesz_at), vagy ha az
+ * fuvar_megallok naplóból: a sofőr kézi jelölése (sofor_kesz_at), vagy ha az
  * nincs, a GPS-ből megfigyelt megérkezés (gps_erkezes). A max() az utolsó
  * állomást adja, ami a végső lerakás.
  *
@@ -38,9 +38,9 @@ const TIME_FMT = "mon. DD";
  * tervezett dátumra.
  */
 const LERAKAS_TENYLEGES_SQL = `(
-  select max(coalesce(ma.kesz_at, ma.gps_erkezes, ma.kezi_erkezes))::text
-  from fuvar_megallo_allapot ma
-  where ma.fuvar_id = fuvar_megbizasok.id
+  select max(coalesce(ma.sofor_kesz_at, ma.gps_erkezes, ma.sofor_megerkezett_at))::text
+  from fuvar_megallok ma
+  where ma.megbizas_id = fuvar_megbizasok.id
 )`;
 
 const FUVAR_ROW_COLUMNS = `
@@ -62,7 +62,7 @@ const FUVAR_ROW_COLUMNS = `
   (select count(*) from fuvar_dokumentumok d where d.fuvar_id = fuvar_megbizasok.id and d.tipus = 'fuvarlevel')::int as fuvarlevel_foto_db,
   (select min(d.id) from fuvar_dokumentumok d where d.fuvar_id = fuvar_megbizasok.id and d.tipus = 'fuvarlevel')::text as fuvarlevel_foto_id,
   (select coalesce(sum(extract(epoch from (coalesce(ma.varakozas_vege, now()) - ma.varakozas_kezdete)) / 60), 0)::int
-     from fuvar_megallo_allapot ma where ma.fuvar_id = fuvar_megbizasok.id and ma.varakozas_kezdete is not null) as varakozas_perc
+     from fuvar_megallok ma where ma.megbizas_id = fuvar_megbizasok.id and ma.varakozas_kezdete is not null) as varakozas_perc
 `;
 
 export async function getFuvarok(tipus: FuvarTipus): Promise<FuvarRow[]> {

@@ -10,7 +10,7 @@
 // lerakóját elhagyta — ugyanaz a jelölő, amit a kézi "Kész" gomb is állít.
 //
 // Két hibát zár ez a közös út:
-// 1. A GPS-érintések naplója (fuvar_megallo_allapot.gps_erkezes/gps_tavozas)
+// 1. A GPS-érintések naplója (fuvar_megallok.gps_erkezes/gps_tavozas). (2026-10-06)
 //    korábban csak akkor íródott, ha valaki megnyitotta a GPS lapot — most
 //    az 5 perces kör írja, nézőtől függetlenül.
 // 2. A figyelő és a lap más-más logikával döntött (a figyelő a lerakó mezőt

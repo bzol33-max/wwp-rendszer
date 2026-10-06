@@ -117,7 +117,7 @@ export async function getMaiValodiSajatFuvarok(nap?: string, csuszokIs = false):
   );
 }
 
-/** Egy fuvar-lista megállóinak kézi állapota (sofőr mobil / GPS lap jelölése) a fuvar_megallo_allapot táblából. */
+/** Egy fuvar-lista megállóinak állapota az új megállótáblából. (2026-10-06) */
 export async function getMegalloAllapotok(fuvarIds: string[]): Promise<
   {
     fuvar_id: string;
@@ -136,10 +136,11 @@ export async function getMegalloAllapotok(fuvarIds: string[]): Promise<
   // Nem csak a kész sorok: a várakozás-jelölés és a "Megérkeztem" kész
   // megálló nélkül is létezik — a GPS lap táblázata mindkettőt mutatja.
   return query(
-    `select fuvar_id::text as fuvar_id, megallo_index, kesz, kesz_by, kesz_at, kezi_erkezes, varakozas_kezdete, varakozas_vege
-     from fuvar_megallo_allapot
-     where fuvar_id = any($1::bigint[]) and (kesz or varakozas_kezdete is not null or kezi_erkezes is not null)`,
+    `select megbizas_id::text as fuvar_id, sorszam - 1 as megallo_index,
+            sofor_kesz_at is not null as kesz, sofor_kesz_by as kesz_by, sofor_kesz_at as kesz_at,
+            sofor_megerkezett_at as kezi_erkezes, varakozas_kezdete, varakozas_vege
+     from fuvar_megallok
+     where megbizas_id = any($1::bigint[]) and (sofor_kesz_at is not null or varakozas_kezdete is not null or sofor_megerkezett_at is not null)`,
     [fuvarIds]
   );
 }
-

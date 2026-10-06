@@ -225,8 +225,8 @@ export type FuvarRow = {
   /**
    * A fuvar TÉNYLEGES befejezése: a legkésőbbi állomás-érintés — a sofőr kézi
    * jelölése, vagy ha az nincs, a GPS-ből megfigyelt megérkezés (lásd
-   * fuvar_megallo_allapot és lib/fuvarozas/megallo-naplo.ts). Null, ha egyik
-   * forrásból sincs adat; ilyenkor a tervezett lerakás dátuma a tartalék.
+   * fuvar_megallok és lib/fuvarozas/megallo-naplo.ts). Null, ha egyik forrásból
+   * sincs adat; ilyenkor a tervezett lerakás dátuma a tartalék. (2026-10-06)
    *
    * A papír- és számlázási határidőket ettől kell számolni, nem a TERVEZETT
    * lerakás dátumától.

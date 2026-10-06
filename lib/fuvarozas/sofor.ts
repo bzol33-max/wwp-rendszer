@@ -5,7 +5,7 @@
 // actions.ts) használja: az minden saját járművet mutat egy vezetőnek,
 // itt viszont EGY sofőr EGY aktuális fuvarjának állomásait kell
 // megjeleníteni, kézzel jelölhető fel-/lerakási állapottal (lásd
-// db/schema.sql fuvar_megallo_allapot) — ez a GPS-alapú, csak becslésre
+// fuvar_megallok) — ez a GPS-alapú, csak becslésre
 // szolgáló "elhagyva" jelzéstől (lib/fuvarozas/idovonal.ts) független,
 // explicit sofőri megerősítés.
 
@@ -164,7 +164,8 @@ export async function visszavonMegalloKesz(fuvarId: string, megalloIndex: number
     );
     if (!sor || sor.torolt) throw new Error("A fuvar nem található.");
     const [jel] = await q<{ kesz: boolean; kesz_at: Date | null; megallo_id: string | null }>(
-      `select kesz, kesz_at, megallo_id::text from fuvar_megallo_allapot where fuvar_id = $1 and megallo_index = $2 for update`,
+      `select sofor_kesz_at is not null as kesz, sofor_kesz_at as kesz_at, id::text as megallo_id
+         from fuvar_megallok where megbizas_id = $1 and sorszam = $2 + 1 for update`,
       [fuvarId, megalloIndex]
     );
     if (!jel?.kesz) throw new Error("Ez a megálló nincs kézzel készre jelölve — nincs mit visszavonni.");
@@ -273,7 +274,7 @@ export type SoforMegalloSor = {
   /** Honnan tudjuk, hogy kész: "gps" megfigyelés vagy "kezi" megerősítés. */
   keszForras: "gps" | "kezi" | null;
   keszBy: string | null;
-  /** A kézi készre jelölés ideje (fuvar_megallo_allapot.kesz_at), ha volt. */
+  /** A kézi készre jelölés ideje (fuvar_megallok.sofor_kesz_at), ha volt. (2026-10-06) */
   keszAt: Date | null;
   /**
    * Igaz, ha a megálló kézi „Kész” jelölése még visszavonható
@@ -519,9 +520,9 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
   const [erkezesSorok, helyszinSorok] = fuvarIds.length
     ? await Promise.all([
         query<{ fuvar_id: string; megallo_index: number; kezi_erkezes: Date | null }>(
-          `select fuvar_id::text, megallo_index, kezi_erkezes
-             from fuvar_megallo_allapot
-            where fuvar_id = any($1::bigint[]) and kezi_erkezes is not null`,
+          `select megbizas_id::text as fuvar_id, sorszam - 1 as megallo_index, sofor_megerkezett_at as kezi_erkezes
+             from fuvar_megallok
+            where megbizas_id = any($1::bigint[]) and sofor_megerkezett_at is not null`,
           [fuvarIds]
         ),
         megallokKulcsai.length
@@ -649,17 +650,17 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
       id: string; megrendelo: string | null; felrako: string | null; lerako: string | null;
       jarmu: string | null; sofor: string | null; megallo_index: number; kesz_at: Date;
     }>(
-      `select distinct on (f.id) f.id::text, f.megrendelo, f.felrako, f.lerako, f.jarmu, f.sofor, a.megallo_index, a.kesz_at
+      `select distinct on (f.id) f.id::text, f.megrendelo, f.felrako, f.lerako, f.jarmu, f.sofor, a.sorszam - 1 as megallo_index, a.sofor_kesz_at as kesz_at
          from fuvar_megbizasok f
-         join fuvar_megallo_allapot a on a.fuvar_id = f.id and a.kesz
+         join fuvar_megallok a on a.megbizas_id = f.id and a.sofor_kesz_at is not null
         where f.teljesitve and f.allapot = 'teljesitve' and f.statusz <> 'torolt' and f.torolt_at is null
           and coalesce(f.szamla_szam, '') = ''
           and not exists (select 1 from fuvar_dokumentumok d where d.fuvar_id = f.id and d.tipus = 'fuvarlevel')
-          and a.kesz_at > now() - make_interval(hours => $3)
-          and abs(extract(epoch from (f.teljesitve_at - a.kesz_at))) < 120
+          and a.sofor_kesz_at > now() - make_interval(hours => $3)
+          and abs(extract(epoch from (f.teljesitve_at - a.sofor_kesz_at))) < 120
           and coalesce(f.lerakas_datum, f.datum) >= $1::date
           and not (f.id = any($2::bigint[]))
-        order by f.id, a.kesz_at desc`,
+        order by f.id, a.sofor_kesz_at desc`,
       [nap, fuvarIds, VISSZAVONAS_ORA]
     ).catch((err) => {
       console.error("[sofor] nemrég lezárt fuvarok:", err);

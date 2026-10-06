@@ -413,9 +413,10 @@ export async function getFuvarFulAdatok(): Promise<FuvarFulAdatok> {
   const maiIds = [...maiFuvarIds];
   const keziSorok = maiIds.length
     ? await query<{ fuvar_id: string; megallo_index: number; kesz_at: Date | null; kezi_erkezes: Date | null }>(
-        `select fuvar_id::text, megallo_index, kesz_at, kezi_erkezes
-           from fuvar_megallo_allapot
-          where fuvar_id = any($1::bigint[]) and (kesz_at is not null or kezi_erkezes is not null)`,
+        `select megbizas_id::text as fuvar_id, sorszam - 1 as megallo_index,
+                sofor_kesz_at as kesz_at, sofor_megerkezett_at as kezi_erkezes
+           from fuvar_megallok
+          where megbizas_id = any($1::bigint[]) and (sofor_kesz_at is not null or sofor_megerkezett_at is not null)`,
         [maiIds]
       ).catch(() => [])
     : [];

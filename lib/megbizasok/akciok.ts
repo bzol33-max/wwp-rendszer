@@ -392,8 +392,8 @@ export async function visszaveszem(id: string): Promise<Eredmeny> {
   await requireEditPermission("fuvarozas");
   const [erintett] = await query<{ n: number }>(
     `select (
-       (select count(*) from fuvar_megallo_allapot a where a.fuvar_id = $1 and (a.kesz or a.kezi_erkezes is not null)) +
-       (select count(*) from fuvar_megallok g where g.megbizas_id = $1 and (g.gps_erkezes is not null or g.sofor_kesz_at is not null))
+       (select count(*) from fuvar_megallok g where g.megbizas_id = $1 and
+         (g.sofor_kesz_at is not null or g.sofor_megerkezett_at is not null or g.gps_erkezes is not null))
      )::int as n`,
     [id]
   );

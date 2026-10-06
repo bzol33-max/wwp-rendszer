@@ -129,7 +129,7 @@ function HelyGomb({ m, pending, onHely }: { m: SoforMegalloSor; pending: boolean
  * megállón jelennek meg — a felrakónál, majd az indulás jelölése után a
  * lerakónál. Ami megvan, az zöld, órával jelölt sorrá alakul; ez a nyugtázás.
  *
- * Adat: a fuvar_megallo_allapot meglévő mezőit írják (kezi_erkezes, illetve
+ * Adat: a fuvar_megallok meglévő mezőit írják (sofor_megerkezett_at, illetve
  * kesz + kesz_at), migráció nélkül.
  */
 function LepesGombok({
