@@ -53,6 +53,12 @@ export type KozosBemenet = {
   ajanlatFt?: number;
   /** Van-e visszfuvar: ha igen, a hazaút üres km-jét nem erre a fuvarra terheljük. */
   vanVisszfuvar?: boolean;
+  /**
+   * Számoljon-e telephelyi üres km-t (telephely → első megálló, utolsó → telephely).
+   * Alapból igen (Tervezés); a Kalkulátor oldalon alapból ki van kapcsolva
+   * (Zoltán, 2026-10-06: „csak a beírt út távolságával számoljon”).
+   */
+  telephelyrol?: boolean;
 };
 
 export type KozosEredmeny = {
@@ -77,6 +83,8 @@ export type KozosEredmeny = {
   megbizoiAjanlat: (Ajanlat & { sajat: true }) | null;
   jarmuKod: string | null;
   vanVisszfuvar: boolean;
+  /** Beszámolta-e a telephelyi üres km-t. (Régi, tárolt eredményekben hiányzik — azokban igen.) */
+  telephelyrol?: boolean;
   figyelmeztetesek: string[];
 };
 
@@ -105,11 +113,16 @@ export async function kozosKalkulacio(bemenet: KozosBemenet): Promise<{ ok: true
   // Üres szakaszok: telephely → első megálló, és (ha nincs visszfuvar) utolsó megálló → telephely.
   let uresKm = 0, uresUtdij = 0, uresPerc = 0;
   const uresReszek: string[] = [];
+  const telephelyrol = bemenet.telephelyrol !== false;
   let telephely: GeocodedAddress | null = null;
-  try {
-    telephely = await geocodeAddress(TELEPHELY);
-  } catch {
-    figyelmeztetesek.push("A telephely címe nem található — az üres km nélkül a kalkuláció optimista.");
+  if (!telephelyrol) {
+    uresReszek.push("telephelyi üres km nincs beszámítva — csak a beírt út");
+  } else {
+    try {
+      telephely = await geocodeAddress(TELEPHELY);
+    } catch {
+      figyelmeztetesek.push("A telephely címe nem található — az üres km nélkül a kalkuláció optimista.");
+    }
   }
   if (telephely) {
     try {
@@ -162,7 +175,7 @@ export async function kozosKalkulacio(bemenet: KozosBemenet): Promise<{ ok: true
       literek: Math.round(((rakottKm + uresKm) * l100) / 100),
       gazolaj,
       onkoltseg, savok, megbizoiAjanlat,
-      jarmuKod: bemenet.jarmuKod ?? null, vanVisszfuvar: !!bemenet.vanVisszfuvar,
+      jarmuKod: bemenet.jarmuKod ?? null, vanVisszfuvar: !!bemenet.vanVisszfuvar, telephelyrol,
       figyelmeztetesek,
     },
   };

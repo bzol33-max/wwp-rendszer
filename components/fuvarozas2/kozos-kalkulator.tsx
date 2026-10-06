@@ -118,7 +118,7 @@ function Reszletek({ e, jarmuCimke }: { e: KozosEredmeny; jarmuCimke: string | n
       <div>
         <h3 className="font-bold">{e.stops.map((s) => s.label).join(" → ")}</h3>
         <p className="text-xs text-muted-foreground">
-          {jarmuCimke ?? "flotta-átlag"} · {e.vanVisszfuvar ? "visszfuvarral" : "hazaúttal"} · {e.napok} nap
+          {jarmuCimke ?? "flotta-átlag"} · {e.telephelyrol === false ? "csak a beírt út" : e.vanVisszfuvar ? "telephelyről, visszfuvarral" : "telephelyről, hazaúttal"} · {e.napok} nap
         </p>
       </div>
       <div>
@@ -165,6 +165,8 @@ export function KozosKalkulator({ jarmuvek, kezdoMegallok }: { jarmuvek: { kod: 
   const [jarmu, setJarmu] = useState("");
   const [ajanlat, setAjanlat] = useState("");
   const [visszfuvar, setVisszfuvar] = useState(false);
+  // Alapból csak a beírt megállók közti távval számol (Zoltán, 2026-10-06).
+  const [telephelyrol, setTelephelyrol] = useState(false);
   const [szamol, setSzamol] = useState(false);
   const [csempek, setCsempek] = useState<Csempe[]>([]);
   const [betoltve, setBetoltve] = useState(false);
@@ -215,6 +217,7 @@ export function KozosKalkulator({ jarmuvek, kezdoMegallok }: { jarmuvek: { kod: 
         jarmuKod: jarmu || undefined,
         ajanlatFt,
         vanVisszfuvar: visszfuvar,
+        telephelyrol,
       });
       if (!r.ok) { toast.error(r.hiba); return; }
       const uj = { id: ujId(), e: r.eredmeny };
@@ -275,9 +278,15 @@ export function KozosKalkulator({ jarmuvek, kezdoMegallok }: { jarmuvek: { kod: 
             <input value={ajanlat} onChange={(e) => setAjanlat(e.target.value)} inputMode="numeric" placeholder="pl. 240 000" className="w-40 rounded-lg border border-foreground/15 bg-background px-3 py-2 text-sm normal-case tracking-normal text-foreground" />
           </label>
           <label className="flex items-center gap-2 pb-2">
-            <input type="checkbox" checked={visszfuvar} onChange={(e) => setVisszfuvar(e.target.checked)} />
-            Van visszfuvar (a hazautat nem erre terheljük)
+            <input type="checkbox" checked={telephelyrol} onChange={(e) => setTelephelyrol(e.target.checked)} />
+            Telephelyről indul (üres km beszámítása)
           </label>
+          {telephelyrol ? (
+            <label className="flex items-center gap-2 pb-2">
+              <input type="checkbox" checked={visszfuvar} onChange={(e) => setVisszfuvar(e.target.checked)} />
+              Van visszfuvar (a hazautat nem erre terheljük)
+            </label>
+          ) : null}
           <button type="submit" disabled={szamol} className="ml-auto rounded-lg bg-[var(--f2-mint)] px-5 py-2 text-sm font-bold text-white disabled:opacity-60">
             {szamol ? "Számítás…" : "Számítás"}
           </button>
