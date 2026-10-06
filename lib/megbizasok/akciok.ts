@@ -219,6 +219,16 @@ export async function torolMegbizast(id: string): Promise<{ ok: true } | { ok: f
   if (sor.szamlas) return { ok: false, hiba: "Számlázott fuvar nem törölhető." };
   const ki = session.name ?? session.username;
   await query(`update fuvar_megbizasok set statusz = 'torolt', torolt_at = now(), torolt_by = $2 where id = $1`, [id, ki]);
+  // A törölt fuvarhoz párosított szállítólevél újra szabad: a 15 percenkénti
+  // párosítás (lib/fuvarozas2/szallitolevel.ts) a valódi fuvarra teheti
+  // (#274 duplikátum, 2026-10-06: az S-WLLWR-2026-165 a törölt soron ragadt
+  // volna, a #295 papír nélkül maradt volna).
+  await query(
+    `update szallitolevel_import set megbizas_id = null, parositas_allapot = 'nyitott'
+      where megbizas_id = $1 and parositas_allapot = 'parositva'`,
+    [id]
+  );
+  await query(`update fuvar_megbizasok set kulso_azonosito = null where id = $1 and kulso_azonosito like 'S-%'`, [id]);
   await query(`insert into fuvar_megbizas_esemeny (megbizas_id, esemeny, forras, ki, reszletek) values ($1, 'torolve', 'ember', $2, $3)`, [
     id, ki, JSON.stringify({ honnan: "munkaasztal" }),
   ]);
