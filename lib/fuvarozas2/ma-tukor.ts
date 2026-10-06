@@ -68,6 +68,14 @@ export type TukorFuvar = {
   jelleg: "ber" | "sajat";
   megallo_reszletek: MegalloReszlet[] | null;
   megallok: TukorMegallo[];
+  /**
+   * A fuvar már lezárult (teljesítve vagy későbbi állapot): minden megállója
+   * kész, akkor is, ha a GPS-távozás / sofőr-kész jelölés hiányzik — nem
+   * késhet, nem lehet „most” vagy „következő”. (Gergő #293, 2026-10-06:
+   * délben lerakva, este számlázva — addig eltűnt a tükörből, és a debreceni
+   * GPS-állás „nem tervezett” lett.)
+   */
+  lezart?: boolean;
 };
 
 export type TukorGpsAllas = { kezdet: Date; veg: Date; cim: string | null; percek: number; lat: number | null; lon: number | null };
@@ -143,19 +151,19 @@ export function tukorSorok(be: {
   // Ahol a kocsi MOST áll (GPS-érkezés, nincs kész) — akkor is „most”, ha egy
   // előtte álló megálló még nyitott (Micó 09-29: a két etei lerakó közül a
   // másodikon kezdett, az első „következő” lett, a valódi „most” szürke).
-  const mostItt = fuvarok.flatMap((f) => f.megallok).find((g) => g.gps_erkezes && !g.gps_tavozas && !g.sofor_kesz_at) ?? null;
+  const mostItt = fuvarok.filter((f) => !f.lezart).flatMap((f) => f.megallok).find((g) => g.gps_erkezes && !g.gps_tavozas && !g.sofor_kesz_at) ?? null;
   let kovetkezoVolt = false;
   const etaCel = be.etaCel ? ekezetNelkul(varosNev(be.etaCel) ?? be.etaCel) : null;
   for (const f of fuvarok) {
     eredmeny.push({ tipus: "fuvar", fuvarId: f.id, partner: f.partner ?? "(nincs megbízó)", hivatkozas: f.hivatkozas, jelleg: f.jelleg });
     for (const g of f.megallok) {
-      const kesz = !!(g.gps_tavozas || g.sofor_kesz_at);
+      const kesz = !!(f.lezart || g.gps_tavozas || g.sofor_kesz_at);
       const erk = idobelyeg(g.gps_erkezes ?? g.sofor_megerkezett_at ?? null);
       const tav = idobelyeg(g.gps_tavozas ?? g.sofor_kesz_at);
       const tol = idobelyeg(g.ablak_tol);
       const ig = idobelyeg(g.ablak_ig);
       const varos = varosNev(g.cim_nyers) ?? g.cim_nyers;
-      const varakozik = !!(g.varakozas_kezdete && !g.varakozas_vege);
+      const varakozik = !f.lezart && !!(g.varakozas_kezdete && !g.varakozas_vege);
 
       // A GPS nem jelzett érkezést, de a kocsi a megálló városában állt: az
       // állás ide tartozik — a megálló címe nincs pontosan meg.
@@ -185,7 +193,8 @@ export function tukorSorok(be: {
       const terv = [masNap, ablak].filter(Boolean).join(" ") || null;
 
       let teny: string | null = null;
-      if (kesz) teny = erk && tav ? `${ORA(erk)}–${ORA(tav)}` : ORA(tav ?? erk);
+      // A lezárt fuvar megállójánál időpont nélkül is kész (nincs „—”).
+      if (kesz) teny = erk && tav ? `${ORA(erk)}–${ORA(tav)}` : tav || erk ? ORA(tav ?? erk) : allas ? `állt ${allas.tol}–${allas.ig}` : null;
       else if (erk) teny = varakozik ? `várakozik ${perc(most, idobelyeg(g.varakozas_kezdete)!)} p` : `ott ${ORA(erk)} óta`;
       else if (allas) teny = allas.folyamatban ? `áll ${allas.tol} óta` : `állt ${allas.tol}–${allas.ig}`;
       else if (etaIde) teny = `ETA ${ORA(etaIde)}`;

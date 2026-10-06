@@ -169,5 +169,48 @@ eq("más célú ETA nem kerül rossz megállóra", csaszarEta.find((r) => r.tipu
   eq("még nem érkezett: késik", rakodik[2].kiemelt, "kesik");
 }
 
+// Gergő 10-06: a #293 (Lösung, lerakó Debrecen) délben lerakva, este
+// „számlázva” — lezárt fuvarként is a tükörben marad, minden megállója kész
+// (a GPS nem jelzett debreceni érkezést, a sofőr nem jelölt készt). A
+// debreceni GPS-állás a lerakóhoz tartozik, nem „nem tervezett”; a lejárt
+// ablak nem késés. A nyitott következő fuvar a „következő”.
+{
+  const n06 = (x: Partial<TukorMegallo>) => ({ tervezett_nap: "2026-10-06", ...x });
+  const t06 = (hhmm: string) => t(hhmm).replace("2026-09-28", "2026-10-06");
+  const d06 = (hhmm: string) => new Date(t06(hhmm).replace(" ", "T").replace("+00", "Z"));
+  const lezartFuvar: TukorFuvar = {
+    id: "293", partner: "Lösung", hivatkozas: null, jelleg: "ber", megallo_reszletek: null, lezart: true,
+    megallok: [
+      m(1, "felrako", "HU-9600 Sárvár, Ikervári út 42.", { tervezett_nap: "2026-10-05", gps_erkezes: "2026-10-05 08:00:00+00", gps_tavozas: "2026-10-05 09:00:00+00" }),
+      m(2, "lerako", "HU-4031 Debrecen", n06({ ablak_tol: t06("08:00"), ablak_ig: t06("10:00"), varakozas_kezdete: t06("12:05") })),
+    ],
+  };
+  const r = tukorSorok({
+    fuvarok: [
+      lezartFuvar,
+      { id: "296", partner: "Fabrika", hivatkozas: null, jelleg: "sajat", megallo_reszletek: null, megallok: [m(1, "felrako", "Hajdúszoboszló", n06({}))] },
+    ],
+    allasok: [{ kezdet: d06("12:01"), veg: d06("12:39"), cim: "Debrecen, Mikepércsi út, 4031 Magyarország", percek: 38, lat: 47.5, lon: 21.6 }],
+    eta: null, most: d06("18:55"), ma: "2026-10-06",
+  });
+  eq("Gergő 10-06: a lezárt fuvar kész, az állás a lerakónál", rovid(r), [
+    "# Lösung",
+    "Fel Sárvár [kesz]",
+    "Le Debrecen [kesz] +állás 38p",
+    "# Fabrika",
+    "Fel Hajdúszoboszló [kovetkezo]",
+  ]);
+  const db = r.find((x) => x.tipus === "megallo" && x.varos === "Debrecen") as Extract<TukorSor, { tipus: "megallo" }>;
+  eq("Gergő 10-06: lezárt megálló nem késik, nem várakozik", [db.kiemelt, db.elteres], [null, null]);
+  eq("Gergő 10-06: tény az állásból", db.teny, "állt 12:01–12:39");
+
+  // GPS-érkezés távozás nélkül: a lezárt fuvar megállója sem „most”.
+  const ott = tukorSorok({
+    fuvarok: [{ ...lezartFuvar, megallok: [m(1, "lerako", "HU-4031 Debrecen", n06({ gps_erkezes: t06("12:01") }))] }],
+    allasok: [], eta: null, most: d06("18:55"), ma: "2026-10-06",
+  });
+  eq("lezárt fuvar: GPS-érkezés távozás nélkül is kész", rovid(ott), ["# Lösung", "Le Debrecen [kesz]"]);
+}
+
 console.log(`\nMa-tükör teszt: ${ok} rendben, ${bad} hiba`);
 if (bad > 0) process.exit(1);

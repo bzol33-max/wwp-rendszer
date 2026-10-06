@@ -1,7 +1,7 @@
 // A Ma oldal heti rácsa (R2). Futtatás: npx tsx scripts/teszt-ma-het.ts
 
 import { hetCellak, hetMost, hetNapjai, hetSzama, type HetFuvar, type HetMegallo } from "@/lib/fuvarozas2/ma-het";
-import type { TukorSor } from "@/lib/fuvarozas2/ma-tukor";
+import { tukorSorok, type TukorSor } from "@/lib/fuvarozas2/ma-tukor";
 
 let ok = 0, bad = 0;
 function eq(nev: string, kapott: unknown, vart: unknown) {
@@ -62,6 +62,13 @@ eq("Most: a mostani fuvar és a haladása", hetMost(tukor), { tipus: "fuvar", fu
 eq("Most: a megállón állva sárga", (hetMost([tukor[3], tukor[4], m("295", "Tompaládony", "lerako", "most", "ott 14:40 óta")]) as { szin: string }).szin, "amber");
 eq("Most: minden kész", hetMost(tukor.slice(0, 3)), { tipus: "kesz" });
 eq("Most: nincs mai fuvar", hetMost([]), { tipus: "ures" });
+// Este a nap minden fuvarja lezárult (a lezárt fuvar is a tükörben marad, készként): „kész”, nem „üres”.
+eq("Most: a lezárt fuvarokkal kész nap", hetMost(tukorSorok({
+  fuvarok: [{ id: "293", partner: "Lösung", hivatkozas: null, jelleg: "ber", megallo_reszletek: null, lezart: true, megallok: [
+    { sorszam: 1, tipus: "lerako", cim_nyers: "HU-4031 Debrecen", ablak_tol: null, ablak_ig: "2026-10-06 08:00:00+00", gps_erkezes: null, gps_tavozas: null, sofor_kesz_at: null, varakozas_kezdete: null, varakozas_vege: null, tervezett_nap: "2026-10-06" },
+  ] }],
+  allasok: [], eta: null, most: new Date("2026-10-06T16:55:00Z"), ma: "2026-10-06",
+})), { tipus: "kesz" });
 
 console.log(`heti rács: ${ok} ok, ${bad} hiba`);
 if (bad) process.exit(1);

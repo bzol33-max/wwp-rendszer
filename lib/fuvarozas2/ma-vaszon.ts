@@ -221,13 +221,13 @@ export async function getMaVaszon(): Promise<MaVaszon> {
   const holnapCimke = holnap === naptariHolnap ? "Holnap" : "Hétfő";
 
   // 1. A nyitott megbízások (ma és holnap) kocsival, partnerrel.
-  const sorok = await query<{
+  type MegbizasSor = {
     id: string; allapot: Allapot; jelleg: "ber" | "sajat"; partner: string | null; hivatkozas: string | null;
     jarmu_kod: string | null; jarmu_cimke: string | null; sofor: string | null;
     felrakas_nap: string | null; lerakas_nap: string | null; hianylista: unknown[]; felrako: string | null; lerako: string | null;
     megallo_reszletek: MegalloReszlet[] | null;
-  }>(
-    `select m.id::text, m.allapot, m.jelleg, coalesce(p.nev, m.megrendelo) as partner,
+  };
+  const MEGBIZAS_OSZLOPOK = `m.id::text, m.allapot, m.jelleg, coalesce(p.nev, m.megrendelo) as partner,
        coalesce(m.hivatkozas_kanonikus, m.pozicioszam, m.reise_id) as hivatkozas,
        j.kod as jarmu_kod, coalesce(j.cimke, m.jarmu) as jarmu_cimke, coalesce(a.name, m.sofor) as sofor,
        to_char(m.datum, 'YYYY-MM-DD') as felrakas_nap,
@@ -236,20 +236,46 @@ export async function getMaVaszon(): Promise<MaVaszon> {
      from fuvar_megbizasok m
      left join fuvar_partnerek p on p.id = m.partner_id
      left join fuvar_jarmuvek j on j.id = m.jarmu_id
-     left join alkalmazottak a on a.id = m.sofor_id
+     left join alkalmazottak a on a.id = m.sofor_id`;
+  const sorok = await query<MegbizasSor>(
+    `select ${MEGBIZAS_OSZLOPOK}
      where m.torolt_at is null and m.allapot in ('ellenorzesre_var','tervezett','folyamatban')
        and coalesce(m.lerakas_datum, m.datum) >= $1::date - 3 and m.datum <= $2::date
      order by m.datum, m.id`,
     [ma, holnap]
   );
 
-  const megallok = sorok.length
+  // 1b. A ma már lezárult (teljesítve vagy későbbi állapotú) fuvarok — CSAK a
+  // kocsi tükréhez (a nap munkája), az eltérések, csempék, holnap és az
+  // ütközés továbbra is csak a nyitottakból számol. Gergő #293 (Lösung,
+  // lerakó Debrecen, 2026-10-06): 12:01–12:39 lerakva, 18:50-re fotóval és
+  // számlával „számlázva” lett — onnantól a mai megállói eltűntek a tükörből,
+  // és a debreceni GPS-állás „nem tervezett” lett. Ma: a felrakás vagy a
+  // lerakás napja ma, egy megálló tervezett napja ma, vagy ma érintette.
+  const lezartMaiak = await query<MegbizasSor>(
+    `select ${MEGBIZAS_OSZLOPOK}
+     where m.torolt_at is null and m.jarmu_id is not null
+       and m.allapot in ('teljesitve','szamlazhato','szamlazva','email_elment','postazva','lezart')
+       and m.datum <= $1::date and coalesce(m.lerakas_datum, m.datum) >= $1::date - 7
+       and (m.datum = $1::date or coalesce(m.lerakas_datum, m.datum) = $1::date
+         or exists (select 1 from fuvar_megallok g where g.megbizas_id = m.id and (
+           g.tervezett_nap = $1::date
+           or (g.gps_erkezes at time zone 'Europe/Budapest')::date = $1::date
+           or (g.gps_tavozas at time zone 'Europe/Budapest')::date = $1::date
+           or (g.sofor_megerkezett_at at time zone 'Europe/Budapest')::date = $1::date
+           or (g.sofor_kesz_at at time zone 'Europe/Budapest')::date = $1::date)))
+     order by m.datum, m.id`,
+    [ma]
+  ).catch(() => [] as MegbizasSor[]);
+
+  const megbizasIdk = [...sorok, ...lezartMaiak].map((s) => s.id);
+  const megallok = megbizasIdk.length
     ? await query<MegalloSor>(
         `select megbizas_id::text, sorszam, tipus, cim_nyers, telepules,
            ablak_tol::text, ablak_ig::text, gps_erkezes::text, gps_tavozas::text,
            sofor_megerkezett_at::text, sofor_kesz_at::text, varakozas_kezdete::text, varakozas_vege::text, tervezett_nap::text
          from fuvar_megallok where megbizas_id = any($1::bigint[]) order by megbizas_id, sorszam`,
-        [sorok.map((s) => s.id)]
+        [megbizasIdk]
       )
     : [];
   const megalloMap = new Map<string, MegalloSor[]>();
@@ -606,6 +632,8 @@ export async function getMaVaszon(): Promise<MaVaszon> {
     const sajat = sorok.filter((s) => s.jarmu_kod === j.kod && s.allapot !== "ellenorzesre_var");
     // Ma: a mai napra eső, és a korábbról csúszó, még folyamatban lévő fuvarok.
     const maiak = sajat.filter((s) => aznap(s, ma) || ((s.lerakas_nap ?? "") < ma && s.allapot === "folyamatban"));
+    // A tükörbe a ma lezárultak is (készként) — a holnapi folytatást nem jelzik.
+    const maiLezartak = lezartMaiak.filter((s) => s.jarmu_kod === j.kod);
     // A holnapi fuvarok a menet sorrendjében, nem a rögzítésében (napi-sorrend.ts).
     const holnapiak = napiSorrend(
       sajat.filter((s) => aznap(s, holnap) && !maiak.includes(s)),
@@ -643,9 +671,10 @@ export async function getMaVaszon(): Promise<MaVaszon> {
       napiKm: elo?.napiKm ?? null,
       etaSor,
       sorok: tukorSorok({
-        fuvarok: maiak.map((s) => ({
+        fuvarok: [...maiak, ...maiLezartak].map((s) => ({
           id: s.id, partner: s.partner, hivatkozas: s.hivatkozas, jelleg: s.jelleg,
           megallo_reszletek: s.megallo_reszletek, megallok: megalloMap.get(s.id) ?? [],
+          lezart: maiLezartak.includes(s),
         })),
         // A GPS nem tervezett állásai, a koordinátájukkal (az idővonal állás-szakaszából).
         allasok: (elo?.nemTervezettAllasok ?? []).map((a) => {
