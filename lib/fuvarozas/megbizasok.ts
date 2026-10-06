@@ -1,20 +1,19 @@
 "use server";
 
-import { query } from "@/lib/db";
+import { query, withTransaction } from "@/lib/db";
 import { frissitsdFuvarozas2Modellt } from "@/lib/fuvarozas2/modell-szinkron";
 import { requireAnyEditPermission, requireAnyViewPermission, requireEditPermission, requireViewPermission } from "@/lib/auth/require-permission";
 import { kanonikusMegrendeloNev } from "@/lib/fuvarozas/megrendelo-nev";
 import { FUVAR_HELY_SQL, FUVAR_MA_SQL } from "@/lib/fuvarozas/fuvar-hely";
 import { toroljIdovonalCachet } from "@/lib/fuvarozas/idovonal-cache";
 import { bontsMegallokra } from "@/lib/fuvarozas/varos";
-import { kiegAlap, parositKiegSzamlakat, parositSzamlakat } from "@/lib/fuvarozas/szamla-parositas";
+import { fuvarSzamlaTukor, kiegAlap, parositKiegSzamlakat, parositSzamlakat } from "@/lib/fuvarozas/szamla-parositas";
 import { requireSession } from "@/lib/auth/dal";
 import type {
   FuvarTipus,
   FuvarRow,
   MaiFuvarSor,
   AddFuvarInput,
-  ApproveFuvarInput,
   FuvarErintesSor,
   FuvardijPenznem } from "@/lib/fuvarozas/fuvar-constants";
 
@@ -215,12 +214,6 @@ export async function addFuvar(input: AddFuvarInput): Promise<string | null> {
   return id;
 }
 
-export async function deleteFuvar(id: string) {
-  await requireEditPermission("fuvarozas");
-  // Nem töröljük fizikailag — "Törölt" státuszba kerül, hogy a naplózás megmaradjon.
-  await query(`update fuvar_megbizasok set statusz = 'torolt' where id = $1`, [id]);
-}
-
 /**
  * Egy Drive-ból importált megbízás ÚJRAOLVASÁSRA felszabadítása: a sor
  * törölt lesz, és elengedi a Drive-iratot (dokumentum_url, drive_file_id),
@@ -385,48 +378,10 @@ export async function jelolTeljesitveGpsAlapjan(id: string): Promise<boolean> {
   return irt.length > 0;
 }
 
-export async function setFuvarTeljesitve(id: string, teljesitve: boolean) {
-  await requireEditPermission("fuvarozas");
-  await query(
-    `update fuvar_megbizasok set teljesitve = $2, teljesitve_at = case when $2 then now() else null end where id = $1`,
-    [id, teljesitve]
-  );
-  toroljIdovonalCachet();
-}
-
 // Az "effektíve archivált" (postázva + 5 perc) és a "munka kész" feltétel,
 // valamint a fülek közti besorolás EGY helyen él: lib/fuvarozas/fuvar-hely.ts
 // (FUVAR_HELY_SQL). Az alábbi lekérdezések csak azt szűrik, hogy a sor helye
 // melyik fül — a szabályt ott módosítsd, ne itt.
-
-/** Egy papírra váró fuvar minimális adatai a nyugtázó sávhoz. */
-export type PapirraVaroFuvar = {
-  id: string;
-  megrendelo: string | null;
-  felrako: string | null;
-  lerako: string;
-  jarmu: string | null;
-  sofor: string | null;
-  datum: string;
-};
-
-/**
- * A Számla/Posta fülön álló, papírra még váró fuvarok — a telephelyi
- * nyugtázó sávhoz (lásd getPapirNyugtazasJavaslat az actions.ts-ben), ahol a
- * hazaért kocsi fuvarjait egy listából lehet kipipálni.
- */
-export async function getPapirraVaroFuvarok(): Promise<PapirraVaroFuvar[]> {
-  await requireViewPermission("fuvarozas");
-  return query<PapirraVaroFuvar>(
-    `select id::text, megrendelo, felrako, lerako, jarmu, sofor,
-       to_char(coalesce(lerakas_datum, datum), 'YYYY-MM-DD') as datum
-     from fuvar_megbizasok
-     where statusz <> 'torolt' and ${FUVAR_HELY_SQL} = 'szamla_posta'
-       and papirok_beerkeztek_at is null
-     order by coalesce(lerakas_datum, datum) asc, id asc
-     limit 100`
-  );
-}
 
 /**
  * A fuvaron álló számlaszám egy sztornózott (törölt/teljesen helyesbített)
@@ -463,7 +418,7 @@ export async function szinkronizalSzamlaSzamokat(): Promise<number> {
        m.felrako, m.lerako
      from fuvar_megbizasok m
      left join fuvar_partnerek p on p.id = m.partner_id
-     where m.tipus = 'sajat' and m.statusz <> 'torolt' and m.torolt_at is null
+     where m.jelleg = 'ber' and m.tipus = 'sajat' and m.statusz <> 'torolt' and m.torolt_at is null
        and (coalesce(m.szamla_szam, '') = '' or ${SZTORNOZOTT_SZAMLA_SQL})
        and coalesce(m.lerakas_datum, m.datum) >= current_date - 180`
   );
@@ -506,13 +461,27 @@ export async function szinkronizalSzamlaSzamokat(): Promise<number> {
 
   let talalatDarab = 0;
   for (const p of parok) {
-    const frissitve = await query<{ id: string; regi: string | null }>(
-      `update fuvar_megbizasok m set szamla_szam = $2
-       from (select szamla_szam as regi from fuvar_megbizasok where id = $1) r
-       where m.id = $1 and (coalesce(m.szamla_szam, '') = '' or ${SZTORNOZOTT_SZAMLA_SQL})
-       returning m.id::text, nullif(r.regi, '') as regi`,
-      [p.fuvarId, p.szamlaszam]
+    const [sz] = await query<{ id: string; kelt: string | null }>(
+      `select id::text, to_char(kiallitas_datum, 'YYYY-MM-DD') as kelt from szamla where szamlaszam = $1`,
+      [p.szamlaszam]
     );
+    const tukor = fuvarSzamlaTukor(p.szamlaszam, sz);
+    const frissitve = await withTransaction(async (tx) => {
+      const rows = await tx<{ id: string; regi: string | null }>(
+        `update fuvar_megbizasok m set szamla_szam = $2
+         from (select szamla_szam as regi from fuvar_megbizasok where id = $1) r
+         where m.id = $1 and m.jelleg = 'ber' and (coalesce(m.szamla_szam, '') = '' or ${SZTORNOZOTT_SZAMLA_SQL})
+         returning m.id::text, nullif(r.regi, '') as regi`,
+        [p.fuvarId, tukor.szamlaSzam]
+      );
+      if (rows.length) await tx(
+        `insert into fuvar_elszamolas (megbizas_id, szamla_szam, szamla_id, szamla_kelte)
+         values ($1, $2, $3, $4) on conflict (megbizas_id) do update set
+         szamla_szam = excluded.szamla_szam, szamla_id = excluded.szamla_id, szamla_kelte = excluded.szamla_kelte, frissitve_at = now()`,
+        [p.fuvarId, tukor.szamlaSzam, tukor.szamlaId, tukor.szamlaKelte]
+      );
+      return rows;
+    });
     if (frissitve.length === 0) continue;
     talalatDarab++;
     const regi = frissitve[0].regi;
@@ -596,58 +565,18 @@ export async function getParositatlanFuvarszamlak(napok = 60): Promise<{
 /** A Számla/Posta nézet soron belüli, azonnali javítása: a kiállított számla sorszámának kitöltése. */
 export async function setFuvarSzamlaSzam(id: string, szamlaSzam: string | null) {
   await requireEditPermission("fuvarozas");
-  await query(`update fuvar_megbizasok set szamla_szam = $2 where id = $1`, [
-    id,
-    szamlaSzam || null,
-  ]);
-}
-
-/** A "Jóváhagy" / "Módosít" gomb: a mezőket (esetleg módosítva) menti, és ellenorzott = true. */
-export async function approveFuvar(input: ApproveFuvarInput) {
-  await requireEditPermission("fuvarozas");
-  const megrendelo = await kanonikusMegrendeloNev(input.megrendelo);
-  await query(
-    `update fuvar_megbizasok set
-       tipus = $2, datum = $3, idopont = $4, felrako = $5, lerako = $6,
-       megrendelo = $7, aru = $8, mennyiseg = $9, suly = $10,
-       jarmu = $11, sofor = $12, alvallalkozo = $13,
-       fuvardij = $14, koltseg = $15, megjegyzes = $16,
-       pozicioszam = $17, pozicioszam_nincs = $18,
-       postazasi_cim = $19, fuvardij_penznem = $20,
-       lerakas_datum = $21,
-       -- A Fuvarozás 2 kulcsai (partner_id, jarmu_id) a szövegből épülnek, de
-       -- csak a beolvasáskor: ha itt MÁS lesz a megrendelő vagy a kocsi, a
-       -- régi kulcsot eldobjuk, és lent a szövegből újra kitöltjük. Enélkül
-       -- a jóváhagyáskor kiosztott kocsi a Fuvarozás 2 listán "kocsi
-       -- nélkül" maradt (Huncargo 26S009326/1, Gergő, 2026-09-24). Az
-       -- UPDATE jobb oldalán a megrendelo/jarmu még a RÉGI érték.
-       partner_id = case when megrendelo is distinct from $7 then null else partner_id end,
-       jarmu_id = case when jarmu is distinct from $11 or sofor is distinct from $12 then null else jarmu_id end,
-       ellenorzott = true
-     where id = $1`,
-    [
-      input.id,
-      input.tipus,
-      input.datum,
-      input.idopont || null,
-      input.felrako,
-      input.lerako,
-      megrendelo,
-      input.aru || null,
-      input.mennyiseg || null,
-      input.suly || null,
-      input.jarmu || null,
-      input.sofor || null,
-      input.alvallalkozo || null,
-      input.fuvardij ?? null,
-      input.koltseg ?? null,
-      input.megjegyzes || null,
-      input.pozicioszam || null,
-      input.pozicioszamNincs ?? false,
-      input.postazasiCim || null,
-      input.fuvardijPenznem ?? "Ft",
-      input.lerakasDatum || null,
-    ]
-  );
-  await frissitsdFuvarozas2Modellt(input.id);
+  const szam = szamlaSzam?.trim() || null;
+  const [sz] = szam ? await query<{ id: string; kelt: string | null }>(
+    `select id::text, to_char(kiallitas_datum, 'YYYY-MM-DD') as kelt from szamla where szamlaszam = $1`, [szam]
+  ) : [undefined];
+  const tukor = fuvarSzamlaTukor(szam, sz);
+  await withTransaction(async (tx) => {
+    const sor = await tx<{ jelleg: string }>(`update fuvar_megbizasok set szamla_szam = $2 where id = $1 returning jelleg`, [id, szam]);
+    if (sor[0]?.jelleg === "ber") await tx(
+      `insert into fuvar_elszamolas (megbizas_id, szamla_szam, szamla_id, szamla_kelte)
+       values ($1, $2, $3, $4) on conflict (megbizas_id) do update set
+       szamla_szam = excluded.szamla_szam, szamla_id = excluded.szamla_id, szamla_kelte = excluded.szamla_kelte, frissitve_at = now()`,
+      [id, tukor.szamlaSzam, tukor.szamlaId, tukor.szamlaKelte]
+    );
+  });
 }

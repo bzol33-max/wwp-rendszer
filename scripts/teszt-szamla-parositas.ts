@@ -9,7 +9,7 @@
 //     megbízáson pozíciószámként a megbízás sorszáma (2026/01201).
 //   Hajdúspedíció — a megbízáson nincs szám: tartalék-kör.
 
-import { kiegAlap, parositKiegSzamlakat, parositSzamlakat, partnerEgyezik, szamKulcs, utvonalEgyezik, type ParositasFuvar, type ParositasSzamla } from "@/lib/fuvarozas/szamla-parositas";
+import { fuvarSzamlaTukor, kiegAlap, parositKiegSzamlakat, parositSzamlakat, partnerEgyezik, szamKulcs, utvonalEgyezik, type ParositasFuvar, type ParositasSzamla } from "@/lib/fuvarozas/szamla-parositas";
 
 let ok = 0, bad = 0;
 function eq(nev: string, kapott: unknown, vart: unknown) {
@@ -26,6 +26,8 @@ const szamla = (s: Partial<ParositasSzamla> & { szamlaszam: string }): Parositas
 });
 
 // --- segédfüggvények
+eq("számlatükör ismert számla", fuvarSzamlaTukor("WLLWR-2026-320", { id: "42", kelt: "2026-09-24" }), { szamlaSzam: "WLLWR-2026-320", szamlaId: "42", szamlaKelte: "2026-09-24" });
+eq("számlatükör ismeretlen számla", fuvarSzamlaTukor("kézi-1"), { szamlaSzam: "kézi-1", szamlaId: null, szamlaKelte: null });
 eq("szamKulcs ékezet/perjel", szamKulcs("ÁJ/2026/09/1279"), "aj2026091279");
 eq("szamKulcs szóközök", szamKulcs("R16 / 2546 / 3003"), szamKulcs("R16/2546/3003"));
 eq("partner: ÁB SPEED Kft. ~ ÁB Speed Szállítmányozási Kft.", partnerEgyezik("ÁB SPEED Kft.", ["ÁB Speed Szállítmányozási Kft."]), true);

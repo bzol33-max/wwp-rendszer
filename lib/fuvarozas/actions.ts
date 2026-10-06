@@ -9,7 +9,7 @@ import "server-only";
 import { query } from "@/lib/db";
 import { getMaiSajatFuvarok, getMaiValodiSajatFuvarok, getMegalloAllapotok } from "@/lib/fuvarozas/napi-fuvarok";
 import { betoltEloElozmenyt, getEloElozmeny, rogzitEloMegfigyelest } from "./elo-elozmeny";
-import { getFleetLastPositions, getVehicleTrips, parseEcofleetTimestamp, EcofleetError, type EcofleetPosition, type EcofleetTrip } from "./ecofleet";
+import { getFleetLastPositions, getVehicleTrips, parseEcofleetTimestamp, EcofleetError, type EcofleetTrip } from "./ecofleet";
 import {
   calculateToll,
   FIXED_VEHICLE,
@@ -42,11 +42,7 @@ import { SAJAT_JARMUVEK, resolveJarmu, type JarmuSzin, type SajatJarmu } from ".
 import { bontsMegallokra, cimPontossaga, varosNev } from "./varos";
 import { geokodolCachelve, megalloAblakKezdet, megalloAblakTagithato, mozogE } from "./erintes-felismeres";
 import { cachelve } from "./idovonal-cache";
-import {
-  getFuvarokIdoszakban,
-  getPapirraVaroFuvarok,
-  type PapirraVaroFuvar,
-} from "./megbizasok";
+import { getFuvarokIdoszakban } from "./megbizasok";
 import type { FuvardijPenznem, FuvarTipus, MaiFuvarSor } from "./fuvar-constants";
 import { budapestFalioraToInstant, budapestHetNapja, budapestNapISO, budapestOra, formatBudapestFaliora } from "./idozona";
 import { SAJAT_TELEPHELYEK } from "./telephelyek";
@@ -911,48 +907,6 @@ function fuvarBlokkok(
  * (kész) jelöli, ha a jármű már ott járt és azóta tovább is ment — lásd
  * jelolMegallokElhagyottkent.
  */
-export type PapirNyugtazasJavaslat = {
-  sofor: string;
-  szin: JarmuSzin;
-  /** A telephely olvasható neve, ahol a kocsi éppen áll (pl. "Szakoly (telephely)"). */
-  telephely: string;
-  fuvarok: PapirraVaroFuvar[];
-};
-
-/**
- * Melyik kocsi ért haza úgy, hogy van nála papírra váró fuvar — ebből lesz a
- * Számla/Posta fül tetején a nyugtázó sáv.
- *
- * Szándékosan csak JAVASLAT, nem automatikus lépés: a kamion behajthat a
- * telephelyre anélkül, hogy a sofőr behozná a papírokat, és egy fordulóból
- * több megbízás papírja is érkezhet egyszerre. A rendszer tehát megszólal, a
- * nyugtázás viszont mindig emberi kattintás.
- *
- * A még munkába nem állt (Ecofleet-azonosító nélküli) járműveket kihagyja —
- * azoknál nincs mit figyelni, amíg meg nem kapják az azonosítót.
- */
-export async function getPapirNyugtazasJavaslat(): Promise<PapirNyugtazasJavaslat[]> {
-  const [papirraVarok, poziciok, telephelyek] = await Promise.all([
-    getPapirraVaroFuvarok().catch(() => [] as PapirraVaroFuvar[]),
-    getFleetLastPositions().catch(() => [] as EcofleetPosition[]),
-    getTelephelyPontok().catch(() => [] as TelephelyPont[]),
-  ]);
-  if (papirraVarok.length === 0) return [];
-
-  const javaslatok: PapirNyugtazasJavaslat[] = [];
-  for (const jarmu of SAJAT_JARMUVEK) {
-    if (!jarmu.ecofleetObjectId) continue;
-    const poz = poziciok.find((p) => p.objectId === jarmu.ecofleetObjectId);
-    if (!poz) continue;
-    const telephely = talalSajatTelephelyet(poz.latitude, poz.longitude, telephelyek);
-    if (!telephely) continue;
-    const fuvarok = papirraVarok.filter((f) => driverMatchesRow(jarmu, f));
-    if (fuvarok.length === 0) continue;
-    javaslatok.push({ sofor: jarmu.sofor, szin: jarmu.szin, telephely, fuvarok });
-  }
-  return javaslatok;
-}
-
 /** Az idővonal-eredmény érvényessége a gyorsítótárban: a mai nap élő, a lezárt napok csak a kézi jelölésekkel változnak. */
 const IDOVONAL_CACHE_MA_MS = 60 * 1000;
 const IDOVONAL_CACHE_MULT_MS = 10 * 60 * 1000;
@@ -1274,4 +1228,3 @@ export async function searchAddressSuggestions(query: string): Promise<GeocodedA
 export type TollCalcResult =
   | { ok: true; stops: GeocodedAddress[]; route: TollRoute }
   | { ok: false; error: string };
-

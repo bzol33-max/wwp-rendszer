@@ -115,7 +115,7 @@ export async function getMegbizasok(szuro: {
   toroltIs?: boolean;
   limit?: number;
 } = {}): Promise<MegbizasSor[]> {
-  await requireAnyViewPermission(["fuvarozas", "elszamolas"]);
+  await requireAnyViewPermission(["fuvarozas", "elszamolas", "attekintes"]);
   const felt: string[] = ["m.allapot is not null"];
   const par: unknown[] = [];
   if (!szuro.toroltIs) felt.push("m.torolt_at is null");

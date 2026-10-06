@@ -48,6 +48,14 @@ export type ParositasSzamla = {
 
 export type Parositas = { fuvarId: string; szamlaszam: string; mod: "szam" | "irat_szoveg" | "partner_osszeg_datum_utvonal" | "partner_osszeg_datum" };
 
+/** A régi számlaszám-írás új elszámolási tüköradata (2026-10-06). */
+export function fuvarSzamlaTukor(
+  szamlaSzam: string | null,
+  szamla?: { id: string; kelt: string | null }
+) {
+  return { szamlaSzam, szamlaId: szamla?.id ?? null, szamlaKelte: szamla?.kelt ?? null };
+}
+
 /** Írásmód-független kulcs: ékezet, kis-nagybetű és minden nem betű/szám nélkül. */
 export function szamKulcs(s: string | null | undefined): string {
   return (s ?? "")

@@ -77,6 +77,7 @@ const szabina: Permissions = {
 eq("Szabina: elszámolás szerkeszt", szerkeszt(szabina, "elszamolas"), true);
 eq("Szabina: teljes Fuvarozás nem (GPS-részlet nélkül — S16)", lat(szabina, "fuvarozas"), false);
 eq("Szabina: rendszer nem", lat(szabina, "rendszer"), false);
+eq("csak Áttekintés: posta olvasás, fuvarozás írás nélkül", [lat({ attekintes: { view: true, edit: false } }, "attekintes"), szerkeszt({ attekintes: { view: true, edit: false } }, "fuvarozas")], [true, false]);
 
 // 4. Sofőr: csak a saját fuvar (fuvarozas_sajat) — a szerver a saját kocsira szűr.
 const sofor: Permissions = {

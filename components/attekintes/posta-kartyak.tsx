@@ -36,7 +36,7 @@ async function lepes(id: string, hova: "postazva" | "szamlazva"): Promise<string
   return r.allapot;
 }
 
-export function PostaKartyak({ varnak, maPostazott }: { varnak: MegbizasSor[]; maPostazott: MegbizasSor[] }) {
+export function PostaKartyak({ varnak, maPostazott, szerkeszthet }: { varnak: MegbizasSor[]; maPostazott: MegbizasSor[]; szerkeszthet: boolean }) {
   const router = useRouter();
   // id → a pipálás utáni állapot ("lezart", vagy "postazva", ha a partner
   // miatt nem zárult le); amíg itt van, a kártya zöld és visszavonható.
@@ -135,7 +135,7 @@ export function PostaKartyak({ varnak, maPostazott }: { varnak: MegbizasSor[]; m
             <div className="text-xs text-[var(--at-muted)]">
               {[s.hivatkozas, nap(s.lerakas_nap)].filter(Boolean).join(" · ")}
             </div>
-            <button
+            {szerkeszthet ? <button
               type="button"
               disabled={folyamatban === s.id}
               onClick={() => (kesz ? visszavon(s) : postazva(s))}
@@ -146,7 +146,7 @@ export function PostaKartyak({ varnak, maPostazott }: { varnak: MegbizasSor[]; m
               }`}
             >
               {folyamatban === s.id ? "…" : kesz ? "Visszavonás" : "Postázva"}
-            </button>
+            </button> : null}
             {kesz ? (
               <div className="text-center text-xs text-[var(--at-positive)]">Postázva — 1 perc múlva az archívba kerül</div>
             ) : null}
