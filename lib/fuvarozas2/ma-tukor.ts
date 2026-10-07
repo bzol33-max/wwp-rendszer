@@ -168,6 +168,13 @@ export function tukorSorok(be: {
       // A GPS nem jelzett érkezést, de a kocsi a megálló városában állt: az
       // állás ide tartozik — a megálló címe nincs pontosan meg.
       let allas: TukorAllas | null = null;
+      // A megálló GPS-érintése maga is egy állás: az időben vele átfedő állás
+      // ne jelenjen meg külön „nem tervezett”-ként (#300 Olaszliszka,
+      // 2026-10-07: a városszintű egyezés Erdőbényén volt, a sor duplán látszott).
+      if (erk) {
+        const veg = tav ?? most;
+        for (const x of allasok) if (!x.felhasznalva && x.kezdet <= veg && x.veg >= erk) x.felhasznalva = true;
+      }
       if (!erk) {
         const v = ekezetNelkul(varos);
         const a = v.length >= 3 ? allasok.find((x) => !x.felhasznalva && ekezetNelkul(x.cim ?? "").includes(v)) : undefined;
