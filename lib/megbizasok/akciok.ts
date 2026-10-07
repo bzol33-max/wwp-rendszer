@@ -468,7 +468,7 @@ export async function mentSajatFuvart(id: string | null, nyers: SajatFuvarAdat, 
   // maradt — a szöveg így nem változott, és az MTS mindig visszajött.
   const frissitve = await query<{ id: string }>(
     `update fuvar_megbizasok set datum = $2, felrako = $3, lerako = $4, megrendelo = $5, megjegyzes = $6, elokeszites_jarmu = $7,
-       idopont_nyitott = case when $7 is not null then false else idopont_nyitott end,
+       idopont_nyitott = case when $7::text is not null then false else idopont_nyitott end,
        kitol = $9,
        partner_id = case when exists (select 1 from fuvar_partnerek p where p.id = partner_id and p.nev_kulcs = $8::text)
                          then partner_id end
