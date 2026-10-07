@@ -38,7 +38,9 @@ export async function valtAllapot(
 ): Promise<{ ok: true; allapot: Allapot } | { ok: false; hiba: string }> {
   await requireAnyEditPermission(["fuvarozas", "elszamolas"]);
   const session = await requireSession();
-  return withTransaction((tx) => valtAllapotTx(tx, id, hova, opciok, session.name ?? session.username));
+  const eredmeny = await withTransaction((tx) => valtAllapotTx(tx, id, hova, opciok, session.name ?? session.username));
+  toroljIdovonalCachet();
+  return eredmeny;
 }
 
 export async function setSzamlaSzam(id: string, szamlaSzam: string | null): Promise<{ ok: true } | { ok: false; hiba: string }> {

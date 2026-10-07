@@ -20,6 +20,7 @@
 //
 // NEM "use server" fájl: import-oldali segéd, a hívói szerver-modulok.
 
+import { toroljIdovonalCachet } from "@/lib/fuvarozas/idovonal-cache";
 import { query } from "@/lib/db";
 import { megalloTerv } from "@/lib/fuvarozas2/megallo-terv";
 import { normalizaltCegKulcs } from "@/lib/fuvarozas/fuvar-constants";
@@ -59,6 +60,10 @@ export type ModellSzinkronEredmeny = {
  * nem bukhat el azon, hogy a partner-kulcs nem áll össze.
  */
 export async function frissitsdFuvarozas2Modellt(fuvarId: string): Promise<ModellSzinkronEredmeny> {
+  // A sofőr appja és a GPS lap az idővonalat gyorsítótárból adja (a holnapit
+  // 10 percig) — egy megbízás változása után azonnal frissüljön (2026-10-07:
+  // az újraolvasott Flott-Trans fuvar nem jelent meg Micó telefonján).
+  toroljIdovonalCachet();
   const ures: ModellSzinkronEredmeny = { megallo: 0, partner: false, jarmu: false, hivatkozas: false };
   try {
     const [sor] = await query<Sor>(

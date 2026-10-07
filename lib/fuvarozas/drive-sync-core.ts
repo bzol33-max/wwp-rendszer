@@ -26,6 +26,7 @@
 // kizárólag async függvényeket exportálhatnak).
 
 // Csak a Drive v3 kliens (audit DEP-4: a teljes googleapis csomag 209 MB volt).
+import { toroljIdovonalCachet } from "@/lib/fuvarozas/idovonal-cache";
 import { auth as googleAuth, drive as googleDrive } from "@googleapis/drive";
 import { egyetlenPeldanyban, query, ZAR_KULCS } from "@/lib/db";
 import {
@@ -811,6 +812,8 @@ async function ujFajlokFeldolgozasa(
     }
   }
 
+  // Új vagy módosult sor után a sofőr app / GPS lap idővonala azonnal friss legyen.
+  if (ujFuvarok > 0 || osszefuzottDokumentumok > 0 || levaltottRegiSorok > 0) toroljIdovonalCachet();
   return {
     ujFuvarok,
     vizsgaltFajlok: fajlok.length,
