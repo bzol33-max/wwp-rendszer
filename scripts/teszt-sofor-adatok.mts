@@ -168,6 +168,21 @@ eq("06-os marad", kontaktTelefon("06 30 123 4567"), "06301234567");
   eq("Flott-Trans felrakó ideje a címkéből", a.megallok[0].ido, "06:00");
   eq("Flott-Trans lerakó ideje a címkéből", a.megallok[1].ido, "12:00");
   eq("Flott-Trans lerakó napja", a.megallok[1].nap, "2026-10-08");
+  // A szerver PDF-olvasója (pdf-parse) a két címkét egymás után, az
+  // értékeket FORDÍTVA adja — itt a szöveg nem segít, a pozíció igen.
+  const pdfParseSzoveg = "Felrakodás dátuma és időpontja:\nKiszolgáltatás dátuma és időpontja:\nRendszám: NMZ492\n2026.10.08 12:00 -\n2026.10.08 06:00";
+  const elemek = [
+    { oldal: 1, x: 30, y: 711, str: "Felrakodás dátuma és időpontja:" },
+    { oldal: 1, x: 30, y: 694, str: "Kiszolgáltatás dátuma és időpontja:" },
+    { oldal: 1, x: 444, y: 711, str: "Rendszám:" },
+    { oldal: 1, x: 198, y: 694, str: "2026.10.08 12:00 -" },
+    { oldal: 1, x: 178, y: 711, str: "2026.10.08 06:00" },
+  ];
+  const poz = soforAdatokKivonatbol(modell, pdfParseSzoveg, elemek);
+  eq("pozícióból: felrakó 06:00", poz.megallok[0].ido, "06:00");
+  eq("pozícióból: lerakó 12:00", poz.megallok[1].ido, "12:00");
+  const csakSzoveg = soforAdatokKivonatbol(modell, pdfParseSzoveg);
+  eq("fordított szöveg, pozíció nélkül: nem talál rossz párt", csakSzoveg.megallok[0].ido, "12:00 -");
   const cimkeNelkul = soforAdatokKivonatbol(modell, "Felrakás: Nyírbátor");
   eq("címke nélkül marad a modell tippje", cimkeNelkul.megallok[0].ido, "12:00 -");
 }

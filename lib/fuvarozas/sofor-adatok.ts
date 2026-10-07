@@ -87,10 +87,40 @@ export function cimkesIdopontok(nyersSzoveg: string): { felrako: { nap: string; 
   return { felrako: olvas(nyersSzoveg.match(CIMKES_FELRAKAS)), lerako: olvas(nyersSzoveg.match(CIMKES_LERAKAS)) };
 }
 
-export function soforAdatokKivonatbol(nyers: unknown, nyersSzoveg?: string | null): SoforAdatok {
+type Elem = { oldal: number; x: number; y: number; str: string };
+const DATUM_IDO = /^(\d{4})\.\s*(\d{2})\.\s*(\d{2})\.?\s*([0-2]?\d:[0-5]\d(?:\s*-\s*(?:[0-2]?\d:[0-5]\d)?)?)?\s*$/;
+
+/**
+ * Ugyanez az oldal-koordinátákból: a címkével EGY SORBAN (±3 pont), tőle
+ * jobbra álló legközelebbi dátum az érték. Kell, mert a pdf-parse szövegében
+ * a Flott-Trans iratán a két címke egymás után jön, az értékek pedig
+ * FORDÍTOTT sorrendben utánuk (#2026/01320) — a szöveg sorrendje itt nem
+ * megbízható, a pozíció igen.
+ */
+export function cimkesIdopontokElemekbol(elemek: Elem[]): ReturnType<typeof cimkesIdopontok> {
+  const ertek = (cimke: RegExp) => {
+    const c = elemek.find((e) => cimke.test(e.str));
+    if (!c) return null;
+    const jelolt = elemek
+      .filter((e) => e.oldal === c.oldal && Math.abs(e.y - c.y) <= 3 && e.x > c.x && DATUM_IDO.test(e.str.trim()))
+      .sort((a, b) => a.x - b.x)[0];
+    const m = jelolt?.str.trim().match(DATUM_IDO);
+    return m ? { nap: `${m[1]}-${m[2]}-${m[3]}`, ido: m[4] ? m[4].replace(/\s+/g, " ").replace(/\s*-\s*$/, "").trim() || null : null } : null;
+  };
+  return {
+    felrako: ertek(/Felrak(?:od)?[áa]s\s+d[áa]tuma\s+[ée]s\s+id[őo]pontja/i),
+    lerako: ertek(/(?:Kiszolg[áa]ltat[áa]s|Lerak(?:od)?[áa]s)\s+d[áa]tuma\s+[ée]s\s+id[őo]pontja/i),
+  };
+}
+
+export function soforAdatokKivonatbol(nyers: unknown, nyersSzoveg?: string | null, elemek?: Elem[] | null): SoforAdatok {
   const adatok = soforAdatokModellbol(nyers);
-  if (!nyersSzoveg) return adatok;
-  const { felrako, lerako } = cimkesIdopontok(nyersSzoveg);
+  if (!nyersSzoveg && !elemek?.length) return adatok;
+  const szovegbol = nyersSzoveg ? cimkesIdopontok(nyersSzoveg) : { felrako: null, lerako: null };
+  const pozicioBol = elemek?.length ? cimkesIdopontokElemekbol(elemek) : { felrako: null, lerako: null };
+  // A pozíció az erősebb: a szöveg sorrendje hasábos iraton felcserélődhet.
+  const felrako = pozicioBol.felrako ?? szovegbol.felrako;
+  const lerako = pozicioBol.lerako ?? szovegbol.lerako;
   const elsoFel = adatok.megallok.find((m) => m.tipus === "felrako");
   const utolsoLe = [...adatok.megallok].reverse().find((m) => m.tipus === "lerako");
   if (felrako && elsoFel) { elsoFel.nap = felrako.nap; elsoFel.ido = felrako.ido ?? elsoFel.ido; }

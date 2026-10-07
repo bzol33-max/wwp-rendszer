@@ -662,7 +662,8 @@ async function ujFajlokFeldolgozasa(
       // SpediTrans kéthasábos felrakó/lerakó táblája, lásd
       // lib/fuvarozas/import/speditrans.ts) felülírják a modell tippjét —
       // csak a ténylegesen kiolvasott (nem null) értékek.
-      const elemek = partner?.kivon && pdfBuffer ? await pdfSzovegElemek(pdfBuffer).catch(() => null) : null;
+      // Minden PDF-nél: a sofőr-adatok címkés időpontjai is a pozícióból jönnek (sofor-adatok.ts).
+      const elemek = pdfBuffer ? await pdfSzovegElemek(pdfBuffer).catch(() => null) : null;
       const nyersDeterminisztikus = partner?.kivon?.(nyersSzoveg, elemek) ?? {};
       const determinisztikus = Object.fromEntries(
         Object.entries(nyersDeterminisztikus).filter(([, v]) => v !== null && v !== undefined)
@@ -705,7 +706,7 @@ async function ujFajlokFeldolgozasa(
       // A sofőrnek szóló adatok (sofor-adatok.ts). Több lerakónál MIND a
       // lerakó bekerül a lerako mezőbe — de csak ha a lerakót nem a partner
       // determinisztikus olvasója adta, mert az megbízhatóbb a modellnél.
-      const soforAdatok = soforAdatokKivonatbol(llm, nyersSzoveg);
+      const soforAdatok = soforAdatokKivonatbol(llm, nyersSzoveg, elemek);
       const lerakoMezo = (determinisztikus.lerako ? null : osszesLerakoCime(soforAdatok)) ?? kivont.lerako!;
       const felrakoMezo = (determinisztikus.felrako ? null : osszesFelrakoCime(soforAdatok)) ?? kivont.felrako;
 
