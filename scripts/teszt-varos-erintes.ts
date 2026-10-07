@@ -70,6 +70,7 @@ function vezetes(hova: { lat: number; lon: number }, kezdet: Date, veg: Date): I
   eq("kör belül, 30 perc: cím szintű", erintesDontes(varos, j(2, t(12, 0, 6), 30)), { elfogadva: true, szint: "cim" });
   eq("5 km, 38 perc: város szintű", erintesDontes(varos, j(5, t(12, 1, 6), 38)), { elfogadva: true, szint: "varos" });
   eq("5 km, 15 perc: túl rövid", erintesDontes(varos, j(5, t(12, 1, 6), 15)).elfogadva === false && (erintesDontes(varos, j(5, t(12, 1, 6), 15)) as { ok: string }).ok, "rovid");
+  eq("#300 Olaszliszka: 6,3 km Erdőbényén, 69 perc: város szintű", erintesDontes({ ...varos, varos: "Olaszliszka", ablakKezdet: t(11, 6, 6) }, j(6.3, t(7, 9, 7), 69, "Erdőbénye, Magyarország")), { elfogadva: true, szint: "varos" });
   eq("9 km név nélkül: messze", (erintesDontes(varos, j(9, t(12, 0, 6), 40)) as { ok: string }).ok, "messze");
   eq("9 km a település nevével: város szintű", erintesDontes(varos, j(9, t(12, 0, 6), 40, "Nyomdász utca 5, Debrecen")), { elfogadva: true, szint: "varos" });
   eq("20 km a nevével is: messze", (erintesDontes(varos, j(20, t(12, 0, 6), 40, "Debrecen")) as { ok: string }).ok, "messze");

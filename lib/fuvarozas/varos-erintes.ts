@@ -38,8 +38,13 @@ export const KOZVETLEN_KOZELSEG_KM = 0.3;
 /** Város szintű egyezéshez ennyi állás kell (a településen belüli piros lámpa, tankolás, rövid megállás kizárására). */
 export const VAROS_SZINTU_MIN_SEC = 20 * 60;
 
-/** Város szintű címnél ennyi km-en belül a településen belülinek vesszük az állást, a település nevétől függetlenül. */
-export const VAROS_SZINTU_SUGAR_KM = 6;
+/**
+ * Város szintű címnél ennyi km-en belül a településen belülinek vesszük az
+ * állást, a település nevétől függetlenül. 6 km volt — a #300 olaszliszkai
+ * lerakásánál (2026-10-07) a kocsi 69 percig 6,3 km-re, az Ecofleet szerint
+ * már Erdőbényén állt, és a lerakó nyitva maradt.
+ */
+export const VAROS_SZINTU_SUGAR_KM = 8;
 
 /**
  * Ha az állás Ecofleet-címében ott a település neve, ennyi km-ig fogadjuk el

@@ -805,6 +805,17 @@ export async function feltoltFuvarlevelFoto(fuvarId: string, form: FormData): Pr
   );
   if (db >= FOTO_MAX_DB_FUVARONKENT) throw new Error(`Ehhez a fuvarhoz már ${db} fotó van — többet nem lehet feltölteni.`);
 
+  // A lerakón lefotózott (leigazolt) fuvarlevél a lerakás kész jele: ha csak
+  // az utolsó megálló nyitott, a fotó lezárja — a fotó beszúrása ELŐTT, hogy
+  // a fotó-trigger bérfuvarnál már a teljesített fuvart vigye tovább
+  // (számlázható). Micó #300, 2026-10-07: Olaszliszkán 08:09-kor és 08:17-kor
+  // fotózott, a lerakó mégis „ott 07:20 óta” maradt, a Ma oldal beragadt.
+  const utolsoNyitott = await utolsoNyitottMegallo(fuvarId);
+  if (utolsoNyitott != null) {
+    await markMegalloKesz(fuvarId, utolsoNyitott);
+    console.log(`[sofor] fuvar #${fuvarId}: a fuvarlevél-fotó lezárta az utolsó megállót (${utolsoNyitott}).`);
+  }
+
   const hivatkozas = (fuvar.reise_id ?? fuvar.pozicioszam ?? `fuvar${fuvarId}`).replace(/[^A-Za-z0-9_-]+/g, "_");
   const rendszam = (fuvar.jarmu ?? "").replace(/[^A-Za-z0-9]+/g, "").toUpperCase() || "kocsi";
   // A fotóból szkennelt oldal lesz: a papír kivágva, egyenesbe hozva,
@@ -842,6 +853,21 @@ export async function feltoltFuvarlevelFoto(fuvarId: string, form: FormData): Pr
   revalidatePath("/erkezes");
   revalidatePath("/fuvarozas2");
   return { dokId: beszurt[0].id };
+}
+
+/** Az utolsó megálló indexe, ha EGYEDÜL az nyitott (minden korábbi kész vagy GPS szerint elhagyva), különben null. */
+async function utolsoNyitottMegallo(fuvarId: string): Promise<number | null> {
+  const sorok = await query<{ sorszam: number; tipus: string; kesz: boolean }>(
+    `select g.sorszam, g.tipus, (g.sofor_kesz_at is not null or g.gps_tavozas is not null) as kesz
+       from fuvar_megallok g join fuvar_megbizasok m on m.id = g.megbizas_id
+      where g.megbizas_id = $1 and m.torolt_at is null and not m.teljesitve
+      order by g.sorszam`,
+    [fuvarId]
+  );
+  const utolso = sorok.at(-1);
+  if (!utolso || utolso.kesz || utolso.tipus !== "lerako") return null;
+  if (sorok.slice(0, -1).some((g) => !g.kesz)) return null;
+  return utolso.sorszam - 1;
 }
 
 /**
