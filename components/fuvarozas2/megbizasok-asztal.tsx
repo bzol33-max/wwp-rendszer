@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { formatNap } from "@/components/fuvarozas2/kozos";
+import { DriveFrissitesGomb } from "@/components/fuvarozas2/berfuvar";
 import { utolsoVaros, varos } from "@/lib/megbizasok/megjelenites";
 import { MegbizasKartya } from "@/components/fuvarozas2/megbizas-kartya";
 import { munkaasztalLink, type MunkaasztalSzuro } from "@/components/fuvarozas2/munkaasztal";
@@ -509,7 +510,9 @@ export function MegbizasokAsztal({
             </Link>
           ))}
         </div>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {/* Drive-ból az új megbízások (2026-10-07: az asztali nézetből kimaradt). */}
+          {szerkesztheto ? <DriveFrissitesGomb /> : null}
           <Link href={munkaasztalLink(szuro, { ujBer: true, reszlet: undefined, elvinni: undefined })} className="flex min-h-11 items-center rounded-lg bg-[var(--f2-blue)] px-4 text-sm font-bold text-white">+ Új bérfuvar</Link>
           <Link href={munkaasztalLink(szuro, { uj: true, reszlet: undefined, elvinni: undefined })} className="flex min-h-11 items-center rounded-lg bg-[var(--f2-mint)] px-4 text-sm font-bold text-white">+ Új saját fuvar</Link>
         </div>
