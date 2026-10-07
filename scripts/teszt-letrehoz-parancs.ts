@@ -22,7 +22,7 @@ ellenoriz("saját: fordított tipus", sajat.tipus.value === "ber");
 ellenoriz("saját: státusz és állapot", sajat.statusz.value === "uj" && sajat.allapot.value === "tervezett");
 ellenoriz("saját: előkészítési mezők", sajat.elokeszites.value === true && sajat.elokeszites_jarmu.value === "ABC-123" && sajat.kitol.value === "Sofőr");
 ellenoriz("saját: allapot_at now()", sajat.allapot_at.expression === "now()");
-ellenoriz("saját: régi oszloplista", Object.keys(sajat).join(",") === "tipus,datum,felrako,lerako,megrendelo,megjegyzes,statusz,forras,ellenorzott,elokeszites,elokeszites_jarmu,allapot,allapot_at,created_by,kitol");
+ellenoriz("saját: új nyitott időpont mezők", sajat.idopont_nyitott.value === false && sajat.legkorabban.value === null);
 
 const duvenbeck = adat({ tipus: "sajat", datum: "2026-10-06", lerako: "Ulm", megrendelo: "Duvenbeck Logisztikai Kft.", forras: "pdf_import", ellenorzott: false, reiseId: "R-1", fuvardijPenznem: "EUR", felrakasAblakTol: new Date("2026-10-06T06:00:00Z"), letrehozasUt: "duvenbeck" }, "Duvenbeck Logisztikai Kft.");
 ellenoriz("Duvenbeck: reise id és EUR", duvenbeck.reise_id.value === "R-1" && duvenbeck.fuvardij_penznem.value === "EUR");

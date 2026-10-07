@@ -12,7 +12,7 @@ import type { MunkaasztalSor } from "@/lib/fuvarozas2/megbizasok";
 // saját oszlop tetején lenyíló „+ Új saját fuvar”; egy sorra kattintva a
 // részlet jobbról becsúszó lapon nyílik (reszlet-lap.tsx).
 
-export type MunkaasztalSzuro = { q?: string; reszlet?: string; uj?: boolean; szerk?: boolean; ujBer?: boolean };
+export type MunkaasztalSzuro = { q?: string; reszlet?: string; uj?: boolean; szerk?: boolean; ujBer?: boolean; jelleg?: "ber" | "sajat"; elvinni?: string; het?: string };
 
 export function munkaasztalLink(alap: MunkaasztalSzuro, valtozas: Partial<MunkaasztalSzuro>): string {
   const p = new URLSearchParams();
@@ -22,6 +22,9 @@ export function munkaasztalLink(alap: MunkaasztalSzuro, valtozas: Partial<Munkaa
   if (e.uj) p.set("uj", "1");
   if (e.szerk) p.set("szerk", "1");
   if (e.ujBer) p.set("ujber", "1");
+  if (e.jelleg) p.set("jelleg", e.jelleg);
+  if (e.elvinni) p.set("elvinni", e.elvinni);
+  if (e.het) p.set("het", e.het);
   const q = p.toString();
   return `/fuvarozas2/megbizasok${q ? `?${q}` : ""}`;
 }

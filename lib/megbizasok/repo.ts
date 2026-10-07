@@ -42,7 +42,7 @@ export async function elszamolasUpsert(tx: Querier, megbizasId: string, mezok: {
 export async function letrehozTx(tx: Querier, input: AddFuvarInput & {
   reiseId?: string; felrakasAblakTol?: Date | null; felrakasAblakIg?: Date | null;
   lerakasAblakTol?: Date | null; lerakasAblakIg?: Date | null; referencia?: string;
-  jarmuEloiras?: string; elokeszites?: boolean; elokeszitesJarmu?: string | null;
+  jarmuEloiras?: string; elokeszites?: boolean; elokeszitesJarmu?: string | null; idopontNyitott?: boolean; legkorabban?: string | null;
   kitol?: string | null; allapot?: string; conflict?: "dokumentum" | "reise";
   kanonikusNev?: boolean; statusz?: string; allapotAtMost?: boolean; letrehozasUt?: "sajat-elokeszites" | "duvenbeck";
 }): Promise<string | null> {
@@ -58,7 +58,7 @@ export async function letrehozTx(tx: Querier, input: AddFuvarInput & {
 }
 
 export const SOR_SQL = `
-  select m.id::text, m.jelleg, m.allapot, m.allapot_at::text, m.partner_id::text, m.rakott_km::float8 as rakott_km,
+  select m.id::text, m.jelleg, m.allapot, m.allapot_at::text, m.created_at::text as letrehozva_at, m.partner_id::text, m.rakott_km::float8 as rakott_km,
     coalesce(p.nev, m.megrendelo) as partner_nev, m.kitol,
     coalesce(m.hivatkozas_kanonikus, m.pozicioszam, m.reise_id) as hivatkozas, m.hivatkozas_nincs,
     j.kod as jarmu_kod, coalesce(j.cimke, m.jarmu) as jarmu_cimke, coalesce(a.name, m.sofor) as sofor,
@@ -78,6 +78,7 @@ export const SOR_SQL = `
     p.papir_bekuldesi_hatarido_nap as papir_hatarido_nap,
     exists (select 1 from fuvar_dokumentumok d where d.fuvar_id = m.id and d.tipus = 'fuvarlevel') as foto_van,
     m.dokumentum_url, m.megjegyzes, m.elokeszites, m.elokeszites_jarmu,
+    m.idopont_nyitott, to_char(m.legkorabban, 'YYYY-MM-DD') as legkorabban,
     (select s.bizonylatszam from szallitolevel_import s where s.megbizas_id = m.id and s.parositas_allapot = 'parositva' order by s.kelt desc limit 1) as szallitolevel
   from fuvar_megbizasok m
   left join fuvar_partnerek p on p.id = m.partner_id

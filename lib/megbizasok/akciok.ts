@@ -1,6 +1,7 @@
 "use server";
 
 import { query, withTransaction } from "@/lib/db";
+import { revalidatePath } from "next/cache";
 import { requireSession } from "@/lib/auth/dal";
 import { requireAnyEditPermission, requireEditPermission } from "@/lib/auth/require-permission";
 import { type Allapot } from "@/lib/megbizasok/allapotgep";
@@ -17,6 +18,7 @@ import { normalizaltCegKulcs } from "@/lib/fuvarozas/fuvar-constants";
 import type { SajatFuvarAdat, Eredmeny } from "@/lib/fuvarozas2/sajat-fuvar";
 import { ALLAPOT_CIMKE } from "@/lib/megbizasok/allapotgep";
 import { duplikatumSor, keresDuplikatumot, type DuplikatumJelolt } from "@/lib/fuvarozas2/sajat-duplikatum";
+import { utemezhetoNap } from "@/lib/megbizasok/elvinni-szabalyok";
 
 
 function egesz(s: string): number | null {
@@ -439,7 +441,9 @@ export async function mentSajatFuvart(id: string | null, nyers: SajatFuvarAdat, 
   // szöveget már átírták („Fabrika 2000 Kft”), a kötés viszont az MTS-en
   // maradt — a szöveg így nem változott, és az MTS mindig visszajött.
   const frissitve = await query<{ id: string }>(
-    `update fuvar_megbizasok set datum = $2, felrako = $3, lerako = $4, megrendelo = $5, megjegyzes = $6, elokeszites_jarmu = $7, kitol = $9,
+    `update fuvar_megbizasok set datum = $2, felrako = $3, lerako = $4, megrendelo = $5, megjegyzes = $6, elokeszites_jarmu = $7,
+       idopont_nyitott = case when $7 is not null then false else idopont_nyitott end,
+       kitol = $9,
        partner_id = case when exists (select 1 from fuvar_partnerek p where p.id = partner_id and p.nev_kulcs = $8::text)
                          then partner_id end
      where id = $1 and elokeszites and jelleg = 'sajat' and torolt_at is null returning id::text`,
@@ -448,6 +452,203 @@ export async function mentSajatFuvart(id: string | null, nyers: SajatFuvarAdat, 
   if (frissitve.length === 0) return { ok: false, hiba: "Ez a fuvar már nincs előkészítésben — előbb vedd vissza." };
   await frissitsdFuvarozas2Modellt(id);
   await naplo(id, "modositva", { elokeszites: true });
+  return { ok: true, id };
+}
+
+// Elvinni való saját fuvar műveletek (2026-10-07, Budaházi Zoltán).
+export type ElvinniAdat = {
+  honnan: string;
+  hova: string;
+  legkorabban?: string | null;
+  kitol?: string | null;
+  kinek?: string | null;
+  megjegyzes?: string | null;
+};
+
+function tisztaElvinni(adat: ElvinniAdat) {
+  return {
+    honnan: adat.honnan.trim(),
+    hova: adat.hova.trim(),
+    legkorabban: adat.legkorabban?.trim() || null,
+    kitol: adat.kitol?.trim() || null,
+    kinek: adat.kinek?.trim() || null,
+    megjegyzes: adat.megjegyzes?.trim() || null,
+  };
+}
+
+export async function rogzitElvinnivalot(nyers: ElvinniAdat): Promise<Eredmeny> {
+  await requireEditPermission("fuvarozas");
+  const adat = tisztaElvinni(nyers);
+  if (!adat.honnan || !adat.hova) {
+    return { ok: false, hiba: "A honnan és a hová mező kötelező." };
+  }
+  if (adat.legkorabban && !ISO_NAP.test(adat.legkorabban)) {
+    return { ok: false, hiba: "Érvénytelen legkorábbi dátum." };
+  }
+
+  const session = await requireSession();
+  const id = await ujKodTranzakcio(async (tx) => {
+    const [maiNap] = await tx<{ ma: string }>(
+      `select (now() at time zone 'Europe/Budapest')::date::text as ma`
+    );
+    const ujId = await letrehozTx(tx, {
+      tipus: "ber",
+      datum: adat.legkorabban ?? maiNap.ma,
+      felrako: adat.honnan,
+      lerako: adat.hova,
+      megrendelo: adat.kinek ?? undefined,
+      megjegyzes: adat.megjegyzes ?? undefined,
+      forras: "kezi",
+      ellenorzott: true,
+      createdBy: session.name ?? session.username,
+      elokeszites: true,
+      elokeszitesJarmu: null,
+      allapot: "tervezett",
+      kitol: adat.kitol,
+      statusz: "uj",
+      letrehozasUt: "sajat-elokeszites",
+      idopontNyitott: true,
+      legkorabban: adat.legkorabban,
+      kanonikusNev: false,
+    });
+
+    if (ujId) {
+      await irEsemenyt(tx, {
+        megbizasId: ujId,
+        esemeny: "letrehozva",
+        forras: "ember",
+        ki: session.name ?? session.username,
+        reszletek: { elvinni_valo: true },
+      });
+    }
+    return ujId;
+  });
+
+  if (!id) return { ok: false, hiba: "Nem jött létre a fuvar." };
+  revalidatePath("/fuvarozas2/megbizasok");
+  return { ok: true, id };
+}
+
+export async function modositElvinnivalot(id: string, nyers: ElvinniAdat): Promise<Eredmeny> {
+  await requireEditPermission("fuvarozas");
+  const adat = tisztaElvinni(nyers);
+  if (!adat.honnan || !adat.hova) {
+    return { ok: false, hiba: "A honnan és a hová mező kötelező." };
+  }
+  if (adat.legkorabban && !ISO_NAP.test(adat.legkorabban)) {
+    return { ok: false, hiba: "Érvénytelen legkorábbi dátum." };
+  }
+
+  const session = await requireSession();
+  const sikeres = await withTransaction(async (tx) => {
+    const sorok = await tx<{ id: string }>(
+      `update fuvar_megbizasok
+       set felrako = $2, lerako = $3, legkorabban = $4,
+           datum = coalesce($4::date, (now() at time zone 'Europe/Budapest')::date),
+           kitol = $5, megrendelo = $6, partner_id = null, megjegyzes = $7
+       where id = $1 and jelleg = 'sajat' and elokeszites
+         and idopont_nyitott and torolt_at is null
+       returning id::text`,
+      [id, adat.honnan, adat.hova, adat.legkorabban, adat.kitol, adat.kinek, adat.megjegyzes]
+    );
+    if (sorok.length === 0) return false;
+
+    await irEsemenyt(tx, {
+      megbizasId: id,
+      esemeny: "modositva",
+      forras: "ember",
+      ki: session.name ?? session.username,
+      reszletek: { elvinni_valo: true },
+    });
+    return true;
+  });
+
+  if (!sikeres) {
+    return { ok: false, hiba: "Ez a fuvar már nincs a Saját fuvar oszlopban (időpont nélkül)." };
+  }
+  await frissitsdFuvarozas2Modellt(id);
+  revalidatePath("/fuvarozas2/megbizasok");
+  return { ok: true, id };
+}
+
+export async function utemezElvinnivalot(
+  id: string,
+  adat: { jarmuKod: string; nap: string }
+): Promise<Eredmeny> {
+  await requireEditPermission("fuvarozas");
+  if (!ISO_NAP.test(adat.nap) || !findJarmuByPlate(adat.jarmuKod)) {
+    return { ok: false, hiba: "Érvénytelen dátum vagy kocsi." };
+  }
+
+  const [aktivJarmu] = await query<{ kod: string }>(
+    `select kod from fuvar_jarmuvek where kod = $1 and aktiv`,
+    [adat.jarmuKod]
+  );
+  if (!aktivJarmu) return { ok: false, hiba: "Ez a kocsi már nem aktív." };
+
+  const session = await requireSession();
+  const eredmeny = await withTransaction(async (tx) => {
+    const [sor] = await tx<{ legkorabban: string | null }>(
+      `select to_char(legkorabban, 'YYYY-MM-DD') as legkorabban
+       from fuvar_megbizasok
+       where id = $1 and jelleg = 'sajat' and elokeszites
+         and idopont_nyitott and torolt_at is null
+       for update`,
+      [id]
+    );
+    if (!sor) return { hiba: "Ez a fuvar már nincs a Saját fuvar oszlopban (időpont nélkül)." };
+    if (!utemezhetoNap(adat.nap, sor.legkorabban)) {
+      return { hiba: `A legkorábbi nap: ${sor.legkorabban}.` };
+    }
+
+    await tx(
+      `update fuvar_megbizasok
+       set datum = $2, elokeszites_jarmu = $3, idopont_nyitott = false
+       where id = $1`,
+      [id, adat.nap, adat.jarmuKod]
+    );
+    await irEsemenyt(tx, {
+      megbizasId: id,
+      esemeny: "modositva",
+      forras: "ember",
+      ki: session.name ?? session.username,
+      reszletek: { mezo: "utemezes", jarmu: adat.jarmuKod, nap: adat.nap },
+    });
+    return { hiba: null };
+  });
+
+  if (eredmeny.hiba) return { ok: false, hiba: eredmeny.hiba };
+  revalidatePath("/fuvarozas2/megbizasok");
+  return { ok: true, id };
+}
+
+export async function visszaElvinnivalokba(id: string): Promise<Eredmeny> {
+  await requireEditPermission("fuvarozas");
+  const session = await requireSession();
+  const sikeres = await withTransaction(async (tx) => {
+    const sorok = await tx<{ id: string }>(
+      `update fuvar_megbizasok
+       set idopont_nyitott = true, elokeszites_jarmu = null,
+           datum = coalesce(legkorabban, (now() at time zone 'Europe/Budapest')::date)
+       where id = $1 and jelleg = 'sajat' and elokeszites
+         and not idopont_nyitott and torolt_at is null
+       returning id::text`,
+      [id]
+    );
+    if (sorok.length === 0) return false;
+
+    await irEsemenyt(tx, {
+      megbizasId: id,
+      esemeny: "modositva",
+      forras: "ember",
+      ki: session.name ?? session.username,
+      reszletek: { mezo: "elvinni_valo", vissza: true },
+    });
+    return true;
+  });
+
+  if (!sikeres) return { ok: false, hiba: "Ez a fuvar nem ütemezett előkészítés." };
+  revalidatePath("/fuvarozas2/megbizasok");
   return { ok: true, id };
 }
 
@@ -465,7 +666,7 @@ export async function kocsiraAdom(id: string): Promise<Eredmeny> {
   const jarmu = findJarmuByPlate(sor.elokeszites_jarmu!);
   if (!jarmu) return { ok: false, hiba: "Ismeretlen kocsi." };
   await query(
-    `update fuvar_megbizasok set jarmu = $2, jarmu_id = null, elokeszites = false, kocsira_adva_at = now(), ellenorzott = true
+    `update fuvar_megbizasok set jarmu = $2, jarmu_id = null, elokeszites = false, idopont_nyitott = false, kocsira_adva_at = now(), ellenorzott = true
      where id = $1`,
     [id, jarmuLabel(jarmu)]
   );

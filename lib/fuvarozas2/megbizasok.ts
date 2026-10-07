@@ -34,6 +34,7 @@ export type MegbizasSor = {
   rakott_km: number | null;
   allapot: Allapot;
   allapot_at: string | null;
+  letrehozva_at: string;
   partner_id: string | null;
   partner_nev: string | null;
   /** Saját fuvar: ki adja az árut (szöveg) — lib/fuvarozas2/sajat-fuvar.ts. */
@@ -73,6 +74,8 @@ export type MegbizasSor = {
   elokeszites: boolean;
   /** Az előkészítésben kiválasztott kocsi kódja (a `jarmu` csak a „Kocsira adom”-mal kap értéket). */
   elokeszites_jarmu: string | null;
+  idopont_nyitott: boolean;
+  legkorabban: string | null;
   /** Saját fuvarhoz párosított Számlázz.hu-s szállítólevél (S-WLLWR-…) — lib/fuvarozas2/szallitolevel.ts. */
   szallitolevel: string | null;
 };

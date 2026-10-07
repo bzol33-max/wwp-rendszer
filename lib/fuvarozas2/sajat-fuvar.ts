@@ -59,6 +59,10 @@ export async function hianyzoMezok(a: { datum: string | null; jarmuKod: string |
  * nélkül nem ment (2026-10-06, #274/#295).
  */
 export async function mentSajatFuvart(id: string | null, nyers: SajatFuvarAdat, opciok: { duplikatumOk?: boolean } = {}): Promise<Eredmeny> { return actions.mentSajatFuvart(id, nyers, opciok); }
+export async function rogzitElvinnivalot(a: actions.ElvinniAdat): Promise<Eredmeny> { return actions.rogzitElvinnivalot(a); }
+export async function modositElvinnivalot(id: string, a: actions.ElvinniAdat): Promise<Eredmeny> { return actions.modositElvinnivalot(id, a); }
+export async function utemezElvinnivalot(id: string, a: { jarmuKod: string; nap: string }): Promise<Eredmeny> { return actions.utemezElvinnivalot(id, a); }
+export async function visszaElvinnivalokba(id: string): Promise<Eredmeny> { return actions.visszaElvinnivalokba(id); }
 
 /**
  * „Kocsira adom”: a kocsi a `jarmu` mezőbe kerül (a sofőr appja innen

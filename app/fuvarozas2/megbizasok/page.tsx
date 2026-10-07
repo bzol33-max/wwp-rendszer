@@ -13,9 +13,15 @@ import { SajatFuvarUrlap, VisszaveszemGomb } from "@/components/fuvarozas2/sajat
 import { getSajatFuvarSegedlet } from "@/lib/fuvarozas2/sajat-fuvar";
 import { BerFuvarUrlap, DriveFrissitesGomb, UjraolvasasGomb } from "@/components/fuvarozas2/berfuvar";
 import { uresBerFuvar } from "@/lib/fuvarozas2/berfuvar";
+import { MegbizasokAsztal, VisszaElvinniGomb } from "@/components/fuvarozas2/megbizasok-asztal";
+import { getElvinniHet } from "@/lib/megbizasok/elvinni-het";
+import { elvinniOszlop } from "@/lib/megbizasok/elvinni-szabalyok";
 
 export const dynamic = "force-dynamic";
 
+// Megbízások (2026-10-07, Budaházi Zoltán): asztali B — szakasz-oszlopok,
+// az Elvinni való saját fuvarok heti kocsinaptárával; a kis kijelzőkön a
+// korábbi felület marad.
 // Megbízások (2026-09-30, Budaházi Zoltán: 1-es terv, B-változat): balra a
 // bérfuvarok, jobbra a saját fuvarok, minden nyitott szakasz egyszerre. A
 // saját oszlop tetején lenyíló „+ Új saját fuvar”; az előre beírt saját
@@ -24,13 +30,13 @@ export const dynamic = "force-dynamic";
 // (Ma oldal, korábbi könyvjelzők) nem szűr többé — minden szakasz látszik.
 
 export default async function Page({ searchParams }: {
-  searchParams: Promise<{ q?: string; reszlet?: string; uj?: string; szerk?: string; ujber?: string }>;
+  searchParams: Promise<{ q?: string; reszlet?: string; uj?: string; szerk?: string; ujber?: string; jelleg?: string; elvinni?: string; het?: string }>;
 }) {
   const sp = await searchParams;
   const q = sp.q?.trim() || undefined;
   const reszletId = sp.reszlet && /^\d+$/.test(sp.reszlet) ? sp.reszlet : undefined;
   const uj = sp.uj === "1";
-  const szuro: MunkaasztalSzuro = { q, reszlet: reszletId, uj, szerk: sp.szerk === "1", ujBer: sp.ujber === "1" };
+  const szuro: MunkaasztalSzuro = { q, reszlet: reszletId, uj, szerk: sp.szerk === "1", ujBer: sp.ujber === "1", jelleg: sp.jelleg === "ber" || sp.jelleg === "sajat" ? sp.jelleg : undefined, elvinni: sp.elvinni && /^\d+$/.test(sp.elvinni) ? sp.elvinni : undefined, het: sp.het && /^\d{4}-\d{2}-\d{2}$/.test(sp.het) ? sp.het : undefined };
 
   const session = await requireSession();
   const jogok = megbizasJogok(session);
@@ -52,6 +58,14 @@ export default async function Page({ searchParams }: {
   const bezar = munkaasztalLink(szuro, { reszlet: undefined, uj: false, szerk: false, ujBer: false });
   // Bérfuvar: szerkesztés a lapon (?szerk=1), kézi új bérfuvar (?ujber=1).
   const berSzerk = szerkeszthet && szuro.szerk && lapon?.sor.jelleg === "ber" ? await getBerFuvarAdat(lapon.sor.id) : null;
+  const nyitottak = [...asztal.ber, ...asztal.sajat].filter(s => elvinniOszlop(s));
+  const nyitottReszlet = szuro.elvinni ? await getMegbizas(szuro.elvinni) : null;
+  const [elvinniHet, gyorsHelyek] = await Promise.all([
+    szuro.elvinni && nyitottReszlet?.sor.idopont_nyitott
+      ? getElvinniHet(szuro.elvinni, sp.het)
+      : Promise.resolve(null),
+    szerkeszthet ? getSajatFuvarSegedlet() : Promise.resolve(null),
+  ]);
   const ujBerLap = szerkeszthet && szuro.ujBer && !lapon;
   const reszletLink = (id: string) => munkaasztalLink(szuro, { reszlet: id, uj: false, szerk: false, ujBer: false });
 
@@ -88,6 +102,15 @@ export default async function Page({ searchParams }: {
   return (
     <div className="flex flex-col gap-4">
       <Fuvarozas2Fulek aktiv="/fuvarozas2/megbizasok" />
+
+      <div className="hidden lg:block">
+        {parositatlan.length > 0 ? <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2 rounded-xl bg-[var(--f2-amb-l)] px-4 py-2 text-sm text-[var(--f2-amb)]"><span><b className="text-foreground">{parositatlan.length} fuvarszámla nincs fuvarhoz párosítva:</b> {parositatlan.slice(0,3).map(p=>`${p.szamlaszam} · ${p.vevo_nev} · ${formatFt(p.netto)}`).join(" | ")}{parositatlan.length>3?" …":""}</span><span className="text-xs">A számlaszámot a fuvar részleteinél lehet beírni.</span></div> : null}
+        <div className="flex items-start gap-3"><div className="min-w-0 flex-1"><KeresoJavaslatok key={q ?? ""} index={asztal.kereso} kezdo={q ?? ""} /></div>{q ? <Link href="/fuvarozas2/megbizasok" className="mt-1.5 shrink-0 rounded-lg border px-3 py-1.5 text-sm">× keresés törlése</Link> : null}</div>
+        <MegbizasokAsztal key={szuro.elvinni ?? "lista"} sorok={[...asztal.ber,...asztal.sajat]} nyitottak={nyitottak} szuro={szuro} het={elvinniHet} szerkesztheto={szerkeszthet} helyek={gyorsHelyek?.helyek} ma={asztal.ma} />
+      </div>
+      {szerkeszthet && elokeszitett && segedlet ? <div className="hidden lg:block"><ReszletLap bezarHref={bezar} cim={`#${elokeszitett.id} · Előkészítés`}>{elokeszitett.idopont_nyitott ? null : <VisszaElvinniGomb id={elokeszitett.id} />}{sajatFelso}</ReszletLap></div> : null}
+
+      <div className="lg:hidden">
 
       {parositatlan.length > 0 ? (
         <div className="flex flex-wrap items-baseline justify-between gap-2 rounded-xl bg-[var(--f2-amb-l)] px-4 py-2 text-sm text-[var(--f2-amb)]">
@@ -138,6 +161,7 @@ export default async function Page({ searchParams }: {
         />
         <OszlopLista cim="Saját fuvarok" sorok={asztal.sajat} ma={asztal.ma} szuro={szuro} felso={sajatFelso} ures={q ? "Nincs találat." : "Nincs nyitott saját fuvar."} />
       </div>
+      </div>
 
       {ujBerLap ? (
         <ReszletLap bezarHref={bezar} cim="Új bérfuvar">
@@ -173,6 +197,7 @@ export default async function Page({ searchParams }: {
           />
         </ReszletLap>
       ) : null}
+      {szerkeszthet && uj && segedlet ? <div className="hidden lg:block"><ReszletLap bezarHref={bezar} cim="Új saját fuvar">{sajatFelso}</ReszletLap></div> : null}
     </div>
   );
 }
