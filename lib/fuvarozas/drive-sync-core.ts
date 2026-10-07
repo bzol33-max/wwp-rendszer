@@ -704,7 +704,7 @@ async function ujFajlokFeldolgozasa(
       // A sofőrnek szóló adatok (sofor-adatok.ts). Több lerakónál MIND a
       // lerakó bekerül a lerako mezőbe — de csak ha a lerakót nem a partner
       // determinisztikus olvasója adta, mert az megbízhatóbb a modellnél.
-      const soforAdatok = soforAdatokKivonatbol(llm);
+      const soforAdatok = soforAdatokKivonatbol(llm, nyersSzoveg);
       const lerakoMezo = (determinisztikus.lerako ? null : osszesLerakoCime(soforAdatok)) ?? kivont.lerako!;
       const felrakoMezo = (determinisztikus.felrako ? null : osszesFelrakoCime(soforAdatok)) ?? kivont.felrako;
 
@@ -932,7 +932,7 @@ async function levelSzovegPotlasa(hibak: string[]): Promise<number> {
       const torzs = torzsSzoveg(normalizalt, partner?.torzsVege ?? []);
       const llm = await kivonatolFuvarAdatot(torzs + LEVEL_ELVALASZTO + sor.torzs);
       if (llm) {
-        const adatok = soforAdatokKivonatbol(llm);
+        const adatok = soforAdatokKivonatbol(llm, sor.nyers_szoveg);
         const tiszta = (v: string | null | undefined) => (v && !EMAIL_HELYETTESITO.test(v) ? v : null);
         const felrako = osszesFelrakoCime(adatok) ?? tiszta(llm.felrako);
         const lerako = osszesLerakoCime(adatok) ?? tiszta(llm.lerako);
@@ -1011,7 +1011,7 @@ async function soforAdatokPotlasa(hibak: string[]): Promise<number> {
       const normalizalt = normalizaltSzoveg(sor.nyers_szoveg);
       const partner = felismerPartner(normalizalt);
       const llm = await kivonatolFuvarAdatot(torzsSzoveg(normalizalt, partner?.torzsVege ?? []));
-      await mentsSoforAdatokat(sor.id, soforAdatokKivonatbol(llm));
+      await mentsSoforAdatokat(sor.id, soforAdatokKivonatbol(llm, sor.nyers_szoveg));
       potolt++;
     } catch (err) {
       hibak.push(`sofőr-adatok pótlása (${sor.id}): ${err instanceof Error ? err.message : "ismeretlen hiba"}`);

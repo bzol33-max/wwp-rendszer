@@ -69,7 +69,36 @@ function isoNap(v: unknown): string | null {
  * nem értelmezhető, az null, nem kivétel: a sofőr-adat kiegészítés, a
  * megbízás felvitelét soha nem akaszthatja meg.
  */
-export function soforAdatokKivonatbol(nyers: unknown): SoforAdatok {
+/**
+ * A megbízás szövegében CÍMKÉVEL megadott felrakási és kiszolgáltatási
+ * időpont (Flott-Trans: „Felrakodás dátuma és időpontja: 2026.10.08 06:00”,
+ * „Kiszolgáltatás dátuma és időpontja: 2026.10.08 12:00 -”). A nyelvi modell
+ * ezt a #2026/01320-on felcserélte (Micó telefonján felrakás 12:00, lerakás
+ * 06:00 — 2026-10-07), ezért ha a címke megvan, az felülírja a modell
+ * tippjét az első felrakón és az utolsó lerakón. Ha nincs címke, semmi sem
+ * változik.
+ */
+const CIMKES_FELRAKAS = /Felrak(?:od)?[áa]s\s+d[áa]tuma\s+[ée]s\s+id[őo]pontja\s*:?\s*(\d{4})\.\s*(\d{2})\.\s*(\d{2})\.?\s*([0-2]?\d:[0-5]\d(?:\s*-\s*(?:[0-2]?\d:[0-5]\d)?)?)?/i;
+const CIMKES_LERAKAS = /(?:Kiszolg[áa]ltat[áa]s|Lerak(?:od)?[áa]s)\s+d[áa]tuma\s+[ée]s\s+id[őo]pontja\s*:?\s*(\d{4})\.\s*(\d{2})\.\s*(\d{2})\.?\s*([0-2]?\d:[0-5]\d(?:\s*-\s*(?:[0-2]?\d:[0-5]\d)?)?)?/i;
+
+export function cimkesIdopontok(nyersSzoveg: string): { felrako: { nap: string; ido: string | null } | null; lerako: { nap: string; ido: string | null } | null } {
+  const olvas = (m: RegExpMatchArray | null) =>
+    m ? { nap: `${m[1]}-${m[2]}-${m[3]}`, ido: m[4] ? m[4].replace(/\s+/g, " ").replace(/\s*-\s*$/, "").trim() || null : null } : null;
+  return { felrako: olvas(nyersSzoveg.match(CIMKES_FELRAKAS)), lerako: olvas(nyersSzoveg.match(CIMKES_LERAKAS)) };
+}
+
+export function soforAdatokKivonatbol(nyers: unknown, nyersSzoveg?: string | null): SoforAdatok {
+  const adatok = soforAdatokModellbol(nyers);
+  if (!nyersSzoveg) return adatok;
+  const { felrako, lerako } = cimkesIdopontok(nyersSzoveg);
+  const elsoFel = adatok.megallok.find((m) => m.tipus === "felrako");
+  const utolsoLe = [...adatok.megallok].reverse().find((m) => m.tipus === "lerako");
+  if (felrako && elsoFel) { elsoFel.nap = felrako.nap; elsoFel.ido = felrako.ido ?? elsoFel.ido; }
+  if (lerako && utolsoLe) { utolsoLe.nap = lerako.nap; utolsoLe.ido = lerako.ido ?? utolsoLe.ido; }
+  return adatok;
+}
+
+function soforAdatokModellbol(nyers: unknown): SoforAdatok {
   const o = (nyers && typeof nyers === "object" ? nyers : {}) as Record<string, unknown>;
   const megallok = (Array.isArray(o.megallok) ? o.megallok : [])
     .map((m): MegalloReszlet | null => {

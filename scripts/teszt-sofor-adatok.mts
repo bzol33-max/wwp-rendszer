@@ -156,5 +156,21 @@ eq("06-os marad", kontaktTelefon("06 30 123 4567"), "06301234567");
   eq("két etei lerakó: Ady utca → Malcsikné", megalloReszlete(reszletek, "lerako", 5, 7, "2947 ETE ADY ENDRE UTCA 27.")?.ceg, "Malcsikné Tálos Erzsébet");
 }
 
+// Flott-Trans #2026/01320 (2026-10-07): a modell felcserélte a két időt —
+// a címkés „Felrakodás / Kiszolgáltatás dátuma és időpontja” felülírja.
+{
+  const szoveg = "Felrakóhely: Unilever Magyarország Kft., 4300, Nyírbátor, Tancsics u. 2-4\n\nFelrakodás dátuma és időpontja:\n\n2026.10.08 06:00\n\nRendszám: NMZ492\n\nKiszolgáltatás dátuma és időpontja:\n\n2026.10.08 12:00 -\n\nMegjegyzés: raksz: 161135741";
+  const modell = { megallok: [
+    { tipus: "felrako", cim: "4300, Nyírbátor, Tancsics u. 2-4", nap: "2026-10-08", ido: "12:00 -" },
+    { tipus: "lerako", cim: "1239 Budapest (BILK) EURÓPA U. 6.", nap: "2026-10-08", ido: "06:00" },
+  ] };
+  const a = soforAdatokKivonatbol(modell, szoveg);
+  eq("Flott-Trans felrakó ideje a címkéből", a.megallok[0].ido, "06:00");
+  eq("Flott-Trans lerakó ideje a címkéből", a.megallok[1].ido, "12:00");
+  eq("Flott-Trans lerakó napja", a.megallok[1].nap, "2026-10-08");
+  const cimkeNelkul = soforAdatokKivonatbol(modell, "Felrakás: Nyírbátor");
+  eq("címke nélkül marad a modell tippje", cimkeNelkul.megallok[0].ido, "12:00 -");
+}
+
 console.log(`\n${ok} rendben, ${bad} hiba`);
 process.exit(bad ? 1 : 0);
