@@ -130,7 +130,7 @@ export type Esemeny = {
   mikor: string;
   reszletek: Record<string, unknown>;
 };
-export type Dokumentum = { id: string; tipus: string | null; fajlnev: string | null; dokumentum_url: string | null; created_at: string; van_eredeti: boolean; forgatas: number };
+export type Dokumentum = { id: string; tipus: string | null; fajlnev: string | null; dokumentum_url: string | null; created_at: string; van_eredeti: boolean; forgatas: number; meret_byte: number | null };
 
 export async function getMegbizas(id: string): Promise<{
   sor: MegbizasSor;
@@ -156,7 +156,7 @@ export async function getMegbizas(id: string): Promise<{
        from fuvar_megbizas_esemeny where megbizas_id = $1 order by mikor desc, id desc limit 100`,
       [id]
     ),
-    query<Dokumentum>(`select id::text, tipus, fajlnev, dokumentum_url, created_at::text, eredeti is not null as van_eredeti, forgatas from fuvar_dokumentumok where fuvar_id = $1 order by created_at`, [id]),
+    query<Dokumentum>(`select id::text, tipus, fajlnev, dokumentum_url, created_at::text, eredeti is not null as van_eredeti, forgatas, meret_byte from fuvar_dokumentumok where fuvar_id = $1 order by created_at`, [id]),
   ]);
   const k = await kontextus(sor, megallok);
   const partnerJavaslatok = sor.partner_id ? await getPartnerAdatJavaslatok(sor.partner_id) : [];
@@ -175,6 +175,7 @@ export async function setMegjegyzes(id: string, megjegyzes: string | null): Prom
 
 /** Fuvarlevél-oldal megjelenítési forgatása. */
 export async function forgatFuvarlevelOldalt(dokId: string, irany: 90 | -90): Promise<void> { return actions.forgatFuvarlevelOldalt(dokId, irany); }
+export async function ujraszkenneldFuvarlevelOldalt(dokId: string): Promise<{ ok: true } | { ok: false; hiba: string }> { return actions.ujraszkenneldFuvarlevelOldalt(dokId); }
 
 /**
  * Kocsi hozzárendelése egy fuvarhoz (Budaházi Zoltán, 2026-09-26): eddig

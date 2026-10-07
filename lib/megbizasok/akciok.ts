@@ -2,6 +2,7 @@
 
 import { query, withTransaction } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import { szkennelj } from "@/lib/fuvarozas/doksi-kivagas";
 import { requireSession } from "@/lib/auth/dal";
 import { requireAnyEditPermission, requireEditPermission } from "@/lib/auth/require-permission";
 import { type Allapot } from "@/lib/megbizasok/allapotgep";
@@ -102,6 +103,31 @@ export async function forgatFuvarlevelOldalt(dokId: string, irany: 90 | -90): Pr
     await tx(`insert into fuvar_megbizas_esemeny (megbizas_id, esemeny, forras, ki, reszletek) values ($1, 'modositva', 'ember', $2, $3)`,
       [dok.fuvar_id, session.name ?? session.username, JSON.stringify({ mezo: "fuvarlevel_forgatas", dok_id: dokId, irany })]);
   });
+}
+
+/**
+ * Fuvarlevél-oldal újra-feldolgozása az eltárolt eredeti fotóból (2026-10-07,
+ * Micó #300: a forgatott telefonfotók csíkosan, dupla képpel kerültek be —
+ * a szkennelés javítása után a már feltöltött oldalak így hozhatók helyre).
+ * A forgatás nullázódik, mert az új oldal már helyes állásban készül.
+ */
+export async function ujraszkenneldFuvarlevelOldalt(dokId: string): Promise<{ ok: true } | { ok: false; hiba: string }> {
+  await requireAnyEditPermission(["fuvarozas", "elszamolas"]);
+  if (!/^\d+$/.test(dokId)) return { ok: false, hiba: "Érvénytelen oldal." };
+  const session = await requireSession();
+  const [dok] = await query<{ fuvar_id: string; eredeti: Buffer | null }>(
+    `select fuvar_id::text, eredeti from fuvar_dokumentumok where id = $1 and tipus = 'fuvarlevel'`, [dokId]
+  );
+  if (!dok) return { ok: false, hiba: "Nincs ilyen fuvarlevél-oldal." };
+  if (!dok.eredeti) return { ok: false, hiba: "Ehhez az oldalhoz nincs eltárolt eredeti fotó (2026-10-06 előtti feltöltés) — a sofőrnek újra kell fotóznia." };
+  const szken = await szkennelj(dok.eredeti);
+  await withTransaction(async (tx) => {
+    await tx(`update fuvar_dokumentumok set tartalom = $2, mime_type = $3, meret_byte = $4, forgatas = 0 where id = $1`,
+      [dokId, szken.tartalom, szken.mimeType, szken.tartalom.length]);
+    await tx(`insert into fuvar_megbizas_esemeny (megbizas_id, esemeny, forras, ki, reszletek) values ($1, 'modositva', 'ember', $2, $3)`,
+      [dok.fuvar_id, session.name ?? session.username, JSON.stringify({ mezo: "fuvarlevel_ujraszkenneles", dok_id: dokId, kivagva: szken.kivagva })]);
+  });
+  return { ok: true };
 }
 
 export async function setFuvarJarmu(id: string, jarmuKod: string | null): Promise<{ ok: true; cimke: string | null } | { ok: false; hiba: string }> {

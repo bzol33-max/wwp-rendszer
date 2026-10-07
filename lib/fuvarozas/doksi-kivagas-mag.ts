@@ -56,26 +56,42 @@ export async function szkennelj(
   try {
     // A telefon EXIF-forgatását azonnal beégetjük, hogy a koordináták a
     // LÁTOTT képre vonatkozzanak.
-    const kep = sharp(eredeti).rotate();
-    const { width, height } = await kep.metadata();
-    if (!width || !height) return { tartalom: eredeti, mimeType: "image/jpeg", kivagva: false, ok: "ismeretlen méret" };
+    //
+    // A méretet a FORGATÁS UTÁNI nyers képből vesszük (2026-10-07, Micó #300
+    // fuvarlevele: vízszintes csíkok és dupla kép). A metadata() a tárolt,
+    // forgatás előtti szélességet adja — álló fotónál (EXIF 6/8) a szélesség
+    // és a magasság felcserélődik, és a nyers puffert rossz sorhosszal
+    // olvastuk.
+    const { data: szurke, info } = await sharp(eredeti)
+      .rotate()
+      .greyscale()
+      .toColourspace("b-w")
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+    const width = info.width;
+    const height = info.height;
+    if (!width || !height || info.channels !== 1) {
+      return { tartalom: eredeti, mimeType: "image/jpeg", kivagva: false, ok: "ismeretlen méret" };
+    }
 
     const meret = Math.min(ELEMZES_SZELESSEG / width, ELEMZES_SZELESSEG / height, 1);
     const ew = Math.max(1, Math.round(width * meret));
     const eh = Math.max(1, Math.round(height * meret));
-    const kicsi = await kep.clone().resize(ew, eh, { fit: "fill" }).greyscale().raw().toBuffer();
+    const kicsi = await sharp(szurke, { raw: { width, height, channels: 1 } })
+      .resize(ew, eh, { fit: "fill" })
+      .toColourspace("b-w")
+      .raw()
+      .toBuffer();
 
     const sarkok = keressLapot(kicsi, ew, eh);
     if (!sarkok) {
       // Nincs biztos lap-kontúr: a kivágás kimarad, de a tisztítás nem — egy
       // egyenletesen megvilágított, szürkeárnyalatos oldal így is olvashatóbb.
-      const egesz = await kep.clone().greyscale().raw().toBuffer();
-      return { tartalom: await tisztitsd(egesz, width, height), mimeType: "image/jpeg", kivagva: false, ok: "nincs felismert lap" };
+      return { tartalom: await tisztitsd(szurke, width, height), mimeType: "image/jpeg", kivagva: false, ok: "nincs felismert lap" };
     }
 
     // Vissza a teljes felbontásra.
     const teljes = sarkok.map((p) => ({ x: p.x / meret, y: p.y / meret }));
-    const szurke = await kep.clone().greyscale().raw().toBuffer();
     const lap = egyenesitsd(szurke, width, height, teljes);
     const kesz = await tisztitsd(lap.adat, lap.szelesseg, lap.magassag);
     return { tartalom: kesz, mimeType: "image/jpeg", kivagva: true };
@@ -115,6 +131,7 @@ async function tisztitsd(szurke: Buffer, w: number, h: number): Promise<Buffer> 
     .resize(kw, kh, { fit: "fill" })
     .blur(2)
     .resize(w, h, { fit: "fill" })
+    .toColourspace("b-w")
     .raw()
     .toBuffer();
 

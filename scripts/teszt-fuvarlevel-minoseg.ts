@@ -31,5 +31,19 @@ assert.equal(pdfOldalMeret(800, 1200), "allo");
   }
   assert.ok(balSotet > 1000, `a bal oldali sorok eltűntek (${balSotet} sötét pixel)`);
   assert.ok(jobbSotet < balSotet * 0.02, `a jobb oldalra „átkenődött" a tartalom (${jobbSotet} vs ${balSotet})`);
-  console.log("Fuvarlevél-minőség tesztek rendben (a szkennelés csatorna-elcsúszás nélkül).");
+
+  // Regresszió (2026-10-07, Micó #300): álló fotó EXIF-forgatással (a
+  // tárolt kép fekvő, orientation 6). A méretet a forgatás előtti képből
+  // vettük, a nyers puffert rossz sorhosszal olvastuk: vízszintes csíkok és
+  // dupla kép. Most: álló kimenet, és egy egyszínű papír-sávon nincs csík.
+  const fw = 1200, fh = 800;
+  const fekvoSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="${fw}" height="${fh}"><rect width="100%" height="100%" fill="#333"/><rect x="80" y="80" width="1040" height="640" fill="#eeeae0"/></svg>`;
+  const allo = await sharp(Buffer.from(fekvoSvg)).jpeg({ quality: 90 }).withMetadata({ orientation: 6 }).toBuffer();
+  const e2 = await szkennelj(allo);
+  const k2 = await sharp(e2.tartalom).greyscale().raw().toBuffer({ resolveWithObject: true });
+  assert.ok(k2.info.height > k2.info.width, `az álló fotóból fekvő oldal lett (${k2.info.width}×${k2.info.height})`);
+  let sotet = 0;
+  for (let i = 0; i < k2.data.length; i++) if (k2.data[i] < 128) sotet++;
+  assert.ok(sotet < k2.data.length * 0.01, `csíkos az üres lap (${sotet} sötét pixel a ${k2.data.length}-ből)`);
+  console.log("Fuvarlevél-minőség tesztek rendben (a szkennelés csatorna-elcsúszás nélkül, álló fotón is).");
 })().catch((e) => { console.error(e); process.exit(1); });
