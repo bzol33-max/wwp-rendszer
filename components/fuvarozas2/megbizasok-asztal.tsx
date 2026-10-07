@@ -13,7 +13,7 @@ import {
   modositElvinnivalot,
   rogzitElvinnivalot,
   torolElokeszitettet,
-  utemezElvinnivalot,
+  kocsihozAdom,
   visszaElvinnivalokba,
 } from "@/lib/fuvarozas2/sajat-fuvar";
 import type { MunkaasztalSor } from "@/lib/fuvarozas2/megbizasok";
@@ -157,31 +157,87 @@ function ElvinniKartya({
   ma,
   kijelolt,
   href,
+  jarmuvek,
+  szerkesztheto,
 }: {
   sor: MunkaasztalSor;
   ma: string;
   kijelolt: boolean;
   href: string;
+  jarmuvek: { kod: string; cimke: string }[];
+  szerkesztheto: boolean;
 }) {
+  const router = useRouter();
   const napokOta = Math.max(
     0,
     Math.floor((Date.parse(`${ma}T12:00:00Z`) - Date.parse(sor.letrehozva_at)) / 86_400_000)
   );
+  const legkorabbiNap = sor.legkorabban && sor.legkorabban > ma ? sor.legkorabban : ma;
+  const [jarmuKod, setJarmuKod] = useState("");
+  const [nap, setNap] = useState(legkorabbiNap);
+  const [kuldes, setKuldes] = useState(false);
+
+  // Egy lépésben kocsira (2026-10-07): kocsi + nap, és megy a sofőrnek.
+  async function kocsira() {
+    if (!jarmuKod || !nap) return;
+    setKuldes(true);
+    try {
+      const eredmeny = await kocsihozAdom(sor.id, { jarmuKod, nap });
+      if (!eredmeny.ok) {
+        toast.error(eredmeny.hiba);
+        return;
+      }
+      toast.success("Kocsira adva — a sofőr látja");
+      router.refresh();
+    } finally {
+      setKuldes(false);
+    }
+  }
 
   return (
-    <Link
-      href={href}
-      scroll={false}
-      className={`block min-h-11 rounded-2xl border border-foreground/10 bg-card p-3 text-sm hover:bg-muted/40 focus-visible:outline-2 focus-visible:outline-[var(--f2-blue)] ${kijelolt ? "bg-[var(--f2-blue-l)]" : ""}`}
-    >
-      <strong className="block">{sor.felrako} → {sor.lerako}</strong>
+    <div className={`rounded-2xl border border-foreground/10 p-3 text-sm ${kijelolt ? "bg-[var(--f2-blue-l)]" : "bg-card"}`}>
+      <strong className="block">{varos(sor.felrako)} → {utolsoVaros(sor.lerako)}</strong>
       <span className="mt-1 block text-xs text-muted-foreground">
         {sor.legkorabban ? `legkorábban: ${napRovid(sor.legkorabban)}` : "bármikor"} · {napokOta} napja vár
       </span>
       {sor.megjegyzes ? (
         <span className="block truncate text-xs text-muted-foreground">{sor.megjegyzes.split("\n")[0]}</span>
       ) : null}
-    </Link>
+      {szerkesztheto ? (
+        <div className="mt-2 flex flex-col gap-1.5">
+          <select
+            aria-label="Kocsi"
+            value={jarmuKod}
+            onChange={(e) => setJarmuKod(e.target.value)}
+            className="min-h-10 rounded-lg border border-foreground/15 bg-background px-2 text-sm"
+          >
+            <option value="">Melyik kocsi?</option>
+            {jarmuvek.map((jarmu) => (
+              <option key={jarmu.kod} value={jarmu.kod}>{jarmu.cimke}</option>
+            ))}
+          </select>
+          <input
+            type="date"
+            aria-label="Nap"
+            value={nap}
+            min={sor.legkorabban ?? undefined}
+            onChange={(e) => setNap(e.target.value)}
+            className="min-h-10 rounded-lg border border-foreground/15 bg-background px-2 text-sm"
+          />
+          <button
+            type="button"
+            disabled={kuldes || !jarmuKod || !nap}
+            onClick={kocsira}
+            className="min-h-11 rounded-lg bg-[var(--f2-mint)] px-3 font-bold text-white disabled:opacity-50"
+          >
+            {kuldes ? "Mentés…" : "Kocsira adom"}
+          </button>
+        </div>
+      ) : null}
+      <Link href={href} scroll={false} className="mt-2 inline-block text-xs font-semibold text-[var(--f2-blue)]">
+        Kocsik hete · szerkesztés ›
+      </Link>
+    </div>
   );
 }
 
@@ -373,6 +429,7 @@ export function MegbizasokAsztal({
   het,
   szerkesztheto,
   helyek = [],
+  jarmuvek = [],
   ma,
 }: {
   sorok: MunkaasztalSor[];
@@ -381,6 +438,7 @@ export function MegbizasokAsztal({
   het?: ElvinniHet | null;
   szerkesztheto: boolean;
   helyek?: Cimadat[];
+  jarmuvek?: { kod: string; cimke: string }[];
   ma: string;
 }) {
   const router = useRouter();
@@ -400,13 +458,13 @@ export function MegbizasokAsztal({
 
   async function utemez(cimke: string, kod: string, nap: string) {
     if (!nyitva) return;
-    if (!(await confirm(`${cimke} · ${napRovid(nap)} — ütemezem?`, { title: "Fuvar ütemezése", confirmLabel: "Ütemezem" }))) return;
-    const eredmeny = await utemezElvinnivalot(nyitva.id, { jarmuKod: kod, nap });
+    if (!(await confirm(`${cimke} · ${napRovid(nap)} — kocsira adom? A sofőr azonnal látja.`, { title: "Kocsira adás", confirmLabel: "Kocsira adom" }))) return;
+    const eredmeny = await kocsihozAdom(nyitva.id, { jarmuKod: kod, nap });
     if (!eredmeny.ok) {
       toast.error(eredmeny.hiba);
       return;
     }
-    toast.success("Fuvar ütemezve");
+    toast.success("Kocsira adva — a sofőr látja");
     bezarPanel();
     router.refresh();
   }
@@ -471,6 +529,8 @@ export function MegbizasokAsztal({
                   ma={ma}
                   kijelolt={nyitva?.id === sor.id}
                   href={munkaasztalLink(szuro, { elvinni: sor.id, het: undefined, reszlet: undefined })}
+                  jarmuvek={jarmuvek}
+                  szerkesztheto={szerkesztheto}
                 />
               </li>
             ))}

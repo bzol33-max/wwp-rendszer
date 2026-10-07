@@ -63,6 +63,7 @@ export async function rogzitElvinnivalot(a: actions.ElvinniAdat): Promise<Eredme
 export async function modositElvinnivalot(id: string, a: actions.ElvinniAdat): Promise<Eredmeny> { return actions.modositElvinnivalot(id, a); }
 export async function utemezElvinnivalot(id: string, a: { jarmuKod: string; nap: string }): Promise<Eredmeny> { return actions.utemezElvinnivalot(id, a); }
 export async function visszaElvinnivalokba(id: string): Promise<Eredmeny> { return actions.visszaElvinnivalokba(id); }
+export async function kocsihozAdom(id: string, a: { jarmuKod: string; nap: string }): Promise<Eredmeny> { return actions.kocsihozAdom(id, a); }
 
 /**
  * „Kocsira adom”: a kocsi a `jarmu` mezőbe kerül (a sofőr appja innen

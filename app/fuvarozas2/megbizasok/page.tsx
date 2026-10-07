@@ -106,7 +106,7 @@ export default async function Page({ searchParams }: {
       <div className="hidden lg:block">
         {parositatlan.length > 0 ? <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2 rounded-xl bg-[var(--f2-amb-l)] px-4 py-2 text-sm text-[var(--f2-amb)]"><span><b className="text-foreground">{parositatlan.length} fuvarszámla nincs fuvarhoz párosítva:</b> {parositatlan.slice(0,3).map(p=>`${p.szamlaszam} · ${p.vevo_nev} · ${formatFt(p.netto)}`).join(" | ")}{parositatlan.length>3?" …":""}</span><span className="text-xs">A számlaszámot a fuvar részleteinél lehet beírni.</span></div> : null}
         <div className="flex items-start gap-3"><div className="min-w-0 flex-1"><KeresoJavaslatok key={q ?? ""} index={asztal.kereso} kezdo={q ?? ""} /></div>{q ? <Link href="/fuvarozas2/megbizasok" className="mt-1.5 shrink-0 rounded-lg border px-3 py-1.5 text-sm">× keresés törlése</Link> : null}</div>
-        <MegbizasokAsztal key={szuro.elvinni ?? "lista"} sorok={[...asztal.ber,...asztal.sajat]} nyitottak={nyitottak} szuro={szuro} het={elvinniHet} szerkesztheto={szerkeszthet} helyek={gyorsHelyek?.helyek} ma={asztal.ma} />
+        <MegbizasokAsztal key={szuro.elvinni ?? "lista"} sorok={[...asztal.ber,...asztal.sajat]} nyitottak={nyitottak} szuro={szuro} het={elvinniHet} szerkesztheto={szerkeszthet} helyek={gyorsHelyek?.helyek} jarmuvek={gyorsHelyek?.jarmuvek} ma={asztal.ma} />
       </div>
       {szerkeszthet && elokeszitett && segedlet ? <div className="hidden lg:block"><ReszletLap bezarHref={bezar} cim={`#${elokeszitett.id} · Előkészítés`}>{elokeszitett.idopont_nyitott ? null : <VisszaElvinniGomb id={elokeszitett.id} />}{sajatFelso}</ReszletLap></div> : null}
 

@@ -715,3 +715,17 @@ export async function torolElokeszitettet(id: string): Promise<Eredmeny> {
   await naplo(id, "torolve", { elokeszites: true });
   return { ok: true, id };
 }
+
+// Egy lépésben kocsira (2026-10-07, Budaházi Zoltán: „nem tudom kocsihoz
+// adni, egyszerűsítsd”): az időpont nélküli saját fuvar kártyáján kocsi +
+// nap, és megy a sofőrnek — az ütemezés és a „Kocsira adom” együtt.
+export async function kocsihozAdom(id: string, a: { jarmuKod: string; nap: string }): Promise<Eredmeny> {
+  const utemezve = await utemezElvinnivalot(id, a);
+  if (!utemezve.ok) return utemezve;
+  const kocsin = await kocsiraAdom(id);
+  revalidatePath("/fuvarozas2/megbizasok");
+  if (!kocsin.ok) {
+    return { ok: false, hiba: `Ütemezve, de nem került kocsira: ${kocsin.hiba} (a Beérkezett / Előkészítés oszlopban folytatható)` };
+  }
+  return kocsin;
+}
