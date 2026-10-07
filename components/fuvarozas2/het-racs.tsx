@@ -30,6 +30,14 @@ const PILL: Record<HetSzin, string> = {
 const ALLAPOT_PONT = { mint: "bg-[var(--f2-mint)]", amber: "bg-[var(--f2-amb)]", red: "bg-[var(--f2-red)]", normal: "bg-foreground/40" } as const;
 
 function Kartya({ k }: { k: HetKartya }) {
+  if (k.folytatodik && k.aznapKesz) {
+    return (
+      <Link href={reszlet(k.id)} className="flex min-w-0 flex-col gap-0.5 rounded-lg border border-[var(--f2-mint)]/30 bg-[var(--f2-mint-l)]/60 px-2 py-1.5 text-xs hover:border-foreground/40">
+        <b className="truncate">✓ #{k.id} {k.partner}</b>
+        <span className="truncate text-[11px] text-muted-foreground">{k.aznap} ✓ · {k.cimke}</span>
+      </Link>
+    );
+  }
   if (k.folytatodik) {
     return (
       <Link href={reszlet(k.id)} className="flex min-w-0 flex-col gap-0.5 rounded-lg border-[1.5px] border-dashed border-foreground/20 bg-card px-2 py-1.5 text-xs hover:border-foreground/40">

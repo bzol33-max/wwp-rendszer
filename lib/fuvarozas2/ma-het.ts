@@ -42,6 +42,8 @@ export type HetKartya = {
   folytatodik: boolean;
   /** A folytatódó napon: aznapi megállók („Debrecen le”), különben null. */
   aznap: string | null;
+  /** A folytatódó nap teendője kész (a fuvar lezárult, vagy aznapi megállói mind készek). */
+  aznapKesz: boolean;
 };
 
 export type HetMost =
@@ -115,15 +117,21 @@ export function hetCellak(fuvarok: HetFuvar[], megallok: Map<string, HetMegallo[
       const gs = megallok.get(f.id) ?? [];
       const elsoNap = nap === napok[0].nap ? (f.felrakas_nap ?? nap) >= nap : (f.felrakas_nap ?? nap) === nap;
       const folytatodik = !elsoNap;
-      const aznapMegallok = gs.filter((m) => m.nap === nap).map((m) => `${m.varos} ${m.tipus === "felrako" ? "fel" : "le"}`);
+      const aznapiGs = gs.filter((m) => m.nap === nap);
+      const aznapMegallok = aznapiGs.map((m) => `${m.varos} ${m.tipus === "felrako" ? "fel" : "le"}`);
+      const allapot = allapotKartya(f, gs);
+      // Kedden a hétfőn indult, már lezárt Lösung/ÁB Speed fuvar ne látsszon
+      // nyitott „folytatódik”-nak (Budaházi Zoltán, 2026-10-07).
+      const aznapKesz = folytatodik && (allapot.szin === "kesz" || allapot.szin === "foto" || (aznapiGs.length > 0 && aznapiGs.every((m) => m.kesz)));
       return {
         id: f.id,
         partner: f.partner ?? "(nincs megbízó)",
         utvonal: `${varos(f.felrako)} → ${varos(f.lerako)}`,
         jelleg: f.jelleg,
-        ...allapotKartya(f, gs),
+        ...allapot,
         folytatodik,
         aznap: folytatodik ? (aznapMegallok.join(", ") || (nap === f.lerakas_nap ? `${varos(f.lerako)} le` : "úton")) : null,
+        aznapKesz,
       };
     });
   });

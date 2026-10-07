@@ -36,6 +36,11 @@ eq("kész fuvar marad: fotóra vár", [cellak[0][0].szin, cellak[0][0].cimke], [
 eq("folyamatban, megálló között: úton", [cellak[0][1].szin, cellak[0][1].cimke], ["uton", "úton"]);
 eq("útvonal városnévvel", cellak[0][2].utvonal, "Sárvár → Debrecen");
 eq("kedden folytatódik, aznapi megállóval", [cellak[1].map((k) => k.id), cellak[1][0].folytatodik, cellak[1][0].aznap], [["293"], true, "Debrecen le"]);
+eq("kedden a még nyitott fuvar folytatódik, nem kész", cellak[1][0].aznapKesz, false);
+const lezartFolyt = hetCellak([{ ...fuvarok[0], id: "297", allapot: "lezart" }], new Map(), napok);
+eq("kedden a lezárt fuvar folytatódó napja kész", [lezartFolyt[1][0].folytatodik, lezartFolyt[1][0].aznapKesz, lezartFolyt[0][0].aznapKesz], [true, true, false]);
+const leteve = hetCellak([{ ...fuvarok[0], id: "8", allapot: "folyamatban" }], new Map([["8", [{ ...megallok.get("293")![0], kesz: true }, { ...megallok.get("293")![1], kesz: true }]]]), napok);
+eq("kedden a lerakott (még nem lezárt) fuvar folytatódó napja kész", leteve[1][0].aznapKesz, true);
 eq("a múlt heti fuvar nincs a rácson", cellak.flat().some((k) => k.id === "280"), false);
 eq("szerda üres", cellak[2].length, 0);
 
