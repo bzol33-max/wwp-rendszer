@@ -81,7 +81,15 @@ export const SOR_SQL = `
          from fuvar_megbizasok m2 left join fuvar_elszamolas e2 on e2.megbizas_id = m2.id
         where m.partner_id is not null and m2.partner_id = m.partner_id and m2.id <> m.id
           and coalesce(nullif(e2.postazasi_cim, ''), nullif(m2.postazasi_cim, '')) is not null
-        order by m2.datum desc, m2.id desc limit 1)) as postazasi_cim,
+        order by m2.datum desc, m2.id desc limit 1),
+      -- A fuvar nincs partnerhez kötve, vagy egy cím nélküli névrokon
+      -- partnerhez: a név-kulcs szerint (normalizaltCegKulcs SQL-ben).
+      (select nullif(p2.postazasi_cim, '') from fuvar_partnerek p2
+        where nullif(p2.postazasi_cim, '') is not null
+          and p2.nev_kulcs in (p.nev_kulcs, trim(regexp_replace(regexp_replace(regexp_replace(
+                translate(lower(coalesce(m.megrendelo, '')), 'áéíóöőúüű', 'aeiooouuu'),
+                '[-.,]', ' ', 'g'), '[[:space:]]+', ' ', 'g'), '[[:space:]]+(kft|zrt|bt|nyrt|kkt)[[:space:]]*$', '')))
+        order by p2.id limit 1)) as postazasi_cim,
     coalesce(e.fizetesi_hatarido_nap, m.fizetesi_hatarido_nap, p.fizetesi_hatarido_nap) as fizetesi_hatarido_nap,
     p.papir_bekuldesi_hatarido_nap as papir_hatarido_nap,
     exists (select 1 from fuvar_dokumentumok d where d.fuvar_id = m.id and d.tipus = 'fuvarlevel') as foto_van,
