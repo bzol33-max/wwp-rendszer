@@ -674,7 +674,9 @@ async function ujFajlokFeldolgozasa(
         // hasábos fejlécből minket (vagy egy felrakó céget) olvasson
         // megrendelőnek — lásd lib/fuvarozas/import/partnerek.ts.
         megrendelo: partner ? partner.nev : llm.megrendelo,
-        postazasiCim: llm.postazasiCim || partner?.postazasiCim || null,
+        // Csupasz e-mail-cím nem postai cím (2026-10-07, Lösung Trans #293:
+        // a „POD: pod@loesung-trans.hu” sorból ide került).
+        postazasiCim: (llm.postazasiCim && !/^\S+@\S+$/.test(llm.postazasiCim.trim()) ? llm.postazasiCim : null) || partner?.postazasiCim || null,
         fizetesiHataridoNap: llm.fizetesiHataridoNap ?? partner?.fizetesiHataridoNap ?? null,
       };
 

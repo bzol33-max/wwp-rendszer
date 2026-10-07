@@ -73,19 +73,20 @@ export const SOR_SQL = `
     coalesce(e.szamla_szam, m.szamla_szam) as szamla_szam, m.kieg_szamla_szamok,
     e.email_elment_at::text,
     coalesce(e.postazva_at, case when m.postazva then m.postazva_at end)::text as postazva_at,
-    -- Üres szöveg = nincs cím; ha sehol nincs, a partner legutóbbi olyan
+    -- Üres szöveg vagy csupasz e-mail-cím = nincs postai cím (a #293 Lösung
+    -- Trans megbízás PDF-jéből „pod@loesung-trans.hu” került ide). Ha sehol nincs, a partner legutóbbi olyan
     -- fuvarjáról, amelyiken volt (2026-10-07, Szabina Posta lapja: a Lösung
     -- Trans fuvarjánál „nincs postázási cím”, holott korábban már volt).
-    coalesce(nullif(e.postazasi_cim, ''), nullif(m.postazasi_cim, ''), nullif(p.postazasi_cim, ''),
-      (select coalesce(nullif(e2.postazasi_cim, ''), nullif(m2.postazasi_cim, ''))
+    coalesce(nullif(regexp_replace(e.postazasi_cim, '^[^[:space:]]+@[^[:space:]]+$', ''), ''), nullif(regexp_replace(m.postazasi_cim, '^[^[:space:]]+@[^[:space:]]+$', ''), ''), nullif(regexp_replace(p.postazasi_cim, '^[^[:space:]]+@[^[:space:]]+$', ''), ''),
+      (select coalesce(nullif(regexp_replace(e2.postazasi_cim, '^[^[:space:]]+@[^[:space:]]+$', ''), ''), nullif(regexp_replace(m2.postazasi_cim, '^[^[:space:]]+@[^[:space:]]+$', ''), ''))
          from fuvar_megbizasok m2 left join fuvar_elszamolas e2 on e2.megbizas_id = m2.id
         where m.partner_id is not null and m2.partner_id = m.partner_id and m2.id <> m.id
-          and coalesce(nullif(e2.postazasi_cim, ''), nullif(m2.postazasi_cim, '')) is not null
+          and coalesce(nullif(regexp_replace(e2.postazasi_cim, '^[^[:space:]]+@[^[:space:]]+$', ''), ''), nullif(regexp_replace(m2.postazasi_cim, '^[^[:space:]]+@[^[:space:]]+$', ''), '')) is not null
         order by m2.datum desc, m2.id desc limit 1),
       -- A fuvar nincs partnerhez kötve, vagy egy cím nélküli névrokon
       -- partnerhez: a név-kulcs szerint (normalizaltCegKulcs SQL-ben).
-      (select nullif(p2.postazasi_cim, '') from fuvar_partnerek p2
-        where nullif(p2.postazasi_cim, '') is not null
+      (select nullif(regexp_replace(p2.postazasi_cim, '^[^[:space:]]+@[^[:space:]]+$', ''), '') from fuvar_partnerek p2
+        where nullif(regexp_replace(p2.postazasi_cim, '^[^[:space:]]+@[^[:space:]]+$', ''), '') is not null
           and p2.nev_kulcs in (p.nev_kulcs, trim(regexp_replace(regexp_replace(regexp_replace(
                 translate(lower(coalesce(m.megrendelo, '')), 'áéíóöőúüű', 'aeiooouuu'),
                 '[-.,]', ' ', 'g'), '[[:space:]]+', ' ', 'g'), '[[:space:]]+(kft|zrt|bt|nyrt|kkt)[[:space:]]*$', '')))
