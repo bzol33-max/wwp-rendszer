@@ -6,7 +6,8 @@
 // mit tenni, egyetlen olcsó lekérdezés. Ugyanez a kör pótolja a bérfuvarok
 // rakott km-ét (lib/fuvarozas2/rakott-km.ts) és a nyitott bérmegbízások
 // tárolt kalkulációját (lib/fuvarozas2/kalkulacio-tar.ts, Tervezés), és a
-// partnerek hiányzó adataira a javaslatokat (lib/fuvarozas2/partner-javaslat.ts).
+// partnerek hiányzó adataira a javaslatokat (lib/fuvarozas2/partner-javaslat.ts),
+// valamint a menetterv-javaslatokat ma és holnapra (lib/menet/generalas.ts).
 
 import { potoldAHianyzoModelleket } from "@/lib/fuvarozas2/modell-szinkron";
 import { potoldRakottKmet } from "@/lib/fuvarozas2/rakott-km";
@@ -14,6 +15,7 @@ import { futtatRendszerkent } from "@/lib/auth/system-context";
 import { egyetlenPeldanyban, query, ZAR_KULCS } from "@/lib/db";
 import { frissitsKalkulaciokat, tervezettBerMegbizasok } from "@/lib/fuvarozas2/kalkulacio-tar";
 import { futtatPartnerJavaslatokat } from "@/lib/fuvarozas2/partner-javaslat";
+import { frissitsMenetJavaslatokat } from "@/lib/menet/generalas";
 
 const INTERVALL_MS = 60 * 60 * 1000;
 const KORLAT = 50;
@@ -51,6 +53,14 @@ async function tickBelso() {
     if (k.szamolt + k.hibas > 0) console.log(`[kalkulacio-tar] ${k.szamolt} kalkuláció frissítve, ${k.hibas} nem számolható.`);
   } catch (err) {
     console.error("[kalkulacio-tar] váratlan hiba:", err);
+  }
+  // Menetterv-javaslatok (árnyék): minden aktív kocsira ma és holnap a
+  // 'javaslat' menet frissül; a jóváhagyotthoz nem nyúl (lib/menet/generalas.ts).
+  try {
+    const mt = await futtatRendszerkent("menetterv", () => frissitsMenetJavaslatokat());
+    if (mt.frissult + mt.hiba > 0) console.log(`[menetterv] ${mt.frissult} javaslat frissült, ${mt.jovahagyott} jóváhagyott kihagyva, ${mt.hiba} hiba.`);
+  } catch (err) {
+    console.error("[menetterv] váratlan hiba:", err);
   }
   // Elavult gyorsítótár- és megfigyelés-sorok takarítása (audit PERF-7/8):
   // a lejárt külső válaszokat eddig semmi nem törölte, az élő megfigyeléseket

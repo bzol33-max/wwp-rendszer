@@ -22,6 +22,7 @@ import { ALLAPOT_CIMKE } from "@/lib/megbizasok/allapotgep";
 import { duplikatumSor, keresDuplikatumot, type DuplikatumJelolt } from "@/lib/fuvarozas2/sajat-duplikatum";
 import { utemezhetoNap } from "@/lib/megbizasok/elvinni-szabalyok";
 import { budapestNapISO } from "@/lib/fuvarozas/idozona";
+import { irValtozasokat, naplozandoValtozasok } from "@/lib/menet/valtozas";
 
 
 function egesz(s: string): number | null {
@@ -155,6 +156,9 @@ export async function setFuvarJarmu(id: string, jarmuKod: string | null): Promis
     `insert into fuvar_megbizas_esemeny (megbizas_id, esemeny, forras, ki, reszletek) values ($1, 'hozzarendeles', 'ember', $2, $3)`,
     [id, session.name ?? session.username, JSON.stringify({ kocsi: cimke, elozo: sor.jarmu })]
   );
+  // Mező-szintű napló (fuvar_valtozas) — a hiánya nem buktathatja a hozzárendelést.
+  await irValtozasokat(query, "fuvar_megbizasok", id, naplozandoValtozasok({ jarmu: sor.jarmu }, { jarmu: cimke }), session.name ?? session.username)
+    .catch((err) => console.error("[fuvar_valtozas] nem íródott:", err));
   return { ok: true, cimke };
 }
 
@@ -198,6 +202,13 @@ export async function modositBerFuvart(id: string, a: BerFuvarAdat): Promise<{ o
     await tx(
       `insert into fuvar_megbizas_esemeny (megbizas_id, esemeny, forras, ki, reszletek) values ($1, 'modositva', 'ember', $2, $3)`,
       [id, session.name ?? session.username, JSON.stringify({ mezok: valtozott, honnan: "megbizasok" })]
+    );
+    // Mező-szintű napló (fuvar_valtozas): kocsi, napok, felrakó/lerakó, fuvardíj — csak a ténylegesen változottak.
+    const csak = (o: Record<string, unknown>) => Object.fromEntries(valtozott.map((k) => [k, o[k]]));
+    await irValtozasokat(
+      tx, "fuvar_megbizasok", id,
+      naplozandoValtozasok(csak(regi), csak({ ...a, fuvardij: egesz(a.fuvardij) ?? "" })),
+      session.name ?? session.username
     );
     return { nincsValtozas: false };
   });

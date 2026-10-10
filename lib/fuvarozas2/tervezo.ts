@@ -17,6 +17,8 @@ import { getFuvarBeallitasok } from "@/lib/beallitasok/fuvar";
 import { type AjanlatMinosites } from "@/lib/fuvarozas2/kalkulator-alap";
 import { frissitsKalkulaciokat, getTaroltKalkulaciok, szamoldEsTarold, type TaroltKalkulacio } from "@/lib/fuvarozas2/kalkulacio-tar";
 import { napiSorrend, tervIdoMegbizasbol } from "@/lib/fuvarozas2/napi-sorrend";
+import { alkalmazMenetSorrendet } from "@/lib/menet/menet-alap";
+import { menetSorrendek } from "@/lib/menet/repo";
 import { celar, elozmenyElteres, hetHatas, legjobbKocsi, type HetEredmeny, type HetFuvar, type HetParam, type Pont } from "@/lib/fuvarozas2/tervezo-alap";
 
 export type BejovoSor = {
@@ -165,6 +167,9 @@ export async function getTervezo(szuro: { m?: string; kocsi?: string }): Promise
      where j.aktiv and j.ecofleet_object_id is not null order by j.id`
   )).map((j) => ({ ...j, sofor: findJarmuByKod(j.kod, jarmuLista)?.sofor ?? j.sofor?.split(" ").pop() ?? j.kod }));
 
+  // A jóváhagyott menetek (lib/menet) a lekért időszakra — egy lekérdezés.
+  const menetek = await menetSorrendek(napPlusz(ma, -24), napPlusz(ma, 60));
+
   /** Egy jelölt fuvar hatása minden kocsi hetére (a jelölt felrakásának hetén). */
   function kocsiHetek(jelolt: FuvarPont): KocsiHet[] {
     const kezd = hetfo(jelolt.felrakas_nap);
@@ -179,7 +184,11 @@ export async function getTervezo(szuro: { m?: string; kocsi?: string }): Promise
       const napok = Array.from({ length: 5 }, (_, i) => napPlusz(kezd, i)).map((nap) => ({
         nap,
         // A nap kártyái a közös sorrendben (napi-sorrend.ts), nem a lekérdezés datum, id rendjében.
-        fuvarok: napiSorrend([...heti, jelolt].filter((f) => f.felrakas_nap <= nap && f.lerakas_nap >= nap), sorrendAdat)
+        fuvarok: alkalmazMenetSorrendet(
+          napiSorrend([...heti, jelolt].filter((f) => f.felrakas_nap <= nap && f.lerakas_nap >= nap), sorrendAdat),
+          menetek.get(j.kod)?.get(nap),
+          (f) => f.id
+        )
           .map((f) => ({
             id: f.id,
             cim: f.partner ?? (f.jelleg === "sajat" ? "saját fuvar" : "(nincs megbízó)"),

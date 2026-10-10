@@ -39,6 +39,8 @@ import type { MegalloReszlet } from "@/lib/fuvarozas/sofor-adatok";
 import type { Allapot } from "@/lib/fuvarozas/allapot";
 import { tukorSorok, type TukorSor } from "@/lib/fuvarozas2/ma-tukor";
 import { berUtkozes, napiSorrend, tervIdoMegbizasbol } from "@/lib/fuvarozas2/napi-sorrend";
+import { menetSorrendek } from "@/lib/menet/repo";
+import { alkalmazMenetSorrendet } from "@/lib/menet/menet-alap";
 import { hetCellak, hetMost, hetNapjai, hetSzama, type HetFuvar, type HetKartya, type HetMegallo, type HetMost, type HetNap } from "@/lib/fuvarozas2/ma-het";
 
 export type CsempeSzin = "normal" | "amber" | "red" | "mint";
@@ -299,6 +301,14 @@ export async function getMaVaszon(): Promise<MaVaszon> {
      where j.aktiv order by j.id`
   );
   const jarmuvek = osszesJarmu.filter((j) => j.ecofleet_object_id);
+  // A jóváhagyott menetek sorrendje (lib/menet) a mai, a holnapi és a heti
+  // rács napjaira — EGY lekérdezés; ahol nincs, a közös napi szabály marad.
+  const hetNapok = hetNapjai(ma);
+  const menetek = await menetSorrendek(
+    [ma, hetNapok[0].nap].sort()[0],
+    [holnap, hetNapok[hetNapok.length - 1].nap].sort().at(-1)!
+  );
+  const menetSorrendje = (kod: string | null, nap: string) => (kod ? menetek.get(kod)?.get(nap) ?? null : null);
 
   const aznap = (s: { felrakas_nap: string | null; lerakas_nap: string | null }, nap: string) =>
     (s.felrakas_nap ?? "") <= nap && (s.lerakas_nap ?? s.felrakas_nap ?? "") >= nap;
@@ -644,12 +654,16 @@ export async function getMaVaszon(): Promise<MaVaszon> {
     // A tükörbe a ma lezárultak is (készként) — a holnapi folytatást nem jelzik.
     const maiLezartak = lezartMaiak.filter((s) => s.jarmu_kod === j.kod);
     // A holnapi fuvarok a menet sorrendjében, nem a rögzítésében (napi-sorrend.ts).
-    const holnapiak = napiSorrend(
-      sajat.filter((s) => aznap(s, holnap) && !maiak.includes(s)),
-      (s) => ({
-        id: s.id, felrakasNap: s.felrakas_nap, lerakasNap: s.lerakas_nap, felrako: s.felrako, lerako: s.lerako,
-        tervIdo: tervIdoMegbizasbol(s.felrakas_nap, s.felrakas_ablak_tol, s.idopont),
-      })
+    const holnapiak = alkalmazMenetSorrendet(
+      napiSorrend(
+        sajat.filter((s) => aznap(s, holnap) && !maiak.includes(s)),
+        (s) => ({
+          id: s.id, felrakasNap: s.felrakas_nap, lerakasNap: s.lerakas_nap, felrako: s.felrako, lerako: s.lerako,
+          tervIdo: tervIdoMegbizasbol(s.felrakas_nap, s.felrakas_ablak_tol, s.idopont),
+        })
+      ),
+      menetSorrendje(j.kod, holnap),
+      (s) => s.id
     );
     const elo = becenev ? idovonal?.jarmuvek.find((x) => x.sofor === becenev) : undefined;
 
@@ -702,6 +716,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
         etaCel: elo?.eloEta?.cel ?? null,
         most,
         ma,
+        menetSorrend: menetSorrendje(j.kod, ma),
       }),
       holnap: holnapiak.map(blokkKesz),
       holnapFolytatodik: maiak.some((s) => (s.lerakas_nap ?? "") >= holnap),
@@ -717,7 +732,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
   }
 
   // ---------------------------------------------------------------- heti rács (R2)
-  const napok = hetNapjai(ma);
+  const napok = hetNapok;
   const hetFuvarok = await query<HetFuvar>(
     `select m.id::text, m.allapot, m.jelleg, coalesce(p.nev, m.megrendelo) as partner,
        coalesce(m.hivatkozas_kanonikus, m.pozicioszam, m.reise_id) as hivatkozas, j.kod as jarmu_kod,
@@ -753,7 +768,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
     sorok: kocsik.map((k) => ({
       kod: k.kod, sofor: k.sofor, cimke: k.cimke, helykitolto: k.helykitolto, allapot: k.allapot,
       most: hetMost(k.sorok),
-      cellak: hetCellak(k.kod ? hetFuvarok.filter((f) => f.jarmu_kod === k.kod) : [], hetMegallok, napok),
+      cellak: hetCellak(k.kod ? hetFuvarok.filter((f) => f.jarmu_kod === k.kod) : [], hetMegallok, napok, (nap) => menetSorrendje(k.kod, nap)),
     })),
     kocsiNelkul: hetCellak(hetFuvarok.filter((f) => !f.jarmu_kod), hetMegallok, napok),
   };
