@@ -5,7 +5,7 @@ import { requireAnyViewPermission } from "@/lib/auth/require-permission";
 import { geokodolCachelve } from "@/lib/fuvarozas/erintes-felismeres";
 import { varosNev } from "@/lib/fuvarozas/varos";
 import { getIndulasiTelephely } from "@/lib/fuvarozas/telephelyek-db";
-import { napiSorrend } from "@/lib/fuvarozas2/napi-sorrend";
+import { napiSorrend, tervIdoMegbizasbol } from "@/lib/fuvarozas2/napi-sorrend";
 import { findJarmuByKod } from "@/lib/fuvarozas/vehicles";
 import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
 import { elvinniCellaKm, hetKezdeteElvinni } from "@/lib/megbizasok/elvinni-szabalyok";
@@ -22,6 +22,10 @@ type HetiMegbizas = {
   kezdet: string;
   veg: string;
   utemezett: boolean;
+  /** A közös sorrendhez (napi-sorrend.ts): kiírt felrakási ablak, időpont-mező, lezárt-e. */
+  felrakas_ablak_tol: string | null;
+  idopont: string | null;
+  lezart: boolean;
 };
 
 type Pont = { lat: number; lon: number };
@@ -108,7 +112,9 @@ export async function getElvinniHet(
        m.lerako,
        to_char(m.datum, 'YYYY-MM-DD') as kezdet,
        to_char(coalesce(m.lerakas_datum, m.datum), 'YYYY-MM-DD') as veg,
-       (m.elokeszites and m.elokeszites_jarmu is not null) as utemezett
+       (m.elokeszites and m.elokeszites_jarmu is not null) as utemezett,
+       m.felrakas_ablak_tol::text as felrakas_ablak_tol, m.idopont,
+       (m.allapot in ('teljesitve','szamlazhato','szamlazva','email_elment','postazva','lezart')) as lezart
      from fuvar_megbizasok m
      left join fuvar_jarmuvek j on j.id = m.jarmu_id
      left join fuvar_partnerek p on p.id = m.partner_id
@@ -152,6 +158,8 @@ export async function getElvinniHet(
         lerakasNap: munka.veg,
         felrako: munka.felrako,
         lerako: munka.lerako,
+        tervIdo: tervIdoMegbizasbol(munka.kezdet, munka.felrakas_ablak_tol, munka.idopont),
+        lezart: munka.lezart,
       })
     );
     let allohely = kocsiMunkai.filter((munka) => munka.veg < hetKezdet).at(-1)?.lerako ?? telephely;
@@ -166,6 +174,8 @@ export async function getElvinniHet(
           lerakasNap: munka.veg,
           felrako: munka.felrako,
           lerako: munka.lerako,
+          tervIdo: tervIdoMegbizasbol(munka.kezdet, munka.felrakas_ablak_tol, munka.idopont),
+          lezart: munka.lezart,
         })
       );
       if (aznapiMunkak.length > 0) {

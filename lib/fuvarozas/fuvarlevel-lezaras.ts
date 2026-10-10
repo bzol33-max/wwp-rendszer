@@ -11,14 +11,22 @@
 //   1. a fuvar minden más megállója kész (sofőr "Indulok" vagy GPS-távozás), és
 //   2. a kocsinak nincs másik, még nyitott fuvarja be nem fejezett lerakóval,
 //      ami ELŐTTE jár: korábbi napi (ellenőrzésre vár/tervezett/folyamatban),
-//      vagy ugyanaznapi, már elindult (folyamatban).
+//      vagy ugyanaznapi, már elindult (folyamatban) és az első ténye
+//      (érkezés/kész) KORÁBBI, mint ennek a fuvarnak az első ténye.
 // Különben a fotó elmentődik, de nem zár, és a sofőr figyelmeztetést kap.
 
 /** A fuvar egy megálló-sora (fuvar_megallok), sorszám szerint. */
 export type LezarasMegallo = { sorszam: number; tipus: string; kesz: boolean };
 
 /** A kocsi egy másik, nyitott fuvarja. `nap` = felrakás napja (YYYY-MM-DD). */
-export type MasikFuvar = { id: string; nap: string; allapot: string; nyitottLerako: boolean };
+export type MasikFuvar = {
+  id: string;
+  nap: string;
+  allapot: string;
+  nyitottLerako: boolean;
+  /** A fuvar megállóinak legkorábbi ténye (GPS-érkezés, sofőr érkezés/kész), ISO; null, ha még nincs. */
+  elsoTeny?: string | null;
+};
 
 export type FotoLezarasDontes = {
   /** A lezárandó megálló indexe (sorszam − 1), vagy null, ha a fotó nem zár. */
@@ -30,13 +38,18 @@ export type FotoLezarasDontes = {
 const NYITOTT = new Set(["ellenorzesre_var", "tervezett", "folyamatban"]);
 
 /** Az a másik fuvar, amelyik a kocsin ELŐTTE jár, és a lerakója még nincs kész. */
-export function elozoNyitottFuvar(ennekNapja: string, masikFuvarok: MasikFuvar[]): MasikFuvar | null {
+export function elozoNyitottFuvar(ennekNapja: string, masikFuvarok: MasikFuvar[], ennekElsoTenye: string | null = null): MasikFuvar | null {
+  // Ugyanaznapi elindult fuvar csak akkor jár ELŐTTE, ha korábban indult:
+  // a bérfuvar lerakásakor a következő saját fuvar felrakója is tényt kap
+  // (folyamatban lesz), de az a bérfuvar CMR-fotóját nem tarthatja vissza.
+  const elotteIndult = (m: MasikFuvar) =>
+    !ennekElsoTenye || (!!m.elsoTeny && Date.parse(m.elsoTeny) < Date.parse(ennekElsoTenye));
   return (
     masikFuvarok.find(
       (m) =>
         m.nyitottLerako &&
         NYITOTT.has(m.allapot) &&
-        (m.nap < ennekNapja || (m.nap === ennekNapja && m.allapot === "folyamatban"))
+        (m.nap < ennekNapja || (m.nap === ennekNapja && m.allapot === "folyamatban" && elotteIndult(m)))
     ) ?? null
   );
 }
@@ -44,7 +57,8 @@ export function elozoNyitottFuvar(ennekNapja: string, masikFuvarok: MasikFuvar[]
 export function fotoLezarasDontes(
   megallok: LezarasMegallo[],
   ennekNapja: string,
-  masikFuvarok: MasikFuvar[]
+  masikFuvarok: MasikFuvar[],
+  ennekElsoTenye: string | null = null
 ): FotoLezarasDontes {
   const sorban = [...megallok].sort((a, b) => a.sorszam - b.sorszam);
   const utolso = sorban.at(-1);
@@ -56,7 +70,7 @@ export function fotoLezarasDontes(
       figyelmeztetes: "A fotó elmentve, de a fuvar nem zárult le: van még nyitott megálló ezen a fuvaron.",
     };
   }
-  const elozo = elozoNyitottFuvar(ennekNapja, masikFuvarok);
+  const elozo = elozoNyitottFuvar(ennekNapja, masikFuvarok, ennekElsoTenye);
   if (elozo) {
     return {
       megalloIndex: null,

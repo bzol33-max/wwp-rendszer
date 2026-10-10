@@ -261,6 +261,18 @@ eq("más célú ETA nem kerül rossz megállóra", csaszarEta.find((r) => r.tipu
   eq("csúszó fuvar megállói: „csúszik”, kiemelve", cs.map((r) => [r.elteres, r.kiemelt]), [["csúszik", "kesik"], ["csúszik", "kesik"]]);
   eq("csúszó fuvar: a terv a nap nevével", cs[0].terv, "vasárnap");
   eq("nem csúszó fuvarnál nincs „csúszik”", tn.some((r) => r.tipus === "megallo" && r.fuvarId !== "340" && r.elteres === "csúszik"), false);
+
+  // Terv-idő a megbízásból (tervIdoMegbizasbol), mint minden más nézetben:
+  // az időpont-mező („06:00”, ablak nélkül) időzít; a lerakó ablaka nem.
+  const ber06: TukorFuvar = { id: "350", partner: "Bér 06:00", hivatkozas: null, jelleg: "ber", megallo_reszletek: null,
+    felrakasNap: "2026-10-12", lerakasNap: "2026-10-12", felrakasAblakTol: null, idopont: "06:00",
+    megallok: [m(1, "felrako", "Debrecen", n12({})), m(2, "lerako", "Miskolc", n12({}))] };
+  eq("időpont-mező 06:00 (ablak nélkül): időzített, a korábbi id-jű saját elé", fejek(tukorSorok({ fuvarok: [sajat, ber06], allasok: [], eta: null, most: d12("05:00"), ma: "2026-10-12" })), ["# Bér 06:00", "# Saját Szakoly"]);
+  const csakLerakoAblak: TukorFuvar = { id: "301", partner: "Csak lerakó-ablak", hivatkozas: null, jelleg: "sajat", megallo_reszletek: null,
+    felrakasNap: "2026-10-12", lerakasNap: "2026-10-12", felrakasAblakTol: null, idopont: null,
+    megallok: [m(1, "felrako", "Szakoly", n12({})), m(2, "lerako", "Nyíregyháza", n12({ ablak_tol: t12("07:00"), ablak_ig: t12("08:00") }))] };
+  const ber09: TukorFuvar = { ...ber06, id: "360", partner: "Bér 09:00", idopont: null, felrakasAblakTol: t12("09:00") };
+  eq("lerakó ablaka a felrakás napján nem felrakási időpont: az időzített elé nem kerül", fejek(tukorSorok({ fuvarok: [csakLerakoAblak, ber09], allasok: [], eta: null, most: d12("05:00"), ma: "2026-10-12" })), ["# Bér 09:00", "# Csak lerakó-ablak"]);
 }
 
 console.log(`\nMa-tükör teszt: ${ok} rendben, ${bad} hiba`);

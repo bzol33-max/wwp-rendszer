@@ -786,18 +786,21 @@ export function jelolMegallokat(
 }
 
 /**
- * A lerakó látogatása a fuvar felrakása után van-e: ha a felrakót a GPS
- * igazolta, a lerakás csak annál később kezdődhet, és nem lehet ugyanaz a
- * látogatás; ha a felrakó (még) nincs igazolva, a lerakás legalább a
+ * A lerakó látogatása a fuvar felrakása után van-e. `felrakas.elso` a fuvar
+ * felrakójának LEGKORÁBBI elfogadható látogatása (nem feltétlenül az, amelyik
+ * végül párosult): a lerakó-látogatásnak legyen olyan állása, amely annál
+ * később van (az állások időrendben indexeltek) — a hajnali telephelyi
+ * parkolás így nem igazolhatja a délután felrakott fuvar lerakóját, de a
+ * pár száz méterre lévő felrakó→lerakó (egy látogatásba olvadó két állás)
+ * igen. Ha a felrakónak nincs elfogadható látogatása, a lerakás legalább a
  * felrakási ablak kezdeténél ne kezdődjön korábban.
  */
 export function lerakasFelrakasUtan(
   lerakas: { kezdet: Date; aik: number[] },
-  felrakas: { elso: { kezdet: Date; aik: number[] } | null; ablak: number | null }
+  felrakas: { elso: { aik: number[] } | null; ablak: number | null }
 ): boolean {
-  if (felrakas.elso) {
-    if (lerakas.aik.some((ai) => felrakas.elso!.aik.includes(ai))) return false;
-    return lerakas.kezdet.getTime() >= felrakas.elso.kezdet.getTime();
+  if (felrakas.elso && felrakas.elso.aik.length > 0 && lerakas.aik.length > 0) {
+    return Math.max(...lerakas.aik) > Math.min(...felrakas.elso.aik);
   }
   if (felrakas.ablak !== null) return lerakas.kezdet.getTime() >= felrakas.ablak;
   return true;
@@ -816,10 +819,19 @@ function parositMegallokat(
   const lapos = fuvarokMegalloi.flatMap((megallok, fi) => megallok.map((m, mi) => ({ fi, mi, m })));
 
   const parok: { fi: number; mi: number; latogatas: Latogatas; tav: number }[] = [];
+  // A fuvar felrakójának legkorábbi elfogadható látogatása a lerakó-sorrend
+  // ellenőrzéséhez (lerakasFelrakasUtan) — az éjszakai-állás szabály nélkül:
+  // az átnyúló reggeli rakodás nem PÁROSUL felrakásként, de a lerakás attól
+  // még utána jöhet.
+  const legkorabbiFelrakas = new Map<number, Latogatas>();
   lapos.forEach(({ fi, mi, m }) => {
     // Felismerhetetlen címnél nincs mihez hasonlítani — ilyet nem jelölünk késznek.
     if (m.lat == null || m.lon == null || m.pontossag === "ismeretlen") return;
     for (const l of latogatasok(m, allasok, pontok)) {
+      if (m.tipus === "felrako" && latogatasDontes({ ...m, ejszakaiAllasKizarva: false }, l).elfogadva) {
+        const eddigi = legkorabbiFelrakas.get(fi);
+        if (!eddigi || Math.min(...l.aik) < Math.min(...eddigi.aik)) legkorabbiFelrakas.set(fi, l);
+      }
       // Az időablak előtt véget ért, a fuvar lezárása után kezdődött, a túl
       // rövid és (város szinten) a településen kívüli látogatás nem ehhez a
       // megállóhoz tartozik — a szabályok a varos-erintes.ts erintesDontes-ében.
@@ -871,15 +883,12 @@ function parositMegallokat(
   for (const p of parok) if (fuvarokMegalloi[p.fi][p.mi].tipus === "felrako") lefoglal(p);
 
   const felrakasFuvaronkent = fuvarokMegalloi.map((megallok, fi) => {
-    let elso: Latogatas | null = null;
     let ablak: number | null = null;
-    megallok.forEach((m, mi) => {
+    megallok.forEach((m) => {
       if (m.tipus !== "felrako") return;
-      const l = parositas.get(`${fi}:${mi}`);
-      if (l && (!elso || l.kezdet.getTime() < elso.kezdet.getTime())) elso = l;
       if (m.ablakKezdet && (ablak === null || m.ablakKezdet.getTime() < ablak)) ablak = m.ablakKezdet.getTime();
     });
-    return { elso: elso as Latogatas | null, ablak };
+    return { elso: legkorabbiFelrakas.get(fi) ?? null, ablak };
   });
 
   for (const p of parok) {

@@ -554,5 +554,42 @@ function vezetes(honnan: { lat: number; lon: number }, hova: { lat: number; lon:
   eq("T2: bérfuvar felrakóját az átnyúló állás továbbra is igazolja", jelolMegallokat([ber], reggel)[0][0].tenylegesIdo?.toISOString(), t(19, 0, 20).toISOString());
 }
 
+// Felülvizsgálat (2026-10-10) S1: a felrakó és a lerakó 1,2 km-re van
+//    egymástól (egy ipari parkon belül) — a két állás egy látogatásba olvad,
+//    a fuvar ettől még kész lehet.
+{
+  const A = { lat: 47.9500, lon: 21.7000 };
+  const B = { lat: 47.9608, lon: 21.7000 }; // ~1,2 km északra
+  const f = [megallo(0, "felrako", A, t(0, 0, 22)), megallo(1, "lerako", B, t(0, 0, 22))];
+  const sz: IdovonalSzakasz[] = [
+    allas(A, t(8, 0, 22), 60),
+    vezetes(A, B, t(9, 0, 22), t(9, 5, 22)),
+    allas(B, t(9, 5, 22), 45),
+    vezetes(B, DEBRECEN, t(9, 50, 22), t(10, 40, 22)),
+  ];
+  eq("S1: közeli felrakó→lerakó fuvar GPS szerint kész", fuvarKeszGpsSzerint(jelolMegallokat([f], sz)[0]), true);
+}
+
+// S4: saját fuvar a telephelyről; a kocsi a telephelyen éjszakázott és
+//    reggel, ugyanabban az állásban rakodott. Délben lerak, este hazaér —
+//    a fuvarnak akkor is késznek kell lennie, ha a figyelő csak a hazaérés
+//    után nézi meg.
+{
+  const SZAKOLY = { lat: 47.7633, lon: 21.9146 };
+  const NYIRJAKO = { lat: 48.0997, lon: 22.0758 };
+  const f = [
+    { ...megallo(0, "felrako", SZAKOLY, t(0, 0, 23)), ejszakaiAllasKizarva: true },
+    { ...megallo(1, "lerako", NYIRJAKO, t(0, 0, 23)), ablakTagithato: true },
+  ];
+  const sz: IdovonalSzakasz[] = [
+    allas(SZAKOLY, t(19, 0, 22), 12 * 60), // 22-én 19:00-tól 23-án 07:00-ig (reggel rakodás)
+    vezetes(SZAKOLY, NYIRJAKO, t(7, 0, 23), t(7, 40, 23)),
+    allas(NYIRJAKO, t(7, 40, 23), 60),
+    vezetes(NYIRJAKO, SZAKOLY, t(8, 40, 23), t(9, 20, 23)),
+    allas(SZAKOLY, t(9, 20, 23), 600), // este is otthon
+  ];
+  eq("S4: telephelyi reggeli rakodás után a lerakás kész, hazaérés után is", fuvarKeszGpsSzerint(jelolMegallokat([f], sz)[0]), true);
+}
+
 console.log(`\n${ok} rendben, ${bad} hiba`);
 process.exit(bad ? 1 : 0);

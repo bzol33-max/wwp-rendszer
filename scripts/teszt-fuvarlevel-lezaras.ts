@@ -47,5 +47,15 @@ eq("a másik fuvar már teljesített → zár", index(ketMegallo, [{ ...berFolya
 eq("a másik fuvar későbbi napi → zár", index(ketMegallo, [{ ...berFolyamatban, nap: "2026-10-11" }]), 1);
 eq("ismeretlen/üres másik-lista → zár (régi viselkedés)", index(ketMegallo, []), 1);
 
+// 3. Sorrend az ugyanaznapi elindult fuvarok közt (felülvizsgálat, 2026-10-10):
+//    a bérfuvar (A) Debrecenben lerak, ugyanott felrakja a saját fuvart (B) —
+//    B is folyamatban lesz. A CMR-je A kártyáján: A zárul; B kártyáján: nem.
+{
+  const B: MasikFuvar = { id: "402", nap: MA, allapot: "folyamatban", nyitottLerako: true, elsoTeny: "2026-10-10T14:00:00Z" };
+  const A: MasikFuvar = { id: "401", nap: MA, allapot: "folyamatban", nyitottLerako: true, elsoTeny: "2026-10-10T06:00:00Z" };
+  eq("A fotója A kártyáján: a később indult B nem tartja vissza", fotoLezarasDontes(ketMegallo, MA, [B], "2026-10-10T06:00:00Z").megalloIndex, 1);
+  eq("A fotója B kártyáján: a korábban indult A visszatartja", fotoLezarasDontes(ketMegallo, MA, [A], "2026-10-10T14:00:00Z").megalloIndex, null);
+}
+
 console.log(`\nFuvarlevél-fotó lezárás teszt: ${ok} rendben, ${bad} hiba`);
 if (bad > 0) process.exit(1);

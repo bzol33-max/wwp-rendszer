@@ -10,6 +10,7 @@ import { fuvarHelyAllapotbol } from "@/lib/megbizasok/fuvar-hely-allapotbol";
 import { toroljIdovonalCachet } from "@/lib/fuvarozas/idovonal-cache";
 import { bontsMegallokra } from "@/lib/fuvarozas/varos";
 import { resolveJarmu } from "@/lib/fuvarozas/vehicles";
+import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
 import { parositasiSorrend } from "@/lib/fuvarozas2/napi-sorrend";
 import { fuvarSzamlaTukor, kiegAlap, parositKiegSzamlakat, parositSzamlakat } from "@/lib/fuvarozas/szamla-parositas";
 import { requireSession } from "@/lib/auth/dal";
@@ -126,9 +127,10 @@ export async function getSajatFuvarokErinteshez(kezdetNapISO: string): Promise<F
   // szamitsIdovonalakat): parositasiSorrend — a figyelő kocsinként szűr,
   // a csoporton belüli sorrend megmarad. (Eddig itt id szerint ment, a GPS
   // lapon bér-majd-saját, így ugyanazt a megállást más-más fuvar kaphatta.)
+  const jarmuLista = await getJarmuvek();
   const kocsinkent = new Map<string, typeof sorok>();
   for (const r of sorok) {
-    const kulcs = resolveJarmu(r.jarmu)?.sofor ?? r.jarmu;
+    const kulcs = resolveJarmu(r.jarmu, jarmuLista)?.sofor ?? r.jarmu;
     kocsinkent.set(kulcs, [...(kocsinkent.get(kulcs) ?? []), r]);
   }
   return [...kocsinkent.values()]

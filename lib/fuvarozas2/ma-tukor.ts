@@ -12,7 +12,7 @@
 
 import { varosNev } from "@/lib/fuvarozas/varos";
 import { kontaktNev, kontaktTelefon, megalloReszlete, type MegalloReszlet } from "@/lib/fuvarozas/sofor-adatok";
-import { napiSorrend } from "@/lib/fuvarozas2/napi-sorrend";
+import { napiSorrend, tervIdoMegbizasbol } from "@/lib/fuvarozas2/napi-sorrend";
 
 export type TukorAllas = {
   percek: number;
@@ -85,6 +85,9 @@ export type TukorFuvar = {
    * még el nem ért megállóinál „csúszik” jelölés, ha más eltérés nincs.
    */
   csuszik?: boolean;
+  /** A megbízás felrakási ablakának kezdete és az időpont-mező (pl. „06:00”) — a terv-időhöz, mint a többi nézetben. */
+  felrakasAblakTol?: string | null;
+  idopont?: string | null;
 };
 
 export type TukorGpsAllas = { kezdet: Date; veg: Date; cim: string | null; percek: number; lat: number | null; lon: number | null };
@@ -124,12 +127,14 @@ function fuvarSorrend(fuvarok: TukorFuvar[]): TukorFuvar[] {
       .flatMap((g) => [idobelyeg(g.gps_erkezes), idobelyeg(g.sofor_megerkezett_at ?? null), idobelyeg(g.sofor_kesz_at)])
       .filter((d): d is Date => d !== null)
       .map((d) => d.getTime());
-    // Terv: a felrakás napjára eső (vagy nap nélküli) megállók ablakai közül a legkorábbi.
-    const tervek = f.megallok
-      .filter((g) => !g.tervezett_nap || !felrakasNap || g.tervezett_nap === felrakasNap)
-      .map((g) => idobelyeg(g.ablak_tol))
-      .filter((d): d is Date => d !== null)
-      .map((d) => d.getTime());
+    // Terv: mint minden más nézetben, a megbízás felrakási ablaka, különben
+    // az időpont-mező (tervIdoMegbizasbol) — az időpont-mező a megállókra nem
+    // kerül át, és a lerakó ablaka nem felrakási időpont. Ha a megbízáson
+    // egyik sincs, az első felrakó megálló ablaka.
+    const tervIdo =
+      tervIdoMegbizasbol(felrakasNap, f.felrakasAblakTol ?? null, f.idopont ?? null) ??
+      idobelyeg(felrakok[0]?.ablak_tol ?? null)?.getTime() ??
+      null;
     return {
       id: f.id,
       felrakasNap,
@@ -138,7 +143,7 @@ function fuvarSorrend(fuvarok: TukorFuvar[]): TukorFuvar[] {
       lerako: lerakok.at(-1)?.cim_nyers ?? null,
       tenyIdo: tenyek.length ? Math.min(...tenyek) : null,
       lezart: !!f.lezart,
-      tervIdo: tervek.length ? Math.min(...tervek) : null,
+      tervIdo,
     };
   });
 }

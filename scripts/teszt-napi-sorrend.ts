@@ -73,6 +73,21 @@ const parSor = (id: string, x: Partial<{ idopont: string | null; felrakas_ablak_
 eq("párosítás: időpontos bérfuvar a korábbi id-jű időpont nélküli saját előtt", parositasiSorrend([parSor("310"), parSor("320", { idopont: "10:00" })]).map((x) => x.id), ["320", "310"]);
 eq("párosítás: a bejövő sorrend nem számít", parositasiSorrend([parSor("320", { idopont: "10:00" }), parSor("310")]).map((x) => x.id), ["320", "310"]);
 
+// Tervezés / Elvinni-hét: ugyanaz a sor-alak, amit tervezes.ts a lekérdezés
+// után épít (tervIdo + lezart mezőként, napiSorrend((s) => s) — a lancKm is
+// így kapja). Saját #10 időpont nélkül + bérfuvar #12 ablak 08:00 ugyanazon
+// a napon: #12 → #10, mint a Ma oldalon és a GPS lapon.
+{
+  const sor = (id: string, ablak: string | null, idopont: string | null) => ({
+    id, felrakasNap: "2026-10-12", lerakasNap: "2026-10-12", felrako: `F${id}`, lerako: `L${id}`,
+    tervIdo: tervIdoMegbizasbol("2026-10-12", ablak, idopont), lezart: false,
+  });
+  eq("Tervezés-sor: #12 (ablak 08:00) a #10 (időpont nélkül) elé", napiSorrend([sor("10", null, null), sor("12", "2026-10-12 06:00:00+00", null)], (s) => s).map((s) => s.id), ["12", "10"]);
+  eq("Tervezés-sor: időpont-mezővel ugyanígy", napiSorrend([sor("10", null, null), sor("12", null, "08:00")], (s) => s).map((s) => s.id), ["12", "10"]);
+  eq("Tervezés és párosítás egyezik", napiSorrend([sor("10", null, null), sor("12", null, "08:00")], (s) => s).map((s) => s.id),
+    parositasiSorrend([parSor("10"), parSor("12", { idopont: "08:00" })]).map((x) => x.id));
+}
+
 eq("ütközés: Gergő 10.05. (1 bér + 2 saját) nem az", berUtkozes([{ jelleg: "ber" }, { jelleg: "sajat" }, { jelleg: "sajat" }]), false);
 eq("ütközés: két bérfuvar egy napon az", berUtkozes([{ jelleg: "ber" }, { jelleg: "ber" }]), true);
 

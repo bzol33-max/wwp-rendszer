@@ -830,7 +830,8 @@ export async function feltoltFuvarlevelFoto(fuvarId: string, form: FormData): Pr
   const dontes = fotoLezarasDontes(
     await fuvarMegalloiLezarashoz(fuvarId),
     fuvar.datum,
-    await kocsiMasikNyitottFuvarjai(fuvarId, fuvar)
+    await kocsiMasikNyitottFuvarjai(fuvarId, fuvar),
+    await fuvarElsoTenye(fuvarId)
   );
   if (dontes.megalloIndex != null) {
     await megalloKeszLezarassal(fuvarId, dontes.megalloIndex, true);
@@ -890,21 +891,35 @@ async function fuvarMegalloiLezarashoz(fuvarId: string): Promise<LezarasMegallo[
   );
 }
 
-/** Ugyanannak a kocsinak a többi nyitott fuvarja (ugyanaz vagy korábbi nap), van-e még be nem fejezett lerakójuk. */
+/** A fuvar megállóinak legkorábbi ténye (GPS-érkezés, sofőr érkezés/kész), ISO UTC; null, ha még nincs. */
+async function fuvarElsoTenye(fuvarId: string): Promise<string | null> {
+  const [sor] = await query<{ elso: string | null }>(
+    `select to_char(min(least(gps_erkezes, sofor_megerkezett_at, sofor_kesz_at)) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as elso
+       from fuvar_megallok where megbizas_id = $1`,
+    [fuvarId]
+  );
+  return sor?.elso ?? null;
+}
+
+/** Ugyanannak a kocsinak a többi nyitott fuvarja (legfeljebb 3 nappal korábbi lerakással) (ugyanaz vagy korábbi nap), van-e még be nem fejezett lerakójuk. */
 async function kocsiMasikNyitottFuvarjai(
   fuvarId: string,
   fuvar: { datum: string; jarmu: string | null; sofor: string | null }
 ): Promise<MasikFuvar[]> {
-  const jarmu = (fuvar.jarmu ? resolveJarmu(fuvar.jarmu) : null) ?? (fuvar.sofor ? findJarmuByEmployeeName(fuvar.sofor) : null);
+  const lista = await getJarmuvek();
+  const jarmu = (fuvar.jarmu ? resolveJarmu(fuvar.jarmu, lista) : null) ?? (fuvar.sofor ? findJarmuByEmployeeName(fuvar.sofor, lista) : null);
   if (!jarmu) return [];
   const sorok = await query<MasikFuvar & { jarmu: string | null; sofor: string | null }>(
     `select m.id::text, to_char(m.datum, 'YYYY-MM-DD') as nap, m.allapot, m.jarmu, m.sofor,
             exists (select 1 from fuvar_megallok g where g.megbizas_id = m.id and g.tipus = 'lerako'
-                     and g.sofor_kesz_at is null and g.gps_tavozas is null) as "nyitottLerako"
+                     and g.sofor_kesz_at is null and g.gps_tavozas is null) as "nyitottLerako",
+            (select to_char(min(least(g.gps_erkezes, g.sofor_megerkezett_at, g.sofor_kesz_at)) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"')
+               from fuvar_megallok g where g.megbizas_id = m.id) as "elsoTeny"
        from fuvar_megbizasok m
       where m.id <> $1 and m.torolt_at is null and not coalesce(m.teljesitve, false)
         and m.allapot in ('ellenorzesre_var', 'tervezett', 'folyamatban')
-        and m.datum <= $2::date and (m.jarmu is not null or m.sofor is not null)
+        and m.datum <= $2::date and coalesce(m.lerakas_datum, m.datum) >= $2::date - 3
+        and (m.jarmu is not null or m.sofor is not null)
       order by m.datum, m.id`,
     [fuvarId, fuvar.datum]
   );

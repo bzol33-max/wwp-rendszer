@@ -19,12 +19,14 @@ import { requireAnyViewPermission } from "@/lib/auth/require-permission";
 import { geokodolCachelve } from "@/lib/fuvarozas/erintes-felismeres";
 import { getIndulasiTelephely } from "@/lib/fuvarozas/telephelyek-db";
 import { varosNev } from "@/lib/fuvarozas/varos";
-import { napiSorrend } from "@/lib/fuvarozas2/napi-sorrend";
+import { napiSorrend, tervIdoMegbizasbol } from "@/lib/fuvarozas2/napi-sorrend";
 import { becsultTavolsag, lancKm } from "@/lib/fuvarozas2/ures-km";
 import type { Allapot } from "@/lib/fuvarozas/allapot";
 
 // A "use server" fájl csak async függvényt exportálhat — ezek belső konstansok.
 const KOZUTI_SZORZO = 1.3;
+/** Lezárt (teljesítve vagy későbbi állapotú) megbízás — a közös sorrendben a tény nélkül lezárt is a helyén marad. */
+const LEZART_ALLAPOTOK = new Set<string>(["teljesitve", "szamlazhato", "szamlazva", "email_elment", "postazva", "lezart"]);
 
 export type TervMegbizas = {
   id: string;
@@ -121,14 +123,15 @@ export async function getTervHet(hetKezdet?: string): Promise<TervHet> {
   );
 
   // A hét megbízásai + az azt megelőző 10 nap (hogy tudjuk, hol áll a kocsi a hét elején).
-  const sorok = await query<TervMegbizas & { jarmu_kod: string | null; rakott_km: number | null; elokeszites: boolean; idopont_nyitott: boolean }>(
+  const nyersSorok = await query<TervMegbizas & { jarmu_kod: string | null; rakott_km: number | null; elokeszites: boolean; idopont_nyitott: boolean; felrakas_ablak_tol: string | null; idopont: string | null }>(
     `select m.id::text, m.allapot, m.jelleg, coalesce(p.nev, m.megrendelo) as partner,
        coalesce(m.hivatkozas_kanonikus, m.pozicioszam, m.reise_id) as hivatkozas,
        coalesce((select g.cim_nyers from fuvar_megallok g where g.megbizas_id = m.id and g.tipus = 'felrako' order by g.sorszam limit 1), m.felrako) as felrako,
        coalesce((select g.cim_nyers from fuvar_megallok g where g.megbizas_id = m.id and g.tipus = 'lerako' order by g.sorszam desc limit 1), m.lerako) as lerako,
        to_char(m.datum, 'YYYY-MM-DD') as "felrakasNap",
        to_char(coalesce(m.lerakas_datum, m.datum), 'YYYY-MM-DD') as "lerakasNap",
-       m.fuvardij, m.fuvardij_penznem as penznem, j.kod as jarmu_kod, m.rakott_km::float8 as rakott_km, m.elokeszites, m.idopont_nyitott
+       m.fuvardij, m.fuvardij_penznem as penznem, j.kod as jarmu_kod, m.rakott_km::float8 as rakott_km, m.elokeszites, m.idopont_nyitott,
+       m.felrakas_ablak_tol::text as felrakas_ablak_tol, m.idopont
      from fuvar_megbizasok m
      left join fuvar_partnerek p on p.id = m.partner_id
      left join fuvar_jarmuvek j on j.id = m.jarmu_id
@@ -137,6 +140,15 @@ export async function getTervHet(hetKezdet?: string): Promise<TervHet> {
      order by m.datum`,
     [kezdet, veg]
   );
+  // A közös sorrendhez (napi-sorrend.ts) a kiírt terv-idő és a lezártság —
+  // a sorokon mezőként, így a napiSorrend((s) => s) és a lancKm is látja
+  // (eddig itt az időpontos bérfuvar az időpont nélküli saját mögé kerülhetett,
+  // míg a Ma oldalon / GPS lapon elé).
+  const sorok = nyersSorok.map((s) => ({
+    ...s,
+    tervIdo: tervIdoMegbizasbol(s.felrakasNap, s.felrakas_ablak_tol, s.idopont),
+    lezart: LEZART_ALLAPOTOK.has(s.allapot),
+  }));
 
   const aznap = (m: TervMegbizas, nap: string) => (m.felrakasNap ?? "") <= nap && (m.lerakasNap ?? m.felrakasNap ?? "") >= nap;
   const telephely = (await getIndulasiTelephely()).cim;

@@ -689,6 +689,8 @@ export async function getMaVaszon(): Promise<MaVaszon> {
           lezart: maiLezartak.includes(s),
           felrakasNap: s.felrakas_nap,
           lerakasNap: s.lerakas_nap,
+          felrakasAblakTol: s.felrakas_ablak_tol,
+          idopont: s.idopont,
           csuszik: !maiLezartak.includes(s) && csuszik(s),
         })),
         // A GPS nem tervezett állásai, a koordinátájukkal (az idővonal állás-szakaszából).
