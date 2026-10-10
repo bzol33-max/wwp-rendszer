@@ -9,7 +9,7 @@
 import { varosNev } from "@/lib/fuvarozas/varos";
 import type { Allapot } from "@/lib/fuvarozas/allapot";
 import type { TukorSor } from "@/lib/fuvarozas2/ma-tukor";
-import { napiSorrend } from "@/lib/fuvarozas2/napi-sorrend";
+import { napiSorrend, tervIdoMegbizasbol } from "@/lib/fuvarozas2/napi-sorrend";
 
 export type HetFuvar = {
   id: string;
@@ -22,6 +22,9 @@ export type HetFuvar = {
   lerakas_nap: string | null;
   felrako: string | null;
   lerako: string | null;
+  /** A kiírt felrakási ablak kezdete és az időpont-mező — a közös sorrendhez (napi-sorrend.ts). */
+  felrakas_ablak_tol?: string | null;
+  idopont?: string | null;
 };
 
 /** Egy megálló annyiban, amennyi a kártya állapotához kell. */
@@ -113,7 +116,14 @@ export function hetCellak(fuvarok: HetFuvar[], megallok: Map<string, HetMegallo[
       const ig = f.lerakas_nap && tol && f.lerakas_nap >= tol ? f.lerakas_nap : tol;
       return tol != null && ig != null && tol <= nap && nap <= ig;
     });
-    return napiSorrend(aznapiak, (f) => ({ id: f.id, felrakasNap: f.felrakas_nap, lerakasNap: f.lerakas_nap, felrako: f.felrako, lerako: f.lerako })).map((f) => {
+    // A közös sorrend (napi-sorrend.ts): a lezárt elöl, a kiírt időpontú a
+    // nélküle lévők előtt — itt nincs tény-idő, csak a terv.
+    const sorrendben = napiSorrend(aznapiak, (f) => ({
+      id: f.id, felrakasNap: f.felrakas_nap, lerakasNap: f.lerakas_nap, felrako: f.felrako, lerako: f.lerako,
+      lezart: !!KESZ_CIMKE[f.allapot],
+      tervIdo: tervIdoMegbizasbol(f.felrakas_nap, f.felrakas_ablak_tol, f.idopont),
+    }));
+    return sorrendben.map((f) => {
       const gs = megallok.get(f.id) ?? [];
       const elsoNap = nap === napok[0].nap ? (f.felrakas_nap ?? nap) >= nap : (f.felrakas_nap ?? nap) === nap;
       const folytatodik = !elsoNap;

@@ -9,6 +9,8 @@
 // (a kocsi akkor is költ, ha áll), ezért egy új fuvar hatása: a bevétele
 // mínusz a pluszban elmenő üzemanyag és útdíj.
 
+import { napiSorrend } from "@/lib/fuvarozas2/napi-sorrend";
+
 export type Pont = { lat: number; lon: number };
 
 export type HetFuvar = {
@@ -24,6 +26,11 @@ export type HetFuvar = {
   dijFt: number | null;
   /** A rakott út útdíja a tárolt kalkulációból, ha van. */
   utdijFt: number | null;
+  /** A közös sorrendhez (napi-sorrend.ts): a fel-/lerakó címe (láncolás), kiírt terv-idő (ms), lezárt-e. */
+  felrakoCim?: string | null;
+  lerakoCim?: string | null;
+  tervIdo?: number | null;
+  lezart?: boolean;
 };
 
 export type HetParam = {
@@ -61,11 +68,16 @@ export function legvonalKm(a: Pont, b: Pont): number {
   return Math.round(2 * R * Math.asin(Math.sqrt(x)) * KOZUTI_SZORZO);
 }
 
-const sorrend = (a: HetFuvar, b: HetFuvar) => a.felrakasNap.localeCompare(b.felrakasNap) || a.lerakasNap.localeCompare(b.lerakasNap) || Number(a.id) - Number(b.id);
+/** A kocsi menete a közös sorrendben (napi-sorrend.ts) — ugyanaz, mint a Ma oldalon és a Tervezésben. */
+const sorrend = (fuvarok: HetFuvar[]) =>
+  napiSorrend(fuvarok, (f) => ({
+    id: f.id, felrakasNap: f.felrakasNap, lerakasNap: f.lerakasNap,
+    felrako: f.felrakoCim ?? null, lerako: f.lerakoCim ?? null, tervIdo: f.tervIdo ?? null, lezart: f.lezart,
+  }));
 
 /** Egy kocsi hete: `kezdo` az, ahol a hét elején áll (az előző lerakó vagy a telephely). */
 export function hetEredmeny(fuvarok: HetFuvar[], kezdo: Pont | null, p: HetParam): HetEredmeny {
-  const lanc = [...fuvarok].sort(sorrend);
+  const lanc = sorrend(fuvarok);
   let hol: Pont = kezdo ?? p.telephely;
   let rakottKm = 0, uresKm = 0, utdijFt = 0, bevetel = 0;
   for (const f of lanc) {

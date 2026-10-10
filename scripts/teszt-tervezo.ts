@@ -50,5 +50,15 @@ eq("előzmény: nincs mihez", elozmenyElteres(583, [null]), { atlag: null, elter
 eq("célár 8%", celar(376300), 410000);
 eq("célár 0%", celar(100000, 0), 100000);
 
+// A lánc a közös sorrendben (napi-sorrend.ts): a később rögzített, kiírt
+// időpontú fuvar az időpont nélküli elé — itt A→C (10:00), utána C→A: nincs üres út.
+{
+  const ido = f("2", "2026-09-29", A, C, 150000, 140);
+  const idoNelkul = f("1", "2026-09-29", C, A, null, 140);
+  const e = hetEredmeny([idoNelkul, { ...ido, tervIdo: Date.parse("2026-09-29T08:00:00Z") }], null, p);
+  eq("közös sorrend: az időpontos előbb, üres út nincs", e.uresKm, 0);
+  eq("időpont nélkül az id dönt (régi lánc): üres út van", hetEredmeny([idoNelkul, ido], null, p).uresKm > 0, true);
+}
+
 console.log(`\nTervező teszt: ${ok} rendben, ${bad} hiba`);
 if (bad > 0) process.exit(1);

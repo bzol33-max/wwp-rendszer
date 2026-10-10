@@ -212,5 +212,56 @@ eq("más célú ETA nem kerül rossz megállóra", csaszarEta.find((r) => r.tipu
   eq("lezárt fuvar: GPS-érkezés távozás nélkül is kész", rovid(ott), ["# Lösung", "Le Debrecen [kesz]"]);
 }
 
+// --- Egységes sorrend (2026-10-10, napi-sorrend.ts): „bérfuvar után a
+// saját fuvar külön, a helyes sorrendben — ne ugorjon előre”.
+{
+  const n12 = (x: Partial<TukorMegallo>) => ({ tervezett_nap: "2026-10-12", ...x });
+  const t12 = (hhmm: string) => t(hhmm).replace("2026-09-28", "2026-10-12");
+  const d12 = (hhmm: string) => new Date(t12(hhmm).replace(" ", "T").replace("+00", "Z"));
+  const fejek = (r: TukorSor[]) => rovid(r).filter((x) => x.startsWith("#"));
+  const sajat: TukorFuvar = { id: "310", partner: "Saját Szakoly", hivatkozas: null, jelleg: "sajat", megallo_reszletek: null, megallok: [
+    m(1, "felrako", "Szakoly", n12({})), m(2, "lerako", "Nyíregyháza", n12({})),
+  ] };
+  const ber: TukorFuvar = { id: "320", partner: "Bér 10:00", hivatkozas: null, jelleg: "ber", megallo_reszletek: null, megallok: [
+    m(1, "felrako", "Debrecen", n12({ ablak_tol: t12("10:00"), ablak_ig: t12("12:00") })), m(2, "lerako", "Miskolc", n12({})),
+  ] };
+  // T5: a később rögzített 10:00-s bérfuvar az időpont nélküli saját előtt —
+  // a régi kulcs az ablak nélkülit „tervezett_nap 00:00+00”-ra (02:00) tette, elé.
+  const t5 = tukorSorok({ fuvarok: [sajat, ber], allasok: [], eta: null, most: d12("07:00"), ma: "2026-10-12" });
+  eq("T5 tükör: a 10:00-s bérfuvar elöl, a saját utána", fejek(t5), ["# Bér 10:00", "# Saját Szakoly"]);
+  eq("T5 tükör: a bérfuvar felrakója a következő", rovid(t5)[1], "Fel Debrecen [kovetkezo]");
+
+  // T6: a bérfuvart az iroda zárta le (nincs GPS / sofőr-tény), a saját már
+  // elkezdődött — eddig a lezárt a saját mögé esett.
+  const berLezart: TukorFuvar = { ...ber, id: "330", partner: "Bér lezárt", lezart: true, megallok: [
+    m(1, "felrako", "Debrecen", n12({})), m(2, "lerako", "Miskolc", n12({})),
+  ] };
+  const sajatElkezdve: TukorFuvar = { ...sajat, id: "325", megallok: [
+    m(1, "felrako", "Szakoly", n12({ gps_erkezes: t12("11:00") })), m(2, "lerako", "Nyíregyháza", n12({})),
+  ] };
+  const t6 = tukorSorok({ fuvarok: [sajatElkezdve, berLezart], allasok: [], eta: null, most: d12("11:30"), ma: "2026-10-12" });
+  eq("T6 tükör: a lezárt bérfuvar az 1. (kész), a saját a 2.", rovid(t6), [
+    "# Bér lezárt", "Fel Debrecen [kesz]", "Le Miskolc [kesz]",
+    "# Saját Szakoly", "Fel Szakoly [most]", "Le Nyíregyháza [kovetkezo]",
+  ]);
+  const t6b = tukorSorok({ fuvarok: [{ ...sajat, id: "325" }, berLezart], allasok: [], eta: null, most: d12("11:30"), ma: "2026-10-12" });
+  eq("T6 tükör: el nem kezdett saját mellett is", fejek(t6b), ["# Bér lezárt", "# Saját Szakoly"]);
+
+  // Többnapos időpont nélkül a nap végére; tegnapról csúszó el nem kezdett
+  // fuvar elöl, „csúszik” jelöléssel.
+  const tobbNapos: TukorFuvar = { id: "300", partner: "Többnapos", hivatkozas: null, jelleg: "ber", megallo_reszletek: null, felrakasNap: "2026-10-12", lerakasNap: "2026-10-13", megallok: [
+    m(1, "felrako", "Sárvár", n12({})), m(2, "lerako", "Debrecen", { tervezett_nap: "2026-10-13" }),
+  ] };
+  const csuszo: TukorFuvar = { id: "340", partner: "Tegnapi", hivatkozas: null, jelleg: "sajat", megallo_reszletek: null, felrakasNap: "2026-10-11", lerakasNap: "2026-10-11", csuszik: true, megallok: [
+    m(1, "felrako", "Balkány", { tervezett_nap: "2026-10-11" }), m(2, "lerako", "Ebes", { tervezett_nap: "2026-10-11" }),
+  ] };
+  const tn = tukorSorok({ fuvarok: [tobbNapos, sajat, csuszo], allasok: [], eta: null, most: d12("07:00"), ma: "2026-10-12" });
+  eq("csúszó elöl, a többnapos időpont nélkül a nap végén", fejek(tn), ["# Tegnapi", "# Saját Szakoly", "# Többnapos"]);
+  const cs = tn.filter((r): r is Extract<TukorSor, { tipus: "megallo" }> => r.tipus === "megallo" && r.fuvarId === "340");
+  eq("csúszó fuvar megállói: „csúszik”, kiemelve", cs.map((r) => [r.elteres, r.kiemelt]), [["csúszik", "kesik"], ["csúszik", "kesik"]]);
+  eq("csúszó fuvar: a terv a nap nevével", cs[0].terv, "vasárnap");
+  eq("nem csúszó fuvarnál nincs „csúszik”", tn.some((r) => r.tipus === "megallo" && r.fuvarId !== "340" && r.elteres === "csúszik"), false);
+}
+
 console.log(`\nMa-tükör teszt: ${ok} rendben, ${bad} hiba`);
 if (bad > 0) process.exit(1);

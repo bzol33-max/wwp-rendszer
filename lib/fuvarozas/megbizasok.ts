@@ -9,6 +9,8 @@ import { FUVAR_MA_SQL } from "@/lib/fuvarozas/fuvar-hely";
 import { fuvarHelyAllapotbol } from "@/lib/megbizasok/fuvar-hely-allapotbol";
 import { toroljIdovonalCachet } from "@/lib/fuvarozas/idovonal-cache";
 import { bontsMegallokra } from "@/lib/fuvarozas/varos";
+import { resolveJarmu } from "@/lib/fuvarozas/vehicles";
+import { parositasiSorrend } from "@/lib/fuvarozas2/napi-sorrend";
 import { fuvarSzamlaTukor, kiegAlap, parositKiegSzamlakat, parositSzamlakat } from "@/lib/fuvarozas/szamla-parositas";
 import { requireSession } from "@/lib/auth/dal";
 import type {
@@ -102,8 +104,8 @@ export async function getFuvarok(tipus: FuvarTipus): Promise<FuvarRow[]> {
  */
 export async function getSajatFuvarokErinteshez(kezdetNapISO: string): Promise<FuvarErintesSor[]> {
   await requireViewPermission("fuvarozas");
-  return query<FuvarErintesSor>(
-    `select id::text, case when jelleg = 'ber' then 'sajat' else 'ber' end as tipus, jelleg, allapot, jarmu, felrako, lerako,
+  const sorok = await query<FuvarErintesSor & { idopont: string | null }>(
+    `select id::text, case when jelleg = 'ber' then 'sajat' else 'ber' end as tipus, jelleg, allapot, jarmu, felrako, lerako, idopont,
        to_char(datum, 'YYYY-MM-DD') as datum,
        to_char(lerakas_datum, 'YYYY-MM-DD') as lerakas_datum,
        to_char(felrakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as felrakas_ablak_tol,
@@ -119,7 +121,19 @@ export async function getSajatFuvarokErinteshez(kezdetNapISO: string): Promise<F
      order by id asc
      limit 200`,
     [kezdetNapISO]
-  ).then((rows) => rows.map((r) => ({ ...r, hely: fuvarHelyAllapotbol(r.jelleg, r.allapot) })));
+  );
+  // A párosítás sorrendje kocsinként ugyanaz, mint a GPS lapé (actions.ts
+  // szamitsIdovonalakat): parositasiSorrend — a figyelő kocsinként szűr,
+  // a csoporton belüli sorrend megmarad. (Eddig itt id szerint ment, a GPS
+  // lapon bér-majd-saját, így ugyanazt a megállást más-más fuvar kaphatta.)
+  const kocsinkent = new Map<string, typeof sorok>();
+  for (const r of sorok) {
+    const kulcs = resolveJarmu(r.jarmu)?.sofor ?? r.jarmu;
+    kocsinkent.set(kulcs, [...(kocsinkent.get(kulcs) ?? []), r]);
+  }
+  return [...kocsinkent.values()]
+    .flatMap((csoport) => parositasiSorrend(csoport))
+    .map((r) => ({ ...r, hely: fuvarHelyAllapotbol(r.jelleg, r.allapot) }));
 }
 
 /**
