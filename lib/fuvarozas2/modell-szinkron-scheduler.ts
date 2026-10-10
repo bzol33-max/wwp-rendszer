@@ -14,6 +14,7 @@ import { futtatRendszerkent } from "@/lib/auth/system-context";
 import { egyetlenPeldanyban, query, ZAR_KULCS } from "@/lib/db";
 import { frissitsKalkulaciokat, tervezettBerMegbizasok } from "@/lib/fuvarozas2/kalkulacio-tar";
 import { futtatPartnerJavaslatokat } from "@/lib/fuvarozas2/partner-javaslat";
+import { taroldMegbizasKoltsegeket } from "@/lib/fuvarozas2/koltseg-adat";
 
 const INTERVALL_MS = 60 * 60 * 1000;
 const KORLAT = 50;
@@ -67,6 +68,14 @@ async function tickBelso() {
     if (pj.irat + pj.javaslat + pj.hiba > 0) console.log(`[partner-javaslat] ${pj.irat} irat kiolvasva, ${pj.javaslat} új javaslat, ${pj.hiba} hiba.`);
   } catch (err) {
     console.error("[partner-javaslat] váratlan hiba:", err);
+  }
+  // Az utolsó 14 nap megbízásainak költségsorai (tény/becslés) a
+  // fuvar_megbizas_koltseg táblába (lib/fuvarozas2/koltseg-adat.ts, 5. fázis).
+  try {
+    const ks = await futtatRendszerkent("koltseg", () => taroldMegbizasKoltsegeket());
+    if (ks.megbizas > 0) console.log(`[koltseg] ${ks.megbizas} megbízás költségsorai frissítve (${ks.sor} sor).`);
+  } catch (err) {
+    console.error("[koltseg] váratlan hiba:", err);
   }
 }
 

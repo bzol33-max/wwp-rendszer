@@ -15,6 +15,7 @@
 
 import { PARTNEREK, type Partner } from "@/lib/fuvarozas/import/partnerek";
 import { findJarmuInSzoveg } from "@/lib/fuvarozas/vehicles";
+import { OPLUSZ_FELADO, OPLUSZ_BIZONYLAT_TARGY, OPLUSZ_SZAMLA_TARGY } from "@/lib/fuvarozas2/koltseg-import";
 
 export type LevelOsztaly =
   /** Új fuvarmegbízás — a csatolmány a Drive-ba megy, onnan importálódik. */
@@ -33,6 +34,8 @@ export type LevelOsztaly =
   | "szamla_ertesito"
   /** Timocom kiírás vagy chat — a Radar forrása. */
   | "timocom"
+  /** A töltőállomás (Oplusz) gépi értesítője egy tankolásról vagy a havi számláról — a Költségek forrása. */
+  | "tankolas"
   /** Hírlevél, reklám, állásajánlat. */
   | "reklam"
   /** Nem tudtuk besorolni — ember nézi meg. */
@@ -194,6 +197,14 @@ export function osztalyozLevelet(b: LevelBemenet): LevelOsztalyozas {
     indoklas.push("Számlázz.hu automatikus értesítő a kimenő számlánkról");
     return vissza("szamla_ertesito", 99);
   }
+  // A kút értesítője: a feladó (opluszbenzinkut@gmail.com), vagy — ha a
+  // levél továbbítva jön — a tárgy és a bizonylat-szöveg együtt.
+  const kutTargy = OPLUSZ_BIZONYLAT_TARGY.test(targy) || OPLUSZ_SZAMLA_TARGY.test(targy);
+  if (OPLUSZ_FELADO.test(b.felado.trim()) || (kutTargy && /v[áa]s[áa]rl[áa]s|partner\s*:/i.test(snippet))) {
+    const bizonylat = OPLUSZ_BIZONYLAT_TARGY.test(targy) || /tranzakci[óo]sz[áa]ma/i.test(snippet);
+    indoklas.push(bizonylat ? "töltőállomás bizonylat-értesítője (tankolás)" : "töltőállomás értesítője (számla)");
+    return vissza("tankolas", bizonylat ? 98 : 90);
+  }
   if (TIMOCOM.test(domain)) {
     indoklas.push("Timocom kiírás vagy chat — a Radar forrása");
     return vissza("timocom", 95);
@@ -270,6 +281,7 @@ export const OSZTALY_CIMKE: Record<LevelOsztaly, string> = {
   fizetes: "Fizetés / könyvelve",
   szamla_ertesito: "Számla-értesítő",
   timocom: "Timocom",
+  tankolas: "Tankolás",
   reklam: "Reklám",
   egyeb: "Egyéb",
 };

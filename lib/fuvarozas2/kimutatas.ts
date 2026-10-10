@@ -1,34 +1,32 @@
 "use server";
 
 // Fuvarozás 2 — Kimutatás (terv 8. fejezet): mennyi km ment egy kocsival
-// nap/hét/hó alatt, mennyi pénzt hozott, és mennyit spóroltunk azzal, hogy a
-// saját raklapot a saját kocsink vitte.
+// nap/hét/hó alatt, mennyi pénzt hozott, és mibe került.
 //
-// MIT MÉRÜNK ÉS MIT BECSLÜNK — ez a nézet csak akkor ér valamit, ha ez
-// világos:
-//   • km és liter: Ecofleet Útvonal-jelentés — TÉNY (ha a kulcs nincs
-//     beállítva, a nézet a megbízás-adatokat akkor is mutatja, a km helyén
-//     hibaüzenettel).
-//   • bevétel: a bér megbízások számlázott/megbízási díja — TÉNY.
-//     Az EUR-os díjakat NEM váltjuk át (nincs árfolyam-tábla feltöltve),
-//     külön soron jelennek meg.
-//   • rakott/üres bontás: a fuvarláncból (ures-km.ts) — rakott a felrakótól
-//     a lerakóig (bérnél a HU-GO-s rakott_km), üres a lerakótól a következő
-//     felrakóig. Ahol nincs HU-GO km, légvonal × 1,3 — becslés. A megtett km
-//     (GPS) ettől külön, tény.
-//   • saját fuvar megtakarítás: a saját fuvarok rakott km-e (HU-GO, ahol már
-//     ki van számolva) × a sajat_fuvar_km_dij_ft beállítás (550 Ft/km) — mennyit
-//     fizettünk volna, ha bérbe adjuk ki.
-//   • útdíj: csak akkor szerepel, ha van importált HU-GO tranzakció az
-//     időszakra (utdij_tranzakcio); nem becsüljük.
+// MIT MÉRÜNK ÉS MIT BECSLÜNK (5. fázis, 2026-10-10) — minden szám mellett
+// felirat jelzi, tény-e vagy becslés; a szabályok részletesen a
+// lib/fuvarozas2/koltseg-szamitas.ts fejlécében:
+//   • km és liter: Ecofleet Útvonal-jelentés — TÉNY. A megbízásra a tény-
+//     időablak (első megálló ténye → utolsó megálló ténye) km-e jut.
+//   • bevétel: a bérmegbízás díja — TÉNY; az EUR a teljesítés napjának MNB-
+//     árfolyamán (lib/fuvarozas/arfolyam.ts), a használt árfolyam kiírva.
+//   • rakott/üres bontás: a fuvarláncból (ures-km.ts) — BECSLÉS.
+//   • üzemanyag: GPS-liter × aznapi tankolás Ft/l (tankolas tábla) vagy
+//     NAV − kedvezmény — TÉNY litereken; ahol nincs mért liter, BECSLÉS.
+//   • útdíj: importált HU-GO tranzakciók (utdij_tranzakcio) — TÉNY; ahol
+//     nincs, a tárolt kalkuláció — BECSLÉS.
+//   • napi fix: napi_koltseg_ft × aktív nap — BECSLÉS (beállítás).
+//   • Bérfuvar → EREDMÉNY; saját fuvar → BELSŐ KÖLTSÉG (külön oszlop). A
+//     saját fuvar „elkerült költsége" (rakott km × km-díj) csak TÁJÉKOZTATÓ —
+//     2026-10-10-ig hozzáadódott a kocsi eredményéhez, ez hibás volt
+//     (Budaházi Zoltán): a kocsi eredménye ma bérfuvar-eredmény − nem
+//     hozzárendelt költség.
 
-import { query } from "@/lib/db";
 import { requireAnyViewPermission } from "@/lib/auth/require-permission";
-import { becsultTavolsag, lancKm } from "@/lib/fuvarozas2/ures-km";
-import { getJarmuIndulasiTelephely } from "@/lib/fuvarozas/telephelyek-db";
-import { getUtvonalJelentes, rendszamKulcs } from "@/lib/fuvarozas/ecofleet";
-import { gazolajArKedvezmennyel } from "@/lib/fuvarozas/gazolaj";
-import { getFuvarBeallitasok } from "@/lib/beallitasok/fuvar";
+import { query } from "@/lib/db";
+import { koltsegIdoszakra, type IdoszakMegbizas } from "@/lib/fuvarozas2/koltseg-adat";
+import type { Forras, Tetel } from "@/lib/fuvarozas2/koltseg-szamitas";
+import type { ArfolyamInfo } from "@/lib/fuvarozas/arfolyam";
 
 export type KimutatasIdoszak = "nap" | "het" | "ho";
 
@@ -36,27 +34,40 @@ export type KimutatasJarmu = {
   kod: string;
   cimke: string;
   sofor: string | null;
+  vanGps: boolean;
+  /** GPS — tény. */
   km: number;
+  liter: number;
+  /** Fuvarlánc — becslés. */
   berKm: number;
   sajatKm: number;
   uresKm: number;
-  liter: number;
   berDb: number;
   sajatDb: number;
+  /** Bérfuvar-bevétel Ft-ban (az EUR átváltva). */
   bevetelFt: number;
-  bevetelEur: number;
-  megtakaritasFt: number;
-  uzemanyagFt: number;
-  utdijFt: number | null;
-  ftKm: number | null;
-  /** Hány napon mozgott a kocsi az időszakban (GPS) — ennyi napi költséget terhelünk rá. */
+  /** EUR-os díj, amihez nem volt árfolyam — átváltás nélkül. */
+  atvaltatlanEur: number;
+  uzemanyag: Tetel | null;
+  utdij: Tetel | null;
+  napiFix: Tetel;
   aktivNap: number;
-  /** Sofőr + kocsi napi fix (napi_koltseg_ft beállítás, alapból 50 000 Ft/nap). */
-  napiKoltsegFt: number;
-  /** Bevétel + saját fuvar megtakarítás − üzemanyag − útdíj − napi költség. */
+  osszKoltsegFt: number;
+  osszKoltsegForras: Forras;
+  berEredmenyFt: number;
+  /** Saját fuvarok belső költsége — külön oszlop, NEM része az eredménynek. */
+  sajatBelsoKoltsegFt: number;
+  /** Üres utak, állás: a megbízásokra nem osztott költség. */
+  nemHozzarendeltFt: number;
+  /** Bérfuvar-eredmény − nem hozzárendelt költség. */
   eredmenyFt: number;
   eredmenyFtKm: number | null;
+  /** Tájékoztató: saját rakott km × km-díj — semmibe nem adódik hozzá. */
+  elkerultKoltsegFt: number;
+  ftKm: number | null;
 };
+
+export type KimutatasMegbizas = IdoszakMegbizas;
 
 export type KimutatasNap = { nap: string; km: number; berKm: number; sajatKm: number; uresKm: number; bevetelFt: number };
 
@@ -65,16 +76,27 @@ export type KimutatasEredmeny = {
   kezdet: string;
   veg: string;
   jarmuvek: KimutatasJarmu[];
+  megbizasok: KimutatasMegbizas[];
   napok: KimutatasNap[];
   ossz: {
     km: number; berKm: number; sajatKm: number; uresKm: number; liter: number;
-    bevetelFt: number; bevetelEur: number; megtakaritasFt: number; uzemanyagFt: number; utdijFt: number | null;
-    berFtKm: number | null; eredmenyFt: number | null;
-    aktivNap: number; napiKoltsegFt: number;
+    bevetelFt: number; atvaltatlanEur: number;
+    uzemanyagFt: number; uzemanyagForras: Forras;
+    utdijFt: number; utdijForras: Forras;
+    napiKoltsegFt: number; aktivNap: number;
+    osszKoltsegFt: number;
+    berFtKm: number | null;
+    berEredmenyFt: number; sajatBelsoKoltsegFt: number; nemHozzarendeltFt: number;
+    eredmenyFt: number; elkerultKoltsegFt: number;
   };
   gazolajAr: number | null;
   gazolajCimke: string | null;
   gpsHiba: string | null;
+  vanUtdijImport: boolean;
+  tankolasDb: number;
+  arfolyamok: ArfolyamInfo[];
+  napiKoltsegBeallitas: number;
+  sajatKmDijBeallitas: number;
   /** Hány megbízás esett az időszakra kocsi nélkül — ezek km-je sehol nem szerepel. */
   kocsiNelkul: number;
 };
@@ -100,181 +122,67 @@ async function idoszakHatarok(idoszak: KimutatasIdoszak, nap?: string): Promise<
 export async function getKimutatas(idoszak: KimutatasIdoszak = "het", nap?: string): Promise<KimutatasEredmeny> {
   await requireAnyViewPermission(["fuvarozas", "elszamolas"]);
   const { kezdet, veg } = await idoszakHatarok(idoszak, nap);
-  const beallitas = await getFuvarBeallitasok();
-
-  // Minden aktív jármű — a GPS nélküli (JANI) is: annak km/liter mezője üres
-  // marad, a megbízásai és bevétele viszont ugyanúgy számít.
-  const jarmuvek = await query<{ id: string; kod: string; cimke: string; sofor: string | null; ecofleet_object_id: string | null; vontato_rendszam: string | null }>(
-    `select j.id::text, j.kod, j.cimke, a.name as sofor, j.ecofleet_object_id, j.vontato_rendszam
-     from fuvar_jarmuvek j left join alkalmazottak a on a.id = j.sofor_id
-     where j.aktiv order by j.id`
-  );
-
-  // Megbízások az időszakban, naponta és kocsinként.
-  const megbizasok = await query<{
-    id: string; jarmu_id: string | null; nap: string; felrakas_nap: string; jelleg: "ber" | "sajat"; fuvardij: number | null; penznem: string;
-    felrako: string | null; lerako: string | null; rakott_km: number | null;
-  }>(
-    `select m.id::text, m.jarmu_id::text, to_char(coalesce(m.lerakas_datum, m.datum), 'YYYY-MM-DD') as nap,
-       to_char(m.datum, 'YYYY-MM-DD') as felrakas_nap, m.jelleg,
-       m.fuvardij, m.fuvardij_penznem as penznem, m.felrako, m.lerako, m.rakott_km::float8 as rakott_km
-     from fuvar_megbizasok m
-     where m.torolt_at is null and m.allapot is not null
-       and coalesce(m.lerakas_datum, m.datum) between $1::date and $2::date`,
-    [kezdet, veg]
-  );
-  const kocsiNelkul = megbizasok.filter((m) => !m.jarmu_id).length;
-
-  // Hol állt a kocsi az időszak előtt: az utolsó korábbi lerakó (a lánc első
-  // üres szakasza innen indul), ha nincs, a telephely.
-  const elozoLerako = await query<{ jarmu_id: string; lerako: string | null }>(
-    `select distinct on (m.jarmu_id) m.jarmu_id::text, m.lerako
-     from fuvar_megbizasok m
-     where m.torolt_at is null and m.allapot is not null and m.jarmu_id is not null
-       and coalesce(m.lerakas_datum, m.datum) < $1::date and coalesce(m.lerakas_datum, m.datum) >= $1::date - 30
-     order by m.jarmu_id, coalesce(m.lerakas_datum, m.datum) desc, m.id desc`,
-    [kezdet]
-  );
-  const tav = becsultTavolsag();
-
-  // GPS km és liter — tény.
-  let utak: { rendszamKulcs: string; nap: string; km: number; liter: number }[] = [];
-  let gpsHiba: string | null = null;
-  try {
-    const sorok = await getUtvonalJelentes(
-      jarmuvek.map((j) => j.ecofleet_object_id!).filter(Boolean),
-      kezdet,
-      veg
-    );
-    utak = sorok.map((s) => ({ rendszamKulcs: s.rendszamKulcs, nap: s.indulas.slice(0, 10), km: s.tavKm, liter: s.uzemanyagL }));
-  } catch (err) {
-    gpsHiba = err instanceof Error ? err.message : "Ecofleet hiba";
-  }
-
-  let gazolajAr: number | null = null;
-  let gazolajCimke: string | null = null;
-  // A kalkulátorral azonos, kedvezményes ár (NAV − 50 Ft), mert a flotta
-  // ezen tankol (Budaházi Zoltán, 2026-10-04 — eddig a Kimutatás a teljes
-  // NAV-árral számolt, kb. 7–8%-kal több üzemanyag-költséget mutatott).
-  try {
-    const ar = await gazolajArKedvezmennyel();
-    gazolajAr = ar.ar;
-    gazolajCimke = `${ar.cimke} · NAV − ${ar.kedvezmeny} Ft`;
-  } catch {
-    gazolajAr = null;
-  }
-
-  // Útdíj — csak ha van importált tranzakció.
-  const utdijSorok = await query<{ jarmu_id: string | null; osszeg: number }>(
-    `select jarmu_id::text, sum(brutto_ft)::int as osszeg from utdij_tranzakcio
-     where (idopont at time zone 'Europe/Budapest')::date between $1::date and $2::date group by jarmu_id`,
-    [kezdet, veg]
-  );
-  const vanUtdij = utdijSorok.length > 0;
+  const k = await koltsegIdoszakra(kezdet, veg);
 
   const napok = new Map<string, KimutatasNap>();
-  const ki: KimutatasJarmu[] = [];
-
-  for (const j of jarmuvek) {
-    const kulcs = j.vontato_rendszam ? rendszamKulcs(j.vontato_rendszam) : rendszamKulcs(j.kod);
-    const sajatUtak = utak.filter((u) => u.rendszamKulcs === kulcs);
-    const sajatMegb = megbizasok.filter((m) => m.jarmu_id === j.id);
-    let km = 0, berKm = 0, sajatKm = 0, uresKm = 0, liter = 0;
-
-    // GPS: a megtett km és liter naponta — tény.
-    const napiKm = new Map<string, { km: number; liter: number }>();
-    for (const u of sajatUtak) {
-      const x = napiKm.get(u.nap) ?? { km: 0, liter: 0 };
-      x.km += u.km; x.liter += u.liter;
-      napiKm.set(u.nap, x);
-    }
-    for (const [nap, x] of napiKm) {
-      km += x.km; liter += x.liter;
-      const n = napok.get(nap) ?? { nap, km: 0, berKm: 0, sajatKm: 0, uresKm: 0, bevetelFt: 0 };
-      n.km += x.km;
-      napok.set(nap, n);
-    }
-
-    // Rakott/üres a fuvarláncból: lerakótól a következő felrakóig üres.
-    const lanc = await lancKm(
-      sajatMegb.map((m) => ({
-        id: m.id, jelleg: m.jelleg, felrakasNap: m.felrakas_nap, lerakasNap: m.nap,
-        felrako: m.felrako, lerako: m.lerako, rakottKm: m.rakott_km != null ? Number(m.rakott_km) : null,
-      })),
-      elozoLerako.find((e) => e.jarmu_id === j.id)?.lerako ?? (await getJarmuIndulasiTelephely(j.kod)).cim,
-      tav
-    );
-    for (const l of lanc) {
+  const napSor = (n: string) => {
+    const x = napok.get(n) ?? { nap: n, km: 0, berKm: 0, sajatKm: 0, uresKm: 0, bevetelFt: 0 };
+    napok.set(n, x);
+    return x;
+  };
+  const jarmuvek: KimutatasJarmu[] = k.jarmuvek.map((j) => {
+    for (const [n, x] of j.napiKm) napSor(n).km += x.km;
+    let berKm = 0, sajatKm = 0, uresKm = 0;
+    for (const l of j.lanc) {
       const b = l.jelleg === "ber" ? l.rakott : 0;
       const s = l.jelleg === "sajat" ? l.rakott : 0;
       berKm += b; sajatKm += s; uresKm += l.ures;
-      const n = napok.get(l.nap) ?? { nap: l.nap, km: 0, berKm: 0, sajatKm: 0, uresKm: 0, bevetelFt: 0 };
+      const n = napSor(l.nap);
       n.berKm += b; n.sajatKm += s; n.uresKm += l.ures;
-      napok.set(l.nap, n);
     }
+    for (const m of j.megbizasok) if (m.jelleg === "ber" && m.bevetelFt != null) napSor(m.nap).bevetelFt += m.bevetelFt;
+    const e = j.eredmeny;
+    return {
+      kod: j.kod, cimke: j.cimke, sofor: j.sofor, vanGps: j.vanGps,
+      km: j.km, liter: j.liter,
+      berKm: Math.round(berKm), sajatKm: Math.round(sajatKm), uresKm: Math.round(uresKm),
+      berDb: e.berDb, sajatDb: e.sajatDb,
+      bevetelFt: e.berBevetelFt, atvaltatlanEur: e.atvaltatlanEur,
+      uzemanyag: j.ossz.uzemanyag, utdij: j.ossz.utdij, napiFix: j.ossz.napiFix,
+      aktivNap: j.aktivNap,
+      osszKoltsegFt: e.osszKoltsegFt, osszKoltsegForras: e.osszKoltsegForras,
+      berEredmenyFt: e.berEredmenyFt, sajatBelsoKoltsegFt: e.sajatBelsoKoltsegFt,
+      nemHozzarendeltFt: e.nemHozzarendeltFt, eredmenyFt: e.eredmenyFt,
+      eredmenyFtKm: j.km > 0 ? Math.round(e.eredmenyFt / j.km) : null,
+      elkerultKoltsegFt: e.elkerultKoltsegFt,
+      ftKm: berKm > 0 && e.berBevetelFt > 0 ? Math.round(e.berBevetelFt / berKm) : null,
+    };
+  });
 
-    const berSorok = sajatMegb.filter((m) => m.jelleg === "ber");
-    const bevetelFt = berSorok.filter((m) => m.penznem === "Ft").reduce((a, m) => a + (m.fuvardij ?? 0), 0);
-    const bevetelEur = berSorok.filter((m) => m.penznem === "EUR").reduce((a, m) => a + (m.fuvardij ?? 0), 0);
-    for (const m of berSorok) {
-      if (m.penznem !== "Ft") continue;
-      const n = napok.get(m.nap) ?? { nap: m.nap, km: 0, berKm: 0, sajatKm: 0, uresKm: 0, bevetelFt: 0 };
-      n.bevetelFt += m.fuvardij ?? 0;
-      napok.set(m.nap, n);
-    }
-
-    const aktivNap = napiKm.size;
-    ki.push({
-      aktivNap,
-      napiKoltsegFt: aktivNap * beallitas.napi_koltseg_ft,
-      eredmenyFt: 0, // lent, a flotta Ft/km ismeretében
-      eredmenyFtKm: null,
-      kod: j.kod, cimke: j.cimke, sofor: j.sofor,
-      km: Math.round(km), berKm: Math.round(berKm), sajatKm: Math.round(sajatKm), uresKm: Math.round(uresKm),
-      liter: Math.round(liter),
-      berDb: berSorok.length,
-      sajatDb: sajatMegb.filter((m) => m.jelleg === "sajat").length,
-      bevetelFt, bevetelEur,
-      megtakaritasFt: 0, // lent
-      uzemanyagFt: gazolajAr ? Math.round(liter * gazolajAr) : 0,
-      utdijFt: vanUtdij ? (utdijSorok.find((u) => u.jarmu_id === j.id)?.osszeg ?? 0) : null,
-      ftKm: berKm > 0 && bevetelFt > 0 ? Math.round(bevetelFt / berKm) : null,
-    });
-  }
-
-  const berKmOssz = ki.reduce((a, j) => a + j.berKm, 0);
-  const bevetelFtOssz = ki.reduce((a, j) => a + j.bevetelFt, 0);
-  const berFtKm = berKmOssz > 0 && bevetelFtOssz > 0 ? Math.round(bevetelFtOssz / berKmOssz) : null;
-  for (const j of ki) {
-    j.megtakaritasFt = Math.round(j.sajatKm * beallitas.sajat_fuvar_km_dij_ft);
-    j.eredmenyFt = j.bevetelFt + j.megtakaritasFt - j.uzemanyagFt - (j.utdijFt ?? 0) - j.napiKoltsegFt;
-    j.eredmenyFtKm = j.km > 0 ? Math.round(j.eredmenyFt / j.km) : null;
-  }
-
-  const uzemanyagOssz = ki.reduce((a, j) => a + j.uzemanyagFt, 0);
-  const utdijOssz = vanUtdij ? ki.reduce((a, j) => a + (j.utdijFt ?? 0), 0) : null;
-  const megtakaritasOssz = ki.reduce((a, j) => a + j.megtakaritasFt, 0);
-
+  const sum = (f: (j: KimutatasJarmu) => number) => jarmuvek.reduce((a, j) => a + f(j), 0);
+  const mindTeny = (f: (j: KimutatasJarmu) => Forras | undefined) => (jarmuvek.every((j) => f(j) === "teny") && jarmuvek.length > 0 ? "teny" : "becsles") as Forras;
+  const berKmOssz = sum((j) => j.berKm);
+  const bevetelFtOssz = sum((j) => j.bevetelFt);
   return {
     idoszak, kezdet, veg,
-    jarmuvek: ki,
+    jarmuvek,
+    megbizasok: k.jarmuvek.flatMap((j) => j.megbizasok),
     napok: [...napok.values()].sort((a, b) => a.nap.localeCompare(b.nap)),
     ossz: {
-      km: ki.reduce((a, j) => a + j.km, 0),
-      berKm: berKmOssz,
-      sajatKm: ki.reduce((a, j) => a + j.sajatKm, 0),
-      uresKm: ki.reduce((a, j) => a + j.uresKm, 0),
-      liter: ki.reduce((a, j) => a + j.liter, 0),
-      bevetelFt: bevetelFtOssz,
-      bevetelEur: ki.reduce((a, j) => a + j.bevetelEur, 0),
-      megtakaritasFt: megtakaritasOssz,
-      uzemanyagFt: uzemanyagOssz,
-      utdijFt: utdijOssz,
-      berFtKm,
-      aktivNap: ki.reduce((a, j) => a + j.aktivNap, 0),
-      napiKoltsegFt: ki.reduce((a, j) => a + j.napiKoltsegFt, 0),
-      eredmenyFt: ki.reduce((a, j) => a + j.eredmenyFt, 0),
+      km: sum((j) => j.km), berKm: berKmOssz, sajatKm: sum((j) => j.sajatKm), uresKm: sum((j) => j.uresKm), liter: sum((j) => j.liter),
+      bevetelFt: bevetelFtOssz, atvaltatlanEur: sum((j) => j.atvaltatlanEur),
+      uzemanyagFt: sum((j) => j.uzemanyag?.ft ?? 0), uzemanyagForras: mindTeny((j) => j.uzemanyag?.forras),
+      utdijFt: sum((j) => j.utdij?.ft ?? 0), utdijForras: mindTeny((j) => j.utdij?.forras),
+      napiKoltsegFt: sum((j) => j.napiFix.ft), aktivNap: sum((j) => j.aktivNap),
+      osszKoltsegFt: sum((j) => j.osszKoltsegFt),
+      berFtKm: berKmOssz > 0 && bevetelFtOssz > 0 ? Math.round(bevetelFtOssz / berKmOssz) : null,
+      berEredmenyFt: sum((j) => j.berEredmenyFt), sajatBelsoKoltsegFt: sum((j) => j.sajatBelsoKoltsegFt),
+      nemHozzarendeltFt: sum((j) => j.nemHozzarendeltFt), eredmenyFt: sum((j) => j.eredmenyFt),
+      elkerultKoltsegFt: sum((j) => j.elkerultKoltsegFt),
     },
-    gazolajAr, gazolajCimke, gpsHiba, kocsiNelkul,
+    gazolajAr: k.gazolajAr, gazolajCimke: k.gazolajCimke, gpsHiba: k.gpsHiba,
+    vanUtdijImport: k.vanUtdijImport, tankolasDb: k.tankolasDb, arfolyamok: k.arfolyamok,
+    napiKoltsegBeallitas: k.beallitas.napi_koltseg_ft, sajatKmDijBeallitas: k.beallitas.sajat_fuvar_km_dij_ft,
+    kocsiNelkul: k.kocsiNelkul,
   };
 }

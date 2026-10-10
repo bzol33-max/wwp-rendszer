@@ -46,6 +46,14 @@
  *
  * FRISSÍTÉS (2026-09-25): a script.google.com projektben cseréld le a teljes
  * tartalmat erre a fájlra, és mentsd. Az időzítőt nem kell újra telepíteni.
+ *
+ * FRISSÍTÉS (2026-10-10, Költségek): a töltőállomás (Oplusz) gépi
+ * értesítőit („Értesítés bizonylat készítésről") CÍMKE NÉLKÜL is beküldi —
+ * a feladó szerint keresve (KUT_KERESES), mert ezek nem kapják meg a
+ * „Fuvarmegbízás" címkét. A rendszer ezekből rögzíti a tankolásokat. A
+ * szövegükből 1500 karaktert küld (a liter a 400 karakteres részletből
+ * kimaradhat). Ehhez a script.google.com projektben a tartalmat KÉZZEL kell
+ * lecserélni erre a fájlra (mentés; az időzítő marad).
  */
 
 /** Ezekről a feladókról semmit nem küldünk (bank, hatóság, magán). */
@@ -71,6 +79,13 @@ var ALAP_CIMKE = 'Fuvarmegbízás';
  * változatlanul importálja, amit ide feltöltünk.
  */
 var ALAP_MAPPA = '1JNUvwN30It3_rooGkeTGTpkO4K9bix2n';
+/**
+ * A töltőállomás gépi értesítői — címke nélkül, a feladó szerint (2026-10-10).
+ * Csak ez a feladó, csak az utolsó VISSZA_NAP nap. Üresre állítva kikapcsol.
+ */
+var KUT_KERESES = 'from:opluszbenzinkut@gmail.com';
+var KUT_SNIPPET_KARAKTER = 1500;
+
 /** Ennyi napra visszamenőleg nézzük a címkézett leveleket. */
 var VISSZA_NAP = 14;
 
@@ -220,6 +235,18 @@ function ujLevelekBekuldese_(csakProba) {
     return { uj: 0, ismert: 0, hiba: 'nincs cimke' };
   }
   var szalak = cimkeObj.getThreads(0, 50);
+  // A kút értesítői címke nélkül (lásd KUT_KERESES) — a már címkézett szálakat nem duplázzuk.
+  var kutSzalIdk = {};
+  if (KUT_KERESES) {
+    var cimkezettIdk = {};
+    for (var c = 0; c < szalak.length; c++) cimkezettIdk[szalak[c].getId()] = true;
+    var kutSzalak = GmailApp.search(KUT_KERESES + ' newer_than:' + VISSZA_NAP + 'd', 0, 30);
+    for (var d = 0; d < kutSzalak.length; d++) {
+      if (cimkezettIdk[kutSzalak[d].getId()]) continue;
+      kutSzalIdk[kutSzalak[d].getId()] = true;
+      szalak.push(kutSzalak[d]);
+    }
+  }
   var levelek = [];
   for (var i = 0; i < szalak.length && levelek.length < MAX_LEVEL_EGY_KORBEN; i++) {
     var uzenetek = szalak[i].getMessages();
@@ -239,7 +266,7 @@ function ujLevelekBekuldese_(csakProba) {
         feladoNev: feladoNev_(u.getFrom()),
         cimzettek: String(u.getTo() || '').split(',').map(function (x) { return x.trim().toLowerCase(); }).filter(Boolean),
         targy: u.getSubject(),
-        snippet: String(u.getPlainBody() || '').replace(/\s+/g, ' ').slice(0, 400),
+        snippet: String(u.getPlainBody() || '').replace(/\s+/g, ' ').slice(0, kutSzalIdk[szalak[i].getId()] ? KUT_SNIPPET_KARAKTER : 400),
         erkezett: u.getDate().toISOString(),
         szalElso: j === 0,
         csatolmanyNevek: nevek,

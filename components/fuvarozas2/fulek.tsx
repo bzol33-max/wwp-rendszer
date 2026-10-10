@@ -15,6 +15,8 @@ const FULEK: { href: string; label: string; csakFuvarozas?: boolean; csakRendsze
   { href: "/fuvarozas2/tervezes", label: "Tervezés", csakFuvarozas: true },
   { href: "/fuvarozas2/gps", label: "Élő GPS", csakFuvarozas: true },
   { href: "/fuvarozas2/kimutatas", label: "Kimutatás", csakFuvarozas: true },
+  // Költségek (5. fázis): az Elszámolás hatóköre is látja (HU-GO import, tankolások).
+  { href: "/fuvarozas2/koltsegek", label: "Költségek" },
   { href: "/fuvarozas2/rendszer", label: "Rendszer", csakRendszer: true },
 ];
 

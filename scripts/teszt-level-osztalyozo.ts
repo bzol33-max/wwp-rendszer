@@ -106,6 +106,22 @@ eset("Magánlevél — nem sorolható be, nem megy sehova", {
   felado: "ismeros@example.com", targy: "Szia", snippet: "Jövő héten ráérsz?", szalElso: true,
 }, "egyeb", 0, false);
 
+// --- Töltőállomás (Oplusz) gépi értesítői — Költségek, 5. fázis ---------------
+eset("Oplusz bizonylat-értesítő → tankolás", {
+  felado: "opluszbenzinkut@gmail.com", targy: "Értesítés bizonylat készítésről",
+  snippet: "Partner: Minta Kft. (0000 Példafalu) Vásárlás időpontja: 2026.09.27 17:43:41 Vásárlás tranzakciószáma: 1/R/00000001 Vásárlás összege: 5 002,00 Ft Rendszám: AOPU427 Vásárlás", szalElso: true,
+}, "tankolas", 95, false);
+eset("Oplusz számla-értesítő → tankolás (számla)", {
+  felado: "opluszbenzinkut@gmail.com", targy: "Értesítés számlakészítésrol: K/G/00000001", snippet: "Tisztelt Partnerünk! Számla készült.", szalElso: true,
+}, "tankolas", 85, false);
+eset("Továbbított kút-értesítő más feladótól → tankolás", {
+  felado: "valaki@example.com", targy: "Fwd: Értesítés bizonylat készítésről",
+  snippet: "Vásárlás időpontja: 2026.09.28 06:10:00 Vásárlás tranzakciószáma: 1/R/00000002 Vásárlás összege: 80 000,00 Ft", szalElso: true,
+}, "tankolas", 90, false);
+eset("A „bizonylat” szó egy megbízásban nem tankolás", {
+  felado: "dispo@pelda-logisztika.hu", targy: "Fuvarmegbízás 26/1234", snippet: "Csatolom a megbízást, a bizonylat a rakodáskor.", csatolmanyNevek: PDF, szalElso: true,
+}, "megbizas", 70, true);
+
 // --- Kinyert mezők ----------------------------------------------------------
 const d = osztalyozLevelet({ felado: "mminta@duvenbeck.de", targy: "NZM492 : 23288892.", snippet: "a fent említett szállítást a mellékelt megrendelés szerint", csatolmanyNevek: PDF, szalElso: true });
 if (d.hivatkozas === "23288892") ok++; else { bad++; console.log(`  HIBA  hivatkozás: várt 23288892, kapott ${d.hivatkozas}`); }
