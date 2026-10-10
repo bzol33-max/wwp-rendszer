@@ -62,7 +62,7 @@ export function BejovoLista({ sorok, valasztott }: { sorok: BejovoSor[]; valaszt
                   {s.allapot === "tervezett" ? " · kocsi nélkül" : ""}
                 </div>
                 <div className="mt-1 flex flex-wrap gap-1">
-                  {m ? <Chip szin={m.szin}>magában {m.nev}</Chip> : s.magaban ? <Chip>önköltség {szam(s.magaban.onkoltsegFt / 1000)}e</Chip> : <Chip>számolás…</Chip>}
+                  {m ? <Chip szin={m.szin}>magában {m.nev}</Chip> : s.magaban ? <Chip>önköltség {szam(s.magaban.onkoltsegFt / 1000)}e</Chip> : s.kalkHiba ? <Chip szin={MINOSITES.hatareset.szin}>nem számolható</Chip> : <Chip>számolás…</Chip>}
                   {s.legjobb ? <Chip szin={s.legjobb.hatas >= 0 ? MINOSITES.ajanlott.szin : MINOSITES.veszteseges.szin}>hét {elojel(s.legjobb.hatas)} · {s.legjobb.sofor}</Chip> : <Chip>minden kocsinál ütközik</Chip>}
                   {s.elozmeny?.eltere != null ? <Chip szin={s.elozmeny.eltere <= -10 ? MINOSITES.veszteseges.szin : undefined}>előzmény {s.elozmeny.eltere > 0 ? "+" : ""}{s.elozmeny.eltere}%</Chip> : null}
                 </div>
@@ -158,10 +158,18 @@ export function HetOszlop({ k }: { k: NonNullable<Tervezo["kivalasztott"]> }) {
           <h2 className="text-base font-semibold">{v.sofor} · {v.kod} · a hét {hoNap(k.hetKezdet)}-tól</h2>
           <ol className="flex flex-col gap-1.5">
             {v.napok.map((n) => (
-              <li key={n.nap} className="grid grid-cols-[28px_1fr] items-start gap-2">
-                <span className="pt-1.5 text-xs font-bold text-muted-foreground">{napBetu(n.nap)}</span>
+              <li key={n.nap} className={cn("grid grid-cols-[28px_1fr] items-start gap-2", n.hetvege && n.fuvarok.length === 0 && "opacity-70")}>
+                <span className={cn("pt-1.5 text-xs font-bold text-muted-foreground", n.hetvege && "text-[var(--f2-amb)]")} title={n.hetvege ? "hétvége" : undefined}>{napBetu(n.nap)}</span>
                 <div className="flex flex-col gap-1">
-                  {n.fuvarok.length === 0 ? <span className="rounded-lg border border-dashed border-foreground/15 px-2.5 py-1.5 text-xs text-muted-foreground">szabad</span> : null}
+                  {n.fuvarok.length === 0 ? (
+                    <span className="rounded-lg border border-dashed border-foreground/15 px-2.5 py-1.5 text-xs text-muted-foreground">
+                      {n.hetvege === "vasarnap" ? "hétvége · kamionstop (V 22:00-ig)" : n.hetvege === "szombat" ? "hétvége · kamionstop Szo 22:00-tól" : "szabad"}
+                    </span>
+                  ) : n.hetvege ? (
+                    <span className="text-[11px] font-semibold text-[var(--f2-amb)]">
+                      ⚠ {n.hetvege === "vasarnap" ? "vasárnapi fuvar — kamionstop 22:00-ig" : "szombati fuvar — kamionstop 22:00-tól"}
+                    </span>
+                  ) : null}
                   {n.fuvarok.map((f) => (
                     <span key={f.id} className={cn("flex items-baseline justify-between gap-2 rounded-lg border border-l-4 px-2.5 py-1.5 text-xs",
                       f.uj ? "border-dashed border-[#f97316] bg-[#fff7ed]" : f.sajat ? "border-foreground/10 border-l-[var(--f2-mint)]" : "border-foreground/10 border-l-[var(--f2-blue)]")}>

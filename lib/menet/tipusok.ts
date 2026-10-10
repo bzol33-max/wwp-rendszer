@@ -80,7 +80,17 @@ export type MenetBeallitas = {
   lerakasRahagyasPerc: number;
   /** Átlagsebesség a tervezett időkhöz (km/h). */
   atlagSebessegKmh: number;
+  /**
+   * A nap kezdete (perc éjféltől, budapesti idő) — innen indul az idő-lánc,
+   * ha egyik megállónak sincs időablaka, és ennél korábban nem indul a kocsi,
+   * ha az első időzített megálló előtt más feladat is van. Alapból 360 (06:00,
+   * fuvar_beallitas 'nap_kezdes_ido').
+   */
+  napKezdesPerc?: number;
 };
+
+/** A menet egészére szóló (kártya-szintű) figyelmeztetés — nem egy feladaté. */
+export type MenetFigyelmeztetes = { kod: "vezetesi_ido"; szoveg: string };
 
 /** Egy kiszámolt (még nem mentett) feladat. */
 export type FeladatJavaslat = {

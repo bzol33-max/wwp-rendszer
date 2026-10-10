@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { varosNev } from "@/lib/fuvarozas/varos";
 import { atrendez, feladatLezaras, javaslatFrissites, jovahagy, visszaJavaslatba, type MenettervKocsi } from "@/lib/menet/akciok";
 import { elfogad, elutasit, optimalizalas } from "@/lib/menet/optimalizalo-akciok";
+import type { OptimalizalasEredmeny } from "@/lib/menet/optimalizalo-szerver";
 import { CELFUGGVENY_CIMKE, type Celfuggveny } from "@/lib/menet/optimalizalo";
 import { FELADAT_TIPUS_CIMKE, MENET_ALLAPOT_CIMKE, type FeladatTipus, type MenetEsemeny, type MenetFeladat } from "@/lib/menet/tipusok";
 
@@ -93,22 +94,36 @@ function KocsiMenet({ k, nap, szerkeszthet }: { k: MenettervKocsi; nap: string; 
   const [pending, start] = useTransition();
   const [mozgatas, setMozgatas] = useState<{ ujSorrend: string[]; leiras: string } | null>(null);
   const [indok, setIndok] = useState("");
+  // Az utolsó „Optimalizálás” eredménye — a kártyán marad (nem csak toast), főleg ha nincs megengedett sorrend.
+  const [optValasz, setOptValasz] = useState<OptimalizalasEredmeny | null>(null);
   const m = k.menet;
+  const optDobozId = m ? `optimalizalo-${m.id}` : undefined;
   const jovahagyott = m != null && m.allapot !== "javaslat";
   const rendezheto = szerkeszthet && m != null && (m.allapot === "jovahagyott" || m.allapot === "folyamatban");
   const feladatok = m ? [...m.feladatok].sort((a, b) => a.sorszam - b.sorszam) : [];
   const munkaIndexek = feladatok.flatMap((f, i) => (f.megbizasId ? [i] : []));
   const optimalizalhato = szerkeszthet && m != null && m.allapot !== "lezart" && munkaIndexek.length >= 2;
 
+  /** A meglévő nyitott javaslat dobozához görget (nem számol újra). */
+  function mutasdAJavaslatot() {
+    const el = optDobozId ? document.getElementById(optDobozId) : null;
+    el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    el?.focus({ preventScroll: true });
+  }
+
   function optimalizal() {
     if (!m) return;
+    // Van már nyitott javaslat: azt mutatjuk, nem hibát.
+    if (k.optimalizalo) { setOptValasz(null); mutasdAJavaslatot(); return; }
     start(async () => {
       try {
         const r = await optimalizalas(m.id);
-        if (!r.ok) { toast.error(r.hiba); return; }
+        if (!r.ok) { toast.error(r.hiba); setOptValasz(null); return; }
+        setOptValasz(r.eredmeny === "uj" || r.eredmeny === "meglevo" ? null : r);
         if (r.eredmeny === "uj" || r.eredmeny === "meglevo") toast.success(r.uzenet);
-        else toast.message(r.uzenet);
+        else if (r.eredmeny !== "nincs_megengedett") toast.message(r.uzenet);
         router.refresh();
+        if (r.eredmeny === "meglevo") setTimeout(mutasdAJavaslatot, 300);
       } catch {
         toast.error("Nem sikerült az optimalizálás — próbáld újra.");
       }
@@ -164,9 +179,11 @@ function KocsiMenet({ k, nap, szerkeszthet }: { k: MenettervKocsi; nap: string; 
             </button>
           ) : null}
           {optimalizalhato ? (
-            <button type="button" disabled={pending} onClick={optimalizal} title="Jobb sorrend keresése (csak javaslat — semmit nem ír át)"
+            <button type="button" disabled={pending} onClick={optimalizal}
+              title={k.optimalizalo ? "Van nyitott javaslat — megmutatja" : "Jobb sorrend keresése (csak javaslat — semmit nem ír át)"}
+              aria-controls={k.optimalizalo ? optDobozId : undefined}
               className="rounded-lg border border-foreground/15 px-2.5 py-1 text-xs font-semibold hover:bg-muted disabled:opacity-45">
-              Optimalizálás
+              {k.optimalizalo ? `Javaslat #${k.optimalizalo.id}` : "Optimalizálás"}
             </button>
           ) : null}
           {szerkeszthet && m?.allapot === "jovahagyott" ? (
@@ -177,6 +194,26 @@ function KocsiMenet({ k, nap, szerkeszthet }: { k: MenettervKocsi; nap: string; 
           ) : null}
         </div>
       </div>
+
+      {k.vezetes?.figyelmeztetes ? (
+        <p className="rounded-lg bg-[var(--f2-amb-l)] px-2.5 py-1.5 text-xs font-semibold text-[var(--f2-amb)]" role="status">⚠ {k.vezetes.figyelmeztetes.szoveg}</p>
+      ) : null}
+      {optValasz ? (
+        optValasz.eredmeny === "nincs_megengedett" ? (
+          <div className="flex flex-col gap-1 rounded-lg bg-[var(--f2-amb-l)] px-2.5 py-2 text-xs text-[var(--f2-amb)]" role="status">
+            <b>Nincs a kemény korlátoknak megfelelő sorrend — egyik sorrendben sem teljesül:</b>
+            <ul className="list-disc pl-4">
+              {(optValasz.korlatok ?? []).map((x, i) => <li key={i}>{x}</li>)}
+            </ul>
+            {optValasz.mostaniSerulesek?.length && (optValasz.mostaniSerulesek.join("|") !== (optValasz.korlatok ?? []).join("|")) ? (
+              <span>A mostani terv: {optValasz.mostaniSerulesek.join(" · ")}</span>
+            ) : null}
+            <span className="font-normal">A feladatokat el kell osztani (másik kocsi vagy nap), vagy az ablakot egyeztetni — a sorrend átrakása ezt nem oldja meg.</span>
+          </div>
+        ) : (
+          <p className="rounded-lg bg-muted/50 px-2.5 py-1.5 text-xs text-muted-foreground" role="status">{optValasz.uzenet}</p>
+        )
+      ) : null}
 
       {feladatok.length === 0 ? (
         <p className="rounded-lg border border-dashed border-foreground/15 px-2.5 py-2 text-xs text-muted-foreground">
@@ -196,7 +233,7 @@ function KocsiMenet({ k, nap, szerkeszthet }: { k: MenettervKocsi; nap: string; 
       )}
 
       {k.optimalizalo && m ? (
-        <OptimalizaloDoboz j={k.optimalizalo} javaslatAllapot={m.allapot === "javaslat"} szerkeszthet={szerkeszthet} pending={pending}
+        <OptimalizaloDoboz id={optDobozId} j={k.optimalizalo} javaslatAllapot={m.allapot === "javaslat"} szerkeszthet={szerkeszthet} pending={pending}
           elfogad={() => futtat(() => elfogad(k.optimalizalo!.id), "Optimalizáló javaslat elfogadva.")}
           elutasit={() => futtat(() => elutasit(k.optimalizalo!.id), "Javaslat elutasítva.")} />
       ) : null}
@@ -270,7 +307,8 @@ function FeladatSor({ f, fel, le, kesz, pending }: { f: MenetFeladat; fel: (() =
   );
 }
 
-function OptimalizaloDoboz({ j, javaslatAllapot, szerkeszthet, pending, elfogad, elutasit }: {
+function OptimalizaloDoboz({ id, j, javaslatAllapot, szerkeszthet, pending, elfogad, elutasit }: {
+  id?: string;
   j: NonNullable<MenettervKocsi["optimalizalo"]>;
   javaslatAllapot: boolean;
   szerkeszthet: boolean;
@@ -281,7 +319,7 @@ function OptimalizaloDoboz({ j, javaslatAllapot, szerkeszthet, pending, elfogad,
   const tagok = Object.keys(CELFUGGVENY_CIMKE) as (Exclude<keyof Celfuggveny, "osszesen">)[];
   const kmOssz = (x: { ures: number; rakott: number; haza: number }) => x.ures + x.rakott + x.haza;
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-foreground/10 bg-[var(--f2-blue-l)] p-2.5 text-xs" aria-label="Optimalizáló javaslat">
+    <div id={id} tabIndex={-1} className="flex scroll-mt-4 flex-col gap-2 rounded-lg border border-foreground/10 bg-[var(--f2-blue-l)] p-2.5 text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--f2-blue)]" aria-label="Optimalizáló javaslat">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <b className="text-[var(--f2-blue)]">Optimalizáló javaslat #{j.id}</b>
         <span className="font-semibold">

@@ -9,6 +9,7 @@ import {
   ellenorizVerziot,
   epitMenetJavaslat,
 } from "@/lib/menet/menet-alap";
+import { idobelyegMs } from "@/lib/fuvarozas2/napi-sorrend";
 import type { TavFn } from "@/lib/menet/tipusok";
 
 // Menetterv — az írási műveletek magja (szerver, jogosultság NÉLKÜL: a
@@ -66,8 +67,9 @@ export async function jovahagyMenet(menetId: string, verzio: number, ki: string)
 /**
  * Átrendezés (jóváhagyott / folyamatban lévő menet): `ujSorrend` a feladat-
  * id-k új sorrendje. A munkák sorrendje az új sorrend; az üres
- * pozicionálásokat és a figyelmeztetéseket az új sorrendre újraszámolja (a
- * lezárt feladatok előtagja érintetlen marad).
+ * pozicionálásokat, a TELJES idő-láncot (tervezett indulás / érkezés minden
+ * feladatra) és a figyelmeztetéseket az új sorrendre újraszámolja (a lezárt
+ * feladatok előtagja érintetlen marad).
  */
 export async function atrendezMenet(menetId: string, verzio: number, ujSorrend: string[], ok: string, ki: string, tav: TavFn = szerverTav()): Promise<Valasz<{ verzio: number }>> {
   if (!AZONOSITO.test(menetId) || !Array.isArray(ujSorrend) || ujSorrend.some((x) => typeof x !== "string")) {
@@ -107,6 +109,8 @@ export async function atrendezMenet(menetId: string, verzio: number, ujSorrend: 
     indulas: utolso ? { cim: utolso.celCim, pont: null, telephelyPontId: utolso.celTelephelyPontId } : adat.indulas,
     elsoIndulas: !utolso,
     sorszamKezdet: elotag.length + 1,
+    // A lezárt előtag után: legkorábban a lezárásakor (különben a tervezett érkezésekor) indul tovább.
+    legkorabbiIndulas: utolso ? idobelyegMs(utolso.lezarvaAt) ?? idobelyegMs(utolso.tervezettErkezes) : null,
   });
 
   const r = await withTransaction(async (tx): Promise<Valasz<{ verzio: number }>> => {

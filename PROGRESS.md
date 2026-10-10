@@ -3272,3 +3272,33 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 - **Teszt**: `scripts/teszt-diszpecser.ts` (90/0) a `teszt` láncban; a
   betöltő a scratch Postgresen (Ecofleet-kulcs nélkül → GPS-hiba ág) lefutott,
   a négy nézet és a részlet-panel szerveroldalon renderelve.
+
+## 2026-10-10 — Menetterv / optimalizáló QA-javítások
+
+- **Idő-lánc minden sorrendre** (`lib/menet/menet-alap.ts` `epitMenetJavaslat`): átrendezés,
+  optimalizáló-elfogadás és újragenerálás után a TELJES lánc újraszámolódik (indulási hely →
+  menetidő → fel-/lerakási ráhagyás), az első időzített megálló ablakának VÉGÉRE (ha az több
+  késést okoz, az elejére); ha előtte más feladat is van, a kocsi a nap kezdeténél korábban nem
+  indul — így a lekésett 06–08 ablak ütközés-figyelmeztetést ad. Ablak nélküli menet (JANI) a nap
+  kezdetétől láncol: új beállítás `nap_kezdes_ido` = "06:00" (`db/migrations/035_nap_kezdes_ido.sql`,
+  kódbeli tartalékkal). Lezárt előtag után legkorábban a lezáráskor indul tovább.
+- **Vezetési idő a kártyán** (`menetVezetes`, `akciok.ts` → `vezetes`): 540 perc felett
+  „vezetesi_ido” sáv. Az optimalizáló „nincs megengedett sorrend” eredménye a kártyán marad
+  (melyik korlát nem teljesül, a mostani terv sérülései), nem csak toast.
+- **Nyitott javaslat**: az „Optimalizálás” gomb ilyenkor „Javaslat #id”, és a javaslat-dobozhoz
+  görget (nem hiba).
+- **Másnapi indulási hely**: az előző (≤ 3 napos) menet utolsó feladatának célja (jóváhagyott
+  elsőként), különben a régi megbízás-lekérdezés, végül a telephely (`elozoMenetVege`).
+- **HU-GO terhelés**: `lib/menet/hugo-megszakito.ts` — körönkénti megszakító (az első időtúllépés /
+  hálózati hiba után légvonal × 1,3), a hozzárendelés-javaslat legfeljebb 120 hívás / 20 s;
+  az óránkénti kör a `kulso-hivas.ts` háttér-sorába megy (`hatterHivasban`, "hugo:hatter",
+  elengedi az interaktív hívásokat); a jóváhagyott menetet a számolás ELŐTT kihagyja; > 7
+  mozgatható munkás menetre óránként nincs optimalizálás (kézzel igen).
+- **Verzió-ingadozás** (`osszevetJavaslatot`): ha csak a km (< 2 km) vagy a km-forrás változott,
+  az új számok verzió-ugrás nélkül íródnak; HU-GO → becslés romlás nem íródik.
+- **Tervezés**: a Bejövő chip a most kiszámolt kalkulációt mutatja („nem számolható”, ha hibás);
+  a heti panel mind a 7 napot mutatja, a hétvége jelölve (kamionstop).
+- **Teszt**: `teszt-menetterv.ts` 118/0, `teszt-tervezo.ts` 27/0, `teszt-kulso-hivas.ts` 19/0,
+  `teszt-optimalizalo.ts` 120/0; a QA-adatbázis másolatán böngészőben: Gergő átrendezése (06:00-tól
+  teljes lánc, 08:00-s ablak-ütközés), Micó javaslat-elfogadása (javaslat- és jóváhagyott menetnél),
+  JANI 06:00-tól, másnapi indulás a jóváhagyott menet végéről.

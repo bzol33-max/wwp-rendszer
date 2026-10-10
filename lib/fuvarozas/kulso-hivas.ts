@@ -16,6 +16,7 @@
 //
 // A cache csak akkor ír, ha a hívás sikeres volt: hibát sosem cache-elünk.
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
 import { query } from "@/lib/db";
 
@@ -32,24 +33,57 @@ function varj(ms: number) {
   return new Promise<void>((r) => setTimeout(r, ms));
 }
 
+// HÁTTÉR-SOR (2026-10-10): az óránkénti kör (menetterv, optimalizáló,
+// kalkulációk) HU-GO hívásai külön, alacsonyabb prioritású sorba kerülnek
+// ("hugo:hatter"), hogy a GPS-lap / Kalkulátor / geokódolás interaktív
+// hívásai ne álljanak mögéjük. A háttér-hívás kivárja, amíg az interaktív sor
+// kiürül (legfeljebb HATTER_ELENGEDES_MS-ig), és két háttér-hívás közt
+// kétszeres szünetet tart. Jelölés: hatterHivasban(fn) — AsyncLocalStorage,
+// így a hívási lánc mélyén (calculateToll) sem kell paramétert átadni.
+const hatter = new AsyncLocalStorage<true>();
+export const HATTER_UTOTAG = ":hatter";
+/** Ennyit vár legfeljebb a háttér-hívás az interaktív sor kiürülésére (ms). */
+const HATTER_ELENGEDES_MS = 15_000;
+const fuggoInteraktiv = new Map<string, number>();
+
+/** Az `fn`-ben indított külső hívások a háttér-sorba mennek (lásd fent). */
+export function hatterHivasban<T>(fn: () => Promise<T>): Promise<T> {
+  return hatter.run(true, fn);
+}
+
+/** Melyik sorba megy egy hívás: a szolgáltató sora, háttérben a ":hatter" párja. */
+export function sorKulcs(szolgaltato: string): string {
+  return hatter.getStore() ? `${szolgaltato}${HATTER_UTOTAG}` : szolgaltato;
+}
+
 /**
- * A `fn`-t úgy futtatja, hogy az adott szolgáltatóhoz egyszerre csak egy
- * kérés legyen kint, és két kérés közt elteljen a kötelező szünet.
+ * A `fn`-t úgy futtatja, hogy az adott szolgáltatóhoz (soronként) egyszerre
+ * csak egy kérés legyen kint, és két kérés közt elteljen a kötelező szünet.
+ * Háttérben (hatterHivasban) a külön háttér-sorba áll, és elengedi az
+ * interaktív hívásokat maga előtt.
  */
 export async function sorbaAllit<T>(szolgaltato: string, fn: () => Promise<T>): Promise<T> {
-  const elozo = sorok.get(szolgaltato) ?? Promise.resolve();
-  const szunet = SZUNET_MS[szolgaltato] ?? 200;
+  const hatterben = !!hatter.getStore();
+  const kulcs = sorKulcs(szolgaltato);
+  const elozo = sorok.get(kulcs) ?? Promise.resolve();
+  const szunet = (SZUNET_MS[szolgaltato] ?? 200) * (hatterben ? 2 : 1);
+  if (!hatterben) fuggoInteraktiv.set(szolgaltato, (fuggoInteraktiv.get(szolgaltato) ?? 0) + 1);
   const futas = elozo.then(async () => {
-    const eltelt = Date.now() - (utolsoHivas.get(szolgaltato) ?? 0);
+    if (hatterben) {
+      const kezd = Date.now();
+      while ((fuggoInteraktiv.get(szolgaltato) ?? 0) > 0 && Date.now() - kezd < HATTER_ELENGEDES_MS) await varj(100);
+    }
+    const eltelt = Date.now() - (utolsoHivas.get(kulcs) ?? 0);
     if (eltelt < szunet) await varj(szunet - eltelt);
     try {
       return await fn();
     } finally {
-      utolsoHivas.set(szolgaltato, Date.now());
+      utolsoHivas.set(kulcs, Date.now());
+      if (!hatterben) fuggoInteraktiv.set(szolgaltato, Math.max(0, (fuggoInteraktiv.get(szolgaltato) ?? 1) - 1));
     }
   });
   // A sor akkor is haladjon tovább, ha ez a hívás hibázott.
-  sorok.set(szolgaltato, futas.then(() => undefined, () => undefined));
+  sorok.set(kulcs, futas.then(() => undefined, () => undefined));
   return futas as Promise<T>;
 }
 

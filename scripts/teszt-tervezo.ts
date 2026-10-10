@@ -1,5 +1,5 @@
 // A Tervezés heti számtanának tesztje. Futtatás: npx tsx scripts/teszt-tervezo.ts
-import { atfed, celar, elozmenyElteres, hetEredmeny, hetHatas, legjobbKocsi, legvonalKm, type HetFuvar, type HetParam } from "@/lib/fuvarozas2/tervezo-alap";
+import { atfed, celar, elozmenyElteres, hetEredmeny, hetHatas, hetNapjai, legjobbKocsi, legvonalKm, type HetFuvar, type HetParam } from "@/lib/fuvarozas2/tervezo-alap";
 
 let ok = 0, bad = 0;
 function eq(nev: string, kapott: unknown, vart: unknown) {
@@ -58,6 +58,15 @@ eq("célár 0%", celar(100000, 0), 100000);
   const e = hetEredmeny([idoNelkul, { ...ido, tervIdo: Date.parse("2026-09-29T08:00:00Z") }], null, p);
   eq("közös sorrend: az időpontos előbb, üres út nincs", e.uresKm, 0);
   eq("időpont nélkül az id dönt (régi lánc): üres út van", hetEredmeny([idoNelkul, ido], null, p).uresKm > 0, true);
+}
+
+// A hét mind a 7 napja (QA: a vasárnapi fuvar „ütközik”, de csak H–P látszott).
+{
+  const het = hetNapjai("2026-10-12");
+  eq("a hét 7 napja hétfőtől vasárnapig", het.map((n) => n.nap), ["2026-10-12", "2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-17", "2026-10-18"]);
+  eq("a hétvége jelölve (szombat, vasárnap)", het.map((n) => n.hetvege), [null, null, null, null, null, "szombat", "vasarnap"]);
+  const vasarnapi = { felrakasNap: "2026-10-18", lerakasNap: "2026-10-18" };
+  eq("a vasárnapi fuvar ütközése a heti napok közt látszik", het.some((n) => atfed(vasarnapi, { felrakasNap: n.nap, lerakasNap: n.nap }) && n.hetvege === "vasarnap"), true);
 }
 
 console.log(`\nTervező teszt: ${ok} rendben, ${bad} hiba`);

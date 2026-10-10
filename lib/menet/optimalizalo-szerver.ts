@@ -10,10 +10,12 @@ import { mertFogyasztas } from "@/lib/fuvarozas2/kalkulator-szamitas";
 import { budapestNapISO } from "@/lib/fuvarozas/idozona";
 import { varosNev } from "@/lib/fuvarozas/varos";
 import { getMenet, getMenetById, getMenetek } from "@/lib/menet/repo";
-import { frissitMenetJavaslatot, megbizasMunka, menetAdat, szerverTav } from "@/lib/menet/generalas";
+import { cimparHiba, frissitMenetJavaslatot, megbizasMunka, menetAdat, szerverTav } from "@/lib/menet/generalas";
+import { hugoVagyBecsles, ujHugoKor, type HugoKor } from "@/lib/menet/hugo-megszakito";
 import { atrendezMenet, type Valasz } from "@/lib/menet/muveletek";
 import { KOZUTI_SZORZO, legvonalKm, megbizasSorrend } from "@/lib/menet/menet-alap";
 import {
+  TELJES_BEJARAS_MAX,
   bemenetUjjlenyomat,
   erdemesJavasolni,
   feladatSorrendJavaslatbol,
@@ -52,9 +54,11 @@ const AZONOSITO = /^\d+$/;
  * Szerveroldali szakasz: HU-GO útvonal (J5, EURO6, 40 t; a kulso-hivas
  * gyorsítótárával) km-rel, menetidővel és bruttó útdíjjal; ha az nem érhető
  * el, légvonal × 1,3 'becsles' jelöléssel (útdíj és menetidő nélkül — azt az
- * optimalizáló a flottaátlagból / átlagsebességből adja). Körönként memoizált.
+ * optimalizáló a flottaátlagból / átlagsebességből adja). Körönként memoizált;
+ * a `kor` megszakítója az első HU-GO időtúllépés / hálózati hiba (vagy a
+ * hívás-/időkeret) után a kör hátralévő részére becslésre vált.
  */
-export function szerverSzakasz(): SzakaszFn {
+export function szerverSzakasz(kor: HugoKor = ujHugoKor()): SzakaszFn {
   const pontCache = new Map<string, Pont | null>();
   const cache = new Map<string, Szakasz | null>();
   async function pont(h: Hely): Promise<Pont | null> {
@@ -75,12 +79,16 @@ export function szerverSzakasz(): SzakaszFn {
     let ki: Szakasz;
     if (legvonalKm(p, q) < 0.5) ki = { km: 0, perc: 0, utdijFt: 0, forras: "hugo" };
     else {
-      try {
-        const r = await calculateToll({ points: [p, q], vehicleCategory: "J5", euroCategory: "EURO6", weight: 40 });
-        ki = { km: r.distanceKm, perc: r.durationMin, utdijFt: r.tollHuf?.grossTotal ?? 0, forras: "hugo" };
-      } catch {
-        ki = { km: Math.round(legvonalKm(p, q) * KOZUTI_SZORZO), perc: null, utdijFt: null, forras: "becsles" };
-      }
+      const r = await hugoVagyBecsles<Szakasz>(
+        kor,
+        async () => {
+          const t = await calculateToll({ points: [p, q], vehicleCategory: "J5", euroCategory: "EURO6", weight: 40 });
+          return { km: t.distanceKm, perc: t.durationMin, utdijFt: t.tollHuf?.grossTotal ?? 0, forras: "hugo" };
+        },
+        () => ({ km: Math.round(legvonalKm(p, q) * KOZUTI_SZORZO), perc: null, utdijFt: null, forras: "becsles" }),
+        { cimparHiba }
+      );
+      ki = r.ertek;
     }
     cache.set(kulcs, ki);
     return ki;
@@ -96,7 +104,7 @@ export type OptKor = {
   szakasz: SzakaszFn;
 };
 
-export async function ujOptKor(): Promise<OptKor> {
+export async function ujOptKor(hugo: HugoKor = ujHugoKor()): Promise<OptKor> {
   const beallitas = await getFuvarBeallitasok();
   const gazolajFtL = await gazolajArKedvezmennyel().then((g) => g.ar).catch(() => beallitas.gazolaj_ar_tartalek_ft - beallitas.tankolasi_kedvezmeny_ft_l);
   // Útdíj flottaátlag (Ft/km) a tárolt kalkulációkból (90 nap); ha nincs: 120 Ft/km (mint a Tervezésben).
@@ -110,7 +118,7 @@ export async function ujOptKor(): Promise<OptKor> {
   } catch {
     // marad a 120 Ft/km
   }
-  return { beallitas, gazolajFtL, utdijPerKmFt, fogyasztas: new Map(), szakasz: szerverSzakasz() };
+  return { beallitas, gazolajFtL, utdijPerKmFt, fogyasztas: new Map(), szakasz: szerverSzakasz(hugo) };
 }
 
 async function kocsiParam(kor: OptKor, jarmuKod: string): Promise<OptParam> {
@@ -172,6 +180,10 @@ export type OptimalizalasEredmeny = {
   javaslatId: string | null;
   uzenet: string;
   megtakaritasFt: number;
+  /** 'nincs_megengedett': a kemény korlátok, amelyeket a legjobb sorrend sem teljesít (a kártyán listázva). */
+  korlatok?: string[];
+  /** 'nincs_megengedett': a mostani terv megsértett korlátai. */
+  mostaniSerulesek?: string[];
 };
 
 const FT = (x: number) => `${new Intl.NumberFormat("hu-HU").format(Math.round(x))} Ft`;
@@ -208,15 +220,18 @@ export async function optimalizalMenetet(menetId: string, kor?: OptKor): Promise
       [menetId, mb.ujjlenyomat]
     );
     if (meglevo) {
-      return { ok: true, eredmeny: "meglevo", javaslatId: meglevo.id, megtakaritasFt: Number(meglevo.megtakaritas_ft ?? 0), uzenet: `Már van nyitott javaslat (#${meglevo.id}).` };
+      return { ok: true, eredmeny: "meglevo", javaslatId: meglevo.id, megtakaritasFt: Number(meglevo.megtakaritas_ft ?? 0), uzenet: `A nyitott javaslat (#${meglevo.id}) érvényes — lent látod.` };
     }
     if (!javasol) {
       const eredmeny: OptimalizalasEredmeny["eredmeny"] = e.modszer === "nincs_mozgathato" ? "nincs_mozgathato" : !e.legjobb ? "nincs_megengedett" : "nincs_jobb";
       const uzenet =
         eredmeny === "nincs_mozgathato" ? "Nincs mit átrendezni (legfeljebb egy mozgatható munka)."
-          : eredmeny === "nincs_megengedett" ? `Nincs a kemény korlátoknak megfelelő sorrend: ${e.jelenlegi.serulesek.slice(0, 2).join(" · ")}`
+          : eredmeny === "nincs_megengedett" ? `Nincs a kemény korlátoknak megfelelő sorrend: ${(e.legkevesbeRosszSerulesek.length ? e.legkevesbeRosszSerulesek : e.jelenlegi.serulesek).slice(0, 2).join(" · ")}`
             : `A mostani sorrend jó — a legjobb is legfeljebb ${FT(Math.max(0, e.megtakaritasFt))}-ot / ${Math.max(0, e.megtakaritasKm)} km-t hozna.`;
-      return { ok: true, eredmeny, javaslatId: null, megtakaritasFt: Math.max(0, e.megtakaritasFt), uzenet };
+      return {
+        ok: true, eredmeny, javaslatId: null, megtakaritasFt: Math.max(0, e.megtakaritasFt), uzenet,
+        ...(eredmeny === "nincs_megengedett" ? { korlatok: e.legkevesbeRosszSerulesek.length ? e.legkevesbeRosszSerulesek : e.jelenlegi.serulesek, mostaniSerulesek: e.jelenlegi.serulesek } : {}),
+      };
     }
     const l = e.legjobb!;
     const figy = [
@@ -396,6 +411,8 @@ export async function nyitottJavaslatok(menetIds: string[]): Promise<Map<string,
 
 export type HozzarendelesNezet = {
   nap: string;
+  /** A HU-GO-keret kimerült / nem volt elérhető: a km-ek egy része légvonal × 1,3 becslés. */
+  becsles?: boolean;
   legjobb: { kod: string; sofor: string; vanGps: boolean; pozicio: number; elotte: string | null; utana: string | null; hatarFt: number; pluszKm: number } | null;
   kocsik: { kod: string; sofor: string; vanGps: boolean; megengedett: boolean; hatarFt: number | null; pluszKm: number | null; ok: string | null }[];
 };
@@ -405,12 +422,19 @@ export type HozzarendelesNezet = {
  * mennyibe kerül (a J határváltozása). Mind a 4 aktív kocsi jelölt — a GPS
  * nélküli is. Nem ír semmit.
  */
+/** A kattintásra induló hozzárendelés-javaslat HU-GO kerete: ennyi hívás / ennyi idő után becslés. */
+export const HOZZARENDELES_MAX_HIVAS = 120;
+export const HOZZARENDELES_IDOKERET_MS = 20_000;
+
 export async function hozzarendelesJavaslat(megbizasId: string, kor?: OptKor): Promise<Valasz<HozzarendelesNezet>> {
   if (!AZONOSITO.test(megbizasId)) return { ok: false, hiba: "Érvénytelen megbízás." };
   const uj = await megbizasMunka(megbizasId);
   if (!uj) return { ok: false, hiba: "Nincs ilyen megbízás." };
   const nap = uj.felrakasNap ?? budapestNapISO();
-  const k = kor ?? (await ujOptKor());
+  // Korlátos: legfeljebb 120 HU-GO hívás és 20 s — utána légvonal × 1,3
+  // (a már lekért szakaszok a kulso-hivas gyorsítótárából jönnek).
+  const hugo = ujHugoKor({ maxHivas: HOZZARENDELES_MAX_HIVAS, idokeretMs: HOZZARENDELES_IDOKERET_MS });
+  const k = kor ?? (await ujOptKor(hugo));
   const jarmuvek = (await getJarmuvek()).filter((j): j is typeof j & { id: string; kod: string } => !!j.id && !!j.kod);
   const kocsik: KocsiNap[] = [];
   let telephelyek: OptBemenet["telephelyek"] = [];
@@ -435,9 +459,11 @@ export async function hozzarendelesJavaslat(megbizasId: string, kor?: OptKor): P
   const h = await javasolHozzarendelest(uj, nap, kocsik, k.szakasz, telephelyek);
   const l = h.legjobb;
   const ujHelye = l ? l.sorrend.indexOf(uj.id) : -1;
+  if (hugo.leallt) console.warn(`[optimalizalo] hozzárendelés: a HU-GO-keret kimerült (${hugo.ok}) — a további szakaszok becslések.`);
   return {
     ok: true,
     nap,
+    becsles: hugo.leallt,
     legjobb: l && l.hatarFt != null ? {
       kod: l.kod, sofor: l.sofor, vanGps: l.vanGps, pozicio: ujHelye,
       elotte: ujHelye > 0 ? munkaUt.get(l.sorrend[ujHelye - 1]) ?? null : null,
@@ -458,14 +484,19 @@ export async function hozzarendelesJavaslat(megbizasId: string, kor?: OptKor): P
  * Az óránkénti modell-szinkron körből: ma és holnap minden nem lezárt,
  * legalább két munkás menetére javaslat (ha megéri). SOHA nem dob.
  */
-export async function frissitsOptimalizaloJavaslatokat(most: Date = new Date()): Promise<{ uj: number; nincs: number; hiba: number }> {
-  const eredmeny = { uj: 0, nincs: 0, hiba: 0 };
+export async function frissitsOptimalizaloJavaslatokat(most: Date = new Date(), hugo: HugoKor = ujHugoKor()): Promise<{ uj: number; nincs: number; kihagyva: number; hiba: number }> {
+  const eredmeny = { uj: 0, nincs: 0, kihagyva: 0, hiba: 0 };
   try {
     const ma = budapestNapISO(most);
     const holnap = budapestNapISO(new Date(Date.parse(`${ma}T12:00:00Z`) + 24 * 3600 * 1000));
-    const menetek = (await getMenetek(ma, holnap)).filter((m) => m.allapot !== "lezart" && m.feladatok.filter((f) => f.megbizasId).length >= 2);
+    const mozgathato = (m: Menet) => m.feladatok.filter((f) => f.megbizasId && !f.lezarvaAt).length;
+    const jelolt = (await getMenetek(ma, holnap)).filter((m) => m.allapot !== "lezart" && m.feladatok.filter((f) => f.megbizasId).length >= 2);
+    // Óránként csak a kis meneteket számoljuk elő (a távolság-mátrix ~ (n+1)² HU-GO
+    // szakasz); a nagyobbat a kártya „Optimalizálás” gombja számolja.
+    const menetek = jelolt.filter((m) => mozgathato(m) <= TELJES_BEJARAS_MAX);
+    eredmeny.kihagyva = jelolt.length - menetek.length;
     if (menetek.length === 0) return eredmeny;
-    const kor = await ujOptKor();
+    const kor = await ujOptKor(hugo);
     for (const m of menetek) {
       try {
         const r = await optimalizalMenetet(m.id, kor);

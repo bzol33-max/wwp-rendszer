@@ -9,7 +9,7 @@
 // (5) a cache-kulcs koordinátája kerekített, tehát a GPS-remegés nem ront
 // cache-t, de a valóban más pont igen.
 
-import { sorbaAllit, ujraprobal, kulcsKoordinata, UjrapobalhatoHiba } from "@/lib/fuvarozas/kulso-hivas";
+import { hatterHivasban, sorbaAllit, sorKulcs, ujraprobal, kulcsKoordinata, UjrapobalhatoHiba } from "@/lib/fuvarozas/kulso-hivas";
 
 let ok = 0;
 let bad = 0;
@@ -79,6 +79,29 @@ async function main() {
       throw new UjrapobalhatoHiba("500", 500);
     }).then(() => all("a tartós 5xx végül hibát ad", false), () => ok++);
     eq("a tartós 5xx pontosan háromszor próbálkozik", mindigRossz, 3);
+  }
+
+  // 6. Háttér-sor: az óránkénti kör HU-GO hívásai nem tartják fel az interaktívat.
+  {
+    eq("interaktív hívás a szolgáltató sorába", sorKulcs("hugo"), "hugo");
+    eq("háttérben a külön háttér-sorba", await hatterHivasban(async () => sorKulcs("hugo")), "hugo:hatter");
+    await varj(700); // a korábbi hugo-hívások szünete teljen le
+    const sorrend: string[] = [];
+    const hatterHivas = hatterHivasban(() => sorbaAllit("hugo", async () => { await varj(600); sorrend.push("háttér"); }));
+    await varj(20);
+    const t0 = Date.now();
+    await sorbaAllit("hugo", async () => { sorrend.push("interaktív"); });
+    const varakozas = Date.now() - t0;
+    await hatterHivas;
+    eq("az interaktív hívás nem várja meg a futó háttér-hívást", sorrend, ["interaktív", "háttér"]);
+    all(`az interaktív hívás gyorsan lefutott (${varakozas} ms)`, varakozas < 500);
+    // A háttér-hívás elengedi a már sorban álló interaktívat.
+    const s2: string[] = [];
+    await varj(700);
+    const inter = sorbaAllit("hugo", async () => { await varj(200); s2.push("interaktív"); });
+    const hat = hatterHivasban(() => sorbaAllit("hugo", async () => { s2.push("háttér"); }));
+    await Promise.all([inter, hat]);
+    eq("a háttér-hívás kivárja az interaktív sor kiürülését", s2, ["interaktív", "háttér"]);
   }
 
   // 5. Cache-kulcs koordináta.

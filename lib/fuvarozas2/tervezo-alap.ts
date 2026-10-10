@@ -115,6 +115,23 @@ export function hetEredmeny(fuvarok: HetFuvar[], kezdo: Pont | null, p: HetParam
   };
 }
 
+export type HetNap = { nap: string; hetvege: "szombat" | "vasarnap" | null };
+
+/**
+ * A hét MIND a 7 napja hétfőtől (YYYY-MM-DD) — a hétvége is, jelölve: a
+ * szombati / vasárnapi fuvar is a hét része (ütközés, fuvarszám), ezért
+ * nem rejtjük el; vasárnap kamionstop (szombat 22:00 – vasárnap 22:00).
+ */
+export function hetNapjai(hetfo: string): HetNap[] {
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(`${hetfo}T12:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + i);
+    const nap = d.toISOString().slice(0, 10);
+    const hn = d.getUTCDay();
+    return { nap, hetvege: hn === 6 ? "szombat" : hn === 0 ? "vasarnap" : null };
+  });
+}
+
 /** Két napintervallum (YYYY-MM-DD, zárt) átfed-e. */
 export function atfed(a: { felrakasNap: string; lerakasNap: string }, b: { felrakasNap: string; lerakasNap: string }): boolean {
   return a.felrakasNap <= b.lerakasNap && b.felrakasNap <= a.lerakasNap;

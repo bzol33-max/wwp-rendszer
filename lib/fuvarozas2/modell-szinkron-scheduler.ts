@@ -19,6 +19,8 @@ import { futtatPartnerJavaslatokat } from "@/lib/fuvarozas2/partner-javaslat";
 import { frissitsMenetJavaslatokat } from "@/lib/menet/generalas";
 import { frissitsOptimalizaloJavaslatokat } from "@/lib/menet/optimalizalo-szerver";
 import { taroldMegbizasKoltsegeket } from "@/lib/fuvarozas2/koltseg-adat";
+import { hatterHivasban } from "@/lib/fuvarozas/kulso-hivas";
+import { ujHugoKor } from "@/lib/menet/hugo-megszakito";
 
 const INTERVALL_MS = 60 * 60 * 1000;
 const KORLAT = 50;
@@ -27,7 +29,9 @@ let inditva = false;
 
 async function tick() {
   // Az óránkénti kör egy példányban fut, és nem fut rá a még tartó előzőre.
-  const zar = await egyetlenPeldanyban(ZAR_KULCS.modellSzinkron, tickBelso).catch((err) => {
+  // Minden külső hívása a háttér-sorba megy (kulso-hivas.ts hatterHivasban),
+  // hogy az interaktív HU-GO / Nominatim hívások ne álljanak mögötte.
+  const zar = await egyetlenPeldanyban(ZAR_KULCS.modellSzinkron, () => hatterHivasban(tickBelso)).catch((err) => {
     console.error("[modell-szinkron] zár hiba:", err);
     return null;
   });
@@ -59,8 +63,12 @@ async function tickBelso() {
   }
   // Menetterv-javaslatok (árnyék): minden aktív kocsira ma és holnap a
   // 'javaslat' menet frissül; a jóváhagyotthoz nem nyúl (lib/menet/generalas.ts).
+  // Közös HU-GO megszakító a menetterv és az optimalizáló számára: az első
+  // HU-GO időtúllépés után a kör hátralévő része légvonal × 1,3 becslés
+  // (lib/menet/hugo-megszakito.ts) — így egy HU-GO-kiesés nem tart órákig.
+  const hugo = ujHugoKor();
   try {
-    const mt = await futtatRendszerkent("menetterv", () => frissitsMenetJavaslatokat());
+    const mt = await futtatRendszerkent("menetterv", () => frissitsMenetJavaslatokat(new Date(), hugo));
     if (mt.frissult + mt.hiba > 0) console.log(`[menetterv] ${mt.frissult} javaslat frissült, ${mt.jovahagyott} jóváhagyott kihagyva, ${mt.hiba} hiba.`);
   } catch (err) {
     console.error("[menetterv] váratlan hiba:", err);
@@ -68,8 +76,8 @@ async function tickBelso() {
   // Optimalizáló (4. fázis): ma és holnap a menetekre sorrend-javaslat, ha
   // megéri — CSAK javaslat, a menetet nem írja át (lib/menet/optimalizalo-szerver.ts).
   try {
-    const op = await futtatRendszerkent("optimalizalo", () => frissitsOptimalizaloJavaslatokat());
-    if (op.uj + op.hiba > 0) console.log(`[optimalizalo] ${op.uj} új javaslat, ${op.hiba} hiba.`);
+    const op = await futtatRendszerkent("optimalizalo", () => frissitsOptimalizaloJavaslatokat(new Date(), hugo));
+    if (op.uj + op.hiba + op.kihagyva > 0) console.log(`[optimalizalo] ${op.uj} új javaslat, ${op.kihagyva} nagy menet kihagyva (kézzel optimalizálható), ${op.hiba} hiba.`);
   } catch (err) {
     console.error("[optimalizalo] váratlan hiba:", err);
   }
