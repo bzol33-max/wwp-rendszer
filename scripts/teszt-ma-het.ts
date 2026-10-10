@@ -1,6 +1,6 @@
 // A Ma oldal heti rácsa (R2). Futtatás: npx tsx scripts/teszt-ma-het.ts
 
-import { hetCellak, hetMost, hetNapjai, hetSzama, type HetFuvar, type HetMegallo } from "@/lib/fuvarozas2/ma-het";
+import { hetCellak, hetMost, hetNapjai, hetNapjaiHetvegevel, hetSzama, kocsiHelykitolto, type HetFuvar, type HetMegallo } from "@/lib/fuvarozas2/ma-het";
 import { tukorSorok, type TukorSor } from "@/lib/fuvarozas2/ma-tukor";
 
 let ok = 0, bad = 0;
@@ -16,6 +16,19 @@ eq("ma jelölve", napok.map((n) => n.ma), [true, false, false, false, false]);
 eq("szerdán is ez a hét", hetNapjai("2026-10-07")[0].nap, "2026-10-05");
 eq("szombaton már a következő hét", hetNapjai("2026-10-10")[0].nap, "2026-10-12");
 eq("vasárnap is a következő hét", hetNapjai("2026-10-11")[0].nap, "2026-10-12");
+// Hétvége (QA 2026-10-10): a fuvaros hétvégi nap bekerül, jelölve.
+const csakVasarnap = (n: string) => n === "2026-10-11";
+eq("szombaton: a vasárnapi fuvar napja a hétfő előtt", hetNapjaiHetvegevel("2026-10-10", csakVasarnap).map((n) => n.nap), ["2026-10-11", "2026-10-12", "2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16"]);
+eq("szombaton: a hétvégi nap jelölve", hetNapjaiHetvegevel("2026-10-10", csakVasarnap)[0], { nap: "2026-10-11", cimke: "Vasárnap 11.", ma: false, hetvege: true });
+eq("szombaton: a mai szombat is, ha van fuvar", hetNapjaiHetvegevel("2026-10-10", () => true).slice(0, 2).map((n) => [n.nap, n.ma]), [["2026-10-10", true], ["2026-10-11", false]]);
+eq("fuvar nélkül marad az 5 munkanap", hetNapjaiHetvegevel("2026-10-10", () => false).length, 5);
+eq("hétköznap: a péntek utáni vasárnap a végén", hetNapjaiHetvegevel("2026-10-07", (n) => n === "2026-10-11").map((n) => n.nap).slice(-2), ["2026-10-09", "2026-10-11"]);
+eq("vasárnap: csak a mai vasárnap kerülhet elé", hetNapjaiHetvegevel("2026-10-11", () => true).map((n) => n.nap)[0], "2026-10-11");
+// Helykitöltő: „még nem üzemel” csak fuvar nélkül, GPS és rendszám nélkül.
+eq("helykitöltő: GPS nélküli, fuvaros kocsi látszik", kocsiHelykitolto({ vanGps: false, vanRendszam: false, vanFuvar: true }), null);
+eq("helykitöltő: fuvar és rendszám nélkül még nem üzemel", kocsiHelykitolto({ vanGps: false, vanRendszam: false, vanFuvar: false }), "még nem üzemel");
+eq("helykitöltő: rendszámos kocsi nem helykitöltő", kocsiHelykitolto({ vanGps: false, vanRendszam: true, vanFuvar: false }), null);
+eq("helykitöltő: GPS-es kocsi", kocsiHelykitolto({ vanGps: true, vanRendszam: true, vanFuvar: false }), null);
 eq("hét száma", hetSzama("2026-10-05"), 41);
 eq("hét száma év elején", hetSzama("2026-01-01"), 1);
 

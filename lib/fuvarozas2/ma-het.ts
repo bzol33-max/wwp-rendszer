@@ -55,7 +55,7 @@ export type HetMost =
   | { tipus: "kesz" }
   | { tipus: "ures" };
 
-export type HetNap = { nap: string; cimke: string; ma: boolean };
+export type HetNap = { nap: string; cimke: string; ma: boolean; /** Szombat / vasárnap (csak ha aznap van fuvar). */ hetvege?: boolean };
 
 const NAPNEV = ["Vasárnap", "Hétfő", "Kedd", "Szerda", "Csütörtök", "Péntek", "Szombat"];
 
@@ -71,6 +71,43 @@ export function hetNapjai(ma: string): HetNap[] {
     d.setUTCDate(d.getUTCDate() + 1);
   }
   return ki;
+}
+
+/**
+ * A heti rács napjai a hétvégével együtt (QA 2026-10-10: szombaton a vasárnapi
+ * fuvar sehol nem látszott a Ma oldalon). A hét öt munkanapja (hetNapjai)
+ * mellé bekerül minden hétvégi nap, amelyen van fuvar (`vanFuvar`):
+ *   • hétköznap az e heti szombat és vasárnap (a péntek után);
+ *   • hétvégén a MAI naptól a hétfőig hátralévő hétvégi nap(ok) (a hétfő előtt).
+ * A hétvégi nap `hetvege: true` jelet kap. Fuvar nélküli hétvégi nap nem kerül be.
+ */
+export function hetNapjaiHetvegevel(ma: string, vanFuvar: (nap: string) => boolean): HetNap[] {
+  const munkanapok = hetNapjai(ma);
+  const nap = (iso: string, n: number) => {
+    const d = new Date(`${iso}T12:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + n);
+    return { nap: d.toISOString().slice(0, 10), het: d.getUTCDay(), datum: d.getUTCDate() };
+  };
+  const hetvegiNap = (n: { nap: string; het: number; datum: number }): HetNap => ({ nap: n.nap, cimke: `${NAPNEV[n.het]} ${n.datum}.`, ma: n.nap === ma, hetvege: true });
+  const maHet = new Date(`${ma}T12:00:00Z`).getUTCDay();
+  if (maHet === 6 || maHet === 0) {
+    const elotte = (maHet === 6 ? [nap(ma, 0), nap(ma, 1)] : [nap(ma, 0)]).filter((n) => vanFuvar(n.nap)).map(hetvegiNap);
+    return [...elotte, ...munkanapok];
+  }
+  const pentek = munkanapok[munkanapok.length - 1].nap;
+  const utana = [nap(pentek, 1), nap(pentek, 2)].filter((n) => vanFuvar(n.nap)).map(hetvegiNap);
+  return [...munkanapok, ...utana];
+}
+
+/**
+ * A Ma oldal kocsi-helykitöltője: „még nem üzemel” CSAK akkor, ha a kocsinak
+ * nincs hozzárendelt fuvarja, és nincs GPS-eszköze vagy rendszáma. Ha van
+ * fuvarja (QA 2026-10-10: JANI mai fuvarja rejtve maradt), a kocsi a
+ * feladataival látszik, GPS nélkül „nincs GPS” állapottal.
+ */
+export function kocsiHelykitolto(k: { vanGps: boolean; vanRendszam: boolean; vanFuvar: boolean }): string | null {
+  if (k.vanGps || k.vanFuvar) return null;
+  return k.vanRendszam ? null : "még nem üzemel";
 }
 
 /** ISO hét száma — „41. hét”. */

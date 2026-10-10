@@ -112,7 +112,9 @@ export function Csempesor({ berHavi, berHeti, berHonapHetei }: { berHavi: BerOss
   const [hetekNyitva, setHetekNyitva] = useState(false);
   return (
     <div className="flex flex-col gap-2">
-      <div className="-mx-4 flex snap-x items-stretch gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:grid md:grid-cols-5 md:overflow-visible md:px-0 md:pb-0 xl:grid-cols-10">
+      {/* Telefonon a sor oldalra húzható — a jobb szélen elhalványul, és egy felirat jelzi (QA 2026-10-10: levágottnak tűnt). */}
+      <div className="relative">
+      <div className="-mx-4 flex snap-x items-stretch gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:grid md:grid-cols-5 md:overflow-visible md:px-0 md:pb-0 xl:grid-cols-10" aria-label="Mutatók — oldalra húzható">
         <BerCsempe b={berHavi} onClick={() => setHetekNyitva((x) => !x)} nyitva={hetekNyitva} />
         <BerCsempe b={berHeti} />
         <KmDijCsempe b={berHavi} />
@@ -139,6 +141,9 @@ export function Csempesor({ berHavi, berHeti, berHonapHetei }: { berHavi: BerOss
           );
         })}
       </div>
+      <span aria-hidden className="pointer-events-none absolute inset-y-0 -right-4 w-10 bg-gradient-to-l from-background to-transparent md:hidden" />
+      </div>
+      <p className="-mt-1 text-right text-[10px] text-muted-foreground md:hidden">← húzd oldalra a többi mutatóért →</p>
       {hetekNyitva ? (
         <div className="-mx-4 flex snap-x items-stretch gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:grid md:grid-cols-5 md:overflow-visible md:px-0 md:pb-0 xl:grid-cols-10">
           {berHonapHetei.map((h) => <BerCsempe key={h.cim} b={h} />)}

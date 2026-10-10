@@ -16,7 +16,7 @@ import type { FeladatTipus, Menet, MenetFeladat, TelephelyPontAdat } from "@/lib
 import { getSzabadsagIgenyek, getSzabadsagTavolletek } from "@/lib/jelenlet/actions";
 import { OKMANY_TIPUS_CIMKE, type OkmanyTipus } from "@/lib/jarmuvek/tipusok";
 import {
-  hetHetfoje, isoVagyNull, napEltolva, okmanyJelzes, pgIdo,
+  etaMutathato, gpsFrissesseg, hetHetfoje, isoVagyNull, napEltolva, okmanyJelzes, pgIdo,
   type DiszFeladat, type DiszFeladatAllapot, type DiszHetSor, type DiszKocsi, type DiszKocsiNelkul, type DiszOkmany, type DiszTavollet, type Diszpecser,
 } from "@/lib/fuvarozas2/diszpecser-alap";
 
@@ -219,6 +219,10 @@ export async function getDiszpecser(napParam?: string | null): Promise<Diszpecse
     const elo: JarmuIdovonalEredmeny | undefined = sj ? gpsNap?.jarmuvek.find((x) => x.sofor === sj.sofor) : undefined;
     const blokkok = new Map<string, FuvarBlokk>((maNap ? elo?.fuvarok ?? [] : []).map((b) => [b.fuvarId, b]));
     const kap = kapacitas.get(mk.jarmuId);
+    // Élő ETA csak friss / késői GPS-jellel (lásd etaMutathato) — a GPS nélküli
+    // kocsira a GPS-lánc csak a terv láncolását adja, az nem „élő becslés”.
+    const eloP = elo?.eloPozicio ?? null;
+    const frissesseg = gpsFrissesseg(eloP && pgIdo(eloP.utolsoAdat) ? eloP.utolsoAdat.toISOString() : null, most.getTime(), beallitas.gps_kesei_perc, beallitas.gps_elavult_perc);
 
     // A feladatok: a menetből (jóváhagyott vagy javaslat), különben a kocsi aznapi megbízásai terv-idő szerint.
     let alap: (Omit<MenetFeladat, "tervezettIndulas" | "tervezettErkezes"> & { tervezettIndulas: string | null; tervezettErkezes: string | null; menetbol: boolean })[];
@@ -260,17 +264,19 @@ export async function getDiszpecser(napParam?: string | null): Promise<Diszpecse
         allapot = "kesz";
       }
 
-      // Élő ETA — csak ma, csak ha a GPS-lánc tudott élő becslést adni (különben „nem számolható”).
+      // Élő ETA — csak ma, csak friss/késői GPS-jellel, csak ugyanarra a megbízásra, és csak ha a
+      // GPS-lánc tudott élő becslést adni (különben „nem számolható”, és a terv látszik).
       let eta: string | null = null;
       let etaCel: string | null = null;
       if (allapot !== "kesz") {
         if (m) {
-          const lerakok = blokkok.get(m.id)?.megallok.filter((g) => g.tipus === "lerako") ?? [];
-          const utolso = lerakok.at(-1);
-          if (utolso && !utolso.elhagyva && !utolso.eppenItt && !utolso.becslesElavult) { eta = utolso.idopont.toISOString(); etaCel = varos(utolso.cim); }
+          const blokk = blokkok.get(m.id);
+          const utolso = blokk?.megallok.filter((g) => g.tipus === "lerako").at(-1);
+          if (utolso && etaMutathato(frissesseg, blokk?.fuvarId, m.id) && !utolso.elhagyva && !utolso.eppenItt && !utolso.becslesElavult) { eta = utolso.idopont.toISOString(); etaCel = varos(utolso.cim); }
         } else if (kovM) {
-          const fel = blokkok.get(kovM.id)?.megallok.find((g) => g.tipus === "felrako");
-          if (fel && !fel.elhagyva && !fel.eppenItt && !fel.becslesElavult) { eta = fel.idopont.toISOString(); etaCel = varos(fel.cim); }
+          const blokk = blokkok.get(kovM.id);
+          const fel = blokk?.megallok.find((g) => g.tipus === "felrako");
+          if (fel && etaMutathato(frissesseg, blokk?.fuvarId, kovM.id) && !fel.elhagyva && !fel.eppenItt && !fel.becslesElavult) { eta = fel.idopont.toISOString(); etaCel = varos(fel.cim); }
         }
       }
 

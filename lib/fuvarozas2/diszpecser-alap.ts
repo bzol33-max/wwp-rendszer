@@ -168,6 +168,46 @@ export function oraPerc(iso: string | null | undefined): string | null {
   return d ? d.toLocaleTimeString("hu-HU", { timeZone: "Europe/Budapest", hour: "2-digit", minute: "2-digit" }) : null;
 }
 
+/**
+ * A feladat megjeleníthető kezdete és vége (ISO). A kezdet: tény, különben
+ * terv; a vég: tény, különben élő ETA, különben terv. Ha a vég nem a kezdet
+ * UTÁN van (ellentmondásos adat), csak a megbízhatóbbat adjuk vissza
+ * (tény > ETA > terv; egyenlőnél a kezdetet) — vég < kezdet SOHA nem
+ * jelenik meg (QA 2026-10-10: „14:51–09:17”).
+ */
+export function feladatIdok(f: Pick<DiszFeladat, "tervIndulas" | "tervErkezes" | "tenyIndulas" | "tenyErkezes" | "eta">): { kezd: string | null; veg: string | null; ellentmondas: boolean } {
+  const kezdTeny = pgIdo(f.tenyIndulas);
+  const kezd = kezdTeny ?? pgIdo(f.tervIndulas);
+  const vegTeny = pgIdo(f.tenyErkezes);
+  const vegEta = vegTeny ? null : pgIdo(f.eta);
+  const veg = vegTeny ?? vegEta ?? pgIdo(f.tervErkezes);
+  if (kezd && veg && veg.getTime() <= kezd.getTime()) {
+    const kezdRang = kezdTeny ? 3 : 1;
+    const vegRang = vegTeny ? 3 : vegEta ? 2 : 1;
+    return vegRang > kezdRang
+      ? { kezd: null, veg: veg.toISOString(), ellentmondas: true }
+      : { kezd: kezd.toISOString(), veg: null, ellentmondas: true };
+  }
+  return { kezd: kezd?.toISOString() ?? null, veg: veg?.toISOString() ?? null, ellentmondas: false };
+}
+
+/** „08:30”, más napon „08:30 (+1)” / „21:52 (−1)” — a `nap`-hoz képest. */
+export function oraPercNap(iso: string | null | undefined, nap: string): string | null {
+  const o = oraPerc(iso);
+  const p = percANapban(iso ?? null, nap);
+  if (o == null || p == null) return o;
+  const n = Math.floor(p / 1440);
+  return n === 0 ? o : `${o} (${n > 0 ? "+" : "−"}${Math.abs(n)})`;
+}
+
+/** „08:00–14:06”, csak az egyik, ha a másik hiányzik / ellentmondásos; „” ha egyik sincs. */
+export function idoSzoveg(f: Pick<DiszFeladat, "tervIndulas" | "tervErkezes" | "tenyIndulas" | "tenyErkezes" | "eta">, nap: string): string {
+  const x = feladatIdok(f);
+  const k = oraPercNap(x.kezd, nap);
+  const v = oraPercNap(x.veg, nap);
+  return k && v ? `${k}–${v}` : k ? `${k}–` : v ? `–${v}` : "";
+}
+
 /** Nap + n nap (ISO). */
 export function napEltolva(nap: string, n: number): string {
   const d = new Date(`${nap}T12:00:00Z`);
@@ -182,6 +222,17 @@ export function hetHetfoje(nap: string): string {
 }
 
 // ------------------------------------------------------------------ GPS-frissesség
+
+/**
+ * Élő ETA csak akkor mutatható, ha a kocsinak friss vagy késői GPS-jele van,
+ * ÉS a becslés ugyanarra a feladatra (megbízásra) szól. Jel nélkül (vagy
+ * elavult jellel) a GPS-lánc csak a terv láncolását adná vissza — azt nem
+ * írjuk ki „élő GPS-becslés”-ként (QA 2026-10-10: „ETA 13:58 · élő
+ * GPS-becslés” a „× nincs GPS” kocsin).
+ */
+export function etaMutathato(frissesseg: GpsFrissesseg, becslesMegbizasId: string | null | undefined, feladatMegbizasId: string | null | undefined): boolean {
+  return (frissesseg === "friss" || frissesseg === "kesoi") && !!becslesMegbizasId && becslesMegbizasId === feladatMegbizasId;
+}
 
 /** A GPS-jel kora alapján: friss ≤ késői-küszöb, késői ≤ elavult-küszöb, különben elavult; jel nélkül „nincs”. */
 export function gpsFrissesseg(utolsoAdat: string | null | undefined, mostMs: number, kesoiPerc: number, elavultPerc: number): GpsFrissesseg {
@@ -201,6 +252,22 @@ export function korSzoveg(utolsoAdat: string | null | undefined, mostMs: number)
   if (perc < 60) return `${perc} perce`;
   if (perc < 24 * 60) return `${Math.floor(perc / 60)} ó ${perc % 60} p-e`;
   return `${Math.floor(perc / 1440)} napja`;
+}
+
+// ------------------------------------------------------------------ jármű-név
+
+/**
+ * A jármű EGY megjelenítési szabálya (Diszpécser minden nézete és a Ma oldal):
+ * a kód mindig elöl; ha a címke nem tartalmazza a kódot, „kód · címke”
+ * (pl. „JANI · DAF XG (gyártás alatt)”), különben a címke maga
+ * („AOPU-427/AOTY-474”).
+ */
+export function jarmuNev(j: { kod: string | null | undefined; cimke: string | null | undefined }): string {
+  const kod = (j.kod ?? "").trim();
+  const cimke = (j.cimke ?? "").trim();
+  if (!kod) return cimke || "?";
+  if (!cimke || cimke.toLocaleUpperCase("hu-HU").includes(kod.toLocaleUpperCase("hu-HU"))) return cimke || kod;
+  return `${kod} · ${cimke}`;
 }
 
 // ------------------------------------------------------------------ okmányok
@@ -232,6 +299,12 @@ export type Problema = {
   sulyos: boolean;
   szoveg: string;
   jarmuKod: string | null;
+  /**
+   * „feladat”: a feladat saját problémája — ez adja a ▲ jelet a feladaton;
+   * „kocsi”: a kocsi egészére szól (GPS), a feladaton NEM jelez, csak a
+   * kijelöléshez ad egy feladatot; „flotta”: kocsi nélküli fuvar.
+   */
+  szint: "feladat" | "kocsi" | "flotta";
   /** A kijelölendő feladat kulcsa (ha van). */
   feladatKulcs: string | null;
   /** Ha nincs feladat: egy megbízás linkje (kocsi nélküli fuvar). */
@@ -280,6 +353,7 @@ export function problemak(adat: Pick<Diszpecser, "kocsik" | "kocsiNelkul" | "bea
   const mostMs = pgIdo(adat.most)?.getTime() ?? Date.now();
   const ki: Problema[] = [];
   adat.kocsik.forEach((k) => {
+    const knev = jarmuNev(k);
     for (const f of k.feladatok) {
       const nev = feladatNev(f, varos);
       const kes = kesesveszely(f);
@@ -287,30 +361,30 @@ export function problemak(adat: Pick<Diszpecser, "kocsik" | "kocsiNelkul" | "bea
       const vanUtkozes = f.figyelmeztetesek.some((x) => x.kod === "utkozes");
       if (kes && (kes.forras === "eta" || !vanUtkozes)) {
         ki.push({
-          kulcs: `kes-${f.kulcs}`, tipus: "kesesveszely", sulyos: true, jarmuKod: k.kod, feladatKulcs: f.kulcs, megbizasId: f.megbizasId,
-          szoveg: `${k.cimke} ${nev}: ${kes.forras === "eta" ? "ETA" : "terv"} ${oraPerc(kes.varhato)}, a ${kes.hol === "lerako" ? "lerakási" : "felrakási"} ablak vége ${oraPerc(kes.ablakVege)}`,
+          kulcs: `kes-${f.kulcs}`, tipus: "kesesveszely", sulyos: true, jarmuKod: k.kod, szint: "feladat", feladatKulcs: f.kulcs, megbizasId: f.megbizasId,
+          szoveg: `${knev} ${nev}: ${kes.forras === "eta" ? "ETA" : "terv"} ${oraPerc(kes.varhato)}, a ${kes.hol === "lerako" ? "lerakási" : "felrakási"} ablak vége ${oraPerc(kes.ablakVege)}`,
         });
       }
       if (f.allapot === "kesz") continue;
       f.figyelmeztetesek.forEach((x, i) => {
         const tipus = FIGY_TIPUS[x.kod] ?? "hianyzo_cim";
-        ki.push({ kulcs: `fig-${f.kulcs}-${i}`, tipus, sulyos: SULYOS[tipus], jarmuKod: k.kod, feladatKulcs: f.kulcs, megbizasId: f.megbizasId, szoveg: `${k.cimke} ${nev}: ${x.szoveg}` });
+        ki.push({ kulcs: `fig-${f.kulcs}-${i}`, tipus, sulyos: SULYOS[tipus], jarmuKod: k.kod, szint: "feladat", feladatKulcs: f.kulcs, megbizasId: f.megbizasId, szoveg: `${knev} ${nev}: ${x.szoveg}` });
       });
     }
     const nyitott = k.feladatok.filter((f) => f.allapot !== "kesz");
     const fr = gpsFrissesseg(k.gps?.utolsoAdat, mostMs, adat.beallitas.gpsKesoiPerc, adat.beallitas.gpsElavultPerc);
     if (nyitott.length > 0 && (fr === "elavult" || fr === "nincs")) {
       ki.push({
-        kulcs: `gps-${k.kod}`, tipus: "gps", sulyos: false, jarmuKod: k.kod, feladatKulcs: nyitott[0].kulcs, megbizasId: null,
+        kulcs: `gps-${k.kod}`, tipus: "gps", sulyos: false, jarmuKod: k.kod, szint: "kocsi", feladatKulcs: nyitott[0].kulcs, megbizasId: null,
         szoveg: fr === "nincs"
-          ? `${k.cimke}: nincs GPS-jel${k.vanGpsEszkoz ? (k.gpsHiba ? ` (${k.gpsHiba})` : "") : " — nincs Ecofleet-eszköz"}`
-          : `${k.cimke}: elavult GPS-jel (${korSzoveg(k.gps?.utolsoAdat, mostMs)}, határ ${adat.beallitas.gpsElavultPerc} perc)`,
+          ? `${knev}: nincs GPS-jel${k.vanGpsEszkoz ? (k.gpsHiba ? ` (${k.gpsHiba})` : "") : " — nincs Ecofleet-eszköz"}`
+          : `${knev}: elavult GPS-jel (${korSzoveg(k.gps?.utolsoAdat, mostMs)}, határ ${adat.beallitas.gpsElavultPerc} perc)`,
       });
     }
   });
   for (const m of adat.kocsiNelkul) {
     ki.push({
-      kulcs: `nk-${m.id}`, tipus: "kocsi_nelkul", sulyos: false, jarmuKod: null, feladatKulcs: null, megbizasId: m.id,
+      kulcs: `nk-${m.id}`, tipus: "kocsi_nelkul", sulyos: false, jarmuKod: null, szint: "flotta", feladatKulcs: null, megbizasId: m.id,
       szoveg: `#${m.id} ${m.partner ?? ""} ${varos ? `${varos(m.honnan)} → ${varos(m.hova)}` : `${m.honnan ?? "?"} → ${m.hova ?? "?"}`}: nincs kocsihoz rendelve`.replace(/\s+/g, " "),
     });
   }
@@ -323,6 +397,23 @@ export function problemak(adat: Pick<Diszpecser, "kocsik" | "kocsiNelkul" | "bea
       || (kocsiRend.get(a.p.jarmuKod ?? "") ?? 99) - (kocsiRend.get(b.p.jarmuKod ?? "") ?? 99)
       || a.i - b.i)
     .map(({ p }) => p);
+}
+
+/**
+ * A ▲ (problémás) jelet kapó feladatok: PONTOSAN a probléma-lista feladat-szintű
+ * elemei. A kocsi-szintű (GPS) probléma nem jelöl meg feladatot — különben a
+ * jel olyan feladaton is ott volt, amelyhez a sávban nincs saját sor.
+ */
+export function problemasFeladatKulcsok(lista: readonly Problema[]): Set<string> {
+  return new Set(lista.flatMap((p) => (p.szint === "feladat" && p.feladatKulcs ? [p.feladatKulcs] : [])));
+}
+
+/** A kijelölt feladat problémái: a sajátjai, és külön a kocsijára szólók. */
+export function feladatProblemai(lista: readonly Problema[], f: { kulcs: string; jarmuKod: string }): { sajat: Problema[]; kocsi: Problema[] } {
+  return {
+    sajat: lista.filter((p) => p.szint === "feladat" && p.feladatKulcs === f.kulcs),
+    kocsi: lista.filter((p) => p.szint === "kocsi" && p.jarmuKod === f.jarmuKod),
+  };
 }
 
 // ------------------------------------------------------------------ szűrők
@@ -394,8 +485,9 @@ export type Tengely = { tol: number; ig: number };
 
 /** A blokk kezdete és vége percben (tény, ha van, különben terv); null, ha nincs ideje. */
 export function feladatIdoszak(f: Pick<DiszFeladat, "tervIndulas" | "tervErkezes" | "tenyIndulas" | "tenyErkezes" | "eta">, nap: string): { kezd: number; veg: number } | null {
-  const kezd = percANapban(f.tenyIndulas ?? f.tervIndulas, nap);
-  const veg = percANapban(f.tenyErkezes ?? f.eta ?? f.tervErkezes, nap);
+  const x = feladatIdok(f);
+  const kezd = percANapban(x.kezd, nap);
+  const veg = percANapban(x.veg, nap);
   if (kezd == null && veg == null) return null;
   const k = kezd ?? (veg as number) - 30;
   const v = veg != null && veg > k ? veg : k + 30;
@@ -447,6 +539,26 @@ export function sorokraBont(idoszakok: { kezd: number; veg: number }[]): number[
     ki[x.i] = s;
   }
   return ki;
+}
+
+/**
+ * A tengely felirat-jelölői a „most” címke mellett: azok az órák maradnak ki,
+ * amelyek feliratát a „most HH:MM” címke takarná (a tengely `tavolsag`
+ * hányadán belül vannak). A rácsvonalak maradnak (oraJelolok).
+ */
+export function oraFeliratok(t: Tengely, mostPerc: number | null, tavolsag = 0.08): number[] {
+  const hossz = t.ig - t.tol;
+  if (mostPerc == null || mostPerc < t.tol || mostPerc > t.ig) return oraJelolok(t);
+  return oraJelolok(t).filter((p) => Math.abs(p - mostPerc) / hossz >= tavolsag);
+}
+
+/**
+ * A sorokba bontáshoz a blokkot legalább `minHanyad`-nyi tengelyhosszra
+ * szélesítjük — a minimális chip-szélesség miatt a rövid feladat se lógjon rá
+ * a következőre ugyanabban a sorban.
+ */
+export function minSzelesIdoszak(x: { kezd: number; veg: number }, t: Tengely, minHanyad = 0.09): { kezd: number; veg: number } {
+  return { kezd: x.kezd, veg: Math.max(x.veg, x.kezd + (t.ig - t.tol) * minHanyad) };
 }
 
 /** A tengely óra-jelölői (2 óránként, 12 óránál hosszabb tengelyen 3 óránként). */

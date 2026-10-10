@@ -4,12 +4,14 @@ import type { HetKartya, HetMost, HetSzin } from "@/lib/fuvarozas2/ma-het";
 
 // A Ma oldal heti rácsa (Budaházi Zoltán, 2026-10-05, „R2” terv): soronként
 // egy kocsi, a „Most” oszlop a mostani fuvar haladásával (kör: kész
-// megállók aránya, következő megálló, ETA), utána hétfőtől péntekig a
-// megbízások. A kész fuvar a helyén marad, a több napos a következő napon
+// megállók aránya, következő megálló, ETA), utána hétfőtől péntekig (és a
+// fuvaros hétvégi napokon) a megbízások. A kész fuvar a helyén marad, a több napos a következő napon
 // „folytatódik”. Szerver-komponens; keskeny képernyőn vízszintesen görgethető.
 
 const reszlet = (id: string) => `/fuvarozas2/megbizasok?reszlet=${id}`;
-const RACS = "grid grid-cols-[150px_220px_repeat(5,minmax(0,1fr))] gap-2";
+// Az oszlopszám a napok számából: 5 munkanap, plusz a fuvaros hétvégi nap(ok).
+const RACS = "grid gap-2";
+const racsStilus = (napDb: number): React.CSSProperties => ({ gridTemplateColumns: `150px 220px repeat(${napDb}, minmax(0, 1fr))` });
 
 const KARTYA: Record<HetSzin, string> = {
   kesz: "border-[var(--f2-mint)]/30 bg-[var(--f2-mint-l)]/60",
@@ -97,19 +99,23 @@ function Cella({ lista, ma, ures }: { lista: HetKartya[]; ma: boolean; ures: Rea
 
 export function HetRacs({ het }: { het: MaHet }) {
   const kocsiNelkulVan = het.kocsiNelkul.some((c) => c.length > 0);
+  const st = racsStilus(het.napok.length);
   return (
     <div className="overflow-x-auto rounded-2xl border border-foreground/10 bg-muted/30 p-3">
+      {/* A hétvégi oszlop(ok) a meglévő szélességen osztoznak — asztalon nem kell oldalra görgetni. */}
       <div className="flex min-w-[1080px] flex-col gap-2">
-        <div className={`${RACS} text-center text-[11px] font-bold uppercase tracking-wide text-muted-foreground`}>
+        <div style={st} className={`${RACS} text-center text-[11px] font-bold uppercase tracking-wide text-muted-foreground`}>
           <span className="text-left normal-case tracking-normal text-foreground">{het.cim}</span>
           <span className="py-1 text-[var(--f2-blue)]">Most</span>
           {het.napok.map((n) => (
-            <span key={n.nap} className={`rounded-lg py-1 ${n.ma ? "bg-foreground text-background" : ""}`}>{n.cimke}{n.ma ? " · ma" : ""}</span>
+            <span key={n.nap} className={`rounded-lg py-1 ${n.ma ? "bg-foreground text-background" : n.hetvege ? "bg-[var(--f2-amb-l)] text-[var(--f2-amb)]" : ""}`} title={n.hetvege ? "Hétvége — csak azért látszik, mert van rá fuvar" : undefined}>
+              {n.cimke}{n.ma ? " · ma" : ""}{n.hetvege ? " · hétvége" : ""}
+            </span>
           ))}
         </div>
 
         {het.sorok.map((s, i) => (
-          <div key={s.kod ?? `hely-${i}`} className={RACS}>
+          <div key={s.kod ?? `hely-${i}`} style={st} className={RACS}>
             <div className="flex min-w-0 flex-col justify-center gap-0.5 px-1 text-xs">
               <b className="truncate text-sm">{s.sofor ?? s.cimke}</b>
               {s.sofor ? <span className="truncate text-muted-foreground">{s.cimke}</span> : null}
@@ -127,7 +133,7 @@ export function HetRacs({ het }: { het: MaHet }) {
                 lista={lista}
                 ma={het.napok[d].ma}
                 ures={
-                  s.kod && !s.helykitolto ? (
+                  s.kod && !s.helykitolto && !het.napok[d].hetvege ? (
                     <Link href="/fuvarozas2/tervezes" className="flex min-h-10 flex-1 items-center justify-center rounded-lg border-[1.5px] border-dashed border-[var(--f2-amb)]/60 bg-[var(--f2-amb-l)]/50 text-xs font-semibold text-[var(--f2-amb)] hover:underline">
                       Üres — keress →
                     </Link>
@@ -139,7 +145,7 @@ export function HetRacs({ het }: { het: MaHet }) {
         ))}
 
         {kocsiNelkulVan ? (
-          <div className={RACS}>
+          <div style={st} className={RACS}>
             <b className="col-span-2 flex items-center px-1 text-xs text-[var(--f2-red)]">Kocsi nélkül</b>
             {het.kocsiNelkul.map((lista, d) =>
               lista.length > 0 ? (
