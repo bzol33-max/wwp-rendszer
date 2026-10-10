@@ -23,7 +23,7 @@ import {
  * van töltve), különben a beállítás (fogyasztas_alap_l_100km, 28); a mért
  * érték csak a beállított küszöb (meres_min_km, 300 km) FÖLÖTT írja felül.
  */
-async function mertFogyasztas(jarmuKod: string | undefined, beallitas: FuvarBeallitasok): Promise<{ l100: number; forras: string }> {
+export async function mertFogyasztas(jarmuKod: string | undefined, beallitas: FuvarBeallitasok): Promise<{ l100: number; forras: string }> {
   let alapL100 = beallitas.fogyasztas_alap_l_100km;
   try {
     const jarmuvek = await query<{ kod: string; ecofleet_object_id: string | null; vontato_rendszam: string | null; fogyasztas_l_100km: number | null }>(

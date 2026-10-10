@@ -3188,3 +3188,39 @@ JANI is), km HU-GO-ból, légvonal × 1,3 csak „becslés” jelöléssel.
 - **Teszt**: `scripts/teszt-menetterv.ts` (76/0) a `teszt` láncban; a scratch
   Postgresen a teljes kör (javaslat → elavult verzió → jóváhagyás → átrendezés
   → lezárás → árnyék-kör) végigfutott.
+
+## 2026-10-10 — Optimalizáló (4. fázis): csak javaslat, jóváhagyott menetet magától nem ír át
+
+- **Séma** (`db/migrations/033_optimalizalo_javaslat.sql`, additív): `optimalizalo_javaslat`
+  (menet, kocsi, nap, típus sorrend/hozzarendeles, bemenet-ujjlenyomat, javasolt sorrend,
+  célfüggvény-tagok a javaslatra és a mostani tervre, megtakarítás, figyelmeztetések,
+  állapot nyitott/elfogadva/elutasitva/elavult, ki és mikor döntött). Menetenként
+  legfeljebb egy nyitott javaslat (részleges egyedi index).
+- **Tiszta mag** (`lib/menet/optimalizalo.ts`): J = üzemanyag (üres + rakott km × fogyasztás ×
+  gázolajár) + útdíj (HU-GO szakaszonként, különben flottaátlag Ft/km) + napi költség (fix)
+  + késés- és várakozás-büntetés + hazaút − p × saját áru értéke. Kemény korlát: késés az
+  ablak vége után, kapacitás (660/812 db, 33/28 hely, a hozott rakomány is), lerakó a
+  felrakó után, elkezdett/lezárt munkák a helyükön, 540 perc napi vezetés és 270 perc után
+  45 perc szünet (becslés, nem tachográf). Az első időzített megállóra az ablak VÉGÉRE ér
+  (tulajdonosi elv), ha ez késést okozna, az elejére. 30 km-es üres indulás csak
+  figyelmeztetés. ≤ 7 mozgatható munkánál teljes bejárás, fölötte beszúrás + 2-opt +
+  áthelyezés; determinisztikus. Hozzárendelés: egy bejövő bérfuvar legjobb helye mind a
+  4 kocsi napjában (GPS nélküli is), a J határváltozásával.
+- **Szerver** (`lib/menet/optimalizalo-szerver.ts`): a menetterv adatgyűjtéséből számol,
+  és csak 1 000 Ft vagy 5 km fölött (vagy ha a mostani terv sért egy kemény korlátot) ír
+  nyitott javaslatot; más ujjlenyomatnál a régi nyitott elavul. **Elfogadás**: jóváhagyott
+  menetnél KIZÁRÓLAG az átrendezés-úton (verzió, indok „optimalizáló javaslat #id”,
+  menet_esemeny + fuvar_valtozas); javaslat-menetnél újragenerálás ebben a sorrendben,
+  javaslat marad (az óránkénti kör az elfogadott sorrendet tartja). Elavult verzióra
+  hiba, a javaslat elavult.
+- **Akciók** (`lib/menet/optimalizalo-akciok.ts`, jogellenőrzéssel): `optimalizalas`,
+  `elfogad`, `elutasit` (szerkesztés), `hozzarendelesJavaslat` (megtekintés, nem ír).
+- **Felület**: Menetterv kocsikártyán „Optimalizálás” gomb és javaslat-doboz (most vs
+  javasolt sorrend, km, J tagjai, megtakarítás, korlát-megjegyzések, Elfogadás /
+  Elutasítás); Tervezés döntés-sáv: „Optimalizáló: melyik kocsi?” (legjobb kocsi, hely,
+  határköltség, kocsinként).
+- **Óránkénti kör**: ma és holnap a menetekre javaslat (egy try/catch blokk, nem dob).
+- **Teszt**: `scripts/teszt-optimalizalo.ts` (120/0) a `teszt` láncban; scratch Postgresen a
+  teljes kör (javaslat → nincs duplikátum → elfogadás javaslat-menetnél → árnyék-kör tartja
+  → jóváhagyás → elavulás → elavult elfogadás elutasítva → elfogadás átrendezéssel → elutasítás
+  → hozzárendelés 4 kocsira → óránkénti kör) 35/0.

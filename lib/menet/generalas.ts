@@ -80,10 +80,8 @@ type MunkaSor = {
 
 const pontVagyNull = (lat: number | null, lon: number | null): Pont | null => (lat != null && lon != null ? { lat: Number(lat), lon: Number(lon) } : null);
 
-/** Egy kocsi egy napjának megbízásai (a nap a felrakás és a lerakás napja közé esik). */
-async function napiMunkak(jarmuId: string, nap: string): Promise<MenetMunka[]> {
-  const sorok = await query<MunkaSor>(
-    `select m.id::text, m.jelleg, m.allapot,
+// A munka-sor oszlopai (a napi lista és az egyetlen megbízás — optimalizáló — közös lekérdezése).
+const MUNKA_OSZLOPOK = `select m.id::text, m.jelleg, m.allapot,
        to_char(m.datum, 'YYYY-MM-DD') as felrakas_nap, to_char(coalesce(m.lerakas_datum, m.datum), 'YYYY-MM-DD') as lerakas_nap,
        coalesce(fel.cim_nyers, m.felrako) as felrako, fel.lat as fel_lat, fel.lon as fel_lon,
        coalesce(le.cim_nyers, m.lerako) as lerako, le.lat as le_lat, le.lon as le_lon,
@@ -93,33 +91,46 @@ async function napiMunkak(jarmuId: string, nap: string): Promise<MenetMunka[]> {
          where g.megbizas_id = m.id) as teny
      from fuvar_megbizasok m
      left join lateral (select g.cim_nyers, g.lat, g.lon from fuvar_megallok g where g.megbizas_id = m.id and g.tipus = 'felrako' order by g.sorszam limit 1) fel on true
-     left join lateral (select g.cim_nyers, g.lat, g.lon from fuvar_megallok g where g.megbizas_id = m.id and g.tipus = 'lerako' order by g.sorszam desc limit 1) le on true
+     left join lateral (select g.cim_nyers, g.lat, g.lon from fuvar_megallok g where g.megbizas_id = m.id and g.tipus = 'lerako' order by g.sorszam desc limit 1) le on true`;
+
+/** Egy kocsi egy napjának megbízásai (a nap a felrakás és a lerakás napja közé esik). */
+async function napiMunkak(jarmuId: string, nap: string): Promise<MenetMunka[]> {
+  const sorok = await query<MunkaSor>(
+    `${MUNKA_OSZLOPOK}
      where m.jarmu_id = $1 and m.torolt_at is null and m.allapot is not null and m.allapot <> 'ellenorzesre_var'
        and not coalesce(m.elokeszites, false)
        and m.datum <= $2::date and coalesce(m.lerakas_datum, m.datum) >= $2::date
      order by m.datum, m.id`,
     [jarmuId, nap]
   );
-  return sorok.map((s) => {
-    const r = raklapMennyisegbol(s.mennyiseg);
-    return {
-      id: s.id,
-      jelleg: s.jelleg,
-      felrakasNap: s.felrakas_nap,
-      lerakasNap: s.lerakas_nap,
-      felrako: { cim: s.felrako, pont: pontVagyNull(s.fel_lat, s.fel_lon) },
-      lerako: { cim: s.lerako, pont: pontVagyNull(s.le_lat, s.le_lon) },
-      tervIdo: tervIdoMegbizasbol(s.felrakas_nap, s.felrakas_ablak_tol, s.idopont),
-      felrakasAblakIg: idobelyegMs(s.felrakas_ablak_ig),
-      lerakasAblakTol: idobelyegMs(s.lerakas_ablak_tol),
-      lerakasAblakIg: idobelyegMs(s.lerakas_ablak_ig),
-      tenyIdo: idobelyegMs(s.teny),
-      lezart: LEZART_ALLAPOTOK.includes(s.allapot),
-      rakottKm: s.rakott_km != null ? Number(s.rakott_km) : null,
-      raklapDb: r.raklapDb,
-      raklaphely: r.raklaphely,
-    };
-  });
+  return sorok.map(munkaSorbol);
+}
+
+/** Egy (akár kocsi nélküli, ellenőrzésre váró) megbízás munkaként — az optimalizáló hozzárendelés-javaslatához. */
+export async function megbizasMunka(megbizasId: string): Promise<MenetMunka | null> {
+  const [s] = await query<MunkaSor>(`${MUNKA_OSZLOPOK} where m.id = $1 and m.torolt_at is null`, [megbizasId]);
+  return s ? munkaSorbol(s) : null;
+}
+
+function munkaSorbol(s: MunkaSor): MenetMunka {
+  const r = raklapMennyisegbol(s.mennyiseg);
+  return {
+    id: s.id,
+    jelleg: s.jelleg,
+    felrakasNap: s.felrakas_nap,
+    lerakasNap: s.lerakas_nap,
+    felrako: { cim: s.felrako, pont: pontVagyNull(s.fel_lat, s.fel_lon) },
+    lerako: { cim: s.lerako, pont: pontVagyNull(s.le_lat, s.le_lon) },
+    tervIdo: tervIdoMegbizasbol(s.felrakas_nap, s.felrakas_ablak_tol, s.idopont),
+    felrakasAblakIg: idobelyegMs(s.felrakas_ablak_ig),
+    lerakasAblakTol: idobelyegMs(s.lerakas_ablak_tol),
+    lerakasAblakIg: idobelyegMs(s.lerakas_ablak_ig),
+    tenyIdo: idobelyegMs(s.teny),
+    lezart: LEZART_ALLAPOTOK.includes(s.allapot),
+    rakottKm: s.rakott_km != null ? Number(s.rakott_km) : null,
+    raklapDb: r.raklapDb,
+    raklaphely: r.raklaphely,
+  };
 }
 
 async function telephelyPontok(): Promise<TelephelyPontAdat[]> {
@@ -222,6 +233,24 @@ export async function beszurFeladatokat(tx: Querier, menetId: string, feladatok:
   }
 }
 
+/**
+ * A kocsi napjára legutóbb elfogadott optimalizáló-sorrend (033-as migráció),
+ * vagy null. Hiba (pl. még nincs tábla) esetén null — a közös napi szabály marad.
+ */
+export async function elfogadottOptimalizaloSorrend(jarmuId: string, nap: string): Promise<string[] | null> {
+  try {
+    const [s] = await query<{ sorrend: unknown }>(
+      `select javasolt->'sorrend' as sorrend from optimalizalo_javaslat
+        where jarmu_id = $1 and nap = $2::date and tipus = 'sorrend' and allapot = 'elfogadva'
+        order by dontes_at desc nulls last, id desc limit 1`,
+      [jarmuId, nap]
+    );
+    return Array.isArray(s?.sorrend) && s.sorrend.every((x) => typeof x === "string") ? (s.sorrend as string[]) : null;
+  } catch {
+    return null;
+  }
+}
+
 export type JavaslatEredmeny =
   | { eredmeny: "uj" | "frissult" | "valtozatlan"; menetId: string | null; verzio: number }
   | { eredmeny: "jovahagyott"; menetId: string; verzio: number };
@@ -232,10 +261,20 @@ export type JavaslatEredmeny =
  * menethez nem nyúl. Csak változás esetén ír, és akkor nő a verzió. Ha
  * nincs munka és menet sincs, nem hoz létre üres menetet.
  */
-export async function frissitMenetJavaslatot(jarmuId: string, nap: string, ki: string, tav: TavFn = szerverTav()): Promise<JavaslatEredmeny> {
+export async function frissitMenetJavaslatot(
+  jarmuId: string,
+  nap: string,
+  ki: string,
+  tav: TavFn = szerverTav(),
+  sorrend?: readonly string[] | null
+): Promise<JavaslatEredmeny> {
   const adat = await menetAdat(jarmuId, nap);
   if (!adat) throw new Error("Nincs ilyen kocsi.");
-  const feladatok = await epitMenetJavaslat({ ...adat, tav });
+  // Kötött sorrend: a hívóé (optimalizáló elfogadása), különben a legutóbb
+  // elfogadott optimalizáló-javaslaté — hogy az óránkénti kör ne írja vissza
+  // a közös napi szabályra. Ha nincs ilyen: a közös napi szabály.
+  const kotott = sorrend !== undefined ? sorrend : await elfogadottOptimalizaloSorrend(jarmuId, nap);
+  const feladatok = await epitMenetJavaslat({ ...adat, tav, sorrend: kotott });
   return withTransaction(async (tx) => {
     let [m] = await tx<{ id: string; allapot: string; verzio: number }>(
       `select id::text, allapot, verzio from fuvar_menet where jarmu_id = $1 and nap = $2::date for update`,
