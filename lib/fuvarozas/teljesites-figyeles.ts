@@ -28,7 +28,8 @@
 // két Pápa → Debrecen Duvenbeck-megbízás, NMZ-492).
 
 import { getFleetLastPositions, getVehicleTrips, parseEcofleetTimestamp, EcofleetError, type EcofleetPosition } from "./ecofleet";
-import { SAJAT_JARMUVEK, resolveJarmu } from "./vehicles";
+import { resolveJarmu } from "./vehicles";
+import { getJarmuvek } from "./jarmuvek-db";
 import { getSajatFuvarokErinteshez, jelolTeljesitveGpsAlapjan } from "./megbizasok";
 import { cimSugarKm, epitsIdovonal, fuvarKeszGpsSzerint, haversineKm, jelolMegallokat, kiegesziteloAllapottal, megalloJeloltjei } from "./idovonal";
 import { epitsErintesMegallokat, mozogE } from "./erintes-felismeres";
@@ -135,9 +136,10 @@ export async function futtatTeljesitesFigyeles(): Promise<TeljesitesFigyelesEred
     eloPoziciok = [];
   }
 
-  for (const jarmu of SAJAT_JARMUVEK) {
+  const jarmuLista = await getJarmuvek();
+  for (const jarmu of jarmuLista) {
     if (!jarmu.ecofleetObjectId) continue; // nincs GPS-kötés ehhez a járműhöz
-    const sajat = sorok.filter((s) => resolveJarmu(s.jarmu) === jarmu);
+    const sajat = sorok.filter((s) => resolveJarmu(s.jarmu, jarmuLista) === jarmu);
     if (sajat.length === 0) continue;
     // Nyitott: még nem Teljesítve és nincs számlázva — a lerakási nap múlása
     // (a Megbízások fülön Számla/Posta) nem zárja ki: a csúszó fuvar (a #130

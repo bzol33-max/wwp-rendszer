@@ -18,8 +18,8 @@ import * as actions from "@/lib/megbizasok/akciok";
 
 import { query } from "@/lib/db";
 import { requireViewPermission } from "@/lib/auth/require-permission";
-import { SAJAT_JARMUVEK } from "@/lib/fuvarozas/vehicles";
-import { SAJAT_TELEPHELYEK } from "@/lib/fuvarozas/telephelyek";
+import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
+import { getSajatTelephelyek } from "@/lib/fuvarozas/telephelyek-db";
 import type { DuplikatumJelolt } from "@/lib/fuvarozas2/sajat-duplikatum";
 
 export type SajatFuvarAdat = {
@@ -90,7 +90,7 @@ export type SajatFuvarSegedlet = {
 /** A rögzítő űrlap választólistái: kocsik, telephelyek + korábbi címek, partnerek. */
 export async function getSajatFuvarSegedlet(): Promise<SajatFuvarSegedlet> {
   await requireViewPermission("fuvarozas");
-  const [cimek, partnerek] = await Promise.all([
+  const [cimek, partnerek, jarmuLista, telephelyLista] = await Promise.all([
     query<{ cim: string }>(
       `select cim from (
          select felrako as cim, max(datum) as utolso from fuvar_megbizasok where jelleg = 'sajat' and felrako <> '' group by felrako
@@ -99,11 +99,13 @@ export async function getSajatFuvarSegedlet(): Promise<SajatFuvarSegedlet> {
        ) x group by cim order by max(utolso) desc limit 40`
     ),
     query<{ nev: string }>(`select nev from fuvar_partnerek order by nev limit 300`),
+    getJarmuvek(),
+    getSajatTelephelyek(),
   ]);
-  const telephelyek = SAJAT_TELEPHELYEK.map((t) => ({ cim: t.cim, nev: t.nev }));
+  const telephelyek = telephelyLista.map((t) => ({ cim: t.cim, nev: t.nev }));
   const ismert = new Set(telephelyek.map((t) => t.cim));
   return {
-    jarmuvek: SAJAT_JARMUVEK.filter((j) => j.rendszamok.length > 0).map((j) => ({ kod: j.rendszamok[0], cimke: `${j.sofor} · ${j.rendszamok[0]}` })),
+    jarmuvek: jarmuLista.filter((j) => j.rendszamok.length > 0).map((j) => ({ kod: j.kod ?? j.rendszamok[0], cimke: `${j.sofor} · ${j.rendszamok[0]}` })),
     helyek: [...telephelyek, ...cimek.filter((c) => !ismert.has(c.cim)).map((c) => ({ cim: c.cim, nev: null }))],
     partnerek: partnerek.map((p) => p.nev),
   };

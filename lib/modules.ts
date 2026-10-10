@@ -49,8 +49,8 @@ export const MODULES: ModuleInfo[] = [
     label: "Járművek",
     href: "/jarmuvek",
     icon: Car,
-    status: "tervezes-alatt",
-    description: "A modul funkciói még nincsenek kidolgozva.",
+    status: "fejlesztes-alatt",
+    description: "Járművek törzsadata (új kamion felvétele, rendszám, pótkocsi és raklap-kapacitás, sofőr, Ecofleet GPS, fogyasztás, Euro-osztály), pótkocsik, okmányok és sofőr-okmányok lejárat-figyeléssel.",
   },
   {
     key: "szamlak",

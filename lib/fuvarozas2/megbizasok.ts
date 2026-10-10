@@ -24,7 +24,8 @@ import { keresEgyezik, keresNapok, keresSzoveg, szakaszSorbol, szakaszSorrendben
 import { cimReszek, rovidCim, megbizasCim } from "@/lib/megbizasok/megjelenites";
 import { varosNev } from "@/lib/fuvarozas/varos";
 import { SOR_SQL, kontextus, BER_SQL } from "@/lib/megbizasok/repo";
-import { findJarmuByPlate } from "@/lib/fuvarozas/vehicles";
+import { findJarmuByKod } from "@/lib/fuvarozas/vehicles";
+import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
 import { type BerFuvarAdat } from "@/lib/fuvarozas2/berfuvar";
 
 export type MegbizasSor = {
@@ -232,17 +233,17 @@ export type MunkaasztalSor = MegbizasSor & { szakasz: Szakasz };
 
 /**
  * A munkaasztal kocsijai: a törzs aktív járművei, a sofőr keresztnevével
- * (a törzsben ritkán van sofőr-hozzárendelés, ezért a saját járművek
- * listájából — vehicles.ts). A rendszám nélküli, gyártás alatti kocsi csak
+ * (a törzs sofor_becenev mezőjéből — getJarmuvek, jarmuvek-db.ts). A rendszám nélküli, gyártás alatti kocsi csak
  * akkor jelenik meg, ha van nyitott fuvarja.
  */
 async function munkaasztalJarmuvei(): Promise<{ kod: string; cimke: string; sofor: string | null; rendszamos: boolean }[]> {
   const sorok = await query<{ kod: string; cimke: string; sofor: string | null }>(
     `select j.kod, j.cimke, a.name as sofor from fuvar_jarmuvek j left join alkalmazottak a on a.id = j.sofor_id where j.aktiv order by j.kod`
   );
+  const lista = await getJarmuvek();
   return sorok.map((j) => {
-    const sajat = findJarmuByPlate(j.kod);
-    return { ...j, sofor: sajat?.sofor ?? j.sofor?.split(" ").pop() ?? null, rendszamos: !!sajat };
+    const sajat = findJarmuByKod(j.kod, lista);
+    return { ...j, sofor: sajat?.sofor ?? j.sofor?.split(" ").pop() ?? null, rendszamos: (sajat?.rendszamok.length ?? 0) > 0 };
   });
 }
 

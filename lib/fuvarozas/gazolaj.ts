@@ -1,5 +1,7 @@
 import "server-only";
 import { fetchGazolajAr, GazolajArError } from "./uzemanyagar";
+import { FUVAR_BEALLITAS_ALAP } from "@/lib/beallitasok/fuvar-alap";
+import { getFuvarBeallitasok } from "@/lib/beallitasok/fuvar";
 
 // A gázolajár kedvezménnyel — a régi kalkulátor (lib/fuvarozas/actions.ts
 // getGazolajAr) és a Fuvarozás 2 kalkulátora (lib/fuvarozas2/kalkulator.ts) közös forrása.
@@ -7,12 +9,14 @@ import { fetchGazolajAr, GazolajArError } from "./uzemanyagar";
 // Ha a NAV oldala nem érhető el (átmeneti hiba, oldalszerkezet-változás),
 // ez a tartalék érték jelenik meg — utoljára kézzel ellenőrizve 2026.
 // szeptemberében. Csak akkor használódik, ha az automatikus lekérés hibázik.
-export const GAZOLAJ_AR_TARTALEK = { ar: 667, cimke: "2026. szeptember (tartalék érték)" };
+// 2026-10-10-től a beállításokból (gazolaj_ar_tartalek_ft) jön — ez az alapértéke.
+export const GAZOLAJ_AR_TARTALEK = { ar: FUVAR_BEALLITAS_ALAP.gazolaj_ar_tartalek_ft, cimke: "2026. szeptember (tartalék érték)" };
 
 // A flotta mindig ugyanott tankol, ahol literenként 50 Ft kedvezményt kap a
 // NAV hivatalos árához képest — ezt a kalkulátor a NAV-áron automatikusan
-// levonja.
-export const TANKOLASI_KEDVEZMENY_FT_PER_LITER = 50;
+// levonja. 2026-10-10-től a beállításokból (tankolasi_kedvezmeny_ft_l) jön —
+// ez az alapértéke.
+export const TANKOLASI_KEDVEZMENY_FT_PER_LITER = FUVAR_BEALLITAS_ALAP.tankolasi_kedvezmeny_ft_l;
 
 export type GazolajArResult = {
   /** A ténylegesen alkalmazandó ár (NAV ár - kedvezmény) — ezzel kell számolni. */
@@ -30,7 +34,9 @@ export type GazolajArResult = {
  * cache-eléssel), a flotta állandó tankolási kedvezményével csökkentve.
  */
 export async function gazolajArKedvezmennyel(): Promise<GazolajArResult> {
-  const kedvezmeny = TANKOLASI_KEDVEZMENY_FT_PER_LITER;
+  const beallitas = await getFuvarBeallitasok();
+  const kedvezmeny = beallitas.tankolasi_kedvezmeny_ft_l;
+  const tartalekAr = beallitas.gazolaj_ar_tartalek_ft;
   try {
     const { ar, cimke } = await fetchGazolajAr();
     return { ar: ar - kedvezmeny, navAr: ar, kedvezmeny, cimke, friss: true };
@@ -39,8 +45,8 @@ export async function gazolajArKedvezmennyel(): Promise<GazolajArResult> {
       console.error("[uzemanyagar] váratlan hiba:", err);
     }
     return {
-      ar: GAZOLAJ_AR_TARTALEK.ar - kedvezmeny,
-      navAr: GAZOLAJ_AR_TARTALEK.ar,
+      ar: tartalekAr - kedvezmeny,
+      navAr: tartalekAr,
       kedvezmeny,
       cimke: GAZOLAJ_AR_TARTALEK.cimke,
       friss: false,

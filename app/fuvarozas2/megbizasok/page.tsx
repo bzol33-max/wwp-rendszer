@@ -13,6 +13,8 @@ import { SajatFuvarUrlap, VisszaveszemGomb } from "@/components/fuvarozas2/sajat
 import { getSajatFuvarSegedlet } from "@/lib/fuvarozas2/sajat-fuvar";
 import { BerFuvarUrlap, DriveFrissitesGomb, UjraolvasasGomb } from "@/components/fuvarozas2/berfuvar";
 import { uresBerFuvar } from "@/lib/fuvarozas2/berfuvar";
+import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
+import { jarmuLabel } from "@/lib/fuvarozas/vehicles";
 import { MegbizasokAsztal, VisszaElvinniGomb } from "@/components/fuvarozas2/megbizasok-asztal";
 import { getElvinniHet } from "@/lib/megbizasok/elvinni-het";
 import { elvinniOszlop } from "@/lib/megbizasok/elvinni-szabalyok";
@@ -50,6 +52,7 @@ export default async function Page({ searchParams }: {
   const elokeszitett = szerkeszthet && reszlet?.sor.elokeszites ? reszlet.sor : null;
   const urlapNyitva = szerkeszthet && (uj || !!elokeszitett);
   const segedlet = urlapNyitva ? await getSajatFuvarSegedlet() : null;
+  const kocsiLista = (await getJarmuvek()).map(jarmuLabel);
   const lapon = reszlet && !elokeszitett ? reszlet : null;
   const visszaveheto =
     szerkeszthet && lapon && lapon.sor.jelleg === "sajat" && !lapon.sor.elokeszites &&
@@ -165,13 +168,13 @@ export default async function Page({ searchParams }: {
 
       {ujBerLap ? (
         <ReszletLap bezarHref={bezar} cim="Új bérfuvar">
-          <BerFuvarUrlap id={null} kezdo={uresBerFuvar(asztal.ma)} megseHref={bezar} reszletHref={munkaasztalLink(szuro, { reszlet: "{id}", uj: false, szerk: false, ujBer: false }).replace("%7Bid%7D", "{id}")} />
+          <BerFuvarUrlap kocsiLista={kocsiLista} id={null} kezdo={uresBerFuvar(asztal.ma)} megseHref={bezar} reszletHref={munkaasztalLink(szuro, { reszlet: "{id}", uj: false, szerk: false, ujBer: false }).replace("%7Bid%7D", "{id}")} />
         </ReszletLap>
       ) : null}
 
       {lapon && berSzerk ? (
         <ReszletLap bezarHref={bezar} cim={`#${lapon.sor.id} · ${lapon.sor.partner_nev ?? "(nincs megbízó)"} — szerkesztés`}>
-          <BerFuvarUrlap id={lapon.sor.id} kezdo={berSzerk} megseHref={reszletLink(lapon.sor.id)} reszletHref={reszletLink(lapon.sor.id)} />
+          <BerFuvarUrlap kocsiLista={kocsiLista} id={lapon.sor.id} kezdo={berSzerk} megseHref={reszletLink(lapon.sor.id)} reszletHref={reszletLink(lapon.sor.id)} />
         </ReszletLap>
       ) : lapon ? (
         <ReszletLap bezarHref={bezar} cim={`#${lapon.sor.id} · ${lapon.sor.partner_nev ?? (lapon.sor.jelleg === "sajat" ? "Saját fuvar" : "(nincs megbízó)")}`}>

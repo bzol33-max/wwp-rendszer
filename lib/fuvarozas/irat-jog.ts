@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import { query } from "@/lib/db";
 import { verifySession } from "@/lib/auth/dal";
 import type { ModuleKey } from "@/lib/auth/permissions";
-import { findJarmuByEmployeeName, jarmuMatch } from "@/lib/fuvarozas/sofor-jarmu";
+import { findJarmuForEmployee, jarmuMatch } from "@/lib/fuvarozas/sofor-jarmu";
+import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
 
 /**
  * Egy fuvar iratainak (megbízás-PDF, rakománylista, fuvarlevél-fotó)
@@ -17,8 +18,10 @@ import { findJarmuByEmployeeName, jarmuMatch } from "@/lib/fuvarozas/sofor-jarmu
  * önkiszolgáló jog → kizárólag a saját fuvar iratai.
  *
  * A "saját fuvar" ugyanaz az összerendelés, amit a sofőr nap-nézete használ
- * (lib/fuvarozas/sofor-jarmu.ts): a bejelentkezett dolgozó neve → SAJAT_JARMUVEK
- * kocsi → a fuvar jarmu/sofor mezője. Tartaléknak a fuvar "sofor" mezőjének
+ * (lib/fuvarozas/sofor-jarmu.ts): a bejelentkezett dolgozó → a törzsadat
+ * (fuvar_jarmuvek.sofor_id, tartalékként a név) szerinti kocsi → a fuvar
+ * jarmu/sofor mezője. A járműlista a DB-ből jön (getJarmuvek), így egy
+ * 3./4. kocsi sofőrje is a saját papírjait látja — és csak azokat. Tartaléknak a fuvar "sofor" mezőjének
  * közvetlen név-egyezése is elég, hogy egy ismeretlen kocsira ültetett sofőr
  * se maradjon papír nélkül.
  *
@@ -59,6 +62,7 @@ export async function sajatFuvarE(employeeId: string | null, fuvarId: string): P
   if (!fuvar) return false;
   const nev = emp.name.trim().toLowerCase();
   if (fuvar.sofor && fuvar.sofor.trim().toLowerCase() === nev) return true;
-  const jarmu = findJarmuByEmployeeName(emp.name);
-  return jarmu ? jarmuMatch(jarmu, fuvar) : false;
+  const lista = await getJarmuvek();
+  const jarmu = findJarmuForEmployee({ id: employeeId, name: emp.name }, lista);
+  return jarmu ? jarmuMatch(jarmu, fuvar, lista) : false;
 }

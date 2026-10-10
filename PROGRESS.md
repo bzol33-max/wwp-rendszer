@@ -1,5 +1,33 @@
 # PROGRESS
 
+## 2026-10-10 — Törzsadat (2. fázis): beállítások, telephelyek, pótkocsik, 4 kamionos flotta, /jarmuvek
+
+- **Döntés (Zoltán):** a flotta 4 kamionos lesz — se darabszám, se rendszám ne
+  legyen beégetve; JANI (DAF XG, rendszám/GPS nélkül) teljes értékű jármű.
+  Alap fogyasztás 28 l/100 km, a mért Ecofleet-érték csak 300 mért km fölött
+  írja felül. Útvonal marad HU-GO.
+- **030_fuvar_beallitas.sql:** `fuvar_beallitas` (kulcs, ertek jsonb,
+  ervenyes_tol, modositotta) — módosítás = új sor, az aktuális a legkésőbbi
+  érvényes. `lib/beallitasok/fuvar.ts getFuvarBeallitasok()` (1 perc cache,
+  hiba/hiányzó tábla esetén a kódbeli alapérték). Bekötve: kalkulátor (napi
+  költség, fogyasztás, küszöb, vezetési keret), kalkuláció-ujjlenyomat
+  (beállítás-változásra újraszámol), kimutatás, tervező, gázolaj
+  (kedvezmény, tartalék), rakodási ráhagyás (GPS-idővonal).
+- **031_torzsadat_jarmu_telephely.sql:** `telephely_pont` (a szakolyi parkoló
+  'parkolo' pont, NEM új `sites` sor), `fuvar_potkocsik` (Schmitz Mega
+  33/28 hely, 660/812 raklap), `fuvar_jarmuvek` + potkocsi_id, euro_osztaly,
+  hugo_kategoria, ossztomeg_t, alap_telephely_pont_id, megjegyzes,
+  sofor_becenev; `sofor_profil`, `jarmu_okmany`.
+- **Járművek a DB-ből:** `lib/fuvarozas/jarmuvek-db.ts getJarmuvek()` (60 s
+  cache, tartalék a régi konstans) — GPS, Ma, Tervezés, Áttekintés, sofőr-nap,
+  irat-jog, teljesítés-figyelő, fogyasztás, saját fuvar űrlap. Irat-jog: a
+  sofőr ↔ kocsi elsőként `sofor_id` szerint (szigorúbb, mint a névegyezés).
+- **/jarmuvek:** járművek (4. kamion felvétele), pótkocsik, okmányok és
+  sofőr-okmányok lejárat-jelzéssel (lejárt piros, 30 napon belül sárga).
+- **Teszt:** új `scripts/teszt-jarmu-torzs.ts`, bővített `teszt-kalkulator`,
+  a teljes `npm run teszt` lánc (a kocsihozAdom előzetes hibája kivételével),
+  typecheck, eslint, next build; a migrációk valódi Postgres 16-on futtatva.
+
 ## 2026-10-02 — Téves „Postázva”: visszavonható, és számla előtt nem számít
 
 - **Probléma:** a BHS Trans 330031897 (Budapest → Nyíregyháza) nem ment

@@ -17,7 +17,7 @@ import { query } from "@/lib/db";
 import { getUtvonalJelentes, rendszamKulcs } from "@/lib/fuvarozas/ecofleet";
 import { requireAnyViewPermission } from "@/lib/auth/require-permission";
 import { geokodolCachelve } from "@/lib/fuvarozas/erintes-felismeres";
-import { SAJAT_TELEPHELYEK } from "@/lib/fuvarozas/telephelyek";
+import { getIndulasiTelephely } from "@/lib/fuvarozas/telephelyek-db";
 import { varosNev } from "@/lib/fuvarozas/varos";
 import { napiSorrend } from "@/lib/fuvarozas2/napi-sorrend";
 import { becsultTavolsag, lancKm } from "@/lib/fuvarozas2/ures-km";
@@ -139,7 +139,7 @@ export async function getTervHet(hetKezdet?: string): Promise<TervHet> {
   );
 
   const aznap = (m: TervMegbizas, nap: string) => (m.felrakasNap ?? "") <= nap && (m.lerakasNap ?? m.felrakasNap ?? "") >= nap;
-  const telephely = SAJAT_TELEPHELYEK[0].cim;
+  const telephely = (await getIndulasiTelephely()).cim;
 
   // Geokód a hazaút-becsléshez (szótárból, hálózat nélkül is működik).
   const telephelyPont = await geokodolCachelve(telephely).catch(() => null);
@@ -196,7 +196,7 @@ export async function getTervHet(hetKezdet?: string): Promise<TervHet> {
           jarmuKod: j.kod, jarmuCimke: j.cimke, nap, hol: hely, holVaros: varos,
           hazautKm: hazaut, korzet,
           keresoSzoveg: `Felrakás: ${varos}${korzet ? ` (HU ${korzet})` : ""} · ${nap} · lerakás: kelet-Magyarország (HU 40–45) · nyerges, 24 t`,
-          kalkulatorUrl: `/fuvarozas2/kalkulator?honnan=${encodeURIComponent(hely)}&hova=${encodeURIComponent(SAJAT_TELEPHELYEK[0].cim)}`,
+          kalkulatorUrl: `/fuvarozas2/kalkulator?honnan=${encodeURIComponent(hely)}&hova=${encodeURIComponent(telephely)}`,
         });
       }
     }

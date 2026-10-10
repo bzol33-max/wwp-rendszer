@@ -33,7 +33,8 @@ import { toroljIdovonalCachet } from "@/lib/fuvarozas/idovonal-cache";
 import { getUtvonalJelentes, rendszamKulcs } from "@/lib/fuvarozas/ecofleet";
 import { cachelve } from "@/lib/fuvarozas/idovonal-cache";
 import { kovetkezoMunkanapISO } from "@/lib/fuvarozas/idozona";
-import { SAJAT_JARMUVEK, type JarmuSzin } from "@/lib/fuvarozas/vehicles";
+import { findJarmuByKod, type JarmuSzin } from "@/lib/fuvarozas/vehicles";
+import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
 import type { MegalloReszlet } from "@/lib/fuvarozas/sofor-adatok";
 import type { Allapot } from "@/lib/fuvarozas/allapot";
 import { tukorSorok, type TukorSor } from "@/lib/fuvarozas2/ma-tukor";
@@ -291,6 +292,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
   const idovonal = await getIdovonalak().catch(() => null);
 
   // 3. Kocsik az új törzsből.
+  const jarmuLista = await getJarmuvek();
   const osszesJarmu = await query<{ id: string; kod: string; cimke: string; sofor: string | null; ecofleet_object_id: string | null; vontato_rendszam: string | null }>(
     `select j.id::text, j.kod, j.cimke, a.name as sofor, j.ecofleet_object_id, j.vontato_rendszam from fuvar_jarmuvek j
      left join alkalmazottak a on a.id = j.sofor_id
@@ -525,7 +527,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
       [kezdet, zaras]
     );
     const kocsik = osszesJarmu.map((j) => {
-      const torzs = SAJAT_JARMUVEK.find((x) => x.rendszamok[0] === j.kod) ?? SAJAT_JARMUVEK.find((x) => x.rendszamok.length === 0 && j.kod === "JANI");
+      const torzs = findJarmuByKod(j.kod, jarmuLista);
       const r = berSorok.find((x) => x.jarmu_id === j.id);
       return { nev: torzs?.sofor ?? j.sofor ?? j.cimke, szin: torzs?.szin ?? null, ft: r?.ft ?? 0, eur: r?.eur ?? 0, km: kmDij(r ? [r] : []) };
     });
@@ -629,7 +631,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
   };
 
   const kocsik: MaKocsi[] = osszesJarmu.map((j) => {
-    const torzs = SAJAT_JARMUVEK.find((x) => x.rendszamok[0] === j.kod) ?? SAJAT_JARMUVEK.find((x) => x.rendszamok.length === 0 && j.kod === "JANI");
+    const torzs = findJarmuByKod(j.kod, jarmuLista);
     const becenev = torzs?.sofor ?? null;
     const sajat = sorok.filter((s) => s.jarmu_kod === j.kod && s.allapot !== "ellenorzesre_var");
     // Ma: a mai napra eső, és a korábbról csúszó, még nyitott fuvarok — a

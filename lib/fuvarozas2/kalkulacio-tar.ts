@@ -2,7 +2,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import { query } from "@/lib/db";
 import { kozosKalkulacio, type KozosEredmeny } from "@/lib/fuvarozas2/kalkulator-szamitas";
-import { NAPI_KOLTSEG_FT } from "@/lib/fuvarozas2/kalkulator-alap";
+import { getFuvarBeallitasok, type FuvarBeallitasok } from "@/lib/beallitasok/fuvar";
 
 // A bérmegbízások kalkulációja tárolva (fuvar_kalkulacio, 2026-09-30):
 // Budaházi Zoltán kérése, hogy ami egyszer ki van számolva, rögzüljön, és ne
@@ -11,8 +11,10 @@ import { NAPI_KOLTSEG_FT } from "@/lib/fuvarozas2/kalkulator-alap";
 // oldal számol, ha még nincs tárolt eredmény.
 //
 // Elavulás: a bemenet_kulcs a számítás bemenetének ujjlenyomata (megállók,
-// díj, kocsi, a hónap — a NAV-ár havonta változik —, a napi költség, a
-// verzió). Ha a megbízás változik, a kulcs eltér; 7 napnál régebbi eredmény
+// díj, kocsi, a hónap — a NAV-ár havonta változik —, a számítás
+// beállításai (fuvar_beallitas: napi költség, alap fogyasztás, mérési küszöb,
+// tankolási kedvezmény, gázolaj-tartalék, vezetési keret), a verzió). Ha egy
+// beállítás változik, minden tárolt kalkuláció elavul és újraszámolódik. Ha a megbízás változik, a kulcs eltér; 7 napnál régebbi eredmény
 // is elavult (a mért fogyasztás 14 napos ablakból jön). Elavult eredmény is
 // látszik („frissítés alatt”), amíg az új el nem készül.
 
@@ -48,9 +50,21 @@ async function bemenetek(ids: string[]): Promise<Bemenet[]> {
   }));
 }
 
-function kulcs(b: Bemenet): string {
+/** A kalkuláció eredményét befolyásoló beállítások — ezek az ujjlenyomat részei. */
+function szamitasiParameterek(p: FuvarBeallitasok) {
+  return {
+    n: p.napi_koltseg_ft,
+    f: p.fogyasztas_alap_l_100km,
+    mk: p.meres_min_km,
+    tk: p.tankolasi_kedvezmeny_ft_l,
+    gt: p.gazolaj_ar_tartalek_ft,
+    vz: p.sofor_napi_vezetes_max_perc,
+  };
+}
+
+function kulcs(b: Bemenet, p: FuvarBeallitasok): string {
   return createHash("sha1")
-    .update(JSON.stringify({ v: VERZIO, m: b.megallok, a: b.ajanlatFt, j: b.jarmuKod, h: b.honap, n: NAPI_KOLTSEG_FT }))
+    .update(JSON.stringify({ v: VERZIO, m: b.megallok, a: b.ajanlatFt, j: b.jarmuKod, h: b.honap, ...szamitasiParameterek(p) }))
     .digest("hex");
 }
 
@@ -58,7 +72,7 @@ function kulcs(b: Bemenet): string {
 export async function getTaroltKalkulaciok(ids: string[]): Promise<Map<string, TaroltKalkulacio>> {
   const ki = new Map<string, TaroltKalkulacio>();
   if (ids.length === 0) return ki;
-  const [be, tar] = await Promise.all([
+  const [be, tar, beallitas] = await Promise.all([
     bemenetek(ids),
     query<{ id: string; bemenet_kulcs: string; eredmeny: KozosEredmeny | null; hiba: string | null; szamolva_at: string; regi: boolean }>(
       `select megbizas_id::text as id, bemenet_kulcs, eredmeny, hiba, szamolva_at::text,
@@ -66,8 +80,9 @@ export async function getTaroltKalkulaciok(ids: string[]): Promise<Map<string, T
        from fuvar_kalkulacio where megbizas_id = any($1::bigint[])`,
       [ids, ELAVUL_NAP]
     ),
+    getFuvarBeallitasok(),
   ]);
-  const kulcsok = new Map(be.map((b) => [b.id, kulcs(b)]));
+  const kulcsok = new Map(be.map((b) => [b.id, kulcs(b, beallitas)]));
   for (const t of tar) {
     ki.set(t.id, { eredmeny: t.eredmeny, hiba: t.hiba, szamolvaAt: t.szamolva_at, elavult: t.regi || kulcsok.get(t.id) !== t.bemenet_kulcs });
   }
@@ -83,6 +98,9 @@ export async function szamoldEsTarold(id: string): Promise<TaroltKalkulacio | nu
   try {
     const [b] = await bemenetek([id]);
     if (!b) return null;
+    // A beállítást a számítás ELŐTT olvassuk: ha közben változna, a tárolt
+    // kulcs a régi értékhez tartozik, és a következő körben újraszámolódik.
+    const beallitas = await getFuvarBeallitasok();
     let eredmeny: KozosEredmeny | null = null;
     let hiba: string | null = null;
     if (b.megallok.length < 2) {
@@ -96,7 +114,7 @@ export async function szamoldEsTarold(id: string): Promise<TaroltKalkulacio | nu
       `insert into fuvar_kalkulacio (megbizas_id, bemenet_kulcs, eredmeny, hiba, szamolva_at) values ($1, $2, $3, $4, now())
        on conflict (megbizas_id) do update set bemenet_kulcs = excluded.bemenet_kulcs, eredmeny = excluded.eredmeny, hiba = excluded.hiba, szamolva_at = now()
        returning szamolva_at::text`,
-      [id, kulcs(b), eredmeny ? JSON.stringify(eredmeny) : null, hiba]
+      [id, kulcs(b, beallitas), eredmeny ? JSON.stringify(eredmeny) : null, hiba]
     );
     return { eredmeny, hiba, szamolvaAt: sor.szamolva_at, elavult: false };
   } finally {

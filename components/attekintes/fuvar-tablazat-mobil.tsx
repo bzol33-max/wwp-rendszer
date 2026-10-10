@@ -364,6 +364,7 @@ const JARMU_SZIN_HEX: Record<(typeof SAJAT_JARMUVEK)[number]["szin"], string> = 
   blue: "#3b82f6",
   yellow: "#eab308",
   green: "#22c55e",
+  purple: "#a855f7",
 };
 
 /**
@@ -571,18 +572,21 @@ function fogyasztasFelirat(l100: number | null | undefined): string {
  */
 function OsszefoglaloLap({
   jarmuvek,
+  lista,
   most,
   fogyasztas,
   flottaFogyasztas,
   onValaszt,
 }: {
   jarmuvek: JarmuIdovonalEredmeny[];
+  /** A saját járművek (a szerver DB-ből töltött listája, a csoportokból). */
+  lista: (typeof SAJAT_JARMUVEK)[number][];
   most: number;
   fogyasztas: Record<string, number | null>;
   flottaFogyasztas: number | null;
   onValaszt: (jarmuIndex: number) => void;
 }) {
-  const o = osszkep(jarmuvek, true, most);
+  const o = osszkep(jarmuvek, true, most, lista);
   const fuvarok = jarmuvek.flatMap((a) => a.fuvarok);
   const dijFt = fuvarok.reduce((s, f) => s + (f.fuvardijPenznem === "Ft" ? (f.fuvardij ?? 0) : 0), 0);
   const dijEur = fuvarok.reduce((s, f) => s + (f.fuvardijPenznem === "EUR" ? (f.fuvardij ?? 0) : 0), 0);
@@ -615,7 +619,7 @@ function OsszefoglaloLap({
       </div>
 
       <div className="overflow-hidden rounded-xl border border-[var(--at-border)] bg-[var(--at-card)]">
-        {SAJAT_JARMUVEK.map((j, i) => (
+        {lista.map((j, i) => (
           <FlottaSor
             key={j.sofor}
             jarmu={j}
@@ -1013,6 +1017,9 @@ export function FuvarTablazatMobil({
 }) {
   const [aktiv, setAktiv] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
+  // A kocsik a szerver járműlistájából (getJarmuvek → csoportok) jönnek, így
+  // egy 3./4. jármű pusztán adatként megjelenik; a beépített lista csak tartalék.
+  const lista = csoportok.length > 0 ? csoportok.map((c) => c.jarmu) : SAJAT_JARMUVEK;
 
   // Fülre koppintva a lapozó a megfelelő lapra görget; húzáskor a
   // scroll-snap a legközelebbi lapra áll be, és a fül ahhoz igazodik.
@@ -1040,7 +1047,7 @@ export function FuvarTablazatMobil({
         >
           Flotta
         </button>
-        {SAJAT_JARMUVEK.map((j, i) => (
+        {lista.map((j, i) => (
           <button
             key={j.sofor}
             type="button"
@@ -1060,9 +1067,9 @@ export function FuvarTablazatMobil({
         className="-mx-4 flex snap-x snap-mandatory overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         <div className="w-full shrink-0 snap-center px-4">
-          <OsszefoglaloLap jarmuvek={jarmuvek} most={most} fogyasztas={fogyasztas} flottaFogyasztas={flottaFogyasztas} onValaszt={(i) => ugras(i + 1)} />
+          <OsszefoglaloLap jarmuvek={jarmuvek} lista={lista} most={most} fogyasztas={fogyasztas} flottaFogyasztas={flottaFogyasztas} onValaszt={(i) => ugras(i + 1)} />
         </div>
-        {SAJAT_JARMUVEK.map((j) => (
+        {lista.map((j) => (
           <div key={j.sofor} className="w-full shrink-0 snap-center px-4">
             <KocsiLap
               jarmu={j}

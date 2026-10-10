@@ -2,7 +2,7 @@
 
 import { requireAnyViewPermission } from "@/lib/auth/require-permission";
 import { EcofleetError, getUtvonalJelentes, rendszamKulcs, type EcofleetUtSor } from "./ecofleet";
-import { SAJAT_JARMUVEK } from "./vehicles";
+import { getJarmuvek } from "./jarmuvek-db";
 import { budapestNapISO } from "./idozona";
 import { cachelve } from "./idovonal-cache";
 import { getGazolajAr } from "./actions";
@@ -66,7 +66,7 @@ function osszegez(sorok: EcofleetUtSor[], kezdetNapISO: string, vegNapISO: strin
 
 async function szamitsFogyasztast(napISO: string): Promise<FogyasztasEredmeny> {
   const gazolaj = await getGazolajAr();
-  const jarmuvek = SAJAT_JARMUVEK.filter((j) => j.ecofleetObjectId !== null);
+  const jarmuvek = (await getJarmuvek()).filter((j) => j.ecofleetObjectId !== null);
   const kezdet = napIsoEltolva(napISO, -(FOGYASZTAS_NAPOK - 1));
   const sorok = await getUtvonalJelentes(
     jarmuvek.map((j) => j.ecofleetObjectId as string),

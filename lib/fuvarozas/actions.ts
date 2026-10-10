@@ -38,14 +38,16 @@ import {
   type TervezettFuvarSzakasz,
   type TervezettMegallo,
 } from "./idovonal";
-import { SAJAT_JARMUVEK, resolveJarmu, type JarmuSzin, type SajatJarmu } from "./vehicles";
+import { resolveJarmu, type JarmuSzin, type SajatJarmu } from "./vehicles";
+import { getJarmuvek } from "./jarmuvek-db";
+import { getFuvarBeallitasok } from "@/lib/beallitasok/fuvar";
 import { bontsMegallokra, varosNev } from "./varos";
 import { geokodolCachelve, megalloAblakKezdet, megalloAblakTagithato, megalloPontossaga, mozogE } from "./erintes-felismeres";
 import { cachelve } from "./idovonal-cache";
 import { getFuvarokIdoszakban } from "./megbizasok";
 import type { FuvardijPenznem, FuvarTipus, MaiFuvarSor } from "./fuvar-constants";
 import { budapestFalioraToInstant, budapestHetNapja, budapestNapISO, budapestOra, formatBudapestFaliora } from "./idozona";
-import { SAJAT_TELEPHELYEK } from "./telephelyek";
+import { getSajatTelephelyek } from "./telephelyek-db";
 import { napiSorrend, parositasiSorrend, tervIdoMegbizasbol } from "@/lib/fuvarozas2/napi-sorrend";
 
 /**
@@ -269,8 +271,14 @@ function napIsoEltolva(napISO: string, delta: number): string {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
 }
 
-const RAKODAS_PUFFER_PERC = 30;
-const LERAKODAS_PUFFER_PERC = 45;
+/**
+ * Felrakásra / lerakásra tervezett idő, perc — a fuvar_beallitas
+ * felrakas_rahagyas_perc / lerakas_rahagyas_perc értéke (alap 30 / 45).
+ */
+async function rakodasPufferek(): Promise<{ fel: number; le: number }> {
+  const b = await getFuvarBeallitasok();
+  return { fel: b.felrakas_rahagyas_perc, le: b.lerakas_rahagyas_perc };
+}
 /** Ha egy megbízáson nincs megadva időpont, ezt tekintjük becsült felrakás-kezdésnek. */
 const ALAPERTELMEZETT_FELRAKAS_ORA = 7;
 /** Ha a cím nem geokódolható / az útvonal nem számolható, ennyi menetidőt feltételezünk. */
@@ -290,16 +298,16 @@ const ALAPERTELMEZETT_LERAKAS_ORA = 8;
  * sort MINDKÉT jármű idővonalára belistázta, így Micónál olyan
  * fel-/lerakók is megjelentek, amik valójában nem az ő fuvarjai voltak.
  */
-function driverMatchesRow(jarmu: SajatJarmu, row: { jarmu: string | null; sofor: string | null }): boolean {
+function driverMatchesRow(jarmu: SajatJarmu, row: { jarmu: string | null; sofor: string | null }, lista: SajatJarmu[]): boolean {
   if (row.jarmu?.trim()) {
-    const feloldott = resolveJarmu(row.jarmu);
+    const feloldott = resolveJarmu(row.jarmu, lista);
     // Kitöltött ÉS felismerhető "Kocsi" mező: ez az egyetlen hiteles jelölő.
     if (feloldott) return feloldott === jarmu;
     // Kitöltött, de fel NEM ismerhető (elgépelés, régi/kivont jármű neve) —
     // ilyenkor nem dobjuk el a sort némán, hanem a "Sofőr" mező a tartalék.
     // Ha az sem egyezik, a sor az "elakadt" listára kerül (lásd elakadtFuvar).
   }
-  return soforEgyezik(row.sofor, jarmu);
+  return soforEgyezik(row.sofor, jarmu, lista);
 }
 
 /** Ékezet- és írásjel-független összehasonlító alak ("Vadon Gergő" → "vadon gergo"). */
@@ -320,9 +328,9 @@ function normalizeNev(s: string): string {
  * idővonalról. Szóhatáros névegyezést fogadunk el, hogy egy vezetéknévvel
  * kiegészített beírás se vesszen el, de egy másik név része ne egyezzen.
  */
-function soforEgyezik(sofor: string | null, jarmu: SajatJarmu): boolean {
+function soforEgyezik(sofor: string | null, jarmu: SajatJarmu, lista: SajatJarmu[]): boolean {
   if (!sofor?.trim()) return false;
-  if (resolveJarmu(sofor) === jarmu) return true;
+  if (resolveJarmu(sofor, lista) === jarmu) return true;
   return normalizeNev(sofor).split(" ").includes(normalizeNev(jarmu.sofor));
 }
 
@@ -349,11 +357,11 @@ const RENDSZAM_ELTERES_HATAR = 2;
  * sofőrje — de csak akkor, ha EGYETLEN jármű van elég közel. Ha több is
  * szóba jönne, nem tippelünk: a kétértelmű javaslat rosszabb a semminél.
  */
-function javasoltJarmuSoforje(szoveg: string | null): string | null {
+function javasoltJarmuSoforje(szoveg: string | null, lista: SajatJarmu[]): string | null {
   const norm = (szoveg ?? "").replace(/[^a-z0-9]/gi, "").toUpperCase();
   if (norm.length < 4) return null;
 
-  const kozeliek = SAJAT_JARMUVEK.filter((j) =>
+  const kozeliek = lista.filter((j) =>
     j.rendszamok.some((r) => szerkesztesiTavolsag(norm, r.replace(/[^A-Z0-9]/gi, "").toUpperCase()) <= RENDSZAM_ELTERES_HATAR)
   );
   return kozeliek.length === 1 ? kozeliek[0].sofor : null;
@@ -364,16 +372,20 @@ const TELEPHELY_TAVOLSAG_KM = 0.6;
 
 type TelephelyPont = { nev: string; lat: number; lon: number };
 
-// SAJAT_TELEPHELYEK címei csak egyszer, a szerver-folyamat élettartama alatt
-// gyorsítótárazva geokódolódnak (ugyanazzal a HU-GO címkereséssel, amit a
-// megbízások fel-/lerakó címeinél is használunk) — nem kell minden
-// getIdovonalak-híváskor újra lekérni, mert ezek a címek nem változnak.
-let telephelyPontokCache: Promise<TelephelyPont[]> | null = null;
+// A saját telephelyek (telephely_pont tábla, tartalékként a
+// lib/fuvarozas/telephelyek.ts lista) címei a szerver-folyamat élettartama
+// alatt gyorsítótárazva geokódolódnak (ugyanazzal a HU-GO címkereséssel, amit
+// a megbízások fel-/lerakó címeinél is használunk) — csak akkor újra, ha a
+// pontok listája változott. Ha a DB-ben van koordináta, azt használjuk.
+let telephelyPontokCache: { kulcs: string; pontok: Promise<TelephelyPont[]> } | null = null;
 
-function getTelephelyPontok(): Promise<TelephelyPont[]> {
-  if (!telephelyPontokCache) {
-    telephelyPontokCache = Promise.all(
-      SAJAT_TELEPHELYEK.map(async (t) => {
+async function getTelephelyPontok(): Promise<TelephelyPont[]> {
+  const telephelyek = await getSajatTelephelyek();
+  const kulcs = JSON.stringify(telephelyek);
+  if (!telephelyPontokCache || telephelyPontokCache.kulcs !== kulcs) {
+    const pontok = Promise.all(
+      telephelyek.map(async (t) => {
+        if (t.lat != null && t.lon != null) return { nev: t.nev, lat: t.lat, lon: t.lon };
         try {
           const g = await geocodeAddress(t.cim);
           return { nev: t.nev, lat: g.lat, lon: g.lon };
@@ -381,9 +393,10 @@ function getTelephelyPontok(): Promise<TelephelyPont[]> {
           return null;
         }
       })
-    ).then((pontok) => pontok.filter((p): p is TelephelyPont => p !== null));
+    ).then((p) => p.filter((x): x is TelephelyPont => x !== null));
+    telephelyPontokCache = { kulcs, pontok };
   }
-  return telephelyPontokCache;
+  return telephelyPontokCache.pontok;
 }
 
 /** Ha a megadott koordináta egy saját telephely/parkoló közelében van, annak olvasható neve — egyébként null. */
@@ -467,7 +480,7 @@ async function szamitsKalibraciot(): Promise<KalibraciosEredmeny> {
 
   const veg = most;
   const kezdet = new Date(most.getTime() - KALIBRACIO_MINTA_NAP * 86400000);
-  const jarmuvek = SAJAT_JARMUVEK.filter((j) => j.ecofleetObjectId !== null);
+  const jarmuvek = (await getJarmuvek()).filter((j) => j.ecofleetObjectId !== null);
 
   const mindenTrip = (
     await Promise.all(jarmuvek.map((j) => getVehicleTrips(j.ecofleetObjectId!, kezdet, veg).catch(() => [] as EcofleetTrip[])))
@@ -556,15 +569,16 @@ export async function getKovetkezoNapokElonezet(napokSzama = 3): Promise<Record<
   const utolsoNap = napIsoEltolva(maiNapISO, napokSzama);
   const sorok = await getFuvarokIdoszakban(elsoNap, utolsoNap).catch(() => []);
 
+  const jarmuLista = await getJarmuvek();
   const eredmeny: Record<string, KovetkezoNap[]> = {};
-  for (const jarmu of SAJAT_JARMUVEK) {
+  for (const jarmu of jarmuLista) {
     const napok: KovetkezoNap[] = [];
     for (let i = 1; i <= napokSzama; i++) napok.push({ napISO: napIsoEltolva(maiNapISO, i), megallok: [] });
     eredmeny[jarmu.sofor] = napok;
   }
 
   for (const row of sorok) {
-    const jarmu = SAJAT_JARMUVEK.find((j) => driverMatchesRow(j, row));
+    const jarmu = jarmuLista.find((j) => driverMatchesRow(j, row, jarmuLista));
     if (!jarmu) continue;
     // A felrakás és a lerakás külön napra eshet (row.lerakas_datum) — pl.
     // ha a fuvar egy éjszakai (saját telephelyi) megállással jár, a
@@ -651,9 +665,10 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus, kali
     // A lerakás napi órája itt csak durva alapértelmezés — jelöljük bizonytalannak, amíg élő pozícióból nem pontosodik.
     utvonalBizonytalan = true;
   } else {
-    const felrakasVeg = new Date(kezdet.getTime() + RAKODAS_PUFFER_PERC * 60000);
+    const puffer = await rakodasPufferek();
+    const felrakasVeg = new Date(kezdet.getTime() + puffer.fel * 60000);
     const erkezes = new Date(felrakasVeg.getTime() + utvonalPercek * 60000);
-    veg = new Date(erkezes.getTime() + LERAKODAS_PUFFER_PERC * 60000);
+    veg = new Date(erkezes.getTime() + puffer.le * 60000);
   }
 
   // A megallokSzovegei sorrendje (felrakó(k), majd lerakó(k)) adja az
@@ -763,6 +778,7 @@ async function lancoltEloBecsles(
   const sorrend = eloLancSorrend(fuvarok, maiNapISO, (f) => napVegereSorolt(f, maiNapISO));
 
   const eredmeny = fuvarok.map((f) => ({ ...f, megallok: [...f.megallok] }));
+  const pufferek = await rakodasPufferek();
 
   // Ha a jármű éppen egy megállónál áll, a következő pont felé csak a rakodás
   // hátralévő ideje után indul el — a lánc tehát nem "most"-tól, hanem onnantól
@@ -772,7 +788,7 @@ async function lancoltEloBecsles(
     .flatMap((f) => f.megallok)
     .filter((m) => m.eppenItt)
     .reduce((sum, m) => {
-      const teljesPuffer = m.tipus === "felrako" ? RAKODAS_PUFFER_PERC : LERAKODAS_PUFFER_PERC;
+      const teljesPuffer = m.tipus === "felrako" ? pufferek.fel : pufferek.le;
       const elteltPerc = m.tenylegesIdo ? (most.getTime() - m.tenylegesIdo.getTime()) / 60000 : 0;
       return sum + Math.max(0, teljesPuffer - elteltPerc);
     }, 0);
@@ -798,7 +814,7 @@ async function lancoltEloBecsles(
       // ideje, nem a mai "most") illő napszak alapján választjuk — egy
       // láncban a nap előrehaladtával más-más napszaki szorzó léphet érvénybe.
       const erkezes = new Date(idoPont.getTime() + route.durationMin * valasszKalibraciosSzorzot(kalibracio, idoPont) * 60000);
-      const puffer = m.tipus === "felrako" ? RAKODAS_PUFFER_PERC : LERAKODAS_PUFFER_PERC;
+      const puffer = m.tipus === "felrako" ? pufferek.fel : pufferek.le;
       eredmeny[fi].megallok[mi] = { ...m, idopont: erkezes };
       pozicio = { lat: m.lat, lon: m.lon };
       idoPont = new Date(erkezes.getTime() + puffer * 60000);
@@ -970,6 +986,7 @@ async function getGondJelzesek(fuvarIds: string[]): Promise<Map<string, GondJelz
 
 async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
   const { kezdet, veg, napISO, maiNap } = budapestNapHatarok(nap);
+  const jarmuLista = await getJarmuvek();
   if (maiNap) await betoltEloElozmenyt();
   // A mai napon a csúszó (korábbi lerakási napú, még nem Teljesítve) fuvarok
   // is kellenek — a kocsi ezeket viszi, nem tűnhetnek el éjfélkor.
@@ -1006,7 +1023,7 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
   // Amelyik sor egyik járműhöz sem illeszkedik, az nem vész el: külön,
   // látható listára kerül, hogy ki lehessen javítani a Kocsi mezőt.
   const elakadtak: ElakadtFuvar[] = maiFuvarok
-    .filter(({ row }) => !SAJAT_JARMUVEK.some((j) => driverMatchesRow(j, row)))
+    .filter(({ row }) => !jarmuLista.some((j) => driverMatchesRow(j, row, jarmuLista)))
     .map(({ row, tipus }) => {
       const jarmuSzoveg = row.jarmu?.trim() || row.sofor?.trim() || null;
       return {
@@ -1018,7 +1035,7 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
         hova: row.lerako ? varosNev(row.lerako) : null,
         ok: jarmuSzoveg ? ("ismeretlen_kocsi" as const) : ("nincs_kocsi" as const),
         jarmuSzoveg,
-        javasoltSofor: javasoltJarmuSoforje(jarmuSzoveg),
+        javasoltSofor: javasoltJarmuSoforje(jarmuSzoveg, jarmuLista),
       };
     });
 
@@ -1052,13 +1069,13 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
     }));
 
   const jarmuvek = await Promise.all(
-    SAJAT_JARMUVEK.map(async (jarmu): Promise<JarmuIdovonalEredmeny> => {
+    jarmuLista.map(async (jarmu): Promise<JarmuIdovonalEredmeny> => {
       // A párosítás (jelolMegallokat) sorrendje ugyanaz, mint a figyelőé
       // (getSajatFuvarokErinteshez): parositasiSorrend — eddig itt előbb a
       // bérfuvarok, aztán a saját fuvarok jöttek (időpont, id szerint), a
       // figyelőben id szerint, így ugyanazt a megállást a kettő más-más
       // fuvarhoz rendelhette.
-      const kocsiSorai = maiFuvarok.filter(({ row }) => driverMatchesRow(jarmu, row));
+      const kocsiSorai = maiFuvarok.filter(({ row }) => driverMatchesRow(jarmu, row, jarmuLista));
       const sorrend = parositasiSorrend(kocsiSorai.map(({ row }) => row));
       const sajatSorok = sorrend.map((row) => kocsiSorai.find((x) => x.row === row)!);
       const tervezettFuvarok = await Promise.all(

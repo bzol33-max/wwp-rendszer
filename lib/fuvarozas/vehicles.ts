@@ -4,10 +4,32 @@
 // Ez az egységes forrás arra, hogy a jármű megjelenítése ("Gergő —
 // AOPU-427/AOTY-474") és a hozzá tartozó szín mindenhol egységes legyen
 // az appban (Megbízások kocsiválasztó és lista, GPS-pozíció kártyák, stb.).
+//
+// 2026-10-10 (törzsadat, 2. fázis): a járművek forrása a fuvar_jarmuvek tábla
+// — a szerver a lib/fuvarozas/jarmuvek-db.ts getJarmuvek() függvényével
+// olvassa (gyorsítótárral), és az eredményt ide, a `jarmuLista()` mögé
+// regisztrálja. Az alábbi SAJAT_JARMUVEK a TARTALÉK (DB-hiba, a migráció
+// előtt, tesztek, kliensoldali alapérték). A kereső segédek egy opcionális
+// `lista` paramétert kapnak; ha elmarad, a legutóbb betöltött listával
+// (vagy a tartalékkal) dolgoznak. A flotta 4 kamionos lesz — egyetlen
+// darabszám vagy rendszám se legyen ezen kívül beégetve.
 
-export type JarmuSzin = "blue" | "yellow" | "green";
+export type JarmuSzin = "blue" | "yellow" | "green" | "purple";
+
+/** A választható jármű-színek, felületi sorrendben. */
+export const JARMU_SZINEK: JarmuSzin[] = ["blue", "yellow", "green", "purple"];
+
+export function jarmuSzinE(v: unknown): v is JarmuSzin {
+  return typeof v === "string" && (JARMU_SZINEK as string[]).includes(v);
+}
 
 export type SajatJarmu = {
+  /** fuvar_jarmuvek.kod ('AOPU-427', 'NMZ-492', 'JANI', …) — a DB-vel való összekötés kulcsa. */
+  kod?: string;
+  /** fuvar_jarmuvek.id — csak a DB-ből töltött listán. */
+  id?: string;
+  /** A hozzárendelt sofőr alkalmazott-azonosítója (fuvar_jarmuvek.sofor_id) — csak a DB-ből töltött listán. */
+  soforAlkalmazottId?: string | null;
   sofor: string;
   /** Megjelenítendő azonosító — rendszám(ok) vagy egy még gyártás alatt álló jármű neve. */
   label: string;
@@ -35,14 +57,14 @@ export type SajatJarmu = {
 };
 
 export const SAJAT_JARMUVEK: SajatJarmu[] = [
-  { sofor: "Gergő", label: "AOPU-427/AOTY-474", rendszamok: ["AOPU-427", "AOTY-474"], szin: "blue", ecofleetObjectId: "1144376", alkalmazottNevek: ["Vadon Gergő"] },
+  { kod: "AOPU-427", sofor: "Gergő", label: "AOPU-427/AOTY-474", rendszamok: ["AOPU-427", "AOTY-474"], szin: "blue", ecofleetObjectId: "1144376", alkalmazottNevek: ["Vadon Gergő"] },
   // A Duvenbeck törzsadatában Micó rendszáma felcserélt betűkkel szerepel
   // ("NZM492" az "NMZ-492" helyett), minden megbízásukon és rakománylistájukon
   // egyformán. A hibát jeleztük nekik; amíg nem javítják, enélkül minden
   // Duvenbeck-fuvaruk "ismeretlen kocsi" maradna. Ha javítják, ez a sor
   // ártalmatlanul itt maradhat.
-  { sofor: "Micó", label: "NMZ-492/XZV-926", rendszamok: ["NMZ-492", "XZV-926"], irasvaltozatok: ["NZM-492"], szin: "yellow", ecofleetObjectId: "369485", alkalmazottNevek: ["Takács Micó", "Takács Miklós"] },
-  { sofor: "Jani", label: "DAF XG (Gyártás alatt)", rendszamok: [], szin: "green", ecofleetObjectId: null },
+  { kod: "NMZ-492", sofor: "Micó", label: "NMZ-492/XZV-926", rendszamok: ["NMZ-492", "XZV-926"], irasvaltozatok: ["NZM-492"], szin: "yellow", ecofleetObjectId: "369485", alkalmazottNevek: ["Takács Micó", "Takács Miklós"] },
+  { kod: "JANI", sofor: "Jani", label: "DAF XG (Gyártás alatt)", rendszamok: [], szin: "green", ecofleetObjectId: null },
 ];
 
 /** Szín -> tömör pötty osztály (pl. legördülő listákban, ahol nincs hely egy teljes Badge-nek). */
@@ -50,7 +72,77 @@ export const JARMU_SZIN_DOT_CLASS: Record<JarmuSzin, string> = {
   blue: "bg-blue-500",
   yellow: "bg-yellow-500",
   green: "bg-green-500",
+  purple: "bg-purple-500",
 };
+
+// ---------------------------------------------------------------------------
+// Az aktuális járműlista (a szerveren a DB-ből betöltött, különben a tartalék).
+// globalThis-en tárolva, hogy a Next különböző szerver-rétegei (RSC, route
+// handler, ütemező) ugyanazt lássák; a böngészőben sosem állítódik be.
+
+const LISTA_KULCS = "__wwpJarmuLista";
+
+/** A legutóbb betöltött saját járművek (a DB-ből), vagy a tartalék SAJAT_JARMUVEK. */
+export function jarmuLista(): SajatJarmu[] {
+  const l = (globalThis as Record<string, unknown>)[LISTA_KULCS];
+  return Array.isArray(l) && l.length > 0 ? (l as SajatJarmu[]) : SAJAT_JARMUVEK;
+}
+
+/** CSAK a szerveroldali betöltő (jarmuvek-db.ts) hívja. */
+export function jarmuListaBeallitasa(lista: SajatJarmu[]): void {
+  (globalThis as Record<string, unknown>)[LISTA_KULCS] = lista;
+}
+
+/** Kód szerinti keresés ('AOPU-427', 'JANI'). */
+export function findJarmuByKod(kod: string | null | undefined, lista: SajatJarmu[] = jarmuLista()): SajatJarmu | null {
+  if (!kod) return null;
+  return lista.find((j) => j.kod === kod) ?? null;
+}
+
+/** Egy fuvar_jarmuvek sor (a sofőr nevével) — a DB-ből töltött lista nyers alakja. */
+export type JarmuTorzsSor = {
+  id: string;
+  kod: string;
+  cimke: string;
+  vontato_rendszam: string | null;
+  potkocsi_rendszam: string | null;
+  irasvaltozatok: string[] | null;
+  szin: string | null;
+  ecofleet_object_id: string | null;
+  sofor_id: string | null;
+  sofor_nev: string | null;
+  sofor_becenev: string | null;
+};
+
+/**
+ * DB-sorokból SajatJarmu lista. A sofőr rövid neve: sofor_becenev, különben a
+ * tartalék lista azonos kódú elemének neve, különben a hivatalos név utolsó
+ * szava ("Vadon Gergő" → "Gergő"), végső esetben a kód. A dolgozói
+ * bejelentkezés összerendeléséhez (alkalmazottNevek) a DB szerinti
+ * hozzárendelt sofőr neve kerül be — a tartalék lista nevei nem, hogy egy
+ * a felületen levett sofőr ne maradjon jogosult a kocsi irataira. Kivétel a
+ * 031-es migráció előtti sor (se sofőr, se becenév): ott a mai, beépített
+ * összerendelés marad érvényben, hogy az átállás alatt se vesszen el a jog.
+ */
+export function jarmuvekSorokbol(sorok: JarmuTorzsSor[], tartalek: SajatJarmu[] = SAJAT_JARMUVEK): SajatJarmu[] {
+  return sorok.map((s) => {
+    const regi = tartalek.find((t) => t.kod === s.kod);
+    const nev = s.sofor_nev?.trim() || null;
+    const sofor = s.sofor_becenev?.trim() || regi?.sofor || (nev ? nev.split(/\s+/).pop()! : s.kod);
+    return {
+      kod: s.kod,
+      id: String(s.id),
+      soforAlkalmazottId: s.sofor_id != null ? String(s.sofor_id) : null,
+      sofor,
+      label: s.cimke?.trim() || regi?.label || s.kod,
+      rendszamok: [s.vontato_rendszam, s.potkocsi_rendszam].map((r) => r?.trim() ?? "").filter((r) => r.length > 0),
+      irasvaltozatok: (s.irasvaltozatok ?? []).filter((r) => r.trim().length > 0),
+      szin: jarmuSzinE(s.szin) ? s.szin : regi?.szin ?? "blue",
+      ecofleetObjectId: s.ecofleet_object_id?.trim() || null,
+      alkalmazottNevek: nev ? [nev] : s.sofor_id == null && s.sofor_becenev == null ? [...(regi?.alkalmazottNevek ?? [])] : [],
+    };
+  });
+}
 
 export function jarmuLabel(j: SajatJarmu): string {
   return `${j.sofor} — ${j.label}`;
@@ -65,12 +157,16 @@ function normalizePlate(p: string): string {
  * hozzá tartozó saját járművet, ha van. A valódi rendszámok után a partnerek
  * ismert elírásait (`irasvaltozatok`) is megnézi — lásd ott.
  */
-export function findJarmuByPlate(plate: string): SajatJarmu | null {
+export function findJarmuByPlate(plate: string, lista: SajatJarmu[] = jarmuLista()): SajatJarmu | null {
   const norm = normalizePlate(plate);
   if (!norm) return null;
   return (
-    SAJAT_JARMUVEK.find((j) => j.rendszamok.some((r) => normalizePlate(r) === norm)) ??
-    SAJAT_JARMUVEK.find((j) => (j.irasvaltozatok ?? []).some((r) => normalizePlate(r) === norm)) ??
+    lista.find((j) => j.rendszamok.some((r) => normalizePlate(r) === norm)) ??
+    lista.find((j) => (j.irasvaltozatok ?? []).some((r) => normalizePlate(r) === norm)) ??
+    // A jármű törzs-kódja (fuvar_jarmuvek.kod) is azonosít — a fuvarozas2
+    // jarmu_kod / elokeszites_jarmu mezője ezt hordozza; a rendszám nélküli
+    // jármű ("JANI") csak így ismerhető fel.
+    lista.find((j) => j.kod != null && normalizePlate(j.kod) === norm) ??
     null
   );
 }
@@ -128,7 +224,7 @@ const RENDSZAM_ELTERES_HATAR = 1;
  * vagy egy elgépelés véletlenül máshoz áll közel), nem tippelünk: null —
  * a Kocsi mezőt ilyenkor ember tölti ki, ahogy eddig.
  */
-export function findJarmuInSzoveg(szoveg: string | null | undefined): SajatJarmu | null {
+export function findJarmuInSzoveg(szoveg: string | null | undefined, lista: SajatJarmu[] = jarmuLista()): SajatJarmu | null {
   if (!szoveg) return null;
   const jeloltek = [...new Set([...szoveg.toUpperCase().matchAll(RENDSZAM_ALAK)].map((m) => m[1] + m[2]))];
   if (jeloltek.length === 0) {
@@ -139,20 +235,20 @@ export function findJarmuInSzoveg(szoveg: string | null | undefined): SajatJarmu
     // (elgépelés-tűrés nélkül), hogy az összeragasztott szöveg ne tippeljen.
     const tomor = szoveg.toUpperCase().replace(/\s+/g, "");
     const pontosak = new Set(
-      [...tomor.matchAll(RENDSZAM_ALAK_TAPADO)].map((m) => findJarmuByPlate(m[1] + m[2])).filter((j): j is SajatJarmu => j !== null)
+      [...tomor.matchAll(RENDSZAM_ALAK_TAPADO)].map((m) => findJarmuByPlate(m[1] + m[2], lista)).filter((j): j is SajatJarmu => j !== null)
     );
     if (pontosak.size === 1) return [...pontosak][0];
-    return findJarmuBySoforNev(szoveg);
+    return findJarmuBySoforNev(szoveg, lista);
   }
 
   const talalatok = new Set<SajatJarmu>();
   for (const jelolt of jeloltek) {
-    const pontos = findJarmuByPlate(jelolt);
+    const pontos = findJarmuByPlate(jelolt, lista);
     if (pontos) {
       talalatok.add(pontos);
       continue;
     }
-    const kozeliek = SAJAT_JARMUVEK.filter((j) =>
+    const kozeliek = lista.filter((j) =>
       j.rendszamok.some((r) => szerkesztesiTavolsag(jelolt, normalizePlate(r)) <= RENDSZAM_ELTERES_HATAR)
     );
     if (kozeliek.length === 1) talalatok.add(kozeliek[0]);
@@ -160,7 +256,7 @@ export function findJarmuInSzoveg(szoveg: string | null | undefined): SajatJarmu
   if (talalatok.size === 1) return [...talalatok][0];
   // Egy idegen rendszám mellett a sofőr neve még dönthet; két saját jármű
   // egy szövegben viszont kétértelmű — azt nem döntjük el gép által.
-  return talalatok.size === 0 ? findJarmuBySoforNev(szoveg) : null;
+  return talalatok.size === 0 ? findJarmuBySoforNev(szoveg, lista) : null;
 }
 
 /** Ékezet- és írásjel-független összehasonlító alak ("Vadon Gergő" → "vadon gergo"). */
@@ -179,13 +275,13 @@ function normalizeNev(s: string): string {
  * a keresztnevet bárhol a szövegben ("sofőr: Gergő") is elfogadja — szóhatáron,
  * hogy egy másik név része ne egyezzen. Csak egyértelmű találatot ad vissza.
  */
-function findJarmuBySoforNev(szoveg: string): SajatJarmu | null {
-  const gyors = resolveJarmu(szoveg);
+function findJarmuBySoforNev(szoveg: string, lista: SajatJarmu[]): SajatJarmu | null {
+  const gyors = resolveJarmu(szoveg, lista);
   if (gyors) return gyors;
   const norm = normalizeNev(szoveg);
   if (!norm) return null;
   const szavak = new Set(norm.split(" "));
-  const talalatok = SAJAT_JARMUVEK.filter(
+  const talalatok = lista.filter(
     (j) =>
       (j.alkalmazottNevek ?? []).some((n) => norm.includes(normalizeNev(n))) ||
       szavak.has(normalizeNev(j.sofor))
@@ -194,8 +290,11 @@ function findJarmuBySoforNev(szoveg: string): SajatJarmu | null {
 }
 
 /** Egy elmentett "Sofőr — címke" szöveg alapján visszaadja a hozzá tartozó saját járművet, ha van. */
-export function findJarmuByLabel(value: string): SajatJarmu | null {
-  return SAJAT_JARMUVEK.find((j) => jarmuLabel(j) === value) ?? null;
+export function findJarmuByLabel(value: string, lista: SajatJarmu[] = jarmuLista()): SajatJarmu | null {
+  // Kis-/nagybetű-független: a DB-címke ("DAF XG (gyártás alatt)") és a régi,
+  // elmentett szöveg ("DAF XG (Gyártás alatt)") csak ebben térhet el.
+  const v = value.trim().toLowerCase();
+  return lista.find((j) => jarmuLabel(j).toLowerCase() === v) ?? null;
 }
 
 /**
@@ -206,17 +305,17 @@ export function findJarmuByLabel(value: string): SajatJarmu | null {
  * mező kitöltve. Sorrend: pontos "Sofőr — címke" egyezés, majd rendszám,
  * majd sofőrnév (a szöveg eleje vagy egésze).
  */
-export function resolveJarmu(value: string): SajatJarmu | null {
-  const exact = findJarmuByLabel(value);
+export function resolveJarmu(value: string, lista: SajatJarmu[] = jarmuLista()): SajatJarmu | null {
+  const exact = findJarmuByLabel(value, lista);
   if (exact) return exact;
 
-  const byPlate = findJarmuByPlate(value);
+  const byPlate = findJarmuByPlate(value, lista);
   if (byPlate) return byPlate;
 
   const trimmed = value.trim().toLowerCase();
   if (!trimmed) return null;
   return (
-    SAJAT_JARMUVEK.find(
+    lista.find(
       (j) =>
         j.sofor.toLowerCase() === trimmed ||
         trimmed.startsWith(j.sofor.toLowerCase() + " ") ||

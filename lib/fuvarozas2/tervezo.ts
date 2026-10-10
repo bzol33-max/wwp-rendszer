@@ -9,11 +9,12 @@
 import { query } from "@/lib/db";
 import { requireViewPermission } from "@/lib/auth/require-permission";
 import { varosNev } from "@/lib/fuvarozas/varos";
-import { findJarmuByPlate } from "@/lib/fuvarozas/vehicles";
+import { findJarmuByKod } from "@/lib/fuvarozas/vehicles";
+import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
 import { geokodolCachelve } from "@/lib/fuvarozas/erintes-felismeres";
-import { SAJAT_TELEPHELYEK } from "@/lib/fuvarozas/telephelyek";
-import { GAZOLAJ_AR_TARTALEK, TANKOLASI_KEDVEZMENY_FT_PER_LITER } from "@/lib/fuvarozas/gazolaj";
-import { NAPI_KOLTSEG_FT, ALAP_FOGYASZTAS_L100, type AjanlatMinosites } from "@/lib/fuvarozas2/kalkulator-alap";
+import { getIndulasiTelephely } from "@/lib/fuvarozas/telephelyek-db";
+import { getFuvarBeallitasok } from "@/lib/beallitasok/fuvar";
+import { type AjanlatMinosites } from "@/lib/fuvarozas2/kalkulator-alap";
 import { frissitsKalkulaciokat, getTaroltKalkulaciok, szamoldEsTarold, type TaroltKalkulacio } from "@/lib/fuvarozas2/kalkulacio-tar";
 import { napiSorrend, tervIdoMegbizasbol } from "@/lib/fuvarozas2/napi-sorrend";
 import { celar, elozmenyElteres, hetHatas, legjobbKocsi, type HetEredmeny, type HetFuvar, type HetParam, type Pont } from "@/lib/fuvarozas2/tervezo-alap";
@@ -128,15 +129,20 @@ export async function getTervezo(szuro: { m?: string; kocsi?: string }): Promise
   // Tárolt kalkulációk: a bejövőké és a hetekben szereplő bérfuvaroké (útdíj, km).
   const tar = await getTaroltKalkulaciok(fuvarok.filter((f) => f.jelleg === "ber").map((f) => f.id));
 
-  // A becslés paraméterei a tárolt kalkulációkból (hálózat nélkül); ha nincs, alapérték.
+  // A becslés paraméterei a tárolt kalkulációkból (hálózat nélkül); ha nincs,
+  // a beállítások (fuvar_beallitas) értéke.
+  const beallitas = await getFuvarBeallitasok();
   const eredmenyek = [...tar.values()].map((t) => t.eredmeny).filter((e): e is NonNullable<typeof e> => !!e);
-  const fogyasztasL100 = eredmenyek.length ? Math.round((eredmenyek.reduce((a, e) => a + e.fogyasztasL100, 0) / eredmenyek.length) * 10) / 10 : ALAP_FOGYASZTAS_L100;
-  const gazolajFt = eredmenyek.length ? eredmenyek[eredmenyek.length - 1].gazolaj.ar : GAZOLAJ_AR_TARTALEK.ar - TANKOLASI_KEDVEZMENY_FT_PER_LITER;
+  const fogyasztasL100 = eredmenyek.length ? Math.round((eredmenyek.reduce((a, e) => a + e.fogyasztasL100, 0) / eredmenyek.length) * 10) / 10 : beallitas.fogyasztas_alap_l_100km;
+  const gazolajFt = eredmenyek.length ? eredmenyek[eredmenyek.length - 1].gazolaj.ar : beallitas.gazolaj_ar_tartalek_ft - beallitas.tankolasi_kedvezmeny_ft_l;
   const kmOssz = eredmenyek.reduce((a, e) => a + e.rakottKm, 0);
   const utdijPerKm = kmOssz > 0 ? Math.round(eredmenyek.reduce((a, e) => a + e.rakottUtdijFt, 0) / kmOssz) : 120;
-  const telephelyGeo = await geokodolCachelve(SAJAT_TELEPHELYEK[0].cim).catch(() => null);
+  const indulas = await getIndulasiTelephely();
+  const telephelyGeo = indulas.lat != null && indulas.lon != null
+    ? { lat: indulas.lat, lon: indulas.lon }
+    : await geokodolCachelve(indulas.cim).catch(() => null);
   const telephely: Pont = telephelyGeo ? { lat: telephelyGeo.lat, lon: telephelyGeo.lon } : { lat: 47.77, lon: 21.93 };
-  const param: HetParam = { telephely, fogyasztasL100, gazolajFt, napiFt: NAPI_KOLTSEG_FT, munkanapok: 5, utdijPerKm };
+  const param: HetParam = { telephely, fogyasztasL100, gazolajFt, napiFt: beallitas.napi_koltseg_ft, munkanapok: 5, utdijPerKm };
 
   const hetFuvar = (f: FuvarPont): HetFuvar => {
     const t = tar.get(f.id)?.eredmeny;
@@ -153,10 +159,11 @@ export async function getTervezo(szuro: { m?: string; kocsi?: string }): Promise
     };
   };
 
+  const jarmuLista = await getJarmuvek();
   const jarmuvek = (await query<{ kod: string; cimke: string; sofor: string | null }>(
     `select j.kod, j.cimke, a.name as sofor from fuvar_jarmuvek j left join alkalmazottak a on a.id = j.sofor_id
      where j.aktiv and j.ecofleet_object_id is not null order by j.id`
-  )).map((j) => ({ ...j, sofor: findJarmuByPlate(j.kod)?.sofor ?? j.sofor?.split(" ").pop() ?? j.kod }));
+  )).map((j) => ({ ...j, sofor: findJarmuByKod(j.kod, jarmuLista)?.sofor ?? j.sofor?.split(" ").pop() ?? j.kod }));
 
   /** Egy jelölt fuvar hatása minden kocsi hetére (a jelölt felrakásának hetén). */
   function kocsiHetek(jelolt: FuvarPont): KocsiHet[] {

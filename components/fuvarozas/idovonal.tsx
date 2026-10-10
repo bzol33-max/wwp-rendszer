@@ -49,6 +49,7 @@ const SZIN_SAV: Record<JarmuSzin, string> = {
   blue: "border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/40",
   yellow: "border-yellow-200 bg-yellow-50 dark:border-yellow-900 dark:bg-yellow-950/40",
   green: "border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-950/40",
+  purple: "border-purple-200 bg-purple-50 dark:border-purple-900 dark:bg-purple-950/40",
 };
 
 // FIGYELEM: fordított UI-címkézés (történelmi okokból, lásd megbizasok.ts):
@@ -558,8 +559,8 @@ function KocsiSzakasz({
 // Nap összképe
 // ---------------------------------------------------------------------------
 
-function OsszkepDoboz({ adatok, maiNap, most, mobil }: { adatok: JarmuIdovonalEredmeny[]; maiNap: boolean; most: number; mobil: boolean }) {
-  const o = osszkep(adatok, maiNap, most);
+function OsszkepDoboz({ adatok, lista, maiNap, most, mobil }: { adatok: JarmuIdovonalEredmeny[]; lista: Jarmu[]; maiNap: boolean; most: number; mobil: boolean }) {
+  const o = osszkep(adatok, maiNap, most, lista);
   const { kesz, folyamatban, csuszik, nyitottGond, gpsNelkul, km } = o;
   const cellak: { cimke: string; ertek: string; szin?: string }[] = [
     { cimke: maiNap ? "Fuvar ma" : "Fuvar", ertek: String(o.fuvar) },
@@ -626,7 +627,7 @@ function ElakadtakDoboz({ elakadtak }: { elakadtak: ElakadtFuvar[] }) {
 // Telefon: kocsi-fülek + balra-jobbra lapozható lapok
 // ---------------------------------------------------------------------------
 
-function MobilLapozo({ children, aktiv, setAktiv }: { children: ReactNode[]; aktiv: number; setAktiv: (i: number) => void }) {
+function MobilLapozo({ children, lista, aktiv, setAktiv }: { children: ReactNode[]; lista: Jarmu[]; aktiv: number; setAktiv: (i: number) => void }) {
   const ref = useRef<HTMLDivElement>(null);
 
   // Fülre koppintva a lapozó a megfelelő lapra görget; húzáskor a
@@ -647,7 +648,7 @@ function MobilLapozo({ children, aktiv, setAktiv }: { children: ReactNode[]; akt
   return (
     <div className="flex flex-col gap-3">
       <div className="flex border-b">
-        {SAJAT_JARMUVEK.map((j, i) => (
+        {lista.map((j, i) => (
           <button
             key={j.sofor}
             type="button"
@@ -681,7 +682,12 @@ function MobilLapozo({ children, aktiv, setAktiv }: { children: ReactNode[]; akt
 // A lap
 // ---------------------------------------------------------------------------
 
-export function GpsStatus() {
+/**
+ * `jarmuvek`: a saját járművek a szerver DB-ből töltött listájából
+ * (getJarmuvek) — így egy 3./4. kocsi pusztán adatként megjelenik. Elhagyva
+ * a beépített lista a tartalék.
+ */
+export function GpsStatus({ jarmuvek = SAJAT_JARMUVEK }: { jarmuvek?: Jarmu[] } = {}) {
   const maiNapISO = budapestNapISO();
   const [napISO, setNapISO] = useState(maiNapISO);
   const [adatok, setAdatok] = useState<JarmuIdovonalEredmeny[]>([]);
@@ -726,7 +732,7 @@ export function GpsStatus() {
   }, [load, napISO]);
 
   const kocsik = (mobil: boolean) =>
-    SAJAT_JARMUVEK.map((jarmu) => (
+    jarmuvek.map((jarmu) => (
       <KocsiSzakasz
         key={jarmu.sofor}
         jarmu={jarmu}
@@ -766,15 +772,15 @@ export function GpsStatus() {
           <>
             {/* Asztal (lg-től): összkép + a három kocsi egymás alatt, nyolc oszlopos táblázattal. */}
             <div className="hidden flex-col gap-4 lg:flex">
-              <OsszkepDoboz adatok={adatok} maiNap={maiNap} most={betoltve} mobil={false} />
+              <OsszkepDoboz adatok={adatok} lista={jarmuvek} maiNap={maiNap} most={betoltve} mobil={false} />
               <ElakadtakDoboz elakadtak={elakadtak} />
               {kocsik(false)}
             </div>
             {/* Telefon (lg alatt): összkép, majd kocsi-fülek, balra-jobbra lapozható lapokkal. */}
             <div className="flex flex-col gap-4 lg:hidden">
-              <OsszkepDoboz adatok={adatok} maiNap={maiNap} most={betoltve} mobil />
+              <OsszkepDoboz adatok={adatok} lista={jarmuvek} maiNap={maiNap} most={betoltve} mobil />
               <ElakadtakDoboz elakadtak={elakadtak} />
-              <MobilLapozo aktiv={aktivKocsi} setAktiv={setAktivKocsi}>
+              <MobilLapozo lista={jarmuvek} aktiv={aktivKocsi} setAktiv={setAktivKocsi}>
                 {kocsik(true)}
               </MobilLapozo>
             </div>

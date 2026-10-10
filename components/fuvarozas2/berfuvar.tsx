@@ -107,8 +107,10 @@ const cimke = "flex flex-col gap-1 text-[11px] font-semibold uppercase tracking-
  * A bérfuvar összes mezője (a régi szerkesztő FuvarFields-ének bérfuvaros
  * változata). `id` null → új bérfuvar. Mentés után a részletre lép.
  */
-export function BerFuvarUrlap({ id, kezdo, megseHref, reszletHref }: {
+export function BerFuvarUrlap({ id, kezdo, megseHref, reszletHref, kocsiLista }: {
   id: string | null;
+  /** A választható kocsik („Sofőr — címke”) a szerver DB-ből töltött listájából; elhagyva a beépített lista. */
+  kocsiLista?: string[];
   kezdo: BerFuvarAdat;
   megseHref: string;
   /** Mentés után ide lépünk; `{id}` helyére kerül az azonosító. */
@@ -120,7 +122,7 @@ export function BerFuvarUrlap({ id, kezdo, megseHref, reszletHref }: {
   const hiba = berFuvarHiba(a);
   const valtozott = JSON.stringify(a) !== JSON.stringify(kezdo);
   const allit = (k: keyof BerFuvarAdat) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setA({ ...a, [k]: e.target.value });
-  const kocsik = SAJAT_JARMUVEK.map(jarmuLabel);
+  const kocsik = kocsiLista ?? SAJAT_JARMUVEK.map(jarmuLabel);
   const hivHianyzik = !a.pozicioszam.trim() && !a.pozicioszamNincs;
 
   function ment() {

@@ -9,6 +9,7 @@ import { type Allapot } from "@/lib/megbizasok/allapotgep";
 import { valtAllapotTx } from "@/lib/megbizasok/allapot-akcio";
 import { ujKodTranzakcio, irEsemenyt, elszamolasUpsert, BER_SQL, letrehozTx } from "@/lib/megbizasok/repo";
 import { findJarmuByPlate, jarmuLabel } from "@/lib/fuvarozas/vehicles";
+import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
 import { frissitsdFuvarozas2Modellt } from "@/lib/fuvarozas2/modell-szinkron";
 import { kanonikusMegrendeloNev } from "@/lib/fuvarozas/megrendelo-nev";
 import { berFuvarHiba, berSzam, valtozottMezok, type BerFuvarAdat } from "@/lib/fuvarozas2/berfuvar";
@@ -139,7 +140,7 @@ export async function ujraszkenneldFuvarlevelOldalt(dokId: string): Promise<{ ok
 export async function setFuvarJarmu(id: string, jarmuKod: string | null): Promise<{ ok: true; cimke: string | null } | { ok: false; hiba: string }> {
   await requireAnyEditPermission(["fuvarozas"]);
   const session = await requireSession();
-  const jarmu = jarmuKod?.trim() ? findJarmuByPlate(jarmuKod.trim()) : null;
+  const jarmu = jarmuKod?.trim() ? findJarmuByPlate(jarmuKod.trim(), await getJarmuvek()) : null;
   if (jarmuKod?.trim() && !jarmu) return { ok: false, hiba: "Ismeretlen kocsi." };
   const [sor] = await query<{ elokeszites: boolean; jarmu: string | null }>(
     `select elokeszites, jarmu from fuvar_megbizasok where id = $1 and torolt_at is null`,
@@ -442,7 +443,7 @@ export async function mentSajatFuvart(id: string | null, nyers: SajatFuvarAdat, 
   const a = tisztit(nyers);
   if (!ISO_NAP.test(a.datum)) return { ok: false, hiba: "A dátum kötelező." };
   if (a.datum < budapestNapISO()) return { ok: false, hiba: MULT_NAP_HIBA };
-  if (a.jarmuKod && !findJarmuByPlate(a.jarmuKod)) return { ok: false, hiba: "Ismeretlen kocsi." };
+  if (a.jarmuKod && !findJarmuByPlate(a.jarmuKod, await getJarmuvek())) return { ok: false, hiba: "Ismeretlen kocsi." };
   if (opciok.duplikatumOk !== true) {
     const dupl = await sajatDuplikatumok(id, a);
     if (dupl.length > 0) {
@@ -609,7 +610,7 @@ export async function utemezElvinnivalot(
   adat: { jarmuKod: string; nap: string }
 ): Promise<Eredmeny> {
   await requireEditPermission("fuvarozas");
-  if (!ISO_NAP.test(adat.nap) || !findJarmuByPlate(adat.jarmuKod)) {
+  if (!ISO_NAP.test(adat.nap) || !findJarmuByPlate(adat.jarmuKod, await getJarmuvek())) {
     return { ok: false, hiba: "Érvénytelen dátum vagy kocsi." };
   }
 
@@ -697,7 +698,7 @@ export async function kocsiraAdom(id: string): Promise<Eredmeny> {
   const hiany = await hianyzoMezok({ datum: sor.datum, jarmuKod: sor.elokeszites_jarmu, honnan: sor.felrako, hova: sor.lerako });
   if (hiany.length > 0) return { ok: false, hiba: `Hiányzik: ${hiany.join(", ")}.` };
   if (sor.datum! < budapestNapISO()) return { ok: false, hiba: MULT_NAP_HIBA };
-  const jarmu = findJarmuByPlate(sor.elokeszites_jarmu!);
+  const jarmu = findJarmuByPlate(sor.elokeszites_jarmu!, await getJarmuvek());
   if (!jarmu) return { ok: false, hiba: "Ismeretlen kocsi." };
   await query(
     `update fuvar_megbizasok set jarmu = $2, jarmu_id = null, elokeszites = false, idopont_nyitott = false, kocsira_adva_at = now(), ellenorzott = true
