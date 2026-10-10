@@ -1,5 +1,39 @@
 # PROGRESS
 
+## 2026-10-10 — Költségek és tények (5. fázis): tény/becslés, HU-GO, tankolás, MNB-árfolyam
+
+Budaházi Zoltán: minden szám mellett látszódjon, tény-e vagy becslés, és a
+saját fuvar „megtakarítása" NE adódjon hozzá a kocsi eredményéhez.
+
+- **Séma** (`db/migrations/034_koltseg_teny.sql`, csak additív):
+  `fuvar_megbizas_koltseg` + `forras` ('teny'/'becsles'), `menet_feladat_id`
+  (FK nélkül — a menetterv párhuzamosan készül), `letrehozva_at`, `szamitott`,
+  `mennyiseg`, `reszletek`; egyedi kulcs (megbizas_id, tipus, forras) a gépi
+  sorokra. Új `tankolas` tábla (tranzakciószámra idempotens). `utdij_tranzakcio`
+  + `tav_km`, `netto_ft`, `rendszam_nyers`.
+- **Számítás** (tiszta: `lib/fuvarozas2/koltseg-szamitas.ts`; adat:
+  `koltseg-adat.ts`): tény-km a megbízás első és utolsó megálló-ténye közti
+  GPS-utakból; liter a napi GPS-liter km-arányos része × aznapi tankolás Ft/l
+  (különben NAV − kedvezmény); útdíj a HU-GO tranzakciókból (időablak, vagy a
+  nap felosztása), különben a tárolt kalkuláció; napi fix a nap fuvarjai közt;
+  EUR a teljesítés napjának MNB-árfolyamán. Bérfuvar → eredmény; saját →
+  belső költség (Ft/raklap); az „elkerült költség" csak tájékoztató. Kocsi
+  eredménye = bérfuvar-eredmény − nem hozzárendelt költség.
+- **Importok:** HU-GO CSV/XLSX feltöltés (fejlécnév szerinti oszlopok, magyar
+  számalak, Windows-1250 CSV), Oplusz-kút levél → `tankolas` (új levélosztály:
+  „Tankolás"), kézi tankolás. MNB SOAP (`lib/fuvarozas/arfolyam.ts`, az
+  `arfolyam` táblába gyorsítótárazva, soha nem dob).
+- **Felület:** új „Költségek" fül (HU-GO import, tankolások, beállítások);
+  Kimutatás: tény/becslés jelek, bér eredmény és saját belső költség külön,
+  megbízásonkénti rendezhető tábla, a használt EUR-árfolyam.
+- **Óránkénti kör:** a modell-szinkron végén a 14 nap költségsorai a
+  `fuvar_megbizas_koltseg`-be (`taroldMegbizasKoltsegeket`).
+- **Kézi teendő:** a Gmail-figyelő (`docs/gmail-fuvar-figyelo.gs`) frissült —
+  a kút értesítői címke nélkül is mennek; a script.google.com-on a tartalmat
+  kézzel kell cserélni.
+- Teszt: `scripts/teszt-koltseg.ts` (a `teszt` láncban), a levél-osztályozó
+  teszt bővült.
+
 ## 2026-10-10 — Törzsadat (2. fázis): beállítások, telephelyek, pótkocsik, 4 kamionos flotta, /jarmuvek
 
 - **Döntés (Zoltán):** a flotta 4 kamionos lesz — se darabszám, se rendszám ne

@@ -1,0 +1,153 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { cn } from "@/lib/utils";
+import { formatFt, formatNap, JellegBadge } from "@/components/fuvarozas2/kozos";
+import { ForrasJel, TetelErtek } from "@/components/fuvarozas2/forras-jel";
+import type { KimutatasMegbizas } from "@/lib/fuvarozas2/kimutatas";
+
+// A Kimutatás megbízásonkénti táblája (5. fázis): bérfuvarnál eredmény,
+// saját fuvarnál belső költség (és Ft/raklap) — külön oszlopban, soha nem
+// egy közös számban. Az oszlopfejlécre kattintva rendez.
+
+type Kulcs = "nap" | "jarmu" | "km" | "uzemanyag" | "utdij" | "napi" | "koltseg" | "bevetel" | "eredmeny" | "belso";
+
+const ERTEK: Record<Kulcs, (m: KimutatasMegbizas) => number | string> = {
+  nap: (m) => m.nap,
+  jarmu: (m) => m.jarmuKod,
+  km: (m) => m.km.ertek,
+  uzemanyag: (m) => m.uzemanyag?.ft ?? -1,
+  utdij: (m) => m.utdij?.ft ?? -1,
+  napi: (m) => m.napiFix.ft,
+  koltseg: (m) => m.koltsegFt,
+  bevetel: (m) => m.bevetelFt ?? -1,
+  eredmeny: (m) => m.eredmenyFt ?? Number.NEGATIVE_INFINITY,
+  belso: (m) => m.belsoKoltsegFt ?? -1,
+};
+
+type Rend = { k: Kulcs; le: boolean };
+
+function Fej({ k, rend, setRend, children, jobb = true }: {
+  k: Kulcs; rend: Rend; setRend: (f: (r: Rend) => Rend) => void; children: React.ReactNode; jobb?: boolean;
+}) {
+  return (
+    <th className={cn("px-3 py-2 font-medium", jobb && "text-right")}>
+      <button
+        type="button"
+        className="inline-flex items-center gap-0.5 hover:text-foreground"
+        onClick={() => setRend((r) => ({ k, le: r.k === k ? !r.le : k !== "nap" && k !== "jarmu" }))}
+      >
+        {children}
+        <span className="text-[10px]">{rend.k === k ? (rend.le ? "▼" : "▲") : ""}</span>
+      </button>
+    </th>
+  );
+}
+
+export function KimutatasMegbizasok({ megbizasok }: { megbizasok: KimutatasMegbizas[] }) {
+  const [rend, setRend] = useState<Rend>({ k: "nap", le: false });
+  const [jelleg, setJelleg] = useState<"mind" | "ber" | "sajat">("mind");
+  const sorok = useMemo(() => {
+    const f = ERTEK[rend.k];
+    return megbizasok
+      .filter((m) => jelleg === "mind" || m.jelleg === jelleg)
+      .sort((a, b) => {
+        const x = f(a), y = f(b);
+        const c = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y));
+        return rend.le ? -c : c;
+      });
+  }, [megbizasok, rend, jelleg]);
+
+  if (megbizasok.length === 0) {
+    return <p className="px-3 py-4 text-sm text-muted-foreground">Ebben az időszakban nincs kocsihoz rendelt megbízás.</p>;
+  }
+
+  return (
+    <div>
+      <div className="flex items-center gap-1 px-3 pb-2 text-sm">
+        {(["mind", "ber", "sajat"] as const).map((j) => (
+          <button key={j} type="button" onClick={() => setJelleg(j)}
+            className={cn("rounded-md px-2 py-0.5", jelleg === j ? "bg-muted font-medium" : "text-muted-foreground hover:bg-muted/60")}>
+            {j === "mind" ? "Mind" : j === "ber" ? "Bérfuvar" : "Saját"}
+          </button>
+        ))}
+        <span className="ml-auto text-xs text-muted-foreground">{sorok.length} megbízás</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[72rem] text-sm">
+          <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
+            <tr>
+              <Fej rend={rend} setRend={setRend} k="nap" jobb={false}>Nap</Fej>
+              <Fej rend={rend} setRend={setRend} k="jarmu" jobb={false}>Kocsi · fuvar</Fej>
+              <Fej rend={rend} setRend={setRend} k="km">Km</Fej>
+              <th className="px-3 py-2 text-right font-medium">Üres (odaút)</th>
+              <Fej rend={rend} setRend={setRend} k="uzemanyag">Üzemanyag</Fej>
+              <Fej rend={rend} setRend={setRend} k="utdij">Útdíj</Fej>
+              <Fej rend={rend} setRend={setRend} k="napi">Napi fix</Fej>
+              <Fej rend={rend} setRend={setRend} k="koltseg">Költség</Fej>
+              <Fej rend={rend} setRend={setRend} k="bevetel">Bevétel</Fej>
+              <Fej rend={rend} setRend={setRend} k="eredmeny">Eredmény (bér)</Fej>
+              <Fej rend={rend} setRend={setRend} k="belso">Belső költség (saját)</Fej>
+            </tr>
+          </thead>
+          <tbody>
+            {sorok.map((m) => (
+              <tr key={m.id} className="border-t border-foreground/5 align-top">
+                <td className="px-3 py-2 tabular-nums">{formatNap(m.nap)}</td>
+                <td className="px-3 py-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium">{m.jarmuKod}</span>
+                    <JellegBadge jelleg={m.jelleg} />
+                    <Link href={`/fuvarozas2/megbizasok/${m.id}`} className="text-xs text-muted-foreground hover:underline">#{m.id}</Link>
+                  </div>
+                  <div className="max-w-[18rem] truncate text-xs text-muted-foreground" title={`${m.felrako ?? "?"} → ${m.lerako ?? "?"}`}>
+                    {m.partner ? `${m.partner} · ` : ""}{m.felrako ?? "?"} → {m.lerako ?? "?"}
+                  </div>
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums">
+                  {m.km.ertek.toLocaleString("hu-HU")} <ForrasJel forras={m.km.forras} />
+                  {m.liter ? <div className="text-[10px] text-muted-foreground">{m.liter.ertek} l</div> : null}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{m.uresKmBecsles.toLocaleString("hu-HU")} <ForrasJel forras="becsles" /></td>
+                <td className="px-3 py-2 text-right tabular-nums"><TetelErtek tetel={m.uzemanyag} /></td>
+                <td className="px-3 py-2 text-right tabular-nums"><TetelErtek tetel={m.utdij} /></td>
+                <td className="px-3 py-2 text-right tabular-nums text-muted-foreground"><TetelErtek tetel={m.napiFix} /></td>
+                <td className="px-3 py-2 text-right tabular-nums">{formatFt(m.koltsegFt)} <ForrasJel forras={m.koltsegForras} /></td>
+                <td className="px-3 py-2 text-right tabular-nums">
+                  {m.jelleg === "ber" ? (
+                    <>
+                      {m.bevetelFt != null ? formatFt(m.bevetelFt) : <span className="text-[var(--f2-amb)]">nincs árfolyam</span>} <ForrasJel forras="teny" />
+                      {m.bevetelEur != null ? (
+                        <div className="text-[10px] text-muted-foreground" title={m.atvaltas?.cimke}>
+                          {m.bevetelEur.toLocaleString("hu-HU")} EUR{m.atvaltas ? ` × ${m.atvaltas.arfolyam.toLocaleString("hu-HU")} (${m.atvaltas.arfolyamNap})` : ""}
+                        </div>
+                      ) : null}
+                    </>
+                  ) : <span className="text-muted-foreground">—</span>}
+                </td>
+                <td className={cn("px-3 py-2 text-right font-semibold tabular-nums",
+                  m.eredmenyFt == null ? "text-muted-foreground" : m.eredmenyFt < 0 ? "text-[var(--f2-red)]" : "text-[var(--f2-mint)]")}>
+                  {m.jelleg === "ber" ? formatFt(m.eredmenyFt) : "—"}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums">
+                  {m.jelleg === "sajat" ? (
+                    <>
+                      <span className="font-semibold text-[var(--f2-blue)]">{formatFt(m.belsoKoltsegFt)}</span>
+                      {m.ftPerRaklap != null ? <div className="text-[10px] text-muted-foreground">{formatFt(m.ftPerRaklap)}/raklap ({m.raklapDb} db)</div> : null}
+                      {m.elkerultKoltsegFt ? (
+                        <div className="text-[10px] text-muted-foreground" title="Tájékoztató: ennyibe került volna bérbe kiadva (rakott km × km-díj) — semmilyen eredménybe nem számít bele.">
+                          elkerült: {formatFt(m.elkerultKoltsegFt)}
+                        </div>
+                      ) : null}
+                    </>
+                  ) : <span className="text-muted-foreground">—</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}

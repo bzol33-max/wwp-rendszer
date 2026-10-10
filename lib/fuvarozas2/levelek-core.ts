@@ -15,6 +15,7 @@
 import { query } from "@/lib/db";
 import { osztalyozLevelet, AUTO_DRIVE_BIZALOM, type LevelBemenet, type LevelOsztaly } from "@/lib/fuvarozas2/level-osztalyozo";
 import { feltoltMegbizasIratot } from "@/lib/fuvarozas/drive-sync-core";
+import { tankolasLevelbol } from "@/lib/fuvarozas2/koltsegek-core";
 
 export type BeerkezoLevel = LevelBemenet & {
   gmailMessageId: string;
@@ -59,6 +60,15 @@ export async function veszLeveleket(levelek: BeerkezoLevel[]): Promise<BeveteliE
     );
     if (sorok.length > 0) uj++;
     else ismert++;
+    // A kút bizonylat-értesítőjéből tankolás lesz (Költségek; idempotens a
+    // tranzakciószámra). Egy hibás szöveg nem akaszthatja meg a levelek mentését.
+    if (o.osztaly === "tankolas") {
+      try {
+        await tankolasLevelbol(l);
+      } catch (err) {
+        console.error("[levelek] tankolás-feldolgozás hiba:", err instanceof Error ? err.message : err);
+      }
+    }
   }
   await jelezFutast({ utolso_bevetel: new Date().toISOString(), utolso_darab: levelek.length });
   return { uj, ismert, kert: await kertCsatolmanyok() };
