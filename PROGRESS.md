@@ -3119,3 +3119,38 @@ rögzüljön, és ne lassítsa az oldalt.
 - A kalkulátor számoló magja külön modulba került (`kalkulator-szamitas.ts`),
   hogy a háttér munkamenet nélkül is hívhassa; a "use server" burok marad a
   jogosultsággal.
+
+## 2026-10-10 — Menetterv (3. fázis): a feladat-sorrend egyetlen forrása
+
+Tulajdonosi döntés (2026-10-10): a `fuvar_menet` + `menet_feladat` a kocsinkénti,
+naponkénti sorrend EGYETLEN forrása; 4 kamion (a kocsik a `getJarmuvek()`-ből,
+JANI is), km HU-GO-ból, légvonal × 1,3 csak „becslés” jelöléssel.
+
+- **Séma** (`db/migrations/032_menetterv.sql`, csak additív): `fuvar_menet`
+  (kocsi × nap, állapot javaslat/jovahagyott/folyamatban/lezart, `verzio`
+  optimista zár), `menet_feladat` (sorszám — halasztott egyediség —, típus
+  bérfuvar / saját áru / üres pozicionálás / telephelyi rakodás / várakozás,
+  km + forrás, figyelmeztetések, lezárás), `menet_esemeny` (napló), `fuvar_valtozas`
+  (mező-szintű napló; írja a bérfuvar-szerkesztő és a kocsi-hozzárendelés is:
+  kocsi, napok, felrakó, lerakó, fuvardíj).
+- **lib/menet/**: `menet-alap.ts` (tiszta: típus, üres pozicionálás, figyelmeztetések
+  — üres indulás > `ures_indulas_figyelmeztetes_km`, kapacitás 33/28 hely ·
+  660/812 raklap, ütközés, hiányzó cím —, `alkalmazMenetSorrendet`, ellenőrzések),
+  `generalas.ts` (adatgyűjtés, HU-GO/becslés távolság, javaslat mentése csak
+  változáskor), `muveletek.ts` (jóváhagyás, átrendezés indokkal, lezárás,
+  visszavonás — jog nélküli mag), `akciok.ts` ("use server" burkok jogellenőrzéssel),
+  `repo.ts` (`getMenet`, `getMenetek`, `menetSorrend`, `menetSorrendek` — egy lekérdezés).
+- **Árnyék-javaslat**: az óránkénti modell-szinkron kör minden aktív kocsira ma
+  és holnap frissíti a 'javaslat' menetet; a jóváhagyotthoz nem nyúl, nem dob.
+- **Egyetlen sorrend-forrás**: ha a kocsi napjára jóváhagyott menet van, azt
+  követi a Ma tükör, a holnapi lista és a heti rács, a GPS lap / sofőr app
+  blokkjai és párosítási sorrendje, a GPS-figyelő bemenete és a Tervezés
+  (heti rács, kocsi-hét); különben marad a `napiSorrend`. Az `idovonal.ts`
+  párosítási szabályai nem változtak.
+- **Felület**: Tervezés → „Menetterv” panel (nap-léptető, minden kocsi):
+  feladatok típus-címkével, honnan → hová, tervezett idő, km („becslés”),
+  figyelmeztetések; Javaslat frissítése, Jóváhagyás, ▲/▼ (indok kötelező),
+  ✓ kész, Vissza javaslatba, napló.
+- **Teszt**: `scripts/teszt-menetterv.ts` (76/0) a `teszt` láncban; a scratch
+  Postgresen a teljes kör (javaslat → elavult verzió → jóváhagyás → átrendezés
+  → lezárás → árnyék-kör) végigfutott.

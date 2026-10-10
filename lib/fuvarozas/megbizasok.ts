@@ -12,6 +12,9 @@ import { bontsMegallokra } from "@/lib/fuvarozas/varos";
 import { resolveJarmu } from "@/lib/fuvarozas/vehicles";
 import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
 import { parositasiSorrend } from "@/lib/fuvarozas2/napi-sorrend";
+import { alkalmazMenetSorrendeket } from "@/lib/menet/menet-alap";
+import { kocsiSorrendjei, menetSorrendek } from "@/lib/menet/repo";
+import { budapestNapISO } from "@/lib/fuvarozas/idozona";
 import { fuvarSzamlaTukor, kiegAlap, parositKiegSzamlakat, parositSzamlakat } from "@/lib/fuvarozas/szamla-parositas";
 import { requireSession } from "@/lib/auth/dal";
 import type {
@@ -127,14 +130,21 @@ export async function getSajatFuvarokErinteshez(kezdetNapISO: string): Promise<F
   // szamitsIdovonalakat): parositasiSorrend — a figyelő kocsinként szűr,
   // a csoporton belüli sorrend megmarad. (Eddig itt id szerint ment, a GPS
   // lapon bér-majd-saját, így ugyanazt a megállást más-más fuvar kaphatta.)
+  //
+  // Ha egy kocsi napjára JÓVÁHAGYOTT menet van (lib/menet), a csoporton belül
+  // annak sorrendje dönt — ugyanaz a forrás, mint a GPS lapé (egy lekérdezés).
   const jarmuLista = await getJarmuvek();
-  const kocsinkent = new Map<string, typeof sorok>();
+  const menetek = await menetSorrendek(kezdetNapISO, budapestNapISO());
+  const kocsinkent = new Map<string, { kod: string | null; sorok: typeof sorok }>();
   for (const r of sorok) {
-    const kulcs = resolveJarmu(r.jarmu, jarmuLista)?.sofor ?? r.jarmu;
-    kocsinkent.set(kulcs, [...(kocsinkent.get(kulcs) ?? []), r]);
+    const jarmu = resolveJarmu(r.jarmu, jarmuLista);
+    const kulcs = jarmu?.sofor ?? r.jarmu;
+    const csoport = kocsinkent.get(kulcs) ?? { kod: jarmu ? jarmu.kod ?? jarmu.rendszamok[0] ?? null : null, sorok: [] };
+    csoport.sorok.push(r);
+    kocsinkent.set(kulcs, csoport);
   }
   return [...kocsinkent.values()]
-    .flatMap((csoport) => parositasiSorrend(csoport))
+    .flatMap((csoport) => alkalmazMenetSorrendeket(parositasiSorrend(csoport.sorok), kocsiSorrendjei(menetek, csoport.kod), (r) => r.id))
     .map((r) => ({ ...r, hely: fuvarHelyAllapotbol(r.jelleg, r.allapot) }));
 }
 

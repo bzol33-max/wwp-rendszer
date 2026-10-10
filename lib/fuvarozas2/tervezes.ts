@@ -21,6 +21,8 @@ import { getIndulasiTelephely } from "@/lib/fuvarozas/telephelyek-db";
 import { varosNev } from "@/lib/fuvarozas/varos";
 import { napiSorrend, tervIdoMegbizasbol } from "@/lib/fuvarozas2/napi-sorrend";
 import { becsultTavolsag, lancKm } from "@/lib/fuvarozas2/ures-km";
+import { alkalmazMenetSorrendet } from "@/lib/menet/menet-alap";
+import { menetSorrendek } from "@/lib/menet/repo";
 import type { Allapot } from "@/lib/fuvarozas/allapot";
 
 // A "use server" fájl csak async függvényt exportálhat — ezek belső konstansok.
@@ -164,6 +166,9 @@ export async function getTervHet(hetKezdet?: string): Promise<TervHet> {
     return pontCache.get(cim) ?? null;
   }
 
+  // A hét jóváhagyott menetei (lib/menet): egy lekérdezés; a cella sorrendje azt követi, ha van.
+  const menetek = await menetSorrendek(kezdet, veg);
+
   const sorokKi: TervSor[] = [];
   const uresSlotok: UresSlot[] = [];
   let foglalt = 0;
@@ -177,7 +182,7 @@ export async function getTervHet(hetKezdet?: string): Promise<TervHet> {
     let utolsoHely = telephely;
     let uresOta = 0;
     for (const nap of napok) {
-      const aznapiak = sajat.filter((m) => aznap(m, nap));
+      const aznapiak = alkalmazMenetSorrendet(sajat.filter((m) => aznap(m, nap)), menetek.get(j.kod)?.get(nap), (m) => m.id);
       if (aznapiak.length > 0) {
         const utolso = aznapiak[aznapiak.length - 1];
         if (utolso.lerako) utolsoHely = utolso.lerako;

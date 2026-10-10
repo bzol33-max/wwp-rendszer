@@ -13,6 +13,7 @@
 import { varosNev } from "@/lib/fuvarozas/varos";
 import { kontaktNev, kontaktTelefon, megalloReszlete, type MegalloReszlet } from "@/lib/fuvarozas/sofor-adatok";
 import { napiSorrend, tervIdoMegbizasbol } from "@/lib/fuvarozas2/napi-sorrend";
+import { alkalmazMenetSorrendet } from "@/lib/menet/menet-alap";
 
 export type TukorAllas = {
   percek: number;
@@ -116,9 +117,10 @@ const ekezetNelkul = (x: string) => x.toLowerCase().normalize("NFD").replace(/[�
  * rögzített, de már elkezdett RBT-fuvar (#284) a korábban rögzített, utána
  * következő saját fuvar (#275) mögé került. Ablak nélkül nincs
  * helykitöltő idő (a régi `tervezett_nap 00:00+00` budapesti 02:00 volt).
+ * Ha a napra JÓVÁHAGYOTT menet van (lib/menet), annak sorrendje dönt.
  */
-function fuvarSorrend(fuvarok: TukorFuvar[]): TukorFuvar[] {
-  return napiSorrend(fuvarok, (f) => {
+function fuvarSorrend(fuvarok: TukorFuvar[], menetSorrend: readonly string[] | null): TukorFuvar[] {
+  return alkalmazMenetSorrendet(napiSorrend(fuvarok, (f) => {
     const felrakok = f.megallok.filter((g) => g.tipus === "felrako");
     const lerakok = f.megallok.filter((g) => g.tipus === "lerako");
     const felrakasNap = f.felrakasNap ?? felrakok[0]?.tervezett_nap ?? f.megallok[0]?.tervezett_nap ?? null;
@@ -145,7 +147,7 @@ function fuvarSorrend(fuvarok: TukorFuvar[]): TukorFuvar[] {
       lezart: !!f.lezart,
       tervIdo,
     };
-  });
+  }), menetSorrend, (f) => f.id);
 }
 
 export function tukorSorok(be: {
@@ -158,6 +160,8 @@ export function tukorSorok(be: {
   most: Date;
   /** A mai nap (YYYY-MM-DD, Budapest). */
   ma: string;
+  /** A mai JÓVÁHAGYOTT menet megbízás-sorrendje (lib/menet), ha van — különben a közös napi szabály. */
+  menetSorrend?: readonly string[] | null;
 }): TukorSor[] {
   const { most, ma } = be;
   const allasok = be.allasok.map((a) => ({ ...a, felhasznalva: false }));
@@ -173,7 +177,7 @@ export function tukorSorok(be: {
   const eredmeny: TukorSor[] = [];
   // A megálló tényleges ideje — ehhez sorolódnak be a különálló állások.
   const rendezoIdo = new Map<TukorSor, number | null>();
-  const fuvarok = fuvarSorrend(be.fuvarok);
+  const fuvarok = fuvarSorrend(be.fuvarok, be.menetSorrend ?? null);
   // Ahol a kocsi MOST áll (GPS-érkezés, nincs kész) — akkor is „most”, ha egy
   // előtte álló megálló még nyitott (Micó 09-29: a két etei lerakó közül a
   // másodikon kezdett, az első „következő” lett, a valódi „most” szürke).

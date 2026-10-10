@@ -10,6 +10,7 @@ import { varosNev } from "@/lib/fuvarozas/varos";
 import type { Allapot } from "@/lib/fuvarozas/allapot";
 import type { TukorSor } from "@/lib/fuvarozas2/ma-tukor";
 import { napiSorrend, tervIdoMegbizasbol } from "@/lib/fuvarozas2/napi-sorrend";
+import { alkalmazMenetSorrendet } from "@/lib/menet/menet-alap";
 
 export type HetFuvar = {
   id: string;
@@ -107,9 +108,15 @@ const varos = (cim: string | null) => (cim ? varosNev(cim) ?? cim : "—");
 /**
  * Egy kocsi (vagy a kocsi nélküliek) cellái a hét öt napjára. Egy fuvar
  * minden olyan napon megjelenik, amely a felrakás és a lerakás napja közé
- * esik; az első napon teljes kártya, utána „folytatódik”.
+ * esik; az első napon teljes kártya, utána „folytatódik”. Ha egy napra
+ * JÓVÁHAGYOTT menet van (`menetSorrend(nap)`, lib/menet), az a nap sorrendje.
  */
-export function hetCellak(fuvarok: HetFuvar[], megallok: Map<string, HetMegallo[]>, napok: HetNap[]): HetKartya[][] {
+export function hetCellak(
+  fuvarok: HetFuvar[],
+  megallok: Map<string, HetMegallo[]>,
+  napok: HetNap[],
+  menetSorrend: (nap: string) => readonly string[] | null | undefined = () => null
+): HetKartya[][] {
   return napok.map(({ nap }) => {
     const aznapiak = fuvarok.filter((f) => {
       const tol = f.felrakas_nap ?? f.lerakas_nap;
@@ -118,11 +125,15 @@ export function hetCellak(fuvarok: HetFuvar[], megallok: Map<string, HetMegallo[
     });
     // A közös sorrend (napi-sorrend.ts): a lezárt elöl, a kiírt időpontú a
     // nélküle lévők előtt — itt nincs tény-idő, csak a terv.
-    const sorrendben = napiSorrend(aznapiak, (f) => ({
-      id: f.id, felrakasNap: f.felrakas_nap, lerakasNap: f.lerakas_nap, felrako: f.felrako, lerako: f.lerako,
-      lezart: !!KESZ_CIMKE[f.allapot],
-      tervIdo: tervIdoMegbizasbol(f.felrakas_nap, f.felrakas_ablak_tol, f.idopont),
-    }));
+    const sorrendben = alkalmazMenetSorrendet(
+      napiSorrend(aznapiak, (f) => ({
+        id: f.id, felrakasNap: f.felrakas_nap, lerakasNap: f.lerakas_nap, felrako: f.felrako, lerako: f.lerako,
+        lezart: !!KESZ_CIMKE[f.allapot],
+        tervIdo: tervIdoMegbizasbol(f.felrakas_nap, f.felrakas_ablak_tol, f.idopont),
+      })),
+      menetSorrend(nap),
+      (f) => f.id
+    );
     return sorrendben.map((f) => {
       const gs = megallok.get(f.id) ?? [];
       const elsoNap = nap === napok[0].nap ? (f.felrakas_nap ?? nap) >= nap : (f.felrakas_nap ?? nap) === nap;
