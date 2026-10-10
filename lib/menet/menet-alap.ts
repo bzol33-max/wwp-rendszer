@@ -14,6 +14,7 @@
 // × 1,3 tartalékkal — 'becsles' jelöléssel), így itt minden tesztelhető.
 
 import { cimKulcs, varosNev } from "@/lib/fuvarozas/varos";
+import { budapestFalioraToInstant, budapestNapISO } from "@/lib/fuvarozas/idozona";
 import { napiSorrend } from "@/lib/fuvarozas2/napi-sorrend";
 import type {
   FeladatJavaslat,
@@ -22,6 +23,7 @@ import type {
   Hely,
   KmForras,
   MenetBeallitas,
+  MenetFigyelmeztetes,
   MenetMunka,
   Pont,
   PotkocsiKapacitas,
@@ -164,6 +166,8 @@ export type MenetJavaslatBemenet = {
   elsoIndulas?: boolean;
   /** Ahonnan a sorszámozás indul (a lezárt előtag után). Alapból 1. */
   sorszamKezdet?: number;
+  /** Ennél korábban nem indulhat (ms) — a lezárt előtag vége átrendezéskor. */
+  legkorabbiIndulas?: number | null;
 };
 
 /** A munkák sorrendje: kötött sorrend, különben a közös napi szabály. */
@@ -185,30 +189,175 @@ export function munkakSorrendben(munkak: MenetMunka[], sorrend?: readonly string
   return [...benne, ...alap.filter((m) => !rang.has(m.id))];
 }
 
+/** A nap kezdete, ha a beállítás nem mondja meg (06:00). */
+export const NAP_KEZDES_ALAP_PERC = 360;
+
+/** „06:00” / „6:30” (vagy {"ertek": "06:00"}) → perc éjféltől; érvénytelen értékre null. */
+export function napKezdesPercbol(ertek: unknown): number | null {
+  const nyers = ertek !== null && typeof ertek === "object" && "ertek" in (ertek as Record<string, unknown>) ? (ertek as Record<string, unknown>).ertek : ertek;
+  const s = typeof nyers === "string" ? nyers.trim() : "";
+  const m = /^(\d{1,2}):(\d{2})$/.exec(s);
+  if (!m) return null;
+  const ora = Number(m[1]), perc = Number(m[2]);
+  return ora < 24 && perc < 60 ? ora * 60 + perc : null;
+}
+
+/** A nap (YYYY-MM-DD) budapesti `perc` (éjféltől) időpontja, ms. */
+export function budapestNapIdo(nap: string, perc: number): number {
+  const [ev, ho, n] = nap.split("-").map(Number);
+  return budapestFalioraToInstant(ev, ho, n, Math.floor(perc / 60), perc % 60).getTime();
+}
+
+/** Egy munka lépése a láncban — a helyek és km-ek (időtől független rész). */
+type Lepes = {
+  m: MenetMunka;
+  hozott: boolean;
+  /** Az üres pozicionálás feladata (idők nélkül), és a menetideje (perc; null: nem helyezhető el). */
+  ures: { feladat: FeladatJavaslat; perc: number | null } | null;
+  /** A felrakóhoz érkezés ugyanott / 1 km-en belül (nincs külön üres szakasz). */
+  helyben: boolean;
+  /** A rakott út menetideje (perc; null: nincs km). */
+  rakottPerc: number | null;
+  /** A munka feladata (idők és idő-függő figyelmeztetések nélkül). */
+  feladat: FeladatJavaslat;
+};
+
+/** Egy megálló időablaka a horgonyhoz — csak a menet napjára eső ablak számít. */
+function ablakANapon(nap: string, tol: number | null | undefined, ig: number | null | undefined): { tol: number | null; ig: number | null } | null {
+  const t = tol ?? null, i = ig ?? null;
+  const egyik = i ?? t;
+  if (egyik == null || budapestNapISO(new Date(egyik)) !== nap) return null;
+  return { tol: t, ig: i };
+}
+
+/**
+ * A nap indulási ideje a lánchoz (tiszta). Az első időzített megálló (tény,
+ * vagy a menet napjára eső ablak) a horgony: a tulajdonos elve szerint az
+ * ablak VÉGÉRE érkezik (`horgony` = 'ablak_eleje' esetén az elejére). Ha a
+ * horgony előtt más megálló is van, a kocsi a nap kezdeténél (alapból 06:00)
+ * korábban nem indul — így egy elé tett munka miatt az ablak lekésése
+ * figyelmeztetést ad, nem éjszakai indulást. Ablak nélkül: a nap kezdete.
+ */
+function indulasiIdo(nap: string, lepesek: Lepes[], be: { felrakasPerc: number; lerakasPerc: number; napKezdes: number }, horgony: "ablak_vege" | "ablak_eleje"): number {
+  let eltolas = 0;
+  let megalloElotte = false;
+  for (const l of lepesek) {
+    if (l.ures) {
+      if (l.ures.perc == null) break; // ismeretlen szakasz után nem horgonyzunk
+      eltolas += l.ures.perc;
+    }
+    if (!l.hozott) {
+      if (l.m.tenyIdo != null) return l.m.tenyIdo - eltolas * PERC;
+      const a = ablakANapon(nap, l.m.tervIdo, l.m.felrakasAblakIg ?? l.m.tervIdo);
+      if (a) {
+        const cel = horgony === "ablak_vege" ? (a.ig ?? a.tol)! : (a.tol ?? a.ig)!;
+        const ido = cel - eltolas * PERC;
+        return megalloElotte ? Math.max(ido, be.napKezdes) : ido;
+      }
+      megalloElotte = true;
+      eltolas += be.felrakasPerc;
+    }
+    if (l.rakottPerc == null) break;
+    eltolas += l.rakottPerc;
+    const a = ablakANapon(nap, l.m.lerakasAblakTol, l.m.lerakasAblakIg);
+    if (a) {
+      const cel = horgony === "ablak_vege" ? (a.ig ?? a.tol)! : (a.tol ?? a.ig)!;
+      const ido = cel - eltolas * PERC;
+      return megalloElotte ? Math.max(ido, be.napKezdes) : ido;
+    }
+    megalloElotte = true;
+    eltolas += be.lerakasPerc;
+  }
+  return be.napKezdes;
+}
+
+/**
+ * Az idő-lánc egy indulási időből (tiszta, szinkron): minden feladat
+ * tervezett indulása és érkezése a sorrendben, a menetidőkkel és a
+ * ráhagyásokkal; ablak előtt várakozik, az ablak vége után ütközés-
+ * figyelmeztetést ír. Visszaadja a késő megállók számát is.
+ */
+function idoLanc(lepesek: Lepes[], indulas: number, be: { felrakasPerc: number; lerakasPerc: number }): { feladatok: FeladatJavaslat[]; kesoDb: number } {
+  const ki: FeladatJavaslat[] = [];
+  let ido: number | null = indulas;
+  let kesoDb = 0;
+  let elozoAblakVeg: number | null = null;
+  let elozoNev: string | null = null;
+  for (const l of lepesek) {
+    const { m } = l;
+    let erkezesFelrakora: number | null = null;
+    if (l.ures) {
+      const erk = ido != null && l.ures.perc != null ? ido + l.ures.perc * PERC : null;
+      ki.push({ ...l.ures.feladat, tervezettIndulas: ido, tervezettErkezes: erk });
+      erkezesFelrakora = erk;
+    } else if (l.helyben) {
+      erkezesFelrakora = ido;
+    }
+
+    const figy = [...l.feladat.figyelmeztetesek];
+    const ablakHatar = m.felrakasAblakIg ?? m.tervIdo;
+    if (!m.tenyIdo && !m.lezart) {
+      if (erkezesFelrakora != null && ablakHatar != null && erkezesFelrakora > ablakHatar) {
+        figy.push({ kod: "utkozes", szoveg: `Az előző feladat után legkorábban ${ORA_FMT(erkezesFelrakora)}-kor ér a felrakóra — az ablak ${ORA_FMT(ablakHatar)}.` });
+        kesoDb++;
+      } else if (elozoAblakVeg != null && m.tervIdo != null && m.tervIdo < elozoAblakVeg) {
+        figy.push({ kod: "utkozes", szoveg: `Az ablaka (${ORA_FMT(m.tervIdo)}) belelóg az előző munka ablakába (${elozoNev ?? "előző"} vége ${ORA_FMT(elozoAblakVeg)}).` });
+      }
+    }
+
+    // Kezdés: a hozott rakomány azonnal indul; különben a tény, vagy az érkezés
+    // (az ablak elejéig várva), ismeretlen érkezésnél az ablak eleje.
+    const kezdes: number | null = l.hozott
+      ? ido
+      : m.tenyIdo != null
+        ? m.tenyIdo
+        : erkezesFelrakora != null
+          ? (m.tervIdo != null ? Math.max(m.tervIdo, erkezesFelrakora) : erkezesFelrakora)
+          : m.tervIdo;
+    let erkezes: number | null = null;
+    if (kezdes != null && l.rakottPerc != null) {
+      let e: number = kezdes + ((l.hozott ? 0 : be.felrakasPerc) + l.rakottPerc) * PERC;
+      if (m.lerakasAblakTol != null && e < m.lerakasAblakTol) e = m.lerakasAblakTol;
+      if (!m.lezart && !m.tenyIdo && m.lerakasAblakIg != null && e > m.lerakasAblakIg) {
+        figy.push({ kod: "utkozes", szoveg: `A lerakási ablak végéig (${ORA_FMT(m.lerakasAblakIg)}) nem ér oda — várható ${ORA_FMT(e)}.` });
+        kesoDb++;
+      }
+      erkezes = e;
+    }
+    ki.push({ ...l.feladat, tervezettIndulas: kezdes ?? null, tervezettErkezes: erkezes, figyelmeztetesek: figy });
+    ido = erkezes != null ? erkezes + be.lerakasPerc * PERC : null;
+    elozoAblakVeg = m.lerakasAblakIg ?? m.lerakasAblakTol ?? null;
+    elozoNev = varosNev(m.lerako.cim ?? "") || null;
+  }
+  return { feladatok: ki, kesoDb };
+}
+
 /**
  * Egy kocsi egy napjának javasolt feladatlistája. Tiszta (a távolság-függvény
- * a bemenet része). Figyelmeztetések — soha nem blokkol:
+ * a bemenet része). Minden hívás a TELJES idő-láncot számolja újra az adott
+ * sorrendre (javaslat, átrendezés, optimalizáló elfogadása): indulási hely →
+ * menetidők (átlagsebesség) → fel-/lerakási ráhagyás (beállítás), az ablakok
+ * szerint (lásd indulasiIdo: az első időzített megálló ablakának végére,
+ * ha az több késést okozna, az elejére; ablak nélkül a nap kezdetétől).
+ * Figyelmeztetések — soha nem blokkol:
  *   • ures_indulas: a nap első üres indulása, és az első felrakó a
  *     legközelebbi saját telephelytől is messzebb van a beállított km-nél (30);
  *   • kapacitas: több raklap/raklaphely, mint a pótkocsi (forgatva is);
- *   • utkozes: az előző feladat után a tervezett érkezés a következő ablakán
- *     túl van (az ablak végén, ha ismert, különben a kezdetén), vagy a két
- *     megbízás ablaka egymásba lóg;
+ *   • utkozes: a tervezett érkezés a fel-/lerakási ablak vége után van, vagy a
+ *     két megbízás ablaka egymásba lóg;
  *   • hianyzo_cim: hiányzó cím, vagy nem helyezhető el (nincs km).
  */
 export async function epitMenetJavaslat(be: MenetJavaslatBemenet): Promise<FeladatJavaslat[]> {
   const { nap, telephelyek, kapacitas, beallitas, tav } = be;
   const sebesseg = beallitas.atlagSebessegKmh > 0 ? beallitas.atlagSebessegKmh : 60;
   const menetPerc = (km: number) => Math.round((km / sebesseg) * 60);
-  const ki: FeladatJavaslat[] = [];
+  const lepesek: Lepes[] = [];
   let sorszam = be.sorszamKezdet ?? 1;
   let hol: Hely = be.indulas;
-  let ido: number | null = null;
   let elsoUres = be.elsoIndulas ?? true;
-  let elozoAblakVeg: number | null = null;
-  let elozoNev: string | null = null;
   const telephelyId = (h: Hely, csakVaros: boolean) => h.telephelyPontId ?? sajatTelephelyPontja(h, telephelyek, csakVaros)?.id ?? null;
 
+  // 1. A helyek és a km-ek (HU-GO / becslés) — az időtől független rész.
   for (const m of munkakSorrendben(be.munkak, be.sorrend)) {
     const sajat = m.jelleg === "sajat";
     const munkaFigy: Figyelmeztetes[] = [];
@@ -216,13 +365,14 @@ export async function epitMenetJavaslat(be: MenetJavaslatBemenet): Promise<Felad
       munkaFigy.push({ kod: "hianyzo_cim", szoveg: `Hiányzik a ${!m.felrako.cim?.trim() ? "felrakó" : "lerakó"} címe.` });
     }
 
-    // 1. Üres pozicionálás a felrakóhoz — ha a munka nem korábbi napról
-    // hozott rakomány (az már a kocsin van), és nem ugyanott vagyunk.
-    const korabbrolHozott = (m.felrakasNap ?? nap) < nap;
-    let erkezesFelrakora: number | null = null;
-    if (!korabbrolHozott && m.felrako.cim?.trim() && !ugyanazAHely(hol, m.felrako)) {
+    // Üres pozicionálás a felrakóhoz — ha a munka nem korábbi napról hozott
+    // rakomány (az már a kocsin van), és nem ugyanott vagyunk.
+    const hozott = (m.felrakasNap ?? nap) < nap;
+    let ures: Lepes["ures"] = null;
+    let helyben = false;
+    if (!hozott && m.felrako.cim?.trim() && !ugyanazAHely(hol, m.felrako)) {
       const t = hol.cim || hol.pont ? await tav(hol, m.felrako) : null;
-      if (t != null && t.km <= 1) erkezesFelrakora = ido;
+      if (t != null && t.km <= 1) helyben = true;
       else {
         const figy: Figyelmeztetes[] = [];
         if (t == null) figy.push({ kod: "hianyzo_cim", szoveg: `Nem helyezhető el: ${hol.cim ?? "?"} → ${m.felrako.cim}.` });
@@ -241,45 +391,33 @@ export async function epitMenetJavaslat(be: MenetJavaslatBemenet): Promise<Felad
             figy.push({ kod: "ures_indulas", szoveg: `Üres indulás ${Math.round(t.km)} km — a felrakó a legközelebbi telephelytől is ${Number.isFinite(legkozelebbi) ? Math.round(legkozelebbi) : "?"} km (határ ${hatar} km).` });
           }
         }
-        const perc = t ? menetPerc(t.km) : null;
-        erkezesFelrakora = ido != null && perc != null ? ido + perc * PERC : null;
-        const celIdo = m.tenyIdo ?? m.tervIdo;
-        const indulas = ido ?? (celIdo != null && perc != null ? celIdo - perc * PERC : null);
-        ki.push({
-          sorszam: sorszam++,
-          feladatTipus: "ures_pozicionalas",
-          megbizasId: null,
-          kiinduloCim: hol.cim,
-          celCim: m.felrako.cim,
-          kiinduloTelephelyPontId: telephelyId(hol, true),
-          celTelephelyPontId: telephelyId(m.felrako, sajat),
-          tervezettIndulas: indulas,
-          tervezettErkezes: erkezesFelrakora ?? celIdo ?? null,
-          uresKm: t ? Math.round(t.km) : null,
-          rakottKm: null,
-          kmForras: t?.forras ?? null,
-          raklapDb: null,
-          figyelmeztetesek: figy,
-        });
+        ures = {
+          perc: t ? menetPerc(t.km) : null,
+          feladat: {
+            sorszam: sorszam++,
+            feladatTipus: "ures_pozicionalas",
+            megbizasId: null,
+            kiinduloCim: hol.cim,
+            celCim: m.felrako.cim,
+            kiinduloTelephelyPontId: telephelyId(hol, true),
+            celTelephelyPontId: telephelyId(m.felrako, sajat),
+            tervezettIndulas: null,
+            tervezettErkezes: null,
+            uresKm: t ? Math.round(t.km) : null,
+            rakottKm: null,
+            kmForras: t?.forras ?? null,
+            raklapDb: null,
+            figyelmeztetesek: figy,
+          },
+        };
       }
       elsoUres = false;
-    } else if (!korabbrolHozott) {
-      erkezesFelrakora = ido;
+    } else if (!hozott) {
+      helyben = true;
       elsoUres = false;
     }
 
-    // 2. Időütközés a következő (ennek a) munkával.
-    const ablakKezdet = m.tenyIdo ?? m.tervIdo;
-    const ablakHatar = m.felrakasAblakIg ?? m.tervIdo;
-    if (!m.tenyIdo && !m.lezart) {
-      if (erkezesFelrakora != null && ablakHatar != null && erkezesFelrakora > ablakHatar) {
-        munkaFigy.push({ kod: "utkozes", szoveg: `Az előző feladat után legkorábban ${ORA_FMT(erkezesFelrakora)}-kor ér a felrakóra — az ablak ${ORA_FMT(ablakHatar)}.` });
-      } else if (elozoAblakVeg != null && m.tervIdo != null && m.tervIdo < elozoAblakVeg) {
-        munkaFigy.push({ kod: "utkozes", szoveg: `Az ablaka (${ORA_FMT(m.tervIdo)}) belelóg az előző munka ablakába (${elozoNev ?? "előző"} vége ${ORA_FMT(elozoAblakVeg)}).` });
-      }
-    }
-
-    // 3. A munka maga: rakott km (tárolt HU-GO, különben a távolság-függvény).
+    // A munka maga: rakott km (tárolt HU-GO, különben a távolság-függvény).
     let rakott: { km: number; forras: KmForras } | null = m.rakottKm != null ? { km: m.rakottKm, forras: "hugo" } : null;
     if (!rakott && m.felrako.cim?.trim() && m.lerako.cim?.trim()) {
       rakott = ugyanazAHely(m.felrako, m.lerako) ? { km: 0, forras: "hugo" } : await tav(m.felrako, m.lerako);
@@ -288,38 +426,65 @@ export async function epitMenetJavaslat(be: MenetJavaslatBemenet): Promise<Felad
     const kap = kapacitasFigyelmeztetes(m, kapacitas);
     if (kap) munkaFigy.push(kap);
 
-    const kezdes: number | null = korabbrolHozott ? ido : ablakKezdet != null && erkezesFelrakora != null ? Math.max(ablakKezdet, erkezesFelrakora) : ablakKezdet ?? erkezesFelrakora;
-    let erkezes: number | null = null;
-    if (kezdes != null && rakott) {
-      let e: number = kezdes + ((korabbrolHozott ? 0 : beallitas.felrakasRahagyasPerc) + menetPerc(rakott.km)) * PERC;
-      if (m.lerakasAblakTol != null && e < m.lerakasAblakTol) e = m.lerakasAblakTol;
-      if (!m.lezart && !m.tenyIdo && m.lerakasAblakIg != null && e > m.lerakasAblakIg) {
-        munkaFigy.push({ kod: "utkozes", szoveg: `A lerakási ablak végéig (${ORA_FMT(m.lerakasAblakIg)}) nem ér oda — várható ${ORA_FMT(e)}.` });
-      }
-      erkezes = e;
-    }
-    ki.push({
-      sorszam: sorszam++,
-      feladatTipus: feladatTipusMunkabol(m, telephelyek),
-      megbizasId: m.id,
-      kiinduloCim: m.felrako.cim,
-      celCim: m.lerako.cim,
-      kiinduloTelephelyPontId: telephelyId(m.felrako, sajat),
-      celTelephelyPontId: telephelyId(m.lerako, sajat),
-      tervezettIndulas: kezdes ?? null,
-      tervezettErkezes: erkezes,
-      uresKm: null,
-      rakottKm: rakott ? Math.round(rakott.km) : null,
-      kmForras: rakott?.forras ?? null,
-      raklapDb: m.raklapDb,
-      figyelmeztetesek: munkaFigy,
+    lepesek.push({
+      m,
+      hozott,
+      ures,
+      helyben,
+      rakottPerc: rakott ? menetPerc(rakott.km) : null,
+      feladat: {
+        sorszam: sorszam++,
+        feladatTipus: feladatTipusMunkabol(m, telephelyek),
+        megbizasId: m.id,
+        kiinduloCim: m.felrako.cim,
+        celCim: m.lerako.cim,
+        kiinduloTelephelyPontId: telephelyId(m.felrako, sajat),
+        celTelephelyPontId: telephelyId(m.lerako, sajat),
+        tervezettIndulas: null,
+        tervezettErkezes: null,
+        uresKm: null,
+        rakottKm: rakott ? Math.round(rakott.km) : null,
+        kmForras: rakott?.forras ?? null,
+        raklapDb: m.raklapDb,
+        figyelmeztetesek: munkaFigy,
+      },
     });
-    ido = erkezes != null ? erkezes + beallitas.lerakasRahagyasPerc * PERC : null;
-    elozoAblakVeg = m.lerakasAblakIg ?? m.lerakasAblakTol ?? null;
-    elozoNev = varosNev(m.lerako.cim ?? "") || null;
     if (m.lerako.cim?.trim() || m.lerako.pont) hol = m.lerako;
   }
-  return ki;
+
+  // 2. Az idő-lánc: az ablak végére érkezés elve; ha az elejére érkezve
+  // kevesebb megálló késne, az elejére (mint az optimalizálóban).
+  const ido = {
+    felrakasPerc: beallitas.felrakasRahagyasPerc,
+    lerakasPerc: beallitas.lerakasRahagyasPerc,
+    napKezdes: budapestNapIdo(nap, beallitas.napKezdesPerc ?? NAP_KEZDES_ALAP_PERC),
+  };
+  const indul = (h: "ablak_vege" | "ablak_eleje") => Math.max(indulasiIdo(nap, lepesek, ido, h), be.legkorabbiIndulas ?? -Infinity);
+  const vege = idoLanc(lepesek, indul("ablak_vege"), ido);
+  if (vege.kesoDb === 0) return vege.feladatok;
+  const eleje = idoLanc(lepesek, indul("ablak_eleje"), ido);
+  return eleje.kesoDb < vege.kesoDb ? eleje.feladatok : vege.feladatok;
+}
+
+/**
+ * A menet becsült napi vezetési ideje (perc) a feladatok km-éből az
+ * átlagsebességgel — kártya-szintű 'vezetesi_ido' figyelmeztetés, ha a napi
+ * keret (beállítás: 540 perc) fölött van. BECSLÉS, nem tachográf-adat.
+ */
+export function menetVezetes(
+  feladatok: Pick<FeladatJavaslat, "feladatTipus" | "uresKm" | "rakottKm">[],
+  p: { atlagSebessegKmh: number; vezetesMaxPerc: number }
+): { perc: number; figyelmeztetes: MenetFigyelmeztetes | null } {
+  const sebesseg = p.atlagSebessegKmh > 0 ? p.atlagSebessegKmh : 60;
+  const km = feladatok.reduce((a, f) => a + ((f.feladatTipus === "ures_pozicionalas" ? f.uresKm : f.rakottKm) ?? 0), 0);
+  const perc = Math.round((km / sebesseg) * 60);
+  const oraPerc = (x: number) => `${Math.floor(x / 60)} ó ${x % 60} p`;
+  return {
+    perc,
+    figyelmeztetes: p.vezetesMaxPerc > 0 && perc > p.vezetesMaxPerc
+      ? { kod: "vezetesi_ido", szoveg: `Vezetési idő ~${oraPerc(perc)} (${perc} perc) — a napi ${p.vezetesMaxPerc} perces keret felett (becslés ${sebesseg} km/h átlaggal, nem tachográf-adat). Ez a terv egy sofőrrel nem vezethető le.` }
+      : null,
+  };
 }
 
 // ---------------------------------------------------------------- egyetlen sorrend-forrás
@@ -421,6 +586,84 @@ export function ellenorizLezarasInvarianst(elotte: LezarasSor[], utana: LezarasS
     if (f.id !== feladatId && u.lezarvaAt !== f.lezarvaAt) return `A lezárás egy másik feladatot is érintett (${f.sorszam}.) — visszavonva.`;
   }
   return null;
+}
+
+// ---------------------------------------------------------------- indulási hely, újragenerálás
+
+/** Az előző napi menet egy feladata (a lerakó koordinátájával, ha ismert). */
+export type ElozoMenetFeladat = {
+  nap: string;
+  allapot: string;
+  sorszam: number;
+  celCim: string | null;
+  celTelephelyPontId: string | null;
+  pont: Pont | null;
+  /** A feladat megbízása a vizsgált napon vagy később rakódik le (még úton van) — nem nap végi hely. */
+  atnyulo: boolean;
+};
+
+/**
+ * Ahol a kocsi az előző (legfeljebb néhány napos) menete szerint a napot
+ * zárta: a legkésőbbi nap menetének utolsó feladata (sorszám szerint) — a
+ * jóváhagyott menet az elsődleges, ha ugyanarra a napra javaslat is van.
+ * Az átnyúló (még úton lévő) munka nem nap végi hely. null: nincs ilyen menet.
+ */
+export function elozoMenetVege(sorok: ElozoMenetFeladat[]): Hely | null {
+  const jo = sorok.filter((s) => !s.atnyulo && (s.celCim?.trim() || s.pont));
+  if (jo.length === 0) return null;
+  const rang = (s: ElozoMenetFeladat) => (s.allapot === "javaslat" ? 0 : 1);
+  const legjobb = [...jo].sort((a, b) => b.nap.localeCompare(a.nap) || rang(b) - rang(a) || b.sorszam - a.sorszam)[0];
+  return { cim: legjobb.celCim, pont: legjobb.pont, telephelyPontId: legjobb.celTelephelyPontId };
+}
+
+export type JavaslatOsszevetes = "azonos" | "csak_km" | "becsles_romlas" | "valtozott";
+
+/**
+ * Az újraszámolt javaslat a mentetthez képest (a verzió-ugrás döntéséhez):
+ *   • 'azonos' — semmi nem változott;
+ *   • 'becsles_romlas' — csak km / idő változott, és ahol eddig HU-GO-érték
+ *     volt, most légvonal-becslés jönne (a HU-GO épp nem érhető el): a
+ *     mentett (jobb) érték marad, nem írunk;
+ *   • 'csak_km' — ugyanazok a feladatok, ugyanazokkal a figyelmeztetés-
+ *     kódokkal, és a km-ek legfeljebb 2 km-rel (vagy csak a forrásukban)
+ *     változtak, az idők pedig legfeljebb annyival, amennyit a km-eltérés
+ *     indokol (+2 perc): az új számok VERZIÓ-UGRÁS NÉLKÜL íródnak — így a
+ *     HU-GO ingadozása nem teszi elavulttá a nyitott jóváhagyást;
+ *   • 'valtozott' — minden más: újraírás, verzió + 1.
+ */
+export function osszevetJavaslatot(mentett: FeladatJavaslat[], uj: FeladatJavaslat[], percPerKm: number): JavaslatOsszevetes {
+  if (feladatUjjlenyomat(mentett) === feladatUjjlenyomat(uj)) return "azonos";
+  if (mentett.length !== uj.length) return "valtozott";
+  const szerkezet = (f: FeladatJavaslat) => JSON.stringify([
+    f.sorszam, f.feladatTipus, f.megbizasId, f.kiinduloCim, f.celCim, f.kiinduloTelephelyPontId, f.celTelephelyPontId, f.raklapDb,
+  ]);
+  const kodok = (f: FeladatJavaslat) => f.figyelmeztetesek.map((x) => x.kod).join(",");
+  const km = (f: FeladatJavaslat) => (f.feladatTipus === "ures_pozicionalas" ? f.uresKm : f.rakottKm);
+  let kmElteres = 0;
+  let romlas = false;
+  let valodiKm = false;
+  let kodValt = false;
+  for (let i = 0; i < uj.length; i++) {
+    const a = mentett[i], b = uj[i];
+    if (szerkezet(a) !== szerkezet(b)) return "valtozott";
+    const ka = km(a), kb = km(b);
+    if ((ka == null) !== (kb == null)) return "valtozott";
+    const d = ka != null && kb != null ? Math.abs(ka - kb) : 0;
+    if (d >= 2 && a.kmForras === b.kmForras) valodiKm = true;
+    kmElteres += d;
+    if (a.kmForras === "hugo" && b.kmForras === "becsles") romlas = true;
+    if (kodok(a) !== kodok(b)) kodValt = true;
+  }
+  const turesMs = (kmElteres * Math.max(percPerKm, 0) + 2) * PERC;
+  const idoRendben = (x: number | null, y: number | null) => (x == null) === (y == null) && (x == null || Math.abs(x - y!) <= turesMs);
+  for (let i = 0; i < uj.length; i++) {
+    if (!idoRendben(mentett[i].tervezettIndulas, uj[i].tervezettIndulas) || !idoRendben(mentett[i].tervezettErkezes, uj[i].tervezettErkezes)) return "valtozott";
+  }
+  // Csak a km-forrás romlott (HU-GO → becslés): a mentett marad, akkor is, ha a
+  // becsült km miatt egy figyelmeztetés megjelenne / eltűnne.
+  if (romlas && !valodiKm) return "becsles_romlas";
+  if (valodiKm || kodValt) return "valtozott";
+  return "csak_km";
 }
 
 /** A feladatlista ujjlenyomata — a javaslat csak akkor íródik újra (és nő a verzió), ha változott. */

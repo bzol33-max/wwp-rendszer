@@ -176,6 +176,8 @@ export type SorrendEredmeny = {
   megtakaritasKm: number;
   /** A rögzített munkák és egyéb megjegyzések (kemény korlátok magyarázata). */
   megjegyzesek: string[];
+  /** Ha nincs megengedett sorrend: a legkevésbé rossz (legkisebb J-jű) sorrend megsértett korlátai — a kártya ezt magyarázza. */
+  legkevesbeRosszSerulesek: string[];
 };
 
 export type OptBemenet = {
@@ -633,6 +635,7 @@ export async function optimalizalSorrendet(be: OptBemenet): Promise<SorrendEredm
     megtakaritasFt: legjobbMeg ? jelenlegi.celfuggveny.osszesen - legjobbMeg.celfuggveny.osszesen : 0,
     megtakaritasKm: legjobbMeg ? jelenlegi.uresKm + jelenlegi.rakottKm + jelenlegi.hazaKm - (legjobbMeg.uresKm + legjobbMeg.rakottKm + legjobbMeg.hazaKm) : 0,
     megjegyzesek,
+    legkevesbeRosszSerulesek: legjobbMeg ? [] : legjobb.serulesek,
   };
 }
 

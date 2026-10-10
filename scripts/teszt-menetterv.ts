@@ -5,7 +5,10 @@
 // (üres indulás 30 km, kapacitás 33/28 hely és 660/812 raklap, ütközés,
 // hiányzó cím), hogy a jóváhagyott menet sorrendje a forrás (különben a közös
 // napi szabály, T5/T6), hogy a lezárás a következő feladatot nem bántja, és
-// hogy az elavult verzió elutasítódik.
+// hogy az elavult verzió elutasítódik; az idő-lánc minden sorrendre (átrendezés,
+// elfogadás, ablak nélküli menet), a kártya vezetési-idő figyelmeztetése, a
+// másnapi indulási hely az előző menetből, a HU-GO megszakító és hogy a km-zaj
+// nem ugratja a verziót (QA-javítások, 2026-10-10).
 
 import { readFileSync } from "node:fs";
 import { napiSorrend, type SorrendAdat } from "@/lib/fuvarozas2/napi-sorrend";
@@ -16,17 +19,22 @@ import {
   ellenorizIndokot,
   ellenorizLezarasInvarianst,
   ellenorizVerziot,
+  elozoMenetVege,
   epitMenetJavaslat,
   feladatTipusMunkabol,
   feladatUjjlenyomat,
   kapacitasFigyelmeztetes,
   lezarFeladatot,
   megbizasSorrend,
+  menetVezetes,
+  napKezdesPercbol,
+  osszevetJavaslatot,
   raklapMennyisegbol,
   sajatTelephelyPontja,
 } from "@/lib/menet/menet-alap";
+import { hugoVagyBecsles, ujHugoKor } from "@/lib/menet/hugo-megszakito";
 import { naplozandoValtozasok } from "@/lib/menet/valtozas";
-import type { Hely, MenetBeallitas, MenetMunka, PotkocsiKapacitas, TavFn, TelephelyPontAdat } from "@/lib/menet/tipusok";
+import type { FeladatJavaslat, Hely, MenetBeallitas, MenetMunka, PotkocsiKapacitas, TavFn, TelephelyPontAdat } from "@/lib/menet/tipusok";
 
 let ok = 0, bad = 0;
 function eq(nev: string, kapott: unknown, vart: unknown) {
@@ -226,6 +234,152 @@ const BP = (hhmm: string) => Date.parse(`${NAP}T${hhmm}:00+02:00`);
     const tav = tesztTav({ "Szakoly, Rákóczi utca 26→Tata": 300, "Tata→Győr": 40, "Szakoly, Rákóczi utca 26→Tata ": 300, "Győr→Szakoly, Rákóczi utca 26": 330, "Tata→Szakoly, Rákóczi utca 26": 300 });
     const kotott = await epitMenetJavaslat({ nap: NAP, munkak: [a, b], indulas: { cim: "Szakoly, Rákóczi utca 26", pont: null, telephelyPontId: "1" }, telephelyek: TELEPHELYEK, kapacitas: KAP, beallitas: BEALL, tav, sorrend: ["2", "1"], sorszamKezdet: 3, elsoIndulas: false });
     eq("kötött sorrend: 2 előbb, üres szakaszokkal, sorszám 3-tól", kotott.map((x) => `${x.sorszam}:${x.megbizasId ?? "ü"}`), ["3:ü", "4:2", "5:ü", "6:1"]);
+  }
+
+  // ---------------------------------------------------------------- 10. idő-lánc minden sorrendre (QA: átrendezés / elfogadás után)
+  {
+    const ORA = (ms: number | null) => (ms == null ? null : new Date(ms).toLocaleTimeString("hu-HU", { timeZone: "Europe/Budapest", hour: "2-digit", minute: "2-digit" }));
+    const teljesLanc = (f: FeladatJavaslat[]) => f.every((x) => x.tervezettIndulas != null && x.tervezettErkezes != null);
+    const monoton = (f: FeladatJavaslat[]) => f.every((x, i) => x.tervezettIndulas! <= x.tervezettErkezes! && (i === 0 || f[i - 1].tervezettErkezes! <= x.tervezettIndulas!));
+    const szakoly: Hely = { cim: "Szakoly, Rákóczi utca 26", pont: null, telephelyPontId: "1" };
+    const ber = munka({ id: "801", jelleg: "ber", felrako: h("Sárvár, Rába utca 1"), lerako: h("Debrecen, Mezőségi út 1"),
+      tervIdo: BP("06:00"), felrakasAblakIg: BP("08:00"), lerakasAblakTol: BP("14:00"), lerakasAblakIg: BP("16:00") });
+    const sajat = munka({ id: "802", felrako: h("Debrecen, Mezőségi út 1"), lerako: h("Szakoly, Rákóczi utca 26") });
+    const tav = tesztTav({
+      "Szakoly, Rákóczi utca 26→Sárvár, Rába utca 1": 420, "Sárvár, Rába utca 1→Debrecen, Mezőségi út 1": 400,
+      "Szakoly, Rákóczi utca 26→Debrecen, Mezőségi út 1": 60, "Debrecen, Mezőségi út 1→Szakoly, Rákóczi utca 26": 60,
+    });
+    const alap = { nap: NAP, munkak: [ber, sajat], indulas: szakoly, telephelyek: TELEPHELYEK, kapacitas: KAP, beallitas: BEALL, tav };
+
+    // Eredeti sorrend: a bér az első időzített megálló → az ablak VÉGÉRE (08:00) ér.
+    const elso = await epitMenetJavaslat({ ...alap, sorrend: ["801", "802"] });
+    eq("eredeti sorrend: minden feladatnak van tervezett ideje", teljesLanc(elso), true);
+    eq("eredeti sorrend: a lánc időrendben", monoton(elso), true);
+    eq("eredeti sorrend: a felrakóra az ablak végére (08:00) ér", ORA(elso.find((x) => x.megbizasId === "801")!.tervezettIndulas), "08:00");
+    eq("eredeti sorrend: az üres út 420 perccel előtte indul (01:00)", ORA(elso[0].tervezettIndulas), "01:00");
+    eq("eredeti sorrend: nincs ütközés", elso.flatMap((x) => x.figyelmeztetesek.map((w) => w.kod)).includes("utkozes"), false);
+    eq("eredeti sorrend: a saját fuvar a bér után láncolva (15:55-kor indul)", ORA(elso.find((x) => x.megbizasId === "802")!.tervezettIndulas), "15:55");
+
+    // Átrendezés (QA hiba: 1–2. feladat NULL idő, a 3. tegnapi 21:52–06:00): a saját elöl.
+    const at = await epitMenetJavaslat({ ...alap, sorrend: ["802", "801"] });
+    eq("átrendezés után: minden feladatnak van tervezett ideje", teljesLanc(at), true);
+    eq("átrendezés után: a lánc időrendben", monoton(at), true);
+    eq("átrendezés után: a nap kezdetén (06:00) indul, nem éjjel", ORA(at[0].tervezettIndulas), "06:00");
+    eq("átrendezés után: egyik idő sem az előző napra esik", at.every((x) => x.tervezettIndulas! >= BP("00:00")), true);
+    const berAt = at.find((x) => x.megbizasId === "801")!;
+    eq("átrendezés után: a 06–08 rakodási ablak lekésése ütközés-figyelmeztetés", berAt.figyelmeztetesek.some((w) => w.kod === "utkozes" && /08:00/.test(w.szoveg)), true);
+    eq("átrendezés után: a lerakási ablak (16:00) lekésése is", berAt.figyelmeztetesek.filter((w) => w.kod === "utkozes").length, 2);
+
+    // Időablak nélküli menet (JANI): a nap kezdetétől láncolva.
+    const jani1 = munka({ id: "810", felrako: h("Szakoly, Rákóczi utca 26"), lerako: h("Balkány, Bocskai utca 11") });
+    const jani2 = munka({ id: "811", felrako: h("Balkány, Bocskai utca 11"), lerako: h("Nyíregyháza, Tünde út 20/A") });
+    const jtav = tesztTav({ "Szakoly, Rákóczi utca 26→Balkány, Bocskai utca 11": 6, "Balkány, Bocskai utca 11→Nyíregyháza, Tünde út 20/A": 30 });
+    const jani = await epitMenetJavaslat({ ...alap, munkak: [jani1, jani2], sorrend: null, tav: jtav });
+    eq("ablak nélküli menet: minden feladatnak van ideje", teljesLanc(jani), true);
+    eq("ablak nélküli menet: 06:00-kor kezd (beállítás alapértéke)", ORA(jani[0].tervezettIndulas), "06:00");
+    eq("ablak nélküli menet: láncolva (06:00 + 30 + 6 → 06:36, + 45 → 07:21)", [ORA(jani[0].tervezettErkezes), ORA(jani[1].tervezettIndulas)], ["06:36", "07:21"]);
+    const jani7 = await epitMenetJavaslat({ ...alap, munkak: [jani1, jani2], sorrend: null, tav: jtav, beallitas: { ...BEALL, napKezdesPerc: 7 * 60 } });
+    eq("a nap kezdete a beállításból (07:00)", ORA(jani7[0].tervezettIndulas), "07:00");
+    eq("nap_kezdes_ido olvasása", [napKezdesPercbol("06:00"), napKezdesPercbol({ ertek: "5:30" }), napKezdesPercbol("25:00"), napKezdesPercbol(6)], [360, 330, null, null]);
+
+    // Az ablak végére érkezés, ha az késést okozna: az ablak elejére.
+    const reggeli = munka({ id: "820", felrako: h("Szakoly, Rákóczi utca 26"), lerako: h("Tata"), tervIdo: BP("06:00"), felrakasAblakIg: BP("10:00") });
+    const delutani = munka({ id: "821", felrako: h("Tata"), lerako: h("Győr"), lerakasAblakIg: BP("15:00") });
+    const ttav = tesztTav({ "Szakoly, Rákóczi utca 26→Tata": 200, "Tata→Győr": 100 });
+    const ee = await epitMenetJavaslat({ ...alap, munkak: [reggeli, delutani], sorrend: ["820", "821"], tav: ttav });
+    eq("ablak vége késést okozna → az ablak elejére (06:00) érkezik", ORA(ee.find((x) => x.megbizasId === "820")!.tervezettIndulas), "06:00");
+    eq("…és így nincs késés", ee.some((x) => x.figyelmeztetesek.some((w) => w.kod === "utkozes")), false);
+
+    // Lezárt előtag utáni átrendezés: nem indul a lezárás előtt.
+    const lez = await epitMenetJavaslat({ ...alap, munkak: [jani1, jani2], sorrend: null, tav: jtav, legkorabbiIndulas: BP("11:15") });
+    eq("legkorábbi indulás (lezárt előtag vége) tiszteletben tartva", ORA(lez[0].tervezettIndulas), "11:15");
+  }
+
+  // ---------------------------------------------------------------- 11. vezetési idő a kártyán
+  {
+    const sok = [
+      { feladatTipus: "ures_pozicionalas" as const, uresKm: 420, rakottKm: null },
+      { feladatTipus: "berfuvar" as const, uresKm: null, rakottKm: 400 },
+      { feladatTipus: "sajat_aru" as const, uresKm: null, rakottKm: 78 },
+    ];
+    const v = menetVezetes(sok, { atlagSebessegKmh: 60, vezetesMaxPerc: 540 });
+    eq("vezetési idő: 898 km / 60 km/h = 898 perc", v.perc, 898);
+    eq("a napi 540 perc felett: 'vezetesi_ido' figyelmeztetés", [v.figyelmeztetes?.kod, /540/.test(v.figyelmeztetes?.szoveg ?? "")], ["vezetesi_ido", true]);
+    eq("a keret alatt nincs figyelmeztetés", menetVezetes(sok.slice(2), { atlagSebessegKmh: 60, vezetesMaxPerc: 540 }).figyelmeztetes, null);
+  }
+
+  // ---------------------------------------------------------------- 12. másnapi indulási hely az előző menetből
+  {
+    const sor = (nap: string, allapot: string, sorszam: number, celCim: string, atnyulo = false) =>
+      ({ nap, allapot, sorszam, celCim, celTelephelyPontId: null, pont: null, atnyulo });
+    // NMZ-492: a 10.10-i jóváhagyott menet Nyíregyházán ért véget (a Miskolc-i lerakó korábbi feladat).
+    eq("az előző menet UTOLSÓ feladata (Nyíregyháza), nem a legkésőbbi ablakú lerakó (Miskolc)", elozoMenetVege([
+      sor("2026-10-10", "jovahagyott", 2, "Miskolc, Zsolcai kapu 30"),
+      sor("2026-10-10", "jovahagyott", 4, "Nyíregyháza, Tünde út 20/A"),
+      sor("2026-10-10", "jovahagyott", 1, "Balkány, Bocskai utca 11"),
+    ])?.cim, "Nyíregyháza, Tünde út 20/A");
+    eq("a legutóbbi nap menete számít", elozoMenetVege([
+      sor("2026-10-08", "jovahagyott", 5, "Győr"), sor("2026-10-09", "javaslat", 2, "Debrecen"),
+    ])?.cim, "Debrecen");
+    eq("ugyanazon a napon a jóváhagyott az elsődleges", elozoMenetVege([
+      sor("2026-10-10", "javaslat", 9, "Tata"), sor("2026-10-10", "jovahagyott", 3, "Szakoly"),
+    ])?.cim, "Szakoly");
+    eq("a még úton lévő (átnyúló) munka nem nap végi hely", elozoMenetVege([
+      sor("2026-10-10", "jovahagyott", 3, "Szakoly"), sor("2026-10-10", "jovahagyott", 4, "Budapest", true),
+    ])?.cim, "Szakoly");
+    eq("nincs előző menet → null (tartalék: megbízások, telephely)", elozoMenetVege([]), null);
+  }
+
+  // ---------------------------------------------------------------- 13. HU-GO megszakító (egy kör)
+  {
+    const kor = ujHugoKor();
+    let hivas = 0;
+    const idotullepes = async () => { hivas++; throw Object.assign(new Error("The operation was aborted due to timeout"), { name: "TimeoutError" }); };
+    const r1 = await hugoVagyBecsles(kor, idotullepes, () => 70);
+    eq("időtúllépés: becslés, és a kör leáll", [r1.ertek, r1.hugo, kor.leallt], [70, false, true]);
+    const r2 = await hugoVagyBecsles(kor, async () => { hivas++; return 54; }, () => 70);
+    eq("leállás után nem hívja a HU-GO-t (becslés a kör végéig)", [r2.ertek, hivas], [70, 1]);
+
+    class CimparHiba extends Error {}
+    const kor2 = ujHugoKor();
+    const r3 = await hugoVagyBecsles(kor2, async () => { throw new CimparHiba("Nem található útvonal"); }, () => 12, { cimparHiba: (e) => e instanceof CimparHiba });
+    eq("rossz címpár: csak az a szakasz becslés, a kör megy tovább", [r3.ertek, kor2.leallt], [12, false]);
+    eq("…a következő szakasz HU-GO", (await hugoVagyBecsles(kor2, async () => 54, () => 70, { cimparHiba: (e) => e instanceof CimparHiba })).ertek, 54);
+
+    const kor3 = ujHugoKor({ maxHivas: 2 });
+    for (let i = 0; i < 3; i++) await hugoVagyBecsles(kor3, async () => 1, () => 0);
+    eq("hívás-korlát: a 3. már becslés", [kor3.hivasok, kor3.leallt], [2, true]);
+
+    const kor4 = ujHugoKor({ idokeretMs: 40 });
+    const t0 = Date.now();
+    const r4 = await hugoVagyBecsles(kor4, () => new Promise<number>((ok) => setTimeout(() => ok(54), 2000)), () => 70);
+    eq("időkeret: a lógó hívást elvágja, becslés", [r4.ertek, kor4.leallt, Date.now() - t0 < 1000], [70, true, true]);
+  }
+
+  // ---------------------------------------------------------------- 14. verzió-ingadozás: km-zaj nem ugrat verziót
+  {
+    const a = munka({ id: "901", jelleg: "ber", felrako: h("Nyíregyháza"), lerako: h("Miskolc"), tervIdo: BP("10:00"), felrakasAblakIg: BP("12:00") });
+    const b = munka({ id: "902", felrako: h("Miskolc"), lerako: h("Szakoly") });
+    const be = (tav: TavFn) => epitMenetJavaslat({ nap: NAP, munkak: [a, b], indulas: { cim: "Balkány", pont: null }, telephelyek: TELEPHELYEK, kapacitas: KAP, beallitas: BEALL, tav });
+    const tavBol = (ures: number, forras: "hugo" | "becsles", rakott = 90): TavFn => async (x, y) => {
+      const k = `${x.cim}→${y.cim}`;
+      if (k === "Balkány→Nyíregyháza") return { km: ures, forras };
+      if (k === "Nyíregyháza→Miskolc") return { km: rakott, forras: "hugo" };
+      if (k === "Miskolc→Szakoly") return { km: 110, forras: "hugo" };
+      return null;
+    };
+    const mentett = await be(tavBol(25, "hugo"));
+    const ppk = 1; // 60 km/h → 1 perc / km
+    eq("ugyanaz: azonos", osszevetJavaslatot(mentett, await be(tavBol(25, "hugo")), ppk), "azonos");
+    eq("1 km ingadozás (HU-GO): csak_km — nincs verzió-ugrás", osszevetJavaslatot(mentett, await be(tavBol(26, "hugo")), ppk), "csak_km");
+    eq("HU-GO kiesett (becslés 33 km): a mentett marad", osszevetJavaslatot(mentett, await be(tavBol(33, "becsles")), ppk), "becsles_romlas");
+    eq("becslés → HU-GO (csak a forrás és a km): csak_km", osszevetJavaslatot(await be(tavBol(28, "becsles")), await be(tavBol(25, "hugo")), ppk), "csak_km");
+    eq("becslés → HU-GO, de eltűnik egy figyelmeztetés (33 km > 30): valtozott", osszevetJavaslatot(await be(tavBol(33, "becsles")), await be(tavBol(25, "hugo")), ppk), "valtozott");
+    eq("valódi km-változás (HU-GO 25 → 40): valtozott", osszevetJavaslatot(mentett, await be(tavBol(40, "hugo")), ppk), "valtozott");
+    const masAblak = await epitMenetJavaslat({ nap: NAP, munkak: [{ ...a, tervIdo: BP("13:00"), felrakasAblakIg: BP("14:00") }, b], indulas: { cim: "Balkány", pont: null }, telephelyek: TELEPHELYEK, kapacitas: KAP, beallitas: BEALL, tav: tavBol(25, "hugo") });
+    eq("ablak-változás (idő km nélkül): valtozott", osszevetJavaslatot(mentett, masAblak, ppk), "valtozott");
+    const masSorrend = await epitMenetJavaslat({ nap: NAP, munkak: [a, b], indulas: { cim: "Balkány", pont: null }, telephelyek: TELEPHELYEK, kapacitas: KAP, beallitas: BEALL, tav: tavBol(25, "hugo"), sorrend: ["902", "901"] });
+    eq("sorrend-változás: valtozott", osszevetJavaslatot(mentett, masSorrend, ppk), "valtozott");
   }
 
   // ---------------------------------------------------------------- 8. mező-szintű napló

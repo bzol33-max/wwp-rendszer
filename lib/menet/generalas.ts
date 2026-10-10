@@ -1,6 +1,6 @@
 import "server-only";
 import { query, withTransaction, type Querier } from "@/lib/db";
-import { calculateToll } from "@/lib/fuvarozas/utdijkalkulacio";
+import { calculateToll, TollCalcError } from "@/lib/fuvarozas/utdijkalkulacio";
 import { geokodolCachelve } from "@/lib/fuvarozas/erintes-felismeres";
 import { getJarmuIndulasiTelephely } from "@/lib/fuvarozas/telephelyek-db";
 import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
@@ -10,12 +10,17 @@ import { cimKulcs } from "@/lib/fuvarozas/varos";
 import { idobelyegMs, tervIdoMegbizasbol } from "@/lib/fuvarozas2/napi-sorrend";
 import {
   KOZUTI_SZORZO,
+  NAP_KEZDES_ALAP_PERC,
+  elozoMenetVege,
   epitMenetJavaslat,
-  feladatUjjlenyomat,
   legvonalKm,
+  napKezdesPercbol,
+  osszevetJavaslatot,
   raklapMennyisegbol,
+  type ElozoMenetFeladat,
   type MenetJavaslatBemenet,
 } from "@/lib/menet/menet-alap";
+import { hugoVagyBecsles, ujHugoKor, type HugoKor } from "@/lib/menet/hugo-megszakito";
 import { menetFeladatai } from "@/lib/menet/repo";
 import type { FeladatJavaslat, Hely, MenetFeladat, MenetMunka, Pont, PotkocsiKapacitas, TavFn, TelephelyPontAdat } from "@/lib/menet/tipusok";
 
@@ -26,18 +31,23 @@ import type { FeladatJavaslat, Hely, MenetFeladat, MenetMunka, Pont, PotkocsiKap
 // felül — azt csak az átrendezés (akciok.ts) módosítja.
 
 /** Átlagsebesség a tervezett időkhöz (km/h) — nyerges szerelvény, vegyes út. */
-const ATLAG_SEBESSEG_KMH = 60;
+export const ATLAG_SEBESSEG_KMH = 60;
 /** Ennyi napnál régebbi lerakó már nem indulási hely: a kocsi akkor a telephelyéről indul. */
 const INDULAS_NAPOK = 3;
 const LEZART_ALLAPOTOK = ["teljesitve", "szamlazhato", "szamlazva", "email_elment", "postazva", "lezart"];
+
+/** A HU-GO „nincs útvonal / rossz címpár” hibája — ez nem állítja le a kört (lásd hugo-megszakito.ts). */
+export const cimparHiba = (err: unknown) => err instanceof TollCalcError;
 
 /**
  * Szerveroldali távolság: HU-GO útvonal (J5, EURO6, 40 t; a kulso-hivas
  * gyorsítótárával), ha az nem érhető el, légvonal × 1,3 — 'becsles'
  * jelöléssel. A cím koordinátája a megállóból, különben a helyszín-szótár
- * / geokód-gyorsítótár (geokodolCachelve). Egy körön belül memoizált.
+ * / geokód-gyorsítótár (geokodolCachelve). Egy körön belül memoizált; a
+ * `kor` megszakítója az első HU-GO időtúllépés / hálózati hiba után a kör
+ * hátralévő részére becslésre vált (hugo-megszakito.ts).
  */
-export function szerverTav(): TavFn {
+export function szerverTav(kor: HugoKor = ujHugoKor()): TavFn {
   const pontCache = new Map<string, Pont | null>();
   const tavCache = new Map<string, { km: number; forras: "hugo" | "becsles" } | null>();
   async function pont(h: Hely): Promise<Pont | null> {
@@ -58,12 +68,13 @@ export function szerverTav(): TavFn {
     let ki: { km: number; forras: "hugo" | "becsles" };
     if (legvonalKm(p, q) < 0.5) ki = { km: 0, forras: "hugo" };
     else {
-      try {
-        const r = await calculateToll({ points: [p, q], vehicleCategory: "J5", euroCategory: "EURO6", weight: 40 });
-        ki = { km: r.distanceKm, forras: "hugo" };
-      } catch {
-        ki = { km: Math.round(legvonalKm(p, q) * KOZUTI_SZORZO), forras: "becsles" };
-      }
+      const r = await hugoVagyBecsles<{ km: number; forras: "hugo" | "becsles" }>(
+        kor,
+        async () => ({ km: (await calculateToll({ points: [p, q], vehicleCategory: "J5", euroCategory: "EURO6", weight: 40 })).distanceKm, forras: "hugo" as const }),
+        () => ({ km: Math.round(legvonalKm(p, q) * KOZUTI_SZORZO), forras: "becsles" as const }),
+        { cimparHiba }
+      );
+      ki = r.ertek;
     }
     tavCache.set(kulcs, ki);
     return ki;
@@ -144,8 +155,34 @@ async function telephelyPontok(): Promise<TelephelyPontAdat[]> {
   }
 }
 
-/** Ahonnan a kocsi a napot kezdi: az utolsó (legfeljebb 3 napos) lerakója, különben a saját telephelye. */
+/**
+ * Ahonnan a kocsi a napot kezdi: az előző (legfeljebb 3 napos) MENET utolsó
+ * feladatának célja (a jóváhagyott menet sorrendje szerint, különben a
+ * javaslaté) — ez követi az átrendezést és az optimalizáló elfogadását;
+ * ha nincs ilyen menet, a legutóbbi lerakó a megbízásokból; különben a kocsi
+ * saját telephelye.
+ */
 async function indulasiHely(jarmuId: string, jarmuKod: string, nap: string, telephelyek: TelephelyPontAdat[]): Promise<Hely> {
+  try {
+    const sorok = await query<{ nap: string; allapot: string; sorszam: number; cel_cim: string | null; cel_tp: string | null; lat: number | null; lon: number | null; atnyulo: boolean }>(
+      `select m.nap::text as nap, m.allapot, f.sorszam, f.cel_cim, f.cel_telephely_pont_id::text as cel_tp, le.lat, le.lon,
+         coalesce(coalesce(mb.lerakas_datum, mb.datum) >= $2::date, false) as atnyulo
+       from fuvar_menet m
+       join menet_feladat f on f.menet_id = m.id
+       left join fuvar_megbizasok mb on mb.id = f.megbizas_id
+       left join lateral (select g.lat, g.lon from fuvar_megallok g where g.megbizas_id = f.megbizas_id and g.tipus = 'lerako' order by g.sorszam desc limit 1) le on true
+       where m.jarmu_id = $1 and m.nap < $2::date and m.nap >= $2::date - $3::int`,
+      [jarmuId, nap, INDULAS_NAPOK]
+    );
+    const tp = (id: string | null) => (id ? telephelyek.find((t) => t.id === id) ?? null : null);
+    const vege = elozoMenetVege(sorok.map((s): ElozoMenetFeladat => ({
+      nap: s.nap, allapot: s.allapot, sorszam: s.sorszam, celCim: s.cel_cim, celTelephelyPontId: s.cel_tp,
+      pont: pontVagyNull(s.lat, s.lon) ?? tp(s.cel_tp)?.pont ?? null, atnyulo: s.atnyulo,
+    })));
+    if (vege) return vege;
+  } catch (err) {
+    console.warn("[menetterv] az előző menet nem olvasható, a megbízásokból indulunk:", err instanceof Error ? err.message : err);
+  }
   const [elozo] = await query<{ cim: string | null; lat: number | null; lon: number | null }>(
     `select coalesce(le.cim_nyers, m.lerako) as cim, le.lat, le.lon
      from fuvar_megbizasok m
@@ -163,6 +200,18 @@ async function indulasiHely(jarmuId: string, jarmuKod: string, nap: string, tele
   return { cim: t.cim, pont: pontVagyNull(t.lat ?? null, t.lon ?? null) ?? tp?.pont ?? null, telephelyPontId: tp?.id ?? null };
 }
 
+/** A nap kezdete (perc) a fuvar_beallitas 'nap_kezdes_ido' sorából („06:00”, 035-ös migráció); hiba / hiány: 06:00. */
+async function napKezdesBeallitas(): Promise<number> {
+  try {
+    const [s] = await query<{ ertek: unknown }>(
+      `select ertek from fuvar_beallitas where kulcs = 'nap_kezdes_ido' and ervenyes_tol <= now() order by ervenyes_tol desc, id desc limit 1`
+    );
+    return napKezdesPercbol(s?.ertek) ?? NAP_KEZDES_ALAP_PERC;
+  } catch {
+    return NAP_KEZDES_ALAP_PERC;
+  }
+}
+
 export type MenetAdat = Omit<MenetJavaslatBemenet, "tav" | "sorrend" | "elsoIndulas" | "sorszamKezdet"> & { jarmuKod: string };
 
 /** A javaslat bemenete egy kocsi egy napjára (adatbázisból). */
@@ -177,7 +226,7 @@ export async function menetAdat(jarmuId: string, nap: string): Promise<MenetAdat
   const kapacitas: PotkocsiKapacitas | null = j.van
     ? { raklaphelyNormal: j.rhn, raklaphelyForgatott: j.rhf, raklapDbNormal: j.rdn, raklapDbForgatott: j.rdf }
     : null;
-  const [telephelyek, munkak, b] = await Promise.all([telephelyPontok(), napiMunkak(jarmuId, nap), getFuvarBeallitasok()]);
+  const [telephelyek, munkak, b, napKezdesPerc] = await Promise.all([telephelyPontok(), napiMunkak(jarmuId, nap), getFuvarBeallitasok(), napKezdesBeallitas()]);
   return {
     jarmuKod: j.kod,
     nap,
@@ -190,6 +239,7 @@ export async function menetAdat(jarmuId: string, nap: string): Promise<MenetAdat
       felrakasRahagyasPerc: b.felrakas_rahagyas_perc,
       lerakasRahagyasPerc: b.lerakas_rahagyas_perc,
       atlagSebessegKmh: ATLAG_SEBESSEG_KMH,
+      napKezdesPerc,
     },
   };
 }
@@ -252,14 +302,29 @@ export async function elfogadottOptimalizaloSorrend(jarmuId: string, nap: string
 }
 
 export type JavaslatEredmeny =
-  | { eredmeny: "uj" | "frissult" | "valtozatlan"; menetId: string | null; verzio: number }
+  | { eredmeny: "uj" | "frissult" | "km_frissult" | "valtozatlan"; menetId: string | null; verzio: number }
   | { eredmeny: "jovahagyott"; menetId: string; verzio: number };
+
+/** A feladatok km-, idő- és figyelmeztetés-oszlopai helyben (sorszám szerint) — verzió-ugrás nélkül. */
+async function frissitKmOszlopokat(tx: Querier, menetId: string, feladatok: FeladatJavaslat[]): Promise<void> {
+  for (const f of feladatok) {
+    await tx(
+      `update menet_feladat set tervezett_indulas = $3, tervezett_erkezes = $4, ures_km = $5, rakott_km = $6, km_forras = $7, figyelmeztetesek = $8::jsonb
+       where menet_id = $1 and sorszam = $2`,
+      [menetId, f.sorszam, isoVagyNull(f.tervezettIndulas), isoVagyNull(f.tervezettErkezes), f.uresKm, f.rakottKm, f.kmForras, JSON.stringify(f.figyelmeztetesek)]
+    );
+  }
+}
 
 /**
  * Egy kocsi egy napjának javaslata: kiszámolja (a tranzakción KÍVÜL — HU-GO
  * hívás lehet benne), aztán zárolva összeveti a mentettel. Jóváhagyott
- * menethez nem nyúl. Csak változás esetén ír, és akkor nő a verzió. Ha
- * nincs munka és menet sincs, nem hoz létre üres menetet.
+ * menethez nem nyúl — ezt MÁR A SZÁMOLÁS ELŐTT megnézi, hogy jóváhagyott
+ * menetre ne menjen ki HU-GO hívás. Csak valódi változás esetén ír új
+ * feladatlistát és nő a verzió; ha csak a km-ek ingadoznak (HU-GO ↔ becslés,
+ * < 2 km), az új számok verzió-ugrás nélkül íródnak, a HU-GO → becslés
+ * romlás pedig nem íródik (osszevetJavaslatot). Ha nincs munka és menet sincs,
+ * nem hoz létre üres menetet.
  */
 export async function frissitMenetJavaslatot(
   jarmuId: string,
@@ -268,6 +333,11 @@ export async function frissitMenetJavaslatot(
   tav: TavFn = szerverTav(),
   sorrend?: readonly string[] | null
 ): Promise<JavaslatEredmeny> {
+  const [elotte] = await query<{ id: string; allapot: string; verzio: number }>(
+    `select id::text, allapot, verzio from fuvar_menet where jarmu_id = $1 and nap = $2::date`,
+    [jarmuId, nap]
+  );
+  if (elotte && elotte.allapot !== "javaslat") return { eredmeny: "jovahagyott", menetId: elotte.id, verzio: elotte.verzio };
   const adat = await menetAdat(jarmuId, nap);
   if (!adat) throw new Error("Nincs ilyen kocsi.");
   // Kötött sorrend: a hívóé (optimalizáló elfogadása), különben a legutóbb
@@ -297,7 +367,13 @@ export async function frissitMenetJavaslatot(
       return { eredmeny: "uj", menetId: m.id, verzio: m.verzio };
     }
     const mentett = ((await menetFeladatai([m.id], tx)).get(m.id) ?? []).map(mentettJavaslatkent);
-    if (feladatUjjlenyomat(mentett) === feladatUjjlenyomat(feladatok)) return { eredmeny: "valtozatlan", menetId: m.id, verzio: m.verzio };
+    const percPerKm = 60 / (adat.beallitas.atlagSebessegKmh > 0 ? adat.beallitas.atlagSebessegKmh : 60);
+    const osszevetes = osszevetJavaslatot(mentett, feladatok, percPerKm);
+    if (osszevetes === "azonos" || osszevetes === "becsles_romlas") return { eredmeny: "valtozatlan", menetId: m.id, verzio: m.verzio };
+    if (osszevetes === "csak_km") {
+      await frissitKmOszlopokat(tx, m.id, feladatok);
+      return { eredmeny: "km_frissult", menetId: m.id, verzio: m.verzio };
+    }
     await tx(`delete from menet_feladat where menet_id = $1`, [m.id]);
     await beszurFeladatokat(tx, m.id, feladatok);
     const [u] = await tx<{ verzio: number }>(
@@ -317,19 +393,19 @@ export async function frissitMenetJavaslatot(
  * (budapesti napok) a 'javaslat' menet frissítése; a jóváhagyottat kihagyja.
  * SOHA nem dob — kocsinként elkapja és naplózza a hibát.
  */
-export async function frissitsMenetJavaslatokat(most: Date = new Date()): Promise<{ frissult: number; valtozatlan: number; jovahagyott: number; hiba: number }> {
+export async function frissitsMenetJavaslatokat(most: Date = new Date(), kor: HugoKor = ujHugoKor()): Promise<{ frissult: number; valtozatlan: number; jovahagyott: number; hiba: number }> {
   const eredmeny = { frissult: 0, valtozatlan: 0, jovahagyott: 0, hiba: 0 };
   try {
     const ma = budapestNapISO(most);
     const holnap = budapestNapISO(new Date(Date.parse(`${ma}T12:00:00Z`) + 24 * 3600 * 1000));
     const jarmuvek = (await getJarmuvek()).filter((j): j is typeof j & { id: string } => !!j.id);
-    const tav = szerverTav();
+    const tav = szerverTav(kor);
     for (const j of jarmuvek) {
       for (const nap of [ma, holnap]) {
         try {
           const r = await frissitMenetJavaslatot(j.id, nap, "rendszer:menetterv", tav);
           if (r.eredmeny === "jovahagyott") eredmeny.jovahagyott++;
-          else if (r.eredmeny === "valtozatlan") eredmeny.valtozatlan++;
+          else if (r.eredmeny === "valtozatlan" || r.eredmeny === "km_frissult") eredmeny.valtozatlan++;
           else eredmeny.frissult++;
         } catch (err) {
           eredmeny.hiba++;
@@ -341,5 +417,6 @@ export async function frissitsMenetJavaslatokat(most: Date = new Date()): Promis
     eredmeny.hiba++;
     console.error("[menetterv] váratlan hiba:", err instanceof Error ? err.message : err);
   }
+  if (kor.leallt) console.warn(`[menetterv] a HU-GO ebben a körben leállt (${kor.ok}) — a további szakaszok légvonal × 1,3 becslések.`);
   return eredmeny;
 }

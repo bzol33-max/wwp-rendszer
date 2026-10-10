@@ -342,7 +342,7 @@ function bemenet(munkak: MenetMunka[], sorrend: string[] | null, x: Partial<OptB
     const minta = (ft: number, km: number, megengedett = true): SorrendEredmeny => ({
       jelenlegi: { sorrend: ["A", "B"], megengedett } as SorrendEredmeny["jelenlegi"],
       legjobb: { sorrend: ["B", "A"], megengedett: true } as SorrendEredmeny["jelenlegi"],
-      modszer: "teljes_bejaras", vizsgalt: 3, megtakaritasFt: ft, megtakaritasKm: km, megjegyzesek: [],
+      modszer: "teljes_bejaras", vizsgalt: 3, megtakaritasFt: ft, megtakaritasKm: km, megjegyzesek: [], legkevesbeRosszSerulesek: [],
     });
     eq("küszöb: 999 Ft, 4 km → nem", erdemesJavasolni(minta(999, 4)), false);
     eq("küszöb: 1 000 Ft → igen", erdemesJavasolni(minta(1000, 0)), true);

@@ -19,7 +19,7 @@ import { frissitsKalkulaciokat, getTaroltKalkulaciok, szamoldEsTarold, type Taro
 import { napiSorrend, tervIdoMegbizasbol } from "@/lib/fuvarozas2/napi-sorrend";
 import { alkalmazMenetSorrendet } from "@/lib/menet/menet-alap";
 import { menetSorrendek } from "@/lib/menet/repo";
-import { celar, elozmenyElteres, hetHatas, legjobbKocsi, type HetEredmeny, type HetFuvar, type HetParam, type Pont } from "@/lib/fuvarozas2/tervezo-alap";
+import { celar, elozmenyElteres, hetHatas, hetNapjai, legjobbKocsi, type HetEredmeny, type HetFuvar, type HetNap, type HetParam, type Pont } from "@/lib/fuvarozas2/tervezo-alap";
 
 export type BejovoSor = {
   id: string;
@@ -36,6 +36,8 @@ export type BejovoSor = {
   /** A tárolt kalkulációból (becslés helyett a pontos HU-GO-számítás), ha van. */
   magaban: { minosites: AjanlatMinosites | null; eredmenyFt: number | null; onkoltsegFt: number } | null;
   kalkElavult: boolean;
+  /** A tárolt kalkuláció hibával zárult (nem „számolás…”, hanem nem számolható). */
+  kalkHiba: boolean;
   legjobb: { kod: string; sofor: string; hatas: number } | null;
   elozmeny: { eltere: number | null; atlag: number | null } | null;
 };
@@ -48,7 +50,8 @@ export type KocsiHet = {
   utkozik: boolean;
   vele: HetEredmeny;
   nelkule: HetEredmeny;
-  napok: { nap: string; fuvarok: { id: string; cim: string; ut: string; dij: number | null; uj: boolean; sajat: boolean }[] }[];
+  /** A hét mind a 7 napja (a hétvége jelölve). */
+  napok: (HetNap & { fuvarok: { id: string; cim: string; ut: string; dij: number | null; uj: boolean; sajat: boolean }[] })[];
 };
 
 export type ElozmenySor = { id: string; nap: string; partner: string | null; ut: string; dij: number; ftKm: number | null; egyezes: "partner-ut" | "ut" | "partner" };
@@ -181,8 +184,9 @@ export async function getTervezo(szuro: { m?: string; kocsi?: string }): Promise
       const elotte = sajat.filter((f) => f.lerakas_nap < kezd && f.le_lat != null).pop();
       const kezdo = elotte ? { lat: elotte.le_lat!, lon: elotte.le_lon! } : null;
       const h = hetHatas(heti.map(hetFuvar), uj, kezdo, param);
-      const napok = Array.from({ length: 5 }, (_, i) => napPlusz(kezd, i)).map((nap) => ({
+      const napok = hetNapjai(kezd).map(({ nap, hetvege }) => ({
         nap,
+        hetvege,
         // A nap kártyái a közös sorrendben (napi-sorrend.ts), nem a lekérdezés datum, id rendjében.
         fuvarok: alkalmazMenetSorrendet(
           napiSorrend([...heti, jelolt].filter((f) => f.felrakas_nap <= nap && f.lerakas_nap >= nap), sorrendAdat),
@@ -238,17 +242,21 @@ export async function getTervezo(szuro: { m?: string; kocsi?: string }): Promise
     return elozmenyElteres(mostFtKm(f), (utas.length ? utas : el).map((e) => e.ftKm));
   }
 
+  const magabanKalkbol = (t: TaroltKalkulacio | null | undefined): BejovoSor["magaban"] =>
+    t?.eredmeny
+      ? { minosites: t.eredmeny.megbizoiAjanlat?.minosites ?? null, eredmenyFt: t.eredmeny.megbizoiAjanlat?.eredmenyFt ?? null, onkoltsegFt: t.eredmeny.onkoltseg.osszesenFt }
+      : null;
   const bejovo: BejovoSor[] = bejovoFuvarok.map((f) => {
     const t = tar.get(f.id);
-    const m = t?.eredmeny?.megbizoiAjanlat;
     const hetek = kocsiHetek(f);
     const legjobb = legjobbKocsi(hetek);
     const el = elozmenyek(f);
     return {
       id: f.id, allapot: f.allapot, partner: f.partner, hivatkozas: f.hivatkozas, felrako: f.felrako, lerako: f.lerako,
       felrakasNap: f.felrakas_nap, lerakasNap: f.lerakas_nap, fuvardij: f.fuvardij != null ? Number(f.fuvardij) : null, penznem: f.penznem, jarmuKod: f.jarmu_kod,
-      magaban: t?.eredmeny ? { minosites: m?.minosites ?? null, eredmenyFt: m?.eredmenyFt ?? null, onkoltsegFt: t.eredmeny.onkoltseg.osszesenFt } : null,
+      magaban: magabanKalkbol(t),
       kalkElavult: !t || t.elavult,
+      kalkHiba: !!t && !t.eredmeny && !!t.hiba,
       legjobb: legjobb ? { kod: legjobb.kod, sofor: legjobb.sofor, hatas: legjobb.hatas } : null,
       elozmeny: el.length ? elozmenyOsszeg(f, el) : null,
     };
@@ -264,7 +272,15 @@ export async function getTervezo(szuro: { m?: string; kocsi?: string }): Promise
     const sor = bejovo.find((b) => b.id === valasztottId)!;
     // A kiválasztottra — ha még soha nem volt kiszámolva — megvárjuk a számítást (egyszer).
     let kalk = tar.get(valasztottId) ?? null;
-    if (!kalk) kalk = await szamoldEsTarold(valasztottId).catch(() => null);
+    if (!kalk) {
+      kalk = await szamoldEsTarold(valasztottId).catch(() => null);
+      // A Bejövő sor chipje is a most kiszámolt kalkulációt mutassa (ne maradjon „számolás…”-on).
+      if (kalk) {
+        sor.magaban = magabanKalkbol(kalk);
+        sor.kalkElavult = kalk.elavult;
+        sor.kalkHiba = !kalk.eredmeny && !!kalk.hiba;
+      }
+    }
     const kocsik = kocsiHetek(f);
     const el = elozmenyek(f);
     const legutobbi = el.find((e) => e.egyezes === "partner-ut");

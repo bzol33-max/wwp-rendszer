@@ -20,11 +20,13 @@ import { requireSession } from "@/lib/auth/dal";
 import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
 import { toroljIdovonalCachet } from "@/lib/fuvarozas/idovonal-cache";
 import { getMenetEsemenyek, getMenetek } from "@/lib/menet/repo";
-import { frissitMenetJavaslatot } from "@/lib/menet/generalas";
+import { ATLAG_SEBESSEG_KMH, frissitMenetJavaslatot } from "@/lib/menet/generalas";
+import { getFuvarBeallitasok } from "@/lib/beallitasok/fuvar";
+import { menetVezetes } from "@/lib/menet/menet-alap";
 import { atrendezMenet, jovahagyMenet, lezarMenetFeladatot, visszaJavaslatbaMenet, type Valasz } from "@/lib/menet/muveletek";
 import { nyitottJavaslatok } from "@/lib/menet/optimalizalo-szerver";
 import type { OptJavaslatNezet } from "@/lib/menet/optimalizalo";
-import type { Menet, MenetEsemeny } from "@/lib/menet/tipusok";
+import type { Menet, MenetEsemeny, MenetFigyelmeztetes } from "@/lib/menet/tipusok";
 
 const ISO_NAP = /^\d{4}-\d{2}-\d{2}$/;
 const AZONOSITO = /^\d+$/;
@@ -43,6 +45,8 @@ export type MenettervKocsi = {
   esemenyek: MenetEsemeny[];
   /** Az optimalizáló nyitott sorrend-javaslata (4. fázis), ha van; `elavult`: azóta változott a menet verziója. */
   optimalizalo: (OptJavaslatNezet & { elavult: boolean }) | null;
+  /** A menet becsült napi vezetése (perc) és a kártya-szintű figyelmeztetés, ha a napi keret felett van. */
+  vezetes: { perc: number; maxPerc: number; figyelmeztetes: MenetFigyelmeztetes | null } | null;
 };
 
 /** A Menetterv panel adatai egy napra: minden aktív kocsi (JANI is), a menetével és a naplójával. */
@@ -60,6 +64,7 @@ export async function getMenettervNap(nap: string): Promise<{ nap: string; kocsi
   }
   const esemenyek = menetek.length ? await getMenetEsemenyek(menetek.map((m) => m.id)).catch(() => new Map<string, MenetEsemeny[]>()) : new Map<string, MenetEsemeny[]>();
   const javaslatok = await nyitottJavaslatok(menetek.map((m) => m.id));
+  const vezetesMaxPerc = (await getFuvarBeallitasok()).sofor_napi_vezetes_max_perc;
   return {
     nap,
     hiba,
@@ -69,6 +74,9 @@ export async function getMenettervNap(nap: string): Promise<{ nap: string; kocsi
       return {
         jarmuId: j.id!, kod: j.kod!, cimke: j.label, sofor: j.sofor, menet, esemenyek: menet ? esemenyek.get(menet.id) ?? [] : [],
         optimalizalo: opt && menet ? { ...opt, elavult: opt.menetVerzio != null && opt.menetVerzio !== menet.verzio } : null,
+        vezetes: menet && menet.feladatok.length
+          ? { ...menetVezetes(menet.feladatok, { atlagSebessegKmh: ATLAG_SEBESSEG_KMH, vezetesMaxPerc }), maxPerc: vezetesMaxPerc }
+          : null,
       };
     }),
   };
