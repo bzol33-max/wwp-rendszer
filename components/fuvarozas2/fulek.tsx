@@ -9,6 +9,8 @@ import { cn } from "@/lib/utils";
 // Megbízások munkaasztalba (az oldalaik elérhetők maradnak linkről).
 const FULEK: { href: string; label: string; csakFuvarozas?: boolean; csakRendszer?: boolean }[] = [
   { href: "/fuvarozas2", label: "Ma" },
+  // Diszpécser (6. fázis): kocsinkénti idővonal, probléma-sáv, heti beosztás, lista, térkép.
+  { href: "/fuvarozas2/diszpecser", label: "Diszpécser", csakFuvarozas: true },
   { href: "/fuvarozas2/megbizasok", label: "Megbízások" },
   { href: "/fuvarozas2/kalkulator", label: "Kalkulátor", csakFuvarozas: true },
   { href: "/fuvarozas2/levelek", label: "Levelek" },
