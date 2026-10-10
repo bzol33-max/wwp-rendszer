@@ -40,15 +40,87 @@ export function parseMnbArfolyamok(xml: string): MnbArfolyam[] {
   return ki;
 }
 
+/** Hogyan viszonyul a használt árfolyam napja a teljesítés napjához. */
+export type ArfolyamTipus =
+  /** Pontosan a teljesítés napjának árfolyama. */
+  | "aznapi"
+  /** A megelőző közzétett nap árfolyama, mert aznap nincs (hétvége, vagy ma 12:00 előtt). */
+  | "elozo"
+  /** Régebbi árfolyam, pedig közben lett volna közzétett nap (ünnep, vagy hiányzó/elavult adat). */
+  | "regi"
+  /** Korábbi nincs, a legkorábbi KÉSŐBBI napé. */
+  | "kesobbi";
+
+/** Az MNB a munkanapi árfolyamot délben (~12:00, budapesti idő) teszi közzé. */
+export const MNB_KOZZETETEL_ORA = 12;
+
+function napHetNapja(nap: string): number {
+  return new Date(`${nap}T12:00:00Z`).getUTCDay();
+}
+
+function napLepes(nap: string, delta: number): string {
+  const d = new Date(`${nap}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + delta);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Kellett-e már árfolyamot közzétenni erre a napra: hétköznap, és vagy múltbeli
+ * nap, vagy a mai nap 12:00 (budapesti idő) után. Ünnepnapot nem ismer — azt
+ * a hívó a hiányzó sorból látja (és óránként legfeljebb egyszer kérdez újra).
+ * `ma`/`ora` nélkül minden hétköznapot közzétettnek vesz.
+ */
+export function kozzetettNapKell(nap: string, ma?: string, ora?: number): boolean {
+  const h = napHetNapja(nap);
+  if (h === 0 || h === 6) return false;
+  if (ma == null) return true;
+  if (nap < ma) return true;
+  if (nap > ma) return false;
+  return (ora ?? 0) >= MNB_KOZZETETEL_ORA;
+}
+
+/** A `nap`-ra érvényes árfolyam várt közzétételi napja: a legutóbbi `nap` előtti/aznapi nap, amelyre már kellett közzétett árfolyam. */
+export function elvartArfolyamNap(nap: string, ma?: string, ora?: number): string | null {
+  let d = nap;
+  for (let i = 0; i < 10; i++) {
+    if (kozzetettNapKell(d, ma, ora)) return d;
+    d = napLepes(d, -1);
+  }
+  return null;
+}
+
+/**
+ * Azok a teljesítési napok, amelyekhez HIÁNYZIK a tárolt árfolyam: a várt
+ * közzétételi napra (lásd fent) nincs PONTOSAN arra a napra szóló sor. A
+ * régi szabály (bármely sor 4 napon belül) egy 4 napos árfolyamot is
+ * meglévőnek vett — ez nem.
+ */
+export function hianyzoArfolyamNapok(
+  sorok: { nap: string }[],
+  napok: string[],
+  ma: string,
+  ora: number
+): string[] {
+  const meglevo = new Set(sorok.map((s) => s.nap));
+  return napok.filter((n) => {
+    const v = elvartArfolyamNap(n, ma, ora);
+    return v != null && !meglevo.has(v);
+  });
+}
+
 /**
  * A `nap`-hoz érvényes árfolyam: az aznapi, vagy (hétvége, ünnep, még nem
  * közzétett mai) a legutóbbi korábbi. Ha korábbi sincs, a legkorábbi
- * későbbi — jelölve, hogy nem a teljesítés napjáé.
+ * későbbi. `pontos` CSAK az aznapi árfolyamnál igaz; a `tipus` mondja meg,
+ * jogos-e a korábbi nap (hétvége / ma dél előtt → "elozo") vagy elavult
+ * ("regi").
  */
 export function arfolyamNapra(
   sorok: { nap: string; ft: number }[],
-  nap: string
-): { ft: number; nap: string; pontos: boolean } | null {
+  nap: string,
+  ma?: string,
+  ora?: number
+): { ft: number; nap: string; pontos: boolean; tipus: ArfolyamTipus } | null {
   if (sorok.length === 0) return null;
   const rendezett = [...sorok].sort((a, b) => a.nap.localeCompare(b.nap));
   let talalt: { nap: string; ft: number } | null = null;
@@ -56,9 +128,23 @@ export function arfolyamNapra(
     if (s.nap <= nap) talalt = s;
     else break;
   }
-  if (talalt) return { ft: Number(talalt.ft), nap: talalt.nap, pontos: true };
+  if (talalt) {
+    if (talalt.nap === nap) return { ft: Number(talalt.ft), nap: talalt.nap, pontos: true, tipus: "aznapi" };
+    const elvart = elvartArfolyamNap(nap, ma, ora);
+    // Jogos előző nap: a várt közzétételi nap nem későbbi a talált sornál (hétvége, ma dél előtt).
+    const tipus: ArfolyamTipus = elvart == null || elvart <= talalt.nap ? "elozo" : "regi";
+    return { ft: Number(talalt.ft), nap: talalt.nap, pontos: false, tipus };
+  }
   const elso = rendezett[0];
-  return { ft: Number(elso.ft), nap: elso.nap, pontos: false };
+  return { ft: Number(elso.ft), nap: elso.nap, pontos: false, tipus: "kesobbi" };
+}
+
+/** Rövid felirat az árfolyam mellé (a Kimutatás és az EUR-átváltás címkéje). */
+export function arfolyamTipusCimke(tipus: ArfolyamTipus | undefined, pontos?: boolean): string {
+  if (tipus === "aznapi" || (tipus == null && pontos !== false)) return "";
+  if (tipus === "elozo") return "előző közzétett nap";
+  if (tipus === "regi") return "régebbi árfolyam — aznapi nincs tárolva";
+  return "tartalék";
 }
 
 /** A GetExchangeRates SOAP 1.1 kérés törzse. */

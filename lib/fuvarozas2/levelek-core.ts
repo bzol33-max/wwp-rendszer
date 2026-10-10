@@ -16,12 +16,20 @@ import { query } from "@/lib/db";
 import { osztalyozLevelet, AUTO_DRIVE_BIZALOM, type LevelBemenet, type LevelOsztaly } from "@/lib/fuvarozas2/level-osztalyozo";
 import { feltoltMegbizasIratot } from "@/lib/fuvarozas/drive-sync-core";
 import { tankolasLevelbol } from "@/lib/fuvarozas2/koltsegek-core";
+import { opluszFeladoPontos } from "@/lib/fuvarozas2/koltseg-import";
 
 export type BeerkezoLevel = LevelBemenet & {
   gmailMessageId: string;
   gmailThreadId?: string | null;
   feladoNev?: string | null;
   erkezett: string;
+  /**
+   * A Gmail-figyelő (2026-10-10 utáni változat) a kút leveleinél a levél
+   * Authentication-Results fejlécéből: true, ha a gmail.com DKIM/SPF/DMARC
+   * átment. false → hamisított feladó, nem írunk tankolást. Hiányzik (régi
+   * script) → csak a pontos feladócím dönt.
+   */
+  kutHitelesites?: boolean | null;
 };
 
 export type BeveteliEredmeny = { uj: number; ismert: number; kert: string[] };
@@ -62,7 +70,8 @@ export async function veszLeveleket(levelek: BeerkezoLevel[]): Promise<BeveteliE
     else ismert++;
     // A kút bizonylat-értesítőjéből tankolás lesz (Költségek; idempotens a
     // tranzakciószámra). Egy hibás szöveg nem akaszthatja meg a levelek mentését.
-    if (o.osztaly === "tankolas") {
+    // CSAK a kút pontos feladócíméről: a továbbított/hasonmás levél csak osztályozva.
+    if (o.osztaly === "tankolas" && opluszFeladoPontos(l.felado) && l.kutHitelesites !== false) {
       try {
         await tankolasLevelbol(l);
       } catch (err) {

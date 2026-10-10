@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { ForrasJel, TetelErtek } from "@/components/fuvarozas2/forras-jel";
 import { KimutatasMegbizasok } from "@/components/fuvarozas2/kimutatas-megbizasok";
 import type { Forras } from "@/lib/fuvarozas2/koltseg-szamitas";
+import { arfolyamTipusCimke } from "@/lib/fuvarozas/arfolyam-alap";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ function Mezo({ cim, ertek, alcim, szin, jel }: { cim: string; ertek: string; al
   return (
     <div className="rounded-xl bg-card px-4 py-3 ring-1 ring-foreground/10">
       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">{cim} <ForrasJel forras={jel} /></div>
-      <div className={cn("text-xl font-semibold tabular-nums", szin)}>{ertek}</div>
+      <div className={cn("whitespace-nowrap text-xl font-semibold tabular-nums", szin)}>{ertek}</div>
       {alcim ? <div className="text-xs text-muted-foreground">{alcim}</div> : null}
     </div>
   );
@@ -44,8 +45,21 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ i
   const arfolyamCimke = k.arfolyamok.length === 0
     ? null
     : k.arfolyamok.length === 1
-      ? `MNB ${k.arfolyamok[0].ft.toLocaleString("hu-HU")} Ft/EUR (${k.arfolyamok[0].nap}${k.arfolyamok[0].pontos ? "" : ", tartalék"})`
-      : `MNB ${Math.min(...k.arfolyamok.map((a) => a.ft)).toLocaleString("hu-HU")}–${Math.max(...k.arfolyamok.map((a) => a.ft)).toLocaleString("hu-HU")} Ft/EUR (a teljesítés napja szerint)`;
+      ? (() => {
+          const a = k.arfolyamok[0];
+          const megj = arfolyamTipusCimke(a.tipus, a.pontos);
+          return `MNB ${a.ft.toLocaleString("hu-HU")} Ft/EUR (${a.nap}${megj ? `, ${megj}` : ""})`;
+        })()
+      : `MNB ${Math.min(...k.arfolyamok.map((a) => a.ft)).toLocaleString("hu-HU")}–${Math.max(...k.arfolyamok.map((a) => a.ft)).toLocaleString("hu-HU")} Ft/EUR (a teljesítés napja szerint${k.arfolyamok.some((a) => !a.pontos) ? "; ahol aznapi nincs, az előző közzétett nap" : ""})`;
+  const fk = k.ossz.fejlecKm;
+  const kmAlcim = [
+    fk.becsultKocsi > 0
+      ? fk.tenyKm > 0
+        ? `GPS ${fk.tenyKm.toLocaleString("hu-HU")} + becslés ${fk.becsultKm.toLocaleString("hu-HU")} (${fk.becsultKocsi} kocsi GPS-tény nélkül)`
+        : "nincs GPS-tény — a fuvarlánc becslése"
+      : null,
+    `rakott ${(k.ossz.berKm + k.ossz.sajatKm).toLocaleString("hu-HU")} · üres ${k.ossz.uresKm.toLocaleString("hu-HU")} (becslés)`,
+  ].filter(Boolean).join(" · ");
   return (
     <div className="flex flex-col gap-5">
       <PageHeader
@@ -79,7 +93,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ i
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Mezo cim="Megtett km" jel="teny" ertek={`${k.ossz.km.toLocaleString("hu-HU")} km`} alcim={`rakott ${(k.ossz.berKm + k.ossz.sajatKm).toLocaleString("hu-HU")} · üres ${k.ossz.uresKm.toLocaleString("hu-HU")} (becslés)`} />
+        <Mezo cim="Megtett km" jel={fk.forras} ertek={`${fk.ertek.toLocaleString("hu-HU")} km`} alcim={kmAlcim} />
         <Mezo cim="Bevétel (bérfuvar)" jel="teny" ertek={formatFt(k.ossz.bevetelFt)}
           alcim={[
             arfolyamCimke,
@@ -87,13 +101,16 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ i
           ].filter(Boolean).join(" · ") || undefined}
           szin="text-[var(--f2-mint)]" />
         <Mezo cim="Bér Ft/km" jel="becsles" ertek={k.ossz.berFtKm ? `${k.ossz.berFtKm.toLocaleString("hu-HU")} Ft/km` : "—"} alcim="bér bevétel ÷ bér rakott km" />
-        <Mezo cim="Összes költség" jel={k.ossz.uzemanyagForras === "teny" && k.ossz.utdijForras === "teny" ? "teny" : "becsles"} ertek={formatFt(k.ossz.osszKoltsegFt)} alcim="üzemanyag + útdíj + napi fix, minden kocsira" />
+        <Mezo cim="Összes költség" jel={k.ossz.osszKoltsegForras} ertek={formatFt(k.ossz.osszKoltsegFt)}
+          alcim={`üzemanyag + útdíj + napi fix${k.ossz.keziEgyebFt ? ` + kézi egyéb ${formatFt(k.ossz.keziEgyebFt)}` : ""}, minden kocsira`} />
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Mezo cim="Üzemanyag" jel={k.ossz.uzemanyagForras} ertek={formatFt(k.ossz.uzemanyagFt)}
           alcim={`${k.ossz.liter.toLocaleString("hu-HU")} l (GPS) × aznapi tankolás Ft/l, ahol van; különben ${k.gazolajAr ? `${k.gazolajAr} Ft/l (${k.gazolajCimke})` : "nincs ár"}`} />
         <Mezo cim="Útdíj (HU-GO)" jel={k.ossz.utdijForras} ertek={formatFt(k.ossz.utdijFt)}
-          alcim={k.vanUtdijImport ? "importált HU-GO tranzakciók; ahol nincs, tárolt kalkuláció" : "nincs HU-GO import — tárolt kalkulációból (Költségek fül → import)"} />
+          alcim={k.vanUtdijImport
+            ? `importált HU-GO tranzakciók (a megbízásokra felosztva is tény)${k.ossz.utdijForras === "teny" ? "" : "; ahol nincs, tárolt kalkuláció"}`
+            : "nincs HU-GO import — tárolt kalkulációból (Költségek fül → import)"} />
         <Mezo cim="Sofőr + kocsi napi fix" jel="becsles" ertek={formatFt(k.ossz.napiKoltsegFt)} alcim={`${k.ossz.aktivNap} aktív nap × ${k.napiKoltsegBeallitas.toLocaleString("hu-HU")} Ft`} />
         <Mezo cim="Kocsi nélküli megbízás" ertek={String(k.kocsiNelkul)} alcim={k.kocsiNelkul > 0 ? "ezek km-je és költsége sehol nem szerepel" : undefined} szin={k.kocsiNelkul > 0 ? "text-[var(--f2-red)]" : undefined} />
       </div>
@@ -101,7 +118,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ i
         <Mezo cim="Bérfuvarok eredménye" jel="becsles" ertek={formatFt(k.ossz.berEredmenyFt)} alcim="bér bevétel − a bérfuvarokra jutó költség"
           szin={k.ossz.berEredmenyFt < 0 ? "text-[var(--f2-red)]" : "text-[var(--f2-mint)]"} />
         <Mezo cim="Nem hozzárendelt költség" jel="becsles" ertek={formatFt(k.ossz.nemHozzarendeltFt)} alcim="üres utak, állás — összes költség − megbízásokra osztott" />
-        <Mezo cim="Eredmény (kocsik)" jel="becsles" ertek={formatFt(k.ossz.eredmenyFt)} alcim="bérfuvar-eredmény − nem hozzárendelt költség"
+        <Mezo cim="Eredmény (bérfuvarok, saját fuvar költsége nélkül)" jel="becsles" ertek={formatFt(k.ossz.eredmenyFt)}
+          alcim="bérfuvar-eredmény − nem hozzárendelt költség; a saját fuvarok belső költségét nem vonja le — az a mellette lévő kártyán, külön"
           szin={k.ossz.eredmenyFt < 0 ? "text-[var(--f2-red)]" : "text-[var(--f2-mint)]"} />
         <Mezo cim="Saját fuvar belső költsége" jel="becsles" ertek={formatFt(k.ossz.sajatBelsoKoltsegFt)}
           alcim={`külön, nem része az eredménynek · elkerült (tájékoztató): ${formatFt(k.ossz.elkerultKoltsegFt)}`} szin="text-[var(--f2-blue)]" />
@@ -110,10 +128,10 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ i
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-base">Kocsinként</CardTitle></CardHeader>
         <CardContent className="overflow-x-auto p-0">
-          <table className="w-full min-w-[78rem] text-sm">
+          <table className="w-full min-w-[78rem] text-sm [&_td]:whitespace-nowrap">
             <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
               <tr>
-                <th className="px-3 py-2 font-medium">Kocsi</th>
+                <th className="sticky left-0 z-10 bg-muted px-3 py-2 font-medium">Kocsi</th>
                 <th className="px-3 py-2 text-right font-medium">Km</th>
                 <th className="px-3 py-2 text-right font-medium">Bér / saját / üres km</th>
                 <th className="px-3 py-2 text-right font-medium">Fuvar</th>
@@ -121,23 +139,31 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ i
                 <th className="px-3 py-2 text-right font-medium">Üzemanyag</th>
                 <th className="px-3 py-2 text-right font-medium">Útdíj</th>
                 <th className="px-3 py-2 text-right font-medium">Napi fix</th>
+                <th className="px-3 py-2 text-right font-medium">Kézi egyéb</th>
                 <th className="px-3 py-2 text-right font-medium">Bér eredmény</th>
                 <th className="px-3 py-2 text-right font-medium">Nem hozzárendelt</th>
-                <th className="px-3 py-2 text-right font-medium">Eredmény</th>
+                <th className="px-3 py-2 text-right font-medium" title="Bérfuvar-eredmény − nem hozzárendelt költség; a saját fuvar belső költsége külön oszlop">Eredmény (bér, saját nélkül)</th>
                 <th className="px-3 py-2 text-right font-medium">Saját belső költség</th>
               </tr>
             </thead>
             <tbody>
               {k.jarmuvek.map((j) => (
                 <tr key={j.kod} className="border-t border-foreground/5 align-top">
-                  <td className="px-3 py-2"><div className="font-medium">{j.kod}</div><div className="text-xs text-muted-foreground">{j.sofor ?? "—"}{j.vanGps ? "" : " · nincs GPS"}</div></td>
-                  <td className="px-3 py-2 text-right tabular-nums">{j.vanGps ? <>{j.km.toLocaleString("hu-HU")} <ForrasJel forras="teny" /></> : "—"}</td>
+                  <td className="sticky left-0 z-10 bg-card px-3 py-2"><div className="font-medium">{j.kod}</div><div className="text-xs text-muted-foreground">{j.sofor ?? "—"}{j.vanGps ? "" : " · nincs GPS"}</div></td>
+                  <td className="px-3 py-2 text-right tabular-nums">
+                    {j.vanGps && j.km > 0
+                      ? <>{j.km.toLocaleString("hu-HU")} <ForrasJel forras="teny" /></>
+                      : j.berKm + j.sajatKm + j.uresKm > 0
+                        ? <>{(j.berKm + j.sajatKm + j.uresKm).toLocaleString("hu-HU")} <ForrasJel forras="becsles" /></>
+                        : "—"}
+                  </td>
                   <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{j.berKm.toLocaleString("hu-HU")} / {j.sajatKm.toLocaleString("hu-HU")} / {j.uresKm.toLocaleString("hu-HU")}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{j.berDb} / {j.sajatDb}</td>
                   <td className="px-3 py-2 text-right tabular-nums">{formatFt(j.bevetelFt)}{j.atvaltatlanEur > 0 ? <div className="text-[10px] text-[var(--f2-amb)]">+ {j.atvaltatlanEur} EUR átváltás nélkül</div> : null}{j.ftKm ? <div className="text-[10px] text-muted-foreground">{j.ftKm} Ft/km</div> : null}</td>
                   <td className="px-3 py-2 text-right tabular-nums"><TetelErtek tetel={j.uzemanyag} /></td>
                   <td className="px-3 py-2 text-right tabular-nums"><TetelErtek tetel={j.utdij} /></td>
                   <td className="px-3 py-2 text-right tabular-nums text-muted-foreground"><TetelErtek tetel={j.napiFix} /><div className="text-[10px]">{j.aktivNap} nap</div></td>
+                  <td className="px-3 py-2 text-right tabular-nums"><TetelErtek tetel={j.keziEgyeb} /></td>
                   <td className={cn("px-3 py-2 text-right tabular-nums", j.berEredmenyFt < 0 ? "text-[var(--f2-red)]" : "text-[var(--f2-mint)]")}>{formatFt(j.berEredmenyFt)}</td>
                   <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">{formatFt(j.nemHozzarendeltFt)}</td>
                   <td className={cn("px-3 py-2 text-right font-semibold tabular-nums", j.eredmenyFt < 0 ? "text-[var(--f2-red)]" : "text-[var(--f2-mint)]")}>
@@ -186,6 +212,8 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ i
         <ForrasJel forras="becsles" /> számított érték. A megbízás tény-km-e az első és az utolsó megálló ténye (GPS vagy
         sofőr-jelzés) közti GPS-km; liter: a kocsi napi literének km-arányos része; ár: az aznapi tankolás Ft/l-e, különben
         NAV − kedvezmény. Ahol nincs tény, a rakott km (HU-GO / légvonal × 1,3) × alap fogyasztás × ár.
+        A megbízáshoz kézzel rögzített költség (útdíj, várakozási pótdíj, kiállási díj…) tény: az azonos típusú számított
+        tételt felülírja, a többi hozzáadódik. A HU-GO-tranzakciók megbízásokra felosztott része is tény („felosztva”).
         A napi fix ({k.napiKoltsegBeallitas.toLocaleString("hu-HU")} Ft/nap) a nap fuvarjai közt oszlik meg; ami nem jut
         megbízásra (üres utak, állás), az a „nem hozzárendelt” költség. A saját fuvar belső költség — az „elkerült költség”
         (saját rakott km × {k.sajatKmDijBeallitas} Ft/km) csak tájékoztató, egyik eredménybe sem számít bele.

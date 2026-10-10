@@ -8,10 +8,14 @@
 // a km/liter felosztás, az EUR-átváltás, és hogy a saját fuvar „elkerült
 // költsége" NEM adódik hozzá a kocsi eredményéhez.
 
-import { csvSorok, idopontHu, parseHuGoTabla, parseOpluszErtesites, szamHu } from "@/lib/fuvarozas2/koltseg-import";
-import { arfolyamNapra, parseMnbArfolyamok } from "@/lib/fuvarozas/arfolyam-alap";
+import ExcelJS from "exceljs";
 import {
-  eurAtvaltas, jarmuEredmeny, jarmuOsszkoltseg, literFelosztas, megbizasKoltseg, napiFixFelosztas, napiOsszeg, utakAblakban, utdijNapiFelosztas,
+  csvSorok, HUGO_MAX_KIBONTOTT_BYTE, idopontHu, opluszFeladoPontos, parseHuGoTabla, parseOpluszErtesites, szamHu, xlsxKorlatHiba, zipKibontottMeret,
+} from "@/lib/fuvarozas2/koltseg-import";
+import { tablazatSorai } from "@/lib/fuvarozas2/koltseg-xlsx";
+import { arfolyamNapra, elvartArfolyamNap, hianyzoArfolyamNapok, kozzetettNapKell, parseMnbArfolyamok } from "@/lib/fuvarozas/arfolyam-alap";
+import {
+  eurAtvaltas, fejlecKmSzamitas, jarmuEredmeny, jarmuOsszkoltseg, literFelosztas, megbizasKoltseg, napiFixFelosztas, napiOsszeg, utakAblakban, utdijNapiFelosztas,
   type JarmuKontextus, type MegbizasBemenet, type Parameterek,
 } from "@/lib/fuvarozas2/koltseg-szamitas";
 import type { SajatJarmu } from "@/lib/fuvarozas/vehicles";
@@ -91,6 +95,26 @@ const nincsFej = parseHuGoTabla([["a", "b"], ["1", "2"]], JARMUVEK);
 all("HU-GO: fejléc nélkül érthető hiba", nincsFej.tranzakciok.length === 0 && /fejlécsor/.test(nincsFej.hibak[0] ?? ""));
 eq("CSV: vesszős elválasztó idézőjellel", csvSorok('a,b,c\n"1,5",2,3'), [["a", "b", "c"], ["1,5", "2", "3"]]);
 
+// HU-GO ismétlődés: tranzakció-azonosítóval CSAK az azonosító a kulcs — ugyanaz a
+// tranzakció két különböző formátumú exportból (más dátum- és összegalak) egyszer számít.
+const exportA = parseHuGoTabla(csvSorok([
+  "Tranzakció azonosító;Dátum;Rendszám;Bruttó összeg;Útszakasz",
+  "HG-000123;2026.09.27 06:12:10;AOPU427;5 082,00;M3 Nyíregyháza - Görbeháza",
+  "HG-000124;2026.09.27 06:31:44;AOPU427;2 500,00;M3 Görbeháza - Polgár",
+].join("\n")), JARMUVEK);
+const exportB = parseHuGoTabla([
+  ["Transaction ID", "Időpont", "Jármű rendszáma", "Bruttó díj (Ft)", "Szakasz"],
+  ["hg-000123", new Date(Date.UTC(2026, 8, 27, 6, 12, 0)), "AOPU-427", 5082.4, "M3 Nyíregyháza–Görbeháza"],
+], JARMUVEK);
+eq("HU-GO kulcs: azonosítóval csak az azonosító", exportA.tranzakciok[0]?.kulsoAzonosito, "hugo:id:HG-000123");
+eq("HU-GO kulcs: két formátum, ugyanaz a tranzakció → ugyanaz a kulcs", exportB.tranzakciok[0]?.kulsoAzonosito, exportA.tranzakciok[0]?.kulsoAzonosito);
+const egyutt = new Set([...exportA.tranzakciok, ...exportB.tranzakciok].map((t) => t.kulsoAzonosito));
+eq("HU-GO kulcs: a két export együtt 2 tranzakció (nem 3)", egyutt.size, 2);
+eq("HU-GO kulcs: azonosító nélkül az összetett kulcs marad", hugo.tranzakciok[0]?.kulsoAzonosito.startsWith("hugo:id:"), false);
+all("HU-GO kulcs: a régi (összetett) kulcs is megvan a már importált sorok felismeréséhez", (exportA.tranzakciok[0]?.regiKulcs ?? "").includes("HG-000123|2026-09-27 06:12:10"));
+const sorszamos = parseHuGoTabla(csvSorok("Sorszám;Dátum;Rendszám;Bruttó összeg\n1;2026.09.27 06:12:10;AOPU427;5 082,00"), JARMUVEK);
+eq("HU-GO kulcs: a „Sorszám” nem azonosító (összetett kulcs)", sorszamos.tranzakciok[0]?.kulsoAzonosito.startsWith("hugo:id:"), false);
+
 // --- Oplusz ------------------------------------------------------------------
 const snippet = "Partner: Well-worn Pallet Kft. (4234 Szakoly) Vásárlás időpontja: 2026.09.27 17:43:41 Vásárlás tranzakciószáma: 1/R/00478709 Vásárlás összege: 5 002,00 Ft Rendszám: AOPU427 Vásárlás részletei";
 const o = parseOpluszErtesites(`Értesítés bizonylat készítésről\n${snippet}`);
@@ -99,8 +123,22 @@ eq("Oplusz: tranzakciószám", o?.tranzakcioSzam, "1/R/00478709");
 eq("Oplusz: összeg", o?.osszegFt, 5002);
 eq("Oplusz: rendszám", o?.rendszam, "AOPU427");
 eq("Oplusz: liter nincs", o?.liter, null);
-const ol = parseOpluszErtesites(snippet.replace("Vásárlás részletei", "Termék: Gázolaj Mennyiség: 142,35 l Egységár: 612,90 Ft/l"));
+const ol = parseOpluszErtesites(snippet.replace("5 002,00 Ft", "87 244,31 Ft").replace("Vásárlás részletei", "Termék: Gázolaj Mennyiség: 142,35 l Egységár: 612,90 Ft/l"));
 eq("Oplusz: liter, ha van", ol?.liter, 142.35);
+eq("Oplusz: hihető Ft/l → nincs figyelmeztetés", ol?.figyelmeztetes, null);
+// Valószínűtlen egységár (5 002 Ft / 142,35 l = 35 Ft/l): az összeg marad, a liter nem — jelölve.
+const olGyanus = parseOpluszErtesites(snippet.replace("Vásárlás részletei", "Mennyiség: 142,35 l"));
+eq("Oplusz: 35 Ft/l → liter nincs, összeg marad", [olGyanus?.liter, olGyanus?.osszegFt], [null, 5002]);
+all("Oplusz: 35 Ft/l → figyelmeztetés", /Ft\/l/.test(olGyanus?.figyelmeztetes ?? ""));
+const olDraga = parseOpluszErtesites(snippet.replace("5 002,00 Ft", "250 000,00 Ft").replace("Vásárlás részletei", "Mennyiség: 100 l"));
+eq("Oplusz: 2500 Ft/l → liter nincs", olDraga?.liter, null);
+// A szigorúbb liter-minta: a puszta „… l” egy termék nevében nem liter.
+const olTermek = parseOpluszErtesites(snippet.replace("Vásárlás részletei", "Termék: AdBlue 5 l kiszerelés"));
+eq("Oplusz: „AdBlue 5 l” nem liter", olTermek?.liter, null);
+const olLiterSzo = parseOpluszErtesites(snippet.replace("5 002,00 Ft", "61 290,00 Ft").replace("Vásárlás részletei", "Tankolva 100,0 liter gázolaj"));
+eq("Oplusz: „100,0 liter” elfogadva", olLiterSzo?.liter, 100);
+eq("Oplusz: a pontos feladó ír", opluszFeladoPontos("Oplusz <opluszbenzinkut@gmail.com>"), true);
+eq("Oplusz: hasonmás feladó nem ír", opluszFeladoPontos("opluszbenzinkut@gmail.com.example.org"), false);
 eq("Oplusz: számla-értesítő nem tankolás", parseOpluszErtesites("Értesítés számlakészítésről: K/G/00040623"), null);
 
 // --- MNB ---------------------------------------------------------------------
@@ -112,7 +150,26 @@ eq("MNB: 10-09 EUR", mnb.find((r) => r.nap === "2026-10-09")?.ft, 364.82);
 eq("MNB: 5 tizedes", mnb.find((r) => r.nap === "2026-10-07")?.ft, 366.76);
 eq("MNB: egység (100 JPY)", mnb.find((r) => r.penznem === "JPY")?.ft, 2.451);
 const eur = mnb.filter((r) => r.penznem === "EUR");
-eq("MNB: hétvégére a pénteki", arfolyamNapra(eur, "2026-10-04"), { ft: 367.87, nap: "2026-10-02", pontos: true });
+// Hétvégére a pénteki — de NEM „pontos” (az csak az aznapi), hanem jogos előző közzétett nap.
+eq("MNB: hétvégére a pénteki (előző közzétett nap)", arfolyamNapra(eur, "2026-10-04"), { ft: 367.87, nap: "2026-10-02", pontos: false, tipus: "elozo" });
+eq("MNB: aznapi = pontos", arfolyamNapra(eur, "2026-10-08")?.tipus, "aznapi");
+// A régi hiba: hétfőre (10-05) a 4 nappal korábbi csütörtöki/pénteki sor „pontos” volt.
+eq("MNB: hiányzó hétfő → régi, nem pontos", arfolyamNapra(eur, "2026-10-05", "2026-10-10", 15), { ft: 367.87, nap: "2026-10-02", pontos: false, tipus: "regi" });
+eq("MNB: ha a mai már megvan, az aznapi", arfolyamNapra(eur, "2026-10-09", "2026-10-09", 9)?.tipus, "aznapi");
+eq("MNB: ma (péntek) dél előtt, csütörtöki sorral → előző", arfolyamNapra(eur.filter((r) => r.nap !== "2026-10-09"), "2026-10-09", "2026-10-09", 9)?.tipus, "elozo");
+eq("MNB: ma (péntek) dél után, csütörtöki sorral → régi", arfolyamNapra(eur.filter((r) => r.nap !== "2026-10-09"), "2026-10-09", "2026-10-09", 13)?.tipus, "regi");
+// Hiányzó napok (ezért kérdezzük újra az MNB-t).
+eq("MNB közzététel: szombat nem kell", kozzetettNapKell("2026-10-10", "2026-10-12", 9), false);
+eq("MNB közzététel: múlt hétköznap kell", kozzetettNapKell("2026-10-08", "2026-10-12", 9), true);
+eq("MNB közzététel: ma 11-kor még nem", kozzetettNapKell("2026-10-12", "2026-10-12", 11), false);
+eq("MNB közzététel: ma 12-kor már igen", kozzetettNapKell("2026-10-12", "2026-10-12", 12), true);
+eq("MNB várt nap: vasárnap → péntek", elvartArfolyamNap("2026-10-04", "2026-10-10", 9), "2026-10-02");
+eq("MNB hiányzó: hétfő-kedd nincs tárolva → hiányzik (a régi 4 napos szabály meglévőnek vette)",
+  hianyzoArfolyamNapok(eur, ["2026-10-05", "2026-10-06", "2026-10-08"], "2026-10-10", 9), ["2026-10-05", "2026-10-06"]);
+eq("MNB hiányzó: hétvége a pénteki sorral nem hiányzik", hianyzoArfolyamNapok(eur, ["2026-10-03", "2026-10-04"], "2026-10-10", 9), []);
+// Hétfő dél előtt: a pénteki (10-09) a várt nap — tárolva van, nem hiányzik.
+eq("MNB hiányzó: ma dél előtt nem hiányzik", hianyzoArfolyamNapok(eur, ["2026-10-12"], "2026-10-12", 9), []);
+eq("MNB hiányzó: ma dél után hiányzik", hianyzoArfolyamNapok(eur, ["2026-10-12"], "2026-10-12", 13), ["2026-10-12"]);
 eq("MNB: aznapi", arfolyamNapra(eur, "2026-10-08")?.ft, 366.45);
 eq("MNB: korábbi nincs → tartalék", arfolyamNapra(eur, "2026-09-30")?.pontos, false);
 eq("MNB: üres", arfolyamNapra([], "2026-10-08"), null);
@@ -121,6 +178,8 @@ eq("MNB: üres", arfolyamNapra([], "2026-10-08"), null);
 const at = eurAtvaltas(1200, { ft: 364.82, nap: "2026-10-09" });
 eq("EUR: 1200 × 364,82", at?.ft, 437784);
 all("EUR: a címke tartalmazza az árfolyamot és a napot", /364,82/.test(at?.cimke ?? "") && /2026-10-09/.test(at?.cimke ?? ""));
+all("EUR: előző közzétett nap a címkében", /előző közzétett nap/.test(eurAtvaltas(1, { ft: 364.82, nap: "2026-10-09", pontos: false, tipus: "elozo" })?.cimke ?? ""));
+all("EUR: régi árfolyam a címkében", /régebbi/.test(eurAtvaltas(1, { ft: 364.82, nap: "2026-10-05", pontos: false, tipus: "regi" })?.cimke ?? ""));
 eq("EUR: árfolyam nélkül null", eurAtvaltas(1200, null), null);
 
 // --- km / liter felosztás ------------------------------------------------------
@@ -229,5 +288,99 @@ const kalkbol = megbizasKoltseg({ ...ber, id: "9", tenyTol: null, tenyIg: null }
 const uo = jarmuOsszkoltseg({ ...k, utdijak: ud }, [eb, napbol, kalkbol], p, 1);
 eq("kocsi útdíj: HU-GO összes + a nem fedett fuvar becslése", [uo.utdij?.ft, uo.utdij?.forras], [5082 + 2500 + 1500 + 999 + 9000, "becsles"]);
 
-console.log(`\nKöltség-teszt: ${ok} rendben, ${bad} hiba`);
-if (bad > 0) process.exit(1);
+// --- Útdíj felosztva: tény (nem becslés), a kocsi összesítőjével egyezően --------
+eq("útdíj napból: tény, felosztva", [napbol.utdij?.forras, napbol.utdij?.felosztva, napbol.utdij?.ft], ["teny", true, 2000]);
+// Két tény-ablak nélküli fuvar egy napon, a nap minden tranzakciója nekik jut → az ő útdíjuk összege = a kocsié, mindkettő tény.
+const ketNap = [{ idopont: "2026-10-09 08:00:00", bruttoFt: 10_285 }, { idopont: "2026-10-09 15:00:00", bruttoFt: 10_285 }];
+const felos = utdijNapiFelosztas([
+  { id: "x", napok: ["2026-10-09"], tenyTol: null, tenyIg: null },
+  { id: "y", napok: ["2026-10-09"], tenyTol: null, tenyIg: null },
+], ketNap);
+const kx = megbizasKoltseg({ ...sajat, id: "x", nap: "2026-10-09", felrakasNap: "2026-10-09", utdijNapbol: felos.get("x") }, { ...k, vanGps: false, utak: [], utdijak: ketNap }, p, 0);
+const ky = megbizasKoltseg({ ...sajat, id: "y", nap: "2026-10-09", felrakasNap: "2026-10-09", utdijNapbol: felos.get("y") }, { ...k, vanGps: false, utak: [], utdijak: ketNap }, p, 0);
+const kxy = jarmuOsszkoltseg({ ...k, vanGps: false, utak: [], utdijak: ketNap }, [kx, ky], p, 1);
+eq("útdíj: 10 285 + 10 285 a fuvaroknak, 20 570 a kocsinak — mind tény",
+  [kx.utdij?.ft, kx.utdij?.forras, ky.utdij?.forras, kxy.utdij?.ft, kxy.utdij?.forras], [10_285, "teny", "teny", 20_570, "teny"]);
+
+// --- Kézi költségsorok (fuvar_megbizas_koltseg, nem gépi) ----------------------------
+// Útdíj 22 000 (tény) felülírja a számított útdíjat; a várakozási pótdíj 15 000 hozzáadódik.
+const kezi = megbizasKoltseg({
+  ...ber, kezi: [
+    { tipus: "utdij", ft: 22_000, megjegyzes: "számla szerint", forras: "teny" },
+    { tipus: "varakozasi_potdij", ft: 15_000, megjegyzes: null, forras: "teny" },
+  ],
+}, k, p, 25_000, { ft: 364.82, nap: "2026-09-25" });
+eq("kézi: útdíj felülírja a számítottat (nem adódik hozzá)", [kezi.utdij?.ft, kezi.utdij?.forras, kezi.utdij?.kezi], [22_000, "teny", true]);
+eq("kézi: várakozási pótdíj külön tétel", [kezi.keziEgyeb?.ft, kezi.keziEgyeb?.forras], [15_000, "teny"]);
+eq("kézi: költség = üzemanyag + kézi útdíj + napi fix + pótdíj", kezi.koltsegFt, 43_500 + 22_000 + 25_000 + 15_000);
+eq("kézi: eredmény ennyivel kevesebb", kezi.eredmenyFt, Math.round(400 * 364.82) - kezi.koltsegFt);
+const keziBecsles = megbizasKoltseg({ ...ber, kezi: [{ tipus: "utdij", ft: 1, megjegyzes: null, forras: "becsles" }] }, k, p, 25_000, null);
+eq("kézi becslés nem írja felül a HU-GO tényt", keziBecsles.utdij?.ft, 5082);
+const keziBevetel = megbizasKoltseg({ ...ber, penznem: "Ft", fuvardij: 300_000, kezi: [{ tipus: "bevetel_potdij", ft: 20_000, megjegyzes: null, forras: "teny" }] }, k, p, 25_000, null);
+eq("kézi bevétel-pótdíj a bevételhez, nem a költséghez", [keziBevetel.bevetelFt, keziBevetel.keziEgyeb], [320_000, null]);
+// A kocsi összesítője: a pótdíj benne van az összes költségben, így nem tűnik el a „nem hozzárendelt”-ben.
+const keziOssz = jarmuOsszkoltseg(k, [kezi, es], p, 1);
+const keziJe = jarmuEredmeny([kezi, es], keziOssz);
+eq("kézi: a kocsi összes költségében a pótdíj", keziOssz.keziEgyeb?.ft, 15_000);
+// A kézi útdíj a HU-GO-ból számolt 5082-t írta felül: a kocsin 7582 − 5082 + 22 000, tény.
+eq("kézi: a kocsi útdíja a felülírt HU-GO-rész helyett a kézi összeggel", [keziOssz.utdij?.ft, keziOssz.utdij?.forras], [7582 - 5082 + 22_000, "teny"]);
+eq("kézi: a nem hozzárendelt útdíj nem torzul (= a megbízáson kívüli 2500)", (keziOssz.utdij?.ft ?? 0) - (kezi.utdij?.ft ?? 0) - (es.utdij?.ft ?? 0), 2500);
+eq("kézi: a kocsi egyeztetése (bevétel − összes = eredmény − saját belső)", keziJe.berBevetelFt - keziJe.osszKoltsegFt, keziJe.eredmenyFt - keziJe.sajatBelsoKoltsegFt);
+// HU-GO import nélkül a kézi útdíj a kocsi útdíjában is tény.
+const keziNelkul = megbizasKoltseg({ ...ber, tenyTol: null, tenyIg: null, kezi: [{ tipus: "utdij", ft: 22_000, megjegyzes: null, forras: "teny" }] }, { ...k, utdijak: [] }, p, 0, null);
+const keziNelkulOssz = jarmuOsszkoltseg({ ...k, utdijak: [] }, [keziNelkul], p, 1);
+eq("kézi útdíj import nélkül: kocsi útdíj tény 22 000", [keziNelkulOssz.utdij?.ft, keziNelkulOssz.utdij?.forras], [22_000, "teny"]);
+
+// --- Fejléc km: GPS nélkül a becslés, becslésnek jelölve ------------------------------
+eq("fejléc km: nincs GPS → rakott + üres becslés", fejlecKmSzamitas([{ vanGps: false, km: 0, berKm: 600, sajatKm: 49, uresKm: 541 }]),
+  { ertek: 1190, forras: "becsles", tenyKm: 0, becsultKm: 1190, becsultKocsi: 1 });
+eq("fejléc km: GPS-szel tény", fejlecKmSzamitas([{ vanGps: true, km: 812, berKm: 600, sajatKm: 0, uresKm: 100 }]).forras, "teny");
+eq("fejléc km: vegyes flotta → összeg, becslés", fejlecKmSzamitas([
+  { vanGps: true, km: 800, berKm: 1, sajatKm: 0, uresKm: 0 }, { vanGps: false, km: 0, berKm: 300, sajatKm: 0, uresKm: 50 },
+]), { ertek: 1150, forras: "becsles", tenyKm: 800, becsultKm: 350, becsultKocsi: 1 });
+eq("fejléc km: GPS-es kocsi 0 km-rel, de fuvarlánccal → becslés", fejlecKmSzamitas([{ vanGps: true, km: 0, berKm: 200, sajatKm: 0, uresKm: 0 }]).forras, "becsles");
+
+// --- XLSX-feltöltés korlátai (zip-bomba, sorszám) -------------------------------------
+async function xlsxTesztek() {
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("HU-GO");
+  ws.addRow(["Tranzakció azonosító", "Dátum", "Rendszám", "Bruttó összeg"]);
+  for (let i = 0; i < 40; i++) ws.addRow([`HG-${i}`, new Date(Date.UTC(2026, 9, 1, 8, i)), "AOPU427", 1000 + i]);
+  const kicsi = Buffer.from(await wb.xlsx.writeBuffer());
+  const z = zipKibontottMeret(kicsi);
+  all("zip: a központi könyvtár olvasható", !!z && z.bejegyzes > 3 && z.kibontott > kicsi.length && !z.zip64);
+  eq("zip: kis xlsx átmegy", xlsxKorlatHiba(kicsi), null);
+  const sorok = await tablazatSorai("hugo.xlsx", kicsi);
+  eq("xlsx stream: fejléc + 40 sor", sorok.length, 41);
+  const px = parseHuGoTabla(sorok, JARMUVEK);
+  eq("xlsx stream: tranzakciók (azonosító-kulccsal)", [px.tranzakciok.length, px.tranzakciok[0]?.kulsoAzonosito, px.tranzakciok[0]?.idopont], [40, "hugo:id:HG-0", "2026-10-01 08:00:00"]);
+  let hiba = "";
+  try { await tablazatSorai("hugo.xlsx", kicsi, 20); } catch (e) { hiba = e instanceof Error ? e.message : String(e); }
+  all(`xlsx stream: a sorkorlát tisztán megáll (${hiba})`, /túl hosszú/.test(hiba));
+  hiba = "";
+  try { await tablazatSorai("hugo.csv", Buffer.from("a;b\n".repeat(30)), 20); } catch (e) { hiba = e instanceof Error ? e.message : String(e); }
+  all("csv: a sorkorlát tisztán megáll", /túl hosszú/.test(hiba));
+  // Zip-bomba: egy kicsi, jól tömöríthető munkalap, amely kibontva a korlát fölött van.
+  const bomba = new ExcelJS.Workbook();
+  const bws = bomba.addWorksheet("x");
+  const sor = "A".repeat(32_000);
+  // Minden sor más szöveg (az exceljs a közös szövegeket egyszer tárolja).
+  for (let i = 0; i < Math.ceil(HUGO_MAX_KIBONTOTT_BYTE / 32_000) + 50; i++) bws.addRow([`${i}${sor}`]);
+  const bombaBuf = Buffer.from(await bomba.xlsx.writeBuffer());
+  const bz = zipKibontottMeret(bombaBuf);
+  all(`zip-bomba: tömörítve kicsi (${Math.round(bombaBuf.length / 1024)} KB), kibontva nagy (${Math.round((bz?.kibontott ?? 0) / 1024 / 1024)} MB)`,
+    bombaBuf.length < 7 * 1024 * 1024 && (bz?.kibontott ?? 0) > HUGO_MAX_KIBONTOTT_BYTE);
+  all("zip-bomba: elutasítva kibontás előtt", /kibontva túl nagy/.test(xlsxKorlatHiba(bombaBuf) ?? ""));
+  hiba = "";
+  try { await tablazatSorai("bomba.xlsx", bombaBuf); } catch (e) { hiba = e instanceof Error ? e.message : String(e); }
+  all("zip-bomba: a beolvasó is elutasítja", /kibontva túl nagy/.test(hiba));
+  all("zip: nem zip → hiba", /nem érvényes/.test(xlsxKorlatHiba(Buffer.from("PK\u0003\u0004 nem zip")) ?? ""));
+}
+
+xlsxTesztek().then(() => {
+  console.log(`\nKöltség-teszt: ${ok} rendben, ${bad} hiba`);
+  if (bad > 0) process.exit(1);
+}, (err) => {
+  console.error(err);
+  process.exit(1);
+});

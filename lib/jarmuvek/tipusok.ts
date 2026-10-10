@@ -90,6 +90,8 @@ export type JarmuvekOldal = {
   soforok: SoforProfilAdat[];
   alkalmazottak: AlkalmazottValasztas[];
   telephelyek: TelephelyPontAdat[];
+  /** A fuvar_beallitas alap fogyasztása (l/100 km) — az új jármű űrlapjának alapértéke. */
+  alapFogyasztasL100: number;
 };
 
 // ---------------------------------------------------------------------------
@@ -339,4 +341,17 @@ export function tisztitSoforProfil(b: SoforProfilBemenet): TisztaSoforProfil {
     adrLejar: datumVagyNull(b.adrLejar, "ADR lejárata"),
     megjegyzes: ures(b.megjegyzes),
   };
+}
+
+/**
+ * Új jármű alapszíne: az első szín, amelyet még egyik AKTÍV jármű sem visel
+ * (sorrend: JARMU_SZINEK). Ha mind foglalt, a legritkábban használt.
+ * (Korábban minden új jármű lila lett, akkor is, ha egy másik már az volt.)
+ */
+export function elsoSzabadSzin(hasznalt: JarmuSzin[], szinek: readonly JarmuSzin[]): JarmuSzin {
+  const db = new Map<JarmuSzin, number>(szinek.map((s) => [s, 0]));
+  for (const h of hasznalt) if (db.has(h)) db.set(h, (db.get(h) ?? 0) + 1);
+  const szabad = szinek.find((s) => (db.get(s) ?? 0) === 0);
+  if (szabad) return szabad;
+  return [...szinek].sort((a, b) => (db.get(a) ?? 0) - (db.get(b) ?? 0))[0];
 }

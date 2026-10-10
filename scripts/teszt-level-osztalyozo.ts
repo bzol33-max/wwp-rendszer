@@ -7,6 +7,7 @@
 // nem kerül a repóba (ugyanaz a szabály, mint a scripts/teszt-minta/-nál).
 
 import { osztalyozLevelet, type LevelBemenet, type LevelOsztaly } from "@/lib/fuvarozas2/level-osztalyozo";
+import { opluszFeladoPontos } from "@/lib/fuvarozas2/koltseg-import";
 
 let ok = 0;
 let bad = 0;
@@ -114,10 +115,34 @@ eset("Oplusz bizonylat-értesítő → tankolás", {
 eset("Oplusz számla-értesítő → tankolás (számla)", {
   felado: "opluszbenzinkut@gmail.com", targy: "Értesítés számlakészítésrol: K/G/00000001", snippet: "Tisztelt Partnerünk! Számla készült.", szalElso: true,
 }, "tankolas", 85, false);
-eset("Továbbított kút-értesítő más feladótól → tankolás", {
+// A továbbított másolat osztályozva van, de NEM ír tankolást (levelek-core: opluszFeladoPontos).
+const tovabbitott = eset("Továbbított kút-értesítő más feladótól → tankolás (csak osztályozva)", {
   felado: "valaki@example.com", targy: "Fwd: Értesítés bizonylat készítésről",
   snippet: "Vásárlás időpontja: 2026.09.28 06:10:00 Vásárlás tranzakciószáma: 1/R/00000002 Vásárlás összege: 80 000,00 Ft", szalElso: true,
-}, "tankolas", 90, false);
+}, "tankolas", 60, false);
+if (tovabbitott.indoklas.some((x) => /nem r[öo]gz[íi]t/.test(x))) ok++; else { bad++; console.log("  HIBA  a továbbított kút-levél indoklása nem mondja, hogy nem rögzít"); }
+if (tovabbitott.bizalom < 90) ok++; else { bad++; console.log(`  HIBA  a továbbított kút-levél bizalma túl magas: ${tovabbitott.bizalom}`); }
+// Hasonmás cím (az előző minta `\b`-je ezt is elfogadta) — osztályozva sem a kút saját leveleként.
+const hasonmas = osztalyozLevelet({
+  felado: "opluszbenzinkut@gmail.com.hamis.example", targy: "Értesítés bizonylat készítésről",
+  snippet: "Partner: Minta Kft. Vásárlás időpontja: 2026.09.27 17:43:41 Vásárlás tranzakciószáma: 1/R/00000009 Vásárlás összege: 5 002,00 Ft", szalElso: true,
+});
+if (hasonmas.bizalom < 90 && hasonmas.indoklas.some((x) => /nem r[öo]gz[íi]t/.test(x))) ok++;
+else { bad++; console.log(`  HIBA  hasonmás feladó (…gmail.com.hamis.example) a kút saját leveleként: ${hasonmas.bizalom} ${hasonmas.indoklas.join(" · ")}`); }
+// A pontos feladó-ellenőrzés (ez dönt az írásról).
+const pontos: [string, boolean][] = [
+  ["opluszbenzinkut@gmail.com", true],
+  ["OPLUSZBENZINKUT@GMAIL.COM", true],
+  ["Oplusz Benzinkút <opluszbenzinkut@gmail.com>", true],
+  ["opluszbenzinkut@gmail.com.hamis.example", false],
+  ["x.opluszbenzinkut@gmail.com", false],
+  ["\"opluszbenzinkut@gmail.com\" <tamado@example.com>", false],
+  ["Fwd <valaki@example.com> opluszbenzinkut@gmail.com", false],
+  ["", false],
+];
+for (const [cim, vart] of pontos) {
+  if (opluszFeladoPontos(cim) === vart) ok++; else { bad++; console.log(`  HIBA  opluszFeladoPontos(${JSON.stringify(cim)}): várt ${vart}`); }
+}
 eset("A „bizonylat” szó egy megbízásban nem tankolás", {
   felado: "dispo@pelda-logisztika.hu", targy: "Fuvarmegbízás 26/1234", snippet: "Csatolom a megbízást, a bizonylat a rakodáskor.", csatolmanyNevek: PDF, szalElso: true,
 }, "megbizas", 70, true);

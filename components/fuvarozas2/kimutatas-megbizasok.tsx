@@ -74,8 +74,12 @@ export function KimutatasMegbizasok({ megbizasok }: { megbizasok: KimutatasMegbi
         ))}
         <span className="ml-auto text-xs text-muted-foreground">{sorok.length} megbízás</span>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[72rem] text-sm">
+      {/* Telefonon kártyák: a 11 oszlopos táblából 390 px-en csak kettő látszott. */}
+      <ul className="flex flex-col divide-y divide-foreground/5 sm:hidden">
+        {sorok.map((m) => <MegbizasKartya key={m.id} m={m} />)}
+      </ul>
+      <div className="hidden overflow-x-auto sm:block">
+        <table className="w-full min-w-[72rem] text-sm [&_td]:whitespace-nowrap">
           <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
             <tr>
               <Fej rend={rend} setRend={setRend} k="nap" jobb={false}>Nap</Fej>
@@ -85,6 +89,7 @@ export function KimutatasMegbizasok({ megbizasok }: { megbizasok: KimutatasMegbi
               <Fej rend={rend} setRend={setRend} k="uzemanyag">Üzemanyag</Fej>
               <Fej rend={rend} setRend={setRend} k="utdij">Útdíj</Fej>
               <Fej rend={rend} setRend={setRend} k="napi">Napi fix</Fej>
+              <th className="px-3 py-2 text-right font-medium">Kézi egyéb</th>
               <Fej rend={rend} setRend={setRend} k="koltseg">Költség</Fej>
               <Fej rend={rend} setRend={setRend} k="bevetel">Bevétel</Fej>
               <Fej rend={rend} setRend={setRend} k="eredmeny">Eredmény (bér)</Fej>
@@ -113,11 +118,13 @@ export function KimutatasMegbizasok({ megbizasok }: { megbizasok: KimutatasMegbi
                 <td className="px-3 py-2 text-right tabular-nums"><TetelErtek tetel={m.uzemanyag} /></td>
                 <td className="px-3 py-2 text-right tabular-nums"><TetelErtek tetel={m.utdij} /></td>
                 <td className="px-3 py-2 text-right tabular-nums text-muted-foreground"><TetelErtek tetel={m.napiFix} /></td>
+                <td className="px-3 py-2 text-right tabular-nums"><TetelErtek tetel={m.keziEgyeb} /></td>
                 <td className="px-3 py-2 text-right tabular-nums">{formatFt(m.koltsegFt)} <ForrasJel forras={m.koltsegForras} /></td>
                 <td className="px-3 py-2 text-right tabular-nums">
                   {m.jelleg === "ber" ? (
                     <>
                       {m.bevetelFt != null ? formatFt(m.bevetelFt) : <span className="text-[var(--f2-amb)]">nincs árfolyam</span>} <ForrasJel forras="teny" />
+                      {m.keziBevetelFt ? <div className="text-[10px] text-muted-foreground">benne kézi pótdíj: {formatFt(m.keziBevetelFt)}</div> : null}
                       {m.bevetelEur != null ? (
                         <div className="text-[10px] text-muted-foreground" title={m.atvaltas?.cimke}>
                           {m.bevetelEur.toLocaleString("hu-HU")} EUR{m.atvaltas ? ` × ${m.atvaltas.arfolyam.toLocaleString("hu-HU")} (${m.atvaltas.arfolyamNap})` : ""}
@@ -149,5 +156,60 @@ export function KimutatasMegbizasok({ megbizasok }: { megbizasok: KimutatasMegbi
         </table>
       </div>
     </div>
+  );
+}
+
+function Sor({ cim, children }: { cim: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3">
+      <span className="text-xs text-muted-foreground">{cim}</span>
+      <span className="whitespace-nowrap text-right tabular-nums">{children}</span>
+    </div>
+  );
+}
+
+/** Egy megbízás telefonos kártyája — ugyanazok a számok, mint a tábla sorában. */
+function MegbizasKartya({ m }: { m: KimutatasMegbizas }) {
+  return (
+    <li className="flex flex-col gap-1 px-3 py-3 text-sm">
+      <div className="flex items-center gap-1.5">
+        <span className="tabular-nums text-muted-foreground">{formatNap(m.nap)}</span>
+        <span className="font-medium">{m.jarmuKod}</span>
+        <JellegBadge jelleg={m.jelleg} />
+        <Link href={`/fuvarozas2/megbizasok/${m.id}`} className="ml-auto text-xs text-muted-foreground hover:underline">#{m.id}</Link>
+      </div>
+      <div className="truncate text-xs text-muted-foreground">{m.partner ? `${m.partner} · ` : ""}{m.felrako ?? "?"} → {m.lerako ?? "?"}</div>
+      <Sor cim="Km">{m.km.ertek.toLocaleString("hu-HU")} <ForrasJel forras={m.km.forras} />{m.liter ? <span className="text-xs text-muted-foreground"> · {m.liter.ertek} l</span> : null}</Sor>
+      <Sor cim="Üzemanyag"><TetelErtek tetel={m.uzemanyag} /></Sor>
+      <Sor cim="Útdíj"><TetelErtek tetel={m.utdij} /></Sor>
+      <Sor cim="Napi fix"><TetelErtek tetel={m.napiFix} /></Sor>
+      {m.keziEgyeb ? <Sor cim="Kézi egyéb"><TetelErtek tetel={m.keziEgyeb} /></Sor> : null}
+      <Sor cim="Költség">{formatFt(m.koltsegFt)} <ForrasJel forras={m.koltsegForras} /></Sor>
+      {m.jelleg === "ber" ? (
+        <>
+          <Sor cim="Bevétel">
+            {m.bevetelFt != null ? formatFt(m.bevetelFt) : <span className="text-[var(--f2-amb)]">nincs árfolyam</span>} <ForrasJel forras="teny" />
+          </Sor>
+          {m.bevetelEur != null ? (
+            <div className="text-right text-[10px] text-muted-foreground" title={m.atvaltas?.cimke}>
+              {m.bevetelEur.toLocaleString("hu-HU")} EUR{m.atvaltas ? ` × ${m.atvaltas.arfolyam.toLocaleString("hu-HU")} (${m.atvaltas.arfolyamNap})` : ""}
+            </div>
+          ) : null}
+          <Sor cim="Eredmény (bér)">
+            <span className={cn("font-semibold", m.eredmenyFt == null ? "text-muted-foreground" : m.eredmenyFt < 0 ? "text-[var(--f2-red)]" : "text-[var(--f2-mint)]")}>
+              {formatFt(m.eredmenyFt)}
+            </span>
+          </Sor>
+        </>
+      ) : (
+        <>
+          <Sor cim="Belső költség (saját)">
+            <span className="font-semibold text-[var(--f2-blue)]">{formatFt(m.belsoKoltsegFt)}</span>
+            {m.ftPerRaklap != null ? <span className="text-xs text-muted-foreground"> · {formatFt(m.ftPerRaklap)}/raklap</span> : null}
+          </Sor>
+          {m.elkerultKoltsegFt ? <Sor cim="Elkerült (tájékoztató)"><span className="text-muted-foreground">{formatFt(m.elkerultKoltsegFt)}</span></Sor> : null}
+        </>
+      )}
+    </li>
   );
 }

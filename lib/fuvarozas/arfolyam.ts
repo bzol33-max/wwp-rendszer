@@ -1,6 +1,7 @@
 import "server-only";
 import { query } from "@/lib/db";
-import { arfolyamNapra, mnbKeresTorzs, parseMnbArfolyamok } from "@/lib/fuvarozas/arfolyam-alap";
+import { arfolyamNapra, hianyzoArfolyamNapok, mnbKeresTorzs, parseMnbArfolyamok, type ArfolyamTipus } from "@/lib/fuvarozas/arfolyam-alap";
+import { budapestNapISO, budapestOra } from "@/lib/fuvarozas/idozona";
 
 // Az MNB hivatalos napi EUR/HUF árfolyama az `arfolyam` táblában (001-es
 // migráció) gyorsítótárazva. A Kimutatás az EUR-os bérfuvar-díjat a
@@ -27,8 +28,10 @@ export type ArfolyamInfo = {
   ft: number;
   /** Melyik nap árfolyama (a teljesítés napja vagy a megelőző közzétett nap). */
   nap: string;
-  /** false, ha nem a teljesítés napjáig közzétett árfolyam, hanem tartalék (a legkorábbi későbbi, vagy a legutóbbi tárolt). */
+  /** CSAK akkor true, ha pontosan a teljesítés napjának árfolyama. */
   pontos: boolean;
+  /** aznapi / elozo (hétvége, ma dél előtt) / regi (elavult vagy ünnep) / kesobbi (tartalék). */
+  tipus: ArfolyamTipus;
   forras: string;
 };
 
@@ -76,12 +79,12 @@ export async function getEurArfolyamok(napok: string[]): Promise<Map<string, Arf
        where penznem = 'EUR' and nap between $1::date and $2::date order by nap`,
       [kezdet, veg]
     );
-    const ma = new Date().toISOString().slice(0, 10);
-    const hianyos = egyedi.some((n) => {
-      // Egy napra akkor van meg, ha van aznapi vagy legfeljebb 4 nappal korábbi tárolt sor (hosszú hétvége).
-      const tol = napEltol(n, -4);
-      return !sorok.some((s) => s.nap >= tol && s.nap <= n) && n <= ma;
-    });
+    // Egy nap akkor hiányzik, ha a várt közzétételi napjára (múltbeli hétköznap,
+    // vagy ma 12:00 után a mai) nincs PONTOSAN arra a napra tárolt sor.
+    const most = new Date();
+    const ma = budapestNapISO(most);
+    const ora = budapestOra(most);
+    const hianyos = hianyzoArfolyamNapok(sorok, egyedi, ma, ora).length > 0;
     const kulcs = `${kezdet}|${veg}`;
     if (hianyos && Date.now() - (utolsoProba.get(kulcs) ?? 0) > UJRAKERES_MS) {
       utolsoProba.set(kulcs, Date.now());
@@ -115,9 +118,11 @@ export async function getEurArfolyamok(napok: string[]): Promise<Map<string, Arf
       );
     }
     for (const n of egyedi) {
-      const v = arfolyamNapra(sorok, n);
-      if (v) ki.set(n, { ft: v.ft, nap: v.nap, pontos: v.pontos, forras: "MNB" });
-      else if (tartalek) ki.set(n, { ft: Number(tartalek.ft), nap: tartalek.nap, pontos: false, forras: "MNB (legutóbbi tárolt)" });
+      const v = arfolyamNapra(sorok, n, ma, ora);
+      if (v) ki.set(n, { ft: v.ft, nap: v.nap, pontos: v.pontos, tipus: v.tipus, forras: "MNB" });
+      else if (tartalek) {
+        ki.set(n, { ft: Number(tartalek.ft), nap: tartalek.nap, pontos: false, tipus: "kesobbi", forras: "MNB (legutóbbi tárolt)" });
+      }
     }
   } catch (err) {
     console.warn("[arfolyam] árfolyam nem olvasható:", err instanceof Error ? err.message : err);

@@ -14,6 +14,7 @@ import { query } from "@/lib/db";
 import { requireEditPermission, requireViewPermission } from "@/lib/auth/require-permission";
 import { jarmuCacheTorles } from "@/lib/fuvarozas/jarmuvek-db";
 import { jarmuSzinE } from "@/lib/fuvarozas/vehicles";
+import { getFuvarBeallitasok } from "@/lib/beallitasok/fuvar";
 import {
   normalRendszam,
   tisztitJarmu,
@@ -59,6 +60,7 @@ export async function getJarmuvekOldal(): Promise<JarmuvekOldal> {
   const alkalmazottak = await query<{ id: string; nev: string }>(
     `select id::text, name as nev from alkalmazottak where active order by position, name`
   );
+  const alapFogyasztasL100 = (await getFuvarBeallitasok()).fogyasztas_alap_l_100km;
   try {
     const [jarmuvek, potkocsik, okmanyok, soforok, telephelyek] = await Promise.all([
       query<{
@@ -137,6 +139,7 @@ export async function getJarmuvekOldal(): Promise<JarmuvekOldal> {
       })),
       alkalmazottak,
       telephelyek,
+      alapFogyasztasL100,
     };
   } catch (err) {
     console.warn("[jarmuvek] törzsadat-táblák nem olvashatók (031-es migráció?):", err instanceof Error ? err.message : err);
@@ -160,6 +163,7 @@ export async function getJarmuvekOldal(): Promise<JarmuvekOldal> {
       soforok: [],
       alkalmazottak,
       telephelyek: [],
+      alapFogyasztasL100,
     };
   }
 }
@@ -212,6 +216,8 @@ export async function mentJarmu(id: string | null, bemenet: JarmuBemenet): Promi
     ];
 
     if (id === null) {
+      // Üresen hagyott fogyasztás: a fuvar_beallitas alapértéke (nem NULL — a kalkulátor és a kimutatás ebből becsül).
+      if (j.fogyasztasL100 == null) ertekek[9] = (await getFuvarBeallitasok()).fogyasztas_alap_l_100km;
       await query(
         `insert into fuvar_jarmuvek (kod, cimke, sofor_becenev, vontato_rendszam, potkocsi_id, potkocsi_rendszam, irasvaltozatok, szin,
             ecofleet_object_id, sofor_id, fogyasztas_l_100km, euro_osztaly, hugo_kategoria, ossztomeg_t, alap_telephely_pont_id, megjegyzes, aktiv)
