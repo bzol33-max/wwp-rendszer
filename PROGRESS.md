@@ -3188,3 +3188,52 @@ JANI is), km HU-GO-ból, légvonal × 1,3 csak „becslés” jelöléssel.
 - **Teszt**: `scripts/teszt-menetterv.ts` (76/0) a `teszt` láncban; a scratch
   Postgresen a teljes kör (javaslat → elavult verzió → jóváhagyás → átrendezés
   → lezárás → árnyék-kör) végigfutott.
+
+## 2026-10-10 — Diszpécser (6. fázis): a fuvarszervező egy képernyője
+
+Új fül: **Fuvarozás 2 → Diszpécser** (`/fuvarozas2/diszpecser`; megtekintés a
+fuvarozás nézési jogával, a feladat-lezárás a meglévő `feladatLezaras`
+szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
+
+- **Felső sáv** (sötét antracit, `--f2-dark`): nap-léptető (alapból ma,
+  Budapest) és nézetváltó: Idővonal · Heti beosztás · Lista · Térkép.
+- **Szűrők**: jármű, sofőr, partner, telephely, státusz (tervezett /
+  folyamatban / kész / problémás) — a betöltött napra a kliensen hatnak, és
+  az URL-ben is megjelennek (`?nap=&nezet=&jarmu=…`).
+- **Probléma-sáv** (`aria-live="polite"`): késésveszély (élő ETA vagy terv a
+  lerakási/felrakási ablak vége után), a menet figyelmeztetései (üres indulás
+  a beállítás küszöbe fölött, időütközés, kapacitás, hiányzó cím), GPS
+  elavult/nincs (csak ha a kocsinak van nyitott feladata), kocsi nélküli
+  fuvar (ma). Kattintásra kijelöli a feladatot.
+- **Idővonal**: minden aktív kocsi egy sáv (JANI is, „nincs GPS”), a fejben
+  rendszám + pótkocsi + sofőr + GPS-frissesség (friss ≤ `gps_kesei_perc`,
+  késői ≤ `gps_elavult_perc`, elavult, nincs GPS — pozíciót nem találunk ki),
+  a sorrend a jóváhagyott menetből, különben a javaslatból („javaslat”
+  címkével), menet nélkül a megbízások terv-ideje szerint („menet nélkül”).
+  A tengely a nap feladataihoz igazodik, „most” vonal, típus-színek a
+  Menetterv panel szerint + betűjel, állapot ikonnal és szöveggel.
+  Billentyűzet: minden blokk gomb szöveges címkével, nyilak/Home/End a
+  sávon belül. Telefonon a sávok egymás alatti listák, a részletek a lista alatt.
+- **Részlet-panel**: típus, honnan→hová, ablakok, terv/tény, ETA (különben
+  „nem számolható”), raklap/kapacitás, üres és rakott km („becslés” jellel),
+  költség a költségmodul tárolt soraiból (tény/becslés), megbízás- és
+  dokumentum-link; „Feladat lezárása” (megerősítéssel, csak jóváhagyott
+  menetben), „Átrendezés a Tervezésben”.
+- **Heti beosztás**: kocsi × 7 nap, feladatszám és típusok, sofőr szabadsága /
+  betegsége (Jelenlét-joggal, a meglévő `getSzabadsagIgenyek` /
+  `getSzabadsagTavolletek`), 30 napon belül lejáró (borostyán) és lejárt
+  (vörös) okmányok a `jarmu_okmany`-ból (pótkocsié is).
+- **Lista**: rendezhető táblázat (jármű, sorszám, típus, partner, felrakó,
+  lerakó, ablak, státusz, km, költség), ugyanazokkal a szűrőkkel.
+- **Térkép**: Leaflet (dinamikus import, ssr nélkül): utolsó ismert pozíció
+  idővel és frissességgel, szaggatott vonal a következő ismert koordinátájú
+  megállóig; jel nélküli kocsi csak a listában.
+- **Adat** (`lib/fuvarozas2/diszpecser.ts`, server-only): `getMenettervNap`,
+  `getIdovonalak` (a gyorsítótárazott GPS-lánc — saját Ecofleet-hívás nincs;
+  hibánál „GPS nem elérhető”, az oldal megjelenik), `getFuvarBeallitasok`,
+  `getJarmuvek`, `getSajatTelephelyek`, `getMenetek` (hét), plusz egy-egy
+  lekérdezés a nap megbízás-adataira, a tárolt költségsorokra, a pótkocsi-
+  kapacitásra, az okmányokra és a heti megbízás-számokra — nincs N+1.
+- **Teszt**: `scripts/teszt-diszpecser.ts` (90/0) a `teszt` láncban; a
+  betöltő a scratch Postgresen (Ecofleet-kulcs nélkül → GPS-hiba ág) lefutott,
+  a négy nézet és a részlet-panel szerveroldalon renderelve.
