@@ -22,6 +22,8 @@ import { toroljIdovonalCachet } from "@/lib/fuvarozas/idovonal-cache";
 import { getMenetEsemenyek, getMenetek } from "@/lib/menet/repo";
 import { frissitMenetJavaslatot } from "@/lib/menet/generalas";
 import { atrendezMenet, jovahagyMenet, lezarMenetFeladatot, visszaJavaslatbaMenet, type Valasz } from "@/lib/menet/muveletek";
+import { nyitottJavaslatok } from "@/lib/menet/optimalizalo-szerver";
+import type { OptJavaslatNezet } from "@/lib/menet/optimalizalo";
 import type { Menet, MenetEsemeny } from "@/lib/menet/tipusok";
 
 const ISO_NAP = /^\d{4}-\d{2}-\d{2}$/;
@@ -39,6 +41,8 @@ export type MenettervKocsi = {
   sofor: string;
   menet: Menet | null;
   esemenyek: MenetEsemeny[];
+  /** Az optimalizáló nyitott sorrend-javaslata (4. fázis), ha van; `elavult`: azóta változott a menet verziója. */
+  optimalizalo: (OptJavaslatNezet & { elavult: boolean }) | null;
 };
 
 /** A Menetterv panel adatai egy napra: minden aktív kocsi (JANI is), a menetével és a naplójával. */
@@ -55,12 +59,17 @@ export async function getMenettervNap(nap: string): Promise<{ nap: string; kocsi
     console.error("[menetterv] olvasási hiba:", err instanceof Error ? err.message : err);
   }
   const esemenyek = menetek.length ? await getMenetEsemenyek(menetek.map((m) => m.id)).catch(() => new Map<string, MenetEsemeny[]>()) : new Map<string, MenetEsemeny[]>();
+  const javaslatok = await nyitottJavaslatok(menetek.map((m) => m.id));
   return {
     nap,
     hiba,
     kocsik: jarmuvek.map((j) => {
       const menet = menetek.find((m) => m.jarmuId === j.id) ?? null;
-      return { jarmuId: j.id!, kod: j.kod!, cimke: j.label, sofor: j.sofor, menet, esemenyek: menet ? esemenyek.get(menet.id) ?? [] : [] };
+      const opt = menet ? javaslatok.get(menet.id) ?? null : null;
+      return {
+        jarmuId: j.id!, kod: j.kod!, cimke: j.label, sofor: j.sofor, menet, esemenyek: menet ? esemenyek.get(menet.id) ?? [] : [],
+        optimalizalo: opt && menet ? { ...opt, elavult: opt.menetVerzio != null && opt.menetVerzio !== menet.verzio } : null,
+      };
     }),
   };
 }

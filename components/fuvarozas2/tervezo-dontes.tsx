@@ -5,9 +5,16 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { setFuvarJarmu, torolMegbizast, valtAllapot } from "@/lib/fuvarozas2/megbizasok";
+import { hozzarendelesJavaslat } from "@/lib/menet/optimalizalo-akciok";
+import type { HozzarendelesNezet } from "@/lib/menet/optimalizalo-szerver";
 
 // A Tervezés döntés-sávja: jóváhagyás a kiválasztott kocsira, ajánlat-szöveg
-// más árral (vágólapra — a Gmail-piszkozat későbbi kör), elutasítás.
+// más árral (vágólapra — a Gmail-piszkozat későbbi kör), elutasítás. Az
+// „Optimalizáló: melyik kocsi?” a 4 kocsi napjába (a felrakás napja) a
+// legjobb helyet és a J határköltségét számolja (lib/menet/optimalizalo.ts) —
+// csak javaslat, nem ír semmit.
+
+const FT = (x: number) => `${new Intl.NumberFormat("hu-HU").format(Math.round(x))} Ft`;
 
 const NAPNEV = ["vasárnap", "hétfő", "kedd", "szerda", "csütörtök", "péntek", "szombat"];
 
@@ -26,6 +33,21 @@ export function DontesSav({ id, allapot, kocsiKod, kocsiNev, felrakasNap, celarF
   const [confirm, confirmDialog] = useConfirm();
   const [ar, setAr] = useState(celarFt ? String(celarFt) : "");
   const [szovegNyitva, setSzovegNyitva] = useState(false);
+  const [hozzarendeles, setHozzarendeles] = useState<HozzarendelesNezet | null>(null);
+  const [szamol, setSzamol] = useState(false);
+
+  async function kocsiJavaslat() {
+    setSzamol(true);
+    try {
+      const r = await hozzarendelesJavaslat(id);
+      if (!r.ok) toast.error(r.hiba);
+      else setHozzarendeles(r);
+    } catch {
+      toast.error("Nem sikerült a kocsi-javaslat.");
+    } finally {
+      setSzamol(false);
+    }
+  }
   const nap = NAPNEV[new Date(`${felrakasNap}T12:00:00Z`).getUTCDay()];
   const arSzam = Number(ar.replace(/\s/g, ""));
   const szoveg =
@@ -87,7 +109,35 @@ export function DontesSav({ id, allapot, kocsiKod, kocsiNev, felrakasNap, celarF
           className="rounded-lg border border-foreground/15 px-3 py-2 text-sm font-semibold text-[var(--f2-red)] hover:bg-muted">
           Elutasítom
         </button>
+        <button type="button" disabled={pending || szamol} onClick={kocsiJavaslat}
+          className="rounded-lg border border-foreground/15 px-3 py-2 text-sm font-semibold hover:bg-muted disabled:opacity-45">
+          {szamol ? "Számolom…" : "Optimalizáló: melyik kocsi?"}
+        </button>
       </div>
+      {hozzarendeles ? (
+        <div className="flex flex-col gap-1 rounded-lg bg-muted/50 p-2.5 text-xs" aria-label="Optimalizáló kocsi-javaslat">
+          {hozzarendeles.legjobb ? (
+            <p>
+              <b>Legjobb: {hozzarendeles.legjobb.sofor}</b> <span className="font-mono text-muted-foreground">{hozzarendeles.legjobb.kod}</span>
+              {hozzarendeles.legjobb.vanGps ? null : <span className="text-muted-foreground"> (GPS nélkül)</span>}
+              {" — "}{hozzarendeles.legjobb.pozicio + 1}. munka a napján
+              {hozzarendeles.legjobb.elotte ? `, ${hozzarendeles.legjobb.elotte} után` : ", elsőként"}
+              {hozzarendeles.legjobb.utana ? `, ${hozzarendeles.legjobb.utana} előtt` : ""}
+              {" · "}határköltség <b>{FT(hozzarendeles.legjobb.hatarFt)}</b> ({hozzarendeles.legjobb.pluszKm >= 0 ? "+" : ""}{hozzarendeles.legjobb.pluszKm} km)
+            </p>
+          ) : (
+            <p className="font-semibold text-[var(--f2-amb)]">Egyik kocsi napjába sem fér bele a kemény korlátokkal (ablak, kapacitás, vezetési idő).</p>
+          )}
+          <ul className="flex flex-wrap gap-x-3 gap-y-0.5 text-muted-foreground">
+            {hozzarendeles.kocsik.map((x) => (
+              <li key={x.kod} title={x.ok ?? undefined}>
+                {x.sofor}: {x.megengedett && x.hatarFt != null ? FT(x.hatarFt) : "nem fér bele"}
+              </li>
+            ))}
+          </ul>
+          <p className="text-[11px] text-muted-foreground">A felrakás napja ({hozzarendeles.nap}); J = üzemanyag + útdíj + várakozás + hazaút változása, a napi költség fix. A vezetési idő becslés, nem tachográf.</p>
+        </div>
+      ) : null}
       {szovegNyitva ? (
         <div className="flex flex-col gap-2">
           <label className="flex items-center gap-2 text-sm">

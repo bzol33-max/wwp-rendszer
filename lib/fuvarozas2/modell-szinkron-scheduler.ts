@@ -7,7 +7,8 @@
 // rakott km-ét (lib/fuvarozas2/rakott-km.ts) és a nyitott bérmegbízások
 // tárolt kalkulációját (lib/fuvarozas2/kalkulacio-tar.ts, Tervezés), és a
 // partnerek hiányzó adataira a javaslatokat (lib/fuvarozas2/partner-javaslat.ts),
-// valamint a menetterv-javaslatokat ma és holnapra (lib/menet/generalas.ts).
+// valamint a menetterv-javaslatokat ma és holnapra (lib/menet/generalas.ts),
+// és az optimalizáló sorrend-javaslatait (lib/menet/optimalizalo-szerver.ts).
 
 import { potoldAHianyzoModelleket } from "@/lib/fuvarozas2/modell-szinkron";
 import { potoldRakottKmet } from "@/lib/fuvarozas2/rakott-km";
@@ -16,6 +17,7 @@ import { egyetlenPeldanyban, query, ZAR_KULCS } from "@/lib/db";
 import { frissitsKalkulaciokat, tervezettBerMegbizasok } from "@/lib/fuvarozas2/kalkulacio-tar";
 import { futtatPartnerJavaslatokat } from "@/lib/fuvarozas2/partner-javaslat";
 import { frissitsMenetJavaslatokat } from "@/lib/menet/generalas";
+import { frissitsOptimalizaloJavaslatokat } from "@/lib/menet/optimalizalo-szerver";
 import { taroldMegbizasKoltsegeket } from "@/lib/fuvarozas2/koltseg-adat";
 
 const INTERVALL_MS = 60 * 60 * 1000;
@@ -62,6 +64,14 @@ async function tickBelso() {
     if (mt.frissult + mt.hiba > 0) console.log(`[menetterv] ${mt.frissult} javaslat frissült, ${mt.jovahagyott} jóváhagyott kihagyva, ${mt.hiba} hiba.`);
   } catch (err) {
     console.error("[menetterv] váratlan hiba:", err);
+  }
+  // Optimalizáló (4. fázis): ma és holnap a menetekre sorrend-javaslat, ha
+  // megéri — CSAK javaslat, a menetet nem írja át (lib/menet/optimalizalo-szerver.ts).
+  try {
+    const op = await futtatRendszerkent("optimalizalo", () => frissitsOptimalizaloJavaslatokat());
+    if (op.uj + op.hiba > 0) console.log(`[optimalizalo] ${op.uj} új javaslat, ${op.hiba} hiba.`);
+  } catch (err) {
+    console.error("[optimalizalo] váratlan hiba:", err);
   }
   // Elavult gyorsítótár- és megfigyelés-sorok takarítása (audit PERF-7/8):
   // a lejárt külső válaszokat eddig semmi nem törölte, az élő megfigyeléseket

@@ -7,6 +7,8 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { varosNev } from "@/lib/fuvarozas/varos";
 import { atrendez, feladatLezaras, javaslatFrissites, jovahagy, visszaJavaslatba, type MenettervKocsi } from "@/lib/menet/akciok";
+import { elfogad, elutasit, optimalizalas } from "@/lib/menet/optimalizalo-akciok";
+import { CELFUGGVENY_CIMKE, type Celfuggveny } from "@/lib/menet/optimalizalo";
 import { FELADAT_TIPUS_CIMKE, MENET_ALLAPOT_CIMKE, type FeladatTipus, type MenetEsemeny, type MenetFeladat } from "@/lib/menet/tipusok";
 
 // A Tervezés „Menetterv” panelje (3. fázis, 2026-10-10): kocsinként a nap
@@ -29,7 +31,10 @@ const ESEMENY_CIMKE: Record<string, string> = {
   atrendezes: "átrendezve",
   feladat_lezarva: "feladat kész",
   vissza_javaslatba: "visszavonva javaslatba",
+  optimalizalo_elfogadva: "optimalizáló javaslat elfogadva",
 };
+
+const FT = (x: number) => `${new Intl.NumberFormat("hu-HU").format(Math.round(x))} Ft`;
 
 /** Postgres „2026-10-12 08:00:00+02” → Date. */
 function ido(t: string | null): Date | null {
@@ -93,6 +98,22 @@ function KocsiMenet({ k, nap, szerkeszthet }: { k: MenettervKocsi; nap: string; 
   const rendezheto = szerkeszthet && m != null && (m.allapot === "jovahagyott" || m.allapot === "folyamatban");
   const feladatok = m ? [...m.feladatok].sort((a, b) => a.sorszam - b.sorszam) : [];
   const munkaIndexek = feladatok.flatMap((f, i) => (f.megbizasId ? [i] : []));
+  const optimalizalhato = szerkeszthet && m != null && m.allapot !== "lezart" && munkaIndexek.length >= 2;
+
+  function optimalizal() {
+    if (!m) return;
+    start(async () => {
+      try {
+        const r = await optimalizalas(m.id);
+        if (!r.ok) { toast.error(r.hiba); return; }
+        if (r.eredmeny === "uj" || r.eredmeny === "meglevo") toast.success(r.uzenet);
+        else toast.message(r.uzenet);
+        router.refresh();
+      } catch {
+        toast.error("Nem sikerült az optimalizálás — próbáld újra.");
+      }
+    });
+  }
 
   function futtat(fn: () => Promise<{ ok: true } | { ok: false; hiba: string }>, siker: string) {
     start(async () => {
@@ -142,6 +163,12 @@ function KocsiMenet({ k, nap, szerkeszthet }: { k: MenettervKocsi; nap: string; 
               ✓ Jóváhagyás
             </button>
           ) : null}
+          {optimalizalhato ? (
+            <button type="button" disabled={pending} onClick={optimalizal} title="Jobb sorrend keresése (csak javaslat — semmit nem ír át)"
+              className="rounded-lg border border-foreground/15 px-2.5 py-1 text-xs font-semibold hover:bg-muted disabled:opacity-45">
+              Optimalizálás
+            </button>
+          ) : null}
           {szerkeszthet && m?.allapot === "jovahagyott" ? (
             <button type="button" disabled={pending} onClick={() => futtat(() => visszaJavaslatba(m.id), "Visszavonva javaslatba.")}
               className="rounded-lg border border-foreground/15 px-2.5 py-1 text-xs hover:bg-muted disabled:opacity-45">
@@ -167,6 +194,12 @@ function KocsiMenet({ k, nap, szerkeszthet }: { k: MenettervKocsi; nap: string; 
           ))}
         </ol>
       )}
+
+      {k.optimalizalo && m ? (
+        <OptimalizaloDoboz j={k.optimalizalo} javaslatAllapot={m.allapot === "javaslat"} szerkeszthet={szerkeszthet} pending={pending}
+          elfogad={() => futtat(() => elfogad(k.optimalizalo!.id), "Optimalizáló javaslat elfogadva.")}
+          elutasit={() => futtat(() => elutasit(k.optimalizalo!.id), "Javaslat elutasítva.")} />
+      ) : null}
 
       {mozgatas && m ? (
         <form className="flex flex-col gap-2 rounded-lg bg-muted/50 p-2.5"
@@ -234,6 +267,63 @@ function FeladatSor({ f, fel, le, kesz, pending }: { f: MenetFeladat; fel: (() =
         </div>
       ) : null}
     </li>
+  );
+}
+
+function OptimalizaloDoboz({ j, javaslatAllapot, szerkeszthet, pending, elfogad, elutasit }: {
+  j: NonNullable<MenettervKocsi["optimalizalo"]>;
+  javaslatAllapot: boolean;
+  szerkeszthet: boolean;
+  pending: boolean;
+  elfogad: () => void;
+  elutasit: () => void;
+}) {
+  const tagok = Object.keys(CELFUGGVENY_CIMKE) as (Exclude<keyof Celfuggveny, "osszesen">)[];
+  const kmOssz = (x: { ures: number; rakott: number; haza: number }) => x.ures + x.rakott + x.haza;
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-foreground/10 bg-[var(--f2-blue-l)] p-2.5 text-xs" aria-label="Optimalizáló javaslat">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <b className="text-[var(--f2-blue)]">Optimalizáló javaslat #{j.id}</b>
+        <span className="font-semibold">
+          {j.megtakaritasFt > 0 ? `−${FT(j.megtakaritasFt)}` : "korlát-javítás"}{j.megtakaritasKm !== 0 ? ` · ${j.megtakaritasKm > 0 ? "−" : "+"}${Math.abs(j.megtakaritasKm)} km` : ""}
+        </span>
+      </div>
+      {j.elavult ? <p className="font-semibold text-[var(--f2-amb)]">A menet azóta változott — elfogadáskor ellenőrizzük; ha elavult, futtasd újra.</p> : null}
+      <div className="grid gap-2 sm:grid-cols-2">
+        {([["Most", j.jelenlegi, j.km.jelenlegi], ["Javasolt", j.javasolt, j.km.javasolt]] as const).map(([cim, lista, km]) => (
+          <div key={cim} className="min-w-0">
+            <div className="font-semibold text-muted-foreground">{cim} · {kmOssz(km)} km <span className="font-normal">({km.ures} üres, {km.rakott} rakott, {km.haza} haza)</span></div>
+            <ol className="mt-0.5 flex flex-col gap-0.5">
+              {lista.map((x, i) => (
+                <li key={x.id} className="truncate" title={`#${x.id} ${x.ut}`}><span className="font-mono text-muted-foreground">{i + 1}.</span> {x.ut}</li>
+              ))}
+            </ol>
+          </div>
+        ))}
+      </div>
+      <table className="w-full text-[11px]">
+        <thead>
+          <tr className="text-muted-foreground"><th className="text-left font-normal">J tagjai</th><th className="text-right font-normal">most</th><th className="text-right font-normal">javasolt</th></tr>
+        </thead>
+        <tbody className="font-mono">
+          {tagok.filter((t) => j.celfuggveny.jelenlegi[t] !== 0 || j.celfuggveny.javasolt[t] !== 0).map((t) => (
+            <tr key={t}><td className="font-sans">{CELFUGGVENY_CIMKE[t]}</td><td className="text-right">{FT(j.celfuggveny.jelenlegi[t])}</td><td className="text-right">{FT(j.celfuggveny.javasolt[t])}</td></tr>
+          ))}
+          <tr className="border-t border-foreground/10 font-bold"><td className="font-sans">összesen (J)</td><td className="text-right">{FT(j.celfuggveny.jelenlegi.osszesen)}</td><td className="text-right">{FT(j.celfuggveny.javasolt.osszesen)}</td></tr>
+        </tbody>
+      </table>
+      {j.megjegyzesek.map((x, i) => <p key={`m${i}`} className="text-muted-foreground">• {x}</p>)}
+      {j.figyelmeztetesek.map((x, i) => <p key={`f${i}`} className="font-semibold text-[var(--f2-amb)]">⚠ {x}</p>)}
+      {szerkeszthet ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" disabled={pending} onClick={elfogad} className="rounded-lg bg-foreground px-3 py-1 text-xs font-bold text-background disabled:opacity-45">Elfogadás</button>
+          <button type="button" disabled={pending} onClick={elutasit} className="rounded-lg border border-foreground/15 px-3 py-1 text-xs hover:bg-muted disabled:opacity-45">Elutasítás</button>
+          <span className="text-[11px] text-muted-foreground">
+            {javaslatAllapot ? "A javaslat ebben a sorrendben készül újra; a jóváhagyás külön lépés." : "Átrendezés a menet verziójával, „optimalizáló javaslat” indokkal, naplózva."}
+          </span>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
