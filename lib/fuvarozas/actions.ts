@@ -42,7 +42,8 @@ import { resolveJarmu, type JarmuSzin, type SajatJarmu } from "./vehicles";
 import { getJarmuvek } from "./jarmuvek-db";
 import { getFuvarBeallitasok } from "@/lib/beallitasok/fuvar";
 import { bontsMegallokra, varosNev } from "./varos";
-import { geokodolCachelve, megalloAblakKezdet, megalloAblakTagithato, megalloPontossaga, mozogE } from "./erintes-felismeres";
+import { geokodolCachelve, megalloAblakKezdet, megalloAblakTagithato,
+  megalloEjszakaiAllasKizarva, megalloPontossaga, mozogE } from "./erintes-felismeres";
 import { cachelve } from "./idovonal-cache";
 import { getFuvarokIdoszakban } from "./megbizasok";
 import type { FuvardijPenznem, FuvarTipus, MaiFuvarSor } from "./fuvar-constants";
@@ -695,6 +696,7 @@ async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus, kali
     bizonytalanFelismeres: false,
     ablakKezdet: megalloAblakKezdet(row, m.tipus),
     ablakTagithato: megalloAblakTagithato(row, m.tipus),
+    ejszakaiAllasKizarva: megalloEjszakaiAllasKizarva({ ...row, tipus: fuvarTipus }, m.tipus),
     keszForras: null,
     keszBy: null,
   }));

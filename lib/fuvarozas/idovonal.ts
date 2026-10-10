@@ -352,6 +352,14 @@ export type TervezettMegallo = {
    * első GPS-felrakásáig előrehozza.
    */
   ablakTagithato?: boolean;
+  /**
+   * Igaz a SAJÁT fuvar olyan felrakójánál, amelynek ablakát csak a nap adja
+   * (nincs megadott felrakási ablak): ilyenkor az ablak ELŐTT KEZDŐDÖTT
+   * (éjszakán átnyúló) állás nem felrakás. Élesben a kocsi a szakolyi
+   * telephelyen éjszakázott, és a reggeli indulás "felrakta" a délutánra
+   * tervezett saját fuvart — az a bérfuvar elé ugrott. (2026-10-10)
+   */
+  ejszakaiAllasKizarva?: boolean;
   /** Honnan tudjuk, hogy a megálló kész: GPS-felismerés, vagy kézi jelölés (sofőr a mobilon, vagy iroda a GPS lapon / a fuvar Teljesítve gombja). */
   keszForras: "gps" | "kezi" | null;
   /** Kézi jelölésnél a jelölő neve (fuvar_megallok.sofor_kesz_by), ha ismert. (2026-10-06) */
@@ -721,7 +729,7 @@ function latogatasok(
 
 function latogatasDontes(m: TervezettMegallo, l: Latogatas): ErintesDontes {
   return erintesDontes(
-    { pontossag: m.pontossag, varos: m.cim, sugarKm: cimSugarKm(m.pontossag), ablakKezdet: m.ablakKezdet, fuvarLezarva: m.fuvarLezarva ?? null },
+    { pontossag: m.pontossag, varos: m.cim, sugarKm: cimSugarKm(m.pontossag), ablakKezdet: m.ablakKezdet, fuvarLezarva: m.fuvarLezarva ?? null, ejszakaiAllasKizarva: m.ejszakaiAllasKizarva },
     { tavKm: l.tav, idotartamSec: l.idotartamSec, kezdet: l.kezdet, veg: l.veg, allasCim: l.allasCim }
   );
 }
@@ -777,6 +785,24 @@ export function jelolMegallokat(
   return tagitva ? parositMegallokat(tagitott, allasok, pontok) : elso;
 }
 
+/**
+ * A lerakó látogatása a fuvar felrakása után van-e: ha a felrakót a GPS
+ * igazolta, a lerakás csak annál később kezdődhet, és nem lehet ugyanaz a
+ * látogatás; ha a felrakó (még) nincs igazolva, a lerakás legalább a
+ * felrakási ablak kezdeténél ne kezdődjön korábban.
+ */
+export function lerakasFelrakasUtan(
+  lerakas: { kezdet: Date; aik: number[] },
+  felrakas: { elso: { kezdet: Date; aik: number[] } | null; ablak: number | null }
+): boolean {
+  if (felrakas.elso) {
+    if (lerakas.aik.some((ai) => felrakas.elso!.aik.includes(ai))) return false;
+    return lerakas.kezdet.getTime() >= felrakas.elso.kezdet.getTime();
+  }
+  if (felrakas.ablak !== null) return lerakas.kezdet.getTime() >= felrakas.ablak;
+  return true;
+}
+
 function parositMegallokat(
   fuvarokMegalloi: TervezettMegallo[][],
   allasok: Extract<IdovonalSzakasz, { tipus: "allas" }>[],
@@ -826,13 +852,40 @@ function parositMegallokat(
   const foglaltMegallo = new Set<string>();
   const foglaltAllas = new Set<string>();
   const parositas = new Map<string, Latogatas>();
-  for (const p of parok) {
+  const lefoglal = (p: (typeof parok)[number]) => {
     const kulcs = `${p.fi}:${p.mi}`;
     const szerep = fuvarokMegalloi[p.fi][p.mi].tipus;
-    if (foglaltMegallo.has(kulcs) || p.latogatas.aik.some((ai) => foglaltAllas.has(`${ai}:${szerep}`))) continue;
+    if (foglaltMegallo.has(kulcs) || p.latogatas.aik.some((ai) => foglaltAllas.has(`${ai}:${szerep}`))) return;
     foglaltMegallo.add(kulcs);
     for (const ai of p.latogatas.aik) foglaltAllas.add(`${ai}:${szerep}`);
     parositas.set(kulcs, p.latogatas);
+  };
+
+  // Két menetben: előbb a felrakók, aztán a lerakók. A foglalás szerepenként
+  // külön van, ezért a felrakók párosítása ugyanaz, mint eddig; a lerakó
+  // viszont csak a SAJÁT fuvarja felrakása UTÁN kezdődött, attól külön
+  // látogatással teljesülhet. Élesben (2026-10-10) enélkül a bérfuvar
+  // debreceni lerakása "felrakta" az utána következő saját fuvart
+  // (Debrecen→Szakoly), a lerakóját pedig a hajnali szakolyi parkolás
+  // igazolta — a figyelő a bérfuvarral együtt a saját fuvart is lezárta.
+  for (const p of parok) if (fuvarokMegalloi[p.fi][p.mi].tipus === "felrako") lefoglal(p);
+
+  const felrakasFuvaronkent = fuvarokMegalloi.map((megallok, fi) => {
+    let elso: Latogatas | null = null;
+    let ablak: number | null = null;
+    megallok.forEach((m, mi) => {
+      if (m.tipus !== "felrako") return;
+      const l = parositas.get(`${fi}:${mi}`);
+      if (l && (!elso || l.kezdet.getTime() < elso.kezdet.getTime())) elso = l;
+      if (m.ablakKezdet && (ablak === null || m.ablakKezdet.getTime() < ablak)) ablak = m.ablakKezdet.getTime();
+    });
+    return { elso: elso as Latogatas | null, ablak };
+  });
+
+  for (const p of parok) {
+    if (fuvarokMegalloi[p.fi][p.mi].tipus !== "lerako") continue;
+    if (!lerakasFelrakasUtan(p.latogatas, felrakasFuvaronkent[p.fi])) continue;
+    lefoglal(p);
   }
 
   return fuvarokMegalloi.map((megallok, fi) =>

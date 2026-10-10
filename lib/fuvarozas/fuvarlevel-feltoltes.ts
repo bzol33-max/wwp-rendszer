@@ -61,27 +61,34 @@ export async function feltoltOldalakat(
   fuvarId: string,
   fajlok: File[],
   haladas?: (kesz: number, osszes: number) => void
-): Promise<{ sikeres: number; hibas: number }> {
+): Promise<{ sikeres: number; hibas: number; figyelmeztetes: string | null }> {
   let sikeres = 0;
   let hibas = 0;
+  // Ha a fotó nem zárta le a fuvart (a kocsinak másik nyitott fuvarja van —
+  // lásd fuvarlevel-lezaras.ts), a sofőrnek látnia kell: neki kell lezárnia.
+  let figyelmeztetes: string | null = null;
   haladas?.(0, fajlok.length);
   for (const fajl of fajlok) {
     try {
       const kicsi = await kicsinyitFotot(fajl);
       const form = new FormData();
       form.append("foto", kicsi, kicsi.type === "image/png" ? "fuvarlevel.png" : "fuvarlevel.jpg");
-      await feltoltFuvarlevelFoto(fuvarId, form);
+      const eredmeny = await feltoltFuvarlevelFoto(fuvarId, form);
+      if (eredmeny?.figyelmeztetes) figyelmeztetes = eredmeny.figyelmeztetes;
       sikeres++;
     } catch {
       hibas++;
     }
     haladas?.(sikeres + hibas, fajlok.length);
   }
-  return { sikeres, hibas };
+  return { sikeres, hibas, figyelmeztetes };
 }
 
 /** A feltöltés eredménye egy mondatban, a sofőrnek. */
-export function feltoltesUzenet(e: { sikeres: number; hibas: number }): { ok: boolean; szoveg: string } {
+export function feltoltesUzenet(e: { sikeres: number; hibas: number; figyelmeztetes?: string | null }): { ok: boolean; szoveg: string } {
+  if (e.hibas === 0 && e.figyelmeztetes) {
+    return { ok: false, szoveg: `${e.sikeres === 1 ? "Oldal feltöltve." : `${e.sikeres} oldal feltöltve.`} ${e.figyelmeztetes}` };
+  }
   if (e.hibas === 0) return { ok: true, szoveg: e.sikeres === 1 ? "Oldal feltöltve." : `${e.sikeres} oldal feltöltve.` };
   if (e.sikeres === 0) return { ok: false, szoveg: "Nem sikerült feltölteni — próbáld újra, ha jobb a térerő." };
   return { ok: false, szoveg: `${e.sikeres} oldal feltöltve, ${e.hibas} nem ment fel — azt küldd újra.` };

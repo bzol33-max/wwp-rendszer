@@ -53,6 +53,14 @@ export function megalloAblakKezdet(sor: AblakosFuvarSor, tipus: "felrako" | "ler
   return sor.lerakas_ablak_tol ? new Date(sor.lerakas_ablak_tol) : napKezdete(sor.lerakas_datum ?? sor.datum);
 }
 
+/**
+ * Saját fuvar (a régi, fordított `tipus` mezőben "ber") olyan felrakója,
+ * amelynek ablakát csak a nap adja — lásd TervezettMegallo.ejszakaiAllasKizarva.
+ */
+export function megalloEjszakaiAllasKizarva(sor: AblakosFuvarSor & { tipus?: string | null }, tipus: "felrako" | "lerako"): boolean {
+  return tipus === "felrako" && sor.tipus === "ber" && !sor.felrakas_ablak_tol;
+}
+
 /** Lerakó, amelynek ablakát csak a lerakás napja adja — lásd TervezettMegallo.ablakTagithato. */
 export function megalloAblakTagithato(sor: AblakosFuvarSor, tipus: "felrako" | "lerako"): boolean {
   return tipus === "lerako" && !sor.lerakas_ablak_tol;
@@ -136,7 +144,7 @@ export async function geokodolCachelve(cim: string): Promise<GeocodedAddress | n
  * kezdete) — a GPS lap a saját menetidő-becslésével írja felül.
  */
 export async function epitsErintesMegallokat(
-  sor: AblakosFuvarSor & { felrako: string | null; lerako: string },
+  sor: AblakosFuvarSor & { felrako: string | null; lerako: string; tipus?: string | null },
   geokodol: (cim: string) => Promise<GeocodedAddress | null> = geokodolCachelve
 ): Promise<TervezettMegallo[]> {
   const szovegek = [
@@ -164,6 +172,7 @@ export async function epitsErintesMegallokat(
       bizonytalanFelismeres: false,
       ablakKezdet,
       ablakTagithato: megalloAblakTagithato(sor, m.tipus),
+      ejszakaiAllasKizarva: megalloEjszakaiAllasKizarva(sor, m.tipus),
       keszForras: null,
       keszBy: null,
     };

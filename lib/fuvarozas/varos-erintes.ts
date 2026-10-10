@@ -72,6 +72,8 @@ export type ErintesMegalloAdat = {
   sugarKm: number;
   ablakKezdet: Date | null;
   fuvarLezarva?: Date | null;
+  /** Lásd TervezettMegallo.ejszakaiAllasKizarva (idovonal.ts). */
+  ejszakaiAllasKizarva?: boolean;
 };
 
 export type ErintesJelolt = {
@@ -112,6 +114,9 @@ export function erintesDontes(m: ErintesMegalloAdat, j: ErintesJelolt): ErintesD
   const tav = `${j.tavKm.toFixed(1)} km`;
   if (m.ablakKezdet && j.veg.getTime() < m.ablakKezdet.getTime()) {
     return { elfogadva: false, ok: "ablak_elott", reszlet: `az ablak előtt véget ért (${tav})` };
+  }
+  if (m.ejszakaiAllasKizarva && m.ablakKezdet && j.kezdet.getTime() < m.ablakKezdet.getTime()) {
+    return { elfogadva: false, ok: "ablak_elott", reszlet: `az ablak előtt kezdődött — éjszakai állás, nem felrakás (${tav})` };
   }
   if (m.fuvarLezarva && j.kezdet.getTime() > m.fuvarLezarva.getTime()) {
     return { elfogadva: false, ok: "lezaras_utan", reszlet: `a fuvar lezárása után kezdődött (${tav})` };

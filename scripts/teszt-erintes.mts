@@ -501,5 +501,58 @@ function vezetes(honnan: { lat: number; lon: number }, hova: { lat: number; lon:
   eq("araszolás a telephelyen: a lerakón itt áll", jelolMegallokat([f], all)[0][0].eppenItt, true);
 }
 
+// T1 (2026-10-10, a sorrendhiba): NMZ-492 éjjel Szakolyon parkol, reggel
+//    elmegy a bérfuvarért (Sárvár→Debrecen, #401), délután Debrecenben
+//    lerak, majd ugyanott felrakja a saját fuvart (Debrecen→Szakoly, #402,
+//    ablak nélkül). A Debrecenből távozáskor CSAK a bérfuvar lehet kész: a
+//    saját fuvar lerakóját nem igazolhatja a hajnali szakolyi parkolás.
+{
+  const SAROVAR = { lat: 47.2546, lon: 16.9339 };
+  const SZAKOLY = { lat: 47.7633, lon: 21.9146 };
+  const f401 = [megallo(0, "felrako", SAROVAR, t(0, 0, 20)), megallo(1, "lerako", DEBRECEN, t(0, 0, 20))];
+  const f402 = [megallo(0, "felrako", DEBRECEN, t(0, 0, 20)), { ...megallo(1, "lerako", SZAKOLY, t(0, 0, 20)), ablakTagithato: true }];
+  const szakaszok: IdovonalSzakasz[] = [
+    allas(SZAKOLY, t(20, 0, 19), 9 * 60), // 19-én 20:00-tól 20-án 05:00-ig parkolás a telephelyen
+    vezetes(SZAKOLY, SAROVAR, t(5, 0, 20), t(10, 0, 20)),
+    allas(SAROVAR, t(10, 0, 20), 60),
+    vezetes(SAROVAR, DEBRECEN, t(11, 0, 20), t(16, 0, 20)),
+    allas(DEBRECEN, t(16, 0, 20), 90), // bérfuvar lerakása + saját felrakása egy ottlétben
+    vezetes(DEBRECEN, { lat: 47.6, lon: 21.75 }, t(17, 30, 20), t(17, 50, 20)),
+  ];
+  const [j401, j402] = jelolMegallokat([f401, f402], szakaszok);
+  eq("T1: bérfuvar #401 GPS szerint kész", fuvarKeszGpsSzerint(j401), true);
+  eq("T1: saját #402 felrakója Debrecenben kész", j402[0].elhagyva, true);
+  eq("T1: saját #402 lerakóját NEM igazolja a hajnali szakolyi parkolás", j402[1].elhagyva, false);
+  eq("T1: saját #402 GPS szerint NEM kész a bérfuvarral együtt", fuvarKeszGpsSzerint(j402), false);
+  // ...este megérkezik Szakolyra: akkor kész.
+  const este = [...szakaszok, allas(SZAKOLY, t(18, 30, 20), 60), vezetes(SZAKOLY, { lat: 47.9, lon: 22.1 }, t(19, 30, 20), t(19, 50, 20))];
+  const [, k402] = jelolMegallokat([f401, f402], este);
+  eq("T1: saját #402 a szakolyi érkezés után kész", fuvarKeszGpsSzerint(k402), true);
+}
+
+// T2: a saját fuvar (Szakoly→Nyírjákó, #404, ablak nélkül) a bérfuvar
+//    (#403) UTÁN jön; a kocsi éjjel a szakolyi telephelyen állt. Az éjszakán
+//    átnyúló (az ablak előtt kezdődött) állás nem a saját fuvar felrakása.
+{
+  const SZAKOLY = { lat: 47.7633, lon: 21.9146 };
+  const NYIRJAKO = { lat: 48.0997, lon: 22.0758 };
+  const f404 = [
+    { ...megallo(0, "felrako", SZAKOLY, t(0, 0, 21)), ejszakaiAllasKizarva: true },
+    { ...megallo(1, "lerako", NYIRJAKO, t(0, 0, 21)), ablakTagithato: true },
+  ];
+  const reggel: IdovonalSzakasz[] = [
+    allas(SZAKOLY, t(19, 0, 20), 10 * 60), // 20-án 19:00-tól 21-én 05:00-ig
+    vezetes(SZAKOLY, DEBRECEN, t(5, 0, 21), t(6, 0, 21)),
+  ];
+  const [j404] = jelolMegallokat([f404], reggel);
+  eq("T2: az éjszakai telephelyi állás NEM a saját fuvar felrakása", j404[0].tenylegesIdo, null);
+  const delutan = [...reggel, allas(DEBRECEN, t(6, 0, 21), 120), vezetes(DEBRECEN, SZAKOLY, t(8, 0, 21), t(9, 0, 21)), allas(SZAKOLY, t(9, 0, 21), 60), vezetes(SZAKOLY, NYIRJAKO, t(10, 0, 21), t(10, 40, 21))];
+  const [k404] = jelolMegallokat([f404], delutan);
+  eq("T2: a napközbeni telephelyi rakodás a felrakás", k404[0].tenylegesIdo?.toISOString(), t(9, 0, 21).toISOString());
+  // Bérfuvar felrakója (explicit ablak nélkül, de nem saját) ugyanígy: régi szabály marad.
+  const ber = [megallo(0, "felrako", SZAKOLY, t(0, 0, 21)), megallo(1, "lerako", DEBRECEN, t(0, 0, 21))];
+  eq("T2: bérfuvar felrakóját az átnyúló állás továbbra is igazolja", jelolMegallokat([ber], reggel)[0][0].tenylegesIdo?.toISOString(), t(19, 0, 20).toISOString());
+}
+
 console.log(`\n${ok} rendben, ${bad} hiba`);
 process.exit(bad ? 1 : 0);

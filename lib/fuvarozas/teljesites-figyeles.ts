@@ -198,6 +198,11 @@ export async function futtatTeljesitesFigyeles(): Promise<TeljesitesFigyelesEred
       );
       await rogzitGpsErinteseket(erintesek).catch((err) => console.error("[megallo-naplo] felírás sikertelen:", err));
 
+      // Egy körben kocsinként legfeljebb EGY fuvar zárul le, a párosítási
+      // sorrend (parositasiSorrend) szerinti első kész — a következő a
+      // következő körben (5 perc múlva), ha addig is kész. Két egymás utáni
+      // fuvar egyszerre lezárása eddig a hibás párosítás jele volt.
+      let lezartEbbenAKorben = false;
       for (let i = 0; i < fuvarok.length; i++) {
         const { sor } = fuvarok[i];
         if (sor.teljesitve || sor.szamlas) continue;
@@ -210,7 +215,14 @@ export async function futtatTeljesitesFigyeles(): Promise<TeljesitesFigyelesEred
             .join(" | ")}`
         );
         if (!kesz) continue;
-        if (await jelolTeljesitveGpsAlapjan(sor.id)) eredmeny.automatikusanTeljesitve++;
+        if (lezartEbbenAKorben) {
+          console.log(`[teljesites-figyeles] ${jarmu.sofor} #${sor.id}: GPS szerint kész, de ebben a körben már zárult fuvar ennél a kocsinál — a következő körben.`);
+          continue;
+        }
+        if (await jelolTeljesitveGpsAlapjan(sor.id)) {
+          eredmeny.automatikusanTeljesitve++;
+          lezartEbbenAKorben = true;
+        }
       }
     } catch (err) {
       eredmeny.hibak.push(
