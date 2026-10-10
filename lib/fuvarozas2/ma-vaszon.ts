@@ -41,7 +41,8 @@ import { tukorSorok, type TukorSor } from "@/lib/fuvarozas2/ma-tukor";
 import { berUtkozes, napiSorrend, tervIdoMegbizasbol } from "@/lib/fuvarozas2/napi-sorrend";
 import { menetSorrendek } from "@/lib/menet/repo";
 import { alkalmazMenetSorrendet } from "@/lib/menet/menet-alap";
-import { hetCellak, hetMost, hetNapjai, hetSzama, type HetFuvar, type HetKartya, type HetMegallo, type HetMost, type HetNap } from "@/lib/fuvarozas2/ma-het";
+import { jarmuNev } from "@/lib/fuvarozas2/diszpecser-alap";
+import { hetCellak, hetMost, hetNapjai, hetNapjaiHetvegevel, hetSzama, kocsiHelykitolto, type HetFuvar, type HetKartya, type HetMegallo, type HetMost, type HetNap } from "@/lib/fuvarozas2/ma-het";
 
 export type CsempeSzin = "normal" | "amber" | "red" | "mint";
 export type Csempe = { kulcs: string; cimke: string; ertek: string; also: string | null; szin: CsempeSzin; href: string | null };
@@ -303,11 +304,32 @@ export async function getMaVaszon(): Promise<MaVaszon> {
   const jarmuvek = osszesJarmu.filter((j) => j.ecofleet_object_id);
   // A jóváhagyott menetek sorrendje (lib/menet) a mai, a holnapi és a heti
   // rács napjaira — EGY lekérdezés; ahol nincs, a közös napi szabály marad.
-  const hetNapok = hetNapjai(ma);
+  // A heti rács lehetséges napjai: a hét munkanapjai, plusz a hétvége (hétvégén
+  // a mai naptól, hétköznap a péntek utáni két nap) — hogy melyik hétvégi nap
+  // kerül be, azt a fuvarok döntik el (hetNapjaiHetvegevel).
+  const munkanapok = hetNapjai(ma);
+  const eltol = (iso: string, n: number) => { const d = new Date(`${iso}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+  const hetTol = [ma, munkanapok[0].nap].sort()[0];
+  const hetIg = eltol(munkanapok[munkanapok.length - 1].nap, 2);
   const menetek = await menetSorrendek(
-    [ma, hetNapok[0].nap].sort()[0],
-    [holnap, hetNapok[hetNapok.length - 1].nap].sort().at(-1)!
+    [ma, hetTol].sort()[0],
+    [holnap, hetIg].sort().at(-1)!
   );
+  const hetFuvarok = await query<HetFuvar>(
+    `select m.id::text, m.allapot, m.jelleg, coalesce(p.nev, m.megrendelo) as partner,
+       coalesce(m.hivatkozas_kanonikus, m.pozicioszam, m.reise_id) as hivatkozas, j.kod as jarmu_kod,
+       to_char(m.datum, 'YYYY-MM-DD') as felrakas_nap,
+       to_char(coalesce(m.lerakas_datum, m.datum), 'YYYY-MM-DD') as lerakas_nap,
+       m.felrako, m.lerako, m.felrakas_ablak_tol::text as felrakas_ablak_tol, m.idopont
+     from fuvar_megbizasok m
+     left join fuvar_partnerek p on p.id = m.partner_id
+     left join fuvar_jarmuvek j on j.id = m.jarmu_id
+     where m.torolt_at is null and m.allapot is not null
+       and m.datum <= $2::date and coalesce(m.lerakas_datum, m.datum) >= $1::date
+     order by m.datum, m.id`,
+    [hetTol, hetIg]
+  );
+  const hetNapok = hetNapjaiHetvegevel(ma, (nap) => hetFuvarok.some((f) => f.felrakas_nap === nap || f.lerakas_nap === nap));
   const menetSorrendje = (kod: string | null, nap: string) => (kod ? menetek.get(kod)?.get(nap) ?? null : null);
 
   const aznap = (s: { felrakas_nap: string | null; lerakas_nap: string | null }, nap: string) =>
@@ -318,7 +340,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
 
   for (const s of sorok) {
     const gs = megalloMap.get(s.id) ?? [];
-    const kocsiCimke = s.jarmu_cimke ?? "kocsi nélkül";
+    const kocsiCimke = s.jarmu_kod ? jarmuNev({ kod: s.jarmu_kod, cimke: s.jarmu_cimke }) : s.jarmu_cimke ?? "kocsi nélkül";
     const ki = [kocsiCimke, s.sofor].filter(Boolean).join(" · ");
 
     // 2a. Nyitott várakozás — 45 perc felett a legtöbb megbízónál pótdíjas.
@@ -666,6 +688,12 @@ export async function getMaVaszon(): Promise<MaVaszon> {
       (s) => s.id
     );
     const elo = becenev ? idovonal?.jarmuvek.find((x) => x.sofor === becenev) : undefined;
+    // „még nem üzemel” csak fuvar nélkül (és GPS / rendszám nélkül) — a hozzárendelt fuvar mindig látszik.
+    const helykitolto = kocsiHelykitolto({
+      vanGps: !!j.ecofleet_object_id,
+      vanRendszam: !!j.vontato_rendszam,
+      vanFuvar: sajat.length > 0 || maiLezartak.length > 0 || hetFuvarok.some((f) => f.jarmu_kod === j.kod),
+    });
 
     // Vezetési idő becslés: 4,5 óra vezetés után kötelező 45 perc szünet.
     let vezetesSor: string | null = null;
@@ -688,10 +716,10 @@ export async function getMaVaszon(): Promise<MaVaszon> {
 
     return {
       kod: j.kod,
-      cimke: j.cimke,
+      cimke: jarmuNev(j),
       sofor: becenev ?? j.sofor,
-      helykitolto: j.ecofleet_object_id ? null : "még nem üzemel",
-      allapot: j.ecofleet_object_id ? kocsiAllapot(elo) : null,
+      helykitolto,
+      allapot: j.ecofleet_object_id ? kocsiAllapot(elo) : helykitolto ? null : { szoveg: "nincs GPS", szin: "amber", hely: null },
       vezetesSor,
       hetiSor: hp != null ? `Hét: ${Math.round(hp / 60)} / 56 óra` : null,
       napiKm: elo?.napiKm ?? null,
@@ -733,20 +761,6 @@ export async function getMaVaszon(): Promise<MaVaszon> {
 
   // ---------------------------------------------------------------- heti rács (R2)
   const napok = hetNapok;
-  const hetFuvarok = await query<HetFuvar>(
-    `select m.id::text, m.allapot, m.jelleg, coalesce(p.nev, m.megrendelo) as partner,
-       coalesce(m.hivatkozas_kanonikus, m.pozicioszam, m.reise_id) as hivatkozas, j.kod as jarmu_kod,
-       to_char(m.datum, 'YYYY-MM-DD') as felrakas_nap,
-       to_char(coalesce(m.lerakas_datum, m.datum), 'YYYY-MM-DD') as lerakas_nap,
-       m.felrako, m.lerako, m.felrakas_ablak_tol::text as felrakas_ablak_tol, m.idopont
-     from fuvar_megbizasok m
-     left join fuvar_partnerek p on p.id = m.partner_id
-     left join fuvar_jarmuvek j on j.id = m.jarmu_id
-     where m.torolt_at is null and m.allapot is not null
-       and m.datum <= $2::date and coalesce(m.lerakas_datum, m.datum) >= $1::date
-     order by m.datum, m.id`,
-    [napok[0].nap, napok[4].nap]
-  );
   const hetMegalloSorok = hetFuvarok.length
     ? await query<{ megbizas_id: string; tipus: "felrako" | "lerako"; cim_nyers: string; tervezett_nap: string | null; ott: boolean; kesz: boolean }>(
         `select megbizas_id::text, tipus, cim_nyers, tervezett_nap::text,
@@ -763,7 +777,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
     hetMegallok.set(g.megbizas_id, lista);
   }
   const het: MaHet = {
-    cim: `${hetSzama(napok[0].nap)}. hét`,
+    cim: `${hetSzama(munkanapok[0].nap)}. hét`,
     napok,
     sorok: kocsik.map((k) => ({
       kod: k.kod, sofor: k.sofor, cimke: k.cimke, helykitolto: k.helykitolto, allapot: k.allapot,

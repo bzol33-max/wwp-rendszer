@@ -3272,3 +3272,25 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 - **Teszt**: `scripts/teszt-diszpecser.ts` (90/0) a `teszt` láncban; a
   betöltő a scratch Postgresen (Ecofleet-kulcs nélkül → GPS-hiba ág) lefutott,
   a négy nézet és a részlet-panel szerveroldalon renderelve.
+
+## 2026-10-10 — Diszpécser és Ma: QA-javítások (ETA, ▲-jel, chipek, névszabály, telefon, hétvége)
+
+- **ETA csak élő GPS-szel** (`diszpecser-alap.ts` `etaMutathato`, betöltő): élő ETA csak friss/késői
+  GPS-jellel és ugyanarra a megbízásra; különben a menet terve látszik, „nem számolható (nincs friss
+  GPS-jel — a terv látszik)”. **Vég < kezdet soha** (`feladatIdok`, `idoSzoveg`): ellentmondásnál csak
+  a megbízhatóbb idő (tény > ETA > terv); más napra eső idő „(−1)”/„(+1)” jelet kap.
+- **▲-jel = a probléma-lista**: a `Problema` `szint` mezőt kapott (feladat / kocsi / flotta); a feladat
+  jelét csak a feladat-szintű elemek adják (`problemasFeladatKulcsok`) — a kocsi GPS-hiánya nem jelöl
+  feladatot. A részlet-panel a feladat saját és „(a kocsira)” problémáit listázza.
+- **Idővonal**: chip min. 4rem, a sorszám mindig olvasható (teljes címke aria-label/title), a sorokba
+  bontás a min. szélességgel számol; a „most” címke alatt az ütköző óra-felirat elmarad, a szélen nem lóg ki.
+- **Lista**: a Költség oszlop asztalon is kifér (tény/becslés jellel); telefonon kártyalista rendezés-választóval.
+- **Egy névszabály** (`jarmuNev`): „kód · címke”, ha a címke nem tartalmazza a kódot („JANI · DAF XG
+  (gyártás alatt)”) — Diszpécser minden nézete és a Ma oldal.
+- **Heti beosztás telefonon**: ragadó kocsi-oszlop, a kiválasztott nap oszlopa görgetve látszik.
+- **Ma oldal**: „még nem üzemel” csak fuvar nélkül, GPS és rendszám nélkül (`kocsiHelykitolto`); a fuvaros
+  GPS nélküli kocsi a feladataival, „nincs GPS” állapottal látszik. A heti rácsba a fuvaros hétvégi nap
+  bekerül, „hétvége” jellel (`hetNapjaiHetvegevel`). A csempesor telefonon elhalványuló széllel és
+  „húzd oldalra” felirattal.
+- **Teszt**: `teszt-diszpecser.ts` 125/0, `teszt-ma-het.ts` 35/0; teljes `npm run teszt`, typecheck, eslint,
+  build; Playwright 1440×900 és 390×844 (`/tmp/qa-shots/fixdisz_*.png`).

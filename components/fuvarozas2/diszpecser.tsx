@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
@@ -13,8 +13,8 @@ import { ForrasJel } from "@/components/fuvarozas2/forras-jel";
 import { formatFt } from "@/components/fuvarozas2/kozos";
 import {
   FELADAT_ALLAPOT_CIMKE, FELADAT_TIPUS_CIMKE, GPS_FRISSESSEG_CIMKE, NEZETEK, PROBLEMA_CIMKE, URES_SZURO,
-  alkalmazSzurot, blokkHely, feladatIdoszak, feladatNev, gpsFrissesseg, idoTengely, kesesveszely, korSzoveg, napEltolva,
-  oraJelolok, oraPerc, percANapban, problemak, rendezLista, sorokraBont, szuroUrlbe, vanSzuro,
+  alkalmazSzurot, blokkHely, feladatIdok, feladatIdoszak, feladatNev, feladatProblemai, gpsFrissesseg, idoSzoveg, idoTengely, jarmuNev, kesesveszely, korSzoveg,
+  minSzelesIdoszak, napEltolva, oraFeliratok, oraJelolok, oraPerc, oraPercNap, percANapban, problemak, problemasFeladatKulcsok, rendezLista, sorokraBont, szuroUrlbe, vanSzuro,
   type DiszFeladat, type DiszFeladatAllapot, type DiszKocsi, type Diszpecser, type GpsFrissesseg, type ListaOszlop, type ListaSor,
   type Nezet, type Problema, type StatuszSzuro, type Szuro, type Tengely,
 } from "@/lib/fuvarozas2/diszpecser-alap";
@@ -100,12 +100,12 @@ export function DiszpecserNezet({ adat, kezdoSzuro, kezdoNezet, kezdoValasztott 
   const nezetAllit = (nz: Nezet) => { setNezet(nz); urlFrissit(szuro, nz); };
 
   const probl = useMemo(() => problemak(adat, (c) => varos(c)), [adat]);
-  const problemasFeladatok = useMemo(() => new Set(probl.flatMap((p) => (p.feladatKulcs ? [p.feladatKulcs] : []))), [probl]);
+  const problemasFeladatok = useMemo(() => problemasFeladatKulcsok(probl), [probl]);
   const szurt = useMemo(() => alkalmazSzurot(adat.kocsik, szuro, problemasFeladatok), [adat.kocsik, szuro, problemasFeladatok]);
   const szurtProbl = useMemo(() => {
     const lathato = new Set(szurt.flatMap((k) => k.feladatok.map((f) => f.kulcs)));
     const kocsik = new Set(szurt.map((k) => k.kod));
-    return probl.filter((p) => (p.feladatKulcs ? lathato.has(p.feladatKulcs) : !vanSzuro(szuro) || (p.jarmuKod ? kocsik.has(p.jarmuKod) : false)));
+    return probl.filter((p) => (p.szint === "feladat" && p.feladatKulcs ? lathato.has(p.feladatKulcs) : p.jarmuKod ? kocsik.has(p.jarmuKod) : !vanSzuro(szuro)));
   }, [probl, szurt, szuro]);
 
   const kivalasztott = adat.kocsik.flatMap((k) => k.feladatok.filter((f) => f.kulcs === valasztott).map((f) => ({ k, f })))[0] ?? null;
@@ -178,7 +178,7 @@ export function DiszpecserNezet({ adat, kezdoSzuro, kezdoNezet, kezdoValasztott 
         <div className="min-w-0">
           {nezet === "idovonal" ? <Idovonal adat={adat} kocsik={szurt} valasztott={valasztott} onValaszt={valaszt} mostMs={mostMs} problemasFeladatok={problemasFeladatok} /> : null}
           {nezet === "het" ? <HetiBeosztas adat={adat} szuro={szuro} napLink={napLink} /> : null}
-          {nezet === "lista" ? <Lista kocsik={szurt} osszes={adat.kocsik} valasztott={valasztott} onValaszt={valaszt} problemasFeladatok={problemasFeladatok} /> : null}
+          {nezet === "lista" ? <Lista nap={adat.nap} kocsik={szurt} osszes={adat.kocsik} valasztott={valasztott} onValaszt={valaszt} problemasFeladatok={problemasFeladatok} /> : null}
           {nezet === "terkep" ? <Terkep adat={adat} kocsik={szurt} mostMs={mostMs} valasztott={kivalasztott?.k.kod ?? null} onValaszt={(kod) => {
             const k = adat.kocsik.find((x) => x.kod === kod);
             const f = k?.feladatok.find((x) => x.allapot !== "kesz") ?? k?.feladatok[0];
@@ -205,7 +205,7 @@ function SzuroSav({ adat, szuro, onValtozik }: { adat: Diszpecser; szuro: Szuro;
       <label className="flex min-w-0 flex-col gap-1 text-xs font-medium text-muted-foreground">Rendszám / jármű
         <select className={mezo} value={szuro.jarmu} onChange={allit("jarmu")}>
           <option value="">mind</option>
-          {adat.kocsik.map((k) => <option key={k.kod} value={k.kod}>{k.cimke}</option>)}
+          {adat.kocsik.map((k) => <option key={k.kod} value={k.kod}>{jarmuNev(k)}</option>)}
         </select>
       </label>
       <label className="flex min-w-0 flex-col gap-1 text-xs font-medium text-muted-foreground">Sofőr
@@ -307,8 +307,8 @@ function savBillentyu(e: React.KeyboardEvent<HTMLElement>, onValaszt: (kulcs: st
   onValaszt(gombok[j].dataset.feladat!);
 }
 
-function feladatCimke(f: DiszFeladat, problemas: boolean): string {
-  const ido = [oraPerc(f.tenyIndulas ?? f.tervIndulas), oraPerc(f.tenyErkezes ?? f.eta ?? f.tervErkezes)].filter(Boolean).join("–");
+function feladatCimke(f: DiszFeladat, problemas: boolean, nap: string): string {
+  const ido = idoSzoveg(f, nap);
   return [
     feladatNev(f, varos),
     FELADAT_TIPUS_CIMKE[f.tipus],
@@ -352,12 +352,16 @@ function OraTengely({ t, mostPerc }: { t: Tengely; mostPerc: number | null }) {
     <div className="grid grid-cols-[200px_minmax(0,1fr)] gap-2" aria-hidden>
       <div />
       <div className="relative h-5 text-[10px] text-muted-foreground">
-        {oraJelolok(t).map((p) => (
-          <span key={p} className="absolute -translate-x-1/2 tabular-nums" style={{ left: `${((p - t.tol) / hossz) * 100}%` }}>{percOra(p)}</span>
+        {oraFeliratok(t, mostPerc).map((p) => (
+          <span key={p} className={cn("absolute tabular-nums", p === t.ig ? "-translate-x-full" : p === t.tol ? "" : "-translate-x-1/2")} style={{ left: `${((p - t.tol) / hossz) * 100}%` }}>{percOra(p)}</span>
         ))}
-        {mostPerc != null && mostPerc >= t.tol && mostPerc <= t.ig ? (
-          <span className="absolute -translate-x-1/2 rounded bg-[var(--f2-red)] px-1 font-semibold text-white" style={{ left: `${((mostPerc - t.tol) / hossz) * 100}%` }}>most {percOra(mostPerc)}</span>
-        ) : null}
+        {mostPerc != null && mostPerc >= t.tol && mostPerc <= t.ig ? (() => {
+          // A „most” címke a tengelyen belül marad (a szélén nem lóg ki), egy sorban.
+          const hely = (mostPerc - t.tol) / hossz;
+          return (
+            <span className={cn("absolute z-10 whitespace-nowrap rounded bg-[var(--f2-red)] px-1 font-semibold text-white", hely > 0.92 ? "-translate-x-full" : hely < 0.08 ? "" : "-translate-x-1/2")} style={{ left: `${hely * 100}%` }}>most {percOra(mostPerc)}</span>
+          );
+        })() : null}
       </div>
     </div>
   );
@@ -369,7 +373,7 @@ function Sav({ k, adat, tengely, mostPerc, valasztott, onValaszt, mostMs, proble
   const hossz = tengely.ig - tengely.tol;
   const idozitett = k.feladatok.map((f) => ({ f, x: feladatIdoszak(f, adat.nap) }));
   const vanIdo = idozitett.filter((y): y is { f: DiszFeladat; x: { kezd: number; veg: number } } => y.x != null);
-  const sorIndex = sorokraBont(vanIdo.map((y) => y.x));
+  const sorIndex = sorokraBont(vanIdo.map((y) => minSzelesIdoszak(y.x, tengely)));
   const sorDb = Math.max(1, ...sorIndex.map((s) => s + 1));
   const idoNelkul = idozitett.filter((y) => y.x == null).map((y) => y.f);
 
@@ -382,8 +386,8 @@ function Sav({ k, adat, tengely, mostPerc, valasztott, onValaszt, mostMs, proble
         type="button"
         data-feladat={f.kulcs}
         aria-pressed={kiv}
-        aria-label={feladatCimke(f, problemas)}
-        title={feladatCimke(f, problemas)}
+        aria-label={feladatCimke(f, problemas, adat.nap)}
+        title={feladatCimke(f, problemas, adat.nap)}
         onClick={() => onValaszt(f.kulcs, true)}
         style={style}
         className={cn(
@@ -397,19 +401,20 @@ function Sav({ k, adat, tengely, mostPerc, valasztott, onValaszt, mostMs, proble
       >
         <span aria-hidden className="shrink-0">{ALLAPOT_JEL[f.allapot]}</span>
         {f.sorszam != null ? <span className="shrink-0 tabular-nums">#{f.sorszam}</span> : <span aria-hidden className="shrink-0">{TIPUS_JEL[f.tipus]}</span>}
-        <span className="truncate">{varos(f.hova)}</span>
+        <span className="min-w-0 truncate">{varos(f.hova)}</span>
         {problemas ? <span aria-hidden className="shrink-0">⚠</span> : null}
       </button>
     );
   };
 
   return (
-    <div role="group" aria-label={`${k.cimke}, ${k.sofor} sávja — nyilakkal léptethető`} onKeyDown={(e) => savBillentyu(e, (kulcs) => onValaszt(kulcs))}
+    <div role="group" aria-label={`${jarmuNev(k)}, ${k.sofor} sávja — nyilakkal léptethető`} onKeyDown={(e) => savBillentyu(e, (kulcs) => onValaszt(kulcs))}
       className="grid gap-2 border-t border-foreground/10 pt-2 md:grid-cols-[200px_minmax(0,1fr)]">
       <div className="flex min-w-0 flex-col gap-1">
         <div className="flex flex-wrap items-baseline gap-x-2">
-          <b className="font-mono text-sm">{k.vontato ?? k.kod}</b>
+          <b className="font-mono text-sm">{k.kod}</b>
           {k.potkocsi ? <span className="font-mono text-xs text-muted-foreground">+ {k.potkocsi}</span> : null}
+          {!k.cimke.toLocaleUpperCase("hu-HU").includes(k.kod.toLocaleUpperCase("hu-HU")) ? <span className="text-xs text-muted-foreground">· {k.cimke}</span> : null}
         </div>
         <span className="text-xs">{k.sofor || "sofőr nincs megadva"}</span>
         <div className="flex flex-wrap gap-1">
@@ -432,7 +437,7 @@ function Sav({ k, adat, tengely, mostPerc, valasztott, onValaszt, mostMs, proble
             ) : null}
             {vanIdo.map(({ f, x }, i) => {
               const h = blokkHely(x, tengely);
-              return gomb(f, "absolute h-[26px]", { left: `${h.bal}%`, width: `${h.szel}%`, top: `${3 + sorIndex[i] * 30}px`, minWidth: "1.75rem" });
+              return gomb(f, "absolute h-[26px]", { left: `${h.bal}%`, width: `${h.szel}%`, top: `${3 + sorIndex[i] * 30}px`, minWidth: "4rem" });
             })}
           </div>
         )}
@@ -450,7 +455,7 @@ function Sav({ k, adat, tengely, mostPerc, valasztott, onValaszt, mostMs, proble
         {k.feladatok.map((f) => (
           <li key={f.kulcs} className="flex items-center gap-2">
             <span className="w-24 shrink-0 text-[11px] tabular-nums text-muted-foreground">
-              {[oraPerc(f.tenyIndulas ?? f.tervIndulas), oraPerc(f.tenyErkezes ?? f.eta ?? f.tervErkezes)].filter(Boolean).join("–") || "—"}
+              {idoSzoveg(f, adat.nap) || "—"}
             </span>
             {gomb(f, "h-9 flex-1")}
           </li>
@@ -466,19 +471,28 @@ function HetiBeosztas({ adat, szuro, napLink }: { adat: Diszpecser; szuro: Szuro
   const sorok = adat.het.sorok
     .filter((s) => !szuro.jarmu || s.kod === szuro.jarmu)
     .filter((s) => !szuro.sofor || s.sofor.toLocaleLowerCase("hu-HU") === szuro.sofor.toLocaleLowerCase("hu-HU"));
+  // Keskeny képernyőn a kiválasztott nap (alapból ma) oszlopa görgetve látszik; a kocsi-oszlop ragad.
+  const gorgeto = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const g = gorgeto.current;
+    if (!g || g.scrollWidth <= g.clientWidth) return;
+    const cel = g.querySelector<HTMLElement>("th[data-kivalasztott]");
+    const elso = g.querySelector<HTMLElement>("th[data-kocsi-oszlop]");
+    if (cel) g.scrollLeft = Math.max(0, cel.offsetLeft - (elso?.offsetWidth ?? 0) - 8);
+  }, [adat.nap]);
   return (
     <section aria-label="Heti beosztás" className="rounded-2xl border border-foreground/10 bg-card p-3">
       <p className="mb-2 text-xs text-muted-foreground">
         A hét kocsinként: feladatok száma és típusa (jóváhagyott menet, javaslat, vagy menet nélkül a megbízásokból), a sofőr távolléte
         {adat.het.tavolletLathato ? "" : " (a Jelenlét modul jogosultsága nélkül nem látszik)"} és a 30 napon belül lejáró okmányok. A napra kattintva arra a napra vált.
       </p>
-      <div className="overflow-x-auto">
+      <div ref={gorgeto} className="overflow-x-auto">
         <table className="w-full min-w-[760px] border-separate border-spacing-1 text-xs">
           <thead>
             <tr>
-              <th scope="col" className="w-44 text-left font-semibold">Kocsi</th>
+              <th scope="col" data-kocsi-oszlop className="sticky left-0 z-10 w-32 bg-card text-left font-semibold sm:w-44">Kocsi</th>
               {adat.het.napok.map((n) => (
-                <th key={n} scope="col" className={cn("rounded-md px-1 py-1 text-left font-semibold capitalize", n === adat.nap && "bg-[var(--f2-dark)] text-white", n === adat.ma && n !== adat.nap && "underline")}>
+                <th key={n} scope="col" data-kivalasztott={n === adat.nap ? "" : undefined} className={cn("rounded-md px-1 py-1 text-left font-semibold capitalize", n === adat.nap && "bg-[var(--f2-dark)] text-white", n === adat.ma && n !== adat.nap && "underline")}>
                   {napRovid(n)}{n === adat.ma ? " · ma" : ""}
                 </th>
               ))}
@@ -487,19 +501,21 @@ function HetiBeosztas({ adat, szuro, napLink }: { adat: Diszpecser; szuro: Szuro
           <tbody>
             {sorok.map((s) => (
               <tr key={s.kod}>
-                <th scope="row" className="rounded-md bg-muted/40 p-2 text-left align-top font-normal">
-                  <b className="block font-mono">{s.cimke}</b>
+                <th scope="row" className="sticky left-0 z-10 rounded-md bg-card p-0 text-left align-top font-normal">
+                  <div className="h-full rounded-md bg-muted/40 p-2">
+                  <b className="block break-words font-mono">{jarmuNev(s)}</b>
                   <span className="block">{s.sofor || "—"}</span>
                   {s.okmanyok.map((o) => (
                     <span key={`${o.cimke}-${o.targy}-${o.lejarat}`} className={cn("mt-1 block rounded px-1.5 py-0.5 font-semibold", o.allapot === "lejart" ? "bg-[var(--f2-red-l)] text-[var(--f2-red)]" : "bg-[var(--f2-amb-l)] text-[var(--f2-amb)]")}>
                       {o.allapot === "lejart" ? "⛔" : "⚠"} {o.cimke}{o.targy !== s.cimke ? ` (${o.targy})` : ""}: {o.allapot === "lejart" ? `lejárt ${-o.hatraNap} napja` : `${o.hatraNap} nap múlva`}
                     </span>
                   ))}
+                  </div>
                 </th>
                 {s.napok.map((c) => (
                   <td key={c.nap} className="align-top">
                     <Link href={napLink(c.nap, "idovonal")} className={cn("flex h-full min-h-16 flex-col gap-1 rounded-md border p-1.5 hover:border-foreground/40", FOKUSZ, c.nap === adat.nap ? "border-[var(--f2-dark)]" : "border-foreground/10")}
-                      aria-label={`${s.cimke}, ${napRovid(c.nap)}: ${c.feladatDb} feladat${c.tavollet ? `, sofőr ${c.tavollet === "beteg" ? "betegszabadságon" : "szabadságon"}` : ""}`}>
+                      aria-label={`${jarmuNev(s)}, ${napRovid(c.nap)}: ${c.feladatDb} feladat${c.tavollet ? `, sofőr ${c.tavollet === "beteg" ? "betegszabadságon" : "szabadságon"}` : ""}`}>
                       {c.tavollet ? <span className="rounded bg-[var(--f2-amb-l)] px-1 font-semibold text-[var(--f2-amb)]">{c.tavollet === "beteg" ? "✚ beteg" : "☀ szabadság"}</span> : null}
                       {c.feladatDb > 0 ? (
                         <>
@@ -545,20 +561,65 @@ function ablakSzoveg(f: DiszFeladat): string {
   return [fel, le].filter(Boolean).join(" · ") || "—";
 }
 
-function Lista({ kocsik, osszes, valasztott, onValaszt, problemasFeladatok }: {
-  kocsik: DiszKocsi[]; osszes: DiszKocsi[]; valasztott: string | null; onValaszt: (kulcs: string, gorgess?: boolean) => void; problemasFeladatok: ReadonlySet<string>;
+function kmSzoveg(f: DiszFeladat) {
+  const km = (f.uresKm ?? 0) + (f.rakottKm ?? 0);
+  return (
+    <>
+      {km > 0 ? `${km} km` : "—"}
+      {f.kmForras === "becsles" ? <span className="ml-1 text-[10px] text-[var(--f2-amb)]">becslés</span> : null}
+    </>
+  );
+}
+const koltsegSzoveg = (f: DiszFeladat) => (f.koltseg ? <>{formatFt(f.koltseg.ft)} <ForrasJel forras={f.koltseg.forras} /></> : "—");
+
+function Lista({ nap, kocsik, osszes, valasztott, onValaszt, problemasFeladatok }: {
+  nap: string; kocsik: DiszKocsi[]; osszes: DiszKocsi[]; valasztott: string | null; onValaszt: (kulcs: string, gorgess?: boolean) => void; problemasFeladatok: ReadonlySet<string>;
 }) {
   const [rend, setRend] = useState<{ o: ListaOszlop; irany: "asc" | "desc" }>({ o: "jarmu", irany: "asc" });
   const sorok: ListaSor[] = useMemo(() => {
     const index = new Map(osszes.map((k, i) => [k.kod, i]));
-    const alap = kocsik.flatMap((k) => k.feladatok.map((f) => ({ ...f, jarmuCimke: k.cimke, jarmuIndex: index.get(k.kod) ?? 0 })));
+    const alap = kocsik.flatMap((k) => k.feladatok.map((f) => ({ ...f, jarmuCimke: jarmuNev(k), jarmuIndex: index.get(k.kod) ?? 0 })));
     return rendezLista(alap, rend.o, rend.irany);
   }, [kocsik, osszes, rend]);
   const kattint = (o: ListaOszlop) => setRend((r) => ({ o, irany: r.o === o && r.irany === "asc" ? "desc" : "asc" }));
   return (
     <section aria-label="Lista" className="rounded-2xl border border-foreground/10 bg-card p-3">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[900px] text-xs">
+      {/* Telefonon kártyalista (a táblázat oldalra lógna), rendezés a választóval. */}
+      <div className="flex flex-col gap-2 sm:hidden">
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">Rendezés
+          <select className={cn("h-9 min-w-0 flex-1 rounded-lg border border-input bg-background px-2 text-sm", FOKUSZ)} value={`${rend.o}|${rend.irany}`}
+            onChange={(e) => { const [o, irany] = e.target.value.split("|") as [ListaOszlop, "asc" | "desc"]; setRend({ o, irany }); }}>
+            {LISTA_OSZLOPOK.flatMap((o) => [
+              <option key={`${o.kulcs}-a`} value={`${o.kulcs}|asc`}>{o.cimke} ▲</option>,
+              <option key={`${o.kulcs}-d`} value={`${o.kulcs}|desc`}>{o.cimke} ▼</option>,
+            ])}
+          </select>
+        </label>
+        {sorok.length === 0 ? <p className="py-4 text-center text-xs text-muted-foreground">Nincs a szűrőnek megfelelő feladat.</p> : null}
+        <ul className="flex flex-col gap-2">
+          {sorok.map((f) => {
+            const problemas = problemasFeladatok.has(f.kulcs);
+            return (
+              <li key={f.kulcs}>
+                <button type="button" data-feladat={f.kulcs} onClick={() => onValaszt(f.kulcs, true)} aria-pressed={valasztott === f.kulcs} aria-label={`Kiválasztás: ${feladatCimke(f, problemas, nap)}`}
+                  className={cn("flex w-full flex-col gap-1 rounded-xl border border-foreground/10 p-2.5 text-left text-xs hover:bg-muted", FOKUSZ, valasztott === f.kulcs && "bg-[var(--f2-blue-l)]/60", problemas && "border-[var(--f2-red)]")}>
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <b className="font-mono">{f.jarmuCimke}</b>
+                    <b className="tabular-nums">{f.sorszam != null ? `#${f.sorszam}` : "—"}</b>
+                    <span className={cn("rounded border px-1 font-semibold", TIPUS_SZIN[f.tipus])}>{FELADAT_TIPUS_CIMKE[f.tipus]}</span>
+                    <span className="whitespace-nowrap">{ALLAPOT_JEL[f.allapot]} {FELADAT_ALLAPOT_CIMKE[f.allapot]}{problemas ? " · ⚠ problémás" : ""}</span>
+                  </span>
+                  <span className="font-semibold">{varos(f.honnan)} → {varos(f.hova)}{f.partner ? <span className="font-normal text-muted-foreground"> · {f.partner}</span> : null}</span>
+                  <span className="tabular-nums text-muted-foreground">{ablakSzoveg(f)}</span>
+                  <span className="flex flex-wrap gap-x-3 tabular-nums"><span>Km: {kmSzoveg(f)}</span><span>Költség: {koltsegSzoveg(f)}</span></span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+      <div className="hidden overflow-x-auto sm:block">
+        <table className="w-full min-w-[640px] text-xs">
           <caption className="sr-only">A nap feladatai — az oszlopfejlécre kattintva rendezhető</caption>
           <thead>
             <tr className="border-b border-foreground/10 text-left">
@@ -578,9 +639,12 @@ function Lista({ kocsik, osszes, valasztott, onValaszt, problemasFeladatok }: {
               const problemas = problemasFeladatok.has(f.kulcs);
               return (
                 <tr key={f.kulcs} className={cn("border-b border-foreground/5 align-top", valasztott === f.kulcs && "bg-[var(--f2-blue-l)]/60")}>
-                  <td className="px-1.5 py-1.5 font-mono">{f.jarmuCimke}</td>
+                  <td className="px-1.5 py-1.5 font-mono">
+                    {/* A rendszám nem törik a kötőjelnél — csak a „/” után és a szóközöknél. */}
+                    {f.jarmuCimke.split(/(?<=\/)/).map((d, i) => <span key={i} className={d.includes(" ") ? undefined : "inline-block whitespace-nowrap"}>{d}</span>)}
+                  </td>
                   <td className="px-1.5 py-1.5">
-                    <button type="button" data-feladat={f.kulcs} onClick={() => onValaszt(f.kulcs, true)} aria-pressed={valasztott === f.kulcs} aria-label={`Kiválasztás: ${feladatCimke(f, problemas)}`}
+                    <button type="button" data-feladat={f.kulcs} onClick={() => onValaszt(f.kulcs, true)} aria-pressed={valasztott === f.kulcs} aria-label={`Kiválasztás: ${feladatCimke(f, problemas, nap)}`}
                       className={cn("rounded border border-foreground/15 px-1.5 py-0.5 font-semibold tabular-nums hover:bg-muted", FOKUSZ)}>
                       {f.sorszam != null ? `#${f.sorszam}` : "—"}
                     </button>
@@ -589,13 +653,12 @@ function Lista({ kocsik, osszes, valasztott, onValaszt, problemasFeladatok }: {
                   <td className="px-1.5 py-1.5">{f.partner ?? "—"}</td>
                   <td className="px-1.5 py-1.5">{varos(f.honnan)}</td>
                   <td className="px-1.5 py-1.5">{varos(f.hova)}</td>
-                  <td className="px-1.5 py-1.5 tabular-nums">{ablakSzoveg(f)}</td>
-                  <td className="whitespace-nowrap px-1.5 py-1.5">{ALLAPOT_JEL[f.allapot]} {FELADAT_ALLAPOT_CIMKE[f.allapot]}{problemas ? " · ⚠" : ""}</td>
-                  <td className="whitespace-nowrap px-1.5 py-1.5 tabular-nums">
-                    {(f.uresKm ?? 0) + (f.rakottKm ?? 0) > 0 ? `${(f.uresKm ?? 0) + (f.rakottKm ?? 0)} km` : "—"}
-                    {f.kmForras === "becsles" ? <span className="ml-1 text-[10px] text-[var(--f2-amb)]">becslés</span> : null}
+                  <td className="px-1.5 py-1.5 tabular-nums">{ablakSzoveg(f).split(" · ").map((d) => { const [elo, ...ido] = d.split(" "); return <span key={d} className="block">{ido.length ? <>{elo} <span className="whitespace-nowrap">{ido.join(" ")}</span></> : d}</span>; })}</td>
+                  <td className="whitespace-nowrap px-1.5 py-1.5">{ALLAPOT_JEL[f.allapot]} {FELADAT_ALLAPOT_CIMKE[f.allapot]}{problemas ? <span title="problémás"> ⚠</span> : ""}</td>
+                  <td className="px-1.5 py-1.5 tabular-nums"><span className="whitespace-nowrap">{kmSzoveg(f)}</span></td>
+                  <td className="px-1.5 py-1.5 tabular-nums">
+                    {f.koltseg ? <><span className="whitespace-nowrap">{formatFt(f.koltseg.ft)}</span> <ForrasJel forras={f.koltseg.forras} /></> : "—"}
                   </td>
-                  <td className="whitespace-nowrap px-1.5 py-1.5 tabular-nums">{f.koltseg ? <>{formatFt(f.koltseg.ft)} <ForrasJel forras={f.koltseg.forras} /></> : "—"}</td>
                 </tr>
               );
             })}
@@ -611,7 +674,7 @@ function Lista({ kocsik, osszes, valasztott, onValaszt, problemasFeladatok }: {
 function Terkep({ adat, kocsik, mostMs, valasztott, onValaszt }: { adat: Diszpecser; kocsik: DiszKocsi[]; mostMs: number; valasztott: string | null; onValaszt: (kod: string) => void }) {
   const b = adat.beallitas;
   const rajzolhato: TerkepKocsi[] = kocsik.filter((k) => k.gps).map((k) => ({
-    kod: k.kod, cimke: k.vontato ?? k.kod, sofor: k.sofor, lat: k.gps!.lat, lon: k.gps!.lon,
+    kod: k.kod, cimke: jarmuNev(k), sofor: k.sofor, lat: k.gps!.lat, lon: k.gps!.lon,
     ido: oraPerc(k.gps!.utolsoAdat) ?? "?", kor: korSzoveg(k.gps!.utolsoAdat, mostMs),
     frissesseg: gpsFrissesseg(k.gps!.utolsoAdat, mostMs, b.gpsKesoiPerc, b.gpsElavultPerc),
     cim: k.gps!.cim, kovetkezo: k.kovetkezoCel, kijelolt: valasztott === k.kod,
@@ -630,7 +693,7 @@ function Terkep({ adat, kocsik, mostMs, valasztott, onValaszt }: { adat: Diszpec
         ))}
         {jelNelkul.map((k) => (
           <li key={k.kod} className="flex flex-wrap items-center gap-2 text-muted-foreground">
-            <b className="font-mono text-foreground">{k.vontato ?? k.kod}</b> {k.sofor} · × nincs GPS — nem rajzoljuk{k.vanGpsEszkoz ? (k.gpsHiba ? ` (${k.gpsHiba})` : "") : " (nincs Ecofleet-eszköz)"}
+            <b className="font-mono text-foreground">{jarmuNev(k)}</b> {k.sofor} · × nincs GPS — nem rajzoljuk{k.vanGpsEszkoz ? (k.gpsHiba ? ` (${k.gpsHiba})` : "") : " (nincs Ecofleet-eszköz)"}
           </li>
         ))}
       </ul>
@@ -665,7 +728,11 @@ function ReszletPanel({ adat, kiv, mostMs, problemak, onBezar }: {
   }
   const { k, f } = kiv;
   const kes = kesesveszely(f);
-  const sajatProbl = problemak.filter((p) => p.feladatKulcs === f.kulcs);
+  const { sajat: sajatProbl, kocsi: kocsiProbl } = feladatProblemai(problemak, f);
+  const idok = feladatIdok(f);
+  const gpsFr = gpsFrissesseg(k.gps?.utolsoAdat, mostMs, adat.beallitas.gpsKesoiPerc, adat.beallitas.gpsElavultPerc);
+  const vanFrissGps = gpsFr === "friss" || gpsFr === "kesoi";
+  const tervEllentmond = !!(f.tervIndulas && f.tervErkezes && Date.parse(f.tervErkezes) <= Date.parse(f.tervIndulas));
   const km = (f.uresKm ?? 0) + (f.rakottKm ?? 0);
   const menetZarhato = k.menetForras === "jovahagyott" && f.feladatId != null && f.allapot !== "kesz";
   const tervezesLink = `/fuvarozas2/tervezes?menetnap=${adat.nap}#menetterv`;
@@ -691,7 +758,7 @@ function ReszletPanel({ adat, kiv, mostMs, problemak, onBezar }: {
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <h2 className="text-sm font-semibold">{feladatNev(f, varos)}</h2>
-          <p className="text-xs text-muted-foreground">{k.vontato ?? k.kod}{k.potkocsi ? ` + ${k.potkocsi}` : ""} · {k.sofor} · {k.menetForras === "javaslat" ? "javaslat" : k.menetForras === "jovahagyott" ? "jóváhagyott menet" : "menet nélkül"}</p>
+          <p className="text-xs text-muted-foreground">{jarmuNev(k)}{k.potkocsi && !jarmuNev(k).includes(k.potkocsi) ? ` + ${k.potkocsi}` : ""} · {k.sofor} · {k.menetForras === "javaslat" ? "javaslat" : k.menetForras === "jovahagyott" ? "jóváhagyott menet" : "menet nélkül"}</p>
         </div>
         <button type="button" onClick={onBezar} aria-label="Részletek bezárása" className={cn("rounded-md px-2 py-1 text-sm hover:bg-muted", FOKUSZ)}>×</button>
       </div>
@@ -703,11 +770,11 @@ function ReszletPanel({ adat, kiv, mostMs, problemak, onBezar }: {
         {kes ? <Chip className="bg-[var(--f2-red-l)] text-[var(--f2-red)]">⛔ késésveszély</Chip> : null}
       </div>
 
-      {sajatProbl.length > 0 ? (
-        <ul className="flex flex-col gap-1">
-          {sajatProbl.map((p) => (
+      {sajatProbl.length > 0 || kocsiProbl.length > 0 ? (
+        <ul className="flex flex-col gap-1" aria-label="A feladat problémái">
+          {[...sajatProbl, ...kocsiProbl].map((p) => (
             <li key={p.kulcs} className={cn("rounded-md px-2 py-1 text-xs", p.sulyos ? "bg-[var(--f2-red-l)] text-[var(--f2-red)]" : "bg-[var(--f2-amb-l)] text-[var(--f2-amb)]")}>
-              {p.sulyos ? "⛔" : "⚠"} <b>{PROBLEMA_CIMKE[p.tipus]}:</b> {p.szoveg.replace(/^.*?: /, "")}
+              {p.sulyos ? "⛔" : "⚠"} <b>{PROBLEMA_CIMKE[p.tipus]}{p.szint === "kocsi" ? " (a kocsira)" : ""}:</b> {p.szoveg.replace(/^.*?: /, "")}
             </li>
           ))}
         </ul>
@@ -718,9 +785,17 @@ function ReszletPanel({ adat, kiv, mostMs, problemak, onBezar }: {
         {f.partner ? <Sor cimke="Partner">{f.partner}{f.hivatkozas ? ` · ${f.hivatkozas}` : ""}</Sor> : null}
         <Sor cimke="Felrakási ablak">{ablak(f.felrakasAblak)}</Sor>
         <Sor cimke="Lerakási ablak">{ablak(f.lerakasAblak)}</Sor>
-        <Sor cimke="Tervezett">{oraPerc(f.tervIndulas) ?? "?"} → {oraPerc(f.tervErkezes) ?? "?"}</Sor>
-        <Sor cimke="Tény">{f.tenyIndulas || f.tenyErkezes ? `${oraPerc(f.tenyIndulas) ?? "?"} → ${oraPerc(f.tenyErkezes) ?? "még nem"}` : "még nincs"}</Sor>
-        <Sor cimke="ETA">{f.eta ? `${oraPerc(f.eta)}${f.etaCel ? ` (${f.etaCel})` : ""} · élő GPS-becslés` : f.allapot === "kesz" ? "—" : "nem számolható"}</Sor>
+        <Sor cimke="Tervezett">
+          {tervEllentmond
+            ? <>{oraPercNap(f.tervIndulas, adat.nap)} → ? <span className="ml-1 rounded bg-[var(--f2-amb-l)] px-1 text-[10px] text-[var(--f2-amb)]">a terv érkezése nem az indulás után van</span></>
+            : `${oraPercNap(f.tervIndulas, adat.nap) ?? "?"} → ${oraPercNap(f.tervErkezes, adat.nap) ?? "?"}`}
+        </Sor>
+        <Sor cimke="Tény">{f.tenyIndulas || f.tenyErkezes ? `${oraPercNap(f.tenyIndulas, adat.nap) ?? "?"} → ${oraPercNap(f.tenyErkezes, adat.nap) ?? "még nem"}` : "még nincs"}</Sor>
+        <Sor cimke="ETA">
+          {f.eta && idok.veg === new Date(f.eta).toISOString()
+            ? `${oraPercNap(f.eta, adat.nap)}${f.etaCel ? ` (${f.etaCel})` : ""} · élő GPS-becslés`
+            : f.allapot === "kesz" ? "—" : `nem számolható${vanFrissGps ? "" : " (nincs friss GPS-jel — a terv látszik)"}`}
+        </Sor>
         <Sor cimke="Raklap / kapacitás">
           {f.raklapDb != null ? `${f.raklapDb} db` : f.tipus === "ures_pozicionalas" ? "üres" : "?"} / {f.kapacitasRaklap != null ? `${f.kapacitasRaklap} db` : "nincs megadva"}
           {f.raklapDb != null && f.kapacitasRaklap != null && f.raklapDb > f.kapacitasRaklap ? <span className="ml-1 font-semibold text-[var(--f2-red)]">⛔ túl sok</span> : null}

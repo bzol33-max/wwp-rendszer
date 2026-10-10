@@ -11,8 +11,9 @@
 
 import { readFileSync } from "node:fs";
 import {
-  URES_SZURO, alkalmazSzurot, blokkHely, feladatIdoszak, gpsFrissesseg, hetHetfoje, idoTengely, kesesveszely, korSzoveg,
-  napEltolva, nezetUrlbol, okmanyJelzes, oraJelolok, percANapban, problemak, rendezLista, sorokraBont, szuroUrlbe, szuroUrlbol, vanSzuro,
+  URES_SZURO, alkalmazSzurot, blokkHely, etaMutathato, feladatIdok, feladatIdoszak, feladatProblemai, gpsFrissesseg, hetHetfoje, idoSzoveg, idoTengely,
+  jarmuNev, kesesveszely, korSzoveg, minSzelesIdoszak, napEltolva, nezetUrlbol, okmanyJelzes, oraFeliratok, oraJelolok, oraPercNap, percANapban,
+  problemak, problemasFeladatKulcsok, rendezLista, sorokraBont, szuroUrlbe, szuroUrlbol, vanSzuro,
   type DiszFeladat, type DiszKocsi, type Diszpecser, type ListaSor,
 } from "@/lib/fuvarozas2/diszpecser-alap";
 
@@ -183,6 +184,48 @@ const BEALL = { gpsKesoiPerc: 10, gpsElavultPerc: 30, uresIndulasKm: 30 };
   eq("lista: jármű stabil", k(rendezLista(sorok, "jarmu", "asc")), ["1", "3", "2"]);
   eq("lista: státusz (folyamatban, tervezett, kész)", k(rendezLista(sorok, "statusz", "asc")), ["3", "2", "1"]);
 
+  // ------------------------------------------------------------ QA-javítások (2026-10-10)
+  // 1. ETA csak friss/késői GPS-szel és ugyanarra a megbízásra.
+  eq("ETA: friss GPS, ugyanaz a megbízás", etaMutathato("friss", "12", "12"), true);
+  eq("ETA: késői GPS is jó", etaMutathato("kesoi", "12", "12"), true);
+  eq("ETA: nincs GPS → nem számolható", etaMutathato("nincs", "12", "12"), false);
+  eq("ETA: elavult GPS → nem számolható", etaMutathato("elavult", "12", "12"), false);
+  eq("ETA: más megbízásra szóló becslés nem jó", etaMutathato("friss", "13", "12"), false);
+  eq("ETA: becslés nélkül nem jó", etaMutathato("friss", null, "12"), false);
+  // 1b. Vég < kezdet soha.
+  eq("idők: rendes terv", feladatIdok(feladat({ kulcs: "i", tervIndulas: T("06:00"), tervErkezes: T("14:06") })), { kezd: T("06:00"), veg: T("14:06"), ellentmondas: false });
+  eq("idők: terv-vég a kezdet előtt → csak a kezdet", feladatIdok(feladat({ kulcs: "i", tervIndulas: T("14:51"), tervErkezes: T("09:17") })), { kezd: T("14:51"), veg: null, ellentmondas: true });
+  eq("idők: ETA a terv-kezdet előtt → az ETA marad (megbízhatóbb)", feladatIdok(feladat({ kulcs: "i", tervIndulas: T("09:29"), eta: T("07:00") })), { kezd: null, veg: T("07:00"), ellentmondas: true });
+  eq("idők: tény-kezdet a terv-vég után → a tény marad", feladatIdok(feladat({ kulcs: "i", tenyIndulas: T("15:00"), tervErkezes: T("14:00") })), { kezd: T("15:00"), veg: null, ellentmondas: true });
+  eq("idők: egyenlő kezdet és vég ellentmondás", feladatIdok(feladat({ kulcs: "i", tervIndulas: T("08:00"), tervErkezes: T("08:00") })).ellentmondas, true);
+  eq("idő-szöveg: rendes", idoSzoveg(feladat({ kulcs: "i", tervIndulas: T("06:00"), tervErkezes: T("14:06") }), NAP), "06:00–14:06");
+  eq("idő-szöveg: ellentmondásosnál csak a kezdet", idoSzoveg(feladat({ kulcs: "i", tervIndulas: T("14:51"), tervErkezes: T("09:17") }), NAP), "14:51–");
+  eq("idő-szöveg: előző napi kezdés jelölve", idoSzoveg(feladat({ kulcs: "i", tervIndulas: T("21:52", "2026-10-11"), tervErkezes: T("06:00") }), NAP), "21:52 (−1)–06:00");
+  eq("idő-szöveg: semmi", idoSzoveg(feladat({ kulcs: "i" }), NAP), "");
+  eq("óra+nap: másnap", oraPercNap(T("07:00", "2026-10-13"), NAP), "07:00 (+1)");
+  eq("időszak: ellentmondásos terv nem fordul meg", feladatIdoszak(feladat({ kulcs: "i", tervIndulas: T("14:51"), tervErkezes: T("09:17") }), NAP), { kezd: 891, veg: 921 });
+  // 2. A ▲ jel pontosan a probléma-lista feladat-szintű elemeiből.
+  const jelolt = problemasFeladatKulcsok(p);
+  eq("jelölő: csak feladat-szintű problémák (a GPS nem jelöl)", [...jelolt].sort(), ["f2", "j1", "n1", "u1"]);
+  eq("jelölő: minden jelölt feladathoz van saját sor a listában", [...jelolt].every((kl) => p.some((x) => x.szint === "feladat" && x.feladatKulcs === kl)), true);
+  const csakGps = problemak({ ...adat, kocsik: [kocsi({ kod: "NMZ-492", gps: null, feladatok: [feladat({ kulcs: "g1" })] })], kocsiNelkul: [] });
+  eq("jelölő: csak GPS-gond → a feladaton nincs jel", [csakGps.map((x) => x.tipus), problemasFeladatKulcsok(csakGps).size], [["gps"], 0]);
+  eq("részlet: a feladat saját és a kocsi problémái", (() => { const r = feladatProblemai(p, { kulcs: "n1", jarmuKod: "NMZ-492" }); return [r.sajat.map((x) => x.tipus), r.kocsi.map((x) => x.tipus)]; })(), [["utkozes"], ["gps"]]);
+  eq("szint: GPS kocsi, kocsi nélküli flotta", [p.find((x) => x.tipus === "gps")?.szint, p.find((x) => x.tipus === "kocsi_nelkul")?.szint, p.find((x) => x.tipus === "utkozes")?.szint], ["kocsi", "flotta", "feladat"]);
+  // 3. Chip-hely és a „most” címke ütközése.
+  eq("feliratok: a most melletti óra-felirat kimarad", oraFeliratok({ tol: 0, ig: 1440 }, 1341), [0, 180, 360, 540, 720, 900, 1080]);
+  eq("feliratok: most nélkül mind", oraFeliratok({ tol: 0, ig: 1440 }, null).length, 9);
+  eq("feliratok: távoli most nem rejt el semmit", oraFeliratok({ tol: 360, ig: 840 }, 660), [360, 480, 600, 720, 840]);
+  eq("feliratok: közeli most a szomszéd órát rejti", oraFeliratok({ tol: 360, ig: 840 }, 620), [360, 480, 720, 840]);
+  eq("min. szélesség: rövid blokk a sorokhoz kiszélesítve", minSzelesIdoszak({ kezd: 600, veg: 610 }, { tol: 0, ig: 1000 }), { kezd: 600, veg: 690 });
+  eq("min. szélesség: rövid blokkok külön sorba kerülnek", sorokraBont([{ kezd: 600, veg: 610 }, { kezd: 620, veg: 630 }].map((x) => minSzelesIdoszak(x, { tol: 0, ig: 1000 }))), [0, 1]);
+  // 5. Egy névszabály.
+  eq("név: kód a címkében", jarmuNev({ kod: "AOPU-427", cimke: "AOPU-427/AOTY-474" }), "AOPU-427/AOTY-474");
+  eq("név: kód + címke", jarmuNev({ kod: "JANI", cimke: "DAF XG (gyártás alatt)" }), "JANI · DAF XG (gyártás alatt)");
+  eq("név: címke nélkül a kód", jarmuNev({ kod: "QAT-101", cimke: "" }), "QAT-101");
+  eq("név: kód nélkül a címke", jarmuNev({ kod: null, cimke: "3. kocsi" }), "3. kocsi");
+  eq("probléma-szöveg a névszabállyal", problemak({ ...adat, kocsik: [kocsi({ kod: "JANI", cimke: "DAF XG (gyártás alatt)", vanGpsEszkoz: false, feladatok: [feladat({ kulcs: "j" })] })], kocsiNelkul: [] })[0].szoveg, "JANI · DAF XG (gyártás alatt): nincs GPS-jel — nincs Ecofleet-eszköz");
+
   // ------------------------------------------------------------ statikus őrök
   const betolto = readFileSync("lib/fuvarozas2/diszpecser.ts", "utf8");
   eq("betöltő: server-only", /^import "server-only";/.test(betolto), true);
@@ -194,6 +237,8 @@ const BEALL = { gpsKesoiPerc: 10, gpsElavultPerc: 30, uresIndulasKm: 30 };
   const kliens = readFileSync("components/fuvarozas2/diszpecser.tsx", "utf8");
   eq("térkép: dinamikus import, ssr nélkül", /dynamic\(\(\) => import\("@\/components\/fuvarozas2\/diszpecser-terkep"\)[\s\S]*?ssr: false/.test(kliens), true);
   eq("probléma-sáv: aria-live polite", /aria-live="polite"/.test(kliens), true);
+  eq("lista: Költség oszlop", /kulcs: "koltseg", cimke: "Költség"/.test(kliens), true);
+  eq("betöltő: az ETA a GPS-frissességhez kötött", /etaMutathato\(frissesseg/.test(betolto), true);
 
   console.log(`\nDiszpécser: ${ok} rendben, ${bad} hibás`);
   if (bad > 0) process.exit(1);
