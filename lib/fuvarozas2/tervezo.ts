@@ -15,6 +15,7 @@ import { SAJAT_TELEPHELYEK } from "@/lib/fuvarozas/telephelyek";
 import { GAZOLAJ_AR_TARTALEK, TANKOLASI_KEDVEZMENY_FT_PER_LITER } from "@/lib/fuvarozas/gazolaj";
 import { NAPI_KOLTSEG_FT, ALAP_FOGYASZTAS_L100, type AjanlatMinosites } from "@/lib/fuvarozas2/kalkulator-alap";
 import { frissitsKalkulaciokat, getTaroltKalkulaciok, szamoldEsTarold, type TaroltKalkulacio } from "@/lib/fuvarozas2/kalkulacio-tar";
+import { napiSorrend, tervIdoMegbizasbol } from "@/lib/fuvarozas2/napi-sorrend";
 import { celar, elozmenyElteres, hetHatas, legjobbKocsi, type HetEredmeny, type HetFuvar, type HetParam, type Pont } from "@/lib/fuvarozas2/tervezo-alap";
 
 export type BejovoSor = {
@@ -71,7 +72,16 @@ type FuvarPont = {
   felrako: string | null; lerako: string | null; felrakas_nap: string; lerakas_nap: string;
   fuvardij: number | null; penznem: string; rakott_km: number | null;
   fel_lat: number | null; fel_lon: number | null; le_lat: number | null; le_lon: number | null;
+  felrakas_ablak_tol: string | null; idopont: string | null;
 };
+
+/** Lezárt (teljesítve vagy későbbi állapotú) megbízás — a közös sorrendben a tény nélkül lezárt is a helyén marad. */
+const LEZART_ALLAPOTOK = new Set(["teljesitve", "szamlazhato", "szamlazva", "email_elment", "postazva", "lezart"]);
+const sorrendAdat = (f: FuvarPont) => ({
+  id: f.id, felrakasNap: f.felrakas_nap, lerakasNap: f.lerakas_nap, felrako: f.felrako, lerako: f.lerako,
+  lezart: LEZART_ALLAPOTOK.has(f.allapot),
+  tervIdo: tervIdoMegbizasbol(f.felrakas_nap, f.felrakas_ablak_tol, f.idopont),
+});
 
 const HONAPNAP = (iso: string) => `${iso.slice(5, 7)}.${iso.slice(8, 10)}.`;
 
@@ -98,7 +108,8 @@ export async function getTervezo(szuro: { m?: string; kocsi?: string }): Promise
        coalesce(fel.cim_nyers, m.felrako) as felrako, coalesce(le.cim_nyers, m.lerako) as lerako,
        to_char(m.datum, 'YYYY-MM-DD') as felrakas_nap, to_char(coalesce(m.lerakas_datum, m.datum), 'YYYY-MM-DD') as lerakas_nap,
        m.fuvardij, coalesce(m.fuvardij_penznem, 'Ft') as penznem, m.rakott_km,
-       fel.lat as fel_lat, fel.lon as fel_lon, le.lat as le_lat, le.lon as le_lon
+       fel.lat as fel_lat, fel.lon as fel_lon, le.lat as le_lat, le.lon as le_lon,
+       m.felrakas_ablak_tol::text as felrakas_ablak_tol, m.idopont
      from fuvar_megbizasok m
      left join fuvar_partnerek p on p.id = m.partner_id
      left join fuvar_jarmuvek j on j.id = m.jarmu_id
@@ -129,6 +140,7 @@ export async function getTervezo(szuro: { m?: string; kocsi?: string }): Promise
 
   const hetFuvar = (f: FuvarPont): HetFuvar => {
     const t = tar.get(f.id)?.eredmeny;
+    const so = sorrendAdat(f);
     return {
       id: f.id, jelleg: f.jelleg, felrakasNap: f.felrakas_nap, lerakasNap: f.lerakas_nap,
       felrako: f.fel_lat != null && f.fel_lon != null ? { lat: f.fel_lat, lon: f.fel_lon } : null,
@@ -136,6 +148,8 @@ export async function getTervezo(szuro: { m?: string; kocsi?: string }): Promise
       rakottKm: t?.rakottKm ?? (f.rakott_km != null ? Number(f.rakott_km) : null),
       dijFt: f.jelleg === "ber" && f.penznem === "Ft" && f.fuvardij ? Number(f.fuvardij) : null,
       utdijFt: t?.rakottUtdijFt ?? null,
+      felrakoCim: f.felrako, lerakoCim: f.lerako,
+      tervIdo: so.tervIdo, lezart: so.lezart,
     };
   };
 
@@ -157,8 +171,8 @@ export async function getTervezo(szuro: { m?: string; kocsi?: string }): Promise
       const h = hetHatas(heti.map(hetFuvar), uj, kezdo, param);
       const napok = Array.from({ length: 5 }, (_, i) => napPlusz(kezd, i)).map((nap) => ({
         nap,
-        fuvarok: [...heti, jelolt]
-          .filter((f) => f.felrakas_nap <= nap && f.lerakas_nap >= nap)
+        // A nap kártyái a közös sorrendben (napi-sorrend.ts), nem a lekérdezés datum, id rendjében.
+        fuvarok: napiSorrend([...heti, jelolt].filter((f) => f.felrakas_nap <= nap && f.lerakas_nap >= nap), sorrendAdat)
           .map((f) => ({
             id: f.id,
             cim: f.partner ?? (f.jelleg === "sajat" ? "saját fuvar" : "(nincs megbízó)"),

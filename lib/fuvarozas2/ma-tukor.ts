@@ -12,6 +12,7 @@
 
 import { varosNev } from "@/lib/fuvarozas/varos";
 import { kontaktNev, kontaktTelefon, megalloReszlete, type MegalloReszlet } from "@/lib/fuvarozas/sofor-adatok";
+import { napiSorrend } from "@/lib/fuvarozas2/napi-sorrend";
 
 export type TukorAllas = {
   percek: number;
@@ -76,6 +77,14 @@ export type TukorFuvar = {
    * GPS-állás „nem tervezett” lett.)
    */
   lezart?: boolean;
+  /** A felrakás / lerakás napja (YYYY-MM-DD) — a közös sorrendhez; ha hiányzik, a megállók tervezett napjából. */
+  felrakasNap?: string | null;
+  lerakasNap?: string | null;
+  /**
+   * Korábbi napról csúszó, még nyitott fuvar (a lerakás napja elmúlt): a
+   * még el nem ért megállóinál „csúszik” jelölés, ha más eltérés nincs.
+   */
+  csuszik?: boolean;
 };
 
 export type TukorGpsAllas = { kezdet: Date; veg: Date; cim: string | null; percek: number; lat: number | null; lon: number | null };
@@ -96,30 +105,42 @@ const napNeve = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString
 const ekezetNelkul = (x: string) => x.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 
 /**
- * A kocsi fuvarjai a valós sorrendben: előbb a már elkezdettek (van GPS-
- * érkezés vagy kész jelölés) a legkorábbi tényük szerint, utánuk a többi a
- * legkorábbi tervezett idejük (ablak, különben a nap) szerint; egyezésnél a
- * bejövő sorrend marad. A dátum+sorszám nem elég: Gergő 09-29-i napján a
- * később rögzített, de már elkezdett RBT-fuvar (#284) a korábban rögzített,
- * utána következő saját fuvar (#275) mögé került.
+ * A kocsi fuvarjai a közös sorrendben (napi-sorrend.ts): nap, utána a már
+ * elkezdettek vagy lezártak a legkorábbi tényük szerint (a tény nélkül
+ * lezárt a tervezett helyén, de nem a következő mögött), majd a kiírt
+ * ablakkal bírók az ablak szerint, végül az időpont nélküliek láncolva /
+ * id szerint. A dátum+sorszám nem elég: Gergő 09-29-i napján a később
+ * rögzített, de már elkezdett RBT-fuvar (#284) a korábban rögzített, utána
+ * következő saját fuvar (#275) mögé került. Ablak nélkül nincs
+ * helykitöltő idő (a régi `tervezett_nap 00:00+00` budapesti 02:00 volt).
  */
 function fuvarSorrend(fuvarok: TukorFuvar[]): TukorFuvar[] {
-  const kulcs = (f: TukorFuvar) => {
+  return napiSorrend(fuvarok, (f) => {
+    const felrakok = f.megallok.filter((g) => g.tipus === "felrako");
+    const lerakok = f.megallok.filter((g) => g.tipus === "lerako");
+    const felrakasNap = f.felrakasNap ?? felrakok[0]?.tervezett_nap ?? f.megallok[0]?.tervezett_nap ?? null;
+    const lerakasNap = f.lerakasNap ?? lerakok.at(-1)?.tervezett_nap ?? f.megallok.at(-1)?.tervezett_nap ?? felrakasNap;
     const tenyek = f.megallok
-      .flatMap((g) => [idobelyeg(g.gps_erkezes), idobelyeg(g.sofor_kesz_at)])
+      .flatMap((g) => [idobelyeg(g.gps_erkezes), idobelyeg(g.sofor_megerkezett_at ?? null), idobelyeg(g.sofor_kesz_at)])
       .filter((d): d is Date => d !== null)
       .map((d) => d.getTime());
-    if (tenyek.length) return { elkezdve: 0, ido: Math.min(...tenyek) };
+    // Terv: a felrakás napjára eső (vagy nap nélküli) megállók ablakai közül a legkorábbi.
     const tervek = f.megallok
-      .map((g) => idobelyeg(g.ablak_tol) ?? (g.tervezett_nap ? idobelyeg(`${g.tervezett_nap} 00:00:00+00`) : null))
+      .filter((g) => !g.tervezett_nap || !felrakasNap || g.tervezett_nap === felrakasNap)
+      .map((g) => idobelyeg(g.ablak_tol))
       .filter((d): d is Date => d !== null)
       .map((d) => d.getTime());
-    return { elkezdve: 1, ido: tervek.length ? Math.min(...tervek) : Number.MAX_SAFE_INTEGER };
-  };
-  return fuvarok
-    .map((f, i) => ({ f, i, k: kulcs(f) }))
-    .sort((a, b) => a.k.elkezdve - b.k.elkezdve || a.k.ido - b.k.ido || a.i - b.i)
-    .map((x) => x.f);
+    return {
+      id: f.id,
+      felrakasNap,
+      lerakasNap,
+      felrako: felrakok[0]?.cim_nyers ?? null,
+      lerako: lerakok.at(-1)?.cim_nyers ?? null,
+      tenyIdo: tenyek.length ? Math.min(...tenyek) : null,
+      lezart: !!f.lezart,
+      tervIdo: tervek.length ? Math.min(...tervek) : null,
+    };
+  });
 }
 
 export function tukorSorok(be: {
@@ -212,6 +233,9 @@ export function tukorSorok(be: {
       else if (tenyKezdet && tol && ig) elteres = "ablakban";
       else if (!kesz && ig && ig < most) elteres = `késik ${perc(most, ig)} p`;
       else if (etaIde && ig && etaIde > ig) elteres = `+${perc(etaIde, ig)} p várható`;
+      // Korábbi napról csúszó, még el nem ért megálló (ugyanaz a szó, mint az eltérés-sávban).
+      const csuszik = !!f.csuszik && !kesz && !erk;
+      if (!elteres && csuszik) elteres = "csúszik";
 
       // A mostani / következő megállónál a cég és a helyszíni kontakt is kell.
       let ceg: string | null = null;
@@ -228,7 +252,7 @@ export function tukorSorok(be: {
       const sor: TukorSor = {
         tipus: "megallo", fuvarId: f.id, felLe: g.tipus, varos, terv, teny, elteres, allapot,
         // Ha a kocsi már ott van, az ablak lejárta nem késés (a rakodás tart).
-        kiemelt: varakozik ? "varakozik" : !kesz && !erk && ig && ig < most ? "kesik" : null,
+        kiemelt: varakozik ? "varakozik" : (!kesz && !erk && ig && ig < most) || csuszik ? "kesik" : null,
         allas, ceg, kontaktNev: kNev, telefon: tel,
       };
       rendezoIdo.set(sor, (erk ?? tav)?.getTime() ?? null);

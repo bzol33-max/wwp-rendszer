@@ -37,7 +37,7 @@ import { SAJAT_JARMUVEK, type JarmuSzin } from "@/lib/fuvarozas/vehicles";
 import type { MegalloReszlet } from "@/lib/fuvarozas/sofor-adatok";
 import type { Allapot } from "@/lib/fuvarozas/allapot";
 import { tukorSorok, type TukorSor } from "@/lib/fuvarozas2/ma-tukor";
-import { berUtkozes, napiSorrend } from "@/lib/fuvarozas2/napi-sorrend";
+import { berUtkozes, napiSorrend, tervIdoMegbizasbol } from "@/lib/fuvarozas2/napi-sorrend";
 import { hetCellak, hetMost, hetNapjai, hetSzama, type HetFuvar, type HetKartya, type HetMegallo, type HetMost, type HetNap } from "@/lib/fuvarozas2/ma-het";
 
 export type CsempeSzin = "normal" | "amber" | "red" | "mint";
@@ -226,13 +226,15 @@ export async function getMaVaszon(): Promise<MaVaszon> {
     jarmu_kod: string | null; jarmu_cimke: string | null; sofor: string | null;
     felrakas_nap: string | null; lerakas_nap: string | null; hianylista: unknown[]; felrako: string | null; lerako: string | null;
     megallo_reszletek: MegalloReszlet[] | null;
+    felrakas_ablak_tol: string | null; idopont: string | null;
   };
   const MEGBIZAS_OSZLOPOK = `m.id::text, m.allapot, m.jelleg, coalesce(p.nev, m.megrendelo) as partner,
        coalesce(m.hivatkozas_kanonikus, m.pozicioszam, m.reise_id) as hivatkozas,
        j.kod as jarmu_kod, coalesce(j.cimke, m.jarmu) as jarmu_cimke, coalesce(a.name, m.sofor) as sofor,
        to_char(m.datum, 'YYYY-MM-DD') as felrakas_nap,
        to_char(coalesce(m.lerakas_datum, m.datum), 'YYYY-MM-DD') as lerakas_nap,
-       m.hianylista, m.felrako, m.lerako, m.megallo_reszletek
+       m.hianylista, m.felrako, m.lerako, m.megallo_reszletek,
+       m.felrakas_ablak_tol::text as felrakas_ablak_tol, m.idopont
      from fuvar_megbizasok m
      left join fuvar_partnerek p on p.id = m.partner_id
      left join fuvar_jarmuvek j on j.id = m.jarmu_id
@@ -630,14 +632,22 @@ export async function getMaVaszon(): Promise<MaVaszon> {
     const torzs = SAJAT_JARMUVEK.find((x) => x.rendszamok[0] === j.kod) ?? SAJAT_JARMUVEK.find((x) => x.rendszamok.length === 0 && j.kod === "JANI");
     const becenev = torzs?.sofor ?? null;
     const sajat = sorok.filter((s) => s.jarmu_kod === j.kod && s.allapot !== "ellenorzesre_var");
-    // Ma: a mai napra eső, és a korábbról csúszó, még folyamatban lévő fuvarok.
-    const maiak = sajat.filter((s) => aznap(s, ma) || ((s.lerakas_nap ?? "") < ma && s.allapot === "folyamatban"));
+    // Ma: a mai napra eső, és a korábbról csúszó, még nyitott fuvarok — a
+    // folyamatban lévők ÉS a még el sem kezdett tervezettek is (eddig a
+    // tegnapról maradt, el nem kezdett fuvar a kocsi oszlopából eltűnt, csak
+    // a „csúszik” eltérés jelezte). A közös sorrendben a korábbi nap elöl
+    // áll, a még el nem ért megállóik „csúszik” jelölést kapnak (tukorSorok).
+    const csuszik = (s: MegbizasSor) => (s.lerakas_nap ?? "") < ma && (s.allapot === "folyamatban" || s.allapot === "tervezett");
+    const maiak = sajat.filter((s) => aznap(s, ma) || csuszik(s));
     // A tükörbe a ma lezárultak is (készként) — a holnapi folytatást nem jelzik.
     const maiLezartak = lezartMaiak.filter((s) => s.jarmu_kod === j.kod);
     // A holnapi fuvarok a menet sorrendjében, nem a rögzítésében (napi-sorrend.ts).
     const holnapiak = napiSorrend(
       sajat.filter((s) => aznap(s, holnap) && !maiak.includes(s)),
-      (s) => ({ id: s.id, felrakasNap: s.felrakas_nap, lerakasNap: s.lerakas_nap, felrako: s.felrako, lerako: s.lerako })
+      (s) => ({
+        id: s.id, felrakasNap: s.felrakas_nap, lerakasNap: s.lerakas_nap, felrako: s.felrako, lerako: s.lerako,
+        tervIdo: tervIdoMegbizasbol(s.felrakas_nap, s.felrakas_ablak_tol, s.idopont),
+      })
     );
     const elo = becenev ? idovonal?.jarmuvek.find((x) => x.sofor === becenev) : undefined;
 
@@ -675,6 +685,9 @@ export async function getMaVaszon(): Promise<MaVaszon> {
           id: s.id, partner: s.partner, hivatkozas: s.hivatkozas, jelleg: s.jelleg,
           megallo_reszletek: s.megallo_reszletek, megallok: megalloMap.get(s.id) ?? [],
           lezart: maiLezartak.includes(s),
+          felrakasNap: s.felrakas_nap,
+          lerakasNap: s.lerakas_nap,
+          csuszik: !maiLezartak.includes(s) && csuszik(s),
         })),
         // A GPS nem tervezett állásai, a koordinátájukkal (az idővonal állás-szakaszából).
         allasok: (elo?.nemTervezettAllasok ?? []).map((a) => {
@@ -706,7 +719,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
        coalesce(m.hivatkozas_kanonikus, m.pozicioszam, m.reise_id) as hivatkozas, j.kod as jarmu_kod,
        to_char(m.datum, 'YYYY-MM-DD') as felrakas_nap,
        to_char(coalesce(m.lerakas_datum, m.datum), 'YYYY-MM-DD') as lerakas_nap,
-       m.felrako, m.lerako
+       m.felrako, m.lerako, m.felrakas_ablak_tol::text as felrakas_ablak_tol, m.idopont
      from fuvar_megbizasok m
      left join fuvar_partnerek p on p.id = m.partner_id
      left join fuvar_jarmuvek j on j.id = m.jarmu_id
