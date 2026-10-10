@@ -25,7 +25,7 @@
 import { requireAnyViewPermission } from "@/lib/auth/require-permission";
 import { query } from "@/lib/db";
 import { koltsegIdoszakra, type IdoszakMegbizas } from "@/lib/fuvarozas2/koltseg-adat";
-import type { Forras, Tetel } from "@/lib/fuvarozas2/koltseg-szamitas";
+import { fejlecKmSzamitas, type Forras, type Tetel } from "@/lib/fuvarozas2/koltseg-szamitas";
 import type { ArfolyamInfo } from "@/lib/fuvarozas/arfolyam";
 
 export type KimutatasIdoszak = "nap" | "het" | "ho";
@@ -51,6 +51,8 @@ export type KimutatasJarmu = {
   uzemanyag: Tetel | null;
   utdij: Tetel | null;
   napiFix: Tetel;
+  /** Kézzel rögzített egyéb költség (várakozási pótdíj, kiállási díj…). */
+  keziEgyeb: Tetel | null;
   aktivNap: number;
   osszKoltsegFt: number;
   osszKoltsegForras: Forras;
@@ -79,12 +81,17 @@ export type KimutatasEredmeny = {
   megbizasok: KimutatasMegbizas[];
   napok: KimutatasNap[];
   ossz: {
-    km: number; berKm: number; sajatKm: number; uresKm: number; liter: number;
+    /** GPS-km (tény) — csak a mért kocsik. */
+    km: number;
+    /** A fejléc km-e: GPS-tény, ahol van; a GPS-tény nélküli kocsiknál a fuvarlánc (rakott + üres) becslése. */
+    fejlecKm: { ertek: number; forras: Forras; tenyKm: number; becsultKm: number; becsultKocsi: number };
+    berKm: number; sajatKm: number; uresKm: number; liter: number;
     bevetelFt: number; atvaltatlanEur: number;
     uzemanyagFt: number; uzemanyagForras: Forras;
     utdijFt: number; utdijForras: Forras;
     napiKoltsegFt: number; aktivNap: number;
-    osszKoltsegFt: number;
+    keziEgyebFt: number;
+    osszKoltsegFt: number; osszKoltsegForras: Forras;
     berFtKm: number | null;
     berEredmenyFt: number; sajatBelsoKoltsegFt: number; nemHozzarendeltFt: number;
     eredmenyFt: number; elkerultKoltsegFt: number;
@@ -148,7 +155,7 @@ export async function getKimutatas(idoszak: KimutatasIdoszak = "het", nap?: stri
       berKm: Math.round(berKm), sajatKm: Math.round(sajatKm), uresKm: Math.round(uresKm),
       berDb: e.berDb, sajatDb: e.sajatDb,
       bevetelFt: e.berBevetelFt, atvaltatlanEur: e.atvaltatlanEur,
-      uzemanyag: j.ossz.uzemanyag, utdij: j.ossz.utdij, napiFix: j.ossz.napiFix,
+      uzemanyag: j.ossz.uzemanyag, utdij: j.ossz.utdij, napiFix: j.ossz.napiFix, keziEgyeb: j.ossz.keziEgyeb ?? null,
       aktivNap: j.aktivNap,
       osszKoltsegFt: e.osszKoltsegFt, osszKoltsegForras: e.osszKoltsegForras,
       berEredmenyFt: e.berEredmenyFt, sajatBelsoKoltsegFt: e.sajatBelsoKoltsegFt,
@@ -163,18 +170,20 @@ export async function getKimutatas(idoszak: KimutatasIdoszak = "het", nap?: stri
   const mindTeny = (f: (j: KimutatasJarmu) => Forras | undefined) => (jarmuvek.every((j) => f(j) === "teny") && jarmuvek.length > 0 ? "teny" : "becsles") as Forras;
   const berKmOssz = sum((j) => j.berKm);
   const bevetelFtOssz = sum((j) => j.bevetelFt);
+  const fejlecKm = fejlecKmSzamitas(jarmuvek);
   return {
     idoszak, kezdet, veg,
     jarmuvek,
     megbizasok: k.jarmuvek.flatMap((j) => j.megbizasok),
     napok: [...napok.values()].sort((a, b) => a.nap.localeCompare(b.nap)),
     ossz: {
-      km: sum((j) => j.km), berKm: berKmOssz, sajatKm: sum((j) => j.sajatKm), uresKm: sum((j) => j.uresKm), liter: sum((j) => j.liter),
+      km: sum((j) => j.km), fejlecKm, berKm: berKmOssz, sajatKm: sum((j) => j.sajatKm), uresKm: sum((j) => j.uresKm), liter: sum((j) => j.liter),
       bevetelFt: bevetelFtOssz, atvaltatlanEur: sum((j) => j.atvaltatlanEur),
       uzemanyagFt: sum((j) => j.uzemanyag?.ft ?? 0), uzemanyagForras: mindTeny((j) => j.uzemanyag?.forras),
       utdijFt: sum((j) => j.utdij?.ft ?? 0), utdijForras: mindTeny((j) => j.utdij?.forras),
       napiKoltsegFt: sum((j) => j.napiFix.ft), aktivNap: sum((j) => j.aktivNap),
-      osszKoltsegFt: sum((j) => j.osszKoltsegFt),
+      keziEgyebFt: sum((j) => j.keziEgyeb?.ft ?? 0),
+      osszKoltsegFt: sum((j) => j.osszKoltsegFt), osszKoltsegForras: mindTeny((j) => j.osszKoltsegForras),
       berFtKm: berKmOssz > 0 && bevetelFtOssz > 0 ? Math.round(bevetelFtOssz / berKmOssz) : null,
       berEredmenyFt: sum((j) => j.berEredmenyFt), sajatBelsoKoltsegFt: sum((j) => j.sajatBelsoKoltsegFt),
       nemHozzarendeltFt: sum((j) => j.nemHozzarendeltFt), eredmenyFt: sum((j) => j.eredmenyFt),

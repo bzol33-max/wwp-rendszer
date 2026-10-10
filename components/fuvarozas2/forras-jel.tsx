@@ -25,9 +25,11 @@ export function ForrasJel({ forras, className }: { forras: Forras | null | undef
 /** Egy költségtétel: összeg + tény/becslés jel, a részletek a súgóban. */
 export function TetelErtek({ tetel, ures = "—" }: { tetel: Tetel | null | undefined; ures?: string }) {
   if (!tetel) return <span className="text-muted-foreground">{ures}</span>;
+  const jelzo = tetel.kezi ? "kézi" : tetel.felosztva ? "felosztva" : null;
   return (
-    <span title={tetel.megjegyzes} className="whitespace-nowrap">
+    <span title={tetel.megjegyzes} className="whitespace-nowrap tabular-nums">
       {formatFt(tetel.ft)} <ForrasJel forras={tetel.forras} />
+      {jelzo ? <span className="block text-[10px] font-normal text-muted-foreground">{jelzo}</span> : null}
     </span>
   );
 }

@@ -57,7 +57,7 @@ function HuGoImport() {
       <CardContent className="flex flex-col gap-3 text-sm">
         <p className="text-muted-foreground">
           A HU-GO portál tranzakció-listájának exportja (.xlsx vagy .csv). Az oszlopokat a fejléc neve alapján ismerjük fel:
-          dátum/időpont, rendszám, bruttó összeg, és ha van: útszakasz, km, kategória. Ugyanaz a fájl újra feltöltve nem duplikál.
+          dátum/időpont, rendszám, bruttó összeg, és ha van: útszakasz, km, kategória. Ugyanaz a fájl újra feltöltve nem duplikál; ha van tranzakció-azonosító oszlop, más formátumú exportból sem.
         </p>
         {canEdit ? (
           <div>
@@ -104,6 +104,7 @@ function KeziTankolas({ jarmuvek }: { jarmuvek: KoltsegekOldal["jarmuvek"] }) {
   const [tranz, setTranz] = useState("");
 
   function ment() {
+    if (!ido || !osszeg) { toast.error("Add meg az időpontot és az összeget."); return; }
     start(async () => {
       const r = await rogzitKeziTankolast({ idopont: ido, jarmuKod: jarmu, osszeg, liter, tranzakcioSzam: tranz });
       if (!r.ok) { toast.error(r.hiba); return; }
@@ -119,13 +120,14 @@ function KeziTankolas({ jarmuvek }: { jarmuvek: KoltsegekOldal["jarmuvek"] }) {
       <label className={mezo}>Időpont<Input type="datetime-local" value={ido} onChange={(e) => setIdo(e.target.value)} /></label>
       <label className={mezo}>Kocsi
         <select value={jarmu} onChange={(e) => setJarmu(e.target.value)} className="h-8 rounded-lg border border-input bg-transparent px-2 text-sm text-foreground max-md:h-11">
-          {jarmuvek.map((j) => <option key={j.kod} value={j.kod}>{j.kod} — {j.label}</option>)}
+          {jarmuvek.map((j) => <option key={j.kod} value={j.kod}>{j.nev}</option>)}
         </select>
       </label>
       <label className={mezo}>Összeg (Ft)<Input inputMode="decimal" placeholder="pl. 85 400" value={osszeg} onChange={(e) => setOsszeg(e.target.value)} /></label>
       <label className={mezo}>Liter (ha ismert)<Input inputMode="decimal" placeholder="pl. 142,5" value={liter} onChange={(e) => setLiter(e.target.value)} /></label>
       <label className={mezo}>Bizonylatszám<Input placeholder="nem kötelező" value={tranz} onChange={(e) => setTranz(e.target.value)} /></label>
-      <Button size="sm" disabled={pending || !ido || !osszeg} onClick={ment}>{pending ? "Mentés…" : "Rögzítés"}</Button>
+      {/* Mindig aktív (a hiányzó mezőt a mentés jelzi) — üres űrlapnál a halvány, letiltott gomb nem tűnt kattinthatónak. */}
+      <Button size="sm" disabled={pending} onClick={ment}>{pending ? "Mentés…" : "Rögzítés"}</Button>
     </div>
   );
 }
@@ -156,8 +158,35 @@ export function KoltsegekNezet({ adat }: { adat: KoltsegekOldal }) {
             Ahol a liter is ismert, a Kimutatás az aznapi tényleges Ft/l-rel számol a NAV-ár helyett.
           </p>
           {canEdit ? <div className="px-4"><KeziTankolas jarmuvek={adat.jarmuvek} /></div> : null}
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[48rem] text-sm">
+          {/* Telefonon kártyák: a táblából 390 px-en az Összeg kilógott. */}
+          <ul className="flex flex-col divide-y divide-foreground/5 border-t border-foreground/5 sm:hidden">
+            {adat.tankolasok.length === 0 ? (
+              <li className="px-4 py-4 text-center text-sm text-muted-foreground">Az utolsó két hónapban nincs rögzített tankolás.</li>
+            ) : adat.tankolasok.map((t) => (
+              <li key={t.id} className="flex flex-col gap-0.5 px-4 py-3 text-sm">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="font-medium">{t.jarmuKod ?? <span className="text-[var(--f2-amb)]">{t.rendszam ?? "?"} (nem saját)</span>}</span>
+                  <span className="whitespace-nowrap font-semibold tabular-nums">{formatFt(t.osszegFt)} <ForrasJel forras="teny" /></span>
+                </div>
+                <div className="flex items-baseline justify-between gap-3 text-xs text-muted-foreground">
+                  <span className="tabular-nums">{t.idopont}</span>
+                  <span className="whitespace-nowrap tabular-nums">
+                    {t.liter != null ? `${t.liter.toLocaleString("hu-HU")} l` : "— l"}{t.ftPerLiter != null ? ` · ${t.ftPerLiter.toLocaleString("hu-HU")} Ft/l` : ""}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                  <span>{FORRAS_CIMKE[t.forras] ?? t.forras}{t.rogzitette && t.forras === "kezi" ? ` · ${t.rogzitette}` : ""}{t.tranzakcioSzam.startsWith("kezi:") ? "" : ` · ${t.tranzakcioSzam}`}</span>
+                  {canEdit && t.forras === "kezi" ? (
+                    <Button size="xs" variant="ghost" disabled={pending}
+                      onClick={() => start(async () => { await torolKeziTankolast(t.id); router.refresh(); })}>Törlés</Button>
+                  ) : null}
+                </div>
+                {t.figyelmeztetes ? <div className="text-xs text-[var(--f2-amb)]">⚠ {t.figyelmeztetes}</div> : null}
+              </li>
+            ))}
+          </ul>
+          <div className="hidden overflow-x-auto sm:block">
+            <table className="w-full min-w-[48rem] text-sm [&_td]:whitespace-nowrap">
               <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
                 <tr>
                   <th className="px-3 py-2 font-medium">Időpont</th>
@@ -177,7 +206,10 @@ export function KoltsegekNezet({ adat }: { adat: KoltsegekOldal }) {
                   <tr key={t.id} className="border-t border-foreground/5">
                     <td className="px-3 py-2 tabular-nums">{t.idopont}</td>
                     <td className="px-3 py-2">{t.jarmuKod ?? <span className="text-[var(--f2-amb)]">{t.rendszam ?? "?"} (nem saját)</span>}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">{t.liter != null ? t.liter.toLocaleString("hu-HU") : "—"}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {t.liter != null ? t.liter.toLocaleString("hu-HU") : "—"}
+                      {t.figyelmeztetes ? <div className="text-[10px] text-[var(--f2-amb)]" title={t.figyelmeztetes}>⚠ gyanús liter</div> : null}
+                    </td>
                     <td className="px-3 py-2 text-right tabular-nums">{formatFt(t.osszegFt)} <ForrasJel forras="teny" /></td>
                     <td className="px-3 py-2 text-right tabular-nums">{t.ftPerLiter != null ? t.ftPerLiter.toLocaleString("hu-HU") : "—"}</td>
                     <td className="px-3 py-2 text-xs text-muted-foreground">{t.tranzakcioSzam.startsWith("kezi:") ? "—" : t.tranzakcioSzam}</td>

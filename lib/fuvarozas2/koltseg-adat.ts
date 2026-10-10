@@ -8,7 +8,7 @@ import { getFuvarBeallitasok, type FuvarBeallitasok } from "@/lib/beallitasok/fu
 import { getEurArfolyamok, type ArfolyamInfo } from "@/lib/fuvarozas/arfolyam";
 import {
   jarmuEredmeny, jarmuOsszkoltseg, megbizasKoltseg, napiFixFelosztas, napokKozott, utdijNapiFelosztas,
-  type GpsUt, type JarmuEredmeny, type JarmuKontextus, type JarmuOsszkoltseg, type MegbizasEredmeny, type Parameterek,
+  type GpsUt, type JarmuEredmeny, type JarmuKontextus, type JarmuOsszkoltseg, type KeziKoltseg, type MegbizasEredmeny, type Parameterek,
 } from "@/lib/fuvarozas2/koltseg-szamitas";
 
 // Egy időszak (nap/hét/hó) költség- és eredmény-számítása kocsinként és
@@ -157,8 +157,46 @@ export async function koltsegIdoszakra(kezdet: string, veg: string): Promise<Ido
      from fuvar_kalkulacio where eredmeny is not null and szamolva_at > now() - interval '180 days'`
   );
 
-  const eurNapok = megbizasok.filter((m) => m.jelleg === "ber" && m.penznem === "EUR").map((m) => m.nap);
+  // Kézi költségsorok (nem gépi): a Kimutatás eddig figyelmen kívül hagyta őket.
+  // Az azonos típusú számított tételt felülírják (lásd megbizasKoltseg).
+  let keziSorok: { megbizas_id: string; tipus: string; osszeg: number; penznem: string; megjegyzes: string | null; forras: "teny" | "becsles"; arfolyam_nap: string | null }[] = [];
+  if (megbizasok.length > 0) {
+    try {
+      keziSorok = await query(
+        `select megbizas_id::text, tipus, osszeg::float8 as osszeg, coalesce(penznem, 'Ft') as penznem, megjegyzes, forras,
+           to_char(arfolyam_nap, 'YYYY-MM-DD') as arfolyam_nap
+         from fuvar_megbizas_koltseg
+         where not szamitott and megbizas_id = any($1::bigint[])
+         order by id`,
+        [megbizasok.map((m) => m.id)]
+      );
+    } catch (err) {
+      console.warn("[koltseg] kézi költségsorok nem olvashatók:", err instanceof Error ? err.message : err);
+    }
+  }
+  const megbNap = new Map(megbizasok.map((m) => [m.id, m.nap]));
+
+  const eurNapok = [
+    ...megbizasok.filter((m) => m.jelleg === "ber" && m.penznem === "EUR").map((m) => m.nap),
+    ...keziSorok.filter((r) => r.penznem === "EUR").map((r) => r.arfolyam_nap ?? megbNap.get(r.megbizas_id) ?? ""),
+  ];
   const arfolyamok = await getEurArfolyamok(eurNapok);
+  const keziMegbizasonkent = new Map<string, KeziKoltseg[]>();
+  for (const r of keziSorok) {
+    let ft: number | null = Number(r.osszeg);
+    let megj = r.megjegyzes;
+    if (r.penznem === "EUR") {
+      const a = arfolyamok.get(r.arfolyam_nap ?? megbNap.get(r.megbizas_id) ?? "");
+      ft = a ? Number(r.osszeg) * a.ft : null;
+      megj = `${Number(r.osszeg).toLocaleString("hu-HU")} EUR${a ? ` × ${a.ft}` : ""}${megj ? ` · ${megj}` : ""}`;
+    } else if (r.penznem !== "Ft" && r.penznem !== "HUF") {
+      ft = null;
+    }
+    if (ft == null) continue; // átválthatatlan pénznem — kihagyva (a megbízás részletén látszik)
+    const lista = keziMegbizasonkent.get(r.megbizas_id) ?? [];
+    lista.push({ tipus: r.tipus, ft, megjegyzes: megj, forras: r.forras === "becsles" ? "becsles" : "teny" });
+    keziMegbizasonkent.set(r.megbizas_id, lista);
+  }
 
   const param: Parameterek = {
     napiKoltsegFt: beallitas.napi_koltseg_ft,
@@ -236,6 +274,7 @@ export async function koltsegIdoszakra(kezdet: string, veg: string): Promise<Ido
           utdijBecslesFt: m.utdij_becsles != null ? Number(m.utdij_becsles) : null,
           utdijNapbol: utdijNapbol.get(m.id) ?? null,
           raklapDb: m.raklap_db,
+          kezi: keziMegbizasonkent.get(m.id) ?? [],
         },
         kontextus, param, napiFix.get(m.id) ?? 0, arfolyamok.get(m.nap) ?? null
       );
@@ -290,14 +329,15 @@ export async function taroldMegbizasKoltsegeket(napVissza = 14): Promise<{ megbi
   for (const j of adat.jarmuvek) {
     for (const m of j.megbizasok) {
       const tetelek: { tipus: string; forras: string; osszeg: number; mennyiseg: number | null; reszletek: Record<string, unknown> }[] = [];
-      if (m.uzemanyag) {
+      // Kézi sorral felülírt tételhez nem írunk gépi sort (a kézi a mérvadó; így nincs kétszer).
+      if (m.uzemanyag && !m.uzemanyag.kezi) {
         tetelek.push({ tipus: "uzemanyag", forras: m.uzemanyag.forras, osszeg: m.uzemanyag.ft, mennyiseg: m.liter?.ertek ?? null,
           reszletek: { megjegyzes: m.uzemanyag.megjegyzes, km: m.km.ertek, kmForras: m.km.forras } });
       }
-      if (m.utdij) {
+      if (m.utdij && !m.utdij.kezi) {
         tetelek.push({ tipus: "utdij", forras: m.utdij.forras, osszeg: m.utdij.ft, mennyiseg: null, reszletek: { megjegyzes: m.utdij.megjegyzes } });
       }
-      tetelek.push({ tipus: "napi_fix", forras: m.napiFix.forras, osszeg: m.napiFix.ft, mennyiseg: m.napok.length, reszletek: { megjegyzes: m.napiFix.megjegyzes, napok: m.napok } });
+      if (!m.napiFix.kezi) tetelek.push({ tipus: "napi_fix", forras: m.napiFix.forras, osszeg: m.napiFix.ft, mennyiseg: m.napok.length, reszletek: { megjegyzes: m.napiFix.megjegyzes, napok: m.napok } });
       for (const t of tetelek) {
         await query(
           `insert into fuvar_megbizas_koltseg (megbizas_id, tipus, osszeg, penznem, forras, szamitott, mennyiseg, reszletek, megjegyzes)

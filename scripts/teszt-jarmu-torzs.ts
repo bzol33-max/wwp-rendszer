@@ -21,7 +21,8 @@ import {
   type JarmuTorzsSor,
 } from "@/lib/fuvarozas/vehicles";
 import { findJarmuByEmployeeName, findJarmuForEmployee, jarmuMatch } from "@/lib/fuvarozas/sofor-jarmu";
-import { lejaratAllapot, tisztitJarmu, tisztitOkmany, type JarmuBemenet } from "@/lib/jarmuvek/tipusok";
+import { elsoSzabadSzin, lejaratAllapot, tisztitJarmu, tisztitOkmany, type JarmuBemenet } from "@/lib/jarmuvek/tipusok";
+import { JARMU_SZINEK } from "@/lib/fuvarozas/vehicles";
 import { indulasiTelephely, SAJAT_TELEPHELYEK } from "@/lib/fuvarozas/telephelyek";
 
 let ok = 0;
@@ -153,6 +154,12 @@ eq("okmány járműhöz", tisztitOkmany({ targy: "jarmu:3", tipus: "kgfb", szam:
 dob("okmány tárgy nélkül", () => tisztitOkmany({ targy: "", tipus: "kgfb", szam: "", partner: "", lejarat: "", megjegyzes: "" }));
 dob("okmány rossz típussal", () => tisztitOkmany({ targy: "potkocsi:1", tipus: "x", szam: "", partner: "", lejarat: "", megjegyzes: "" }));
 dob("okmány rossz dátummal", () => tisztitOkmany({ targy: "potkocsi:1", tipus: "casco", szam: "", partner: "", lejarat: "31.01.2027", megjegyzes: "" }));
+
+// Új jármű alapszíne: az első, amit még egyik aktív jármű sem visel.
+eq("új jármű színe: az első szabad", elsoSzabadSzin(["blue", "yellow", "green"], JARMU_SZINEK), "purple");
+eq("új jármű színe: lyukas sor", elsoSzabadSzin(["blue", "purple"], JARMU_SZINEK), "yellow");
+eq("új jármű színe: mind foglalt → a legritkább", elsoSzabadSzin(["blue", "blue", "yellow", "green", "purple", "purple", "yellow"], JARMU_SZINEK), "green");
+eq("új jármű színe: üres flotta", elsoSzabadSzin([], JARMU_SZINEK), "blue");
 
 console.log(`\nJármű-törzsadat teszt: ${ok} rendben, ${bad} hiba`);
 if (bad > 0) process.exit(1);

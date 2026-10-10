@@ -1,5 +1,37 @@
 # PROGRESS
 
+## 2026-10-10 — Költség/tény javítások: árfolyam, HU-GO import, tankolás-hamisítás, Kimutatás, Járművek
+
+- **MNB-árfolyam:** egy nap akkor hiányzik, ha a várt közzétételi napjára (múlt
+  hétköznap, vagy ma 12:00 után a mai, budapesti idő) nincs PONTOSAN arra a napra
+  sor (eddig bármely 4 napon belüli sor elég volt, UTC-nappal). `pontos` csak az
+  aznapi árfolyam; hétvége/ma dél előtt „előző közzétett nap”, egyébként
+  „régebbi árfolyam” felirat (`arfolyam-alap.ts`).
+- **HU-GO import:** XLSX kibontott méret a zip központi könyvtárából (≤ 40 MB),
+  streamelő olvasó 50 000 soros korláttal (`koltseg-xlsx.ts`); CSV is 50 000 sor.
+  Tranzakció-azonosító oszlopnál a kulcs csak az azonosító (`hugo:id:…`), a már
+  importált (régi, összetett kulcsú) sorokat is felismeri; a „Sorszám” nem azonosító.
+- **Tankolás:** sor csak a pontosan `opluszbenzinkut@gmail.com` feladótól (a
+  továbbított/hasonmás levél osztályozva, nem ír); szigorúbb liter-minta;
+  300–1200 Ft/l-en kívül a liter üres, `tankolas.figyelmeztetes` jelöli
+  (`036_tankolas_figyelmeztetes.sql`); kézi rögzítésnél hibaüzenet.
+  **Kézi teendő:** `docs/gmail-fuvar-figyelo.gs` frissült (pontos feladó +
+  Authentication-Results ellenőrzés, `kutHitelesites`) — a script.google.com-on
+  kézzel kell cserélni.
+- **Kimutatás:** GPS-tény nélkül a fejléc km a fuvarlánc becslése („becslés”);
+  a HU-GO-ból felosztott útdíj tény („felosztva”); a kézi költségsorok
+  (`fuvar_megbizas_koltseg`, nem gépi) beszámítanak — azonos típusnál a kézi tény
+  felülírja a számítottat (a kocsi összesítőjében is), a többi „Kézi egyéb”, a
+  bevétel-pótdíj a bevételhez; az óránkénti mentés felülírt típushoz nem ír gépi
+  sort. Eredmény-felirat: „Eredmény (bérfuvarok, saját fuvar költsége nélkül)”.
+  Ft-oszlopok nem törnek; telefonon megbízás-kártyák, a kocsi-tábla első oszlopa tapad.
+- **Költségek:** a Rögzítés gomb mindig aktív (hiányzó mezőre üzenet), kocsi-
+  választó „kód · sofőr”, telefonon tankolás-kártyák.
+- **Járművek:** új jármű alapfogyasztása a `fuvar_beallitas` értéke (szerveren
+  is, ha üres), színe az első szabad; telefonon a Szerkesztés oszlop tapad.
+- Teszt: `teszt-koltseg` (144), `teszt-level-osztalyozo` (40), `teszt-jarmu-torzs`
+  (73), teljes `npm run teszt`, typecheck, eslint, next build, Playwright 1440/390.
+
 ## 2026-10-10 — Költségek és tények (5. fázis): tény/becslés, HU-GO, tankolás, MNB-árfolyam
 
 Budaházi Zoltán: minden szám mellett látszódjon, tény-e vagy becslés, és a

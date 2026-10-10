@@ -141,8 +141,16 @@ export type HuGoTranzakcio = {
   tavKm: number | null;
   szakasz: string | null;
   kategoria: string | null;
-  /** Ismétlődés-kulcs (utdij_tranzakcio.kulso_azonosito) — ugyanaz a sor újraimportálva ugyanazt adja. */
+  /**
+   * Ismétlődés-kulcs (utdij_tranzakcio.kulso_azonosito) — ugyanaz a sor
+   * újraimportálva ugyanazt adja. Ha az exportnak van tranzakció-azonosító
+   * oszlopa, a kulcs CSAK az azonosító ("hugo:id:…"), így ugyanaz a tranzakció
+   * két különböző formátumú exportból (más dátum-/összegalak) sem számít
+   * kétszer; azonosító nélkül az összetett kulcs (idő, rendszám, összeg, …).
+   */
   kulsoAzonosito: string;
+  /** A 2026-10-10-i (első) importok kulcsa — a már betöltött sorok felismeréséhez. */
+  regiKulcs: string;
   /** fuvar_jarmuvek.id, ha a rendszám saját kocsié (a pótkocsi rendszáma is). */
   jarmuId: string | null;
   jarmuKod: string | null;
@@ -183,7 +191,9 @@ export function huGoOszlopok(fej: Cella[]): Partial<Record<OszlopKulcs, number>>
   keres("ido", /^(id[őo]|[óo]ra|time)$/);
   keres("szakasz", /szakasz|section|[úu]tvonal|route|\b[úu]t\b|road/);
   keres("kategoria", /kateg[óo]ria|category|\bd-?kat/);
-  keres("azonosito", /tranzakci[óo]|azonos[íi]t[óo]|\bid\b|sorsz[áa]m|transaction|bizonylat/);
+  // A „sorszám” NEM azonosító: az csak a sor helye az exportban (két export
+  // ugyanazzal a sorszámmal más tranzakciót jelent) — ilyenkor az összetett kulcs él.
+  keres("azonosito", /tranzakci[óo]|azonos[íi]t[óo]|\bid\b|transaction|bizonylat/, /sorsz[áa]m/);
   return ki;
 }
 
@@ -191,6 +201,12 @@ function cellaSzoveg(c: Cella): string {
   if (c == null) return "";
   if (c instanceof Date) return c.toISOString();
   return String(c).trim();
+}
+
+/** Az ismétlődés-kulcs: tranzakció-azonosítóval CSAK az azonosító, különben az összetett kulcs. */
+export function huGoKulcs(azonosito: string, osszetett: string): string {
+  const a = azonosito.trim().toUpperCase().replace(/\s+/g, "");
+  return a ? `hugo:id:${a}` : osszetett;
 }
 
 /**
@@ -239,7 +255,8 @@ export function parseHuGoTabla(sorok: Cella[][], jarmuvek?: SajatJarmu[]): HuGoB
     const szakasz = cellaSzoveg(get("szakasz")) || null;
     const tavKm = szamHu(get("km"));
     const azon = cellaSzoveg(get("azonosito"));
-    const kulsoAzonosito = `hugo:${[azon, idopont, rendszamKulcs, Math.round(brutto * 100), szakasz ?? "", tavKm ?? ""].join("|")}`;
+    const regiKulcs = `hugo:${[azon, idopont, rendszamKulcs, Math.round(brutto * 100), szakasz ?? "", tavKm ?? ""].join("|")}`;
+    const kulsoAzonosito = huGoKulcs(azon, regiKulcs);
     if (latott.has(kulsoAzonosito)) { kihagyott++; ismetlodo++; continue; }
     latott.add(kulsoAzonosito);
     const jarmu = findJarmuByPlate(rendszam, jarmuvek);
@@ -253,6 +270,7 @@ export function parseHuGoTabla(sorok: Cella[][], jarmuvek?: SajatJarmu[]): HuGoB
       szakasz,
       kategoria: cellaSzoveg(get("kategoria")) || null,
       kulsoAzonosito,
+      regiKulcs,
       jarmuId: jarmu?.id ?? null,
       jarmuKod: jarmu?.kod ?? null,
     });
@@ -270,10 +288,34 @@ export type OpluszTankolas = {
   osszegFt: number;
   rendszam: string | null;
   liter: number | null;
+  /**
+   * Ha a szövegben talált liter valószínűtlen Ft/l-t adna (OPLUSZ_FT_L_TOL–IG
+   * kívül), a liter NEM kerül be (se liter, se Ft/l tény), az összeg igen —
+   * és ez a figyelmeztetés kíséri.
+   */
+  figyelmeztetes: string | null;
 };
 
-/** Az Oplusz-kút gépi feladója (a levél-osztályozó és a feldolgozó közös mintája). */
-export const OPLUSZ_FELADO = /(^|[<\s])opluszbenzinkut@gmail\.com\b/i;
+/** Az Oplusz-kút gépi feladójának PONTOS címe. */
+export const OPLUSZ_FELADO_CIM = "opluszbenzinkut@gmail.com";
+/** Az Oplusz-kút gépi feladója (a levél-osztályozó mintája; csak az osztályozáshoz — íráshoz `opluszFeladoPontos`). */
+export const OPLUSZ_FELADO = /(^|[<\s])opluszbenzinkut@gmail\.com(?![\w.-])/i;
+/** Elfogadható gázolaj-egységár (Ft/l): ezen kívül a liter gyanús, nem rögzítjük. */
+export const OPLUSZ_FT_L_TOL = 300;
+export const OPLUSZ_FT_L_IG = 1200;
+
+/**
+ * Igaz, ha a feladó címe PONTOSAN az Oplusz-kúté ("Név <cím>" vagy puszta cím).
+ * Csak ilyen levélből lesz tankolás-sor: a továbbított másolat (más feladó,
+ * a tárgy és a szöveg mintájával) csak osztályozva van, nem ír — különben bárki
+ * hamis tankolást írhatna egy kinézetre hasonló levéllel.
+ */
+export function opluszFeladoPontos(felado: string | null | undefined): boolean {
+  const s = String(felado ?? "").trim();
+  const m = /<([^<>]*)>\s*$/.exec(s);
+  const cim = (m ? m[1] : s).trim().toLowerCase();
+  return cim === OPLUSZ_FELADO_CIM;
+}
 export const OPLUSZ_BIZONYLAT_TARGY = /[ée]rtes[íi]t[ée]s\s+bizonylat\s+k[ée]sz[íi]t[ée]s/i;
 export const OPLUSZ_SZAMLA_TARGY = /[ée]rtes[íi]t[ée]s\s+sz[áa]mla\s*k[ée]sz[íi]t[ée]s/i;
 
@@ -295,15 +337,87 @@ export function parseOpluszErtesites(szoveg: string | null | undefined): OpluszT
   const osszegFt = szamHu(osszegM[1]);
   if (!idopont || osszegFt == null) return null;
   const rendszamM = /rendsz[áa]m\s*:?\s*([A-Z]{3,4}[\s-]?\d{3})\b/i.exec(s);
+  // Liter: csak a „Mennyiség: 142,35 l” alak, vagy egy kiírt „142,35 liter/ltr”.
+  // A puszta „… l” (pl. „5 l” egy termék nevében) nem elég.
   const literM =
-    /mennyis[ée]g\s*:?\s*([0-9][0-9\s.,]*?)\s*(?:l|liter|ltr)\b/i.exec(s) ??
-    /\b([0-9]{1,4}(?:[.,][0-9]{1,3})?)\s*(?:liter|ltr|l)\b(?!\w)/i.exec(s);
-  const liter = literM ? szamHu(literM[1]) : null;
+    /mennyis[ée]g\s*:?\s*(\d{1,4}(?:[.,]\d{1,3})?)\s*(?:l|liter|ltr)(?![\p{L}\d])/iu.exec(s) ??
+    /(?<![\d.,])(\d{1,4}(?:[.,]\d{1,3})?)\s*(?:liter|ltr)(?![\p{L}\d])/iu.exec(s);
+  const literNyers = literM ? szamHu(literM[1]) : null;
+  let liter = literNyers != null && literNyers > 0 && literNyers < 2000 ? literNyers : null;
+  let figyelmeztetes: string | null = null;
+  if (liter != null) {
+    const ftL = osszegFt / liter;
+    if (!(ftL >= OPLUSZ_FT_L_TOL && ftL <= OPLUSZ_FT_L_IG)) {
+      figyelmeztetes = `valószínűtlen egységár (${Math.round(ftL)} Ft/l a ${literNyers} l-ből) — a liter nincs rögzítve`;
+      liter = null;
+    }
+  }
   return {
     idopont,
     tranzakcioSzam: tranzM[1].toUpperCase(),
     osszegFt,
     rendszam: rendszamM ? rendszamM[1].toUpperCase().replace(/\s+/g, "") : null,
-    liter: liter != null && liter > 0 && liter < 2000 ? liter : null,
+    liter,
+    figyelmeztetes,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Feltöltés-korlátok (XLSX „zip-bomba”, túl sok sor)
+
+/** A feltöltött XLSX kibontott mérete legfeljebb ennyi lehet (a 7 MB-os korlát a TÖMÖRÍTETT méretre vonatkozik). */
+export const HUGO_MAX_KIBONTOTT_BYTE = 40 * 1024 * 1024;
+/** Egy HU-GO export legfeljebb ennyi sort tartalmazhat (egy havi export kocsinként néhány ezer). */
+export const HUGO_MAX_SOR = 50_000;
+/** Legfeljebb ennyi fájl lehet a zipben (egy XLSX-ben jellemzően 10–20). */
+export const HUGO_MAX_ZIP_BEJEGYZES = 1000;
+
+export type ZipMeret = { bejegyzes: number; kibontott: number; legnagyobb: number; zip64: boolean };
+
+/**
+ * A zip (XLSX) központi könyvtárából a bejegyzések KIBONTOTT mérete —
+ * kibontás nélkül. null, ha nem érvényes zip (nincs End of Central
+ * Directory). ZIP64-et nem értelmezünk (a méretmező 0xFFFFFFFF) — ezt a
+ * hívó elutasítja.
+ */
+export function zipKibontottMeret(buf: Uint8Array): ZipMeret | null {
+  const dv = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+  const u32 = (o: number) => dv.getUint32(o, true);
+  const u16 = (o: number) => dv.getUint16(o, true);
+  // EOCD: 22 bájt + legfeljebb 65 535 bájt megjegyzés, a fájl végén.
+  let eocd = -1;
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 22 - 0xffff); i--) {
+    if (u32(i) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) return null;
+  const db = u16(eocd + 10);
+  const cdMeret = u32(eocd + 12);
+  const cdKezdet = u32(eocd + 16);
+  let zip64 = db === 0xffff || cdMeret === 0xffffffff || cdKezdet === 0xffffffff;
+  if (cdKezdet + cdMeret > buf.length) return null;
+  let o = cdKezdet;
+  let kibontott = 0;
+  let legnagyobb = 0;
+  let n = 0;
+  while (o + 46 <= cdKezdet + cdMeret && u32(o) === 0x02014b50) {
+    const meret = u32(o + 24);
+    if (meret === 0xffffffff || u32(o + 20) === 0xffffffff) zip64 = true;
+    kibontott += meret;
+    legnagyobb = Math.max(legnagyobb, meret);
+    n++;
+    o += 46 + u16(o + 28) + u16(o + 30) + u16(o + 32);
+  }
+  return { bejegyzes: n, kibontott, legnagyobb, zip64 };
+}
+
+/** Az XLSX feltöltés ellenőrzése a kibontás ELŐTT; hibaszöveg, vagy null, ha rendben. */
+export function xlsxKorlatHiba(buf: Uint8Array): string | null {
+  const z = zipKibontottMeret(buf);
+  if (!z) return "A fájl nem érvényes .xlsx (sérült zip).";
+  if (z.zip64) return "A fájl túl nagy vagy szokatlan (ZIP64) — exportáld kisebb időszakra, vagy CSV-ként.";
+  if (z.bejegyzes > HUGO_MAX_ZIP_BEJEGYZES) return "A fájl szokatlan szerkezetű (túl sok rész) — exportáld CSV-ként.";
+  if (z.kibontott > HUGO_MAX_KIBONTOTT_BYTE) {
+    return `A fájl kibontva túl nagy (${Math.round(z.kibontott / 1024 / 1024)} MB, legfeljebb ${HUGO_MAX_KIBONTOTT_BYTE / 1024 / 1024} MB) — exportáld kisebb időszakra.`;
+  }
+  return null;
 }

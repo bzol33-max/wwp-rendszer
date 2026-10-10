@@ -27,6 +27,8 @@
 //   • Kocsi: bérfuvar-eredmények összege − a nem hozzárendelt költség
 //     (üres utak, állás); a saját belső költség külön oszlop.
 
+import { arfolyamTipusCimke, type ArfolyamTipus } from "@/lib/fuvarozas/arfolyam-alap";
+
 export type Forras = "teny" | "becsles";
 export type Tetel = {
   ft: number;
@@ -34,7 +36,26 @@ export type Tetel = {
   megjegyzes: string;
   /** Útdíjnál: a kocsi importált HU-GO tranzakcióiból jön (időablak vagy a nap felosztása) — a kocsi összesítője már tartalmazza. */
   hugoBol?: boolean;
+  /** Valódi tételekből (pl. a nap HU-GO tranzakcióiból) a megbízásra FELOSZTOTT rész — tény, de nem egy az egyben a megbízásé. */
+  felosztva?: boolean;
+  /** Kézzel rögzített költségsor (fuvar_megbizas_koltseg, nem gépi) — felülírja az azonos típusú számított tételt. */
+  kezi?: boolean;
+  /** Kézi útdíjnál: a felülírt, HU-GO-ból számolt rész (a kocsi összesítőjéből ezt vonjuk le, a kézit adjuk hozzá). */
+  felulirtHugoFt?: number;
 };
+
+/** Kézzel rögzített költségsor (fuvar_megbizas_koltseg, szamitott = false), Ft-ra váltva. */
+export type KeziKoltseg = { tipus: string; ft: number; megjegyzes: string | null; forras?: Forras };
+
+/** A kézi sor típusa, amely a számított tételt felülírja (ugyanaz a költség, nem számoljuk kétszer). */
+export const KEZI_FELULIRO_TIPUSOK = ["uzemanyag", "utdij", "napi_fix"] as const;
+/** Bevétel-oldali kézi sor (pl. továbbszámlázott pótdíj) — nem költség. */
+export const KEZI_BEVETEL_TIPUS = "bevetel_potdij";
+const KEZI_TIPUS_NEV: Record<string, string> = {
+  utdij: "útdíj", uzemanyag: "üzemanyag", napi_fix: "napi fix", sofor: "sofőr", varakozasi_potdij: "várakozási pótdíj",
+  kiallasi_dij: "kiállási díj", egyeb: "egyéb", bevetel_potdij: "bevétel-pótdíj",
+};
+export const keziTipusNev = (t: string) => KEZI_TIPUS_NEV[t] ?? t;
 
 /** "YYYY-MM-DD HH:MM:SS" (budapesti falióra) → összehasonlítható ms (ál-UTC). */
 export function idoMs(s: string): number {
@@ -132,15 +153,19 @@ export function tankolasArNaponta(tankolasok: Tankolas[]): Map<string, number> {
 /** Az EUR → Ft átváltás eredménye, a használt árfolyammal. */
 export type Atvaltas = { ft: number; arfolyam: number; arfolyamNap: string; cimke: string } | null;
 
-export function eurAtvaltas(eur: number, arf: { ft: number; nap: string; pontos?: boolean; forras?: string } | null | undefined): Atvaltas {
+export function eurAtvaltas(
+  eur: number,
+  arf: { ft: number; nap: string; pontos?: boolean; tipus?: ArfolyamTipus; forras?: string } | null | undefined
+): Atvaltas {
   if (!arf || !(arf.ft > 0)) return null;
   const ft = Math.round(eur * arf.ft);
   const ar = arf.ft.toLocaleString("hu-HU", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const megj = arfolyamTipusCimke(arf.tipus, arf.pontos);
   return {
     ft,
     arfolyam: arf.ft,
     arfolyamNap: arf.nap,
-    cimke: `${arf.forras ?? "MNB"} ${ar} Ft/EUR (${arf.nap}${arf.pontos === false ? ", tartalék" : ""})`,
+    cimke: `${arf.forras ?? "MNB"} ${ar} Ft/EUR (${arf.nap}${megj ? `, ${megj}` : ""})`,
   };
 }
 
@@ -182,6 +207,8 @@ export type MegbizasBemenet = {
    */
   utdijNapbol?: { ft: number; db: number } | null;
   raklapDb: number | null;
+  /** Kézi költségsorok (Ft): az azonos típusú számított tételt felülírják, a többi típus hozzáadódik. */
+  kezi?: KeziKoltseg[];
 };
 
 export type JarmuKontextus = {
@@ -214,7 +241,11 @@ export type MegbizasEredmeny = {
   uzemanyag: Tetel | null;
   utdij: Tetel | null;
   napiFix: Tetel;
-  /** Összes költség (üzemanyag + útdíj + napi fix). */
+  /** Kézi, nem felülíró költségsorok összesen (várakozási pótdíj, kiállási díj, egyéb…) — tény. */
+  keziEgyeb: Tetel | null;
+  /** Kézi bevétel-pótdíj (bérfuvar bevételéhez adva). */
+  keziBevetelFt: number;
+  /** Összes költség (üzemanyag + útdíj + napi fix + kézi egyéb). */
   koltsegFt: number;
   koltsegForras: Forras;
   /** Bérfuvar: Ft bevétel (EUR átváltva), null ha EUR és nincs árfolyam. */
@@ -246,7 +277,7 @@ export function megbizasKoltseg(
   k: JarmuKontextus,
   p: Parameterek,
   napiFixFt: number,
-  arf?: { ft: number; nap: string; pontos?: boolean; forras?: string } | null
+  arf?: { ft: number; nap: string; pontos?: boolean; tipus?: ArfolyamTipus; forras?: string } | null
 ): MegbizasEredmeny {
   // km
   let tenyNapok: Map<string, { km: number; liter: number }> | null = null;
@@ -307,11 +338,14 @@ export function megbizasKoltseg(
     }
   }
   if (!utdij && m.utdijNapbol) {
+    // Valódi HU-GO tranzakciók, csak a felosztás számított → tény (felosztva),
+    // ugyanúgy, mint a kocsi összesítőjében (ott a teljes összeg tény).
     utdij = {
       ft: Math.round(m.utdijNapbol.ft),
-      forras: "becsles",
-      megjegyzes: `a fuvar napjainak HU-GO tranzakciói (${m.utdijNapbol.db} db), a nap tény-ablak nélküli fuvarjai közt elosztva`,
+      forras: "teny",
+      megjegyzes: `a fuvar napjainak HU-GO tranzakciói (${m.utdijNapbol.db} db), a nap tény-ablak nélküli fuvarjai közt felosztva`,
       hugoBol: true,
+      felosztva: true,
     };
   }
   if (!utdij) {
@@ -321,9 +355,41 @@ export function megbizasKoltseg(
     }
   }
 
-  const napiFix: Tetel = { ft: Math.round(napiFixFt), forras: "becsles", megjegyzes: `napi ${p.napiKoltsegFt.toLocaleString("hu-HU")} Ft a nap fuvarjai közt felosztva` };
-  const koltsegFt = (uzemanyag?.ft ?? 0) + (utdij?.ft ?? 0) + napiFix.ft;
-  const koltsegForras = vegyes(uzemanyag?.forras ?? "becsles", utdij?.forras ?? "becsles", napiFix.forras);
+  let napiFix: Tetel = { ft: Math.round(napiFixFt), forras: "becsles", megjegyzes: `napi ${p.napiKoltsegFt.toLocaleString("hu-HU")} Ft a nap fuvarjai közt felosztva` };
+
+  // Kézi sorok: azonos típusnál a kézi TÉNY felülírja a számítottat (nem adódik hozzá).
+  const kezi = (m.kezi ?? []).filter((x) => Number.isFinite(x.ft));
+  const keziTetel = (tipus: string, elozo: Tetel | null): Tetel | null => {
+    const sorok = kezi.filter((x) => x.tipus === tipus);
+    if (sorok.length === 0) return elozo;
+    const keziForras = vegyes(...sorok.map((x) => x.forras ?? "teny"));
+    // Kézi BECSLÉS nem írhat felül mért/számlázott tényt.
+    if (keziForras === "becsles" && elozo?.forras === "teny") return elozo;
+    return {
+      ft: Math.round(sorok.reduce((a, x) => a + x.ft, 0)),
+      forras: keziForras,
+      megjegyzes: `kézzel rögzítve (${sorok.map((x) => x.megjegyzes || keziTipusNev(tipus)).join("; ")})${elozo ? ` — a számított ${elozo.ft.toLocaleString("hu-HU")} Ft helyett` : ""}`,
+      kezi: true,
+      // A kocsi összesítőjében a kézi összeg számít; ha HU-GO-részt írt felül, az onnan kikerül (lásd jarmuOsszkoltseg).
+      felulirtHugoFt: elozo?.hugoBol ? elozo.ft : undefined,
+    };
+  };
+  uzemanyag = keziTetel("uzemanyag", uzemanyag);
+  utdij = keziTetel("utdij", utdij);
+  napiFix = keziTetel("napi_fix", napiFix) as Tetel;
+  const egyebSorok = kezi.filter((x) => !(KEZI_FELULIRO_TIPUSOK as readonly string[]).includes(x.tipus) && x.tipus !== KEZI_BEVETEL_TIPUS);
+  const keziEgyeb: Tetel | null = egyebSorok.length > 0
+    ? {
+        ft: Math.round(egyebSorok.reduce((a, x) => a + x.ft, 0)),
+        forras: vegyes(...egyebSorok.map((x) => x.forras ?? "teny")),
+        megjegyzes: egyebSorok.map((x) => `${keziTipusNev(x.tipus)}: ${Math.round(x.ft).toLocaleString("hu-HU")} Ft${x.megjegyzes ? ` (${x.megjegyzes})` : ""}`).join("; "),
+        kezi: true,
+      }
+    : null;
+  const keziBevetelFt = Math.round(kezi.filter((x) => x.tipus === KEZI_BEVETEL_TIPUS).reduce((a, x) => a + x.ft, 0));
+
+  const koltsegFt = (uzemanyag?.ft ?? 0) + (utdij?.ft ?? 0) + napiFix.ft + (keziEgyeb?.ft ?? 0);
+  const koltsegForras = vegyes(uzemanyag?.forras ?? "becsles", utdij?.forras ?? "becsles", napiFix.forras, keziEgyeb?.forras);
 
   // bevétel és eredmény
   let bevetelFt: number | null = null;
@@ -342,6 +408,7 @@ export function megbizasKoltseg(
     } else {
       bevetelFt = Math.round(dij);
     }
+    if (bevetelFt != null) bevetelFt += keziBevetelFt;
     eredmenyFt = bevetelFt != null ? bevetelFt - koltsegFt : null;
   } else {
     belsoKoltsegFt = koltsegFt;
@@ -352,7 +419,7 @@ export function megbizasKoltseg(
   return {
     id: m.id, jelleg: m.jelleg, nap: m.nap, km,
     rakottKmBecsles: Math.round(m.rakottKmBecsles), uresKmBecsles: Math.round(m.uresKmBecsles),
-    liter, uzemanyag, utdij, napiFix, koltsegFt, koltsegForras,
+    liter, uzemanyag, utdij, napiFix, keziEgyeb, keziBevetelFt, koltsegFt, koltsegForras,
     bevetelFt, bevetelEur, atvaltas, eredmenyFt, belsoKoltsegFt, ftPerRaklap, raklapDb: m.raklapDb, elkerultKoltsegFt,
     napok: m.tenyTol && m.tenyIg ? napokKozott(m.tenyTol, m.tenyIg) : napokKozott(m.felrakasNap, m.nap),
   };
@@ -431,7 +498,13 @@ export function utdijNapiFelosztas(
 // ---------------------------------------------------------------------------
 // Kocsi
 
-export type JarmuOsszkoltseg = { uzemanyag: Tetel | null; utdij: Tetel | null; napiFix: Tetel };
+export type JarmuOsszkoltseg = {
+  uzemanyag: Tetel | null;
+  utdij: Tetel | null;
+  napiFix: Tetel;
+  /** A megbízásokra kézzel rögzített egyéb költségek (várakozási pótdíj, kiállási díj…) — tény. */
+  keziEgyeb?: Tetel | null;
+};
 
 export type JarmuEredmeny = {
   berDb: number;
@@ -465,7 +538,7 @@ export function jarmuEredmeny(megbizasok: MegbizasEredmeny[], ossz: JarmuOsszkol
   const berEredmenyFt = berBevetelFt - berKoltsegFt;
   const sajatBelsoKoltsegFt = sajat.reduce((a, m) => a + (m.belsoKoltsegFt ?? 0), 0);
   const elkerultKoltsegFt = sajat.reduce((a, m) => a + (m.elkerultKoltsegFt ?? 0), 0);
-  const osszKoltsegFt = (ossz.uzemanyag?.ft ?? 0) + (ossz.utdij?.ft ?? 0) + ossz.napiFix.ft;
+  const osszKoltsegFt = (ossz.uzemanyag?.ft ?? 0) + (ossz.utdij?.ft ?? 0) + ossz.napiFix.ft + (ossz.keziEgyeb?.ft ?? 0);
   const hozzarendelt = megbizasok.reduce((a, m) => a + m.koltsegFt, 0);
   const nemHozzarendeltFt = osszKoltsegFt - hozzarendelt;
   return {
@@ -478,7 +551,7 @@ export function jarmuEredmeny(megbizasok: MegbizasEredmeny[], ossz: JarmuOsszkol
     sajatBelsoKoltsegFt,
     elkerultKoltsegFt,
     osszKoltsegFt,
-    osszKoltsegForras: vegyes(ossz.uzemanyag?.forras ?? "becsles", ossz.utdij?.forras ?? "becsles", ossz.napiFix.forras),
+    osszKoltsegForras: vegyes(ossz.uzemanyag?.forras ?? "becsles", ossz.utdij?.forras ?? "becsles", ossz.napiFix.forras, ossz.keziEgyeb?.forras),
     nemHozzarendeltFt,
     eredmenyFt: berEredmenyFt - nemHozzarendeltFt,
   };
@@ -515,15 +588,62 @@ export function jarmuOsszkoltseg(
   }
   // Útdíj: a kocsi összes importált HU-GO tranzakciója (tény) + azoknak a
   // megbízásoknak a becslése, amelyek napjait az import nem fedi le.
-  const hugoFt = Math.round(k.utdijak.reduce((a, u) => a + u.bruttoFt, 0));
-  const kivulFt = megbizasok.reduce((a, m) => a + (m.utdij && !m.utdij.hugoBol ? m.utdij.ft : 0), 0);
+  // Kézi útdíj, amely egy megbízás HU-GO-részét írta felül: a kocsi szintjén is a kézi összeg számít.
+  const felulirtFt = megbizasok.reduce((a, m) => a + (m.utdij?.felulirtHugoFt ?? 0), 0);
+  const hugoFt = Math.round(k.utdijak.reduce((a, u) => a + u.bruttoFt, 0)) - felulirtFt;
+  // Az import által nem fedett fuvarok útdíja: becslés, vagy kézzel rögzített tény.
+  const kivul = megbizasok.filter((m) => m.utdij && !m.utdij.hugoBol).map((m) => m.utdij as Tetel);
+  const kivulFt = kivul.reduce((a, t) => a + t.ft, 0);
+  const kivulBecslesFt = kivul.filter((t) => t.forras !== "teny").reduce((a, t) => a + t.ft, 0);
+  const kivulKeziFt = kivulFt - kivulBecslesFt;
   const utdij: Tetel = k.utdijak.length > 0
     ? {
         ft: hugoFt + kivulFt,
-        forras: kivulFt > 0 ? "becsles" : "teny",
-        megjegyzes: `${k.utdijak.length} HU-GO tranzakció${kivulFt > 0 ? ` + ${kivulFt.toLocaleString("hu-HU")} Ft becslés az import által nem fedett fuvarokra` : ""}`,
+        forras: kivulBecslesFt > 0 ? "becsles" : "teny",
+        megjegyzes: `${k.utdijak.length} HU-GO tranzakció${kivulKeziFt > 0 ? ` + ${kivulKeziFt.toLocaleString("hu-HU")} Ft kézzel rögzítve` : ""}${kivulBecslesFt > 0 ? ` + ${kivulBecslesFt.toLocaleString("hu-HU")} Ft becslés az import által nem fedett fuvarokra` : ""}`,
       }
-    : { ft: kivulFt, forras: "becsles", megjegyzes: "a megbízások becsült útdíja (nincs HU-GO import)" };
+    : {
+        ft: kivulFt,
+        forras: kivul.length > 0 && kivulBecslesFt === 0 ? "teny" : "becsles",
+        megjegyzes: kivulKeziFt > 0 ? `nincs HU-GO import — ${kivulKeziFt.toLocaleString("hu-HU")} Ft kézzel rögzítve, a többi becslés` : "a megbízások becsült útdíja (nincs HU-GO import)",
+      };
   const napiFix: Tetel = { ft: aktivNapok * p.napiKoltsegFt, forras: "becsles", megjegyzes: `${aktivNapok} aktív nap × ${p.napiKoltsegFt.toLocaleString("hu-HU")} Ft` };
-  return { uzemanyag, utdij, napiFix };
+  const keziEgyebFt = megbizasok.reduce((a, m) => a + (m.keziEgyeb?.ft ?? 0), 0);
+  const keziEgyeb: Tetel | null = keziEgyebFt !== 0
+    ? {
+        ft: keziEgyebFt,
+        forras: vegyes(...megbizasok.map((m) => m.keziEgyeb?.forras)),
+        megjegyzes: "a megbízásokra kézzel rögzített egyéb költségek (várakozási pótdíj, kiállási díj…)",
+        kezi: true,
+      }
+    : null;
+  return { uzemanyag, utdij, napiFix, keziEgyeb };
+}
+
+/**
+ * A Kimutatás fejlécének „Megtett km”-e: kocsinként a GPS-tény km, ha a
+ * kocsinak van mérése (GPS és km > 0); különben a fuvarlánc becslése
+ * (rakott + üres). Ha bármelyik kocsi becsült, az egész szám becslés.
+ * (Korábban GPS nélkül „0 km · tény” jelent meg, miközben a becslés ott volt.)
+ */
+export function fejlecKmSzamitas(
+  jarmuvek: { vanGps: boolean; km: number; berKm: number; sajatKm: number; uresKm: number }[]
+): { ertek: number; forras: Forras; tenyKm: number; becsultKm: number; becsultKocsi: number } {
+  let tenyKm = 0;
+  let becsultKm = 0;
+  let becsultKocsi = 0;
+  for (const j of jarmuvek) {
+    if (j.vanGps && j.km > 0) tenyKm += j.km;
+    else {
+      const b = j.berKm + j.sajatKm + j.uresKm;
+      if (b > 0) { becsultKm += b; becsultKocsi++; }
+    }
+  }
+  return {
+    ertek: Math.round(tenyKm + becsultKm),
+    forras: becsultKocsi > 0 || tenyKm === 0 ? "becsles" : "teny",
+    tenyKm: Math.round(tenyKm),
+    becsultKm: Math.round(becsultKm),
+    becsultKocsi,
+  };
 }

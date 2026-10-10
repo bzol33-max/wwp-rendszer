@@ -33,9 +33,12 @@ import {
   type PotkocsiBemenet,
   type SoforProfilAdat,
   type SoforProfilBemenet,
+  elsoSzabadSzin,
 } from "@/lib/jarmuvek/tipusok";
 
 const SZIN_CIMKE: Record<JarmuSzin, string> = { blue: "Kék", yellow: "Sárga", green: "Zöld", purple: "Lila" };
+/** A Szerkesztés-gomb oszlopa telefonon a jobb szélre tapad — különben a széles táblában a képernyőn kívül volt. */
+const MUVELET_OSZLOP = "max-md:sticky max-md:right-0 max-md:z-10 max-md:bg-card max-md:shadow-[-8px_0_8px_-8px_rgba(0,0,0,0.15)]";
 const VALASZTO = "h-8 max-md:h-11 w-full rounded-lg border border-input bg-transparent px-2.5 text-base md:text-sm dark:bg-input/30";
 const HAMAROSAN = "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300";
 
@@ -124,7 +127,7 @@ function UrlapDialog({
 // ---------------------------------------------------------------------------
 // Járművek
 
-function jarmuUrlap(j: JarmuAdat | null): JarmuBemenet {
+function jarmuUrlap(j: JarmuAdat | null, adat: JarmuvekOldal): JarmuBemenet {
   return {
     kod: j?.kod ?? "",
     cimke: j?.cimke ?? "",
@@ -132,10 +135,10 @@ function jarmuUrlap(j: JarmuAdat | null): JarmuBemenet {
     vontatoRendszam: j?.vontatoRendszam ?? "",
     potkocsiId: j?.potkocsiId ?? "",
     irasvaltozatok: (j?.irasvaltozatok ?? []).join(", "),
-    szin: j?.szin ?? "purple",
+    szin: j?.szin ?? elsoSzabadSzin(adat.jarmuvek.filter((x) => x.aktiv).map((x) => x.szin), JARMU_SZINEK),
     ecofleetObjectId: j?.ecofleetObjectId ?? "",
     soforId: j?.soforId ?? "",
-    fogyasztasL100: j?.fogyasztasL100 != null ? String(j.fogyasztasL100) : "28",
+    fogyasztasL100: j?.fogyasztasL100 != null ? String(j.fogyasztasL100) : String(adat.alapFogyasztasL100 ?? 28),
     euroOsztaly: j?.euroOsztaly ?? "",
     hugoKategoria: j?.hugoKategoria ?? "J5",
     ossztomegT: j?.ossztomegT != null ? String(j.ossztomegT) : "",
@@ -146,7 +149,7 @@ function jarmuUrlap(j: JarmuAdat | null): JarmuBemenet {
 }
 
 function JarmuDialog({ jarmu, adat, onBezar }: { jarmu: JarmuAdat | null; adat: JarmuvekOldal; onBezar: () => void }) {
-  const [f, setF] = useState<JarmuBemenet>(() => jarmuUrlap(jarmu));
+  const [f, setF] = useState<JarmuBemenet>(() => jarmuUrlap(jarmu, adat));
   const allit = (k: keyof JarmuBemenet) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF({ ...f, [k]: e.target.value });
   return (
     <UrlapDialog cim={jarmu ? `Jármű: ${jarmu.cimke}` : "Új jármű"} nyitva onBezar={onBezar} onMent={() => mentJarmu(jarmu?.id ?? null, f)}>
@@ -249,7 +252,7 @@ function JarmuvekKartya({ adat }: { adat: JarmuvekOldal }) {
               <TableHead>GPS</TableHead>
               <TableHead>Fogyasztás</TableHead>
               <TableHead>Euro</TableHead>
-              <TableHead />
+              <TableHead className={MUVELET_OSZLOP} />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -269,7 +272,7 @@ function JarmuvekKartya({ adat }: { adat: JarmuvekOldal }) {
                 <TableCell>{j.ecofleetObjectId ? <span className="tabular-nums">{j.ecofleetObjectId}</span> : <Badge variant="outline">nincs GPS</Badge>}</TableCell>
                 <TableCell className="tabular-nums">{j.fogyasztasL100 != null ? `${j.fogyasztasL100.toLocaleString("hu-HU")} l/100` : "—"}</TableCell>
                 <TableCell>{j.euroOsztaly ?? "—"}</TableCell>
-                <TableCell className="text-right">
+                <TableCell className={`text-right ${MUVELET_OSZLOP}`}>
                   {szerk && <Button size="sm" variant="outline" onClick={() => setSzerkesztett(j)}>Szerkesztés</Button>}
                 </TableCell>
               </TableRow>
@@ -335,7 +338,7 @@ function PotkocsikKartya({ adat }: { adat: JarmuvekOldal }) {
                 <TableHead>Raklaphely (normál / forgatva)</TableHead>
                 <TableHead>EUR raklap (normál / forgatva)</TableHead>
                 <TableHead>Vontató</TableHead>
-                <TableHead />
+                <TableHead className={MUVELET_OSZLOP} />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -346,7 +349,7 @@ function PotkocsikKartya({ adat }: { adat: JarmuvekOldal }) {
                   <TableCell className="tabular-nums">{p.raklaphelyNormal ?? "—"} / {p.raklaphelyForgatott ?? "—"}</TableCell>
                   <TableCell className="tabular-nums">{p.raklapDbNormal ?? "—"} / {p.raklapDbForgatott ?? "—"}</TableCell>
                   <TableCell>{adat.jarmuvek.filter((j) => j.potkocsiId === p.id).map((j) => j.soforBecenev ?? j.kod).join(", ") || "—"}</TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className={`text-right ${MUVELET_OSZLOP}`}>
                     {szerk && <Button size="sm" variant="outline" onClick={() => setSzerkesztett(p)}>Szerkesztés</Button>}
                   </TableCell>
                 </TableRow>
@@ -443,7 +446,7 @@ function OkmanyokKartya({ adat }: { adat: JarmuvekOldal }) {
                 <TableHead>Típus</TableHead>
                 <TableHead>Szám</TableHead>
                 <TableHead>Partner</TableHead>
-                <TableHead />
+                <TableHead className={MUVELET_OSZLOP} />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -454,7 +457,7 @@ function OkmanyokKartya({ adat }: { adat: JarmuvekOldal }) {
                   <TableCell>{OKMANY_TIPUS_CIMKE[o.tipus]}</TableCell>
                   <TableCell>{o.szam ?? "—"}</TableCell>
                   <TableCell>{o.partner ?? "—"}</TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className={`text-right ${MUVELET_OSZLOP}`}>
                     {szerk && <Button size="sm" variant="outline" onClick={() => setSzerkesztett(o)}>Szerkesztés</Button>}
                   </TableCell>
                 </TableRow>
@@ -531,7 +534,7 @@ function SoforokKartya({ adat }: { adat: JarmuvekOldal }) {
                 <TableHead>GKI</TableHead>
                 <TableHead>Tachográf-kártya</TableHead>
                 <TableHead>ADR</TableHead>
-                <TableHead />
+                <TableHead className={MUVELET_OSZLOP} />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -548,7 +551,7 @@ function SoforokKartya({ adat }: { adat: JarmuvekOldal }) {
                     </div>
                   </TableCell>
                   <TableCell><Datum datum={s.adrLejar} ma={adat.ma} /></TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className={`text-right ${MUVELET_OSZLOP}`}>
                     {szerk && <Button size="sm" variant="outline" onClick={() => setSzerkesztett(s)}>Szerkesztés</Button>}
                   </TableCell>
                 </TableRow>

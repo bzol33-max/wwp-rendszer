@@ -54,7 +54,30 @@
  * szövegükből 1500 karaktert küld (a liter a 400 karakteres részletből
  * kimaradhat). Ehhez a script.google.com projektben a tartalmat KÉZZEL kell
  * lecserélni erre a fájlra (mentés; az időzítő marad).
+ *
+ * FRISSÍTÉS (2026-10-10, hamisítás elleni védelem): a kút-keresés csak a
+ * PONTOSAN opluszbenzinkut@gmail.com címről jött üzeneteket küldi, és
+ * mindegyikhez megnézi az Authentication-Results fejlécet (kutHitelesites:
+ * dkim/spf/dmarc „pass” a gmail.com-ra). Hitelesítés nélküli levélből a
+ * szerver nem rögzít tankolást. Ezt is KÉZZEL kell lecserélni a
+ * script.google.com projektben (mentés; az időzítő marad).
  */
+
+/**
+ * A kút levelének hitelesítése (Gmail Authentication-Results fejléc): true,
+ * ha a gmail.com DKIM-je vagy a DMARC átment, vagy az SPF a kút címére;
+ * false, ha a fejléc ott van, de egyik sem; null, ha nincs fejléc.
+ */
+function kutHitelesites_(uzenet) {
+  var fej = '';
+  try { fej = String(uzenet.getHeader('Authentication-Results') || ''); } catch (e) { return null; }
+  if (!fej) return null;
+  fej = fej.toLowerCase();
+  if (/dkim=pass[^;]*header\.(i|d)=@?gmail\.com/.test(fej)) return true;
+  if (/dmarc=pass[^;]*header\.from=gmail\.com/.test(fej)) return true;
+  if (/spf=pass[^;]*smtp\.mailfrom=opluszbenzinkut@gmail\.com/.test(fej)) return true;
+  return false;
+}
 
 /** Ezekről a feladókról semmit nem küldünk (bank, hatóság, magán). */
 var KIZART_FELADO = [
@@ -84,6 +107,8 @@ var ALAP_MAPPA = '1JNUvwN30It3_rooGkeTGTpkO4K9bix2n';
  * Csak ez a feladó, csak az utolsó VISSZA_NAP nap. Üresre állítva kikapcsol.
  */
 var KUT_KERESES = 'from:opluszbenzinkut@gmail.com';
+/** A kút pontos címe — a keresés `from:` szűrője részegyezést is enged, ezért üzenetenként újra ellenőrizzük. */
+var KUT_CIM = 'opluszbenzinkut@gmail.com';
 var KUT_SNIPPET_KARAKTER = 1500;
 
 /** Ennyi napra visszamenőleg nézzük a címkézett leveleket. */
@@ -256,6 +281,9 @@ function ujLevelekBekuldese_(csakProba) {
       if (kizart_(u)) continue;
       var cim = emailCim_(u.getFrom());
       if (cim.indexOf('wellwornpallet') === 0 || cim === 'bzol33@gmail.com') continue; // a saját kimenő levelünk
+      var kutSzal = !!kutSzalIdk[szalak[i].getId()];
+      // A címke nélküli kút-szálból csak a kút PONTOS címéről jött üzenet megy.
+      if (kutSzal && cim !== KUT_CIM) continue;
       var nevek = [];
       var csatolmanyok = u.getAttachments({ includeInlineImages: false, includeAttachments: true });
       for (var k = 0; k < csatolmanyok.length; k++) nevek.push(csatolmanyok[k].getName());
@@ -270,6 +298,7 @@ function ujLevelekBekuldese_(csakProba) {
         erkezett: u.getDate().toISOString(),
         szalElso: j === 0,
         csatolmanyNevek: nevek,
+        kutHitelesites: cim === KUT_CIM ? kutHitelesites_(u) : null,
       });
     }
   }
