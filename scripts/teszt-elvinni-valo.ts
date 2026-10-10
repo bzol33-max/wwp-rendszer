@@ -26,8 +26,11 @@ ellenoriz(
   "ütemezett előkészítés a beérkezett oszlopban marad",
   beerkElokeszitesOszlopba({ ...nyitottSajat, idopont_nyitott: false })
 );
-ellenoriz("legkorábbi nap engedélyezett", utemezhetoNap("2026-10-08", "2026-10-08"));
-ellenoriz("legkorábbi nap előtti nap tiltott", !utemezhetoNap("2026-10-07", "2026-10-08"));
+ellenoriz("legkorábbi nap engedélyezett", utemezhetoNap("2026-10-08", "2026-10-08", "2026-10-07"));
+ellenoriz("legkorábbi nap előtti nap tiltott", !utemezhetoNap("2026-10-07", "2026-10-08", "2026-10-07"));
+ellenoriz("mai nap engedélyezett", utemezhetoNap("2026-10-10", null, "2026-10-10"));
+ellenoriz("múltbeli nap tiltott legkorábbi nélkül is", !utemezhetoNap("2026-10-09", null, "2026-10-10"));
+ellenoriz("múltbeli nap tiltott, ha a legkorábbi is múlt", !utemezhetoNap("2026-10-09", "2026-10-01", "2026-10-10"));
 ellenoriz(
   "a legkorábbi dátum hetének hétfőjét adja",
   hetKezdeteElvinni("2026-10-08", "2026-10-07") === "2026-10-05"

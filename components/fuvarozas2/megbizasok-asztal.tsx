@@ -221,7 +221,7 @@ function ElvinniKartya({
             type="date"
             aria-label="Nap"
             value={nap}
-            min={sor.legkorabban ?? undefined}
+            min={legkorabbiNap}
             onChange={(e) => setNap(e.target.value)}
             className="min-h-10 rounded-lg border border-foreground/15 bg-background px-2 text-sm"
           />

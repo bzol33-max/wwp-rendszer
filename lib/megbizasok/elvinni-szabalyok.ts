@@ -14,8 +14,13 @@ export function beerkElokeszitesOszlopba(s: ElvinniJelolo & { szakasz: string })
   return s.szakasz === "beerkezett" || s.szakasz === "elokeszites";
 }
 
-export function utemezhetoNap(nap: string, legkorabban: string | null) {
-  return !legkorabban || nap >= legkorabban;
+/**
+ * Saját fuvar napja: se a legkorábbi nap, se a mai (budapesti) nap előtt.
+ * Múltbeli napra tett saját fuvart a régi követő trigger azonnal teljesítettnek
+ * vette (029, 2026-10-10) — ezért a múlt nap tilos.
+ */
+export function utemezhetoNap(nap: string, legkorabban: string | null, ma: string) {
+  return nap >= ma && (!legkorabban || nap >= legkorabban);
 }
 
 export function hetKezdeteElvinni(legkorabban: string | null, ma: string) {
