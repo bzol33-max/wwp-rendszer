@@ -13,7 +13,8 @@ import { getIdovonalak } from "@/lib/fuvarozas/actions";
 import { fuvarHelyAllapotbol } from "@/lib/megbizasok/fuvar-hely-allapotbol";
 import { budapestNapISO } from "@/lib/fuvarozas/idozona";
 import { getFuvarok } from "@/lib/fuvarozas/megbizasok";
-import { SAJAT_JARMUVEK, resolveJarmu, jarmuLabel, type SajatJarmu } from "@/lib/fuvarozas/vehicles";
+import { resolveJarmu, jarmuLabel, type SajatJarmu } from "@/lib/fuvarozas/vehicles";
+import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
 import { getSzamlaLista } from "@/lib/szamlak/actions";
 import type { SzamlaRow } from "@/lib/szamlak/szamla-constants";
 import type { FuvardijPenznem, FuvarRow } from "@/lib/fuvarozas/fuvar-constants";
@@ -216,8 +217,8 @@ export type JarmuPoziciSor = {
   motorFut: boolean | null;
 };
 
-function jarmuMatch(jarmu: SajatJarmu, row: FuvarRow): boolean {
-  if (row.jarmu && resolveJarmu(row.jarmu) === jarmu) return true;
+function jarmuMatch(jarmu: SajatJarmu, row: FuvarRow, lista: SajatJarmu[]): boolean {
+  if (row.jarmu && resolveJarmu(row.jarmu, lista) === jarmu) return true;
   if (row.sofor && row.sofor.trim().toLowerCase() === jarmu.sofor.toLowerCase()) return true;
   return false;
 }
@@ -378,10 +379,11 @@ function folyamatban(row: FuvarRow): boolean {
 export async function getFuvarFulAdatok(): Promise<FuvarFulAdatok> {
   await requireViewPermission("attekintes");
   const ma = budapestNapISO();
-  const [idovonal, berTabRows, sajatTabRows] = await Promise.all([
+  const [idovonal, berTabRows, sajatTabRows, jarmuLista] = await Promise.all([
     getIdovonalak(ma),
     getFuvarok("sajat"), // DB tipus='sajat' — UI-n "Bér fuvarok" fül
     getFuvarok("ber"), // DB tipus='ber' — UI-n "Saját fuvarok" fül
+    getJarmuvek(),
   ]);
   const osszes = [...berTabRows, ...sajatTabRows];
   const rowById = new Map(osszes.map((r) => [r.id, r]));
@@ -425,7 +427,7 @@ export async function getFuvarFulAdatok(): Promise<FuvarFulAdatok> {
   );
 
   const most = Date.now();
-  const jarmuvek: JarmuFuvarCsoport[] = SAJAT_JARMUVEK.map((jarmu) => {
+  const jarmuvek: JarmuFuvarCsoport[] = jarmuLista.map((jarmu) => {
     const iv = idovonal.jarmuvek.find((j) => j.sofor === jarmu.sofor);
     const mai: JarmuMaiFuvar[] = (iv?.fuvarok ?? []).map((b) => {
       const row = rowById.get(b.fuvarId);
@@ -471,7 +473,7 @@ export async function getFuvarFulAdatok(): Promise<FuvarFulAdatok> {
     });
 
     const kovetkezok = aktivak
-      .filter((r) => jarmuMatch(jarmu, r) && !maiFuvarIds.has(r.id) && r.datum_iso > ma)
+      .filter((r) => jarmuMatch(jarmu, r, jarmuLista) && !maiFuvarIds.has(r.id) && r.datum_iso > ma)
       .sort(
         (a, b) =>
           a.datum_iso.localeCompare(b.datum_iso) ||
@@ -492,7 +494,7 @@ export async function getFuvarFulAdatok(): Promise<FuvarFulAdatok> {
   });
 
   const kocsiNelkul = aktivak
-    .filter((r) => !SAJAT_JARMUVEK.some((j) => jarmuMatch(j, r)) && !maiFuvarIds.has(r.id))
+    .filter((r) => !jarmuLista.some((j) => jarmuMatch(j, r, jarmuLista)) && !maiFuvarIds.has(r.id))
     .sort(
       (a, b) =>
         a.datum_iso.localeCompare(b.datum_iso) ||

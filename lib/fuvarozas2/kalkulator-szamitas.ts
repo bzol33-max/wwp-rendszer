@@ -10,22 +10,29 @@ import { budapestNapISO } from "@/lib/fuvarozas/idozona";
 import { calculateToll, geocodeAddress, TollCalcError, FIXED_VEHICLE, type GeocodedAddress, type TollRoute } from "@/lib/fuvarozas/utdijkalkulacio";
 import { gazolajArKedvezmennyel } from "@/lib/fuvarozas/gazolaj";
 import { getUtvonalJelentes, rendszamKulcs } from "@/lib/fuvarozas/ecofleet";
-import { SAJAT_TELEPHELYEK } from "@/lib/fuvarozas/telephelyek";
+import { getJarmuIndulasiTelephely } from "@/lib/fuvarozas/telephelyek-db";
+import { getFuvarBeallitasok, type FuvarBeallitasok } from "@/lib/beallitasok/fuvar";
 import {
-  ALAP_FOGYASZTAS_L100, ajanlatSavok, minositsAjanlatot, napokMenetidobol, szamoljOnkoltseget,
+  ajanlatSavok, minositsAjanlatot, napokMenetidobol, szamoljOnkoltseget, valasszFogyasztast,
   type Ajanlat, type Onkoltseg,
 } from "@/lib/fuvarozas2/kalkulator-alap";
 
-const TELEPHELY = SAJAT_TELEPHELYEK[0].cim;
-
-/** Mért fogyasztás (l/100) az elmúlt 14 napból, kocsira vagy flottára. */
-async function mertFogyasztas(jarmuKod?: string): Promise<{ l100: number; forras: string }> {
+/**
+ * Mért fogyasztás (l/100) az elmúlt 14 napból, kocsira vagy flottára. Az
+ * alapérték a jármű saját fogyasztas_l_100km-e (ha kocsira kérdezünk és ki
+ * van töltve), különben a beállítás (fogyasztas_alap_l_100km, 28); a mért
+ * érték csak a beállított küszöb (meres_min_km, 300 km) FÖLÖTT írja felül.
+ */
+async function mertFogyasztas(jarmuKod: string | undefined, beallitas: FuvarBeallitasok): Promise<{ l100: number; forras: string }> {
+  let alapL100 = beallitas.fogyasztas_alap_l_100km;
   try {
-    const jarmuvek = await query<{ kod: string; ecofleet_object_id: string | null; vontato_rendszam: string | null }>(
-      `select kod, ecofleet_object_id, vontato_rendszam from fuvar_jarmuvek where aktiv and ecofleet_object_id is not null order by id`
+    const jarmuvek = await query<{ kod: string; ecofleet_object_id: string | null; vontato_rendszam: string | null; fogyasztas_l_100km: number | null }>(
+      `select kod, ecofleet_object_id, vontato_rendszam, fogyasztas_l_100km from fuvar_jarmuvek where aktiv order by id`
     );
-    const cel = jarmuKod ? jarmuvek.filter((j) => j.kod === jarmuKod) : jarmuvek;
-    if (cel.length === 0) return { l100: ALAP_FOGYASZTAS_L100, forras: "alapérték" };
+    const sajatAlap = jarmuKod ? jarmuvek.find((j) => j.kod === jarmuKod)?.fogyasztas_l_100km : null;
+    if (sajatAlap != null && Number(sajatAlap) > 0) alapL100 = Number(sajatAlap);
+    const cel = (jarmuKod ? jarmuvek.filter((j) => j.kod === jarmuKod) : jarmuvek).filter((j) => j.ecofleet_object_id !== null);
+    if (cel.length === 0) return { l100: alapL100, forras: "alapérték" };
     const ma = new Date();
     // Budapesti nap (a konténer UTC-ben fut — éjfél és 2 óra között a
     // toISOString még a tegnapot adta; audit BIZ-10).
@@ -35,13 +42,14 @@ async function mertFogyasztas(jarmuKod?: string): Promise<{ l100: number; forras
     const sajat = sorok.filter((s) => kulcsok.has(s.rendszamKulcs));
     const km = sajat.reduce((a, s) => a + s.tavKm, 0);
     const liter = sajat.reduce((a, s) => a + s.uzemanyagL, 0);
-    if (km > 100 && liter > 0) {
-      return { l100: Math.round((liter / km) * 1000) / 10, forras: `mért, 14 nap${jarmuKod ? ` · ${jarmuKod}` : " · flotta"}` };
+    const v = valasszFogyasztast({ mertKm: km, mertLiter: liter, alapL100, minKm: beallitas.meres_min_km });
+    if (v.mert) {
+      return { l100: v.l100, forras: `mért, 14 nap${jarmuKod ? ` · ${jarmuKod}` : " · flotta"}` };
     }
   } catch {
     // nincs Ecofleet-kulcs vagy hiba — alapértékkel megyünk tovább
   }
-  return { l100: ALAP_FOGYASZTAS_L100, forras: "alapérték (nincs mért adat)" };
+  return { l100: alapL100, forras: "alapérték (nincs elég mért adat)" };
 }
 
 export type KozosBemenet = {
@@ -119,7 +127,10 @@ export async function kozosKalkulacio(bemenet: KozosBemenet): Promise<{ ok: true
     uresReszek.push("telephelyi üres km nincs beszámítva — csak a beírt út");
   } else {
     try {
-      telephely = await geocodeAddress(TELEPHELY);
+      const pont = await getJarmuIndulasiTelephely(bemenet.jarmuKod);
+      telephely = pont.lat != null && pont.lon != null
+        ? { label: pont.cim, lat: pont.lat, lon: pont.lon }
+        : await geocodeAddress(pont.cim);
     } catch {
       figyelmeztetesek.push("A telephely címe nem található — az üres km nélkül a kalkuláció optimista.");
     }
@@ -145,15 +156,16 @@ export async function kozosKalkulacio(bemenet: KozosBemenet): Promise<{ ok: true
     }
   }
 
-  const { l100, forras } = await mertFogyasztas(bemenet.jarmuKod);
+  const beallitas = await getFuvarBeallitasok();
+  const { l100, forras } = await mertFogyasztas(bemenet.jarmuKod, beallitas);
   const gazolaj = await gazolajArKedvezmennyel();
   if (!gazolaj.friss) figyelmeztetesek.push(`A NAV gázolajár nem érhető el — tartalék árral számoltunk (${gazolaj.cimke}).`);
 
   const rakottKm = route.distanceKm;
-  const napok = napokMenetidobol(route.durationMin + uresPerc);
+  const napok = napokMenetidobol(route.durationMin + uresPerc, beallitas.sofor_napi_vezetes_max_perc);
   const rakottUtdijFt = Math.round(route.tollHuf?.grossTotal ?? 0);
   const utdijFt = Math.round(rakottUtdijFt + uresUtdij);
-  const onkoltseg = szamoljOnkoltseget({ rakottKm, uresKm, fogyasztasL100: l100, gazolajFt: gazolaj.ar, utdijFt, napok });
+  const onkoltseg = szamoljOnkoltseget({ rakottKm, uresKm, fogyasztasL100: l100, gazolajFt: gazolaj.ar, utdijFt, napok, napiKoltsegFt: beallitas.napi_koltseg_ft });
   const savok = ajanlatSavok(rakottKm, onkoltseg.osszesenFt);
   const megbizoiAjanlat = bemenet.ajanlatFt
     ? {

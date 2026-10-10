@@ -3,11 +3,12 @@ import { GpsStatus } from "@/components/fuvarozas/idovonal";
 import { Fuvarozas2Fulek } from "@/components/fuvarozas2/fulek";
 import { getGpsVaszon } from "@/lib/fuvarozas2/gps-vaszon";
 import { GpsVaszonNezet } from "@/components/fuvarozas2/gps-vaszon";
+import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
 
 export const dynamic = "force-dynamic";
 
 export default async function Page() {
-  const adat = await getGpsVaszon();
+  const [adat, jarmuvek] = await Promise.all([getGpsVaszon(), getJarmuvek()]);
   return (
     <div className="flex flex-col gap-5">
       <PageHeader title="Élő GPS" subtitle="A nap egy sávon: vezetés, rakodás, szünet — kocsinként, a napi keretekkel." />
@@ -15,7 +16,7 @@ export default async function Page() {
       <GpsVaszonNezet adat={adat} />
       <details className="rounded-2xl border border-foreground/10 bg-card p-4">
         <summary className="cursor-pointer text-sm font-semibold">Részletes idővonal és térkép (a régi nézet)</summary>
-        <div className="mt-4"><GpsStatus /></div>
+        <div className="mt-4"><GpsStatus jarmuvek={jarmuvek} /></div>
       </details>
     </div>
   );

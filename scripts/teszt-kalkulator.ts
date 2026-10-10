@@ -6,8 +6,10 @@
 // veszteséges fuvart minősít nyereségesnek.
 
 import {
-  szamoljOnkoltseget, ajanlatSavok, minositsAjanlatot, napokMenetidobol, NAPI_KOLTSEG_FT, ALAP_FOGYASZTAS_L100,
+  szamoljOnkoltseget, ajanlatSavok, minositsAjanlatot, napokMenetidobol, valasszFogyasztast,
+  NAPI_KOLTSEG_FT, ALAP_FOGYASZTAS_L100, MERES_MIN_KM, SAJAT_FUVAR_KM_DIJ_FT,
 } from "@/lib/fuvarozas2/kalkulator-alap";
+import { FUVAR_BEALLITAS_ALAP, fuvarBeallitasokSorokbol } from "@/lib/beallitasok/fuvar-alap";
 
 let ok = 0, bad = 0;
 function eq(nev: string, kapott: unknown, vart: unknown) {
@@ -56,6 +58,40 @@ eq("10 óra = 2 nap", napokMenetidobol(600), 2);
 eq("0 perc is 1 nap", napokMenetidobol(0), 1);
 
 eq("alap fogyasztás értelmes", ALAP_FOGYASZTAS_L100 > 20 && ALAP_FOGYASZTAS_L100 < 45, true);
+
+// Tulajdonosi döntés (2026-10-10): alap 28 l/100 km, a mért érték csak 300 mért km FÖLÖTT számít.
+eq("alap fogyasztás 28 l/100", ALAP_FOGYASZTAS_L100, 28);
+eq("mérési küszöb 300 km", MERES_MIN_KM, 300);
+eq("napi költség alap 50 000", NAPI_KOLTSEG_FT, 50000);
+eq("saját fuvar km-díj alap 550", SAJAT_FUVAR_KM_DIJ_FT, 550);
+eq("299 mért km → alapérték", valasszFogyasztast({ mertKm: 299, mertLiter: 100 }), { l100: 28, mert: false });
+eq("pontosan 300 km → még alapérték", valasszFogyasztast({ mertKm: 300, mertLiter: 100 }), { l100: 28, mert: false });
+eq("301 km → mért", valasszFogyasztast({ mertKm: 301, mertLiter: 90.3 }), { l100: 30, mert: true });
+eq("0 liter (nem mér a szonda) → alapérték", valasszFogyasztast({ mertKm: 5000, mertLiter: 0 }), { l100: 28, mert: false });
+eq("jármű saját alapértéke", valasszFogyasztast({ mertKm: 50, mertLiter: 20, alapL100: 31 }), { l100: 31, mert: false });
+eq("beállított küszöb", valasszFogyasztast({ mertKm: 150, mertLiter: 45, minKm: 100 }), { l100: 30, mert: true });
+
+// A napi költség és a vezetési keret paraméterként (beállításból) is jöhet.
+eq("napi költség paraméterből", szamoljOnkoltseget({ rakottKm: 100, uresKm: 0, fogyasztasL100: 28, gazolajFt: 600, utdijFt: 0, napok: 2, napiKoltsegFt: 60000 }).napiFt, 120000);
+eq("10 óra 10 órás kerettel = 1 nap", napokMenetidobol(600, 600), 1);
+
+// Beállítás-sorok összefésülése: hiányzó/hibás érték → alapérték.
+const b = fuvarBeallitasokSorokbol([
+  { kulcs: "napi_koltseg_ft", ertek: 55000 },
+  { kulcs: "fogyasztas_alap_l_100km", ertek: "29.5" },
+  { kulcs: "meres_min_km", ertek: { ertek: 400 } },
+  { kulcs: "sajat_fuvar_km_dij_ft", ertek: "abc" },
+  { kulcs: "tankolasi_kedvezmeny_ft_l", ertek: -5 },
+  { kulcs: "ismeretlen_kulcs", ertek: 1 },
+]);
+eq("beállítás: szám", b.napi_koltseg_ft, 55000);
+eq("beállítás: szöveges szám", b.fogyasztas_alap_l_100km, 29.5);
+eq("beállítás: {ertek} alak", b.meres_min_km, 400);
+eq("beállítás: nem szám → alap", b.sajat_fuvar_km_dij_ft, 550);
+eq("beállítás: negatív → alap", b.tankolasi_kedvezmeny_ft_l, 50);
+eq("beállítás: hiányzó → alap", b.lerakas_rahagyas_perc, 45);
+eq("beállítás: ismeretlen kulcs nem kerül be", "ismeretlen_kulcs" in b, false);
+eq("üres sorlista = alapértékek", fuvarBeallitasokSorokbol([]), { ...FUVAR_BEALLITAS_ALAP });
 
 console.log(`\nKalkulátor teszt: ${ok} rendben, ${bad} hiba`);
 if (bad > 0) process.exit(1);

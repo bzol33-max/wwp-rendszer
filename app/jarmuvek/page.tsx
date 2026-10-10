@@ -1,20 +1,24 @@
 import { PageHeader } from "@/components/layout/page-header";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ModuleGate } from "@/components/auth/module-gate";
+import { JarmuvekNezet } from "@/components/jarmuvek/jarmuvek-nezet";
+import { getJarmuvekOldal } from "@/lib/jarmuvek/actions";
+import { requireSession } from "@/lib/auth/dal";
 
-export default function Page() {
+export const dynamic = "force-dynamic";
+
+export default async function Page() {
+  // A ModuleGate a jog hiányában csak üzenetet mutat — az adatot is csak
+  // akkor kérjük le, ha a felhasználó látja a modult (az akció maga is ellenőriz).
+  const session = await requireSession();
+  const adat = session.can("jarmuvek").view ? await getJarmuvekOldal() : null;
   return (
     <ModuleGate module="jarmuvek">
       <div>
-        <PageHeader title="Járművek" subtitle="Ez a modul hamarosan elkészül." />
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">Fejlesztés alatt</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            A Készlet modul után ez következik a rendszertervben.
-          </CardContent>
-        </Card>
+        <PageHeader
+          title="Járművek"
+          subtitle="Kamionok, pótkocsik, sofőrök és a lejáró okmányok — innen kerül fel egy új jármű is."
+        />
+        {adat && <JarmuvekNezet adat={adat} />}
       </div>
     </ModuleGate>
   );

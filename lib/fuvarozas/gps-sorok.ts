@@ -7,7 +7,7 @@
 
 import type { FuvarBlokk, GondJelzes, JarmuIdovonalEredmeny, MegalloBejegyzes } from "@/lib/fuvarozas/actions";
 import type { FuvardijPenznem } from "@/lib/fuvarozas/fuvar-constants";
-import { SAJAT_JARMUVEK } from "@/lib/fuvarozas/vehicles";
+import { jarmuLista, type SajatJarmu } from "@/lib/fuvarozas/vehicles";
 
 /** Ennél régebbi élő GPS-adatnál figyelmeztetünk: a pozíció nem "most", a készülék kieshetett. */
 export const REGI_JEL_PERC = 30;
@@ -208,14 +208,20 @@ export type Osszkep = {
   km: number;
 };
 
-export function osszkep(adatok: JarmuIdovonalEredmeny[], maiNap: boolean, most: number): Osszkep {
+export function osszkep(
+  adatok: JarmuIdovonalEredmeny[],
+  maiNap: boolean,
+  most: number,
+  /** A saját járművek (a szerver DB-ből töltött listája); elhagyva a legutóbb betöltött / beépített lista. */
+  jarmuvek: Pick<SajatJarmu, "sofor" | "ecofleetObjectId">[] = jarmuLista()
+): Osszkep {
   const fuvarok = adatok.flatMap((a) => a.fuvarok);
   const folyamatban = adatok.reduce((n, a) => {
     const kov = kovetkezoMegallo(a.fuvarok);
     const aktivId = a.fuvarok.flatMap((f) => f.megallok).find((b) => b.eppenItt)?.fuvarId ?? kov?.fuvarId ?? null;
     return n + a.fuvarok.filter((f) => !fuvarKesz(f) && (f.fuvarId === aktivId || f.megallok.some((b) => b.eppenItt))).length;
   }, 0);
-  const gpsNelkul = SAJAT_JARMUVEK.filter((j) => {
+  const gpsNelkul = jarmuvek.filter((j) => {
     if (j.ecofleetObjectId === null) return true;
     if (!maiNap) return false;
     const pos = adatok.find((a) => a.sofor === j.sofor)?.eloPozicio ?? null;

@@ -17,7 +17,7 @@
 //     felrakóig. Ahol nincs HU-GO km, légvonal × 1,3 — becslés. A megtett km
 //     (GPS) ettől külön, tény.
 //   • saját fuvar megtakarítás: a saját fuvarok rakott km-e (HU-GO, ahol már
-//     ki van számolva) × SAJAT_FUVAR_KM_DIJ_FT (fix 550 Ft/km) — mennyit
+//     ki van számolva) × a sajat_fuvar_km_dij_ft beállítás (550 Ft/km) — mennyit
 //     fizettünk volna, ha bérbe adjuk ki.
 //   • útdíj: csak akkor szerepel, ha van importált HU-GO tranzakció az
 //     időszakra (utdij_tranzakcio); nem becsüljük.
@@ -25,10 +25,10 @@
 import { query } from "@/lib/db";
 import { requireAnyViewPermission } from "@/lib/auth/require-permission";
 import { becsultTavolsag, lancKm } from "@/lib/fuvarozas2/ures-km";
-import { SAJAT_TELEPHELYEK } from "@/lib/fuvarozas/telephelyek";
+import { getJarmuIndulasiTelephely } from "@/lib/fuvarozas/telephelyek-db";
 import { getUtvonalJelentes, rendszamKulcs } from "@/lib/fuvarozas/ecofleet";
 import { gazolajArKedvezmennyel } from "@/lib/fuvarozas/gazolaj";
-import { NAPI_KOLTSEG_FT, SAJAT_FUVAR_KM_DIJ_FT } from "@/lib/fuvarozas2/kalkulator-alap";
+import { getFuvarBeallitasok } from "@/lib/beallitasok/fuvar";
 
 export type KimutatasIdoszak = "nap" | "het" | "ho";
 
@@ -51,7 +51,7 @@ export type KimutatasJarmu = {
   ftKm: number | null;
   /** Hány napon mozgott a kocsi az időszakban (GPS) — ennyi napi költséget terhelünk rá. */
   aktivNap: number;
-  /** Sofőr + kocsi napi fix (50 000 Ft/nap, lásd kalkulator-alap.ts). */
+  /** Sofőr + kocsi napi fix (napi_koltseg_ft beállítás, alapból 50 000 Ft/nap). */
   napiKoltsegFt: number;
   /** Bevétel + saját fuvar megtakarítás − üzemanyag − útdíj − napi költség. */
   eredmenyFt: number;
@@ -100,11 +100,14 @@ async function idoszakHatarok(idoszak: KimutatasIdoszak, nap?: string): Promise<
 export async function getKimutatas(idoszak: KimutatasIdoszak = "het", nap?: string): Promise<KimutatasEredmeny> {
   await requireAnyViewPermission(["fuvarozas", "elszamolas"]);
   const { kezdet, veg } = await idoszakHatarok(idoszak, nap);
+  const beallitas = await getFuvarBeallitasok();
 
+  // Minden aktív jármű — a GPS nélküli (JANI) is: annak km/liter mezője üres
+  // marad, a megbízásai és bevétele viszont ugyanúgy számít.
   const jarmuvek = await query<{ id: string; kod: string; cimke: string; sofor: string | null; ecofleet_object_id: string | null; vontato_rendszam: string | null }>(
     `select j.id::text, j.kod, j.cimke, a.name as sofor, j.ecofleet_object_id, j.vontato_rendszam
      from fuvar_jarmuvek j left join alkalmazottak a on a.id = j.sofor_id
-     where j.aktiv and j.ecofleet_object_id is not null order by j.id`
+     where j.aktiv order by j.id`
   );
 
   // Megbízások az időszakban, naponta és kocsinként.
@@ -198,7 +201,7 @@ export async function getKimutatas(idoszak: KimutatasIdoszak = "het", nap?: stri
         id: m.id, jelleg: m.jelleg, felrakasNap: m.felrakas_nap, lerakasNap: m.nap,
         felrako: m.felrako, lerako: m.lerako, rakottKm: m.rakott_km != null ? Number(m.rakott_km) : null,
       })),
-      elozoLerako.find((e) => e.jarmu_id === j.id)?.lerako ?? SAJAT_TELEPHELYEK[0].cim,
+      elozoLerako.find((e) => e.jarmu_id === j.id)?.lerako ?? (await getJarmuIndulasiTelephely(j.kod)).cim,
       tav
     );
     for (const l of lanc) {
@@ -223,7 +226,7 @@ export async function getKimutatas(idoszak: KimutatasIdoszak = "het", nap?: stri
     const aktivNap = napiKm.size;
     ki.push({
       aktivNap,
-      napiKoltsegFt: aktivNap * NAPI_KOLTSEG_FT,
+      napiKoltsegFt: aktivNap * beallitas.napi_koltseg_ft,
       eredmenyFt: 0, // lent, a flotta Ft/km ismeretében
       eredmenyFtKm: null,
       kod: j.kod, cimke: j.cimke, sofor: j.sofor,
@@ -243,7 +246,7 @@ export async function getKimutatas(idoszak: KimutatasIdoszak = "het", nap?: stri
   const bevetelFtOssz = ki.reduce((a, j) => a + j.bevetelFt, 0);
   const berFtKm = berKmOssz > 0 && bevetelFtOssz > 0 ? Math.round(bevetelFtOssz / berKmOssz) : null;
   for (const j of ki) {
-    j.megtakaritasFt = Math.round(j.sajatKm * SAJAT_FUVAR_KM_DIJ_FT);
+    j.megtakaritasFt = Math.round(j.sajatKm * beallitas.sajat_fuvar_km_dij_ft);
     j.eredmenyFt = j.bevetelFt + j.megtakaritasFt - j.uzemanyagFt - (j.utdijFt ?? 0) - j.napiKoltsegFt;
     j.eredmenyFtKm = j.km > 0 ? Math.round(j.eredmenyFt / j.km) : null;
   }

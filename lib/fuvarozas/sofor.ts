@@ -17,7 +17,8 @@ import { requireAnyEditPermission, requireSajatVagyModulJog } from "@/lib/auth/r
 import { requireSession } from "@/lib/auth/dal";
 import { getIdovonalak } from "@/lib/fuvarozas/actions";
 import { resolveJarmu } from "@/lib/fuvarozas/vehicles";
-import { findJarmuByEmployeeName, jarmuMatch } from "@/lib/fuvarozas/sofor-jarmu";
+import { findJarmuByEmployeeName, findJarmuForEmployee, jarmuMatch } from "@/lib/fuvarozas/sofor-jarmu";
+import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
 import { bontsMegallokra, cimKulcs, cimPontossaga, varosNev } from "@/lib/fuvarozas/varos";
 import { toroljIdovonalCachet } from "@/lib/fuvarozas/idovonal-cache";
 import { getFleetLastPositions, parseEcofleetTimestamp } from "@/lib/fuvarozas/ecofleet";
@@ -468,7 +469,8 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
   const empRows = await query<{ name: string }>(`select name from alkalmazottak where id = $1`, [employeeId]);
   const employeeName = empRows[0]?.name;
   if (!employeeName) return null;
-  const jarmu = findJarmuByEmployeeName(employeeName);
+  const jarmuLista = await getJarmuvek();
+  const jarmu = findJarmuForEmployee({ id: employeeId, name: employeeName }, jarmuLista);
   if (!jarmu) return null;
 
   const nap = napISO ?? budapestMaIso();
@@ -581,7 +583,7 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
       megalloReszlete(extra?.megallo_reszletek, m.tipus, tipusSzamlalo[m.tipus]++, tipusDarab[m.tipus], m.nyersCim)
     );
     const masRendszam =
-      extra?.jarmu && resolveJarmu(extra.jarmu) !== jarmu ? extra.jarmu : null;
+      extra?.jarmu && resolveJarmu(extra.jarmu, jarmuLista) !== jarmu ? extra.jarmu : null;
     return {
       fuvarId: b.fuvarId,
       megrendelo: b.megrendelo,
@@ -668,7 +670,7 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
       return [];
     });
     for (const s of sorok) {
-      if (!jarmuMatch(jarmu, s) && s.sofor?.trim().toLowerCase() !== employeeName.trim().toLowerCase()) continue;
+      if (!jarmuMatch(jarmu, s, jarmuLista) && s.sofor?.trim().toLowerCase() !== employeeName.trim().toLowerCase()) continue;
       nemregLezartak.push({
         fuvarId: s.id,
         megalloIndex: s.megallo_index,
@@ -739,9 +741,10 @@ export async function rogzitMegalloHelyet(
   // Melyik kocsi: a fuvaré. (A sofőr csak a saját kocsijára ütemezett fuvart
   // látja, de a hely a fuvar kocsijához tartozik, nem a bejelentkezett
   // személyhez.)
+  const jarmuLista = await getJarmuvek();
   const jarmu =
-    (fuvar.jarmu ? resolveJarmu(fuvar.jarmu) : null) ??
-    (fuvar.sofor ? findJarmuByEmployeeName(fuvar.sofor) : null);
+    (fuvar.jarmu ? resolveJarmu(fuvar.jarmu, jarmuLista) : null) ??
+    (fuvar.sofor ? findJarmuByEmployeeName(fuvar.sofor, jarmuLista) : null);
   if (!jarmu?.ecofleetObjectId) throw new Error("A fuvarhoz nem tartozik GPS-es kocsi.");
 
   const poziciok = await getFleetLastPositions();

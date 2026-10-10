@@ -4,9 +4,10 @@ import { query } from "@/lib/db";
 import { requireAnyViewPermission } from "@/lib/auth/require-permission";
 import { geokodolCachelve } from "@/lib/fuvarozas/erintes-felismeres";
 import { varosNev } from "@/lib/fuvarozas/varos";
-import { SAJAT_TELEPHELYEK } from "@/lib/fuvarozas/telephelyek";
+import { getIndulasiTelephely } from "@/lib/fuvarozas/telephelyek-db";
 import { napiSorrend } from "@/lib/fuvarozas2/napi-sorrend";
-import { findJarmuByPlate } from "@/lib/fuvarozas/vehicles";
+import { findJarmuByKod } from "@/lib/fuvarozas/vehicles";
+import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
 import { elvinniCellaKm, hetKezdeteElvinni } from "@/lib/megbizasok/elvinni-szabalyok";
 
 type HetiMegbizas = {
@@ -140,7 +141,8 @@ export async function getElvinniHet(
   }
 
   const celPont = await pont(felrako?.cim ?? null);
-  const telephely = SAJAT_TELEPHELYEK[0].cim;
+  const telephely = (await getIndulasiTelephely()).cim;
+  const jarmuLista = await getJarmuvek();
   const sorok = await Promise.all(jarmuvek.map(async (jarmu) => {
     const kocsiMunkai = napiSorrend(
       munkak.filter((munka) => munka.jarmu === jarmu.kod),
@@ -206,7 +208,7 @@ export async function getElvinniHet(
     }
 
     // „Micó (NMZ-492)“ — a sofőr beceneve és az első rendszám, hogy elsőre látsszon, kié a kocsi.
-    const sofor = findJarmuByPlate(jarmu.kod)?.sofor;
+    const sofor = findJarmuByKod(jarmu.kod, jarmuLista)?.sofor;
     return { kod: jarmu.kod, cimke: sofor ? `${sofor} (${jarmu.kod})` : jarmu.cimke, napok: cellak };
   }));
 
