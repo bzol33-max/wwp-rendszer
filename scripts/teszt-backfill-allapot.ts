@@ -3,7 +3,7 @@
 //
 // Futtatás:  npx tsx scripts/teszt-backfill-allapot.ts
 
-import { regiHelyUjAllapot, becsultElhagyvaAt, type BackfillBemenet } from "@/lib/fuvarozas/backfill-allapot";
+import { regiHelyUjAllapot, sajatNaptarFek, becsultElhagyvaAt, type BackfillBemenet } from "@/lib/fuvarozas/backfill-allapot";
 
 let ok = 0;
 let bad = 0;
@@ -50,6 +50,23 @@ eq("saját: ma → folyamatban", sor({ tipus: "ber" }).allapot, "folyamatban");
 eq("saját: elmúlt, fotó nélkül → teljesitve (fotóra vár)", sor({ tipus: "ber", datum_iso: "2026-09-17" }).allapot, "teljesitve");
 eq("saját: elmúlt, szállítólevél-fotóval → lezart (12. él)", sor({ tipus: "ber", datum_iso: "2026-09-17", fotoVan: true }).allapot, "lezart");
 eq("saját: ellenorzott=false → ellenorzesre_var", sor({ tipus: "ber", ellenorzott: false, datum_iso: "2026-09-21" }).allapot, "ellenorzesre_var");
+// 029: saját fuvar tény nélkül a naptártól nem lép előre (követő trigger tükre).
+const tenyNelkul = { tipus: "ber", elozoAllapot: "tervezett", megalloTenyVan: false } as const;
+eq("029 saját: múlt nap, tény nélkül, Kocsira adom (ellenorzott) → tervezett marad", sor({ ...tenyNelkul, datum_iso: "2026-09-17" }).allapot, "tervezett");
+eq("029 saját: mai nap, tény nélkül → tervezett marad (nem ugrik a bérfuvar elé)", sor({ ...tenyNelkul }).allapot, "tervezett");
+eq("029 saját: ellenőrzésre váró, ellenorzott=true lesz, múlt nap → tervezett", sor({ ...tenyNelkul, elozoAllapot: "ellenorzesre_var", datum_iso: "2026-09-17" }).allapot, "tervezett");
+eq("029 saját: ellenőrzésre váró, ellenorzott=false, múlt nap → ellenorzesre_var", sor({ ...tenyNelkul, elozoAllapot: "ellenorzesre_var", ellenorzott: false, datum_iso: "2026-09-17" }).allapot, "ellenorzesre_var");
+eq("029 saját: folyamatban tény nélkül, múlt nap → nem teljesül magától", sor({ ...tenyNelkul, elozoAllapot: "folyamatban", datum_iso: "2026-09-17" }).allapot, "folyamatban");
+eq("029 saját: megálló-ténnyel, múlt nap → teljesitve (változatlan)", sor({ ...tenyNelkul, megalloTenyVan: true, datum_iso: "2026-09-17" }).allapot, "teljesitve");
+eq("029 saját: megálló-ténnyel, ma → folyamatban (változatlan)", sor({ ...tenyNelkul, megalloTenyVan: true }).allapot, "folyamatban");
+eq("029 saját: teljesitve jelölő → teljesitve (változatlan)", sor({ ...tenyNelkul, teljesitve: true }).allapot, "teljesitve");
+eq("029 saját: fotóval, múlt nap → lezart (változatlan)", sor({ ...tenyNelkul, fotoVan: true, datum_iso: "2026-09-17" }).allapot, "lezart");
+eq("029 saját: jövő nap → tervezett (változatlan)", sor({ ...tenyNelkul, datum_iso: "2026-09-21" }).allapot, "tervezett");
+eq("029 saját: elindult fuvar datum későbbre, tény nélkül → hátra (változatlan)", sor({ ...tenyNelkul, elozoAllapot: "folyamatban", datum_iso: "2026-09-21" }).allapot, "tervezett");
+eq("029 bér: múlt nap, tény nélkül → teljesitve (változatlan)", sor({ elozoAllapot: "tervezett", megalloTenyVan: false, datum_iso: "2026-09-15" }).allapot, "teljesitve");
+eq("029 bér: ma, tény nélkül → folyamatban (változatlan)", sor({ elozoAllapot: "tervezett", megalloTenyVan: false }).allapot, "folyamatban");
+eq("029 előző állapot nélkül (backfill) → régi szabály", sor({ tipus: "ber", datum_iso: "2026-09-17", megalloTenyVan: false }).allapot, "teljesitve");
+eq("029 fék: lezárt előzmény nem számít", sajatNaptarFek("teljesitve", "teljesitve", { tipus: "ber", teljesitve: false, szamla_szam: null, fotoVan: false, ellenorzott: true, megalloTenyVan: false }), "teljesitve");
 // Törölt: az állapot ugyanaz, mint törlés nélkül.
 eq("törölt sor állapota független a törléstől", sor({ statusz: "torolt", datum_iso: "2026-09-21" }).allapot, "tervezett");
 // Régi fül jelentése.

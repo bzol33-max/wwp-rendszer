@@ -27,6 +27,7 @@ import { megalloReszlete, type MegalloReszlet } from "@/lib/fuvarozas/sofor-adat
 import { szkennelj } from "@/lib/fuvarozas/doksi-kivagas";
 import { sajatFuvarE } from "@/lib/fuvarozas/irat-jog";
 import { ellenorizAtmenet } from "@/lib/fuvarozas/allapot";
+import { fotoLezarasDontes, type LezarasMegallo, type MasikFuvar } from "@/lib/fuvarozas/fuvarlevel-lezaras";
 
 function budapestMaIso(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Budapest" });
@@ -81,6 +82,17 @@ async function requireFuvarIrasJog(fuvarId: string): Promise<"fuvarozas" | "fuva
  */
 export async function markMegalloKesz(fuvarId: string, megalloIndex: number): Promise<{ fuvarLezarva: boolean }> {
   await requireFuvarIrasJog(fuvarId);
+  return megalloKeszLezarassal(fuvarId, megalloIndex, false);
+}
+
+/**
+ * A markMegalloKesz törzse. `valodiUtolso`: a hívó a valódi megálló-sorokból
+ * (fuvar_megallok, legnagyobb sorszám) tudja, hogy ez az utolsó megálló — a
+ * fuvarlevél-fotó így zár akkor is, ha a 003-as SQL-bontás a szövegestől
+ * eltér (2026-10-10). A sofőr felülete a szöveges bontásból számoz, ezért ott
+ * marad a szöveges utolsó index.
+ */
+async function megalloKeszLezarassal(fuvarId: string, megalloIndex: number, valodiUtolso: boolean): Promise<{ fuvarLezarva: boolean }> {
   const soforNev = (await requireSession()).name;
   // Az UTOLSÓ megálló "Indulok"-ja a fuvart is lezárja — ugyanúgy, mint a
   // GPS lap pipája (megbizasok.ts setMegalloKesz). Eddig csak a GPS vagy az
@@ -93,7 +105,7 @@ export async function markMegalloKesz(fuvarId: string, megalloIndex: number): Pr
     let lezarva = false;
     if (sor && !sor.teljesitve) {
     const utolsoIndex = bontsMegallokra(sor.felrako).length + bontsMegallokra(sor.lerako).length - 1;
-    if (megalloIndex === utolsoIndex) {
+    if (valodiUtolso || megalloIndex === utolsoIndex) {
       await tx(`update fuvar_megbizasok set teljesitve = true, teljesitve_at = now() where id = $1`, [fuvarId]);
       lezarva = true;
     }
@@ -785,7 +797,7 @@ const FOTO_MAX_DB_FUVARONKENT = 40;
  * beérkezést (papirok_beerkeztek_at) NEM váltja ki: papír nélkül nem
  * számlázunk, de az elveszett fuvarlevél nem két hét múlva derül ki.
  */
-export async function feltoltFuvarlevelFoto(fuvarId: string, form: FormData): Promise<{ dokId: string }> {
+export async function feltoltFuvarlevelFoto(fuvarId: string, form: FormData): Promise<{ dokId: string; figyelmeztetes: string | null }> {
   await requireFuvarIrasJog(fuvarId);
   const session = await requireSession();
   const fajl = form.get("foto");
@@ -793,8 +805,8 @@ export async function feltoltFuvarlevelFoto(fuvarId: string, form: FormData): Pr
   if (fajl.size > FOTO_MAX_BAJT) throw new Error("A kép túl nagy.");
   if (!fajl.type.startsWith("image/")) throw new Error("Csak kép tölthető fel.");
 
-  const sorok = await query<{ datum: string; jarmu: string | null; reise_id: string | null; pozicioszam: string | null }>(
-    `select to_char(datum, 'YYYY-MM-DD') as datum, jarmu, reise_id, pozicioszam from fuvar_megbizasok where id = $1`,
+  const sorok = await query<{ datum: string; jarmu: string | null; sofor: string | null; reise_id: string | null; pozicioszam: string | null }>(
+    `select to_char(datum, 'YYYY-MM-DD') as datum, jarmu, sofor, reise_id, pozicioszam from fuvar_megbizasok where id = $1`,
     [fuvarId]
   );
   const fuvar = sorok[0];
@@ -810,10 +822,18 @@ export async function feltoltFuvarlevelFoto(fuvarId: string, form: FormData): Pr
   // a fotó-trigger bérfuvarnál már a teljesített fuvart vigye tovább
   // (számlázható). Micó #300, 2026-10-07: Olaszliszkán 08:09-kor és 08:17-kor
   // fotózott, a lerakó mégis „ott 07:20 óta” maradt, a Ma oldal beragadt.
-  const utolsoNyitott = await utolsoNyitottMegallo(fuvarId);
-  if (utolsoNyitott != null) {
-    await markMegalloKesz(fuvarId, utolsoNyitott);
-    console.log(`[sofor] fuvar #${fuvarId}: a fuvarlevél-fotó lezárta az utolsó megállót (${utolsoNyitott}).`);
+  // De csak ha a kocsi előtte járó fuvarja már kész (fuvarlevel-lezaras.ts):
+  // a bérfuvar CMR-je a következő saját fuvar kártyáján nem zárhatja a sajátot.
+  const dontes = fotoLezarasDontes(
+    await fuvarMegalloiLezarashoz(fuvarId),
+    fuvar.datum,
+    await kocsiMasikNyitottFuvarjai(fuvarId, fuvar)
+  );
+  if (dontes.megalloIndex != null) {
+    await megalloKeszLezarassal(fuvarId, dontes.megalloIndex, true);
+    console.log(`[sofor] fuvar #${fuvarId}: a fuvarlevél-fotó lezárta az utolsó megállót (${dontes.megalloIndex}).`);
+  } else if (dontes.figyelmeztetes) {
+    console.log(`[sofor] fuvar #${fuvarId}: a fuvarlevél-fotó NEM zárt — ${dontes.figyelmeztetes}`);
   }
 
   const hivatkozas = (fuvar.reise_id ?? fuvar.pozicioszam ?? `fuvar${fuvarId}`).replace(/[^A-Za-z0-9_-]+/g, "_");
@@ -843,8 +863,9 @@ export async function feltoltFuvarlevelFoto(fuvarId: string, form: FormData): Pr
   await query(`update fuvar_dokumentumok set dokumentum_url = $2 where id = $1`, [beszurt[0].id, `/api/fuvarozas/dokumentum/${beszurt[0].id}`]);
   // Saját fuvarnál ez a BEFELÉ kapott szállítólevél fotója (a kifelé menőt a
   // Számlázz.hu állítja ki) — ugyanaz a 'fuvarlevel' irat-típus, mert a
-  // fuvar_dokumentumok CHECK-je csak ezt ismeri, és a saját fuvar állapotát a
-  // fotó amúgy sem mozdítja (003 trigger: csak jelleg='ber').
+  // fuvar_dokumentumok CHECK-je csak ezt ismeri. A fotó a saját fuvart is
+  // lépteti: teljesítve → lezárt (019-es fotó-trigger, 12. él) — ezért zár a
+  // fotó a fenti lezárás-döntés szerint csak óvatosan.
   console.log(
     `[sofor] fuvarlevél-fotó feltöltve: fuvar #${fuvarId}, ${nev}, ` +
       `${Math.round(eredeti.length / 1024)} KB → ${Math.round(tartalom.length / 1024)} KB, ` +
@@ -852,22 +873,39 @@ export async function feltoltFuvarlevelFoto(fuvarId: string, form: FormData): Pr
   );
   revalidatePath("/erkezes");
   revalidatePath("/fuvarozas2");
-  return { dokId: beszurt[0].id };
+  return { dokId: beszurt[0].id, figyelmeztetes: dontes.figyelmeztetes };
 }
 
-/** Az utolsó megálló indexe, ha EGYEDÜL az nyitott (minden korábbi kész vagy GPS szerint elhagyva), különben null. */
-async function utolsoNyitottMegallo(fuvarId: string): Promise<number | null> {
-  const sorok = await query<{ sorszam: number; tipus: string; kesz: boolean }>(
+/** A fuvar megálló-sorai (kész = sofőr "Indulok" vagy GPS-távozás); teljesített/törölt fuvarnál üres. */
+async function fuvarMegalloiLezarashoz(fuvarId: string): Promise<LezarasMegallo[]> {
+  return query<LezarasMegallo>(
     `select g.sorszam, g.tipus, (g.sofor_kesz_at is not null or g.gps_tavozas is not null) as kesz
        from fuvar_megallok g join fuvar_megbizasok m on m.id = g.megbizas_id
       where g.megbizas_id = $1 and m.torolt_at is null and not m.teljesitve
       order by g.sorszam`,
     [fuvarId]
   );
-  const utolso = sorok.at(-1);
-  if (!utolso || utolso.kesz || utolso.tipus !== "lerako") return null;
-  if (sorok.slice(0, -1).some((g) => !g.kesz)) return null;
-  return utolso.sorszam - 1;
+}
+
+/** Ugyanannak a kocsinak a többi nyitott fuvarja (ugyanaz vagy korábbi nap), van-e még be nem fejezett lerakójuk. */
+async function kocsiMasikNyitottFuvarjai(
+  fuvarId: string,
+  fuvar: { datum: string; jarmu: string | null; sofor: string | null }
+): Promise<MasikFuvar[]> {
+  const jarmu = (fuvar.jarmu ? resolveJarmu(fuvar.jarmu) : null) ?? (fuvar.sofor ? findJarmuByEmployeeName(fuvar.sofor) : null);
+  if (!jarmu) return [];
+  const sorok = await query<MasikFuvar & { jarmu: string | null; sofor: string | null }>(
+    `select m.id::text, to_char(m.datum, 'YYYY-MM-DD') as nap, m.allapot, m.jarmu, m.sofor,
+            exists (select 1 from fuvar_megallok g where g.megbizas_id = m.id and g.tipus = 'lerako'
+                     and g.sofor_kesz_at is null and g.gps_tavozas is null) as "nyitottLerako"
+       from fuvar_megbizasok m
+      where m.id <> $1 and m.torolt_at is null and not coalesce(m.teljesitve, false)
+        and m.allapot in ('ellenorzesre_var', 'tervezett', 'folyamatban')
+        and m.datum <= $2::date and (m.jarmu is not null or m.sofor is not null)
+      order by m.datum, m.id`,
+    [fuvarId, fuvar.datum]
+  );
+  return sorok.filter((s) => jarmuMatch(jarmu, s));
 }
 
 /**

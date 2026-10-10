@@ -20,6 +20,7 @@ import type { SajatFuvarAdat, Eredmeny } from "@/lib/fuvarozas2/sajat-fuvar";
 import { ALLAPOT_CIMKE } from "@/lib/megbizasok/allapotgep";
 import { duplikatumSor, keresDuplikatumot, type DuplikatumJelolt } from "@/lib/fuvarozas2/sajat-duplikatum";
 import { utemezhetoNap } from "@/lib/megbizasok/elvinni-szabalyok";
+import { budapestNapISO } from "@/lib/fuvarozas/idozona";
 
 
 function egesz(s: string): number | null {
@@ -27,6 +28,9 @@ function egesz(s: string): number | null {
   return typeof n === "number" ? Math.round(n * 100) / 100 : null;
 }
 const ISO_NAP = /^\d{4}-\d{2}-\d{2}$/;
+// Múltbeli napra tett saját fuvart a követő trigger azonnal teljesítettnek
+// (lezártnak) vette — ezért se kocsira, se ütemezésre nem mehet (2026-10-10).
+const MULT_NAP_HIBA = "Saját fuvar nem tehető múltbeli napra — válassz mai vagy későbbi napot.";
 function tisztit(a: SajatFuvarAdat): SajatFuvarAdat { return { datum:a.datum.trim(), jarmuKod:a.jarmuKod?.trim()||null, honnan:a.honnan.trim(), hova:a.hova.trim(), kitol:a.kitol?.trim()||null, kinek:a.kinek?.trim()||null, megjegyzes:a.megjegyzes?.trim()||null }; }
 async function hianyzoMezok(a: {datum:string|null;jarmuKod:string|null;honnan:string|null;hova:string|null}) { const h:string[]=[]; if(!a.datum||!ISO_NAP.test(a.datum))h.push("dátum");if(!a.jarmuKod)h.push("kocsi");if(!a.honnan?.trim())h.push("honnan");if(!a.hova?.trim())h.push("hová");return h;}
 async function naplo(id:string,esemeny:string,reszletek:Record<string,unknown>){const s=await requireSession();await query(`insert into fuvar_megbizas_esemeny (megbizas_id, esemeny, forras, ki, reszletek) values ($1, $2, 'ember', $3, $4)`,[id,esemeny,s.name??s.username,JSON.stringify(reszletek)]);}
@@ -437,6 +441,7 @@ export async function mentSajatFuvart(id: string | null, nyers: SajatFuvarAdat, 
   await requireEditPermission("fuvarozas");
   const a = tisztit(nyers);
   if (!ISO_NAP.test(a.datum)) return { ok: false, hiba: "A dátum kötelező." };
+  if (a.datum < budapestNapISO()) return { ok: false, hiba: MULT_NAP_HIBA };
   if (a.jarmuKod && !findJarmuByPlate(a.jarmuKod)) return { ok: false, hiba: "Ismeretlen kocsi." };
   if (opciok.duplikatumOk !== true) {
     const dupl = await sajatDuplikatumok(id, a);
@@ -625,8 +630,8 @@ export async function utemezElvinnivalot(
       [id]
     );
     if (!sor) return { hiba: "Ez a fuvar már nincs a Saját fuvar oszlopban (időpont nélkül)." };
-    if (!utemezhetoNap(adat.nap, sor.legkorabban)) {
-      return { hiba: `A legkorábbi nap: ${sor.legkorabban}.` };
+    if (!utemezhetoNap(adat.nap, sor.legkorabban, budapestNapISO())) {
+      return { hiba: sor.legkorabban && adat.nap < sor.legkorabban ? `A legkorábbi nap: ${sor.legkorabban}.` : MULT_NAP_HIBA };
     }
 
     await tx(
@@ -691,6 +696,7 @@ export async function kocsiraAdom(id: string): Promise<Eredmeny> {
   if (!sor.elokeszites) return { ok: false, hiba: "Ez a fuvar már kocsin van." };
   const hiany = await hianyzoMezok({ datum: sor.datum, jarmuKod: sor.elokeszites_jarmu, honnan: sor.felrako, hova: sor.lerako });
   if (hiany.length > 0) return { ok: false, hiba: `Hiányzik: ${hiany.join(", ")}.` };
+  if (sor.datum! < budapestNapISO()) return { ok: false, hiba: MULT_NAP_HIBA };
   const jarmu = findJarmuByPlate(sor.elokeszites_jarmu!);
   if (!jarmu) return { ok: false, hiba: "Ismeretlen kocsi." };
   await query(
@@ -748,6 +754,7 @@ export async function torolElokeszitettet(id: string): Promise<Eredmeny> {
 // adni, egyszerűsítsd”): az időpont nélküli saját fuvar kártyáján kocsi +
 // nap, és megy a sofőrnek — az ütemezés és a „Kocsira adom” együtt.
 export async function kocsihozAdom(id: string, a: { jarmuKod: string; nap: string }): Promise<Eredmeny> {
+  await requireEditPermission("fuvarozas");
   const utemezve = await utemezElvinnivalot(id, a);
   if (!utemezve.ok) return utemezve;
   const kocsin = await kocsiraAdom(id);

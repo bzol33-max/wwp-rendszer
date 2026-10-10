@@ -16,6 +16,14 @@ export type BackfillBemenet = FuvarHelyBemenet & {
   fotoVan: boolean;
   papirok_beerkeztek_at: string | Date | null;
   statusz: string;
+  /**
+   * A követő trigger (029) tükréhez, opcionális: a sor eddigi állapota és
+   * hogy van-e megálló-tény (GPS-érkezés/-távozás, sofőr megérkezett/kész,
+   * várakozás). Csak ha MINDKETTŐ meg van adva, fékez a saját fuvar
+   * naptár-szabálya (sajatNaptarFek); a backfill-szkript nem adja át őket.
+   */
+  elozoAllapot?: Allapot | null;
+  megalloTenyVan?: boolean;
 };
 
 export type BackfillEredmeny = {
@@ -32,6 +40,32 @@ export type BackfillEredmeny = {
  * `torolt_at` hordozza (S9), az állapot "amilyen lenne, ha nem törölték volna".
  */
 export function regiHelyUjAllapot(sor: BackfillBemenet, ma: string, most: Date = new Date()): BackfillEredmeny {
+  const e = regiSzabalyAllapot(sor, ma, most);
+  if (sor.elozoAllapot == null || sor.megalloTenyVan === undefined) return e;
+  const fekezett = sajatNaptarFek(sor.elozoAllapot, e.allapot, sor);
+  return fekezett === e.allapot ? e : { allapot: fekezett, regiHely: e.regiHely, indok: "saját fuvar, megálló-tény nélkül a naptártól nem lép előre (029)" };
+}
+
+/**
+ * A 029-es követő trigger TS-tükre: saját fuvar (tipus='ber') teljesítés-
+ * jelölés, számla, fotó és megálló-tény nélkül a naptártól (datum/lerakás
+ * múlt vagy ma) nem lép előre — tervezett/ellenőrzésre vár/folyamatban marad.
+ * `elozo` = a sor eddigi állapota, `uj` = amit a régi szabály adna.
+ */
+export function sajatNaptarFek(
+  elozo: Allapot,
+  uj: Allapot,
+  sor: Pick<BackfillBemenet, "tipus" | "teljesitve" | "szamla_szam" | "fotoVan" | "ellenorzott" | "megalloTenyVan">
+): Allapot {
+  if (sor.tipus !== "ber") return uj;
+  if (elozo !== "ellenorzesre_var" && elozo !== "tervezett" && elozo !== "folyamatban") return uj;
+  if ((uj !== "folyamatban" && uj !== "teljesitve") || uj === elozo) return uj;
+  if (sor.teljesitve || (sor.szamla_szam ?? "") !== "" || sor.fotoVan || sor.megalloTenyVan) return uj;
+  if (elozo === "folyamatban") return "folyamatban";
+  return sor.ellenorzott ? "tervezett" : "ellenorzesre_var";
+}
+
+function regiSzabalyAllapot(sor: BackfillBemenet, ma: string, most: Date): BackfillEredmeny {
   const regiHely = getFuvarHelye(sor, ma, most);
   const szamlas = (sor.szamla_szam ?? "") !== "";
   const felrakasNap = sor.datum_iso;
