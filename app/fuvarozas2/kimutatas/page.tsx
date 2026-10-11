@@ -86,6 +86,14 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ i
         </span>
       </div>
 
+      {k.atvaltatlanKezi.db > 0 ? (
+        <div className="rounded-lg bg-[var(--f2-amb-l)] px-3 py-2 text-sm text-[var(--f2-amb)]">
+          {k.atvaltatlanKezi.db} kézi költségsor átváltás nélkül kimaradt a költségből
+          {k.atvaltatlanKezi.eur > 0 ? ` (${k.atvaltatlanKezi.eur.toLocaleString("hu-HU")} EUR, nincs árfolyam)` : ""}
+          {k.atvaltatlanKezi.masPenznemDb > 0 ? ` (${k.atvaltatlanKezi.masPenznemDb} ismeretlen pénznemű)` : ""}.
+        </div>
+      ) : null}
+
       {k.gpsHiba ? (
         <div className="rounded-lg bg-[var(--f2-amb-l)] px-3 py-2 text-sm text-[var(--f2-amb)]">
           A km/liter most nem érhető el (Ecofleet): {k.gpsHiba} — a megbízás- és bevétel-adatok ettől függetlenül pontosak, a költségek becslésből jönnek.

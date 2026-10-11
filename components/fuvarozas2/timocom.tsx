@@ -11,6 +11,11 @@ import { useCanEdit } from "@/components/auth/edit-permission-context";
 import { allitTimocomAllapotot, rogzitTimocomAjanlatot, type TimocomSor } from "@/lib/fuvarozas2/timocom";
 import { dekodolHash, konyvjelzoKod, type TimocomHely } from "@/lib/fuvarozas2/timocom-ajanlat";
 
+/** Ár kiírása; pénznem nélkül „pénznem?” (nem feltételezünk EUR-t). */
+function arCimke(ar: { osszeg: number; penznem: string | null }) {
+  return `${ar.osszeg.toLocaleString("hu-HU")} ${ar.penznem ?? "(pénznem?)"}`;
+}
+
 // Timocom → WWP: a könyvjelző-gomb telepítése, a #d=… adat és a kézi
 // beillesztés befogadása, az ajánlat kártyája és a korábbiak listája.
 
@@ -170,7 +175,7 @@ export function TimocomAjanlatKartya({ sor }: { sor: TimocomSor }) {
           <div><span className="text-muted-foreground">Méret:</span> {a.hosszM != null ? `${a.hosszM} m` : "—"} · {a.sulyT != null ? `${a.sulyT} t` : "—"}</div>
           <div><span className="text-muted-foreground">Jármű:</span> {[a.jarmuTipus, a.felepitmeny].filter(Boolean).join(" · ") || "—"}</div>
           <div><span className="text-muted-foreground">Tulajdonság:</span> {a.tulajdonsagok ?? "—"}</div>
-          <div><span className="text-muted-foreground">Ár:</span> {a.ar ? `${a.ar.osszeg.toLocaleString("hu-HU")} ${a.ar.penznem}` : "nincs megadva"}{a.fizetesiHataridoNap ? ` · fizetés ${a.fizetesiHataridoNap} nap` : ""}</div>
+          <div><span className="text-muted-foreground">Ár:</span> {a.ar ? arCimke(a.ar) : "nincs megadva"}{a.fizetesiHataridoNap ? ` · fizetés ${a.fizetesiHataridoNap} nap` : ""}</div>
           <div>
             <span className="text-muted-foreground">Kapcsolat:</span> {a.kapcsolatNev ?? "—"}
             {a.telefonok.map((t) => <a key={t} href={`tel:${t}`} className="ml-2 underline">{t}</a>)}
@@ -214,7 +219,7 @@ export function TimocomLista({ sorok, aktivId }: { sorok: TimocomSor[]; aktivId:
                   </td>
                   <td className="tabular-nums">{fel ? helySav(fel) : "?"}</td>
                   <td>{a.megbizo ?? "?"}</td>
-                  <td>{a.ar ? `${a.ar.osszeg.toLocaleString("hu-HU")} ${a.ar.penznem}` : "—"}</td>
+                  <td>{a.ar ? arCimke(a.ar) : "—"}</td>
                   <td>{ALLAPOT[s.allapot] ?? s.allapot}</td>
                 </tr>
               );

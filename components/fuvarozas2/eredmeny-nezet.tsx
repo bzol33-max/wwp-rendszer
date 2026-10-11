@@ -10,6 +10,7 @@ const KOCSI_SZIN = ["#2f6fa8", "#1f8f6e", "#7a4b9a", "#a8690f"];
 const ftSzam = (ft: number) => `${ft > 0 ? "+" : ft < 0 ? "−" : ""}${Math.abs(Math.round(ft)).toLocaleString("hu-HU")} Ft`;
 const nev = (k: { sofor: string | null; kod: string }) => k.sofor ?? k.kod;
 const pozSzin = (ft: number) => (ft < 0 ? "text-[var(--f2-red)]" : "text-[var(--f2-mint)]");
+const eurSzam = (eur: number) => `${eur.toLocaleString("hu-HU", { maximumFractionDigits: 2 })} EUR`;
 
 function Kerdes({ kerdes, ertek, szin, sor1, sor2, sor3 }: { kerdes: string; ertek: string; szin?: string; sor1?: React.ReactNode; sor2?: React.ReactNode; sor3?: React.ReactNode }) {
   return (
@@ -81,6 +82,9 @@ function KocsiKartya({ k, idoszak }: { k: EredmenyKocsi; idoszak: string }) {
         <span className="text-xs text-muted-foreground">{k.berDb} bérfuvar · {idoszak}</span>
         <span className={cn("ml-auto text-lg font-semibold tabular-nums", pozSzin(k.vizeses.fedezet))}>{ftSzam(k.vizeses.fedezet)}</span>
       </div>
+      {k.atvaltatlanEur > 0 ? (
+        <div className="-mt-1 text-xs text-[var(--f2-amb)]">+ {eurSzam(k.atvaltatlanEur)} átváltás nélkül (nincs árfolyam) — a bevételben és a fedezetben nincs benne, a költsége igen</div>
+      ) : null}
       {k.berDb > 0 || k.vizeses.uresAllas !== 0 ? <VizesesAbra v={k.vizeses} /> : <p className="py-8 text-center text-sm text-muted-foreground">Ebben az időszakban nem volt bérfuvar.</p>}
     </section>
   );
@@ -154,6 +158,13 @@ export function EredmenyNezet({ adat }: { adat: EredmenyAdat }) {
       <div className="rounded-xl bg-[var(--f2-blue-l)] px-4 py-2 text-sm text-[var(--f2-blue)]">
         <b>Mi tény, mi becslés:</b> {becslesSzoveg}.{adat.gpsHiba ? ` GPS: ${adat.gpsHiba}` : ""}
       </div>
+      {adat.atvaltatlanKezi.db > 0 ? (
+        <div className="rounded-xl bg-[var(--f2-amb-l)] px-4 py-2 text-sm text-[var(--f2-amb)]">
+          {adat.atvaltatlanKezi.db} kézi költségsor átváltás nélkül kimaradt a költségből
+          {adat.atvaltatlanKezi.eur > 0 ? ` (${eurSzam(adat.atvaltatlanKezi.eur)}, nincs árfolyam)` : ""}
+          {adat.atvaltatlanKezi.masPenznemDb > 0 ? ` (${adat.atvaltatlanKezi.masPenznemDb} ismeretlen pénznemű)` : ""} — a fedezet ennyivel jobbnak látszik a valósnál.
+        </div>
+      ) : null}
 
       <div className="grid gap-3 lg:grid-cols-3">
         <Kerdes
@@ -162,6 +173,7 @@ export function EredmenyNezet({ adat }: { adat: EredmenyAdat }) {
           szin={pozSzin(adat.fedezetOssz)}
           sor1={<>fedezet {adat.idoszakCimke}: {bertKocsik.map((k, i) => <span key={k.kod}>{i ? ", " : ""}{nev(k)} <span className={pozSzin(k.vizeses.fedezet)}>{ezerFt(k.vizeses.fedezet)}</span></span>)}</>}
           sor2={adat.honapok.filter((h) => !h.folyamatban).map((h) => `${h.cimke}: ${ezerFt(h.kocsik.reduce((a, k) => a + k.fedezet, 0))}`).join(" · ")}
+          sor3={adat.atvaltatlanEurOssz > 0 ? <span className="text-[var(--f2-amb)]">+ {eurSzam(adat.atvaltatlanEurOssz)} átváltás nélkül (nincs árfolyam) — a fedezetben nincs benne</span> : undefined}
         />
         <Kerdes
           kerdes="Kinek dolgozunk ingyen?"
@@ -229,8 +241,8 @@ function PartnerSorNezet({ p }: { p: EredmenyAdat["partnerek"][number] }) {
     <tr className="border-t border-foreground/5">
       <td className="px-5 py-2 font-medium">{p.partner}{p.elmaradt ? <span className="ml-2 rounded-full bg-[var(--f2-amb-l)] px-2 py-0.5 text-[11px] font-normal text-[#5a3806]">{p.utolso.slice(5).replace("-", ".")}. óta nincs fuvar</span> : null}</td>
       <td className="px-3 py-2 text-right tabular-nums">{p.db}</td>
-      <td className="px-3 py-2 text-right tabular-nums">{ezerFt(p.bevetelFt, false)}</td>
-      <td className={cn("px-3 py-2 text-right font-medium tabular-nums", pozSzin(p.fedezetFt))}>{ezerFt(p.fedezetFt)}</td>
+      <td className="px-3 py-2 text-right tabular-nums">{ezerFt(p.bevetelFt, false)}{p.atvaltatlanEur > 0 ? <div className="text-[10px] text-[var(--f2-amb)]">+ {eurSzam(p.atvaltatlanEur)} átváltás nélkül</div> : null}</td>
+      <td className={cn("px-3 py-2 text-right font-medium tabular-nums", pozSzin(p.fedezetFt))}>{ezerFt(p.fedezetFt)}{p.atvaltatlanDb > 0 ? <div className="text-[10px] font-normal text-[var(--f2-amb)]">{p.atvaltatlanDb} fuvar nélkül</div> : null}</td>
       <td className="px-5 py-2 text-right tabular-nums text-muted-foreground">{p.utolso.slice(5).replace("-", ".")}.</td>
     </tr>
   );

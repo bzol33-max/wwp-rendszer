@@ -8,7 +8,7 @@
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useAutoFrissites } from "@/components/fuvarozas2/auto-frissites";
 import type { MaVaszon } from "@/lib/fuvarozas2/ma-vaszon";
 import { savAblak, idoTartam, type SavElem } from "@/lib/fuvarozas2/ma-elo";
 import { KOCSI_SZINEK_LISTA } from "@/components/fuvarozas2/ma-elo-szinek";
@@ -43,17 +43,9 @@ function budapestMostPerc() {
   return ora * 60 + perc;
 }
 
-/** Percenként frissít: a GPS-lánc szerveroldali, a lap újratöltése adja a friss adatot. */
-function useFrissites(mp: number) {
-  const router = useRouter();
-  useEffect(() => {
-    const t = setInterval(() => router.refresh(), mp * 1000);
-    return () => clearInterval(t);
-  }, [router, mp]);
-}
-
 export function MaEloNezet({ adat }: { adat: MaVaszon }) {
-  useFrissites(60);
+  // Az oldal egyetlen frissítője (percenként, csak látható fülön); a GPS-lánc szerveroldali.
+  useAutoFrissites(60_000);
   const [mostPerc, setMostPerc] = useState<number | null>(null);
   useEffect(() => {
     const frissit = () => setMostPerc(budapestMostPerc());

@@ -15,7 +15,7 @@ export default async function Page() {
       <details className="rounded-lg border bg-card">
         <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-muted-foreground">Részletek: megállók, heti rács, csempék</summary>
         <div className="border-t p-3">
-          <MaVaszonNezet adat={adat} />
+          <MaVaszonNezet adat={adat} sajatFrissito={false} />
         </div>
       </details>
     </div>
