@@ -9,6 +9,8 @@
   „Well-Worn Pallet”, más cég a sorban nyíl után („Well-Worn Pallet → Fabrika
   2000 Kft”). Bekötve: Ma (rács, kocsi-oszlop, eltérések), Tervezés kártyák,
   Megbízások címsor. Adatot nem ír át, csak megjelenítés.
+- Kiegészítés: a Diszpécser és a Kimutatás (Költségek) saját fuvarjai is így mutatják
+  a megbízót; a bérfuvar megjelenítése változatlan.
 - Teszt: teszt-ma-het (+10).
 
 ## 2026-10-11 — Timocom → WWP böngésző-gomb (fuvarszervező pult, B út)

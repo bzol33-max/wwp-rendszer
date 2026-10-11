@@ -1,4 +1,5 @@
 import "server-only";
+import { megbizoMegjelenites } from "@/lib/fuvarozas/fuvar-constants";
 import { query } from "@/lib/db";
 import { requireSession } from "@/lib/auth/dal";
 import { requireViewPermission } from "@/lib/auth/require-permission";
@@ -75,6 +76,8 @@ async function megbizasAdatok(idk: string[], jarmuIdk: string[], nap: string): P
      order by m.datum, m.id`,
     [idk, jarmuIdk, nap]
   );
+  // Saját árunál a megbízó mindig a Well-Worn Pallet (Zoltán, 2026-10-11).
+  for (const s of sorok) if (s.jelleg === "sajat") s.partner = megbizoMegjelenites(s.jelleg, s.partner);
   return new Map(sorok.map((s) => [s.id, s]));
 }
 

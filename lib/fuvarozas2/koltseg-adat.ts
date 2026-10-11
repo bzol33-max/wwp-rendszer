@@ -1,4 +1,5 @@
 import "server-only";
+import { megbizoMegjelenites } from "@/lib/fuvarozas/fuvar-constants";
 import { query } from "@/lib/db";
 import { becsultTavolsag, lancKm, type LancKm } from "@/lib/fuvarozas2/ures-km";
 import { getJarmuIndulasiTelephely } from "@/lib/fuvarozas/telephelyek-db";
@@ -105,6 +106,8 @@ export async function koltsegIdoszakra(kezdet: string, veg: string): Promise<Ido
        and coalesce(m.lerakas_datum, m.datum) between $1::date and $2::date`,
     [kezdet, veg]
   );
+  // Saját árunál a megbízó mindig a Well-Worn Pallet (Zoltán, 2026-10-11).
+  for (const m of megbizasok) if (m.jelleg === "sajat") m.partner = megbizoMegjelenites(m.jelleg, m.partner);
   const kocsiNelkul = megbizasok.filter((m) => !m.jarmu_id).length;
 
   const elozoLerako = await query<{ jarmu_id: string; lerako: string | null }>(
