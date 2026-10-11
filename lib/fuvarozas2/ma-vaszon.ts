@@ -20,6 +20,7 @@
 // Minden becsült érték jelölve van a felületen (ETA, vezetési idő) — a
 // tachográf a sofőrnél van, ez előrejelzés.
 
+import { maEloKocsi, type MaElo } from "@/lib/fuvarozas2/ma-elo";
 import { megbizoMegjelenites } from "@/lib/fuvarozas/fuvar-constants";
 import { query } from "@/lib/db";
 import { requireSession } from "@/lib/auth/dal";
@@ -113,6 +114,8 @@ export type MaKocsi = {
   holnapFolytatodik: boolean;
   /** Hiányzó papír/számla ennél a kocsinál, pl. „2 fotó hiányzik”. */
   papir: { szoveg: string; href: string }[];
+  /** Élő nézet (térkép, „MEGY 84 km/h”, következő cél, idősáv) — lib/fuvarozas2/ma-elo.ts. (2026-10-11) */
+  elo: MaElo | null;
 };
 
 export type MaVaszon = {
@@ -754,13 +757,25 @@ export async function getMaVaszon(): Promise<MaVaszon> {
       holnap: holnapiak.map(blokkKesz),
       holnapFolytatodik: maiak.some((s) => (s.lerakas_nap ?? "") >= holnap),
       papir: papirSorok,
+      elo: elo
+        ? maEloKocsi({
+            pozicio: elo.eloPozicio,
+            szakaszok: elo.szakaszok,
+            megallok: elo.fuvarok.flatMap((f) => f.megallok),
+            eta: elo.eloEta,
+            vezetesSec: elo.vezetesSec,
+            utolsoSzunetVege: elo.utolsoSzunetVege,
+            napiKm: elo.napiKm,
+            most,
+          }, ma)
+        : null,
     };
   });
   while (kocsik.length < KOCSI_OSZLOP) {
     kocsik.push({
       kod: null, cimke: `${kocsik.length + 1}. kocsi`, sofor: null, helykitolto: "még nincs beállítva",
       allapot: null, vezetesSor: null, hetiSor: null, napiKm: null, etaSor: null,
-      sorok: [], holnap: [], holnapFolytatodik: false, papir: [],
+      sorok: [], holnap: [], holnapFolytatodik: false, papir: [], elo: null,
     });
   }
 

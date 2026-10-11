@@ -1,5 +1,19 @@
 # PROGRESS
 
+## 2026-10-11 — Ma oldal: élő nézet (2. lépés)
+
+- `/fuvarozas2` új teteje (`components/fuvarozas2/ma-elo.tsx`): teendő-sáv (max. 3 eltérés),
+  élő térkép (kocsi iránynyíllal + sebesség, mai nyomvonal folytonos, hátralévő megállók
+  szaggatott, következő cél jelölve), kocsinként nagy MEGY/ÁLL/NINCS JEL + szám, hely,
+  következő megálló ~ETA (az ETA-láncból, ha ugyanarra a célra szól), vezetési idő, szünetig,
+  napi km; alul mai idősáv (vezetés/rakodás/állás, tervezett megállók, „most” vonal).
+- Percenként frissül magától (router.refresh). GPS nélkül is renderel („nincs GPS”).
+- A régi Ma-vászon (megállók, heti rács, csempék) összecsukva a „Részletek” alatt — nem
+  veszett el funkció.
+- Logika: `lib/fuvarozas2/ma-elo.ts` (tiszta), `scripts/teszt-ma-elo.ts` (27 eset).
+  `eloPozicio.irany` új mező (Ecofleet direction).
+- Következő: Eredmény, Tervezés, Megbízások.
+
 ## 2026-10-11 — 4 fül a 11 helyett (1. lépés)
 
 - `components/fuvarozas2/fulek.tsx`: fő fülek Ma · Tervezés · Megbízások · Eredmény

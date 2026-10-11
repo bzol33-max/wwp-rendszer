@@ -211,6 +211,8 @@ export type JarmuIdovonalEredmeny = {
      * álló, de járó motorú kocsi más helyzet, mint egy lekapcsolt.
      */
     motorJar: boolean;
+    /** Menetirány fokban (0 = észak, 90 = kelet), az Ecofleet getLastData szerint. (2026-10-11) */
+    irany?: number | null;
   } | null;
   /**
    * Élő GPS-pozícióból becsült érkezés a legközelebbi, még el nem hagyott
@@ -1195,6 +1197,7 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
               utolsoAdat: parsedTs,
               oraallasKm: livePos.odometerKm,
               motorJar: livePos.engineOn,
+              irany: Number.isFinite(livePos.direction) ? livePos.direction : null,
             };
           }
         }
