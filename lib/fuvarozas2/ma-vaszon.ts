@@ -308,7 +308,9 @@ export async function getMaVaszon(): Promise<MaVaszon> {
      left join alkalmazottak a on a.id = j.sofor_id
      where j.aktiv order by j.id`
   );
-  const jarmuvek = osszesJarmu.filter((j) => j.ecofleet_object_id);
+  // Csak a GPS-es kocsik (Ecofleet heti vezetési idő). Az úton lévők és a holnapi
+  // ütközés MINDEN aktív kocsiból számol — a GPS nélküli (JANI) is fuvarozik.
+  const gpsJarmuvek = osszesJarmu.filter((j) => j.ecofleet_object_id);
   // A jóváhagyott menetek sorrendje (lib/menet) a mai, a holnapi és a heti
   // rács napjaira — EGY lekérdezés; ahol nincs, a közös napi szabály marad.
   // A heti rács lehetséges napjai: a hét munkanapjai, plusz a hétvége (hétvégén
@@ -493,7 +495,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
   };
   const papirSurgos = papir.filter((r) => (papirHatra(r) ?? 99) <= 2);
 
-  const utonKocsik = jarmuvek.filter((j) => sorok.some((s) => s.jarmu_kod === j.kod && s.allapot === "folyamatban"));
+  const utonKocsik = osszesJarmu.filter((j) => sorok.some((s) => s.jarmu_kod === j.kod && s.allapot === "folyamatban"));
   const maiMegbizas = sorok.filter((s) => aznap(s, ma) && s.allapot !== "ellenorzesre_var").length;
   const ellenorzesre = sorok.filter((s) => s.allapot === "ellenorzesre_var");
 
@@ -612,7 +614,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
      group by m.jarmu_id`,
     [ma]
   );
-  const hetiPerc = await hetiVezetesPercek(jarmuvek, ma).catch(() => new Map<string, number>());
+  const hetiPerc = await hetiVezetesPercek(gpsJarmuvek, ma).catch(() => new Map<string, number>());
 
   const blokkKesz = (s: (typeof sorok)[number]): MaBlokk => {
     const gs = megalloMap.get(s.id) ?? [];
@@ -821,7 +823,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
   const holnapiak = sorok.filter((s) => aznap(s, holnap));
   const holnapKocsiNelkul = holnapiak.filter((s) => !s.jarmu_kod);
   // Csak két bérfuvar ugyanarra a kocsira és napra ütközés; a köré tervezett saját fuvar nem.
-  const utkozes = jarmuvek.filter((j) => berUtkozes(holnapiak.filter((s) => s.jarmu_kod === j.kod))).length;
+  const utkozes = osszesJarmu.filter((j) => berUtkozes(holnapiak.filter((s) => s.jarmu_kod === j.kod))).length;
   const holnapDoboz: { cimke: string; ertek: string; szin: CsempeSzin }[] = [
     { cimke: `${holnapCimke}i megbízás`, ertek: String(holnapiak.length), szin: "normal" },
     { cimke: `${holnapCimke} kocsi nélkül`, ertek: String(holnapKocsiNelkul.length), szin: holnapKocsiNelkul.length > 0 ? "red" : "normal" },

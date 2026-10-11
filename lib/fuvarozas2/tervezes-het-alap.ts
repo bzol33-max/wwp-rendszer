@@ -4,7 +4,8 @@
 // hívni a saját múltból. Légvonal × 1,3 (KOZUTI_SZORZO) — becslés, a
 // Kalkulátor számol pontosan (HU-GO). Teszt: scripts/teszt-tervezes-het.ts.
 
-import { celar, legvonalKm, type Pont } from "@/lib/fuvarozas2/tervezo-alap";
+import { legvonalKm, type Pont } from "@/lib/fuvarozas2/tervezo-alap";
+import { arLetra } from "@/lib/fuvarozas2/ar-letra";
 
 export const RES_MIN_KM = 100;
 export const ATLAG_KMH = 60;
@@ -84,8 +85,15 @@ export type Illeszkedes = {
   plusPerc: number;
   tobbletFt: number;
   rakottKm: number;
+  /** Többlet +10% (az árlétra minimuma), 5 000 Ft-ra felfelé. */
   minFt: number;
+  /** Többlet +20% (az árlétra 2. foka), 5 000 Ft-ra felfelé. */
   kerjFt: number;
+  /** Ugyanezek EUR-ban (5 €-ra felfelé); null, ha nincs árfolyam. */
+  minEur: number | null;
+  kerjEur: number | null;
+  /** Ár-memória: a hasonló korábbi fuvarok Ft/km-e erre az útra (tájékoztató, a kérést nem emeli). */
+  elozmenyFt: number | null;
   draga: boolean;
 };
 
@@ -96,7 +104,9 @@ const napKul = (a: string, b: string) => Math.round((Date.parse(`${b}T12:00:00Z`
  * +km = A→F + F→L + L→B − A→B. Csak ha a felrakás napja a rés napjától
  * legfeljebb 1 napra van (vagy ismeretlen), és a kerülő ≤ 250 km.
  */
-export function illeszt(res: Res, fel: AjanlatHely, le: AjanlatHely, p: { kmKoltseg: number; oraFt: number; ftKmElozmeny: number | null }): Illeszkedes | null {
+export type IllesztParam = { kmKoltseg: number; oraFt: number; ftKmElozmeny: number | null; eurArfolyam?: number | null };
+
+export function illeszt(res: Res, fel: AjanlatHely, le: AjanlatHely, p: IllesztParam): Illeszkedes | null {
   if (!fel.pont || !le.pont) return null;
   if (fel.nap && Math.abs(napKul(res.nap, fel.nap)) > 1) return null;
   const rakottKm = utKm(fel.pont, le.pont);
@@ -104,14 +114,14 @@ export function illeszt(res: Res, fel: AjanlatHely, le: AjanlatHely, p: { kmKolt
   if (plusKm > 250) return null;
   const plusPerc = Math.round((plusKm / ATLAG_KMH) * 60) + 60; // + 1 óra fel- és lerakás
   const tobbletFt = Math.round(plusKm * p.kmKoltseg + (plusPerc / 60) * p.oraFt);
-  const minFt = celar(tobbletFt);
-  const elozmeny = p.ftKmElozmeny != null ? Math.ceil((p.ftKmElozmeny * rakottKm) / 5000) * 5000 : 0;
-  const kerjFt = Math.max(minFt, elozmeny, Math.ceil((minFt * 1.15) / 5000) * 5000);
-  return { res, plusKm, plusPerc, tobbletFt, rakottKm, minFt, kerjFt, draga: plusKm > 100 };
+  // Az egységes árlétra a többletre (határköltségre): min. +10%, kérj +20%.
+  const [min, kerj] = arLetra(tobbletFt, p.eurArfolyam ?? null).fokok;
+  const elozmenyFt = p.ftKmElozmeny != null ? Math.ceil((p.ftKmElozmeny * rakottKm) / 5000) * 5000 : null;
+  return { res, plusKm, plusPerc, tobbletFt, rakottKm, minFt: min.ft, kerjFt: kerj.ft, minEur: min.eur, kerjEur: kerj.eur, elozmenyFt, draga: plusKm > 100 };
 }
 
 /** A legkisebb többletű rés egy ajánlathoz. */
-export function legjobbRes(resek: Res[], fel: AjanlatHely, le: AjanlatHely, p: { kmKoltseg: number; oraFt: number; ftKmElozmeny: number | null }): Illeszkedes | null {
+export function legjobbRes(resek: Res[], fel: AjanlatHely, le: AjanlatHely, p: IllesztParam): Illeszkedes | null {
   let best: Illeszkedes | null = null;
   for (const r of resek) {
     const i = illeszt(r, fel, le, p);

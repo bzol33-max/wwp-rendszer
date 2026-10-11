@@ -16,11 +16,13 @@ import { geokodolCachelve } from "@/lib/fuvarozas/erintes-felismeres";
 import { getIndulasiTelephely } from "@/lib/fuvarozas/telephelyek-db";
 import { getFuvarBeallitasok } from "@/lib/beallitasok/fuvar";
 import { type AjanlatMinosites } from "@/lib/fuvarozas2/kalkulator-alap";
-import { frissitsKalkulaciokat, getTaroltKalkulaciok, szamoldEsTarold, type TaroltKalkulacio } from "@/lib/fuvarozas2/kalkulacio-tar";
+import { dijFtban, frissitsKalkulaciokat, getTaroltKalkulaciok, szamoldEsTarold, type TaroltKalkulacio } from "@/lib/fuvarozas2/kalkulacio-tar";
+import { getEurArfolyamok } from "@/lib/fuvarozas/arfolyam";
+import { arLetra, type ArLetra } from "@/lib/fuvarozas2/ar-letra";
 import { napiSorrend, tervIdoMegbizasbol } from "@/lib/fuvarozas2/napi-sorrend";
 import { alkalmazMenetSorrendet } from "@/lib/menet/menet-alap";
 import { menetSorrendek } from "@/lib/menet/repo";
-import { celar, elozmenyElteres, hetHatas, hetNapjai, legjobbKocsi, type HetEredmeny, type HetFuvar, type HetNap, type HetParam, type Pont } from "@/lib/fuvarozas2/tervezo-alap";
+import { elozmenyElteres, hetHatas, hetNapjai, legjobbKocsi, type HetEredmeny, type HetFuvar, type HetNap, type HetParam, type Pont } from "@/lib/fuvarozas2/tervezo-alap";
 
 export type BejovoSor = {
   id: string;
@@ -33,6 +35,8 @@ export type BejovoSor = {
   lerakasNap: string;
   fuvardij: number | null;
   penznem: string;
+  /** EUR-os díj, de nincs MNB-árfolyam az átváltáshoz — a díj nem számít bevételnek, jelezni kell. */
+  arfolyamNelkul: boolean;
   jarmuKod: string | null;
   /** A tárolt kalkulációból (becslés helyett a pontos HU-GO-számítás), ha van. */
   magaban: { minosites: AjanlatMinosites | null; eredmenyFt: number | null; onkoltsegFt: number } | null;
@@ -52,7 +56,7 @@ export type KocsiHet = {
   vele: HetEredmeny;
   nelkule: HetEredmeny;
   /** A hét mind a 7 napja (a hétvége jelölve). */
-  napok: (HetNap & { fuvarok: { id: string; cim: string; ut: string; dij: number | null; uj: boolean; sajat: boolean }[] })[];
+  napok: (HetNap & { fuvarok: { id: string; cim: string; ut: string; dij: number | null; arfolyamNelkul: boolean; uj: boolean; sajat: boolean }[] })[];
 };
 
 export type ElozmenySor = { id: string; nap: string; partner: string | null; ut: string; dij: number; ftKm: number | null; egyezes: "partner-ut" | "ut" | "partner" };
@@ -66,7 +70,10 @@ export type Tervezo = {
     figyelmeztetes: string | null;
     kocsik: KocsiHet[];
     valasztott: KocsiHet | null;
+    /** A +10%-os létrafok (a döntés-panel ár-előtöltése). */
     celarFt: number | null;
+    /** Az árlétra (önköltség +10/20/30%, Ft és EUR) a tárolt önköltségből. */
+    letra: ArLetra | null;
     hetKezdet: string;
   };
   /** Hány megbízás kalkulációja fut éppen a háttérben (hiányzott vagy elavult). */
@@ -137,6 +144,12 @@ export async function getTervezo(szuro: { m?: string; kocsi?: string }): Promise
 
   // A becslés paraméterei a tárolt kalkulációkból (hálózat nélkül); ha nincs,
   // a beállítások (fuvar_beallitas) értéke.
+  // EUR-os bérdíjak Ft-ban: a felrakás napi (vagy legutóbbi közzétett) MNB-árfolyamon.
+  const eurNapok = fuvarok.filter((f) => f.jelleg === "ber" && f.penznem === "EUR" && f.fuvardij).map((f) => f.felrakas_nap);
+  const arfolyamok = await getEurArfolyamok([...eurNapok, ma]).catch(() => new Map<string, never>());
+  const dijFt = (f: FuvarPont): number | null => (f.jelleg === "ber" ? dijFtban(f.fuvardij, f.penznem, arfolyamok.get(f.felrakas_nap)) : null);
+  const arfolyamNelkul = (f: FuvarPont): boolean => f.jelleg === "ber" && f.penznem === "EUR" && !!f.fuvardij && dijFt(f) == null;
+
   const beallitas = await getFuvarBeallitasok();
   const eredmenyek = [...tar.values()].map((t) => t.eredmeny).filter((e): e is NonNullable<typeof e> => !!e);
   const fogyasztasL100 = eredmenyek.length ? Math.round((eredmenyek.reduce((a, e) => a + e.fogyasztasL100, 0) / eredmenyek.length) * 10) / 10 : beallitas.fogyasztas_alap_l_100km;
@@ -158,7 +171,7 @@ export async function getTervezo(szuro: { m?: string; kocsi?: string }): Promise
       felrako: f.fel_lat != null && f.fel_lon != null ? { lat: f.fel_lat, lon: f.fel_lon } : null,
       lerako: f.le_lat != null && f.le_lon != null ? { lat: f.le_lat, lon: f.le_lon } : null,
       rakottKm: t?.rakottKm ?? (f.rakott_km != null ? Number(f.rakott_km) : null),
-      dijFt: f.jelleg === "ber" && f.penznem === "Ft" && f.fuvardij ? Number(f.fuvardij) : null,
+      dijFt: dijFt(f),
       utdijFt: t?.rakottUtdijFt ?? null,
       felrakoCim: f.felrako, lerakoCim: f.lerako,
       tervIdo: so.tervIdo, lezart: so.lezart,
@@ -168,7 +181,7 @@ export async function getTervezo(szuro: { m?: string; kocsi?: string }): Promise
   const jarmuLista = await getJarmuvek();
   const jarmuvek = (await query<{ kod: string; cimke: string; sofor: string | null }>(
     `select j.kod, j.cimke, a.name as sofor from fuvar_jarmuvek j left join alkalmazottak a on a.id = j.sofor_id
-     where j.aktiv and j.ecofleet_object_id is not null order by j.id`
+     where j.aktiv order by j.id`
   )).map((j) => ({ ...j, sofor: findJarmuByKod(j.kod, jarmuLista)?.sofor ?? j.sofor?.split(" ").pop() ?? j.kod }));
 
   // A jóváhagyott menetek (lib/menet) a lekért időszakra — egy lekérdezés.
@@ -198,7 +211,8 @@ export async function getTervezo(szuro: { m?: string; kocsi?: string }): Promise
             id: f.id,
             cim: megbizoMegjelenites(f.jelleg, f.partner),
             ut: `${varosNev(f.felrako ?? "") || "?"} → ${varosNev(f.lerako ?? "") || "?"}`,
-            dij: f.jelleg === "ber" && f.penznem === "Ft" ? f.fuvardij : null,
+            dij: dijFt(f),
+            arfolyamNelkul: arfolyamNelkul(f),
             uj: f.id === jelolt.id,
             sajat: f.jelleg === "sajat",
           })),
@@ -208,16 +222,22 @@ export async function getTervezo(szuro: { m?: string; kocsi?: string }): Promise
   }
 
   // Ár-előzmény: a saját archívum egy évre (bér, Ft, díjjal).
-  const archiv = await query<{ id: string; nap: string; partner: string | null; partner_id: string | null; felrako: string | null; lerako: string | null; dij: number; km: number | null }>(
+  const archivNyers = await query<{ id: string; nap: string; partner: string | null; partner_id: string | null; felrako: string | null; lerako: string | null; dij: number; penznem: string; km: number | null }>(
     `select m.id::text, to_char(m.datum, 'YYYY-MM-DD') as nap, coalesce(p.nev, m.megrendelo) as partner, m.partner_id::text,
        coalesce((select g.cim_nyers from fuvar_megallok g where g.megbizas_id = m.id and g.tipus = 'felrako' order by g.sorszam limit 1), m.felrako) as felrako,
        coalesce((select g.cim_nyers from fuvar_megallok g where g.megbizas_id = m.id and g.tipus = 'lerako' order by g.sorszam desc limit 1), m.lerako) as lerako,
-       m.fuvardij as dij, m.rakott_km as km
+       m.fuvardij as dij, coalesce(m.fuvardij_penznem, 'Ft') as penznem, m.rakott_km as km
      from fuvar_megbizasok m left join fuvar_partnerek p on p.id = m.partner_id
-     where m.torolt_at is null and m.jelleg = 'ber' and m.fuvardij > 0 and coalesce(m.fuvardij_penznem, 'Ft') = 'Ft'
+     where m.torolt_at is null and m.jelleg = 'ber' and m.fuvardij > 0 and coalesce(m.fuvardij_penznem, 'Ft') in ('Ft', 'EUR')
        and m.datum >= (now() at time zone 'Europe/Budapest')::date - 365
      order by m.datum desc`
   );
+  // Az EUR-os előzmény is Ft-ban (a fuvar napi MNB-árfolyamán); árfolyam nélkül kimarad.
+  const archivEurNapok = archivNyers.filter((a) => a.penznem === "EUR").map((a) => a.nap);
+  const archivArf = archivEurNapok.length ? await getEurArfolyamok(archivEurNapok).catch(() => new Map<string, never>()) : new Map<string, never>();
+  const archiv = archivNyers
+    .map((a) => ({ ...a, dij: dijFtban(a.dij, a.penznem, archivArf.get(a.nap)) }))
+    .filter((a): a is typeof a & { dij: number } => a.dij != null);
   const archivV = archiv.map((a) => ({ ...a, dij: Number(a.dij), km: a.km != null ? Number(a.km) : null, fv: kisVaros(a.felrako), lv: kisVaros(a.lerako), pk: (a.partner ?? "").trim().toLowerCase() }));
 
   function elozmenyek(f: FuvarPont): ElozmenySor[] {
@@ -236,7 +256,8 @@ export async function getTervezo(szuro: { m?: string; kocsi?: string }): Promise
   }
   function mostFtKm(f: FuvarPont): number | null {
     const km = tar.get(f.id)?.eredmeny?.rakottKm ?? (f.rakott_km != null ? Number(f.rakott_km) : null);
-    return f.fuvardij && f.penznem === "Ft" && km ? Math.round(Number(f.fuvardij) / km) : null;
+    const d = dijFt(f);
+    return d && km ? Math.round(d / km) : null;
   }
   function elozmenyOsszeg(f: FuvarPont, el: ElozmenySor[]) {
     const utas = el.filter((e) => e.egyezes !== "partner");
@@ -254,7 +275,7 @@ export async function getTervezo(szuro: { m?: string; kocsi?: string }): Promise
     const el = elozmenyek(f);
     return {
       id: f.id, allapot: f.allapot, partner: f.partner, hivatkozas: f.hivatkozas, felrako: f.felrako, lerako: f.lerako,
-      felrakasNap: f.felrakas_nap, lerakasNap: f.lerakas_nap, fuvardij: f.fuvardij != null ? Number(f.fuvardij) : null, penznem: f.penznem, jarmuKod: f.jarmu_kod,
+      felrakasNap: f.felrakas_nap, lerakasNap: f.lerakas_nap, fuvardij: f.fuvardij != null ? Number(f.fuvardij) : null, penznem: f.penznem, arfolyamNelkul: arfolyamNelkul(f), jarmuKod: f.jarmu_kod,
       magaban: magabanKalkbol(t),
       kalkElavult: !t || t.elavult,
       kalkHiba: !!t && !t.eredmeny && !!t.hiba,
@@ -285,7 +306,7 @@ export async function getTervezo(szuro: { m?: string; kocsi?: string }): Promise
     const kocsik = kocsiHetek(f);
     const el = elozmenyek(f);
     const legutobbi = el.find((e) => e.egyezes === "partner-ut");
-    const most = f.fuvardij != null ? Number(f.fuvardij) : null;
+    const most = dijFt(f);
     const osszeg = elozmenyOsszeg(f, el);
     const figyelmeztetes =
       legutobbi && most && legutobbi.dij > most * 1.05
@@ -293,11 +314,13 @@ export async function getTervezo(szuro: { m?: string; kocsi?: string }): Promise
         : osszeg.eltere != null && osszeg.eltere <= -10
           ? `A korábbi hasonló fuvarok átlaga ~${osszeg.atlag} Ft/km, ez ${mostFtKm(f)} Ft/km (${osszeg.eltere}%).`
           : null;
+    const letra = kalk?.eredmeny ? arLetra(kalk.eredmeny.onkoltseg.osszesenFt, arfolyamok.get(ma)?.ft ?? null) : null;
     const legjobb = legjobbKocsi(kocsik);
     const valasztott = kocsik.find((k) => k.kod === szuro.kocsi) ?? legjobb ?? kocsik[0] ?? null;
     kivalasztott = {
       sor, kalk, elozmenyek: el, figyelmeztetes, kocsik, valasztott,
-      celarFt: kalk?.eredmeny ? celar(kalk.eredmeny.onkoltseg.osszesenFt) : null,
+      celarFt: letra ? letra.fokok[0].ft : null,
+      letra,
       hetKezdet: hetfo(f.felrakas_nap),
     };
   }

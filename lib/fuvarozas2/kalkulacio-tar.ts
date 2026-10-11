@@ -3,6 +3,8 @@ import { createHash } from "node:crypto";
 import { query } from "@/lib/db";
 import { kozosKalkulacio, type KozosEredmeny } from "@/lib/fuvarozas2/kalkulator-szamitas";
 import { getFuvarBeallitasok, type FuvarBeallitasok } from "@/lib/beallitasok/fuvar";
+import { getEurArfolyamok } from "@/lib/fuvarozas/arfolyam";
+import { eurAtvaltas } from "@/lib/fuvarozas2/koltseg-szamitas";
 
 // A bérmegbízások kalkulációja tárolva (fuvar_kalkulacio, 2026-09-30):
 // Budaházi Zoltán kérése, hogy ami egyszer ki van számolva, rögzüljön, és ne
@@ -18,7 +20,8 @@ import { getFuvarBeallitasok, type FuvarBeallitasok } from "@/lib/beallitasok/fu
 // is elavult (a mért fogyasztás 14 napos ablakból jön). Elavult eredmény is
 // látszik („frissítés alatt”), amíg az új el nem készül.
 
-const VERZIO = 1;
+// 2: árlétra (+10/20/30%, EUR) és EUR-díj átváltása (2026-10-11).
+const VERZIO = 2;
 const ELAVUL_NAP = 7;
 
 export type TaroltKalkulacio = {
@@ -30,21 +33,35 @@ export type TaroltKalkulacio = {
 
 type Bemenet = { id: string; megallok: string[]; ajanlatFt: number | null; jarmuKod: string | null; honap: string };
 
+/**
+ * A megbízás díja Ft-ban: Ft-os díj maga; EUR-os díj a felrakás napi (vagy a
+ * legutóbbi közzétett) MNB-árfolyamon (koltseg-szamitas.ts eurAtvaltas). Ha
+ * nincs árfolyam, null — a felület ilyenkor „EUR, árfolyam nélkül”-t mutat.
+ */
+export function dijFtban(dij: number | null, penznem: string, arf: Parameters<typeof eurAtvaltas>[1]): number | null {
+  if (!dij) return null;
+  if (penznem === "EUR") return eurAtvaltas(Number(dij), arf)?.ft ?? null;
+  return Number(dij);
+}
+
 async function bemenetek(ids: string[]): Promise<Bemenet[]> {
   if (ids.length === 0) return [];
-  const sorok = await query<{ id: string; megallok: string[] | null; felrako: string | null; lerako: string | null; fuvardij: number | null; penznem: string; jarmu_kod: string | null; honap: string }>(
+  const sorok = await query<{ id: string; megallok: string[] | null; felrako: string | null; lerako: string | null; fuvardij: number | null; penznem: string; jarmu_kod: string | null; honap: string; nap: string | null }>(
     `select m.id::text,
        (select array_agg(g.cim_nyers order by g.sorszam) from fuvar_megallok g where g.megbizas_id = m.id and coalesce(g.cim_nyers, '') <> '') as megallok,
        m.felrako, m.lerako, m.fuvardij, coalesce(m.fuvardij_penznem, 'Ft') as penznem, j.kod as jarmu_kod,
-       to_char((now() at time zone 'Europe/Budapest')::date, 'YYYY-MM') as honap
+       to_char((now() at time zone 'Europe/Budapest')::date, 'YYYY-MM') as honap,
+       to_char(m.datum, 'YYYY-MM-DD') as nap
      from fuvar_megbizasok m left join fuvar_jarmuvek j on j.id = m.jarmu_id
      where m.id = any($1::bigint[])`,
     [ids]
   );
+  const eurNapok = sorok.filter((s) => s.penznem === "EUR" && s.fuvardij && s.nap).map((s) => s.nap!);
+  const arfolyamok = eurNapok.length ? await getEurArfolyamok(eurNapok) : new Map();
   return sorok.map((s) => ({
     id: s.id,
     megallok: s.megallok && s.megallok.length >= 2 ? s.megallok : [s.felrako, s.lerako].filter((x): x is string => !!x?.trim()),
-    ajanlatFt: s.penznem === "Ft" && s.fuvardij ? Number(s.fuvardij) : null,
+    ajanlatFt: dijFtban(s.fuvardij, s.penznem, s.nap ? arfolyamok.get(s.nap) : null),
     jarmuKod: s.jarmu_kod,
     honap: s.honap,
   }));

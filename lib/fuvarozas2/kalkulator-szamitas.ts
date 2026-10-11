@@ -13,9 +13,11 @@ import { getUtvonalJelentes, rendszamKulcs } from "@/lib/fuvarozas/ecofleet";
 import { getJarmuIndulasiTelephely } from "@/lib/fuvarozas/telephelyek-db";
 import { getFuvarBeallitasok, type FuvarBeallitasok } from "@/lib/beallitasok/fuvar";
 import {
-  ajanlatSavok, minositsAjanlatot, napokMenetidobol, szamoljOnkoltseget, valasszFogyasztast, ervenyesNapokOsszege,
+  minositsAjanlatot, napokMenetidobol, szamoljOnkoltseget, valasszFogyasztast, ervenyesNapokOsszege,
   type Ajanlat, type Onkoltseg,
 } from "@/lib/fuvarozas2/kalkulator-alap";
+import { arLetra, type ArLetra } from "@/lib/fuvarozas2/ar-letra";
+import { getEurArfolyamok } from "@/lib/fuvarozas/arfolyam";
 
 /**
  * Mért fogyasztás (l/100) az elmúlt 14 napból, kocsira vagy flottára. Az
@@ -97,7 +99,10 @@ export type KozosEredmeny = {
   literek: number;
   gazolaj: { ar: number; navAr: number; kedvezmeny: number; cimke: string; friss: boolean };
   onkoltseg: Onkoltseg;
-  savok: Ajanlat[];
+  /** Az árlétra (önköltség +10/20/30%, Ft és EUR). Régi tárolt eredményekben hiányzik. */
+  letra?: ArLetra;
+  /** Az EUR-árfolyam címkéje (MNB, nap), ha volt. */
+  arfolyamCimke?: string | null;
   megbizoiAjanlat: (Ajanlat & { sajat: true }) | null;
   jarmuKod: string | null;
   vanVisszfuvar: boolean;
@@ -176,7 +181,11 @@ export async function kozosKalkulacio(bemenet: KozosBemenet): Promise<{ ok: true
   const rakottUtdijFt = Math.round(route.tollHuf?.grossTotal ?? 0);
   const utdijFt = Math.round(rakottUtdijFt + uresUtdij);
   const onkoltseg = szamoljOnkoltseget({ rakottKm, uresKm, fogyasztasL100: l100, gazolajFt: gazolaj.ar, utdijFt, napok, napiKoltsegFt: beallitas.napi_koltseg_ft });
-  const savok = ajanlatSavok(rakottKm, onkoltseg.osszesenFt);
+  // EUR-árfolyam a mai napra (MNB, a legutóbbi közzétett) — az árlétra EUR-oszlopához.
+  const maNap = budapestNapISO(new Date());
+  const arf = (await getEurArfolyamok([maNap]).catch(() => new Map())).get(maNap) ?? null;
+  const letra = arLetra(onkoltseg.osszesenFt, arf?.ft ?? null);
+  if (!arf) figyelmeztetesek.push("Nincs EUR-árfolyam (MNB) — az árlétra csak Ft-ban.");
   const megbizoiAjanlat = bemenet.ajanlatFt
     ? {
         ftKm: rakottKm > 0 ? Math.round(bemenet.ajanlatFt / rakottKm) : 0,
@@ -196,7 +205,7 @@ export async function kozosKalkulacio(bemenet: KozosBemenet): Promise<{ ok: true
       fogyasztasL100: l100, fogyasztasForras: forras,
       literek: Math.round(((rakottKm + uresKm) * l100) / 100),
       gazolaj,
-      onkoltseg, savok, megbizoiAjanlat,
+      onkoltseg, letra, arfolyamCimke: arf ? `MNB ${arf.ft.toLocaleString("hu-HU", { maximumFractionDigits: 2 })} Ft/EUR (${arf.nap})` : null, megbizoiAjanlat,
       jarmuKod: bemenet.jarmuKod ?? null, vanVisszfuvar: !!bemenet.vanVisszfuvar, telephelyrol,
       figyelmeztetesek,
     },

@@ -6,7 +6,7 @@
 // veszteséges fuvart minősít nyereségesnek.
 
 import {
-  szamoljOnkoltseget, ajanlatSavok, minositsAjanlatot, napokMenetidobol, valasszFogyasztast, ervenyesUzemanyagMeres, ervenyesNapokOsszege,
+  szamoljOnkoltseget, minositsAjanlatot, napokMenetidobol, valasszFogyasztast, ervenyesUzemanyagMeres, ervenyesNapokOsszege,
   NAPI_KOLTSEG_FT, ALAP_FOGYASZTAS_L100, MERES_MIN_KM, SAJAT_FUVAR_KM_DIJ_FT,
 } from "@/lib/fuvarozas2/kalkulator-alap";
 import { FUVAR_BEALLITAS_ALAP, fuvarBeallitasokSorokbol } from "@/lib/beallitasok/fuvar-alap";
@@ -37,19 +37,18 @@ eq("három nap napi fixe", haromNap.napiFt, 3 * NAPI_KOLTSEG_FT);
 // Nulla rakott km: nem osztunk nullával.
 eq("nulla rakott km", szamoljOnkoltseget({ rakottKm: 0, uresKm: 50, fogyasztasL100: 30, gazolajFt: 650, utdijFt: 0, napok: 1 }).ftPerRakottKm, null);
 
-// Minősítés: veszteség / határeset / ajánlott.
+// Minősítés (2026-10-11, árlétra): 0 alatt veszteséges, az önköltség +10%-a
+// alatt határeset, fölötte ajánlott. A százalék az ÖNKÖLTSÉGRE vetített felár
+// (régen a díjhoz mért 8% volt a küszöb, és voltak 500/600/700 Ft/km sávok).
 eq("veszteséges ajánlat", minositsAjanlatot(100000, 150000).minosites, "veszteseges");
-eq("veszteség árrése negatív", minositsAjanlatot(100000, 150000).marginSzazalek, -50);
-eq("határeset (0–8 % árrés)", minositsAjanlatot(160000, 150000).minosites, "hatareset");
-eq("ajánlott (8 % felett)", minositsAjanlatot(200000, 150000).minosites, "ajanlott");
+eq("veszteség felára negatív (önköltséghez)", minositsAjanlatot(100000, 150000).marginSzazalek, -33);
+eq("határeset (0–10 % felár)", minositsAjanlatot(160000, 150000).minosites, "hatareset");
+eq("határeset: 9,9 %", minositsAjanlatot(164850, 150000).minosites, "hatareset");
+eq("pontosan +10 % = ajánlott", minositsAjanlatot(165000, 150000).minosites, "ajanlott");
+eq("ajánlott (10 % felett)", minositsAjanlatot(200000, 150000).minosites, "ajanlott");
+eq("ajánlott felára", minositsAjanlatot(200000, 150000).marginSzazalek, 33);
 eq("pontosan nulla árrés = határeset", minositsAjanlatot(150000, 150000).minosites, "hatareset");
-
-// Sávok: 500/600/700 Ft rakott km-enként.
-const savok = ajanlatSavok(285, 190500);
-eq("három sáv", savok.map((s) => s.ftKm), [500, 600, 700]);
-eq("500 Ft/km díja", savok[0].dijFt, 142500);
-eq("500 Ft/km veszteséges 190 500 önköltségnél", savok[0].minosites, "veszteseges");
-eq("700 Ft/km díja", savok[2].dijFt, 199500);
+eq("0 önköltség, van díj = ajánlott", minositsAjanlatot(50000, 0).minosites, "ajanlott");
 
 // Napok a menetidőből: 9 óra vezetés naponta.
 eq("4 óra = 1 nap", napokMenetidobol(240), 1);

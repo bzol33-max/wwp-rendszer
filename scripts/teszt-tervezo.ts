@@ -1,5 +1,6 @@
 // A Tervezés heti számtanának tesztje. Futtatás: npx tsx scripts/teszt-tervezo.ts
-import { atfed, celar, elozmenyElteres, hetEredmeny, hetHatas, hetNapjai, legjobbKocsi, legvonalKm, type HetFuvar, type HetParam } from "@/lib/fuvarozas2/tervezo-alap";
+import { atfed, elozmenyElteres, hetEredmeny, hetHatas, hetNapjai, legjobbKocsi, legvonalKm, type HetFuvar, type HetParam } from "@/lib/fuvarozas2/tervezo-alap";
+import { arLetra } from "@/lib/fuvarozas2/ar-letra";
 
 let ok = 0, bad = 0;
 function eq(nev: string, kapott: unknown, vart: unknown) {
@@ -47,8 +48,8 @@ eq("legjobb kocsi: mind ütközik", legjobbKocsi([{ hatas: 1, utkozik: true }]),
 
 eq("előzmény: átlag és eltérés", elozmenyElteres(583, [728, 680, null]), { atlag: 704, eltere: -17 });
 eq("előzmény: nincs mihez", elozmenyElteres(583, [null]), { atlag: null, eltere: null });
-eq("célár 8%", celar(376300), 410000);
-eq("célár 0%", celar(100000, 0), 100000);
+// A célár (8% a díjhoz) helyett az árlétra +10%-os foka (2026-10-11): 376 300 × 1,1 = 413 930 → 415 000.
+eq("célár = árlétra +10%", arLetra(376300, null).fokok[0].ft, 415000);
 
 // A lánc a közös sorrendben (napi-sorrend.ts): a később rögzített, kiírt
 // időpontú fuvar az időpont nélküli elé — itt A→C (10:00), utána C→A: nincs üres út.

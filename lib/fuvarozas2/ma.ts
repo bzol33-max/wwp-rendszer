@@ -25,7 +25,7 @@ export async function getMaAdat(): Promise<MaAdat> {
   );
   const nyitott = await getMegbizasok({ allapotok: ["ellenorzesre_var", "tervezett", "folyamatban"], limit: 500 });
   const kocsikRaw = await query<{ kod: string; cimke: string; sofor: string | null }>(
-    `select j.kod, j.cimke, a.name as sofor from fuvar_jarmuvek j left join alkalmazottak a on a.id = j.sofor_id where j.aktiv and j.ecofleet_object_id is not null order by j.id`
+    `select j.kod, j.cimke, a.name as sofor from fuvar_jarmuvek j left join alkalmazottak a on a.id = j.sofor_id where j.aktiv order by j.id`
   );
   const aznap = (s: MegbizasSor, nap: string) => (s.felrakas_nap ?? "") <= nap && (s.lerakas_nap ?? s.felrakas_nap ?? "") >= nap;
   const kocsik = kocsikRaw.map((k) => ({

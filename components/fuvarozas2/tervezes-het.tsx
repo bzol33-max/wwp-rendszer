@@ -11,6 +11,7 @@ const napCimke = (iso: string) => `${NAPNEV[new Date(`${iso}T12:00:00Z`).getUTCD
 const rovidNap = (iso: string) => NAPNEV[new Date(`${iso}T12:00:00Z`).getUTCDay()];
 const ft = (x: number) => `${Math.round(x).toLocaleString("hu-HU")} Ft`;
 const ezer = (x: number) => `${Math.round(x / 1000).toLocaleString("hu-HU")} e`;
+const eur = (x: number) => `${Math.round(x).toLocaleString("hu-HU")} €`;
 const ido = (perc: number) => `${Math.floor(perc / 60)} ó ${String(perc % 60).padStart(2, "0")} p`;
 const resLink = (r: Res) => `/fuvarozas2/tervezes?res=${encodeURIComponent(r.kulcs)}#res`;
 
@@ -123,7 +124,10 @@ export function TervezesHetNezet({ adat }: { adat: TervezesHet }) {
                         <td className="px-2 py-2 text-right tabular-nums">+{a.ehhez!.plusKm}</td>
                         <td className="px-2 py-2 text-right tabular-nums">+{ido(a.ehhez!.plusPerc)}</td>
                         <td className="px-2 py-2 text-right tabular-nums">+{ft(a.ehhez!.tobbletFt)}</td>
-                        <td className="px-2 py-2 text-right tabular-nums"><b>{ezer(a.ehhez!.kerjFt)}</b> <span className="text-xs text-muted-foreground">· min. {ezer(a.ehhez!.minFt)}</span></td>
+                        <td className="px-2 py-2 text-right tabular-nums">
+                          <b>{ezer(a.ehhez!.kerjFt)}</b> <span className="text-xs text-muted-foreground">· min. {ezer(a.ehhez!.minFt)}</span>
+                          <span className="block text-xs text-muted-foreground">{a.ehhez!.kerjEur != null ? `${eur(a.ehhez!.kerjEur)} · min. ${eur(a.ehhez!.minEur!)}` : "— €"}{a.ehhez!.elozmenyFt ? ` · előzmény ${ezer(a.ehhez!.elozmenyFt)}` : ""}</span>
+                        </td>
                         <td className="py-2 pl-2 text-right"><Link href={`/fuvarozas2/timocom?id=${a.id}`} className="rounded-lg border px-2.5 py-1 text-xs font-medium hover:bg-muted">Megnyitom</Link></td>
                       </tr>
                     ))}
@@ -132,7 +136,7 @@ export function TervezesHetNezet({ adat }: { adat: TervezesHet }) {
               ) : <p className="text-sm text-muted-foreground">Ebbe a résbe most nincs illő ajánlat. Keress a Timocomon {k.honnan} környékéről {k.haza ? "hazafelé" : `${k.hova} felé`}, vagy hívd a jobb oldali megbízókat.</p>}
               <p className="mt-2 text-xs text-muted-foreground">
                 +km: a kerülő a rés útjához képest (légvonal × 1,3). Többlet: +km × {adat.kmKoltseg} Ft/km (üzemanyag + útdíj) + az idő a napi fix arányában.
-                Mennyit kérj: legalább a többlet + 8% (min.), illetve a hasonló korábbi fuvarjaink Ft/km-e, ha volt ilyen.
+                Mennyit kérj: a többlet + 20%, minimum a többlet + 10% (5 000 Ft-ra, 5 €-ra felfelé kerekítve{adat.eurArfolyam ? `, ${adat.eurArfolyam.toLocaleString("hu-HU", { maximumFractionDigits: 2 })} Ft/EUR` : ", EUR-árfolyam nélkül"}); előzmény: a hasonló korábbi fuvarjaink Ft/km-e, ha volt ilyen.
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Link href={`/fuvarozas2/kalkulator?honnan=${encodeURIComponent(k.honnan)}&hova=${encodeURIComponent(k.hova)}`} className="rounded-lg border px-3 py-1.5 text-sm hover:bg-muted">Kalkulátor ezzel a réssel →</Link>

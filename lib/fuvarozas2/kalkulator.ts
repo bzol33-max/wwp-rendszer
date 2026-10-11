@@ -9,7 +9,7 @@
 //   • Üzemanyag: (rakott + üres) km × mért fogyasztás (Ecofleet, 14 nap) ×
 //     NAV gázolajár a tankolási kedvezménnyel (lib/fuvarozas/gazolaj.ts).
 //   • Útdíj a teljes útra; napi költség 50 000 Ft/nap (kalkulator-alap.ts).
-//   • Önköltség, 500/600/700 Ft/km ajánlat-sáv és a megbízó ajánlatának minősítése.
+//   • Önköltség, árlétra (+10/20/30%, Ft és EUR — ar-letra.ts) és a megbízó ajánlatának minősítése.
 //
 // Minden külső hívás a sorosított, cache-elt úton megy (lib/fuvarozas/
 // kulso-hivas.ts), ezért a lap ismételt megnyitása nem terheli a HU-GO-t.

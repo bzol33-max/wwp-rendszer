@@ -159,7 +159,4 @@ export function elozmenyElteres(mostFtKm: number | null, korabbiFtKm: (number | 
   return { atlag, eltere: mostFtKm != null && mostFtKm > 0 ? Math.round(((mostFtKm - atlag) / atlag) * 100) : null };
 }
 
-/** Célár: az önköltség + a kívánt árrés (a díjhoz mérve), 5 000 Ft-ra felfelé kerekítve. */
-export function celar(onkoltsegFt: number, arres = 0.08): number {
-  return Math.ceil(onkoltsegFt / (1 - arres) / 5000) * 5000;
-}
+// A célár (régen 8% árrés a díjhoz mérve) helyett az egységes árlétra: lib/fuvarozas2/ar-letra.ts.

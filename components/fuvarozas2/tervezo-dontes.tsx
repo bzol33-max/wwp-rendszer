@@ -143,7 +143,7 @@ export function DontesSav({ id, allapot, kocsiKod, kocsiNev, felrakasNap, celarF
           <label className="flex items-center gap-2 text-sm">
             Ár (Ft + ÁFA):
             <input value={ar} onChange={(e) => setAr(e.target.value)} inputMode="numeric" className="w-36 rounded-lg border border-foreground/15 bg-background px-3 py-1.5 text-sm" />
-            {celarFt ? <span className="text-xs text-muted-foreground">javasolt (8% árrés): {new Intl.NumberFormat("hu-HU").format(celarFt)} Ft</span> : null}
+            {celarFt ? <span className="text-xs text-muted-foreground">minimum (önköltség +10%): {new Intl.NumberFormat("hu-HU").format(celarFt)} Ft</span> : null}
           </label>
           <textarea readOnly rows={7} value={szoveg} aria-label="Ajánlat-szöveg" className="w-full rounded-lg border border-foreground/15 bg-background px-3 py-2 font-sans text-sm" />
           <button type="button" onClick={masol} className="self-start rounded-lg bg-[var(--f2-blue)] px-3 py-1.5 text-sm font-bold text-white">Másolás a vágólapra</button>

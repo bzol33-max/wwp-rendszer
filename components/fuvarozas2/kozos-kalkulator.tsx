@@ -4,8 +4,8 @@
 // kalkulátort minden tudásával”): a régi útdíjkalkulátor (több megálló
 // címjavaslattal, térkép, egymás mellé tett eredménycsempék, amelyek a
 // böngészőben megmaradnak) és a tervvászon D6 kalkulátora (kocsi, üres km,
-// mért fogyasztás, önköltség, 500/600/700 Ft/km sávok, a megbízó ajánlatának
-// minősítése) egyben. A számolás szerver-oldali: szamoljKozosKalkulaciot.
+// mért fogyasztás, önköltség, árlétra +10/20/30% Ft-ban és EUR-ban, a megbízó
+// ajánlatának minősítése) egyben. A számolás szerver-oldali: szamoljKozosKalkulaciot.
 
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
@@ -14,6 +14,7 @@ import { searchAddressSuggestions } from "@/lib/fuvarozas/idovonal-akciok";
 import { szamoljKozosKalkulaciot, type KozosEredmeny } from "@/lib/fuvarozas2/kalkulator";
 import type { GeocodedAddress } from "@/lib/fuvarozas/utdijkalkulacio";
 import { cn } from "@/lib/utils";
+import { ArLetraTabla } from "@/components/fuvarozas2/ar-letra";
 
 // A Leaflet a böngésző `window`-ját használja betöltéskor: csak kliensen.
 const RouteMap = dynamic(() => import("@/components/fuvarozas/route-map").then((m) => m.RouteMap), {
@@ -141,13 +142,17 @@ function Reszletek({ e, jarmuCimke }: { e: KozosEredmeny; jarmuCimke: string | n
       </div>
       <div>
         <div className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Ajánlat</div>
-        {[...e.savok, ...(e.megbizoiAjanlat ? [e.megbizoiAjanlat] : [])].map((s) => (
-          <div key={"sajat" in s ? "megbizo" : s.ftKm} className={cn("mt-1.5 grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-lg px-3 py-2", "sajat" in s ? "border-2 border-[var(--f2-blue)]" : "bg-muted/50")}>
-            <span>{"sajat" in s ? <b>A megbízó ajánlata</b> : <>{s.ftKm} Ft/km</>} <span className="block text-[11px] text-muted-foreground">{"sajat" in s ? `${szam(s.ftKm)} Ft/km · ` : ""}eredmény {ft(s.eredmenyFt)} ({s.marginSzazalek}%)</span></span>
-            <span className="font-mono font-bold tabular-nums">{ft(s.dijFt)}</span>
-            <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold", MINOSITES_SZIN[s.minosites])}>{MINOSITES_NEV[s.minosites]}</span>
-          </div>
-        ))}
+        {e.letra ? <ArLetraTabla letra={e.letra} arfolyamCimke={e.arfolyamCimke} /> : <p className="text-xs text-muted-foreground">Régi eredmény — számold újra az árlétrához.</p>}
+        {e.megbizoiAjanlat ? (() => {
+          const s = e.megbizoiAjanlat;
+          return (
+            <div className="mt-1.5 grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-lg border-2 border-[var(--f2-blue)] px-3 py-2">
+              <span><b>A megbízó ajánlata</b> <span className="block text-[11px] text-muted-foreground">{szam(s.ftKm)} Ft/km · eredmény {ft(s.eredmenyFt)} (önköltség {s.marginSzazalek >= 0 ? "+" : ""}{s.marginSzazalek}%)</span></span>
+              <span className="font-mono font-bold tabular-nums">{ft(s.dijFt)}</span>
+              <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold", MINOSITES_SZIN[s.minosites])}>{MINOSITES_NEV[s.minosites]}</span>
+            </div>
+          );
+        })() : null}
       </div>
       {e.figyelmeztetesek.length ? (
         <ul className="list-disc pl-5 text-xs text-[var(--f2-amb)]">{e.figyelmeztetesek.map((f) => <li key={f}>{f}</li>)}</ul>
@@ -331,8 +336,8 @@ export function KozosKalkulator({ jarmuvek, kezdoMegallok }: { jarmuvek: { kod: 
                   <span>önköltség <b className="font-mono">{ft(c.e.onkoltseg.osszesenFt)}</b></span>
                   <span className="font-mono text-muted-foreground">{c.e.onkoltseg.ftPerRakottKm != null ? `${szam(c.e.onkoltseg.ftPerRakottKm)} Ft/km` : ""}</span>
                 </div>
-                <div className="mt-1 flex gap-2 font-mono">
-                  {c.e.savok.map((s) => <span key={s.ftKm} className={cn("rounded px-1", MINOSITES_SZIN[s.minosites])}>{s.ftKm}: {szam(s.dijFt / 1000)}e</span>)}
+                <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 font-mono">
+                  {c.e.letra?.fokok.map((f) => <span key={f.szazalek} className="rounded bg-muted px-1">+{f.szazalek}%: {szam(f.ft / 1000)}e{f.eur != null ? ` · ${szam(f.eur)}€` : ""}</span>)}
                 </div>
                 {m ? <div className={cn("mt-1.5 rounded px-1.5 py-0.5 font-semibold", MINOSITES_SZIN[m.minosites])}>megbízó {ft(m.dijFt)} — {MINOSITES_NEV[m.minosites]}</div> : null}
               </div>

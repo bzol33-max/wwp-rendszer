@@ -2,6 +2,7 @@ import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { varosNev } from "@/lib/fuvarozas/varos";
 import { formatFt, formatIdo } from "@/components/fuvarozas2/kozos";
+import { ArLetraTabla } from "@/components/fuvarozas2/ar-letra";
 import type { BejovoSor, KocsiHet, Tervezo } from "@/lib/fuvarozas2/tervezo";
 
 // A Tervezés három oszlopa (2026-09-30, az 1-es terv): bejövő · döntés · hét.
@@ -55,7 +56,7 @@ export function BejovoLista({ sorok, valasztott }: { sorok: BejovoSor[]; valaszt
                 className={cn("block border-b border-foreground/5 px-4 py-2.5 hover:bg-muted/50", valasztott === s.id && "bg-[var(--f2-blue-l)]")}>
                 <div className="flex items-baseline justify-between gap-2">
                   <b className="truncate text-sm">{s.partner ?? "(nincs megbízó)"}</b>
-                  <span className="shrink-0 font-mono text-xs tabular-nums">{s.fuvardij ? formatFt(s.fuvardij, s.penznem) : "nincs díj"}</span>
+                  <span className="shrink-0 font-mono text-xs tabular-nums">{s.fuvardij ? formatFt(s.fuvardij, s.penznem) : "nincs díj"}{s.arfolyamNelkul ? <span className="block text-[10px] text-[var(--f2-amb)]">EUR, árfolyam nélkül</span> : null}</span>
                 </div>
                 <div className="truncate text-xs text-muted-foreground">
                   {varosNev(s.felrako ?? "") || "?"} → {varosNev(s.lerako ?? "") || "?"} · {napBetu(s.felrakasNap)} {hoNap(s.felrakasNap)}
@@ -98,8 +99,15 @@ export function DontesOszlop({ k, param }: { k: NonNullable<Tervezo["kivalasztot
               <span>A megbízó ajánlata: <b className="font-mono">{formatFt(e.megbizoiAjanlat.dijFt)}</b></span>
               <b>{elojel(e.megbizoiAjanlat.eredmenyFt)} Ft · {MINOSITES[e.megbizoiAjanlat.minosites].nev}</b>
             </div>
-          ) : <p className="text-xs text-muted-foreground">Nincs Ft-os díj a megbízáson — a minősítéshez díj kell.</p>}
-          {k.celarFt ? <p className="mt-1 text-xs text-muted-foreground">8% árréshez legalább <b className="font-mono text-foreground">{formatFt(k.celarFt)}</b> kellene (magában számolva).</p> : null}
+          ) : k.sor.arfolyamNelkul ? (
+            <p className="text-xs text-[var(--f2-amb)]">EUR, árfolyam nélkül — nincs MNB-árfolyam, a díj nem minősíthető.</p>
+          ) : <p className="text-xs text-muted-foreground">Nincs díj a megbízáson — a minősítéshez díj kell.</p>}
+          {k.letra ? (
+            <div className="mt-2">
+              <div className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Árlétra (magában számolva)</div>
+              <ArLetraTabla letra={k.letra} />
+            </div>
+          ) : null}
           <p className="mt-1 text-[11px] text-muted-foreground">
             Számolva: {formatIdo(k.kalk!.szamolvaAt)}{k.kalk!.elavult ? " · frissítés alatt (a megbízás vagy a hónap változott)" : ""} · <Link href={kalkUrl} className="underline">megnyitás a Kalkulátorban</Link>
           </p>
@@ -174,7 +182,7 @@ export function HetOszlop({ k }: { k: NonNullable<Tervezo["kivalasztott"]> }) {
                     <span key={f.id} className={cn("flex items-baseline justify-between gap-2 rounded-lg border border-l-4 px-2.5 py-1.5 text-xs",
                       f.uj ? "border-dashed border-[#f97316] bg-[#fff7ed]" : f.sajat ? "border-foreground/10 border-l-[var(--f2-mint)]" : "border-foreground/10 border-l-[var(--f2-blue)]")}>
                       <span className="min-w-0 truncate"><b>{f.ut}</b> <span className="text-muted-foreground">· {f.cim}{f.uj ? " · ÚJ" : ""}</span></span>
-                      <span className="shrink-0 font-mono">{f.dij ? szam(f.dij) : "—"}</span>
+                      <span className="shrink-0 font-mono">{f.dij ? szam(f.dij) : f.arfolyamNelkul ? "EUR, árfolyam nélkül" : "—"}</span>
                     </span>
                   ))}
                 </div>

@@ -1,4 +1,5 @@
-// Kalkulátor — önköltség és ajánlat-sávok (tervvászon D6).
+// Kalkulátor — önköltség és a megbízói ajánlat minősítése (tervvászon D6).
+// Az ár-javaslat az árlétra (lib/fuvarozas2/ar-letra.ts), nem itt.
 //
 // Tiszta számtan, adatbázis és hálózat nélkül: így tesztelhető, és ugyanazt
 // számolja a szerver és a felület.
@@ -9,6 +10,7 @@
 // át ide. Az itt exportált konstansok az ALAPÉRTÉKEK (ugyanazok, mint a
 // beállítások tartaléka), ha egy hívó nem ad meg mást.
 import { FUVAR_BEALLITAS_ALAP } from "@/lib/beallitasok/fuvar-alap";
+import { MIN_ARRES_SZAZALEK } from "@/lib/fuvarozas2/ar-letra";
 
 // A NAPI KÖLTSÉG egyetlen szám: a sofőr és a kocsi együttes napi költsége
 // (bér + járulék + lízing + biztosítás + amortizáció). Zoltán döntése
@@ -114,24 +116,21 @@ export type Ajanlat = {
   dijFt: number;
   /** Eredmény a díjból az önköltség levonása után. */
   eredmenyFt: number;
-  /** Árrés a díjhoz viszonyítva, százalék (negatív = veszteség). */
+  /** Felár az ÖNKÖLTSÉGRE vetítve, százalék (negatív = veszteség) — ugyanaz az alap, mint az árlétráé (ar-letra.ts). */
   marginSzazalek: number;
   minosites: AjanlatMinosites;
 };
 
+/**
+ * A díj minősítése az árlétra szabálya szerint (2026-10-11): 0 alatt
+ * veszteséges, az önköltség +10%-a (a létra minimuma) alatt határeset,
+ * fölötte ajánlott. A küszöb a kerekítetlen felárra vonatkozik.
+ */
 export function minositsAjanlatot(dijFt: number, onkoltsegFt: number): { eredmenyFt: number; marginSzazalek: number; minosites: AjanlatMinosites } {
   const eredmenyFt = Math.round(dijFt - onkoltsegFt);
-  const marginSzazalek = dijFt > 0 ? Math.round((eredmenyFt / dijFt) * 100) : -100;
-  const minosites: AjanlatMinosites = marginSzazalek < 0 ? "veszteseges" : marginSzazalek < 8 ? "hatareset" : "ajanlott";
-  return { eredmenyFt, marginSzazalek, minosites };
-}
-
-/** A vászon három sávja: 500 / 600 / 700 Ft rakott km-enként. */
-export function ajanlatSavok(rakottKm: number, onkoltsegFt: number, ftKmLista = [500, 600, 700]): Ajanlat[] {
-  return ftKmLista.map((ftKm) => {
-    const dijFt = Math.round(ftKm * rakottKm);
-    return { ftKm, dijFt, ...minositsAjanlatot(dijFt, onkoltsegFt) };
-  });
+  const felar = onkoltsegFt > 0 ? (eredmenyFt / onkoltsegFt) * 100 : dijFt > 0 ? 100 : 0;
+  const minosites: AjanlatMinosites = felar < 0 ? "veszteseges" : felar < MIN_ARRES_SZAZALEK ? "hatareset" : "ajanlott";
+  return { eredmenyFt, marginSzazalek: Math.round(felar), minosites };
 }
 
 /** Hány napot köt le a fuvar: napi vezetési keret (alap 9 óra) / nap, felfelé kerekítve. */

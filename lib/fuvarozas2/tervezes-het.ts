@@ -16,6 +16,7 @@ import { getIndulasiTelephely } from "@/lib/fuvarozas/telephelyek-db";
 import { getFuvarBeallitasok } from "@/lib/beallitasok/fuvar";
 import { getTaroltKalkulaciok } from "@/lib/fuvarozas2/kalkulacio-tar";
 import { getTimocomAjanlatok } from "@/lib/fuvarozas2/timocom";
+import { getEurArfolyamok } from "@/lib/fuvarozas/arfolyam";
 import type { Pont } from "@/lib/fuvarozas2/tervezo-alap";
 import {
   hetiReszek, illeszt, kiketHivj, legjobbRes, tervHetNapjai, utKm,
@@ -45,6 +46,8 @@ export type TervezesHet = {
   kijelolt: Res | null;
   hivandok: HivandoPartner[];
   kmKoltseg: number;
+  /** Ft / 1 EUR (MNB), null: nincs árfolyam — az EUR oszlop „—”. */
+  eurArfolyam: number | null;
 };
 
 type Sor = {
@@ -109,7 +112,7 @@ export async function getTervezesHet(resKulcs?: string): Promise<TervezesHet> {
   const jarmuLista = await getJarmuvek();
   const jarmuvek = (await query<{ kod: string; sofor: string | null }>(
     `select j.kod, a.name as sofor from fuvar_jarmuvek j left join alkalmazottak a on a.id = j.sofor_id
-     where j.aktiv and j.ecofleet_object_id is not null order by j.id`
+     where j.aktiv order by j.id`
   )).map((j) => ({ kod: j.kod, sofor: findJarmuByKod(j.kod, jarmuLista)?.sofor ?? j.sofor?.split(" ").pop() ?? j.kod }));
 
   const hetiFuvar = (s: Sor): HetiFuvar => ({
@@ -142,6 +145,9 @@ export async function getTervezesHet(resKulcs?: string): Promise<TervezesHet> {
 
   const kijelolt = resek.find((r) => r.kulcs === resKulcs) ?? resek[0] ?? null;
 
+  // EUR-árfolyam (MNB, mai vagy legutóbbi közzétett) az árlétra EUR-oszlopához.
+  const eurArfolyam = (await getEurArfolyamok([ma]).catch(() => new Map<string, never>())).get(ma)?.ft ?? null;
+
   const nyitott = (await getTimocomAjanlatok(30)).filter((t) => t.allapot === "nyitott").slice(0, 12);
   const ajanlatok: HetAjanlat[] = await Promise.all(nyitott.map(async (t) => {
     const helyek = t.ajanlat.helyek;
@@ -151,7 +157,7 @@ export async function getTervezesHet(resKulcs?: string): Promise<TervezesHet> {
     const [fp, lp] = f && l ? await Promise.all([geo(cim(f)), geo(cim(l))]) : [null, null];
     const fel: AjanlatHely = { varos: f?.varos ?? "?", pont: fp, nap: f?.datumTol ?? null };
     const le: AjanlatHely = { varos: l?.varos ?? "?", pont: lp, nap: l?.datumTol ?? null };
-    const p = { kmKoltseg, oraFt, ftKmElozmeny: fp && lp ? ftKmElozmeny(fp, lp) : null };
+    const p = { kmKoltseg, oraFt, ftKmElozmeny: fp && lp ? ftKmElozmeny(fp, lp) : null, eurArfolyam };
     const illik = legjobbRes(resek, fel, le, p);
     const ehhez = kijelolt ? illeszt(kijelolt, fel, le, p) : null;
     return {
@@ -168,5 +174,6 @@ export async function getTervezesHet(resKulcs?: string): Promise<TervezesHet> {
     ajanlatok, kijelolt,
     hivandok: kijelolt ? kiketHivj(kijelolt, mult) : [],
     kmKoltseg,
+    eurArfolyam,
   };
 }
