@@ -14,6 +14,7 @@ import { requireViewPermission } from "@/lib/auth/require-permission";
 import { getIdovonalak } from "@/lib/fuvarozas/actions";
 import { getUtvonalJelentes, rendszamKulcs } from "@/lib/fuvarozas/ecofleet";
 import { budapestNapISO } from "@/lib/fuvarozas/idozona";
+import { etaPontossag } from "@/lib/fuvarozas/eta-naplo";
 
 export type SavTipus = "vezetes" | "rakodas" | "szunet" | "allas";
 
@@ -175,7 +176,19 @@ export async function getGpsVaszon(): Promise<GpsVaszon> {
     ido: most.toLocaleString("hu-HU", { timeZone: "Europe/Budapest", weekday: "long", hour: "2-digit", minute: "2-digit" }),
     kocsik,
     tanult,
-    pontossagMegjegyzes:
-      "Az ETA-hiba (P50/P90) méréséhez a becsléseket rögzíteni kell az érkezés pillanatában — ez még nem gyűlik, ezért itt most a mért rakodási idők állnak.",
+    pontossagMegjegyzes: pontossagSzoveg(await etaPontossag()),
   };
+}
+
+/** Az ETA mért pontossága egy sorban (lib/fuvarozas/eta-naplo.ts). */
+function pontossagSzoveg(p: Awaited<ReturnType<typeof etaPontossag>>): string {
+  if (!p.length) {
+    return "ETA-pontosság: a becslések rögzítése 2026-10-11 óta fut; sávonként 5 GPS-sel igazolt érkezés után itt jelenik meg a mért hiba.";
+  }
+  return (
+    "ETA-pontosság (60 nap, GPS-érkezéshez mérve): " +
+    p
+      .map((x) => `${x.sav}: ±${x.p50} p (80%-ban ±${x.p80} p${x.eltolodas ? `, átlagosan ${x.eltolodas > 0 ? "későbbre" : "korábbra"} becsül ${Math.abs(x.eltolodas)} p-cel` : ""}; ${x.minta} mérés)`)
+      .join(" · ")
+  );
 }

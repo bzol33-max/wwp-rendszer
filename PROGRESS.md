@@ -1,5 +1,24 @@
 # PROGRESS
 
+## 2026-10-11 — Pontosabb élő ETA: szünet, napi keret, kapunyitás, mért rakodás + pontosság-napló
+
+- Eddig az élő ETA-lánc (`lib/fuvarozas/actions.ts` lancoltEloBecsles) = HU-GO
+  menetidő × tanult napszaki szorzó + fix 30/45 perc rakodás. Hiányzott: a
+  kötelező 45 perces szünet 4,5 óra vezetés után, a 9 órás napi keret utáni
+  11 órás pihenő, a várakozás a kapunyitásig, és a helyen MÉRT rakodási idő.
+- Új: `lib/fuvarozas/eta-lanc.ts` (tiszta szabályok) — `vezetSzaballyal`,
+  `megalloTavozas`, `soforAllapotSzakaszokbol` (a sofőr mai vezetése és az utolsó
+  ≥45 perces állás óta vezetett idő a GPS-szakaszokból), `tanultRakodas`
+  (helyenkénti medián, min. 3 mérés, 120 nap; különben a beállított puffer).
+- Pontosság mérése: `db/migrations/038_eta_naplo.sql` + `lib/fuvarozas/eta-naplo.ts`:
+  a lánc becslése megállónként ≤10 percenként naplózva, a `gps_erkezes`-hez mérve
+  sávonként P50/P80 hiba és eltolódás; az Élő GPS lap alján kiírva.
+- Teszt: teszt-eta-lanc (31, a teszt-láncban); tsc, lint, build, teljes teszt
+  zöld; a napló SQL-je helyi DB-n kipróbálva (dedup, hiba-számítás).
+- Vezetési idő: továbbra is GPS-becslés. Pontos, élő adat csak tachográf-
+  kapcsolatból jöhet (Ecofleet egység K-line/FMS) — rákérdezni az ML Global
+  Systemsnél.
+
 ## 2026-10-11 — Menetterv: honnan indul a kocsi (GPS + tény)
 
 - Hiba: Micó hétfői menete „üres pozicionálás BMW HU Plant Debrecen → Szakoly”-val

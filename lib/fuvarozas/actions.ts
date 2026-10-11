@@ -52,6 +52,8 @@ import { getSajatTelephelyek } from "./telephelyek-db";
 import { napiSorrend, parositasiSorrend, tervIdoMegbizasbol } from "@/lib/fuvarozas2/napi-sorrend";
 import { alkalmazMenetSorrendet } from "@/lib/menet/menet-alap";
 import { menetSorrendek } from "@/lib/menet/repo";
+import { naplozEtat } from "./eta-naplo";
+import { megalloTavozas, rakodasMedian, soforAllapotSzakaszokbol, tanultRakodas, vezetSzaballyal, type LancSzabaly, type SoforAllapot, type TanultRakodasIdo } from "./eta-lanc";
 
 /**
  * A NAV hivatalos, aktuális havi gázolajárának automatikus lekérése (napi
@@ -281,6 +283,37 @@ function napIsoEltolva(napISO: string, delta: number): string {
 async function rakodasPufferek(): Promise<{ fel: number; le: number }> {
   const b = await getFuvarBeallitasok();
   return { fel: b.felrakas_rahagyas_perc, le: b.lerakas_rahagyas_perc };
+}
+
+/** A lánc vezetési szabályai a beállításokból (napi keret, szünet utáni perc). */
+async function lancSzabaly(): Promise<LancSzabaly> {
+  const b = await getFuvarBeallitasok();
+  return { szunetUtanPerc: b.szunet_utan_perc, szunetPerc: 45, napiMaxPerc: b.sofor_napi_vezetes_max_perc, napiPihenoPerc: 660 };
+}
+
+/**
+ * Tanult rakodási idő helyenként: a GPS-sel mért érkezés→távozás medián
+ * (fuvar_megallok.gps_erkezes/gps_tavozas, min. 3 mérés). Óránként frissül;
+ * hiba esetén üres (a lánc a beállított pufferrel számol). (2026-10-11)
+ */
+let tanultCache: { at: number; lista: TanultRakodasIdo[] } | null = null;
+async function tanultRakodasIdok(): Promise<TanultRakodasIdo[]> {
+  if (tanultCache && Date.now() - tanultCache.at < 3600000) return tanultCache.lista;
+  try {
+    const sorok = await query<{ hely: string; percek: number[] }>(
+      `select coalesce(telepules, cim_nyers) as hely,
+         array_agg(extract(epoch from (gps_tavozas - gps_erkezes)) / 60) as percek
+       from fuvar_megallok
+       where gps_erkezes is not null and gps_tavozas is not null and gps_tavozas > gps_erkezes
+         and gps_erkezes > now() - interval '120 days'
+       group by 1 having count(*) >= 3`
+    );
+    const lista = sorok.map((r) => ({ hely: r.hely, ...rakodasMedian(r.percek ?? []) })).filter((t) => t.minta >= 3);
+    tanultCache = { at: Date.now(), lista };
+    return lista;
+  } catch {
+    return tanultCache?.lista ?? [];
+  }
 }
 /** Ha egy megbízáson nincs megadva időpont, ezt tekintjük becsült felrakás-kezdésnek. */
 const ALAPERTELMEZETT_FELRAKAS_ORA = 7;
@@ -771,7 +804,8 @@ async function lancoltEloBecsles(
   fuvarok: TervezettFuvarSzakasz[],
   eloPoz: { lat: number; lon: number },
   most: Date,
-  kalibracio: KalibraciosEredmeny
+  kalibracio: KalibraciosEredmeny,
+  sofor: SoforAllapot = { folyamatosPerc: 0, napiPerc: 0 }
 ): Promise<TervezettFuvarSzakasz[]> {
   const maiNapISO = budapestNapISO(most);
   // Az `eppenItt` pontok kimaradnak: a jármű ott áll, nincs mit becsülni — és
@@ -783,6 +817,12 @@ async function lancoltEloBecsles(
 
   const eredmeny = fuvarok.map((f) => ({ ...f, megallok: [...f.megallok] }));
   const pufferek = await rakodasPufferek();
+  const szabaly = await lancSzabaly();
+  const tanult = await tanultRakodasIdok();
+  // A megálló rakodási ideje: a helyen mért medián, ha van; különben a beállítás.
+  const rakodasPerc = (m: TervezettFuvarSzakasz["megallok"][number]) =>
+    tanultRakodas(m.cim, m.nyersCim, tanult) ?? (m.tipus === "felrako" ? pufferek.fel : pufferek.le);
+  const allapot: SoforAllapot = { ...sofor };
 
   // Ha a jármű éppen egy megállónál áll, a következő pont felé csak a rakodás
   // hátralévő ideje után indul el — a lánc tehát nem "most"-tól, hanem onnantól
@@ -792,7 +832,7 @@ async function lancoltEloBecsles(
     .flatMap((f) => f.megallok)
     .filter((m) => m.eppenItt)
     .reduce((sum, m) => {
-      const teljesPuffer = m.tipus === "felrako" ? pufferek.fel : pufferek.le;
+      const teljesPuffer = rakodasPerc(m);
       const elteltPerc = m.tenylegesIdo ? (most.getTime() - m.tenylegesIdo.getTime()) / 60000 : 0;
       return sum + Math.max(0, teljesPuffer - elteltPerc);
     }, 0);
@@ -817,11 +857,14 @@ async function lancoltEloBecsles(
       // A szorzót az induláshoz (idoPont, ez a jelenlegi szakasz elindulási
       // ideje, nem a mai "most") illő napszak alapján választjuk — egy
       // láncban a nap előrehaladtával más-más napszaki szorzó léphet érvénybe.
-      const erkezes = new Date(idoPont.getTime() + route.durationMin * valasszKalibraciosSzorzot(kalibracio, idoPont) * 60000);
-      const puffer = m.tipus === "felrako" ? pufferek.fel : pufferek.le;
+      // A menetidőbe a kötelező szünet (4,5 óra után 45 perc) és a napi
+      // keret utáni pihenő is beleszámít (lib/fuvarozas/eta-lanc.ts).
+      const menetPerc = route.durationMin * valasszKalibraciosSzorzot(kalibracio, idoPont);
+      const { erkezes } = vezetSzaballyal(idoPont, menetPerc, allapot, szabaly);
       eredmeny[fi].megallok[mi] = { ...m, idopont: erkezes };
       pozicio = { lat: m.lat, lon: m.lon };
-      idoPont = new Date(erkezes.getTime() + puffer * 60000);
+      // Kapunyitás előtt érkezve vár, majd a helyen mért ideig rakodik.
+      idoPont = megalloTavozas(erkezes, m.ablakKezdet ?? null, rakodasPerc(m), allapot, szabaly).tavozas;
     } catch {
       continue;
     }
@@ -1177,9 +1220,20 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
         // frissítjük, hogy a jármű tényleges mai haladását tükrözzék, ne
         // csak a megbízásban rögzített (csak irányadó) statikus menetrendet.
         const lancoltFuvarok = livePos
-          ? await lancoltEloBecsles(jeloltFuvarok, { lat: livePos.latitude, lon: livePos.longitude }, veg, kalibracio)
+          ? await lancoltEloBecsles(jeloltFuvarok, { lat: livePos.latitude, lon: livePos.longitude }, veg, kalibracio, soforAllapotSzakaszokbol(szakaszok))
           : jeloltFuvarok;
         const fuvarok = fuvarBlokkok(lancoltFuvarok, napISO, maiNap ? veg : null, csuszoIds, gondokByFuvar, tervIdok, menetSorrend);
+        // ETA-napló (pontosság-méréshez): a még el nem ért, 12 órán belüli
+        // megállók láncolt becslése. A hiba a gps_erkezes-hez mérve jön ki
+        // (lib/fuvarozas/eta-naplo.ts). Nem várjuk meg, nem dobhat. (2026-10-11)
+        if (maiNap && livePos) {
+          const naplozando = lancoltFuvarok.flatMap((f) =>
+            f.megallok
+              .filter((m) => !m.elhagyva && !m.eppenItt && m.idopont.getTime() > veg.getTime() && m.idopont.getTime() - veg.getTime() < 12 * 3600000)
+              .map((m) => ({ megbizasId: f.id, sorszam: m.index + 1, becsultErkezes: m.idopont }))
+          );
+          void naplozEtat(jarmu.kod ?? jarmu.rendszamok[0] ?? null, naplozando);
+        }
         // Ugyanaz a diagnosztika, mint a figyelőé, a GPS lap útján számolva —
         // ha a kettő eltér, a Railway-naplóból látszik, melyik mit lát.
         if (maiNap) {
