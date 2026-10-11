@@ -27,6 +27,7 @@
 //   • Kocsi: bérfuvar-eredmények összege − a nem hozzárendelt költség
 //     (üres utak, állás); a saját belső költség külön oszlop.
 
+import { ervenyesUzemanyagMeres } from "@/lib/fuvarozas2/kalkulator-alap";
 import { arfolyamTipusCimke, type ArfolyamTipus } from "@/lib/fuvarozas/arfolyam-alap";
 
 export type Forras = "teny" | "becsles";
@@ -111,8 +112,9 @@ export function napiOsszeg(utak: GpsUt[]): Map<string, { km: number; liter: numb
 
 /**
  * A megbízás litere: naponként a kocsi napi literének a megbízás aznapi
- * tény-km-ével arányos része. Ha a nyomkövető aznap nem mért litert (0), az
- * a nap 0 liter — a hívó dönti el, kell-e becslés.
+ * tény-km-ével arányos része. Ha a nyomkövető aznap nem mért litert (0), vagy
+ * a napi l/100 a hihető sávon kívül esik, az a nap nem mérés (meroNelkul) —
+ * a hívó dönti el, kell-e becslés.
  */
 export function literFelosztas(
   megbizasKm: Map<string, { km: number }>,
@@ -124,7 +126,8 @@ export function literFelosztas(
   for (const [nap, x] of megbizasKm) {
     const n = napi.get(nap);
     if (!n || n.km <= 0 || x.km <= 0) continue;
-    if (n.liter <= 0) { meroNelkul = true; continue; }
+    // 0 liter (nem mér a szonda) vagy hihetetlen napi l/100 → nincs mérés.
+    if (!ervenyesUzemanyagMeres(n.km, n.liter)) { meroNelkul = true; continue; }
     const l = n.liter * Math.min(1, x.km / n.km);
     literNapok.set(nap, l);
     liter += l;
@@ -570,17 +573,39 @@ export function jarmuOsszkoltseg(
   aktivNapok: number
 ): JarmuOsszkoltseg {
   let uzemanyag: Tetel | null = null;
-  const literOssz = k.utak.reduce((a, u) => a + u.liter, 0);
-  if (k.vanGps && literOssz > 0) {
+  if (k.vanGps && k.utak.some((u) => u.liter > 0)) {
+    // Naponként: hihető mérés → GPS-liter (tény); 0 literes vagy kiugró nap
+    // → km × alap fogyasztás (becslés). Korábban a mérés nélküli nap 0 Ft-tal
+    // számított, így pl. az AOPU-427 szeptemberi üzemanyaga a harmadára esett.
     const napiAr = tankolasArNaponta(k.tankolasok);
     let ft = 0;
+    let gpsLiter = 0;
+    let becsultLiter = 0;
+    let becsultNap = 0;
     let ok = true;
     for (const [nap, x] of napiOsszeg(k.utak)) {
+      if (!(x.km > 0) && !(x.liter > 0)) continue;
       const ar = napiAr.get(nap) ?? p.gazolajAr;
       if (ar == null) { ok = false; break; }
-      ft += x.liter * ar;
+      if (ervenyesUzemanyagMeres(x.km, x.liter)) {
+        gpsLiter += x.liter;
+        ft += x.liter * ar;
+      } else if (x.km > 0) {
+        const l = (x.km * p.fogyasztasL100) / 100;
+        becsultLiter += l;
+        becsultNap++;
+        ft += l * ar;
+      }
     }
-    if (ok) uzemanyag = { ft: Math.round(ft), forras: "teny", megjegyzes: `${Math.round(literOssz)} l (GPS) × aznapi tankolás Ft/l vagy NAV − kedvezmény` };
+    if (ok && (gpsLiter > 0 || becsultNap > 0)) {
+      uzemanyag = becsultNap === 0
+        ? { ft: Math.round(ft), forras: "teny", megjegyzes: `${Math.round(gpsLiter)} l (GPS) × aznapi tankolás Ft/l vagy NAV − kedvezmény` }
+        : {
+            ft: Math.round(ft),
+            forras: "becsles",
+            megjegyzes: `${Math.round(gpsLiter)} l GPS-mérés + ${Math.round(becsultLiter)} l becslés (${becsultNap} nap mérés nélkül vagy hihetetlen értékkel, ${p.fogyasztasL100} l/100 km) × aznapi tankolás Ft/l vagy NAV − kedvezmény`,
+          };
+    }
   }
   if (!uzemanyag) {
     const becsles = megbizasok.reduce((a, m) => a + (m.uzemanyag?.ft ?? 0), 0);

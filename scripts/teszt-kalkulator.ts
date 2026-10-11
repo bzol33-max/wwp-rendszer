@@ -6,7 +6,7 @@
 // veszteséges fuvart minősít nyereségesnek.
 
 import {
-  szamoljOnkoltseget, ajanlatSavok, minositsAjanlatot, napokMenetidobol, valasszFogyasztast,
+  szamoljOnkoltseget, ajanlatSavok, minositsAjanlatot, napokMenetidobol, valasszFogyasztast, ervenyesUzemanyagMeres, ervenyesNapokOsszege,
   NAPI_KOLTSEG_FT, ALAP_FOGYASZTAS_L100, MERES_MIN_KM, SAJAT_FUVAR_KM_DIJ_FT,
 } from "@/lib/fuvarozas2/kalkulator-alap";
 import { FUVAR_BEALLITAS_ALAP, fuvarBeallitasokSorokbol } from "@/lib/beallitasok/fuvar-alap";
@@ -70,6 +70,14 @@ eq("301 km → mért", valasszFogyasztast({ mertKm: 301, mertLiter: 90.3 }), { l
 eq("0 liter (nem mér a szonda) → alapérték", valasszFogyasztast({ mertKm: 5000, mertLiter: 0 }), { l100: 28, mert: false });
 eq("jármű saját alapértéke", valasszFogyasztast({ mertKm: 50, mertLiter: 20, alapL100: 31 }), { l100: 31, mert: false });
 eq("beállított küszöb", valasszFogyasztast({ mertKm: 150, mertLiter: 45, minKm: 100 }), { l100: 30, mert: true });
+// Ecofleet 2026.09: az AOPU-427 09.22-ig 0 litert adott — ezek a napok nem húzhatják le az átlagot.
+eq("érvényes mérés: 0 liter nem mérés", ervenyesUzemanyagMeres(400, 0), false);
+eq("érvényes mérés: 30 l/100 igen", ervenyesUzemanyagMeres(400, 120), true);
+eq("érvényes mérés: 92 l/100 nem (tankszint-ugrás)", ervenyesUzemanyagMeres(124, 114.7), false);
+eq("érvényes mérés: 5 l/100 nem", ervenyesUzemanyagMeres(500, 25), false);
+const napokMert = ervenyesNapokOsszege([{ km: 4000, liter: 0 }, { km: 600, liter: 125 }, { km: 700, liter: 140 }, { km: 0, liter: 0 }]);
+eq("csak az érvényes napok összege", napokMert, { km: 1300, liter: 265, kihagyottNap: 1 });
+eq("szűrt mérés → 20,4 l/100 (régen 4,6 lett volna)", valasszFogyasztast({ mertKm: napokMert.km, mertLiter: napokMert.liter }), { l100: 20.4, mert: true });
 
 // A napi költség és a vezetési keret paraméterként (beállításból) is jöhet.
 eq("napi költség paraméterből", szamoljOnkoltseget({ rakottKm: 100, uresKm: 0, fogyasztasL100: 28, gazolajFt: 600, utdijFt: 0, napok: 2, napiKoltsegFt: 60000 }).napiFt, 120000);

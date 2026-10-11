@@ -26,6 +26,35 @@ export const ALAP_FOGYASZTAS_L100 = FUVAR_BEALLITAS_ALAP.fogyasztas_alap_l_100km
 /** A mért fogyasztás csak ennyi mért km FÖLÖTT írja felül az alapot (2026-10-10: 300 km). */
 export const MERES_MIN_KM = FUVAR_BEALLITAS_ALAP.meres_min_km;
 
+/**
+ * Egy GPS-nap üzemanyag-mérése csak e sávon belül hihető (l/100 km). Az
+ * Ecofleet-útvonaljelentés 2026.09-ben: az AOPU-427 09.22-ig minden során
+ * 0 litert adott (nem mért a szonda), az NMZ-492 napi értéke 5 és 93 között
+ * szórt (tankolás/tankszint-ugrás). A sávon kívüli vagy 0 literes nap NEM
+ * mérés — azt becsüljük, és nem húzhatja le/fel a mért átlagot.
+ */
+export const GPS_L100_MIN = 10;
+export const GPS_L100_MAX = 70;
+
+/** Hihető-e egy nap (vagy út-csoport) mért litere. */
+export function ervenyesUzemanyagMeres(km: number, liter: number): boolean {
+  if (!(km > 0) || !(liter > 0)) return false;
+  const l100 = (liter / km) * 100;
+  return l100 >= GPS_L100_MIN && l100 <= GPS_L100_MAX;
+}
+
+/** Csak az érvényes mérési napok km-e és litere (a mért átlaghoz). */
+export function ervenyesNapokOsszege(napok: Iterable<{ km: number; liter: number }>): { km: number; liter: number; kihagyottNap: number } {
+  let km = 0;
+  let liter = 0;
+  let kihagyottNap = 0;
+  for (const n of napok) {
+    if (ervenyesUzemanyagMeres(n.km, n.liter)) { km += n.km; liter += n.liter; }
+    else if (n.km > 0) kihagyottNap++;
+  }
+  return { km, liter, kihagyottNap };
+}
+
 /** Napi vezetési keret, perc — ebből számoljuk, hány napot köt le egy fuvar. */
 export const NAPI_VEZETES_PERC = FUVAR_BEALLITAS_ALAP.sofor_napi_vezetes_max_perc;
 

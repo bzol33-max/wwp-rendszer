@@ -258,6 +258,22 @@ eq("kocsi: eredmény = bér eredmény − nem hozzárendelt", je.eredmenyFt, je.
 all("kocsi: az elkerült költség NEM része az eredménynek", je.eredmenyFt !== je.berEredmenyFt - je.nemHozzarendeltFt + je.elkerultKoltsegFt && je.elkerultKoltsegFt === 55_000);
 // Egyeztetés: bevétel − összes költség = kocsi eredmény − saját belső költség.
 eq("kocsi: bevétel − összes költség = eredmény − saját belső költség", je.berBevetelFt - je.osszKoltsegFt, je.eredmenyFt - je.sajatBelsoKoltsegFt);
+
+// --- Mérés nélküli / hihetetlen GPS-napok (Ecofleet 2026.09: AOPU-427 0 l 09.22-ig) ---
+// A 09-28-i nap 300 km-t ment, de 0 litert mért: régen 0 Ft-tal számított.
+const nullasNap = [...utak, { indulas: "2026-09-28 06:00:00", erkezes: "2026-09-28 10:00:00", km: 300, liter: 0 }];
+const vegyes = jarmuOsszkoltseg({ ...k, utak: nullasNap }, [eb, es], p, 2);
+// 120 l × 580 (aznapi tankolás) + 300 km × 28/100 × 600 (NAV) = 69 600 + 50 400
+eq("kocsi: 0 literes nap becsülve, nem 0 Ft", [vegyes.uzemanyag?.forras, vegyes.uzemanyag?.ft], ["becsles", 120_000]);
+all("kocsi: a megjegyzés mutatja a mért és a becsült litert", /120 l GPS-mérés \+ 84 l becslés \(1 nap/.test(vegyes.uzemanyag?.megjegyzes ?? ""));
+// Kiugró nap: 500 km, 5 l (1 l/100) — szonda-hiba, becsüljük.
+const kiugro = jarmuOsszkoltseg({ ...k, utak: [...utak, { indulas: "2026-09-28 06:00:00", erkezes: "2026-09-28 10:00:00", km: 500, liter: 5 }] }, [eb, es], p, 2);
+eq("kocsi: hihetetlen l/100-as nap becsülve", [kiugro.uzemanyag?.forras, kiugro.uzemanyag?.ft], ["becsles", 69_600 + Math.round(500 * 0.28 * 600)]);
+eq("kocsi: csupa érvényes nap → tény marad", ossz.uzemanyag?.forras, "teny");
+const tulsok = utak.map((u) => ({ ...u, liter: u.liter * 3 })); // 90 l/100
+eq("liter: 90 l/100-as nap nem mérés", literFelosztas(ablak, napiOsszeg(tulsok)).meroNelkul, true);
+const bMeroNelkul = megbizasKoltseg(ber, { ...k, utak: tulsok }, p, 25_000, { ft: 364.82, nap: "2026-09-25" });
+eq("bér: hihetetlen mérésnél becsült üzemanyag", bMeroNelkul.uzemanyag?.forras, "becsles");
 // A saját fuvar km-díja (az „elkerült költség" alapja) semmilyen eredményt nem mozdít.
 const dragabb = { ...p, sajatKmDijFt: 5500 };
 const es3 = megbizasKoltseg(sajat, k, dragabb, 25_000);

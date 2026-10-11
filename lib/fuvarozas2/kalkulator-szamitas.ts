@@ -13,7 +13,7 @@ import { getUtvonalJelentes, rendszamKulcs } from "@/lib/fuvarozas/ecofleet";
 import { getJarmuIndulasiTelephely } from "@/lib/fuvarozas/telephelyek-db";
 import { getFuvarBeallitasok, type FuvarBeallitasok } from "@/lib/beallitasok/fuvar";
 import {
-  ajanlatSavok, minositsAjanlatot, napokMenetidobol, szamoljOnkoltseget, valasszFogyasztast,
+  ajanlatSavok, minositsAjanlatot, napokMenetidobol, szamoljOnkoltseget, valasszFogyasztast, ervenyesNapokOsszege,
   type Ajanlat, type Onkoltseg,
 } from "@/lib/fuvarozas2/kalkulator-alap";
 
@@ -40,8 +40,18 @@ export async function mertFogyasztas(jarmuKod: string | undefined, beallitas: Fu
     const sorok = await getUtvonalJelentes(cel.map((j) => j.ecofleet_object_id!), kezdet, budapestNapISO(ma));
     const kulcsok = new Set(cel.map((j) => rendszamKulcs(j.vontato_rendszam ?? j.kod)));
     const sajat = sorok.filter((s) => kulcsok.has(s.rendszamKulcs));
-    const km = sajat.reduce((a, s) => a + s.tavKm, 0);
-    const liter = sajat.reduce((a, s) => a + s.uzemanyagL, 0);
+    // Kocsinként-naponként összegzünk, és csak a hihető mérési napok
+    // számítanak: a 0 literes (nem mérő szonda) és a kiugró napok km-e
+    // különben lehúzná/felhúzná az átlagot (2026.09: AOPU-427 0 l, 09.22-ig).
+    const napok = new Map<string, { km: number; liter: number }>();
+    for (const s of sajat) {
+      const k = `${s.rendszamKulcs}|${s.indulas.slice(0, 10)}`;
+      const x = napok.get(k) ?? { km: 0, liter: 0 };
+      x.km += s.tavKm;
+      x.liter += s.uzemanyagL;
+      napok.set(k, x);
+    }
+    const { km, liter } = ervenyesNapokOsszege(napok.values());
     const v = valasszFogyasztast({ mertKm: km, mertLiter: liter, alapL100, minKm: beallitas.meres_min_km });
     if (v.mert) {
       return { l100: v.l100, forras: `mért, 14 nap${jarmuKod ? ` · ${jarmuKod}` : " · flotta"}` };

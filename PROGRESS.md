@@ -1,5 +1,18 @@
 # PROGRESS
 
+## 2026-10-11 — Üzemanyag-tény: 0 literes és kiugró GPS-napok
+
+- Ecofleet útvonaljelentés 09.01–10.04 alapján: AOPU-427 09.22-ig 0 litert mért,
+  NMZ-492 napi l/100-a 5–93 között szórt. Egy GPS-nap csak akkor üzemanyag-mérés,
+  ha liter > 0 és 10 ≤ l/100 ≤ 70 (`ervenyesUzemanyagMeres`, `kalkulator-alap.ts`).
+- Költségek/kocsi: a nem mérő napok km × alap fogyasztás becsléssel számolnak
+  (eddig 0 Ft); vegyes időszak címkéje becslés, a megjegyzés mutatja a GPS- és a
+  becsült litert. Megbízás: hihetetlen napon becslés (`literFelosztas`).
+- Kalkulátor 14 napos mért fogyasztása csak az érvényes kocsi-napokból.
+- Tesztek: teszt-koltseg (+6), teszt-kalkulator (+6); a javítás nélkül 5 elbukik.
+- Mért (érvényes napok): NMZ-492 ≈ 33 l/100, AOPU-427 ≈ 22 l/100 (csak 09.23-tól);
+  a járművek saját fogyasztás-értéke a Járművek oldalon állítható — nem írtam át.
+
 ## 2026-10-10 — Költség/tény javítások: árfolyam, HU-GO import, tankolás-hamisítás, Kimutatás, Járművek
 
 - **MNB-árfolyam:** egy nap akkor hiányzik, ha a várt közzétételi napjára (múlt
