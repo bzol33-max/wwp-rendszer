@@ -6,12 +6,15 @@ import { getJarmuIndulasiTelephely } from "@/lib/fuvarozas/telephelyek-db";
 import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
 import { getFuvarBeallitasok } from "@/lib/beallitasok/fuvar";
 import { budapestNapISO } from "@/lib/fuvarozas/idozona";
+import { getFleetLastPositions, parseEcofleetTimestamp } from "@/lib/fuvarozas/ecofleet";
 import { cimKulcs } from "@/lib/fuvarozas/varos";
 import { idobelyegMs, tervIdoMegbizasbol } from "@/lib/fuvarozas2/napi-sorrend";
 import {
   KOZUTI_SZORZO,
   NAP_KEZDES_ALAP_PERC,
   elozoMenetVege,
+  tenyUtolsoLerako,
+  gpsIndulas,
   epitMenetJavaslat,
   legvonalKm,
   napKezdesPercbol,
@@ -155,14 +158,65 @@ async function telephelyPontok(): Promise<TelephelyPontAdat[]> {
   }
 }
 
+/** A kocsi utolsó ismert GPS-helye (Ecofleet), budapesti "YYYY-MM-DD HH:MM:SS" idővel; hiba / nincs GPS: null. */
+async function jarmuGpsHelye(jarmuId: string): Promise<{ pont: Pont; ido: string } | null> {
+  try {
+    const [j] = await query<{ obj: string | null }>(`select ecofleet_object_id as obj from fuvar_jarmuvek where id = $1`, [jarmuId]);
+    if (!j?.obj) return null;
+    const p = (await getFleetLastPositions()).find((x) => x.objectId === j.obj);
+    const d = p ? parseEcofleetTimestamp(p.timestamp) : null;
+    if (!p || !d || !Number.isFinite(p.latitude) || !Number.isFinite(p.longitude)) return null;
+    const ido = new Intl.DateTimeFormat("sv-SE", { timeZone: "Europe/Budapest", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(d);
+    return { pont: { lat: p.latitude, lon: p.longitude }, ido };
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Ahonnan a kocsi a napot kezdi: az előző (legfeljebb 3 napos) MENET utolsó
+ * Ahonnan a kocsi a napot kezdi: holnapra a mostani GPS-hely, ha minden
+ * korábbi munka kész (gpsIndulas); különben ha van tény, a ténylegesen legkésőbb
+ * teljesített lerakó (tenyUtolsoLerako); különben az előző (legfeljebb 3 napos) MENET utolsó
  * feladatának célja (a jóváhagyott menet sorrendje szerint, különben a
  * javaslaté) — ez követi az átrendezést és az optimalizáló elfogadását;
  * ha nincs ilyen menet, a legutóbbi lerakó a megbízásokból; különben a kocsi
  * saját telephelye.
  */
 async function indulasiHely(jarmuId: string, jarmuKod: string, nap: string, telephelyek: TelephelyPontAdat[]): Promise<Hely> {
+  // 1. A tény az elsődleges: a ténylegesen legkésőbb teljesített lerakó (GPS /
+  //    sofőr). A terv szerinti sorrend ettől eltérhet (pl. a 10.09-i ablakú BMW
+  //    10.08-án teljesült, utána még egy saját fuvar Szakolyba).
+  try {
+    const sorok = await query<{ cim: string | null; lat: number | null; lon: number | null; terv_nap: string; teny: string | null }>(
+      `select coalesce(le.cim_nyers, m.lerako) as cim, le.lat, le.lon,
+         to_char(coalesce(m.lerakas_datum, m.datum), 'YYYY-MM-DD') as terv_nap,
+         to_char(le.teny at time zone 'Europe/Budapest', 'YYYY-MM-DD HH24:MI:SS') as teny
+       from fuvar_megbizasok m
+       left join lateral (select g.cim_nyers, g.lat, g.lon,
+           coalesce(g.gps_tavozas, g.sofor_kesz_at, g.gps_erkezes, g.sofor_megerkezett_at) as teny
+         from fuvar_megallok g where g.megbizas_id = m.id and g.tipus = 'lerako' order by g.sorszam desc limit 1) le on true
+       where m.jarmu_id = $1 and m.torolt_at is null and m.allapot is not null and m.allapot <> 'ellenorzesre_var'
+         and not coalesce(m.elokeszites, false)
+         and coalesce(m.lerakas_datum, m.datum) < $2::date and coalesce(m.lerakas_datum, m.datum) >= $2::date - $3::int`,
+      [jarmuId, nap, INDULAS_NAPOK]
+    );
+    const elozok = sorok.map((s) => ({ cim: s.cim, pont: pontVagyNull(s.lat, s.lon), tervNap: s.terv_nap, teny: s.teny }));
+    // 0. Holnapra: a kocsi mostani GPS-helye, ha minden korábbi munka kész.
+    const ma = budapestNapISO(new Date());
+    if (nap > ma && !elozok.some((e) => !e.teny)) {
+      const gps = await jarmuGpsHelye(jarmuId);
+      const h = gpsIndulas({ nap, ma, gps, elozok, telephelyek });
+      if (h) return h;
+    }
+    const teny = tenyUtolsoLerako(elozok);
+    if (teny) {
+      const tp = telephelyek.find((x) => teny.cim && cimKulcs(x.cim) === cimKulcs(teny.cim));
+      return tp ? { cim: tp.cim, pont: tp.pont ?? teny.pont, telephelyPontId: tp.id } : teny;
+    }
+  } catch (err) {
+    console.warn("[menetterv] a tény szerinti utolsó lerakó nem olvasható:", err instanceof Error ? err.message : err);
+  }
+  // 2. Ha nincs tény: az előző menet vége, majd a terv szerinti utolsó lerakó, végül a telephely.
   try {
     const sorok = await query<{ nap: string; allapot: string; sorszam: number; cel_cim: string | null; cel_tp: string | null; lat: number | null; lon: number | null; atnyulo: boolean }>(
       `select m.nap::text as nap, m.allapot, f.sorszam, f.cel_cim, f.cel_telephely_pont_id::text as cel_tp, le.lat, le.lon,

@@ -20,6 +20,8 @@ import {
   ellenorizLezarasInvarianst,
   ellenorizVerziot,
   elozoMenetVege,
+  tenyUtolsoLerako,
+  gpsIndulas,
   epitMenetJavaslat,
   feladatTipusMunkabol,
   feladatUjjlenyomat,
@@ -328,6 +330,33 @@ const BP = (hhmm: string) => Date.parse(`${NAP}T${hhmm}:00+02:00`);
       sor("2026-10-10", "jovahagyott", 3, "Szakoly"), sor("2026-10-10", "jovahagyott", 4, "Budapest", true),
     ])?.cim, "Szakoly");
     eq("nincs előző menet → null (tartalék: megbízások, telephely)", elozoMenetVege([]), null);
+    // A tény az elsődleges (2026-10-11, Micó): a 10.09-i ablakú BMW 10.08. 19:59-kor
+    // teljesült, utána a Nyíradony → Szakoly saját fuvar. Hétfőn Szakolyból indul.
+    const t = (cim: string, tervNap: string, teny: string | null) => ({ cim, pont: null, tervNap, teny });
+    eq("tény: a ténylegesen utolsó lerakó, nem a terv szerinti", tenyUtolsoLerako([
+      t("BMW HU Plant Debrecen", "2026-10-09", "2026-10-08 19:59:00"),
+      t("Szakoly, Rákóczi utca 26", "2026-10-09", "2026-10-09 13:10:00"),
+      t("1239 Budapest (BILK)", "2026-10-08", "2026-10-08 11:36:00"),
+    ])?.cim, "Szakoly, Rákóczi utca 26");
+    eq("tény: későbbi napra tervezett, még nem teljesült munka → a terv dönt (null)", tenyUtolsoLerako([
+      t("Szakoly", "2026-10-08", "2026-10-08 15:00:00"), t("Győr", "2026-10-09", null),
+    ]), null);
+    eq("tény: ugyanazon a napon tervezett, el nem végzett munka nem írja felül", tenyUtolsoLerako([
+      t("Szakoly", "2026-10-09", "2026-10-09 15:00:00"), t("Győr", "2026-10-09", null),
+    ])?.cim, "Szakoly");
+    eq("tény: nincs tény → null", tenyUtolsoLerako([t("Győr", "2026-10-09", null)]), null);
+    // Holnapi menet: a kocsi mostani GPS-helyéről (Micó vasárnap Szakolyban áll,
+    // az utolsó lerakó csütörtök este a BMW Debrecen volt — a hazaút nincs megbízásban).
+    const szakoly = { id: "1", nev: "Szakoly", cim: "Szakoly, Rákóczi utca 26", pont: { lat: 47.7647, lon: 21.9126 } };
+    const bmw = [t("BMW HU Plant Debrecen", "2026-10-09", "2026-10-08 19:59:00")];
+    const gpsSzakoly = { pont: { lat: 47.7651, lon: 21.9131 }, ido: "2026-10-11 11:30:00" };
+    eq("GPS: holnapra a telephely, nem a BMW", gpsIndulas({ nap: "2026-10-12", ma: "2026-10-11", gps: gpsSzakoly, elozok: bmw, telephelyek: [szakoly] }),
+      { cim: "Szakoly, Rákóczi utca 26", pont: szakoly.pont, telephelyPontId: "1" });
+    eq("GPS: a mai napra nem (a kocsi már úton lehet)", gpsIndulas({ nap: "2026-10-11", ma: "2026-10-11", gps: gpsSzakoly, elozok: bmw, telephelyek: [szakoly] }), null);
+    eq("GPS: van még tény nélküli korábbi munka → nem", gpsIndulas({ nap: "2026-10-12", ma: "2026-10-11", gps: gpsSzakoly, elozok: [...bmw, t("Győr", "2026-10-11", null)], telephelyek: [szakoly] }), null);
+    eq("GPS: a jel régebbi, mint az utolsó lerakó → nem", gpsIndulas({ nap: "2026-10-12", ma: "2026-10-11", gps: { ...gpsSzakoly, ido: "2026-10-08 18:00:00" }, elozok: bmw, telephelyek: [szakoly] }), null);
+    eq("GPS: telephelyen kívül a GPS-pont a hely", gpsIndulas({ nap: "2026-10-12", ma: "2026-10-11", gps: { pont: { lat: 47.53, lon: 21.63 }, ido: "2026-10-11 11:30:00" }, elozok: bmw, telephelyek: [szakoly] })?.pont, { lat: 47.53, lon: 21.63 });
+    eq("GPS: nincs GPS → null", gpsIndulas({ nap: "2026-10-12", ma: "2026-10-11", gps: null, elozok: bmw, telephelyek: [szakoly] }), null);
   }
 
   // ---------------------------------------------------------------- 13. HU-GO megszakító (egy kör)

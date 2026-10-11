@@ -1,5 +1,18 @@
 # PROGRESS
 
+## 2026-10-11 — Menetterv: honnan indul a kocsi (GPS + tény)
+
+- Hiba: Micó hétfői menete „üres pozicionálás BMW HU Plant Debrecen → Szakoly”-val
+  kezdett (és „nem helyezhető el”), pedig a kocsi Szakolyban állt: az utolsó
+  megbízás a BMW Debrecen volt (cs. 19:59), a hazaút nincs megbízásban.
+- Javítás (`lib/menet/generalas.ts` indulasiHely):
+  0. HOLNAPI menet: a kocsi mostani GPS-helye (Ecofleet getLastData), ha minden
+     korábbi munka teljesült és a jel frissebb az utolsó lerakónál; 1 km-en belül
+     a telephely-pont (`gpsIndulas`). A mai napra nem (a kocsi már úton lehet).
+  1. Különben a ténylegesen legkésőbb teljesített lerakó (`tenyUtolsoLerako`),
+     nem a terv szerinti nap/ablak; 2. ezután a régi út (előző menet, terv, telephely).
+- Teszt: teszt-menetterv (+10).
+
 ## 2026-10-11 — Vasárnap pihenőnap; saját árunál a megbízó a Well-Worn Pallet
 
 - Ma oldal: üres vasárnapon a „Most” oszlop és a kocsi „Ma” doboza „Vasárnap —

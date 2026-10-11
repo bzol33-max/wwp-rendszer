@@ -616,6 +616,60 @@ export function elozoMenetVege(sorok: ElozoMenetFeladat[]): Hely | null {
   return { cim: legjobb.celCim, pont: legjobb.pont, telephelyPontId: legjobb.celTelephelyPontId };
 }
 
+/** Egy korábbi megbízás utolsó lerakója a TÉNNYEL (GPS / sofőr), az indulási helyhez. */
+export type TenyLerakoSor = {
+  cim: string | null;
+  pont: Pont | null;
+  /** A lerakó tervezett napja ("YYYY-MM-DD"). */
+  tervNap: string;
+  /** Az utolsó lerakó ténye ("YYYY-MM-DD HH:MM:SS", budapesti), ha megtörtént. */
+  teny: string | null;
+};
+
+/**
+ * A kocsi tényleges utolsó helye: a TÉNYLEGESEN legkésőbb teljesített lerakó
+ * (nem a terv szerinti nap / ablak). Példa (2026-10-11, Micó): a #309 BMW
+ * Debrecen 10.08. 19:59-kor teljesült, utána a Nyíradony → Szakoly saját
+ * fuvar — a terv szerinti sorrendben a BMW (10.09-i ablak) nyert, így a
+ * hétfői menet „üres pozicionálás BMW Debrecen → Szakoly"-val kezdett,
+ * miközben a kocsi Szakolyban állt.
+ * null, ha nincs tény, vagy ha egy KÉSŐBBI napra tervezett munka még nem
+ * teljesült (akkor a terv a mérvadó, a hívó a régi úton megy tovább).
+ */
+export function tenyUtolsoLerako(sorok: TenyLerakoSor[]): Hely | null {
+  const tenyes = sorok.filter((s) => s.teny && (s.cim?.trim() || s.pont));
+  if (tenyes.length === 0) return null;
+  const utolso = [...tenyes].sort((a, b) => b.teny!.localeCompare(a.teny!))[0];
+  const tenyNap = utolso.teny!.slice(0, 10);
+  if (sorok.some((s) => !s.teny && s.tervNap > tenyNap)) return null;
+  return { cim: utolso.cim, pont: utolso.pont };
+}
+
+/**
+ * HOLNAPI (vagy későbbi) menet indulása a kocsi MOSTANI GPS-helyéről, ha minden
+ * korábbi munkája teljesült (nincs tény nélküli lerakó a nap előtt), és a GPS-jel
+ * frissebb, mint az utolsó teljesített lerakó. A megbízásokban nem szereplő
+ * hazaút így is látszik (2026-10-11, Micó: csütörtök este BMW Debrecen, utána
+ * haza Szakolyba — a hétfői menet mégis „üres pozicionálás BMW → Szakoly”-val
+ * kezdett). A mai napra nem: ott a kocsi már úton lehet, a nap eleje kell.
+ * A telephelytől 1 km-en belül a telephely-pont a hely.
+ */
+export function gpsIndulas(b: {
+  nap: string;
+  ma: string;
+  gps: { pont: Pont; ido: string } | null;
+  elozok: TenyLerakoSor[];
+  telephelyek: { id: string; nev: string; cim: string; pont: Pont | null }[];
+}): Hely | null {
+  if (!b.gps || b.nap <= b.ma) return null;
+  if (b.elozok.some((s) => !s.teny)) return null;
+  const utolsoTeny = b.elozok.map((s) => s.teny!).sort().at(-1) ?? null;
+  if (utolsoTeny && b.gps.ido < utolsoTeny) return null;
+  const tp = b.telephelyek.find((t) => t.pont && legvonalKm(b.gps!.pont, t.pont) <= 1);
+  if (tp) return { cim: tp.cim, pont: tp.pont, telephelyPontId: tp.id };
+  return { cim: `Jelenlegi hely (GPS, ${b.gps.pont.lat.toFixed(4)}, ${b.gps.pont.lon.toFixed(4)})`, pont: b.gps.pont };
+}
+
 export type JavaslatOsszevetes = "azonos" | "csak_km" | "becsles_romlas" | "valtozott";
 
 /**
