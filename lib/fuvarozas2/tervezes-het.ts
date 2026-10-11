@@ -162,7 +162,7 @@ export async function getTervezesHet(resKulcs?: string): Promise<TervezesHet> {
     const ehhez = kijelolt ? illeszt(kijelolt, fel, le, p) : null;
     return {
       id: t.id, megbizo: t.ajanlat.megbizo, felVaros: fel.varos, leVaros: le.varos, felNap: fel.nap,
-      arSzoveg: t.ajanlat.ar ? `${t.ajanlat.ar.osszeg.toLocaleString("hu-HU")} ${t.ajanlat.ar.penznem}` : null,
+      arSzoveg: t.ajanlat.ar ? `${t.ajanlat.ar.osszeg.toLocaleString("hu-HU")} ${t.ajanlat.ar.penznem ?? "(pénznem?)"}` : null,
       illik, ehhez, nincsHely: !fp || !lp,
     };
   }));
