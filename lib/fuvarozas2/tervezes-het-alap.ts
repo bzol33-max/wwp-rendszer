@@ -5,7 +5,7 @@
 // Kalkulátor számol pontosan (HU-GO). Teszt: scripts/teszt-tervezes-het.ts.
 
 import { legvonalKm, type Pont } from "@/lib/fuvarozas2/tervezo-alap";
-import { arLetra } from "@/lib/fuvarozas2/ar-letra";
+import { arLetra, felfeleKerekit, FT_LEPES, type ArLetra } from "@/lib/fuvarozas2/ar-letra";
 
 export const RES_MIN_KM = 100;
 export const ATLAG_KMH = 60;
@@ -85,13 +85,21 @@ export type Illeszkedes = {
   plusPerc: number;
   tobbletFt: number;
   rakottKm: number;
-  /** Többlet +10% (az árlétra minimuma), 5 000 Ft-ra felfelé. */
+  /** Ráállás: a rés kezdőpontjától a felrakóig (üres km). */
+  raallasKm: number;
+  /** Az ajánlat TELJES önköltsége: (ráállás + rakott km) × km-költség + az idő az óradíjjal. */
+  teljesFt: number;
+  /** Az árlétra a teljes önköltségre (+10/20/30%, Ft és EUR) — ez a fő ár. */
+  letra: ArLetra;
+  /** Teljes önköltség +10% (a létra minimuma). */
   minFt: number;
-  /** Többlet +20% (az árlétra 2. foka), 5 000 Ft-ra felfelé. */
+  /** Teljes önköltség +20% — „mennyit kérj”. */
   kerjFt: number;
-  /** Ugyanezek EUR-ban (5 €-ra felfelé); null, ha nincs árfolyam. */
   minEur: number | null;
   kerjEur: number | null;
+  /** Alsó határ visszfuvarnál: a többlet (határköltség) +10%, Ft és EUR. */
+  alsoFt: number;
+  alsoEur: number | null;
   /** Ár-memória: a hasonló korábbi fuvarok Ft/km-e erre az útra (tájékoztató, a kérést nem emeli). */
   elozmenyFt: number | null;
   draga: boolean;
@@ -114,10 +122,22 @@ export function illeszt(res: Res, fel: AjanlatHely, le: AjanlatHely, p: IllesztP
   if (plusKm > 250) return null;
   const plusPerc = Math.round((plusKm / ATLAG_KMH) * 60) + 60; // + 1 óra fel- és lerakás
   const tobbletFt = Math.round(plusKm * p.kmKoltseg + (plusPerc / 60) * p.oraFt);
-  // Az egységes árlétra a többletre (határköltségre): min. +10%, kérj +20%.
-  const [min, kerj] = arLetra(tobbletFt, p.eurArfolyam ?? null).fokok;
-  const elozmenyFt = p.ftKmElozmeny != null ? Math.ceil((p.ftKmElozmeny * rakottKm) / 5000) * 5000 : null;
-  return { res, plusKm, plusPerc, tobbletFt, rakottKm, minFt: min.ft, kerjFt: kerj.ft, minEur: min.eur, kerjEur: kerj.eur, elozmenyFt, draga: plusKm > 100 };
+  // Fő ár: az árlétra az ajánlat TELJES önköltségére (ráállás + rakott út, az
+  // idő a napi fix arányában) — ugyanazzal a becsléssel, mint a többlet.
+  const raallasKm = utKm(res.a, fel.pont);
+  const teljesPerc = Math.round(((raallasKm + rakottKm) / ATLAG_KMH) * 60) + 60;
+  const teljesFt = Math.round((raallasKm + rakottKm) * p.kmKoltseg + (teljesPerc / 60) * p.oraFt);
+  const arf = p.eurArfolyam ?? null;
+  const letra = arLetra(teljesFt, arf);
+  const [min, kerj] = letra.fokok;
+  // Alsó határ visszfuvarnál: a többlet (határköltség) +10%.
+  const also = arLetra(tobbletFt, arf).fokok[0];
+  const elozmenyFt = p.ftKmElozmeny != null ? felfeleKerekit(p.ftKmElozmeny * rakottKm, FT_LEPES) : null;
+  return {
+    res, plusKm, plusPerc, tobbletFt, rakottKm, raallasKm, teljesFt, letra,
+    minFt: min.ft, kerjFt: kerj.ft, minEur: min.eur, kerjEur: kerj.eur,
+    alsoFt: also.ft, alsoEur: also.eur, elozmenyFt, draga: plusKm > 100,
+  };
 }
 
 /** A legkisebb többletű rés egy ajánlathoz. */

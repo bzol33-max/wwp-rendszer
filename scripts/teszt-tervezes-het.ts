@@ -63,21 +63,28 @@ const f = (id: string, fel: keyof typeof P, le: keyof typeof P, felNap: string, 
   eq("kis kerülő nem drága", i.draga, false);
   eq("+idő benne 1 óra rakodás", i.plusPerc, Math.round((i.plusKm / 60) * 60) + 60);
   eq("többlet", i.tobbletFt, Math.round(i.plusKm * 300 + (i.plusPerc / 60) * 6000));
-  eq("min ≥ többlet, 5000-re kerek", [i.minFt >= i.tobbletFt, i.minFt % 5000], [true, 0]);
-  eq("kérj ≥ min", i.kerjFt >= i.minFt, true);
-  // Árlétra a többletre (2026-10-11): min. = többlet +10%, kérj = többlet +20%, felfelé 5 000-re.
-  eq("min = többlet +10%", i.minFt, Math.ceil(Math.round(i.tobbletFt * 1.1 * 100) / 100 / 5000) * 5000);
-  eq("kérj = többlet +20% (nem ×1,15)", i.kerjFt, Math.ceil(Math.round(i.tobbletFt * 1.2 * 100) / 100 / 5000) * 5000);
-  eq("árfolyam nélkül EUR null", [i.minEur, i.kerjEur], [null, null]);
+  // Két ár (2026-10-11): fő = a TELJES önköltség létrája, kérj = +20%; alsó határ visszfuvarnál = többlet +10%.
+  const ker = (x: number, l: number) => Math.ceil(Math.round(x * 100) / 100 / l) * l;
+  eq("ráállás = rés eleje → felrakó", i.raallasKm, utKm(P.szakoly, P.debrecen));
+  const tPerc = Math.round(((i.raallasKm + i.rakottKm) / 60) * 60) + 60;
+  eq("teljes önköltség", i.teljesFt, Math.round((i.raallasKm + i.rakottKm) * 300 + (tPerc / 60) * 6000));
+  eq("teljes ≥ többlet", i.teljesFt >= i.tobbletFt, true);
+  eq("min = teljes +10%, 1000-re fel", i.minFt, ker(i.teljesFt * 1.1, 1000));
+  eq("kérj = teljes +20%", i.kerjFt, ker(i.teljesFt * 1.2, 1000));
+  eq("létra 3 foka", i.letra.fokok.map((f) => f.ft), [10, 20, 30].map((s) => ker((i.teljesFt * (100 + s)) / 100, 1000)));
+  eq("alsó határ = többlet +10%", i.alsoFt, ker(i.tobbletFt * 1.1, 1000));
+  eq("kérj ≥ min ≥ alsó határ", i.kerjFt >= i.minFt && i.minFt >= i.alsoFt, true);
+  eq("árfolyam nélkül EUR null", [i.minEur, i.kerjEur, i.alsoEur], [null, null, null]);
   const ie = illeszt(res, { varos: "Debrecen", pont: P.debrecen, nap: "2026-10-12" }, { varos: "Budapest", pont: P.bp, nap: "2026-10-12" }, { ...p, eurArfolyam: 400 })!;
-  eq("EUR 5-re felfelé", [ie.minEur! % 5, ie.kerjEur! % 5, ie.kerjEur! >= ie.minEur!], [0, 0, true]);
-  eq("EUR min ≥ (többlet+10%) / árfolyam", ie.minEur! >= (ie.tobbletFt * 1.1) / 400, true);
+  eq("EUR 10-re felfelé", [ie.minEur! % 10, ie.kerjEur! % 10, ie.alsoEur! % 10, ie.kerjEur! >= ie.minEur!], [0, 0, 0, true]);
+  eq("EUR kérj = teljes +20% / árfolyam", ie.kerjEur, ker((ie.teljesFt * 1.2) / 400, 10));
+  eq("EUR alsó = többlet +10% / árfolyam", ie.alsoEur, ker((ie.tobbletFt * 1.1) / 400, 10));
   eq("rossz nap → nem illik", illeszt(res, { varos: "D", pont: P.debrecen, nap: "2026-10-16" }, { varos: "H", pont: P.hszob, nap: null }, p), null);
   eq("nagy kerülő → nem illik", illeszt(res, { varos: "B", pont: P.tompa, nap: null }, { varos: "B", pont: P.szakoly, nap: null }, p), null);
   eq("hely nélkül → nem illik", illeszt(res, { varos: "?", pont: null, nap: null }, { varos: "H", pont: P.hszob, nap: null }, p), null);
   const el = illeszt(res, { varos: "Debrecen", pont: P.debrecen, nap: null }, { varos: "Budapest", pont: P.bp, nap: null }, { ...p, ftKmElozmeny: 600 })!;
   // Az előzmény tájékoztató (külön mező), a kérést nem emeli — az árlétra az egyetlen szabály.
-  eq("ár-memória külön mezőben", el.elozmenyFt, Math.ceil((600 * el.rakottKm) / 5000) * 5000);
+  eq("ár-memória külön mezőben", el.elozmenyFt, Math.ceil((600 * el.rakottKm) / 1000) * 1000);
   eq("ár-memória nem emeli a kérést", el.kerjFt, illeszt(res, { varos: "Debrecen", pont: P.debrecen, nap: null }, { varos: "Budapest", pont: P.bp, nap: null }, p)!.kerjFt);
   eq("legjobb rés", legjobbRes([res], { varos: "Debrecen", pont: P.debrecen, nap: null }, { varos: "Budapest", pont: P.bp, nap: null }, p)?.res.kulcs, res.kulcs);
   // Kiket hívj

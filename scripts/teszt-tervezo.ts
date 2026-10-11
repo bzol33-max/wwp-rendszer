@@ -48,8 +48,8 @@ eq("legjobb kocsi: mind ütközik", legjobbKocsi([{ hatas: 1, utkozik: true }]),
 
 eq("előzmény: átlag és eltérés", elozmenyElteres(583, [728, 680, null]), { atlag: 704, eltere: -17 });
 eq("előzmény: nincs mihez", elozmenyElteres(583, [null]), { atlag: null, eltere: null });
-// A célár (8% a díjhoz) helyett az árlétra +10%-os foka (2026-10-11): 376 300 × 1,1 = 413 930 → 415 000.
-eq("célár = árlétra +10%", arLetra(376300, null).fokok[0].ft, 415000);
+// A célár (8% a díjhoz) helyett az árlétra +10%-os foka (2026-10-11): 376 300 × 1,1 = 413 930 → 414 000.
+eq("célár = árlétra +10%", arLetra(376300, null).fokok[0].ft, 414000);
 
 // A lánc a közös sorrendben (napi-sorrend.ts): a később rögzített, kiírt
 // időpontú fuvar az időpont nélküli elé — itt A→C (10:00), utána C→A: nincs üres út.

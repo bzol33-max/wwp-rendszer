@@ -1,6 +1,6 @@
 // Az EGYETLEN árlétra (2026-10-11, Budaházi Zoltán szabálya):
 // az önköltség látszik; a minimum = önköltség +10%, aztán +20% és +30%.
-// Minden ár felfelé kerekítve 5 000 Ft-ra, és EUR-ban is (5 EUR-ra felfelé) —
+// Minden ár felfelé kerekítve 1 000 Ft-ra, és EUR-ban is (10 EUR-ra felfelé) —
 // telefonon gyakran euróban alkudnak.
 //
 // Ezt használja a Kalkulátor, a Tervezés döntés-panelje (a célár előtöltése a
@@ -12,8 +12,8 @@
 export const LETRA_SZAZALEKOK = [10, 20, 30] as const;
 /** A minimum árrés (önköltségre vetítve): ez alatt „határeset”. */
 export const MIN_ARRES_SZAZALEK = LETRA_SZAZALEKOK[0];
-export const FT_LEPES = 5000;
-export const EUR_LEPES = 5;
+export const FT_LEPES = 1000;
+export const EUR_LEPES = 10;
 
 export type LetraFok = { szazalek: number; ft: number; eur: number | null };
 export type ArLetra = {
@@ -32,13 +32,13 @@ export function felfeleKerekit(x: number, lepes: number): number {
   return Math.ceil(tiszta / lepes) * lepes;
 }
 
-/** Ft → EUR, 5 EUR-ra felfelé; null, ha nincs (érvényes) árfolyam. */
+/** Ft → EUR, 10 EUR-ra felfelé; null, ha nincs (érvényes) árfolyam. */
 export function eurFelfele(ft: number, eurArfolyam: number | null | undefined): number | null {
   if (!eurArfolyam || !(eurArfolyam > 0)) return null;
   return felfeleKerekit(ft / eurArfolyam, EUR_LEPES);
 }
 
-/** Az árlétra: önköltség + 10 / 20 / 30%, Ft-ban (5 000-re) és EUR-ban (5-re) felfelé kerekítve. */
+/** Az árlétra: önköltség + 10 / 20 / 30%, Ft-ban (1 000-re) és EUR-ban (10-re) felfelé kerekítve. */
 export function arLetra(onkoltsegFt: number, eurArfolyam: number | null): ArLetra {
   const onk = Math.max(0, Math.round(Number.isFinite(onkoltsegFt) ? onkoltsegFt : 0));
   const arf = eurArfolyam && eurArfolyam > 0 ? eurArfolyam : null;

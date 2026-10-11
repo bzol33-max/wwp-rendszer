@@ -22,7 +22,7 @@ export function ArLetraTabla({ letra, arfolyamCimke }: { letra: ArLetra; arfolya
         </div>
       ))}
       <p className="mt-1 text-[11px] text-muted-foreground">
-        Felfelé kerekítve: 5 000 Ft, 5 €.{" "}
+        Felfelé kerekítve: 1 000 Ft, 10 €.{" "}
         {letra.eurArfolyam != null ? (arfolyamCimke ?? `${letra.eurArfolyam.toLocaleString("hu-HU", { maximumFractionDigits: 2 })} Ft/EUR`) : "Nincs EUR-árfolyam (MNB)."}
       </p>
     </div>
