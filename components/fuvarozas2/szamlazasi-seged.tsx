@@ -135,7 +135,7 @@ export function SzamlazasiSegedGomb({ megbizasId, elszamolasJog }: { megbizasId:
     <>
       <Button size="sm" onClick={megnyit} className="bg-[var(--f2-mint)] text-white hover:bg-[var(--f2-mint)]/90">Számlázok</Button>
       <Dialog open={nyitva} onOpenChange={setNyitva}>
-        <DialogContent className="max-h-[92vh] overflow-y-auto sm:max-w-5xl">
+        <DialogContent className="fuvarozas2 max-h-[92vh] overflow-y-auto sm:max-w-5xl">
           <DialogHeader>
             <DialogTitle>Számlázási segéd</DialogTitle>
             <DialogDescription>{adat?.fejlec ?? "mezőnként másold át a Számlázz.hu-ba, a számla sorrendjében"}</DialogDescription>

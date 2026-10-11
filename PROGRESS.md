@@ -2,7 +2,8 @@
 
 ## 2026-10-11 — Számlázási segéd („Számlázok” gomb)
 
-- Hol: a megbízás részletében (Elszámolás kártya, bérfuvar, teljesítve/számlázható,
+- Hol: a Megbízások oldal „Számlázásra” oszlopában a kártya alatt (2026-10-11 javítás:
+  élesben ott nem látszott), a megbízás részletében (Elszámolás kártya, bérfuvar, teljesítve/számlázható,
   még nincs számlaszám) és az Elszámolás „Számlázni” soraiban.
 - Mit mutat: a számla mezőit a számla sorrendjében, mindegyik mellett másolás
   ikonnal — vevő (név, irsz, település, cím, adószám), fizetési mód, rendelésszám,
@@ -19,6 +20,7 @@
   rendelésszámnál link a megbízás szerkesztésére.
 - Kiállítás után a számlaszám a meglévő `setSzamlaSzam`-mal mentődik (adatmodell
   nem változott, nincs migráció).
+- A felugró ablak a `fuvarozas2` témaosztályt kapja (portálban különben a jelzőszínek hiányoztak).
 - Fájlok: `lib/fuvarozas2/szamlazasi-seged-alap.ts` (tiszta), `lib/fuvarozas2/szamlazasi-seged.ts`,
   `components/fuvarozas2/szamlazasi-seged.tsx`; bekötve: megbizas-reszlet.tsx, elszamolas-vaszon.tsx.
 - Teszt: teszt-szamlazasi-seged (44); helyi böngészős próba: Reise-ID a megbízásból,

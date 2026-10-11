@@ -9,6 +9,7 @@ import { formatNap } from "@/components/fuvarozas2/kozos";
 import { DriveFrissitesGomb } from "@/components/fuvarozas2/berfuvar";
 import { utolsoVaros, varos } from "@/lib/megbizasok/megjelenites";
 import { MegbizasKartya } from "@/components/fuvarozas2/megbizas-kartya";
+import { SzamlazasiSegedGomb } from "@/components/fuvarozas2/szamlazasi-seged";
 import { munkaasztalLink, type MunkaasztalSzuro } from "@/components/fuvarozas2/munkaasztal";
 import {
   modositElvinnivalot,
@@ -270,6 +271,14 @@ function SzakaszOszlop({
                 tipus={!szuro.jelleg}
                 href={munkaasztalLink(szuro, { reszlet: sor.id, elvinni: undefined, uj: false, ujBer: false, szerk: false })}
               />
+              {/* Számlázandó bérfuvarnál a Számlázási segéd közvetlenül a kártya alatt
+                  (a kártya linkjén kívül). A számlaszám írását a setSzamlaSzam
+                  szerveroldalon a jogosultsághoz köti. */}
+              {sor.jelleg === "ber" && sor.szakasz === "szamlazasra" && !sor.szamla_szam ? (
+                <div className="mt-1 flex justify-end">
+                  <SzamlazasiSegedGomb megbizasId={sor.id} elszamolasJog />
+                </div>
+              ) : null}
             </li>
           ))}
         </ul>
