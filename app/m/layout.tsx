@@ -2,6 +2,7 @@ import Link from "next/link";
 import { requireSession } from "@/lib/auth/dal";
 import { MTabbar, SOFOR_TABOK, IRODA_TABOK, VEZETO_TABOK } from "@/components/m/tabbar";
 import { budapestHetNapja } from "@/lib/fuvarozas/idozona";
+import { OldalNaplo } from "@/components/oldal-naplo";
 
 // Mobil nézet három szerepre, ugyanazzal a kerettel (terv: „Mobil" vászon):
 //   • sofőr (fuvarozas_sajat + alkalmazott): Ma · Holnap · Profil
@@ -30,6 +31,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
           </div>
         )}
       </div>
+      {ok ? <OldalNaplo /> : null}
       <MTabbar tabok={tabok} holnapFelirat={hetvege ? "Hétfő" : undefined} />
     </div>
   );

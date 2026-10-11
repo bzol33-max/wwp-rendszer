@@ -12,6 +12,29 @@
 
 import { query } from "@/lib/db";
 import { requireAnyViewPermission } from "@/lib/auth/require-permission";
+import { verifySession } from "@/lib/auth/dal";
+import { hasznalatOsszesit, type HasznalatSor, type HasznalatUtvonal } from "@/lib/fuvarozas2/oldal-naplo-alap";
+
+/**
+ * „Használat (14 nap)” (db/migrations/039_oldal_megnyitas.sql): útvonalanként
+ * a megnyitások száma, felhasználónként bontva — ebből döntünk, melyik lapot
+ * lehet törölni/összevonni. Csak adminnak; másnak null. Ha a tábla még nincs
+ * meg (migráció előtt) vagy hiba van, üres lista — a Rendszer-lap ettől nem áll le.
+ */
+export async function getHasznalat14Nap(): Promise<HasznalatUtvonal[] | null> {
+  const session = await verifySession();
+  if (!session.isAuth || session.role !== "admin") return null;
+  try {
+    const sorok = await query<HasznalatSor>(
+      `select utvonal, felhasznalo, count(*)::int as db, max(letrehozva)::text as utoljara
+       from oldal_megnyitas where letrehozva > now() - interval '14 days'
+       group by utvonal, felhasznalo`
+    );
+    return hasznalatOsszesit(sorok);
+  } catch {
+    return [];
+  }
+}
 
 export type EgeszsegAllapot = "rendben" | "figyelmeztetes" | "gond" | "nincs_adat";
 

@@ -87,6 +87,8 @@ async function tickBelso() {
   try {
     await query(`delete from kulso_valasz_cache where lejar_at < now() - interval '7 days'`);
     await query(`delete from fuvar_elo_megfigyeles where idobelyeg < now() - interval '2 days'`);
+    // Használati napló (039_oldal_megnyitas.sql): 60 napnál régebbi sorok.
+    await query(`delete from oldal_megnyitas where letrehozva < now() - interval '60 days'`);
   } catch (err) {
     console.error("[takaritas] váratlan hiba:", err);
   }
