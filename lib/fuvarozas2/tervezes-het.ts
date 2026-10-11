@@ -101,8 +101,9 @@ export async function getTervezesHet(resKulcs?: string): Promise<TervezesHet> {
   const tol = new Date(`${napok[0]}T12:00:00Z`);
   tol.setUTCDate(tol.getUTCDate() - 14);
   const tolNap = tol.toISOString().slice(0, 10);
+  // A legfrissebbek előre (a hét fuvarjai), hogy a 40-es korlát ne őket vágja le.
   const kellCim = new Set<string>();
-  for (const s of sorok) {
+  for (const s of [...sorok].sort((x, y) => y.le_nap.localeCompare(x.le_nap))) {
     if (s.le_nap < tolNap) continue;
     if (s.fel_lat == null && s.felrako) kellCim.add(s.felrako);
     if (s.le_lat == null && s.lerako) kellCim.add(s.lerako);
@@ -152,11 +153,6 @@ export async function getTervezesHet(resKulcs?: string): Promise<TervezesHet> {
       napok, telephely, kmKoltseg
     );
     resek.push(...r.resek);
-    // IDEIGLENES diagnosztika (2026-10-11): miért nincs rés — a heti fuvarok pontjai.
-    for (const s of sajat.filter((x) => x.fel_nap <= napok[napok.length - 1] && x.le_nap >= napok[0])) {
-      console.info(`[tervezes-het-diag] ${j.kod} #${s.id} ${s.fel_nap}→${s.le_nap} fel="${s.felrako}" (${s.fel_lat},${s.fel_lon}) le="${s.lerako}" (${s.le_lat},${s.le_lon})`);
-    }
-    if (elozo) console.info(`[tervezes-het-diag] ${j.kod} elozo #${elozo.id} le="${elozo.lerako}" (${elozo.le_lat},${elozo.le_lon})`);
     return { kod: j.kod, sofor: j.sofor, cellak: r.cellak };
   });
 
