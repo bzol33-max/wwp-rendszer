@@ -1,5 +1,16 @@
 # PROGRESS
 
+## 2026-10-11 — Tervezés hét: a rések végre megjelennek
+
+- Hiba: „egyik résbe sem illik” minden Timocom-ajánlatra (pl. Gergő H: Nádudvar → Tata üres út).
+  Ok: a `fuvar_megallok.lat/lon` oszlopot semmi nem tölti ki, így a hét-nézet koordináta nélkül
+  egyetlen rést sem talált. Javítás (`lib/fuvarozas2/tervezes-het.ts`): a hét és az előző 2 hét
+  fuvarjainak hiányzó pontjai a címből geokódolva (gyorsítótár, max. 40 cím, a legfrissebbek elöl).
+  Lejárt (ma előtti felrakású) Timocom-ajánlat nem kerül a hétre.
+- Élőben ellenőrizve: 4 rés; Nádudvar → Budapest (+5 km) és Hajdúszoboszló → Fót (+45 km)
+  illik Gergő Nádudvar → Tata résébe, létrával és alsó határral.
+- Ugyanez a hiányzó lat/lon érinti a `tervezo.ts` (döntés-panel hete) és a `menet` becsléseit — 1. hullám.
+
 ## 2026-10-11 — 0. hullám: hibás számok javítása (szakértői átvilágítás után)
 
 Alap: 14 szakértői jelentés (claude.ai projekt-doc `claude/fuvarozas-ceo-egyszerusitesi-terv.md`).
