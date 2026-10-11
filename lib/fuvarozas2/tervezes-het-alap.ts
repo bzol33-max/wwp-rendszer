@@ -34,6 +34,8 @@ export type Res = {
   km: number;
   ft: number;
   haza: boolean;
+  /** A fuvar azonosítója, amelynek a felrakójához ez az üres út vezet (a cellában elé kerül). */
+  elott?: string;
 };
 
 export type HetiKocsi = { kod: string; sofor: string; fuvarok: HetiFuvar[]; elozoVeg: { pont: Pont; varos: string } | null };
@@ -57,7 +59,7 @@ export function hetiReszek(k: HetiKocsi, napok: string[], telephely: { pont: Pon
       const km = utKm(hol.pont, f.fel);
       if (km >= RES_MIN_KM) {
         const nap = f.felNap < elso ? elso : f.felNap;
-        resek.push({ kulcs: `${k.kod}:${resek.length}`, kocsi: k.kod, sofor: k.sofor, nap, honnan: hol.varos, hova: f.felVaros, a: hol.pont, b: f.fel, km, ft: Math.round(km * kmKoltseg), haza: false });
+        resek.push({ kulcs: `${k.kod}:${resek.length}`, kocsi: k.kod, sofor: k.sofor, nap, honnan: hol.varos, hova: f.felVaros, a: hol.pont, b: f.fel, km, ft: Math.round(km * kmKoltseg), haza: false, elott: f.id });
       }
     }
     hol = f.le ? { pont: f.le, varos: f.leVaros } : null;

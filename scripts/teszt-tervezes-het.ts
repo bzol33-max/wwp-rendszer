@@ -31,6 +31,14 @@ const f = (id: string, fel: keyof typeof P, le: keyof typeof P, felNap: string, 
   eq("Ft = km × költség", r.resek[0].ft, r.resek[0].km * 300);
   eq("szabad napok", r.cellak.map((c) => c.szabad), [false, false, true, true, true, true]);
 }
+// Gergő hétfő (élő eset): Szakoly → Nádudvar, (üres) Nádudvar → Tata, Tata → Tompaládony, haza —
+// a Nádudvar → Tata rés a tatai fuvar ELÉ tartozik (a cella útvonal-sorrendje).
+if (P.nadudvar && P.szakoly) {
+  const r = hetiReszek({ kod: "AOPU", sofor: "Gergő", elozoVeg: null, fuvarok: [f("283", "szakoly", "nadudvar", "2026-10-12"), f("310", "tata", "tompa", "2026-10-12")] }, napok, tel, 300);
+  const nemHaza = r.resek.filter((x) => !x.haza);
+  eq("Nádudvar → Tata rés a 310 elé", nemHaza.map((x) => [x.honnan, x.hova, x.elott]), [["nadudvar", "tata", "310"]]);
+  eq("haza rés utolsó, elott nélkül", r.resek.filter((x) => x.haza).map((x) => x.elott ?? null), [null]);
+}
 // Rövid üres (<100 km) nem rés; előző heti lerakóról indul.
 {
   const r = hetiReszek({ kod: "NMZ", sofor: "Micó", elozoVeg: { pont: P.balkany, varos: "Balkány" }, fuvarok: [f("c", "teglas", "debrecen", "2026-10-14")] }, napok, tel, 300);

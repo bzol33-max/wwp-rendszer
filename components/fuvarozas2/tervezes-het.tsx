@@ -1,3 +1,4 @@
+import { Fragment } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import type { TervezesHet } from "@/lib/fuvarozas2/tervezes-het";
@@ -53,13 +54,17 @@ export function TervezesHetNezet({ adat }: { adat: TervezesHet }) {
                   {kocsi.cellak.map((c) => (
                     <td key={c.nap} className={cn("px-1.5 py-2", c.nap === adat.ma && "bg-muted/40")}>
                       <div className="flex flex-col gap-1">
-                        {c.resek.filter((r) => !r.haza).map((r) => <ResChip key={r.kulcs} r={r} aktiv={k?.kulcs === r.kulcs} />)}
+                        {/* Útvonal-sorrendben: minden üres út közvetlenül az elé a fuvar elé, amelyhez vezet. */}
+                        {c.resek.filter((r) => !r.haza && !c.fuvarok.some((f) => f.id === r.elott)).map((r) => <ResChip key={r.kulcs} r={r} aktiv={k?.kulcs === r.kulcs} />)}
                         {c.fuvarok.map((f) => (
-                          <Link key={f.id} href={`/fuvarozas2/megbizasok?reszlet=${f.id}`}
+                          <Fragment key={f.id}>
+                          {c.resek.filter((r) => !r.haza && r.elott === f.id).map((r) => <ResChip key={r.kulcs} r={r} aktiv={k?.kulcs === r.kulcs} />)}
+                          <Link href={`/fuvarozas2/megbizasok?reszlet=${f.id}`}
                             className={cn("block rounded-lg px-2 py-1 text-xs", f.sajat ? "bg-[var(--f2-blue-l)] text-[var(--f2-blue)]" : "bg-[var(--f2-mint-l)] text-[#0f5240]")}>
                             <div className="truncate font-semibold">{f.cim}</div>
                             <div className="truncate">{f.felVaros} → {f.leVaros}</div>
                           </Link>
+                          </Fragment>
                         ))}
                         {c.resek.filter((r) => r.haza).map((r) => <ResChip key={r.kulcs} r={r} aktiv={k?.kulcs === r.kulcs} />)}
                         {c.szabad ? <div className="rounded-lg px-2 py-1 text-xs text-muted-foreground/70">szabad</div> : null}
