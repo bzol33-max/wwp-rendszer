@@ -1,5 +1,19 @@
 # PROGRESS
 
+## 2026-10-11 — HU-GO „Díjtételek” export beolvasása
+
+- A portál valódi exportját (ISO-8859-2, `;`, „Költség”, „Használat ideje”,
+  „Viszonylati jegy státusz”) az import elutasította („nem találtam a fejlécsort”).
+  Most: összeg = „Költség”, időpont = „Használat ideje” (elsőbb a vásárlás/
+  érvényesség dátumánál), státusz-oszlop: sikertelen/törölt sor kihagyva és
+  figyelmeztetésben jelezve (pótdíj-veszély).
+- Hiba: az azonosító-keresés `\bid\b`-je a „Szakasz beküldésének időpontja”
+  oszlopra illett (JS `\b` + „ő”), így az egy másodpercben beküldött tételek
+  egymást ütötték ki (45 tétel veszett volna el). Most az „id” csak önálló szó,
+  dátum/idő oszlop sosem azonosító.
+- Valódi fájlon: 4 265 tétel, NMZ-492 2 303 945 Ft, AOPU-427 1 952 545 Ft; 1 sikertelen
+  (AOPU-427, 09.24 12:35, M31U0K0M, 2 021 Ft).
+
 ## 2026-10-11 — Üzemanyag-tény: 0 literes és kiugró GPS-napok
 
 - Ecofleet útvonaljelentés 09.01–10.04 alapján: AOPU-427 09.22-ig 0 litert mért,

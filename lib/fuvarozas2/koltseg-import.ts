@@ -167,7 +167,7 @@ export type HuGoBeolvasas = {
   ismetlodo: number;
 };
 
-type OszlopKulcs = "idopont" | "ido" | "rendszam" | "brutto" | "netto" | "km" | "szakasz" | "kategoria" | "azonosito";
+type OszlopKulcs = "idopont" | "ido" | "rendszam" | "brutto" | "netto" | "km" | "szakasz" | "kategoria" | "azonosito" | "statusz";
 
 function normFej(c: Cella): string {
   return String(c ?? "").toLowerCase().normalize("NFC").replace(/\s+/g, " ").trim();
@@ -185,15 +185,24 @@ export function huGoOszlopok(fej: Cella[]): Partial<Record<OszlopKulcs, number>>
   keres("rendszam", /rendsz[áa]m|license|plate|kennzeichen/);
   keres("netto", /nett[óo]|\bnet\b/);
   keres("brutto", /brutt[óo]|gross/);
-  if (ki.brutto == null) keres("brutto", /fizetend|[öo]sszeg|\bd[íi]j\b|d[íi]j \(|amount|total|[úu]td[íi]j/, /nett[óo]|[áa]fa|vat|kateg/);
+  // A HU-GO portál „Díjtételek” exportja (2026-10): „Költség” + „Devizanem”.
+  if (ki.brutto == null) keres("brutto", /fizetend|[öo]sszeg|\bd[íi]j\b|d[íi]j \(|amount|total|[úu]td[íi]j|k[öo]lts[ée]g/, /nett[óo]|[áa]fa|vat|kateg/);
   keres("km", /\bkm\b|t[áa]vols[áa]g|hossz|distance|length/);
-  keres("idopont", /d[áa]tum|id[őo]pont|date|time|kezdete|bel[ée]p[ée]s/, /k[ée]sz[íi]t|import|lej[áa]rat/);
+  // A tényleges áthaladás ideje elsőbb a vásárlás / érvényesség dátumánál
+  // (Díjtételek export: „Használat ideje”; a „Vásárlás dátuma” a napijegy kezdete).
+  keres("idopont", /haszn[áa]lat/);
+  if (ki.idopont == null) keres("idopont", /d[áa]tum|id[őo]pont|date|time|kezdete|bel[ée]p[ée]s/, /k[ée]sz[íi]t|import|lej[áa]rat/);
   keres("ido", /^(id[őo]|[óo]ra|time)$/);
   keres("szakasz", /szakasz|section|[úu]tvonal|route|\b[úu]t\b|road/);
   keres("kategoria", /kateg[óo]ria|category|\bd-?kat/);
+  keres("statusz", /st[áa]tusz|status|[áa]llapot/);
   // A „sorszám” NEM azonosító: az csak a sor helye az exportban (két export
   // ugyanazzal a sorszámmal más tranzakciót jelent) — ilyenkor az összetett kulcs él.
-  keres("azonosito", /tranzakci[óo]|azonos[íi]t[óo]|\bid\b|transaction|bizonylat/, /sorsz[áa]m/);
+  // Az „id” csak önálló szóként (a JS \b az ékezetes betűt nem-betűnek veszi:
+  // „időpontja” → „id”+„ő” — így lett a Díjtételek export „Szakasz
+  // beküldésének időpontja” oszlopa azonosító, és az egy másodpercben
+  // beküldött tételek egymást ütötték ki). Dátum/idő oszlop sosem azonosító.
+  keres("azonosito", /tranzakci[óo]|azonos[íi]t[óo]|(^|[^\p{L}\d])id($|[^\p{L}\d])|transaction|bizonylat/u, /sorsz[áa]m|id[őo]pont|d[áa]tum|date|time/);
   return ki;
 }
 
@@ -237,6 +246,7 @@ export function parseHuGoTabla(sorok: Cella[][], jarmuvek?: SajatJarmu[]): HuGoB
   const latott = new Set<string>();
   let kihagyott = 0;
   let ismetlodo = 0;
+  const sikertelen: string[] = [];
   for (let i = fejIdx + 1; i < sorok.length; i++) {
     const r = sorok[i] ?? [];
     const sorSzam = i + 1;
@@ -246,6 +256,12 @@ export function parseHuGoTabla(sorok: Cella[][], jarmuvek?: SajatJarmu[]): HuGoB
     if (/[öo]sszes|total|summe/i.test(r.map(cellaSzoveg).join(" ")) && !rendszamNyers) { kihagyott++; continue; }
     const idopont = idopontHu(get("idopont"), get("ido"));
     const brutto = szamHu(get("brutto"));
+    // Sikertelen / törölt fizetés: nem költség, de jelezni kell (pótdíj-veszély).
+    if (/sikertelen|failed|t[öo]r[öo]lt|elutas[íi]t|visszautas/i.test(cellaSzoveg(get("statusz")))) {
+      kihagyott++;
+      sikertelen.push(`${sorSzam}. sor (${rendszamNyers || "?"}, ${idopont ?? "?"}, ${brutto ?? "?"} Ft, ${cellaSzoveg(get("szakasz")) || "?"})`);
+      continue;
+    }
     if (!idopont || brutto == null || !rendszamNyers) {
       hibak.push(`${sorSzam}. sor: ${!idopont ? "érvénytelen dátum" : brutto == null ? "érvénytelen összeg" : "hiányzó rendszám"}`);
       continue;
@@ -274,6 +290,9 @@ export function parseHuGoTabla(sorok: Cella[][], jarmuvek?: SajatJarmu[]): HuGoB
       jarmuId: jarmu?.id ?? null,
       jarmuKod: jarmu?.kod ?? null,
     });
+  }
+  if (sikertelen.length > 0) {
+    hibak.unshift(`${sikertelen.length} sor kihagyva, mert a HU-GO szerint a fizetés SIKERTELEN — ellenőrizd a HU-GO egyenleget (pótdíj-veszély): ${sikertelen.slice(0, 5).join("; ")}${sikertelen.length > 5 ? " …" : ""}`);
   }
   return { tranzakciok: ki, oszlopok, hibak, kihagyott, ismetlodo };
 }

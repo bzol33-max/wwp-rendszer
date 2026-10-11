@@ -93,6 +93,22 @@ eq("HU-GO xlsx: jármű", x.tranzakciok[0]?.jarmuKod, "NMZ-492");
 eq("HU-GO xlsx: időpont", x.tranzakciok[0]?.idopont, "2026-09-29 14:00:00");
 const nincsFej = parseHuGoTabla([["a", "b"], ["1", "2"]], JARMUVEK);
 all("HU-GO: fejléc nélkül érthető hiba", nincsFej.tranzakciok.length === 0 && /fejlécsor/.test(nincsFej.hibak[0] ?? ""));
+// A HU-GO portál valódi „Díjtételek” exportja (2026-10-11, ISO-8859-2, pontosvessző):
+// „Költség”, „Használat ideje”, státusz-oszlop; a „Szakasz beküldésének
+// időpontja” NEM azonosító (régen az „id”+„ő” miatt az lett, és az egy
+// másodpercben beküldött tételek egymást ütötték ki).
+const dijtetelFej = '"Viszonylati jegy szám";"Viszonylati jegy státusz";Rendszám;"Gépjármű felségjelzése";Kategória;Euró-kód;"Szakasz azonosító";Irány;Költség;Devizanem;"Vásárlás dátuma";"Használat ideje";"Érvényesség kezdete";"Érvényesség vége";"Szakasz beküldésének időpontja"';
+const dijtetel = parseHuGoTabla(csvSorok([
+  dijtetelFej,
+  'OBU;Fizetve;NMZ492;H;J5;E6;354U0K197M;Előre;541;HUF;"2026-10-09 05:53:49";"2026-10-09 05:53:46";"2026-10-09 05:53:46";"2026-10-10 23:59:59";"2026-10-09 05:53:49"',
+  'OBU;Fizetve;AOPU427;H;J5;E6;M3U26K375M;Előre;2751;HUF;"2026-10-09 05:00:00";"2026-10-09 05:53:40";"2026-10-09 05:00:00";"2026-10-10 23:59:59";"2026-10-09 05:53:49"',
+  'OBU;Sikertelen;AOPU427;H;J5;E6;M31U0K0M;Vissza;2021;HUF;;"2026-09-24 12:35:06";"2026-09-24 12:35:06";"2026-09-24 12:35:06";"2026-09-24 12:35:09"',
+].join("\n")), JARMUVEK);
+eq("Díjtételek: oszlopok", [dijtetel.oszlopok.brutto, dijtetel.oszlopok.idopont, dijtetel.oszlopok.azonosito], ["Költség", "Használat ideje", undefined]);
+eq("Díjtételek: két tétel ugyanazzal a beküldési idővel is kettő", dijtetel.tranzakciok.length, 2);
+eq("Díjtételek: összeg, időpont (használat), jármű", [dijtetel.tranzakciok[1]?.bruttoFt, dijtetel.tranzakciok[1]?.idopont, dijtetel.tranzakciok[1]?.jarmuKod], [2751, "2026-10-09 05:53:40", "AOPU-427"]);
+all("Díjtételek: a sikertelen fizetés kihagyva és jelezve", dijtetel.kihagyott === 1 && /SIKERTELEN.*M31U0K0M/.test(dijtetel.hibak[0] ?? ""));
+eq("Díjtételek: kulcsok különböznek", new Set(dijtetel.tranzakciok.map((t) => t.kulsoAzonosito)).size, 2);
 eq("CSV: vesszős elválasztó idézőjellel", csvSorok('a,b,c\n"1,5",2,3'), [["a", "b", "c"], ["1,5", "2", "3"]]);
 
 // HU-GO ismétlődés: tranzakció-azonosítóval CSAK az azonosító a kulcs — ugyanaz a
