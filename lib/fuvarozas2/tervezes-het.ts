@@ -94,6 +94,29 @@ export async function getTervezesHet(resKulcs?: string): Promise<TervezesHet> {
     [napok[0], napok[napok.length - 1]]
   );
 
+  // A megállók lat/lon oszlopát semmi nem tölti ki (a modell-szinkron csak a
+  // címet írja), ezért koordináta nélkül egyetlen rés sem jött létre. A hét és
+  // az előtte lévő 2 hét fuvarjainak hiányzó pontjait a címből geokódoljuk
+  // (gyorsítótárazva, címenként egyszer, legfeljebb 40 cím).
+  const tol = new Date(`${napok[0]}T12:00:00Z`);
+  tol.setUTCDate(tol.getUTCDate() - 14);
+  const tolNap = tol.toISOString().slice(0, 10);
+  const kellCim = new Set<string>();
+  for (const s of sorok) {
+    if (s.le_nap < tolNap) continue;
+    if (s.fel_lat == null && s.felrako) kellCim.add(s.felrako);
+    if (s.le_lat == null && s.lerako) kellCim.add(s.lerako);
+  }
+  const cimPont = new Map<string, Pont | null>();
+  await Promise.all([...kellCim].slice(0, 40).map(async (c) => cimPont.set(c, await geo(c))));
+  for (const s of sorok) {
+    if (s.le_nap < tolNap) continue;
+    const fp = s.fel_lat == null && s.felrako ? cimPont.get(s.felrako) : null;
+    if (fp) { s.fel_lat = fp.lat; s.fel_lon = fp.lon; }
+    const lp = s.le_lat == null && s.lerako ? cimPont.get(s.lerako) : null;
+    if (lp) { s.le_lat = lp.lat; s.le_lon = lp.lon; }
+  }
+
   const beallitas = await getFuvarBeallitasok();
   const hetiBer = sorok.filter((s) => s.jelleg === "ber" && s.le_nap >= napok[0]).map((s) => s.id);
   const tar = await getTaroltKalkulaciok(hetiBer);
@@ -148,7 +171,13 @@ export async function getTervezesHet(resKulcs?: string): Promise<TervezesHet> {
   // EUR-árfolyam (MNB, mai vagy legutóbbi közzétett) az árlétra EUR-oszlopához.
   const eurArfolyam = (await getEurArfolyamok([ma]).catch(() => new Map<string, never>())).get(ma)?.ft ?? null;
 
-  const nyitott = (await getTimocomAjanlatok(30)).filter((t) => t.allapot === "nyitott").slice(0, 12);
+  // Lejárt ajánlat (a felrakás napja ma előtt) nem kerül a hétre — a Timocom fülön megmarad.
+  const felNapja = (t: Awaited<ReturnType<typeof getTimocomAjanlatok>>[number]) =>
+    (t.ajanlat.helyek.find((h) => h.tipus === "fel") ?? t.ajanlat.helyek[0])?.datumTol ?? null;
+  const nyitott = (await getTimocomAjanlatok(30))
+    .filter((t) => t.allapot === "nyitott")
+    .filter((t) => { const n = felNapja(t); return !n || n >= ma; })
+    .slice(0, 12);
   const ajanlatok: HetAjanlat[] = await Promise.all(nyitott.map(async (t) => {
     const helyek = t.ajanlat.helyek;
     const f = helyek.find((h) => h.tipus === "fel") ?? helyek[0];
