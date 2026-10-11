@@ -19,7 +19,7 @@ export type TimocomSor = {
   ajanlat: TimocomAjanlat;
 };
 
-export async function rogzitTimocomAjanlatot(be: TimocomBemenet): Promise<{ ok: true; id: string; uj: boolean } | { ok: false; hiba: string }> {
+export async function rogzitTimocomAjanlatot(be: TimocomBemenet): Promise<{ ok: true; id: string; uj: boolean; ut: string } | { ok: false; hiba: string }> {
   await requireEditPermission("fuvarozas");
   const session = await requireSession();
   const szoveg = String(be?.szoveg ?? "").slice(0, 20_000);
@@ -49,7 +49,7 @@ export async function rogzitTimocomAjanlatot(be: TimocomBemenet): Promise<{ ok: 
       a.ar?.penznem ?? null, a.tavKm, JSON.stringify(a), szoveg, a.url, session.name ?? session.username,
     ]
   );
-  return { ok: true, id: rows[0].id, uj: rows[0].uj };
+  return { ok: true, id: rows[0].id, uj: rows[0].uj, ut: `${a.megbizo ?? "?"}: ${fel.varos} → ${le.varos}${fel.datumTol ? ` (${fel.datumTol.slice(5).replace("-", ".")}.)` : ""}` };
 }
 
 type Nyers = { id: string; allapot: string; letrehozva_at: string; frissitve_at: string; rogzitette: string | null; reszletek: TimocomAjanlat | null; nyers_szoveg: string | null; url: string | null };

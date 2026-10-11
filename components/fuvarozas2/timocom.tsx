@@ -49,7 +49,10 @@ export function TimocomBefogado({ vanAktiv }: { vanAktiv: boolean }) {
       try {
         const r = await rogzitTimocomAjanlatot(be);
         if (!r.ok) { toast.error(r.hiba); return; }
-        toast.success(r.uj ? "Ajánlat rögzítve." : "Az ajánlat már megvolt — frissítve.");
+        // Hosszan látszik, és kiírja, MI jött át — ha nem az, amit a Timocomban
+        // megnyitottál, a Timocom-fül régi ajánlatot mutatott.
+        if (r.uj) toast.success(`Új ajánlat behozva — ${r.ut}`, { duration: 10000 });
+        else toast.info(`Ez az ajánlat már megvolt, frissítve — ${r.ut}. Ha nem ezt nyitottad meg, frissítsd a Timocom oldalt (F5), nyisd meg újra az ajánlatot, és kattints újra a gombra.`, { duration: 15000 });
         setSzoveg("");
         router.replace(`/fuvarozas2/timocom?id=${r.id}`);
         router.refresh();

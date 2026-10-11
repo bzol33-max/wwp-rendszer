@@ -49,7 +49,13 @@ eq("áru, jármű, felépítmény", [g.aru, g.jarmuTipus, g.felepitmeny, g.tulaj
 eq("ár nincs, fizetési határidő", [g.ar, g.fizetesiHataridoNap], [null, 30]);
 eq("figyelmeztetés: csak az ár hiánya", g.figyelmeztetesek, ["Nincs megadott ár — árajánlatot kell adni."]);
 eq("kalkulátor-megállók", g.helyek.map(kalkulatorMegallo), ["4200 Hajdúszoboszló", "2120 Dunakeszi"]);
-eq("kulcs = ajánlat-azonosító", timocomKulcs(g), "bTK371e8SA2IgIF-XxPmkg");
+eq("kulcs = ajánlat-azonosító + útvonal", timocomKulcs(g)?.startsWith("btk371e8sa2igif-xxpmkg|"), true);
+{
+  // Ugyanaz az URL-azonosító, más útvonal → más kulcs (nem írja felül a régit).
+  const masik = parseTimocomAjanlat({ szoveg: gaszler.replace("4200 Hajdúszoboszló", "4181 Nádudvar"), url: "https://my.timocom.com/app/tccargo/freights/search/view/bTK371e8SA2IgIF-XxPmkg" });
+  eq("azonos URL, más út → más kulcs", timocomKulcs(masik) !== timocomKulcs(g), true);
+  eq("ugyanaz az ajánlat → ugyanaz a kulcs", timocomKulcs(parseTimocomAjanlat({ szoveg: gaszler, url: "https://my.timocom.com/app/tccargo/freights/search/view/bTK371e8SA2IgIF-XxPmkg" })), timocomKulcs(g));
+}
 
 // 2. Több megálló, ADR, a gombtól jövő hely-sorokkal (ikon-cím + sor szöveg,
 //    a rejtett, képernyőolvasós változat is: „FelrakóhelyHU, 5300 Karcag…").

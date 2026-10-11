@@ -355,9 +355,14 @@ export function kalkulatorMegallo(h: TimocomHely): string {
 
 /** Az ismétlődés-kulcs: a Timocom ajánlat-azonosítója, ennek híján TC ID + útvonal + nap. */
 export function timocomKulcs(a: TimocomAjanlat): string | null {
-  if (a.ajanlatId) return a.ajanlatId;
   if (!a.helyek.length) return null;
-  return ["tc", a.tcId ?? "", ...a.helyek.map((h) => `${h.irsz ?? ""}${h.varos}${h.datumTol ?? ""}`)].join("|").toLowerCase();
+  const ut = a.helyek.map((h) => `${h.irsz ?? ""}${h.varos}${h.datumTol ?? ""}`);
+  // Az URL-ből vett ajánlat-azonosító önmagában nem elég: a Timocom címsora nem
+  // mindig követi a megnyitott ajánlatot, így két különböző ajánlat ugyanazt az
+  // azonosítót kaphatta, és az új felülírta a régit (2026-10-11). Az útvonal +
+  // nap mindig része a kulcsnak.
+  if (a.ajanlatId) return [a.ajanlatId, ...ut].join("|").toLowerCase();
+  return ["tc", a.tcId ?? "", ...ut].join("|").toLowerCase();
 }
 
 /** Az # részbe kódolt adat (base64url JSON) → bemenet; hibás adatnál null. */
