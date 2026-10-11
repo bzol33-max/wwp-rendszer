@@ -152,6 +152,11 @@ export async function getTervezesHet(resKulcs?: string): Promise<TervezesHet> {
       napok, telephely, kmKoltseg
     );
     resek.push(...r.resek);
+    // IDEIGLENES diagnosztika (2026-10-11): miért nincs rés — a heti fuvarok pontjai.
+    for (const s of sajat.filter((x) => x.fel_nap <= napok[napok.length - 1] && x.le_nap >= napok[0])) {
+      console.info(`[tervezes-het-diag] ${j.kod} #${s.id} ${s.fel_nap}→${s.le_nap} fel="${s.felrako}" (${s.fel_lat},${s.fel_lon}) le="${s.lerako}" (${s.le_lat},${s.le_lon})`);
+    }
+    if (elozo) console.info(`[tervezes-het-diag] ${j.kod} elozo #${elozo.id} le="${elozo.lerako}" (${elozo.le_lat},${elozo.le_lon})`);
     return { kod: j.kod, sofor: j.sofor, cellak: r.cellak };
   });
 
