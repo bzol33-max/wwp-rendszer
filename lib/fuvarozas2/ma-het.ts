@@ -53,7 +53,9 @@ export type HetKartya = {
 export type HetMost =
   | { tipus: "fuvar"; fuvarId: string; partner: string; szazalek: number; kovetkezo: string; ido: string | null; szin: "blue" | "amber" }
   | { tipus: "kesz" }
-  | { tipus: "ures" };
+  | { tipus: "ures" }
+  /** Vasárnap, fuvar nélkül: pihenőnap — nem kell fuvart keresni (Zoltán, 2026-10-11). */
+  | { tipus: "piheno" };
 
 export type HetNap = { nap: string; cimke: string; ma: boolean; /** Szombat / vasárnap (csak ha aznap van fuvar). */ hetvege?: boolean };
 
@@ -195,14 +197,20 @@ export function hetCellak(
   });
 }
 
+/** Pihenőnap-e a nap ("YYYY-MM-DD"): vasárnapra nem kell fuvar (Zoltán, 2026-10-11). */
+export function pihenoNapE(nap: string | null | undefined): boolean {
+  if (!nap || !/^\d{4}-\d{2}-\d{2}$/.test(nap)) return false;
+  return new Date(`${nap}T12:00:00Z`).getUTCDay() === 0;
+}
+
 /**
  * A „Most” oszlop a mai tükör-sorokból (ma-tukor.ts): az első még nem kész
  * megálló fuvarja, a kész megállói arányával. Ha minden mai megálló kész:
  * „kesz”; ha ma nincs megálló: „ures”.
  */
-export function hetMost(sorok: TukorSor[]): HetMost {
+export function hetMost(sorok: TukorSor[], ma?: string): HetMost {
   const megallok = sorok.filter((s): s is Extract<TukorSor, { tipus: "megallo" }> => s.tipus === "megallo");
-  if (megallok.length === 0) return { tipus: "ures" };
+  if (megallok.length === 0) return pihenoNapE(ma) ? { tipus: "piheno" } : { tipus: "ures" };
   const kov = megallok.find((m) => m.allapot !== "kesz");
   if (!kov) return { tipus: "kesz" };
   const sajat = megallok.filter((m) => m.fuvarId === kov.fuvarId);

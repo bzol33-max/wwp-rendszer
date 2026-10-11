@@ -5,6 +5,7 @@ import { NyugtaGomb, VisszavonGomb } from "@/components/fuvarozas2/elteres-nyugt
 import { AutoFrissites } from "@/components/fuvarozas2/auto-frissites";
 import { Csempesor } from "@/components/fuvarozas2/csempesor";
 import { HetRacs } from "@/components/fuvarozas2/het-racs";
+import { pihenoNapE } from "@/lib/fuvarozas2/ma-het";
 
 // A „Ma" képernyő (Budaházi Zoltán, 2026-09-28): négy kocsi-oszlop egymás
 // mellett, mindegyik ugyanabban a sorrendben — fejléc (hol van most),
@@ -185,7 +186,7 @@ function Tukor({ sorok }: { sorok: TukorSor[] }) {
   );
 }
 
-function KocsiOszlop({ k, holnapCimke }: { k: MaKocsi; holnapCimke: string }) {
+function KocsiOszlop({ k, holnapCimke, piheno }: { k: MaKocsi; holnapCimke: string; piheno: boolean }) {
   if (k.helykitolto) {
     return (
       <Doboz className="flex flex-col gap-1 border-dashed p-4 text-muted-foreground xl:min-h-40">
@@ -227,6 +228,8 @@ function KocsiOszlop({ k, holnapCimke }: { k: MaKocsi; holnapCimke: string }) {
             <SzakaszCim>Ma</SzakaszCim>
             {k.sorok.length > 0 ? (
               <Tukor sorok={k.sorok} />
+            ) : piheno ? (
+              <div className="rounded-xl bg-muted/50 px-3 py-2 text-xs text-muted-foreground">Vasárnap — pihenőnap</div>
             ) : (
               <Link href="/fuvarozas2/tervezes" className="rounded-xl bg-[var(--f2-amb-l)] px-3 py-2 text-xs font-semibold text-[var(--f2-amb)] hover:underline">
                 Üres nap — keress fuvart →
@@ -313,7 +316,7 @@ export function MaVaszonNezet({ adat }: { adat: MaVaszon }) {
       <HetRacs het={adat.het} />
 
       <div className="grid items-start gap-3 md:grid-cols-2 xl:grid-cols-4">
-        {adat.kocsik.map((k, i) => <KocsiOszlop key={k.kod ?? `hely-${i}`} k={k} holnapCimke={adat.holnapCimke} />)}
+        {adat.kocsik.map((k, i) => <KocsiOszlop key={k.kod ?? `hely-${i}`} k={k} holnapCimke={adat.holnapCimke} piheno={pihenoNapE(adat.ma)} />)}
       </div>
 
       <div className="grid items-start gap-3 lg:grid-cols-2">

@@ -20,6 +20,7 @@
 // Minden becsült érték jelölve van a felületen (ETA, vezetési idő) — a
 // tachográf a sofőrnél van, ez előrejelzés.
 
+import { megbizoMegjelenites } from "@/lib/fuvarozas/fuvar-constants";
 import { query } from "@/lib/db";
 import { requireSession } from "@/lib/auth/dal";
 import { revalidatePath } from "next/cache";
@@ -258,6 +259,8 @@ export async function getMaVaszon(): Promise<MaVaszon> {
   // számlával „számlázva” lett — onnantól a mai megállói eltűntek a tükörből,
   // és a debreceni GPS-állás „nem tervezett” lett. Ma: a felrakás vagy a
   // lerakás napja ma, egy megálló tervezett napja ma, vagy ma érintette.
+  // Saját árunál a megbízó mindig a Well-Worn Pallet (Zoltán, 2026-10-11).
+  for (const s of sorok) s.partner = megbizoMegjelenites(s.jelleg, s.partner);
   const lezartMaiak = await query<MegbizasSor>(
     `select ${MEGBIZAS_OSZLOPOK}
      where m.torolt_at is null and m.jarmu_id is not null
@@ -273,6 +276,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
      order by m.datum, m.id`,
     [ma]
   ).catch(() => [] as MegbizasSor[]);
+  for (const s of lezartMaiak) s.partner = megbizoMegjelenites(s.jelleg, s.partner);
 
   const megbizasIdk = [...sorok, ...lezartMaiak].map((s) => s.id);
   const megallok = megbizasIdk.length
@@ -329,6 +333,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
      order by m.datum, m.id`,
     [hetTol, hetIg]
   );
+  for (const f of hetFuvarok) f.partner = megbizoMegjelenites(f.jelleg, f.partner);
   const hetNapok = hetNapjaiHetvegevel(ma, (nap) => hetFuvarok.some((f) => f.felrakas_nap === nap || f.lerakas_nap === nap));
   const menetSorrendje = (kod: string | null, nap: string) => (kod ? menetek.get(kod)?.get(nap) ?? null : null);
 
@@ -781,7 +786,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
     napok,
     sorok: kocsik.map((k) => ({
       kod: k.kod, sofor: k.sofor, cimke: k.cimke, helykitolto: k.helykitolto, allapot: k.allapot,
-      most: hetMost(k.sorok),
+      most: hetMost(k.sorok, ma),
       cellak: hetCellak(k.kod ? hetFuvarok.filter((f) => f.jarmu_kod === k.kod) : [], hetMegallok, napok, (nap) => menetSorrendje(k.kod, nap)),
     })),
     kocsiNelkul: hetCellak(hetFuvarok.filter((f) => !f.jarmu_kod), hetMegallok, napok),

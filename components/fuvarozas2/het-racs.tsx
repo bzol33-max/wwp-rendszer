@@ -67,6 +67,9 @@ function Most({ m, helykitolto }: { m: HetMost; helykitolto: string | null }) {
       </Link>
     );
   }
+  if (m.tipus === "piheno") {
+    return <div className="flex items-center rounded-xl border border-dashed border-foreground/15 px-3 text-xs text-muted-foreground">Vasárnap — pihenőnap</div>;
+  }
   if (m.tipus === "kesz") {
     return <div className="flex items-center rounded-xl border border-[var(--f2-mint)]/30 bg-[var(--f2-mint-l)]/60 px-3 text-xs font-semibold text-[var(--f2-mint)]">✓ A mai fuvarok készek</div>;
   }

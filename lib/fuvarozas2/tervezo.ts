@@ -6,6 +6,7 @@
 // kalkulációja (lib/fuvarozas2/kalkulacio-tar.ts). A heti számtan:
 // lib/fuvarozas2/tervezo-alap.ts.
 
+import { megbizoMegjelenites } from "@/lib/fuvarozas/fuvar-constants";
 import { query } from "@/lib/db";
 import { requireViewPermission } from "@/lib/auth/require-permission";
 import { varosNev } from "@/lib/fuvarozas/varos";
@@ -195,7 +196,7 @@ export async function getTervezo(szuro: { m?: string; kocsi?: string }): Promise
         )
           .map((f) => ({
             id: f.id,
-            cim: f.partner ?? (f.jelleg === "sajat" ? "saját fuvar" : "(nincs megbízó)"),
+            cim: megbizoMegjelenites(f.jelleg, f.partner),
             ut: `${varosNev(f.felrako ?? "") || "?"} → ${varosNev(f.lerako ?? "") || "?"}`,
             dij: f.jelleg === "ber" && f.penznem === "Ft" ? f.fuvardij : null,
             uj: f.id === jelolt.id,

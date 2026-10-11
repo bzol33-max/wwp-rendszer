@@ -88,6 +88,21 @@ export function normalizaltCegKulcs(nev: string): string {
  */
 const SAJAT_CEG_MINTA = /^well\s*worn\s*pallett?$/;
 
+/** A saját cég megjelenített neve. */
+export const SAJAT_CEG_NEV = "Well-Worn Pallet";
+
+/**
+ * A fuvar megbízója a felületen. Saját árunál a megbízó MINDIG a Well-Worn
+ * Pallet (Zoltán, 2026-10-11); ha a sorhoz más cég is tartozik (a vevő vagy a
+ * címzett, pl. „Fabrika 2000 Kft”), az nyíl után látszik. Bérfuvarnál a partner,
+ * ennek híján „(nincs megbízó)”.
+ */
+export function megbizoMegjelenites(jelleg: string | null | undefined, partner: string | null | undefined): string {
+  const p = partner?.trim() || null;
+  if (jelleg === "sajat") return p && !sajatCegunkE(p) ? `${SAJAT_CEG_NEV} → ${p}` : SAJAT_CEG_NEV;
+  return p ?? "(nincs megbízó)";
+}
+
 /** Igaz, ha a cégnév a MI cégünk (bármilyen írásmóddal). */
 export function sajatCegunkE(nev: string | null | undefined): boolean {
   if (!nev?.trim()) return false;

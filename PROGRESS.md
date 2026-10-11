@@ -1,5 +1,16 @@
 # PROGRESS
 
+## 2026-10-11 — Vasárnap pihenőnap; saját árunál a megbízó a Well-Worn Pallet
+
+- Ma oldal: üres vasárnapon a „Most” oszlop és a kocsi „Ma” doboza „Vasárnap —
+  pihenőnap” (nem „Nincs mai fuvar · keress fuvart”). `pihenoNapE` (ma-het.ts);
+  a vasárnapi fuvar ugyanúgy látszik. A szombat változatlan.
+- `megbizoMegjelenites` (fuvar-constants.ts): saját fuvarnál a megbízó mindig
+  „Well-Worn Pallet”, más cég a sorban nyíl után („Well-Worn Pallet → Fabrika
+  2000 Kft”). Bekötve: Ma (rács, kocsi-oszlop, eltérések), Tervezés kártyák,
+  Megbízások címsor. Adatot nem ír át, csak megjelenítés.
+- Teszt: teszt-ma-het (+10).
+
 ## 2026-10-11 — Timocom → WWP böngésző-gomb (fuvarszervező pult, B út)
 
 - Új lap: Fuvarozás · **Timocom** (`/fuvarozas2/timocom`). A „→ WWP” könyvjelző-gombot

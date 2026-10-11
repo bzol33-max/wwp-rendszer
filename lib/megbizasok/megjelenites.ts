@@ -1,3 +1,4 @@
+import { megbizoMegjelenites } from "@/lib/fuvarozas/fuvar-constants";
 import { varosNev } from "@/lib/fuvarozas/varos";
 
 /** A cím első városa, a munkaasztal eddigi rövidítésével. */
@@ -23,5 +24,5 @@ export function rovidCim(cim: string | null): string {
   return v && v.length <= 32 ? v : (cim ?? "—").slice(0, 32);
 }
 export function megbizasCim(s: { kitol?: string | null; partner_nev?: string | null; jelleg: string }): string {
-  return s.kitol ? `${s.kitol} → ${s.partner_nev ?? "?"}` : s.partner_nev ?? (s.jelleg === "sajat" ? "Saját fuvar" : "(nincs megbízó)");
+  return s.kitol ? `${s.kitol} → ${s.partner_nev ?? "?"}` : megbizoMegjelenites(s.jelleg, s.partner_nev);
 }

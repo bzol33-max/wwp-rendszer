@@ -1,6 +1,7 @@
 // A Ma oldal heti rácsa (R2). Futtatás: npx tsx scripts/teszt-ma-het.ts
 
-import { hetCellak, hetMost, hetNapjai, hetNapjaiHetvegevel, hetSzama, kocsiHelykitolto, type HetFuvar, type HetMegallo } from "@/lib/fuvarozas2/ma-het";
+import { hetCellak, hetMost, hetNapjai, hetNapjaiHetvegevel, hetSzama, kocsiHelykitolto, type HetFuvar, type HetMegallo, pihenoNapE } from "@/lib/fuvarozas2/ma-het";
+import { megbizoMegjelenites } from "@/lib/fuvarozas/fuvar-constants";
 import { tukorSorok, type TukorSor } from "@/lib/fuvarozas2/ma-tukor";
 
 let ok = 0, bad = 0;
@@ -80,6 +81,18 @@ eq("Most: a mostani fuvar és a haladása", hetMost(tukor), { tipus: "fuvar", fu
 eq("Most: a megállón állva sárga", (hetMost([tukor[3], tukor[4], m("295", "Tompaládony", "lerako", "most", "ott 14:40 óta")]) as { szin: string }).szin, "amber");
 eq("Most: minden kész", hetMost(tukor.slice(0, 3)), { tipus: "kesz" });
 eq("Most: nincs mai fuvar", hetMost([]), { tipus: "ures" });
+// Vasárnapra nem kell fuvar (Zoltán, 2026-10-11): üres vasárnap pihenőnap, nem „keress fuvart”.
+eq("Most: üres vasárnap = pihenőnap", hetMost([], "2026-10-11"), { tipus: "piheno" });
+eq("Most: üres szombat = még keres", hetMost([], "2026-10-10"), { tipus: "ures" });
+eq("Most: üres hétfő = keres", hetMost([], "2026-10-12"), { tipus: "ures" });
+eq("Most: vasárnapi fuvar akkor is látszik", hetMost(tukor.slice(0, 3), "2026-10-11"), { tipus: "kesz" });
+eq("pihenőnap: rossz dátum nem az", [pihenoNapE(null), pihenoNapE("2026-10-11x")], [false, false]);
+// Saját árunál a megbízó mindig a Well-Worn Pallet.
+eq("megbízó: saját, partner nélkül", megbizoMegjelenites("sajat", null), "Well-Worn Pallet");
+eq("megbízó: saját, vevővel", megbizoMegjelenites("sajat", "Fabrika 2000 Kft"), "Well-Worn Pallet → Fabrika 2000 Kft");
+eq("megbízó: saját, a saját cég névváltozata", megbizoMegjelenites("sajat", "Well Worn Pallett Kft."), "Well-Worn Pallet");
+eq("megbízó: bér", megbizoMegjelenites("ber", "ÁB SPEED Kft."), "ÁB SPEED Kft.");
+eq("megbízó: bér, nincs", megbizoMegjelenites("ber", "  "), "(nincs megbízó)");
 // Este a nap minden fuvarja lezárult (a lezárt fuvar is a tükörben marad, készként): „kész”, nem „üres”.
 eq("Most: a lezárt fuvarokkal kész nap", hetMost(tukorSorok({
   fuvarok: [{ id: "293", partner: "Lösung", hivatkozas: null, jelleg: "ber", megallo_reszletek: null, lezart: true, megallok: [
