@@ -10,16 +10,25 @@ function eq(nev: string, kapott: unknown, vart: unknown) {
   else { bad++; console.log(`  HIBA  ${nev}\n    várt:   ${JSON.stringify(vart)}\n    kapott: ${JSON.stringify(kapott)}`); }
 }
 const MA = "2026-10-11";
-const alap: PenzBemenet = { id: "1", jelleg: "ber", allapot: "teljesitve", nap: "2026-10-09", fuvardij: 480, penznem: "EUR", szamlaSzam: null, vanPapir: true, szamla: null };
+const alap: PenzBemenet = { id: "1", jelleg: "ber", allapot: "teljesitve", nap: "2026-10-09", fuvardij: 480, penznem: "EUR", szamlaSzam: null, vanPapir: true, fotoVan: true, szamla: null };
 const sz = (x: Partial<NonNullable<PenzBemenet["szamla"]>>) => ({ brutto: 100000, fizetett: 0, penznem: "HUF", kiallitas: "2026-09-20", hatarido: "2026-10-20", fizetve: false, fizetveNap: null, ...x });
 
 const a1 = penzAllapot(alap, MA);
 eq("számlázatlan bér", [a1.kesz, a1.szamlazatlan, a1.papirHianyzik, a1.kor], [true, true, false, 2]);
 eq("teendő", szurobeEsik(a1, "teendo"), true);
 eq("úton lévő nem kész", penzAllapot({ ...alap, allapot: "folyamatban" }, MA).kesz, false);
-const sajat = penzAllapot({ ...alap, jelleg: "sajat", vanPapir: false, nap: "2026-10-05" }, MA);
+const sajat = penzAllapot({ ...alap, jelleg: "sajat", vanPapir: false, fotoVan: false, nap: "2026-10-05" }, MA);
 eq("saját: nincs számla, papír hiányzik", [sajat.szamlazatlan, sajat.papirHianyzik, sajat.kor], [false, true, 6]);
-eq("régi saját papírt nem kérünk", penzAllapot({ ...alap, jelleg: "sajat", vanPapir: false, nap: "2026-07-01" }, MA).papirHianyzik, false);
+eq("régi saját papírt nem kérünk", penzAllapot({ ...alap, jelleg: "sajat", vanPapir: false, fotoVan: false, nap: "2026-07-01" }, MA).papirHianyzik, false);
+// Papír-jelzés (2026-10-11): csak a nyugtázás számít papírnak, a fotó nem.
+const fotoNemPapir = penzAllapot({ ...alap, vanPapir: false, fotoVan: true }, MA);
+eq("bér: fotó van, papír nincs → papír hiányzik", [fotoNemPapir.papirHianyzik, szurobeEsik(fotoNemPapir, "papir"), szurobeEsik(fotoNemPapir, "teendo")], [true, true, true]);
+eq("bér: nyugtázott papír fotó nélkül → megvan", penzAllapot({ ...alap, vanPapir: true, fotoVan: false }, MA).papirHianyzik, false);
+const szPn = penzAllapot({ ...alap, allapot: "szamlazva", szamlaSzam: "Q", vanPapir: false }, MA);
+eq("számlázva, papír még nincs → jelzés", [szPn.papirHianyzik, szPn.szamlazvaPapirNelkul, szPn.szamlazatlan], [true, true, false]);
+eq("számlázva, papír megvan → nincs jelzés", penzAllapot({ ...alap, allapot: "szamlazva", szamlaSzam: "Q" }, MA).szamlazvaPapirNelkul, false);
+eq("számlázatlan papír nélkül: nem 'számlázva papír nélkül'", penzAllapot({ ...alap, vanPapir: false }, MA).szamlazvaPapirNelkul, false);
+eq("saját: fotó = szállítólevél, nincs hiány", penzAllapot({ ...alap, jelleg: "sajat", vanPapir: false, fotoVan: true }, MA).papirHianyzik, false);
 eq("postázott papírja megvolt", penzAllapot({ ...alap, allapot: "postazva", vanPapir: false, szamlaSzam: "X" }, MA).papirHianyzik, false);
 const kik = penzAllapot({ ...alap, allapot: "postazva", szamlaSzam: "A", szamla: sz({}) }, MA);
 eq("kiküldve", [kik.kikuldve, kik.lejart, kik.fizetve, szurobeEsik(kik, "teendo")], [true, false, false, false]);
@@ -32,7 +41,7 @@ eq("fizetve", [fiz.fizetve, fiz.lejart, fiz.kikuldve], [true, false, false]);
 const sorok = [
   { ...alap },
   { ...alap, id: "2", penznem: "Ft", fuvardij: 30000 },
-  { ...alap, id: "3", jelleg: "sajat" as const, vanPapir: false, nap: "2026-10-05", fuvardij: null },
+  { ...alap, id: "3", jelleg: "sajat" as const, vanPapir: false, fotoVan: false, nap: "2026-10-05", fuvardij: null },
   { ...alap, id: "4", allapot: "postazva", szamlaSzam: "B", szamla: sz({ hatarido: "2026-10-01", kiallitas: "2026-08-01", brutto: 250000, fizetett: 50000 }) },
   { ...alap, id: "5", allapot: "postazva", szamlaSzam: "B", szamla: sz({ hatarido: "2026-10-01", kiallitas: "2026-08-01", brutto: 250000, fizetett: 50000 }) },
   { ...alap, id: "6", allapot: "postazva", szamlaSzam: "D", szamla: sz({ penznem: "EUR", brutto: 609.6, kiallitas: "2026-10-01" }) },
@@ -46,6 +55,12 @@ eq("kintlévő számlánként egyszer", osszegSzoveg(o.kintlevo.osszeg), "610 EU
 eq("kintlévő sávok", o.kintlevo.savok.map(osszegSzoveg), ["610 EUR", "0 Ft", "200 000 Ft"]);
 eq("lejárt", [o.lejart.db, osszegSzoveg(o.lejart.osszeg)], [1, "200 000 Ft"]);
 eq("befolyt a hónapban", [o.befolyt.db, osszegSzoveg(o.befolyt.osszeg)], [1, "120 000 Ft"]);
+const o2 = osszesit([
+  { ...alap, id: "a", vanPapir: false, fotoVan: true },
+  { ...alap, id: "b", allapot: "szamlazva", szamlaSzam: "Z", vanPapir: false },
+  { ...alap, id: "c", allapot: "postazva", szamlaSzam: "Y", vanPapir: false },
+].map((s) => ({ ...s, a: penzAllapot(s, MA) })), MA);
+eq("csempe: fotós és számlázott papír nélküli is számít, a postázott nem", [o2.papir.db, o2.szamok.papir], [2, 2]);
 eq("szűrő-számok", [o.szamok.teendo, o.szamok.szamlazatlan, o.szamok.papir, o.szamok.kikuldve, o.szamok.lejart, o.szamok.fizetve, o.szamok.mind], [5, 2, 1, 1, 2, 2, 8]);
 
 console.log(`teszt-penz-lista: ${ok} ok, ${bad} hiba`);

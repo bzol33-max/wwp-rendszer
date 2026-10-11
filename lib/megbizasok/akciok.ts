@@ -23,6 +23,7 @@ import { duplikatumSor, keresDuplikatumot, type DuplikatumJelolt } from "@/lib/f
 import { utemezhetoNap } from "@/lib/megbizasok/elvinni-szabalyok";
 import { budapestNapISO } from "@/lib/fuvarozas/idozona";
 import { irValtozasokat, naplozandoValtozasok } from "@/lib/menet/valtozas";
+import { papirValtasHiba } from "@/lib/megbizasok/papir-alap";
 
 
 function egesz(s: string): number | null {
@@ -85,6 +86,45 @@ export async function setSzamlaSzam(id: string, szamlaSzam: string | null): Prom
     if (err instanceof Error && err.message.startsWith("__ATMENET__")) return { ok: false, hiba: err.message.slice("__ATMENET__".length) };
     throw err;
   }
+}
+
+/**
+ * „Papír megjött ✓” / visszavonás (2026-10-11): Szabina nyugtázza az eredeti
+ * papírt (CMR / fuvarlevél). Nem állapotváltás, csak jelzés — a számlázást
+ * nem tiltja. Jog: aki postázhat / elszámolhat (valtAllapot-tal azonos).
+ * Kettős írás (új elszámolás-tábla + régi oszlop), naplózva; a 040-es
+ * migráció óta a régi oszlop írása nem számolja újra az állapotot.
+ */
+export async function setPapirMegjott(id: string, megjott: boolean): Promise<{ ok: true } | { ok: false; hiba: string }> {
+  await requireAnyEditPermission(["fuvarozas", "elszamolas"]);
+  const session = await requireSession();
+  const ki = session.name ?? session.username;
+  return withTransaction(async (tx) => {
+    const [sor] = await tx<{ jelleg: string | null; torolt: boolean; megvan: boolean }>(
+      `select m.jelleg, m.torolt_at is not null as torolt,
+              coalesce(e.papirok_beerkeztek_at, m.papirok_beerkeztek_at) is not null as megvan
+         from fuvar_megbizasok m left join fuvar_elszamolas e on e.megbizas_id = m.id
+        where m.id = $1 for update of m`,
+      [id]
+    );
+    if (!sor) return { ok: false, hiba: "Nincs ilyen megbízás." };
+    const hiba = papirValtasHiba({ jelleg: sor.jelleg, torolt: sor.torolt, megvan: sor.megvan, megjott });
+    if (hiba) return { ok: false, hiba };
+    await tx(`select set_config('fuvarozas2.uj_kod', '1', true)`);
+    await tx(`insert into fuvar_elszamolas (megbizas_id) values ($1) on conflict (megbizas_id) do nothing`, [id]);
+    if (megjott) {
+      await tx(`update fuvar_elszamolas set papirok_beerkeztek_at = now(), papirok_beerkeztek_by = $2, frissitve_at = now() where megbizas_id = $1`, [id, ki]);
+      await tx(`update fuvar_megbizasok set papirok_beerkeztek_at = now() where id = $1`, [id]);
+    } else {
+      await tx(`update fuvar_elszamolas set papirok_beerkeztek_at = null, papirok_beerkeztek_by = null, frissitve_at = now() where megbizas_id = $1`, [id]);
+      await tx(`update fuvar_megbizasok set papirok_beerkeztek_at = null where id = $1`, [id]);
+    }
+    await irEsemenyt(tx, {
+      megbizasId: id, esemeny: megjott ? "papir_beerkezett" : "visszaallitas",
+      forras: "ember", ki, reszletek: megjott ? { mezo: "papir" } : { mezo: "papir", indok: "papír-nyugtázás visszavonva" },
+    });
+    return { ok: true };
+  });
 }
 
 export async function setMegjegyzes(id: string, megjegyzes: string | null): Promise<void> {

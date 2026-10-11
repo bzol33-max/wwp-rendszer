@@ -41,6 +41,8 @@ export type SzamlazasiSeged = {
   email: string | null;
   emailForras: string | null;
   cmrDb: number;
+  /** Az eredeti papír nyugtázva — hiánya csak figyelmeztetés (2026-10-11). */
+  papirMegvan: boolean;
   ellenorzes: Ellenorzes[];
   kiallithato: boolean;
   elozoSzamla: { szamlaszam: string; kiallitas: string } | null;
@@ -153,7 +155,7 @@ export async function getSzamlazasiSeged(id: string): Promise<SzamlazasiSeged | 
   const cmrDb = dokumentumok.filter((d) => d.tipus === "fuvarlevel").length;
 
   const ellenorzes = ellenorzesek({
-    cmrDb, fuvardij: sor.fuvardij != null ? Number(sor.fuvardij) : null, teljesites, kiallitas,
+    cmrDb, papirMegvan: !!sor.papirok_beerkeztek_at, fuvardij: sor.fuvardij != null ? Number(sor.fuvardij) : null, teljesites, kiallitas,
     vanSzamla: !!sor.szamla_szam, rendelesszam, vevoAdoszam: vevo.adoszam,
   });
 
@@ -180,6 +182,7 @@ export async function getSzamlazasiSeged(id: string): Promise<SzamlazasiSeged | 
     email,
     emailForras,
     cmrDb,
+    papirMegvan: !!sor.papirok_beerkeztek_at,
     ellenorzes,
     kiallithato: !ellenorzes.some((e) => e.blokkol),
     elozoSzamla: elozo ? { szamlaszam: elozo.szamlaszam, kiallitas: huDatum(elozo.kiallitas_datum)! } : null,

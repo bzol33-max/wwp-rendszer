@@ -55,7 +55,8 @@ export async function getPenzLista(szuro: PenzSzuro, sajatIs: boolean): Promise<
         fuvardij: s.fuvardij != null ? Number(s.fuvardij) : null,
         penznem: s.fuvardij_penznem || "Ft",
         szamlaSzam: s.szamla_szam,
-        vanPapir: s.foto_van || !!s.papirok_beerkeztek_at,
+        vanPapir: !!s.papirok_beerkeztek_at,
+        fotoVan: s.foto_van,
         szamla: sz ? {
           brutto: Number(sz.brutto), fizetett: Number(sz.fizetett_osszeg), penznem: sz.penznem,
           kiallitas: sz.kiallitas, hatarido: sz.hatarido, fizetve: sz.fizetve, fizetveNap: sz.fizetve_nap,

@@ -9,6 +9,7 @@
 // árufuvarozás Felrakó-Lerakó”, 1 db, egységár, 27% áfa), pénznem, e-mail.
 
 import { varosNev } from "@/lib/fuvarozas/varos";
+import { PAPIR_HIANY_SZOVEG } from "@/lib/megbizasok/papir-alap";
 
 export type VevoAdat = {
   nev: string | null;
@@ -213,6 +214,8 @@ export type Ellenorzes = { ok: boolean; szoveg: string; blokkol: boolean };
 
 export function ellenorzesek(p: {
   cmrDb: number;
+  /** Az eredeti papírt Szabina nyugtázta (papirok_beerkeztek_at) — figyelmeztet, nem blokkol (2026-10-11). */
+  papirMegvan: boolean;
   fuvardij: number | null;
   teljesites: string | null;
   kiallitas: string;
@@ -222,6 +225,7 @@ export function ellenorzesek(p: {
 }): Ellenorzes[] {
   const ki: Ellenorzes[] = [];
   ki.push({ ok: p.cmrDb > 0, szoveg: p.cmrDb > 0 ? `CMR / fuvarlevél megvan (${p.cmrDb} fotó)` : "Nincs fuvarlevél-fotó — a megbízók a CMR nélkül nem könyvelik", blokkol: false });
+  ki.push({ ok: p.papirMegvan, szoveg: p.papirMegvan ? "Az eredeti papír megérkezett (nyugtázva)" : `${PAPIR_HIANY_SZOVEG} — számlázható, de tartsd számon`, blokkol: false });
   ki.push({ ok: p.fuvardij != null && p.fuvardij > 0, szoveg: p.fuvardij ? "A díj a megbízásból" : "Nincs fuvardíj a megbízáson", blokkol: !(p.fuvardij && p.fuvardij > 0) });
   const teljOk = !!p.teljesites && p.teljesites <= p.kiallitas;
   ki.push({ ok: teljOk, szoveg: !p.teljesites ? "Nincs teljesítési dátum (lerakás)" : teljOk ? "A teljesítés nem későbbi a kiállításnál" : "A teljesítés a kiállítás UTÁN van — elírás?", blokkol: !teljOk });

@@ -16,6 +16,8 @@ import { ALLAPOT_CIMKE, LepesBadge, JellegBadge, formatFt, formatIdo, formatNap 
 import { SAJAT_FUVAR_KM_DIJ_FT } from "@/lib/fuvarozas2/kalkulator-alap";
 import { visszavonMegalloKesz } from "@/lib/fuvarozas/sofor";
 import { SzamlazasiSegedGomb } from "@/components/fuvarozas2/szamlazasi-seged";
+import { PapirGomb } from "@/components/fuvarozas2/papir-gomb";
+import { PAPIR_HIANY_SZOVEG, PAPIR_NINCS_NYUGTAZVA } from "@/lib/megbizasok/papir-alap";
 
 const GOMB_CIMKE: Partial<Record<Allapot, string>> = {
   tervezett: "Jóváhagyás → Tervezett",
@@ -53,7 +55,10 @@ export function MegbizasReszlet({
   const fuvarlevelek = dokumentumok.filter((d) => d.tipus === "fuvarlevel");
   const fuvarlevelDb = fuvarlevelek.length;
 
-  function valt(hova: Allapot, kezi = false) {
+  async function valt(hova: Allapot, kezi = false) {
+    // Postázás papír-nyugtázás nélkül: figyelmeztet, nem tilt (2026-10-11).
+    if (hova === "postazva" && sor.jelleg === "ber" && !sor.papirok_beerkeztek_at
+      && !(await confirm(`${PAPIR_NINCS_NYUGTAZVA}. Biztosan postára ment?`, { title: "Postázva?", confirmLabel: "Postázva" }))) return;
     start(async () => {
       const r = await valtAllapot(sor.id, hova, { kezi, kliensUuid: crypto.randomUUID() });
       if (r.ok) { toast.success(`${ALLAPOT_CIMKE[hova]}`); router.refresh(); }
@@ -182,6 +187,18 @@ export function MegbizasReszlet({
                 <span>Fuvarlevél-fotó</span>
                 <span className={sor.foto_van ? "font-medium text-[var(--f2-mint)]" : "text-muted-foreground"}>{sor.foto_van ? "megvan" : "nincs"}</span>
               </div>
+              <div className="flex items-center justify-between gap-2">
+                <span>Eredeti papír (CMR)</span>
+                <span className="flex items-center gap-2">
+                  <span className={sor.papirok_beerkeztek_at ? "font-medium text-[var(--f2-mint)]" : "font-medium text-[var(--f2-amb)]"}>{sor.papirok_beerkeztek_at ? `megjött ${formatIdo(sor.papirok_beerkeztek_at)}` : "még nincs"}</span>
+                  {elszamolasJog ? <PapirGomb megbizasId={sor.id} megvan={!!sor.papirok_beerkeztek_at} /> : null}
+                </span>
+              </div>
+              {!sor.papirok_beerkeztek_at && (sor.szamla_szam || sor.allapot === "teljesitve" || sor.allapot === "szamlazhato") ? (
+                <div className="rounded-lg bg-[var(--f2-amb-l)] px-2 py-1 text-[var(--f2-amb)]">
+                  {PAPIR_HIANY_SZOVEG}{sor.szamla_szam ? " — a számla már kiment, a papírt kérd be." : " — számlázni így is lehet."}
+                </div>
+              ) : null}
               {!sor.szamla_szam && (sor.allapot === "teljesitve" || sor.allapot === "szamlazhato") ? (
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-muted-foreground">Számla kiállítása a Számlázz.hu-ban</span>

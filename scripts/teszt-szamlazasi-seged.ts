@@ -90,14 +90,17 @@ eq("hibás regex nem akaszt", valasztRendelesszam({ ...alap, pozicioszam: "X1", 
 
 // Ellenőrzések.
 const rOk = valasztRendelesszam({ ...alap, reiseId: "23427161", szamlanKertSzam: "reise_id", kotelezoSablon: true });
-const e1 = ellenorzesek({ cmrDb: 2, fuvardij: 480, teljesites: "2026-10-09", kiallitas: "2026-10-11", vanSzamla: false, rendelesszam: rOk, vevoAdoszam: "13500287-2-19" });
+const e1 = ellenorzesek({ cmrDb: 2, papirMegvan: true, fuvardij: 480, teljesites: "2026-10-09", kiallitas: "2026-10-11", vanSzamla: false, rendelesszam: rOk, vevoAdoszam: "13500287-2-19" });
 eq("minden rendben", e1.every((e) => e.ok), true);
 eq("nem blokkol", e1.some((e) => e.blokkol), false);
-const e2 = ellenorzesek({ cmrDb: 0, fuvardij: 500000, teljesites: "2026-10-27", kiallitas: "2026-10-01", vanSzamla: false, rendelesszam: valasztRendelesszam(alap), vevoAdoszam: "14539097-2-42" });
+const e2 = ellenorzesek({ cmrDb: 0, papirMegvan: false, fuvardij: 500000, teljesites: "2026-10-27", kiallitas: "2026-10-01", vanSzamla: false, rendelesszam: valasztRendelesszam(alap), vevoAdoszam: "14539097-2-42" });
 eq("WLLWR-2026-334 hibája: teljesítés a kiállítás után", e2.find((e) => e.szoveg.includes("UTÁN"))?.blokkol, true);
 eq("CMR nélkül figyelmeztet, nem blokkol", e2[0], { ok: false, szoveg: "Nincs fuvarlevél-fotó — a megbízók a CMR nélkül nem könyvelik", blokkol: false });
+eq("papír nélkül figyelmeztet, nem blokkol", e2[1], { ok: false, szoveg: "Az eredeti papír még nem érkezett meg — számlázható, de tartsd számon", blokkol: false });
+eq("papír nélkül is kiállítható (csak a dátum-hiba blokkol)", e2.filter((e) => e.blokkol).length, 1);
+eq("nyugtázott papír: zöld", e1[1], { ok: true, szoveg: "Az eredeti papír megérkezett (nyugtázva)", blokkol: false });
 eq("nem kötelező rendelésszám: nincs sor róla", e2.some((e) => e.szoveg.startsWith("Rendelésszám")), false);
-const e3 = ellenorzesek({ cmrDb: 1, fuvardij: 480, teljesites: "2026-10-09", kiallitas: "2026-10-11", vanSzamla: true, rendelesszam: valasztRendelesszam({ ...alap, kotelezoSablon: true }), vevoAdoszam: null });
+const e3 = ellenorzesek({ cmrDb: 1, papirMegvan: false, fuvardij: 480, teljesites: "2026-10-09", kiallitas: "2026-10-11", vanSzamla: true, rendelesszam: valasztRendelesszam({ ...alap, kotelezoSablon: true }), vevoAdoszam: null });
 eq("blokkoló tételek", e3.filter((e) => e.blokkol).map((e) => e.szoveg.slice(0, 20)), ["Erre a fuvarra már v", "Hiányzik a vevő adós", "Rendelésszám: Hiányz"]);
 
 eq("mind szövegként", mindSzovegkent([{ kulcs: "a", cimke: "Név", ertek: "X Kft." }, { kulcs: "b", cimke: "Üres", ertek: null }, { kulcs: "c", cimke: "Adószám", ertek: "1-2-3" }]), "Név: X Kft.\nAdószám: 1-2-3");

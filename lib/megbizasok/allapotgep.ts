@@ -112,9 +112,9 @@ export const ATMENETEK: readonly Atmenet[] = [
   // számlát a Számlázz.hu küldi ki. Az él csak a régi sorok miatt marad.
   { szam: 9, honnan: "szamlazva", hova: "email_elment", kivalto: "régi: kézi e-mail jelölés", forrasok: ["rendszer", "migracio"] },
   {
-    // A külön „Papír megjött” lépés megszűnt (Budaházi Zoltán, 2026-09-24):
-    // Szabina viszi postára a papírt, a „Postázva ✓” maga jelenti, hogy a
-    // papír a kezében volt — a papír dátumát a valtAllapot beírja.
+    // A papír nem állapot, hanem jelzés (Budaházi Zoltán, 2026-10-11): Szabina
+    // külön nyugtázza („Papír megjött ✓”, setPapirMegjott); a postázás nem
+    // tilt papír nélkül, csak a megerősítés figyelmeztet, és nem írja a papírt.
     szam: 10, honnan: "szamlazva", hova: "postazva", kivalto: "Postázva ✓ (Szabina feladta)", forrasok: ["ember", "migracio"],
   },
   { szam: 10, honnan: "email_elment", hova: "postazva", kivalto: "Postázva ✓ (Szabina feladta)", forrasok: ["ember", "migracio"] },

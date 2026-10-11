@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { SzamlazasiSegedGomb } from "@/components/fuvarozas2/szamlazasi-seged";
+import { PapirGomb } from "@/components/fuvarozas2/papir-gomb";
 import { munkaasztalLink, type MunkaasztalSzuro } from "@/components/fuvarozas2/munkaasztal";
 import { osszegSzoveg, PENZ_SZUROK, type PenzSzuro } from "@/lib/fuvarozas2/penz-lista-alap";
 import type { PenzLista, PenzSor } from "@/lib/fuvarozas2/penz-lista";
@@ -87,7 +88,16 @@ function Sor({ s, reszlet, elszamolasJog }: { s: PenzSor; reszlet: string; elsza
       <td className="px-2 py-2 text-right tabular-nums">{s.km ?? "—"}</td>
       <td className="px-2 py-2 text-right tabular-nums">{s.jelleg === "ber" && s.fuvardij ? `${Math.round(s.fuvardij).toLocaleString("hu-HU")} ${s.penznem === "HUF" ? "Ft" : s.penznem}` : "—"}</td>
       <td className="px-2 py-2 text-right tabular-nums text-muted-foreground">{s.ftKm ?? "—"}</td>
-      <td className={cn("px-2 py-2", a.papirHianyzik && "font-medium text-[var(--f2-amb)]")}>{s.vanPapir ? "megvan" : a.papirHianyzik ? `hiányzik · ${a.kor} napja` : "—"}</td>
+      <td className={cn("px-2 py-2", a.papirHianyzik && "font-medium text-[var(--f2-amb)]")}>
+        <span className="flex items-center gap-2">
+          <span>
+            {s.vanPapir ? "megvan" : a.papirHianyzik ? `hiányzik · ${a.kor} napja` : "—"}
+            {!s.vanPapir && s.fotoVan && s.jelleg === "ber" ? <span className="ml-1 text-xs font-normal text-muted-foreground">· fotó van</span> : null}
+            {a.szamlazvaPapirNelkul ? <span className="ml-1.5 rounded-full bg-[var(--f2-amb-l)] px-1.5 text-[11px]" title="A számla kiment, de az eredeti papír még nincs nálunk — ne vesszen el">számlázva, papír még nincs</span> : null}
+          </span>
+          {elszamolasJog && s.jelleg === "ber" && (s.vanPapir || a.papirHianyzik) ? <PapirGomb megbizasId={s.id} megvan={s.vanPapir} /> : null}
+        </span>
+      </td>
       <td className={cn("px-2 py-2", a.szamlazatlan && "font-medium text-[var(--f2-amb)]")}>
         {s.jelleg === "sajat" ? <span className="text-muted-foreground">nem kell</span> : s.szamlaSzam ? <span className="font-mono text-xs">{s.szamlaSzam}</span> : `számlázható · ${a.kor} napja`}
       </td>
@@ -95,7 +105,7 @@ function Sor({ s, reszlet, elszamolasJog }: { s: PenzSor; reszlet: string; elsza
       <td className="px-2 py-2 tabular-nums">{sz?.fizetve ? <span className="text-[var(--f2-mint)]">{datum(sz.fizetveNap)}</span> : s.szamlaSzam && !sz ? <span className="text-xs text-muted-foreground">nincs a Számlázz.hu-ban</span> : "—"}</td>
       <td className="px-4 py-1.5 text-right">
         {a.szamlazatlan ? <SzamlazasiSegedGomb megbizasId={s.id} elszamolasJog={elszamolasJog} />
-          : a.papirHianyzik ? <Link href={reszlet} scroll={false} className="rounded-lg border px-2.5 py-1 text-xs font-medium hover:bg-muted">Fotó feltöltése</Link>
+          : a.papirHianyzik && !s.fotoVan ? <Link href={reszlet} scroll={false} className="rounded-lg border px-2.5 py-1 text-xs font-medium hover:bg-muted">Fotó feltöltése</Link>
           : null}
       </td>
     </tr>

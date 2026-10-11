@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getSzamlazasiSeged, type SzamlazasiSeged } from "@/lib/fuvarozas2/szamlazasi-seged";
 import { setSzamlaSzam } from "@/lib/fuvarozas2/megbizasok";
+import { PAPIR_HIANY_SZOVEG } from "@/lib/megbizasok/papir-alap";
 import { mindSzovegkent, type SegedMezo } from "@/lib/fuvarozas2/szamlazasi-seged-alap";
 
 async function vagolapra(szoveg: string): Promise<boolean> {
@@ -215,6 +216,7 @@ export function SzamlazasiSegedGomb({ megbizasId, elszamolasJog }: { megbizasId:
                     Kiállítva — számlaszám mentése
                   </Button>
                   {!adat.kiallithato ? <span className="text-xs text-[var(--f2-red)]">Előbb a piros tételeket kell rendezni.</span> : null}
+                  {!adat.papirMegvan ? <span className="rounded-md bg-[var(--f2-amb-l)] px-2 py-1 text-xs font-medium text-[var(--f2-amb)]">{PAPIR_HIANY_SZOVEG} — a számla ettől kiállítható, de a papírt kérd be.</span> : null}
                   {adat.elozoSzamla ? <span className="text-[11px] text-muted-foreground">legutóbbi számla ennek a megbízónak: {adat.elozoSzamla.szamlaszam} ({adat.elozoSzamla.kiallitas})</span> : null}
                 </div>
                 <Button variant="outline" onClick={() => masol("mind", mindSzovegkent([...m.vevo, ...m.fizetes, ...m.tetel, ...m.kuldes]))}>
