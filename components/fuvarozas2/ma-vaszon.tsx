@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { MaVaszon, Elteres, MaKocsi, MaBlokk, CsempeSzin, MaKocsiAllapot, TukorSor, TukorAllas } from "@/lib/fuvarozas2/ma-vaszon";
 import { AllasRogzitesGomb } from "@/components/fuvarozas2/allas-rogzites";
 import { NyugtaGomb, VisszavonGomb } from "@/components/fuvarozas2/elteres-nyugta";
-import { AutoFrissites } from "@/components/fuvarozas2/auto-frissites";
+import { AutoFrissites, AutoFrissitesFelirat } from "@/components/fuvarozas2/auto-frissites";
 import { Csempesor } from "@/components/fuvarozas2/csempesor";
 import { HetRacs } from "@/components/fuvarozas2/het-racs";
 import { pihenoNapE } from "@/lib/fuvarozas2/ma-het";
@@ -287,14 +287,15 @@ function NyugtazottLista({ adat, kulon = false }: { adat: MaVaszon; kulon?: bool
   );
 }
 
-export function MaVaszonNezet({ adat }: { adat: MaVaszon }) {
+/** `sajatFrissito={false}`: beágyazva (a Ma-élő alatt) nem indít saját frissítőt, csak kiírja az időt. */
+export function MaVaszonNezet({ adat, sajatFrissito = true }: { adat: MaVaszon; sajatFrissito?: boolean }) {
   const iroda = adat.csempek.filter((c) => c.kulcs !== "uton" && c.kulcs !== "elteres");
   return (
     <div className="flex flex-col gap-4">
       <Csempesor berHavi={adat.berHavi} berHeti={adat.berHeti} berHonapHetei={adat.berHonapHetei} />
 
       <div className="-mb-2 flex justify-end">
-        <AutoFrissites frissitve={adat.frissitve} />
+        {sajatFrissito ? <AutoFrissites frissitve={adat.frissitve} /> : <AutoFrissitesFelirat frissitve={adat.frissitve} />}
       </div>
 
       {adat.elteresek.length === 0 && adat.nyugtazott.length === 0 ? null : adat.elteresek.length === 0 ? (

@@ -57,6 +57,8 @@ export type IdoszakKoltseg = {
   tankolasDb: number;
   /** A használt EUR-árfolyamok (napi bontás nélkül, a felület egyszer írja ki). */
   arfolyamok: ArfolyamInfo[];
+  /** Kézi költségsorok, amik átválthatatlanok (EUR árfolyam nélkül, vagy ismeretlen pénznem) — a költségben NINCSENEK benne, a felület jelzi. */
+  atvaltatlanKezi: { db: number; eur: number; masPenznemDb: number };
   beallitas: FuvarBeallitasok;
 };
 
@@ -185,6 +187,7 @@ export async function koltsegIdoszakra(kezdet: string, veg: string): Promise<Ido
   ];
   const arfolyamok = await getEurArfolyamok(eurNapok);
   const keziMegbizasonkent = new Map<string, KeziKoltseg[]>();
+  const atvaltatlanKezi = { db: 0, eur: 0, masPenznemDb: 0 };
   for (const r of keziSorok) {
     let ft: number | null = Number(r.osszeg);
     let megj = r.megjegyzes;
@@ -195,7 +198,15 @@ export async function koltsegIdoszakra(kezdet: string, veg: string): Promise<Ido
     } else if (r.penznem !== "Ft" && r.penznem !== "HUF") {
       ft = null;
     }
-    if (ft == null) continue; // átválthatatlan pénznem — kihagyva (a megbízás részletén látszik)
+    if (ft == null) {
+      // Átválthatatlan (EUR árfolyam nélkül / ismeretlen pénznem): nem számolható Ft-ba,
+      // de nem tűnik el csendben — megszámoljuk, és a Kimutatás/Eredmény kiírja.
+      atvaltatlanKezi.db += 1;
+      if (r.penznem === "EUR") atvaltatlanKezi.eur += Number(r.osszeg);
+      else atvaltatlanKezi.masPenznemDb += 1;
+      console.warn(`[koltseg] kézi költségsor átváltás nélkül kimaradt: megbízás ${r.megbizas_id}, ${r.osszeg} ${r.penznem}`);
+      continue;
+    }
     const lista = keziMegbizasonkent.get(r.megbizas_id) ?? [];
     lista.push({ tipus: r.tipus, ft, megjegyzes: megj, forras: r.forras === "becsles" ? "becsles" : "teny" });
     keziMegbizasonkent.set(r.megbizas_id, lista);
@@ -310,6 +321,7 @@ export async function koltsegIdoszakra(kezdet: string, veg: string): Promise<Ido
     vanUtdijImport: utdijSorok.some((u) => bentVan(u.idopont)),
     tankolasDb: tankolasSorok.filter((t) => bentVan(t.idopont)).length,
     arfolyamok: [...hasznaltArf.values()].sort((a, b) => a.nap.localeCompare(b.nap)),
+    atvaltatlanKezi,
     beallitas,
   };
 }

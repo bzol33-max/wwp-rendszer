@@ -54,6 +54,20 @@ function eq(nev: string, kapott: unknown, vart: unknown) {
   eq("nullszaldó", ing.nullszaldo.map((x) => x.partner), ["HAPP"]);
   eq("nincs negatív → senki", ingyenesMegbizok(p.filter((x) => x.partner !== "ÁB SPEED")).legrosszabb, null);
 }
+// 4b. Átváltatlan EUR-bevétel: külön összegezve, és nem ad hamis „ingyen” riasztást.
+{
+  const m: PartnerBemenet[] = [];
+  for (let i = 0; i < 4; i++) m.push({ partner: "EUR Kft", jelleg: "ber", nap: `2026-10-0${i + 1}`, bevetelFt: null, eredmenyFt: null, bevetelEur: 900 });
+  m.push({ partner: "EUR Kft", jelleg: "ber", nap: "2026-10-08", bevetelFt: 350000, eredmenyFt: -5000, bevetelEur: 900 });
+  for (let i = 0; i < 3; i++) m.push({ partner: "Veszteseg Bt", jelleg: "ber", nap: `2026-10-0${i + 1}`, bevetelFt: 100000, eredmenyFt: -10000 });
+  const p = partnerOsszesites(m, "2026-10-11");
+  const eur = p.find((x) => x.partner === "EUR Kft")!;
+  eq("átváltatlan EUR összeg", [eur.db, eur.bevetelFt, eur.fedezetFt, eur.atvaltatlanEur, eur.atvaltatlanDb], [5, 350000, -5000, 3600, 4]);
+  const ing = ingyenesMegbizok(p);
+  eq("átváltatlan EUR-os megbízó nem „ingyenes”", ing.legrosszabb?.partner, "Veszteseg Bt");
+  eq("átváltatlan EUR-os nem nullszaldó", ing.nullszaldo.some((x) => x.partner === "EUR Kft"), false);
+  eq("Ft-os megbízónál 0 átváltatlan", [p.find((x) => x.partner === "Veszteseg Bt")!.atvaltatlanEur], [0]);
+}
 // 5. Formázás és dátumok.
 eq("ezerFt", [ezerFt(215516), ezerFt(-122400), ezerFt(0), ezerFt(1240000, false), ezerFt(-4490000)], ["+216 e", "−122 e", "0 e", "1,24 M", "−4,49 M"]);
 eq("napKulonbseg", napKulonbseg("2026-09-02", "2026-10-11"), 39);

@@ -102,6 +102,8 @@ export type KimutatasEredmeny = {
   vanUtdijImport: boolean;
   tankolasDb: number;
   arfolyamok: ArfolyamInfo[];
+  /** Átváltás nélkül kimaradt kézi költségsorok (lásd IdoszakKoltseg.atvaltatlanKezi). */
+  atvaltatlanKezi: { db: number; eur: number; masPenznemDb: number };
   napiKoltsegBeallitas: number;
   sajatKmDijBeallitas: number;
   /** Hány megbízás esett az időszakra kocsi nélkül — ezek km-je sehol nem szerepel. */
@@ -190,7 +192,7 @@ export async function getKimutatas(idoszak: KimutatasIdoszak = "het", nap?: stri
       elkerultKoltsegFt: sum((j) => j.elkerultKoltsegFt),
     },
     gazolajAr: k.gazolajAr, gazolajCimke: k.gazolajCimke, gpsHiba: k.gpsHiba,
-    vanUtdijImport: k.vanUtdijImport, tankolasDb: k.tankolasDb, arfolyamok: k.arfolyamok,
+    vanUtdijImport: k.vanUtdijImport, tankolasDb: k.tankolasDb, arfolyamok: k.arfolyamok, atvaltatlanKezi: k.atvaltatlanKezi,
     napiKoltsegBeallitas: k.beallitas.napi_koltseg_ft, sajatKmDijBeallitas: k.beallitas.sajat_fuvar_km_dij_ft,
     kocsiNelkul: k.kocsiNelkul,
   };

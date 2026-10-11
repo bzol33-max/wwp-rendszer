@@ -6,7 +6,7 @@
 // magyar felület), a kapcsolattartó neve és telefonszáma kicserélve.
 
 import {
-  dekodolHash, kalkulatorMegallo, konyvjelzoKod, parseHelySzoveg, parseTimocomAjanlat, timocomKulcs,
+  dekodolHash, kalkulatorMegallo, konyvjelzoKod, parseAr, parseHelySzoveg, parseTimocomAjanlat, szam, timocomKulcs,
 } from "@/lib/fuvarozas2/timocom-ajanlat";
 
 let ok = 0;
@@ -152,6 +152,27 @@ all("gomb: javascript: URL, a WWP lapra mutat", kod.startsWith("javascript:") &&
 all("gomb: nem tartalmaz sortörést", !decodeURIComponent(kod).includes("\n"));
 // A gomb kódja szintaktikailag érvényes JS.
 try { new Function(decodeURIComponent(kod).slice("javascript:".length)); ok++; } catch (e) { bad++; console.log("  HIBA  gomb kód szintaxis:", e); }
+
+// 7. Ár-parser: ezres/tizedes elválasztó, pénznem nélkül nincs feltételezett EUR.
+eq("ár: 1,250 EUR", parseAr("1,250 EUR"), { osszeg: 1250, penznem: "EUR" });
+eq("ár: 1.250 EUR", parseAr("1.250 EUR"), { osszeg: 1250, penznem: "EUR" });
+eq("ár: 1 250 €", parseAr("1 250 €"), { osszeg: 1250, penznem: "EUR" });
+eq("ár: 1\u00a0250 € (nem törő szóköz)", parseAr("1\u00a0250 €"), { osszeg: 1250, penznem: "EUR" });
+eq("ár: 1,250.50 EUR", parseAr("1,250.50 EUR"), { osszeg: 1250.5, penznem: "EUR" });
+eq("ár: 1.250,50 EUR", parseAr("1.250,50 EUR"), { osszeg: 1250.5, penznem: "EUR" });
+eq("ár: 850 (pénznem nélkül)", parseAr("850"), { osszeg: 850, penznem: null });
+eq("ár: 850 Ft", parseAr("850 Ft"), { osszeg: 850, penznem: "HUF" });
+eq("ár: € 900", parseAr("€ 900"), { osszeg: 900, penznem: "EUR" });
+eq("ár: 450 000 HUF", parseAr("450 000 HUF"), { osszeg: 450000, penznem: "HUF" });
+eq("ár: 1.250.000 Ft", parseAr("1.250.000 Ft"), { osszeg: 1250000, penznem: "HUF" });
+eq("ár: 850 net → nincs pénznem", parseAr("850 net"), { osszeg: 850, penznem: null });
+eq("szám: 13.6 / 24,5 / 215", [szam("13.6"), szam("24,5"), szam("215")], [13.6, 24.5, 215]);
+eq("szám: hibás", [szam("1,2,3"), szam("1.250,50,1"), szam("abc")], [null, null, null]);
+{
+  const pn = parseTimocomAjanlat({ szoveg: ["Fuvardíj", "Ár", "850", "Fizetési határidő", "30 Nap"].join("\n") });
+  eq("ajánlat pénznem nélkül", pn.ar, { osszeg: 850, penznem: null });
+  all("pénznem-figyelmeztetés", pn.figyelmeztetesek.some((f) => /pénznem/.test(f)));
+}
 
 console.log(`\nTimocom teszt: ${ok} rendben, ${bad} hiba`);
 if (bad > 0) process.exit(1);

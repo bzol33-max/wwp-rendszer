@@ -16,13 +16,15 @@ import {
 
 export type EredmenyValasztas = "het" | "ho" | "elozo" | "negy";
 
-export type EredmenyKocsi = { kod: string; sofor: string | null; berDb: number; sajatDb: number; vizeses: Vizeses; sajatBelsoFt: number };
+/** `atvaltatlanEur`: EUR-os bérdíj árfolyam nélkül — a vízesés bevételében és fedezetében NINCS benne (a költsége igen), ugyanúgy, mint a Kimutatáson. */
+export type EredmenyKocsi = { kod: string; sofor: string | null; berDb: number; sajatDb: number; vizeses: Vizeses; sajatBelsoFt: number; atvaltatlanEur: number };
 
 export type EredmenyAdat = {
   valasztas: EredmenyValasztas;
   idoszakCimke: string;
   kocsik: EredmenyKocsi[];
   fedezetOssz: number;
+  atvaltatlanEurOssz: number;
   sajatOssz: number;
   sajatDb: number;
   honapok: { cimke: string; folyamatban: boolean; kocsik: { kod: string; sofor: string | null; fedezet: number }[] }[];
@@ -30,6 +32,8 @@ export type EredmenyAdat = {
   ingyen: ReturnType<typeof ingyenesMegbizok>;
   forras: { uzemanyag: Forras; utdij: Forras };
   gpsHiba: string | null;
+  /** Kézi költségsorok, amik átváltás nélkül kimaradtak a költségből (a kiválasztott időszakban). */
+  atvaltatlanKezi: { db: number; eur: number; masPenznemDb: number };
   vanUtdijImport: boolean;
   valasztek: { k: EredmenyValasztas; c: string }[];
 };
@@ -51,14 +55,15 @@ function kocsikIdoszakbol(k: IdoszakKoltseg): EredmenyKocsi[] {
     kod: j.kod, sofor: j.sofor, berDb: j.eredmeny.berDb, sajatDb: j.eredmeny.sajatDb,
     vizeses: vizeses({ berBevetelFt: j.eredmeny.berBevetelFt, eredmenyFt: j.eredmeny.eredmenyFt, nemHozzarendeltFt: j.eredmeny.nemHozzarendeltFt, megbizasok: j.megbizasok }),
     sajatBelsoFt: Math.round(j.eredmeny.sajatBelsoKoltsegFt),
+    atvaltatlanEur: j.eredmeny.atvaltatlanEur,
   }));
 }
 
 function osszevon(listak: EredmenyKocsi[][]): EredmenyKocsi[] {
   const m = new Map<string, EredmenyKocsi>();
   for (const l of listak) for (const k of l) {
-    const x = m.get(k.kod) ?? { kod: k.kod, sofor: k.sofor, berDb: 0, sajatDb: 0, vizeses: URES_VIZESES, sajatBelsoFt: 0 };
-    m.set(k.kod, { kod: k.kod, sofor: x.sofor ?? k.sofor, berDb: x.berDb + k.berDb, sajatDb: x.sajatDb + k.sajatDb, vizeses: vizesesOsszeg(x.vizeses, k.vizeses), sajatBelsoFt: x.sajatBelsoFt + k.sajatBelsoFt });
+    const x = m.get(k.kod) ?? { kod: k.kod, sofor: k.sofor, berDb: 0, sajatDb: 0, vizeses: URES_VIZESES, sajatBelsoFt: 0, atvaltatlanEur: 0 };
+    m.set(k.kod, { kod: k.kod, sofor: x.sofor ?? k.sofor, berDb: x.berDb + k.berDb, sajatDb: x.sajatDb + k.sajatDb, vizeses: vizesesOsszeg(x.vizeses, k.vizeses), sajatBelsoFt: x.sajatBelsoFt + k.sajatBelsoFt, atvaltatlanEur: x.atvaltatlanEur + k.atvaltatlanEur });
   }
   return [...m.values()];
 }
@@ -109,6 +114,7 @@ export async function getEredmeny(valasztasBe?: string): Promise<EredmenyAdat> {
   return {
     valasztas, idoszakCimke, kocsik,
     fedezetOssz: kocsik.reduce((a, k) => a + k.vizeses.fedezet, 0),
+    atvaltatlanEurOssz: kocsik.reduce((a, k) => a + k.atvaltatlanEur, 0),
     sajatOssz: kocsik.reduce((a, k) => a + k.sajatBelsoFt, 0),
     sajatDb: kocsik.reduce((a, k) => a + k.sajatDb, 0),
     honapok: ho.map((h, i) => ({
@@ -119,6 +125,7 @@ export async function getEredmeny(valasztasBe?: string): Promise<EredmenyAdat> {
     ingyen: ingyenesMegbizok(partnerek),
     forras: { uzemanyag: forrasOf(kivalasztott, (j) => j.ossz.uzemanyag?.forras), utdij: forrasOf(kivalasztott, (j) => j.ossz.utdij?.forras) },
     gpsHiba: kivalasztott.map((k) => k.gpsHiba).find(Boolean) ?? null,
+    atvaltatlanKezi: kivalasztott.reduce((a, k) => ({ db: a.db + k.atvaltatlanKezi.db, eur: a.eur + k.atvaltatlanKezi.eur, masPenznemDb: a.masPenznemDb + k.atvaltatlanKezi.masPenznemDb }), { db: 0, eur: 0, masPenznemDb: 0 }),
     vanUtdijImport: kivalasztott.some((k) => k.vanUtdijImport),
     valasztek,
   };

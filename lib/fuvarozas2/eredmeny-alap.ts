@@ -52,13 +52,18 @@ export function vizesesOsszeg(a: Vizeses, b: Vizeses): Vizeses {
 
 export const URES_VIZESES: Vizeses = { bevetel: 0, uzemanyag: 0, utdij: 0, napiFix: 0, uresAllas: 0, egyeb: 0, fedezet: 0 };
 
-export type PartnerBemenet = { partner: string | null; jelleg: "ber" | "sajat"; nap: string; bevetelFt: number | null; eredmenyFt: number | null };
+/** `bevetelEur` + `bevetelFt == null`: EUR-os díj, amit nem sikerült átváltani (nincs árfolyam). */
+export type PartnerBemenet = { partner: string | null; jelleg: "ber" | "sajat"; nap: string; bevetelFt: number | null; eredmenyFt: number | null; bevetelEur?: number | null };
 
 export type PartnerSor = {
   partner: string;
   db: number;
   bevetelFt: number;
   fedezetFt: number;
+  /** Átváltatlan EUR-bevétel (nincs árfolyam): sem a bevételben, sem a fedezetben nincs benne. */
+  atvaltatlanEur: number;
+  /** Ennyi fuvar fedezete nem számolható (átváltatlan EUR). */
+  atvaltatlanDb: number;
   utolso: string;
   /** Rendszeres megbízó (≥5 fuvar), akitől 21+ napja nem jött fuvar. */
   elmaradt: boolean;
@@ -73,10 +78,14 @@ export function partnerOsszesites(megbizasok: PartnerBemenet[], ma: string): Par
   for (const x of megbizasok) {
     if (x.jelleg !== "ber") continue;
     const nev = (x.partner ?? "").trim() || "Ismeretlen megbízó";
-    const s = m.get(nev) ?? { partner: nev, db: 0, bevetelFt: 0, fedezetFt: 0, utolso: x.nap, elmaradt: false };
+    const s = m.get(nev) ?? { partner: nev, db: 0, bevetelFt: 0, fedezetFt: 0, atvaltatlanEur: 0, atvaltatlanDb: 0, utolso: x.nap, elmaradt: false };
     s.db += 1;
     s.bevetelFt += x.bevetelFt ?? 0;
     s.fedezetFt += x.eredmenyFt ?? 0;
+    if (x.bevetelFt == null && x.bevetelEur != null && x.bevetelEur > 0) {
+      s.atvaltatlanEur += x.bevetelEur;
+      s.atvaltatlanDb += 1;
+    }
     if (x.nap > s.utolso) s.utolso = x.nap;
     m.set(nev, s);
   }
@@ -89,9 +98,12 @@ export function partnerOsszesites(megbizasok: PartnerBemenet[], ma: string): Par
   return sorok.sort((a, b) => b.fedezetFt - a.fedezetFt || b.db - a.db);
 }
 
-/** „Ingyen” dolgozunk neki: legalább 3 fuvar, és a fedezet a bevétel 2%-a alatt (vagy negatív). */
+/**
+ * „Ingyen” dolgozunk neki: legalább 3 fuvar, és a fedezet a bevétel 2%-a alatt (vagy negatív).
+ * Akinek van átváltatlan EUR-bevétele, azt nem jelezzük: a fedezete nem ítélhető meg árfolyam nélkül.
+ */
 export function ingyenesMegbizok(sorok: PartnerSor[]): { legrosszabb: PartnerSor | null; nullszaldo: PartnerSor[] } {
-  const gyanus = sorok.filter((s) => s.db >= 3 && s.fedezetFt < Math.max(0, s.bevetelFt) * 0.02);
+  const gyanus = sorok.filter((s) => s.db >= 3 && s.atvaltatlanDb === 0 && s.fedezetFt < Math.max(0, s.bevetelFt) * 0.02);
   const legrosszabb = [...gyanus].sort((a, b) => a.fedezetFt - b.fedezetFt)[0] ?? null;
   const nullszaldo = gyanus.filter((s) => s !== legrosszabb && Math.abs(s.fedezetFt) <= Math.max(25000, s.bevetelFt * 0.02));
   return { legrosszabb: legrosszabb && legrosszabb.fedezetFt < 0 ? legrosszabb : null, nullszaldo };

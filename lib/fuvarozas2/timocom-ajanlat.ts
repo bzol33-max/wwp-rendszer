@@ -67,7 +67,8 @@ export type TimocomAjanlat = {
   jarmuTipus: string | null;
   felepitmeny: string | null;
   tulajdonsagok: string | null;
-  ar: { osszeg: number; penznem: string } | null;
+  /** `penznem: null`, ha a szövegben nincs pénznem — a felület „pénznem?”-et ír, nem feltételez EUR-t. */
+  ar: { osszeg: number; penznem: string | null } | null;
   fizetesiHataridoNap: number | null;
   megjegyzes: string | null;
   /** Amire a döntésnél figyelni kell (ADR, hulladék, felépítmény, méret …). */
@@ -105,9 +106,56 @@ function cimkeUtan(s: string[], cimke: string): string | null {
   return tisztit(ki.join(" "));
 }
 
-function szam(s: string): number | null {
-  const n = Number(s.replace(/\s/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", "."));
+/**
+ * Szám magyar/angol/német írásmódból. Szóköz (nem törő is) = ezres elválasztó.
+ * Ha pont ÉS vessző is van: az utolsó a tizedes, a többi ezres („1,250.50”, „1.250,50”).
+ * Ha csak egyfajta van: többször szerepel → ezres („1.250.000”); egyszer → az
+ * utána álló 3 számjegy ezres („1,250” = 1250), 1–2 számjegy tizedes („13.6”).
+ */
+export function szam(be: string): number | null {
+  const s = be.replace(/[\s\u00a0\u202f]/g, "");
+  if (!/^\d[\d.,]*$/.test(s) || /[.,]$/.test(s)) return null;
+  const pont = (s.match(/\./g) ?? []).length;
+  const vesszo = (s.match(/,/g) ?? []).length;
+  let tiszta: string;
+  if (pont > 0 && vesszo > 0) {
+    const tiz = s.lastIndexOf(".") > s.lastIndexOf(",") ? "." : ",";
+    const ezres = tiz === "." ? "," : ".";
+    if ((s.match(tiz === "." ? /\./g : /,/g) ?? []).length > 1) return null;
+    tiszta = s.split(ezres).join("").replace(tiz, ".");
+  } else if (pont + vesszo === 0) {
+    tiszta = s;
+  } else {
+    const jel = pont > 0 ? "." : ",";
+    const reszek = s.split(jel);
+    if (reszek.length > 2) {
+      if (reszek.slice(1).some((r) => r.length !== 3)) return null;
+      tiszta = reszek.join("");
+    } else {
+      tiszta = reszek[1].length === 3 ? reszek.join("") : `${reszek[0]}.${reszek[1]}`;
+    }
+  }
+  const n = Number(tiszta);
   return Number.isFinite(n) ? n : null;
+}
+
+/** Pénznem-jelölés → kód; null, ha nincs (nem feltételezünk EUR-t). */
+function penznemKod(p: string | undefined): string | null {
+  const x = (p ?? "").trim().toUpperCase();
+  if (!x) return null;
+  if (x === "€" || x === "EUR") return "EUR";
+  if (x === "FT" || x === "HUF") return "HUF";
+  return x;
+}
+
+/** „1,250 EUR”, „€ 900”, „850 Ft”, „850” → összeg + pénznem (pénznem nélkül `null`). */
+export function parseAr(arSzoveg: string): { osszeg: number; penznem: string | null } | null {
+  // A pénznem-kód kis-nagybetű érzékeny (ne legyen „net”/„Nap” pénznem), csak a „Ft” írásmódjai lazák.
+  const m = arSzoveg.match(/(€|EUR|HUF|Ft|FT|ft)?\s*(\d[\d\s\u00a0\u202f.,]*\d|\d)\s*(€|Ft|FT|ft|[A-Z]{3}\b)?/);
+  if (!m) return null;
+  const osszeg = szam(m[2]);
+  if (osszeg == null || !(osszeg > 0)) return null;
+  return { osszeg, penznem: penznemKod(m[3] ?? m[1]) };
 }
 
 /** "10. 13." → "YYYY-MM-DD", az évet a létrehozás évéből (év-fordulónál a következő év). */
@@ -247,14 +295,7 @@ export function parseTimocomAjanlat(be: TimocomBemenet): TimocomAjanlat {
 
   const arSzoveg = cimkeUtan(s, "Ár");
   let ar: TimocomAjanlat["ar"] = null;
-  if (arSzoveg) {
-    const m = arSzoveg.match(/(\d[\d\s.,]*)\s*([A-Z]{3}|€|Ft|HUF)?/i);
-    const osszeg = m ? szam(m[1]) : null;
-    if (osszeg != null && osszeg > 0) {
-      const p = (m?.[2] ?? "").toUpperCase();
-      ar = { osszeg, penznem: p === "€" ? "EUR" : p === "FT" ? "HUF" : p || "EUR" };
-    }
-  }
+  if (arSzoveg) ar = parseAr(arSzoveg);
   const fizM = (cimkeUtan(s, "Fizetési határidő") ?? "").match(/(\d+)\s*nap/i);
 
   const aru = cimkeUtan(s, "Áru jellege");
@@ -276,6 +317,7 @@ export function parseTimocomAjanlat(be: TimocomBemenet): TimocomAjanlat {
   if (helyek.length > 2) fig.push(`${helyek.length} megálló (${helyek.filter((h) => h.tipus === "fel").length} fel, ${helyek.filter((h) => h.tipus === "le").length} le).`);
   if (helyek.some((h) => h.orszag !== "HU")) fig.push("Külföldi megálló.");
   if (!ar) fig.push("Nincs megadott ár — árajánlatot kell adni.");
+  else if (!ar.penznem) fig.push("Az ár mellett nincs pénznem — kérdezz rá (EUR vagy Ft?).");
 
   const idM = (be.url ?? "").match(/\/view\/([A-Za-z0-9_-]{10,})/);
 
