@@ -1,5 +1,16 @@
 # PROGRESS
 
+## 2026-10-11 — 4 fül a 11 helyett (1. lépés)
+
+- `components/fuvarozas2/fulek.tsx`: fő fülek Ma · Tervezés · Megbízások · Eredmény
+  + fogaskerék (Rendszer); alattuk az alfülek: Ma (Ma, Diszpécser, Élő GPS),
+  Tervezés (A hét, Timocom, Kalkulátor, Levelek), Eredmény (Kimutatás, Költségek).
+- Minden oldal a régi címén maradt (nincs átirányítás, a Timocom-gomb linkje is él);
+  a jogosultság alfülenként a régi (az elszámolás-hatókör ugyanazt látja, mint eddig).
+- Ellenőrzés: böngészőben adminnal és elszámolás-jogú felhasználóval minden oldalon
+  a helyes fő- és alfül aktív; teljes tesztsor, tsc, lint, build zöld.
+- Következő lépések: Ma oldal az új terv szerint, Eredmény, Tervezés (a hét).
+
 ## 2026-10-11 — Számlázási segéd („Számlázok” gomb)
 
 - Hol: a Megbízások oldal „Számlázásra” oszlopában a kártya alatt (2026-10-11 javítás:
