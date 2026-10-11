@@ -16,14 +16,18 @@ import { egysegesUtvonal, kuldeniKell, naplozando, szurtParameter } from "@/lib/
 const utolso = new Map<string, number>();
 
 export async function POST(req: Request) {
+  // Csak bejelentkezett felhasználótól, és csak kis törzzsel (a beacon < 1 KB):
+  // a nagy vagy névtelen kérést be sem olvassuk.
+  const ures = new NextResponse(null, { status: 204 });
+  if (Number(req.headers.get("content-length") ?? "0") > 2000) return ures;
+  const session = await verifySession().catch(() => null);
+  if (!session?.isAuth) return ures;
   const szoveg = (await req.text().catch(() => "")).slice(0, 1000);
   after(async () => {
     try {
       const adat = JSON.parse(szoveg) as { utvonal?: unknown; kereses?: unknown };
       const nyers = typeof adat.utvonal === "string" ? adat.utvonal : null;
       if (!naplozando(nyers)) return;
-      const session = await verifySession();
-      if (!session.isAuth) return;
       const utvonal = egysegesUtvonal(nyers!);
       if (!kuldeniKell(utolso, `${session.userId}|${utvonal}`, Date.now())) return;
       const parameter = szurtParameter(typeof adat.kereses === "string" ? adat.kereses.slice(0, 500) : null);
@@ -35,5 +39,5 @@ export async function POST(req: Request) {
       // csendben — a napló nem fontosabb az oldalnál
     }
   });
-  return new NextResponse(null, { status: 204 });
+  return ures;
 }

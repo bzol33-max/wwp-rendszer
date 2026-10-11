@@ -1,5 +1,36 @@
 # PROGRESS
 
+## 2026-10-11 — 0. hullám: hibás számok javítása (szakértői átvilágítás után)
+
+Alap: 14 szakértői jelentés (claude.ai projekt-doc `claude/fuvarozas-ceo-egyszerusitesi-terv.md`).
+Tulajdonosi döntések: árlétra a teljes önköltségre +10/20/30%, visszfuvarnál alsó határ is;
+kerekítés 1 000 Ft / 10 EUR felfelé, MNB; papír: csak figyelmeztet, nem tilt; optimalizáló: előbb mérés.
+
+- **JANI (GPS nélküli kocsi)** benne van a Tervezésben, a Ma oldalon és a mobil vezetői nézetben
+  (`ecofleet_object_id is not null` → `j.aktiv`: tervezes-het.ts, tervezo.ts, ma.ts; ma-vaszon.ts
+  úton/ütközés minden kocsiból). A régi `tervezes.ts` és az Élő GPS lap szándékosan változatlan.
+- **Egy árlétra** `lib/fuvarozas2/ar-letra.ts` + `components/fuvarozas2/ar-letra.tsx`: önköltség,
+  +10/+20/+30% Ft és EUR. Megszűnt: `celar()` 8%, 500/600/700 Ft/km sávok, ×1,15. Kalkulátor
+  minősítés: 10% alatt határeset (a % mostantól az önköltségre vetítve). Hét-nézet: fő ár a teljes
+  önköltség létrája („kérj” = +20%), alatta szürkén „alsó határ visszfuvarnál” = többlet +10%.
+- **EUR-díj** a Tervezésben Ft-ra váltva (MNB, `kalkulacio-tar.ts` `dijFtban`, VERZIO=2 → a tárolt
+  kalkulációk egyszer újraszámolódnak); árfolyam nélkül „EUR, árfolyam nélkül”, nem 0.
+- **Eredmény/Kimutatás**: átváltatlan EUR-bevétel és kézi költség jelezve; nem ad hamis
+  „ingyen dolgozunk” jelzést.
+- **Ma oldal**: egy frissítő (`useAutoFrissites`), rejtett fülön nem frissít; a régi vászon nem indít sajátot.
+- **Timocom ár-parser**: „1,250 EUR” = 1 250; „900 eur”, „1.250,- EUR”; pénznem nélkül „(pénznem?)”.
+- **Papír-jelzés**: „Papír megjött ✓” / visszavonás (fuvarozás vagy elszámolás jog), mobil Posta,
+  Pénz-nézet, részlet. A postázás nem állít papírt (megerősítést kér), a fotó nem számít papírnak,
+  számlázáskor figyelmeztet, nem tilt. `db/schema.sql` induláskori papír-backfill törölve;
+  `040_papir_jelzes_trigger.sql`: az állapot-trigger nem fut papír-írásra (javítja, hogy a papír
+  visszaléptette a kézzel számlázhatóvá tett fuvart). Régi fuvarokon a korábbi backfill papír-értéke marad.
+- **Használati napló** (`039_oldal_megnyitas.sql`, `components/oldal-naplo.tsx`, `/api/oldal-naplo`):
+  /fuvarozas2 és /m megnyitások, 30 mp dedup, 60 nap után törlés; Rendszer lapon adminnak „Használat (14 nap)”.
+  2 hét adat után döntünk a Diszpécser / régi rétegek törléséről.
+- Ellenőrzés: `npm run teszt` (57 szkript) zöld, tsc, eslint, build zöld; független átnézés valós
+  Postgres 16-on (039/040 idempotens, trigger-viselkedés előtte/utána) — MEHET.
+- Következő: 1. hullám (kocsi szabad pontja, ajánlat → előmegbízás → párosítás, duplikátum-őr, foglalási zár).
+
 ## 2026-10-11 — Eredmény, Tervezés, Megbízások az új terv szerint (3–5. lépés)
 
 - **Eredmény** (`/fuvarozas2/eredmeny`, az Eredmény fül első alfüle „Áttekintés”): három kérdés

@@ -191,7 +191,7 @@ export function MegbizasReszlet({
                 <span>Eredeti papír (CMR)</span>
                 <span className="flex items-center gap-2">
                   <span className={sor.papirok_beerkeztek_at ? "font-medium text-[var(--f2-mint)]" : "font-medium text-[var(--f2-amb)]"}>{sor.papirok_beerkeztek_at ? `megjött ${formatIdo(sor.papirok_beerkeztek_at)}` : "még nincs"}</span>
-                  {elszamolasJog ? <PapirGomb megbizasId={sor.id} megvan={!!sor.papirok_beerkeztek_at} /> : null}
+                  {elszamolasJog && (sor.papirok_beerkeztek_at || ["teljesitve", "szamlazhato", "szamlazva", "postazva"].includes(sor.allapot)) ? <PapirGomb megbizasId={sor.id} megvan={!!sor.papirok_beerkeztek_at} /> : null}
                 </span>
               </div>
               {!sor.papirok_beerkeztek_at && (sor.szamla_szam || sor.allapot === "teljesitve" || sor.allapot === "szamlazhato") ? (

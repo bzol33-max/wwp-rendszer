@@ -151,7 +151,8 @@ function penznemKod(p: string | undefined): string | null {
 /** „1,250 EUR”, „€ 900”, „850 Ft”, „850” → összeg + pénznem (pénznem nélkül `null`). */
 export function parseAr(arSzoveg: string): { osszeg: number; penznem: string | null } | null {
   // A pénznem-kód kis-nagybetű érzékeny (ne legyen „net”/„Nap” pénznem), csak a „Ft” írásmódjai lazák.
-  const m = arSzoveg.match(/(€|EUR|HUF|Ft|FT|ft)?\s*(\d[\d\s\u00a0\u202f.,]*\d|\d)\s*(€|Ft|FT|ft|[A-Z]{3}\b)?/);
+  // „900 eur”, „1.250,- EUR” is: az „eur” bármilyen írásmódban, a „,-” / „.-” végződés elnyelve.
+  const m = arSzoveg.match(/(€|[Ee][Uu][Rr]\b|HUF|Ft|FT|ft)?\s*(\d[\d\s\u00a0\u202f.,]*\d|\d)(?:[.,]-)?\s*(€|[Ee][Uu][Rr]\b|Ft|FT|ft|[A-Z]{3}\b)?/);
   if (!m) return null;
   const osszeg = szam(m[2]);
   if (osszeg == null || !(osszeg > 0)) return null;
