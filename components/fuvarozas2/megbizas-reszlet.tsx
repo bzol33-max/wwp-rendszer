@@ -15,6 +15,7 @@ import { AdatJavaslatSor, PostacimBevitel } from "@/components/fuvarozas2/partne
 import { ALLAPOT_CIMKE, LepesBadge, JellegBadge, formatFt, formatIdo, formatNap } from "@/components/fuvarozas2/kozos";
 import { SAJAT_FUVAR_KM_DIJ_FT } from "@/lib/fuvarozas2/kalkulator-alap";
 import { visszavonMegalloKesz } from "@/lib/fuvarozas/sofor";
+import { SzamlazasiSegedGomb } from "@/components/fuvarozas2/szamlazasi-seged";
 
 const GOMB_CIMKE: Partial<Record<Allapot, string>> = {
   tervezett: "Jóváhagyás → Tervezett",
@@ -181,6 +182,12 @@ export function MegbizasReszlet({
                 <span>Fuvarlevél-fotó</span>
                 <span className={sor.foto_van ? "font-medium text-[var(--f2-mint)]" : "text-muted-foreground"}>{sor.foto_van ? "megvan" : "nincs"}</span>
               </div>
+              {!sor.szamla_szam && (sor.allapot === "teljesitve" || sor.allapot === "szamlazhato") ? (
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-muted-foreground">Számla kiállítása a Számlázz.hu-ban</span>
+                  <SzamlazasiSegedGomb megbizasId={sor.id} elszamolasJog={elszamolasJog} />
+                </div>
+              ) : null}
               <div className="flex flex-col gap-1">
                 <span>Számlaszám</span>
                 <div className="flex gap-2">

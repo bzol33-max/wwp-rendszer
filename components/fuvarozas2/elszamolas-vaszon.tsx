@@ -9,6 +9,7 @@ import Link from "next/link";
 import { toast } from "sonner";
 import type { ElszamolasVaszon, ElszamolasSor, Piszkozat } from "@/lib/fuvarozas2/elszamolas";
 import { setSzamlaSzam, valtAllapot } from "@/lib/fuvarozas2/megbizasok";
+import { SzamlazasiSegedGomb } from "@/components/fuvarozas2/szamlazasi-seged";
 
 const ft = (n: number | null | undefined, p = "Ft") => (n == null ? "—" : `${new Intl.NumberFormat("hu-HU").format(n)} ${p}`);
 const nap = (d: string | null | undefined) => (d ? d.slice(5).replace("-", ".") + "." : "—");
@@ -96,6 +97,8 @@ export function ElszamolasVaszonNezet({ adat }: { adat: ElszamolasVaszon }) {
               {s.foto_van ? "fotó ✓" : <span className="text-[var(--f2-amb)]">fotó még nincs</span>} · a számlára: <b className="text-foreground">{s.szamlanKertSzam ? `${s.szamlanKertSzam} ` : ""}{s.hivatkozas ?? "—"}</b>
             </div>
             <div className="flex flex-wrap items-center gap-2">
+              {/* Ezen az oldalon az írás (számlaszám) jogát a setSzamlaSzam szerveroldalon ellenőrzi. */}
+              <SzamlazasiSegedGomb megbizasId={s.id} elszamolasJog />
               <a href="https://www.szamlazz.hu" target="_blank" rel="noreferrer" className={gomb2}>Kiállítom a Számlázz.hu-ban ↗</a>
               <input
                 value={szamok[s.id] ?? ""} onChange={(e) => setSzamok({ ...szamok, [s.id]: e.target.value })}

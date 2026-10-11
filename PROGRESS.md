@@ -1,5 +1,29 @@
 # PROGRESS
 
+## 2026-10-11 — Számlázási segéd („Számlázok” gomb)
+
+- Hol: a megbízás részletében (Elszámolás kártya, bérfuvar, teljesítve/számlázható,
+  még nincs számlaszám) és az Elszámolás „Számlázni” soraiban.
+- Mit mutat: a számla mezőit a számla sorrendjében, mindegyik mellett másolás
+  ikonnal — vevő (név, irsz, település, cím, adószám), fizetési mód, rendelésszám,
+  teljesítés / kiállítás / határidő, tétel („Közúti árufuvarozás Felrakó-Lerakó”,
+  több megállónál 2. sor), egységár, pénznem (EUR-nál MNB-árfolyam tipp), e-mail.
+  A minta 10 valódi kimenő számla (WLLWR-2026-284 … 348).
+- Források: vevő → a partner legutóbbi számlája (`szamla.raw_xml`), hiányában a
+  partner-törzs; rendelésszám → a megbízás (partnernél kért szám: Reise-ID /
+  pozíciószám / hivatkozás), végül a megbízó levelének tárgya (`fuvar_level`);
+  határidő → partner-törzs, megbízás, legutóbbi számla, 30 nap.
+- Ellenőrzés kiállítás előtt: CMR-fotó, díj, teljesítés ≤ kiállítás, nincs még
+  számla, vevő adószáma, kötelező rendelésszám (Duvenbeck-sablon vagy a legutóbbi
+  számlán is volt). A blokkoló tételig a „Kiállítva” gomb tiltott; hiányzó
+  rendelésszámnál link a megbízás szerkesztésére.
+- Kiállítás után a számlaszám a meglévő `setSzamlaSzam`-mal mentődik (adatmodell
+  nem változott, nincs migráció).
+- Fájlok: `lib/fuvarozas2/szamlazasi-seged-alap.ts` (tiszta), `lib/fuvarozas2/szamlazasi-seged.ts`,
+  `components/fuvarozas2/szamlazasi-seged.tsx`; bekötve: megbizas-reszlet.tsx, elszamolas-vaszon.tsx.
+- Teszt: teszt-szamlazasi-seged (44); helyi böngészős próba: Reise-ID a megbízásból,
+  levélből, hiányzó → tiltott gomb + link, másolás a vágólapra, számlaszám mentése.
+
 ## 2026-10-11 — Pontosabb élő ETA: szünet, napi keret, kapunyitás, mért rakodás + pontosság-napló
 
 - Eddig az élő ETA-lánc (`lib/fuvarozas/actions.ts` lancoltEloBecsles) = HU-GO
