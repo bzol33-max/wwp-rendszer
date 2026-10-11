@@ -1,5 +1,31 @@
 # PROGRESS
 
+## 2026-10-11 — Eredmény, Tervezés, Megbízások az új terv szerint (3–5. lépés)
+
+- **Eredmény** (`/fuvarozas2/eredmeny`, az Eredmény fül első alfüle „Áttekintés”): három kérdés
+  (kerestünk-e a bérfuvaron · kinek dolgozunk ingyen · mennyibe kerül a saját áru fuvarja),
+  kocsinként vízesés (bevétel − üzemanyag − útdíj − napi fix − üres út/állás = fedezet),
+  havi fedezet 4 hónapra kocsinként, megbízók fedezet szerint (rendszeres megbízó 21+ nap
+  csend jelzéssel). Új számítási szabály nincs: a fedezet a Kimutatás „Eredmény” oszlopa
+  (`koltsegIdoszakra`), a vízesés csak felbontja. Lezárt hónap 6 órára gyorsítótárazva.
+  `lib/fuvarozas2/eredmeny(-alap).ts`, teszt: `scripts/teszt-eredmeny.ts` (17).
+- **Tervezés** (`/fuvarozas2/tervezes` teteje): a hét (H–Szo) kocsinként, a rések (≥100 km
+  üres út két fuvar közt vagy hazafelé, légvonal × 1,3) kiemelve, szabad napok; jobbra a nyitott
+  Timocom-ajánlatok „illik: X rés · +Ft” jelöléssel; a kijelölt résnél ajánlatonként +km, +idő,
+  többlet, mennyit kérj (min. = többlet + 8%, ár-memória: hasonló korábbi fuvarok Ft/km),
+  „Kiket hívj” (felrakó ≤50 km, ≥2 korábbi fuvar), Kalkulátor előtöltve. A régi döntés-panel,
+  menetterv és heti tábla változatlanul alatta. `lib/fuvarozas2/tervezes-het(-alap).ts`,
+  teszt: `scripts/teszt-tervezes-het.ts` (27). Koordináta nélküli lerakó után nem becsül rést.
+- **Megbízások**: asztali alapnézet a „Pénz”: csempék (számlázatlan, papír hiányzik,
+  kintlévőség 0–30/31–60/60+, lejárt, befolyt a hónapban), szűrők (Teendő, Számlázatlan,
+  Papír, Kiküldve, Lejárt, Fizetve, Mind, saját áru is), soronként papír → számla → esedékes →
+  fizetve (Számlázz.hu `szamla` tábla), Számlázok gomb / Fotó feltöltése. A szakasz-oszlopos
+  munkaasztal a „Munkafolyamat (szakaszok)” gombbal (`?nezet=asztal`), keresés / új fuvar /
+  elvinni-naptár automatikusan oda visz. Mobil nézet változatlan.
+  `lib/fuvarozas2/penz-lista(-alap).ts`, teszt: `scripts/teszt-penz-lista.ts` (16).
+- Ellenőrzés: tsc, teljes teszt, build; böngészőben adminnal és elszámolás-jogúval.
+  A 20 eslint-hiba régebbi, nem érintett fájlokban van (változatlan).
+
 ## 2026-10-11 — Ma oldal: élő nézet (2. lépés)
 
 - `/fuvarozas2` új teteje (`components/fuvarozas2/ma-elo.tsx`): teendő-sáv (max. 3 eltérés),

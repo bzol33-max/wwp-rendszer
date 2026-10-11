@@ -1,0 +1,172 @@
+"use server";
+
+// Tervezés · A hét (az új terv 2. oldala, 2026-10-11): a kocsik hete a
+// résekkel, a bejött Timocom-ajánlatok melyik résbe illenek, és kiket
+// érdemes hívni a saját múltból. Csak olvas; a döntés (elvállalás) a
+// meglévő Timocom-lapon és a bejövő megbízás-döntésen keresztül megy.
+
+import { query } from "@/lib/db";
+import { requireViewPermission } from "@/lib/auth/require-permission";
+import { megbizoMegjelenites } from "@/lib/fuvarozas/fuvar-constants";
+import { varosNev } from "@/lib/fuvarozas/varos";
+import { findJarmuByKod } from "@/lib/fuvarozas/vehicles";
+import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
+import { geokodolCachelve } from "@/lib/fuvarozas/erintes-felismeres";
+import { getIndulasiTelephely } from "@/lib/fuvarozas/telephelyek-db";
+import { getFuvarBeallitasok } from "@/lib/beallitasok/fuvar";
+import { getTaroltKalkulaciok } from "@/lib/fuvarozas2/kalkulacio-tar";
+import { getTimocomAjanlatok } from "@/lib/fuvarozas2/timocom";
+import type { Pont } from "@/lib/fuvarozas2/tervezo-alap";
+import {
+  hetiReszek, illeszt, kiketHivj, legjobbRes, tervHetNapjai, utKm,
+  type AjanlatHely, type HetiFuvar, type HivandoPartner, type Illeszkedes, type MultFuvar, type NapCella, type Res,
+} from "@/lib/fuvarozas2/tervezes-het-alap";
+
+export type HetAjanlat = {
+  id: string;
+  megbizo: string | null;
+  felVaros: string;
+  leVaros: string;
+  felNap: string | null;
+  arSzoveg: string | null;
+  illik: Illeszkedes | null;
+  /** A kijelölt réshez mért illeszkedés (ha más, mint a legjobb). */
+  ehhez: Illeszkedes | null;
+  nincsHely: boolean;
+};
+
+export type TervezesHet = {
+  ma: string;
+  napok: string[];
+  kocsik: { kod: string; sofor: string; cellak: NapCella[] }[];
+  resek: Res[];
+  uresKmOssz: number;
+  ajanlatok: HetAjanlat[];
+  kijelolt: Res | null;
+  hivandok: HivandoPartner[];
+  kmKoltseg: number;
+};
+
+type Sor = {
+  id: string; jelleg: "ber" | "sajat"; jarmu_kod: string | null; partner: string | null;
+  felrako: string | null; lerako: string | null; fel_nap: string; le_nap: string;
+  fuvardij: number | null; penznem: string;
+  fel_lat: number | null; fel_lon: number | null; le_lat: number | null; le_lon: number | null;
+};
+
+const pont = (lat: number | null, lon: number | null): Pont | null => (lat != null && lon != null ? { lat: Number(lat), lon: Number(lon) } : null);
+const varos = (s: string | null) => varosNev(s ?? "") || "?";
+
+async function geo(cim: string): Promise<Pont | null> {
+  const ido = new Promise<null>((r) => setTimeout(() => r(null), 4000));
+  const g = await Promise.race([geokodolCachelve(cim).catch(() => null), ido]);
+  return g ? { lat: g.lat, lon: g.lon } : null;
+}
+
+function median(x: number[]): number | null {
+  if (!x.length) return null;
+  const s = [...x].sort((a, b) => a - b);
+  return s[Math.floor(s.length / 2)];
+}
+
+export async function getTervezesHet(resKulcs?: string): Promise<TervezesHet> {
+  await requireViewPermission("fuvarozas");
+  const [{ ma }] = await query<{ ma: string }>(`select ((now() at time zone 'Europe/Budapest')::date)::text as ma`);
+  const napok = tervHetNapjai(ma);
+
+  const sorok = await query<Sor>(
+    `select m.id::text, m.jelleg, j.kod as jarmu_kod, coalesce(p.nev, m.megrendelo) as partner,
+       coalesce(fel.cim_nyers, m.felrako) as felrako, coalesce(le.cim_nyers, m.lerako) as lerako,
+       to_char(m.datum, 'YYYY-MM-DD') as fel_nap, to_char(coalesce(m.lerakas_datum, m.datum), 'YYYY-MM-DD') as le_nap,
+       m.fuvardij, coalesce(m.fuvardij_penznem, 'Ft') as penznem,
+       fel.lat as fel_lat, fel.lon as fel_lon, le.lat as le_lat, le.lon as le_lon
+     from fuvar_megbizasok m
+     left join fuvar_partnerek p on p.id = m.partner_id
+     left join fuvar_jarmuvek j on j.id = m.jarmu_id
+     left join lateral (select g.cim_nyers, g.lat, g.lon from fuvar_megallok g where g.megbizas_id = m.id and g.tipus = 'felrako' order by g.sorszam limit 1) fel on true
+     left join lateral (select g.cim_nyers, g.lat, g.lon from fuvar_megallok g where g.megbizas_id = m.id and g.tipus = 'lerako' order by g.sorszam desc limit 1) le on true
+     where m.torolt_at is null and m.allapot is not null and m.datum is not null
+       and coalesce(m.lerakas_datum, m.datum) >= $1::date - 180 and m.datum <= $2::date
+     order by m.datum, m.id`,
+    [napok[0], napok[napok.length - 1]]
+  );
+
+  const beallitas = await getFuvarBeallitasok();
+  const hetiBer = sorok.filter((s) => s.jelleg === "ber" && s.le_nap >= napok[0]).map((s) => s.id);
+  const tar = await getTaroltKalkulaciok(hetiBer);
+  const eredmenyek = [...tar.values()].map((t) => t.eredmeny).filter((e): e is NonNullable<typeof e> => !!e);
+  const fogyasztas = eredmenyek.length ? eredmenyek.reduce((a, e) => a + e.fogyasztasL100, 0) / eredmenyek.length : beallitas.fogyasztas_alap_l_100km;
+  const gazolaj = eredmenyek.length ? eredmenyek[eredmenyek.length - 1].gazolaj.ar : beallitas.gazolaj_ar_tartalek_ft - beallitas.tankolasi_kedvezmeny_ft_l;
+  const kmOssz = eredmenyek.reduce((a, e) => a + e.rakottKm, 0);
+  const utdijPerKm = kmOssz > 0 ? eredmenyek.reduce((a, e) => a + e.rakottUtdijFt, 0) / kmOssz : 120;
+  const kmKoltseg = Math.round((fogyasztas / 100) * gazolaj + utdijPerKm);
+  const oraFt = Math.round(beallitas.napi_koltseg_ft / 9);
+
+  const indulas = await getIndulasiTelephely();
+  const tpont = indulas.lat != null && indulas.lon != null ? { lat: indulas.lat, lon: indulas.lon } : (await geo(indulas.cim)) ?? { lat: 47.77, lon: 21.93 };
+  const telephely = { pont: tpont, varos: varos(indulas.cim) };
+
+  const jarmuLista = await getJarmuvek();
+  const jarmuvek = (await query<{ kod: string; sofor: string | null }>(
+    `select j.kod, a.name as sofor from fuvar_jarmuvek j left join alkalmazottak a on a.id = j.sofor_id
+     where j.aktiv and j.ecofleet_object_id is not null order by j.id`
+  )).map((j) => ({ kod: j.kod, sofor: findJarmuByKod(j.kod, jarmuLista)?.sofor ?? j.sofor?.split(" ").pop() ?? j.kod }));
+
+  const hetiFuvar = (s: Sor): HetiFuvar => ({
+    id: s.id, cim: megbizoMegjelenites(s.jelleg, s.partner), felVaros: varos(s.felrako), leVaros: varos(s.lerako),
+    fel: pont(s.fel_lat, s.fel_lon), le: pont(s.le_lat, s.le_lon), felNap: s.fel_nap, leNap: s.le_nap, sajat: s.jelleg === "sajat",
+  });
+
+  const resek: Res[] = [];
+  const kocsik = jarmuvek.map((j) => {
+    const sajat = sorok.filter((s) => s.jarmu_kod === j.kod);
+    const elozo = sajat.filter((s) => s.le_nap < napok[0] && s.le_lat != null).pop();
+    const r = hetiReszek(
+      { kod: j.kod, sofor: j.sofor, fuvarok: sajat.map(hetiFuvar), elozoVeg: elozo ? { pont: pont(elozo.le_lat, elozo.le_lon)!, varos: varos(elozo.lerako) } : null },
+      napok, telephely, kmKoltseg
+    );
+    resek.push(...r.resek);
+    return { kod: j.kod, sofor: j.sofor, cellak: r.cellak };
+  });
+
+  const mult: (MultFuvar & { le: Pont | null })[] = sorok
+    .filter((s) => s.jelleg === "ber" && s.fel_nap < ma && s.partner)
+    .map((s) => ({ partner: megbizoMegjelenites(s.jelleg, s.partner), fel: pont(s.fel_lat, s.fel_lon), le: pont(s.le_lat, s.le_lon), felVaros: varos(s.felrako), leVaros: varos(s.lerako), nap: s.fel_nap, dijFt: s.penznem === "Ft" && s.fuvardij ? Number(s.fuvardij) : null }));
+
+  /** Ár-memória: hasonló (fel ±30 km, le ±30 km) korábbi fuvarok Ft/km mediánja. */
+  const ftKmElozmeny = (f: Pont, l: Pont): number | null => {
+    const x = mult.filter((m) => m.dijFt && m.fel && m.le && utKm(m.fel, f) <= 30 && utKm(m.le, l) <= 30)
+      .map((m) => m.dijFt! / Math.max(1, utKm(m.fel!, m.le!)));
+    return median(x);
+  };
+
+  const kijelolt = resek.find((r) => r.kulcs === resKulcs) ?? resek[0] ?? null;
+
+  const nyitott = (await getTimocomAjanlatok(30)).filter((t) => t.allapot === "nyitott").slice(0, 12);
+  const ajanlatok: HetAjanlat[] = await Promise.all(nyitott.map(async (t) => {
+    const helyek = t.ajanlat.helyek;
+    const f = helyek.find((h) => h.tipus === "fel") ?? helyek[0];
+    const l = [...helyek].reverse().find((h) => h.tipus === "le") ?? helyek[helyek.length - 1];
+    const cim = (h: typeof f) => [h.irsz, h.varos].filter(Boolean).join(" ") + (h.orszag ? `, ${h.orszag}` : "");
+    const [fp, lp] = f && l ? await Promise.all([geo(cim(f)), geo(cim(l))]) : [null, null];
+    const fel: AjanlatHely = { varos: f?.varos ?? "?", pont: fp, nap: f?.datumTol ?? null };
+    const le: AjanlatHely = { varos: l?.varos ?? "?", pont: lp, nap: l?.datumTol ?? null };
+    const p = { kmKoltseg, oraFt, ftKmElozmeny: fp && lp ? ftKmElozmeny(fp, lp) : null };
+    const illik = legjobbRes(resek, fel, le, p);
+    const ehhez = kijelolt ? illeszt(kijelolt, fel, le, p) : null;
+    return {
+      id: t.id, megbizo: t.ajanlat.megbizo, felVaros: fel.varos, leVaros: le.varos, felNap: fel.nap,
+      arSzoveg: t.ajanlat.ar ? `${t.ajanlat.ar.osszeg.toLocaleString("hu-HU")} ${t.ajanlat.ar.penznem}` : null,
+      illik, ehhez, nincsHely: !fp || !lp,
+    };
+  }));
+  ajanlatok.sort((a, b) => (a.illik ? a.illik.tobbletFt : 1e12) - (b.illik ? b.illik.tobbletFt : 1e12));
+
+  return {
+    ma, napok, kocsik, resek,
+    uresKmOssz: resek.reduce((a, r) => a + r.km, 0),
+    ajanlatok, kijelolt,
+    hivandok: kijelolt ? kiketHivj(kijelolt, mult) : [],
+    kmKoltseg,
+  };
+}

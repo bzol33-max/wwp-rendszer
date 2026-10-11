@@ -54,6 +54,8 @@ const FOFULEK: Fofül[] = [
     kulcs: "eredmeny",
     label: "Eredmény",
     alfulek: [
+      // Az új Eredmény-áttekintés (2026-10-11): három kérdés, vízesés, havi fedezet, megbízók.
+      { href: "/fuvarozas2/eredmeny", label: "Áttekintés", csakFuvarozas: true },
       { href: "/fuvarozas2/kimutatas", label: "Kimutatás", csakFuvarozas: true },
       // Költségek (5. fázis): az Elszámolás hatóköre is látja (HU-GO import, tankolások).
       { href: "/fuvarozas2/koltsegek", label: "Költségek" },

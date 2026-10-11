@@ -1,0 +1,91 @@
+// Tervezés · A hét: rések, ajánlat-illesztés, kiket hívj (lib/fuvarozas2/tervezes-het-alap.ts).
+// Futtatás: npx tsx scripts/teszt-tervezes-het.ts
+
+import { hetiReszek, illeszt, kiketHivj, legjobbRes, tervHetNapjai, utKm, type HetiFuvar } from "@/lib/fuvarozas2/tervezes-het-alap";
+
+let ok = 0, bad = 0;
+function eq(nev: string, kapott: unknown, vart: unknown) {
+  if (JSON.stringify(kapott) === JSON.stringify(vart)) ok++;
+  else { bad++; console.log(`  HIBA  ${nev}\n    várt:   ${JSON.stringify(vart)}\n    kapott: ${JSON.stringify(kapott)}`); }
+}
+const P = {
+  szakoly: { lat: 47.77, lon: 21.93 }, nadudvar: { lat: 47.42, lon: 21.17 }, tata: { lat: 47.65, lon: 18.32 },
+  tompa: { lat: 47.26, lon: 16.88 }, bp: { lat: 47.5, lon: 19.04 }, hszob: { lat: 47.44, lon: 21.39 }, debrecen: { lat: 47.53, lon: 21.63 },
+  balkany: { lat: 47.77, lon: 21.86 }, teglas: { lat: 47.71, lon: 21.68 },
+};
+const tel = { pont: P.szakoly, varos: "Szakoly" };
+const napok = tervHetNapjai("2026-10-12");
+eq("hét hétfőtől szombatig", napok, ["2026-10-12", "2026-10-13", "2026-10-14", "2026-10-15", "2026-10-16", "2026-10-17"]);
+eq("vasárnap → jövő hét", tervHetNapjai("2026-10-11")[0], "2026-10-12");
+eq("szerda → e hét hétfő", tervHetNapjai("2026-10-14")[0], "2026-10-12");
+
+const f = (id: string, fel: keyof typeof P, le: keyof typeof P, felNap: string, leNap = felNap, sajat = false): HetiFuvar =>
+  ({ id, cim: id, felVaros: fel, leVaros: le, fel: P[fel], le: P[le], felNap, leNap, sajat });
+
+// Gergő: Szakoly → (üres) Tata → Tompaládony, majd Tompaládony → Budapest, haza.
+{
+  const r = hetiReszek({ kod: "AOPU", sofor: "Gergő", elozoVeg: null, fuvarok: [f("a", "tata", "tompa", "2026-10-12"), f("b", "tompa", "bp", "2026-10-13")] }, napok, tel, 300);
+  eq("rések", r.resek.map((x) => [x.nap, x.honnan, x.hova, x.haza]), [["2026-10-12", "Szakoly", "tata", false], ["2026-10-13", "bp", "Szakoly", true]]);
+  eq("üres km Szakoly→Tata", r.resek[0].km, utKm(P.szakoly, P.tata));
+  eq("Nádudvar 90 km: nem rés", hetiReszek({ kod: "X", sofor: "X", elozoVeg: null, fuvarok: [f("n", "nadudvar", "hszob", "2026-10-12")] }, napok, tel, 300).resek.length, 0);
+  eq("Ft = km × költség", r.resek[0].ft, r.resek[0].km * 300);
+  eq("szabad napok", r.cellak.map((c) => c.szabad), [false, false, true, true, true, true]);
+}
+// Rövid üres (<100 km) nem rés; előző heti lerakóról indul.
+{
+  const r = hetiReszek({ kod: "NMZ", sofor: "Micó", elozoVeg: { pont: P.balkany, varos: "Balkány" }, fuvarok: [f("c", "teglas", "debrecen", "2026-10-14")] }, napok, tel, 300);
+  eq("nincs rés közel", r.resek.length, 0);
+  eq("csak a szerdai nap foglalt", r.cellak.map((c) => c.fuvarok.length), [0, 0, 1, 0, 0, 0]);
+}
+// Lerakó koordináta nélkül: utána nem becsülünk rést.
+{
+  const x = { ...f("g", "tata", "tompa", "2026-10-12"), le: null };
+  const r = hetiReszek({ kod: "X", sofor: "X", elozoVeg: null, fuvarok: [x, f("h", "bp", "tata", "2026-10-14")] }, napok, tel, 300);
+  eq("ismeretlen hely után nincs rés", r.resek.map((y) => y.honnan), ["Szakoly", "tata"]);
+}
+// Üres hét: nincs rés, minden nap szabad.
+{
+  const r = hetiReszek({ kod: "X", sofor: "X", elozoVeg: null, fuvarok: [] }, napok, tel, 300);
+  eq("üres hét", [r.resek.length, r.cellak.every((c) => c.szabad)], [0, true]);
+}
+// Több napos fuvar minden érintett napon látszik; a héten kívüli nem.
+{
+  const r = hetiReszek({ kod: "X", sofor: "X", elozoVeg: null, fuvarok: [f("d", "teglas", "tompa", "2026-10-15", "2026-10-16"), f("e", "teglas", "debrecen", "2026-10-05")] }, napok, tel, 300);
+  eq("kétnapos", r.cellak.map((c) => c.fuvarok.map((x) => x.id).join()), ["", "", "", "d", "d", ""]);
+}
+// Ajánlat illesztése a Szakoly → Tata résbe: Debrecen → Budapest kis kerülő.
+{
+  const res = hetiReszek({ kod: "AOPU", sofor: "Gergő", elozoVeg: null, fuvarok: [f("a", "tata", "tompa", "2026-10-12")] }, napok, tel, 300).resek[0];
+  const p = { kmKoltseg: 300, oraFt: 6000, ftKmElozmeny: null };
+  const i = illeszt(res, { varos: "Debrecen", pont: P.debrecen, nap: "2026-10-12" }, { varos: "Budapest", pont: P.bp, nap: "2026-10-12" }, p)!;
+  eq("illik", !!i, true);
+  eq("+km = kerülő", i.plusKm, Math.max(0, utKm(P.szakoly, P.debrecen) + utKm(P.debrecen, P.bp) + utKm(P.bp, P.tata) - res.km));
+  eq("kis kerülő nem drága", i.draga, false);
+  eq("+idő benne 1 óra rakodás", i.plusPerc, Math.round((i.plusKm / 60) * 60) + 60);
+  eq("többlet", i.tobbletFt, Math.round(i.plusKm * 300 + (i.plusPerc / 60) * 6000));
+  eq("min ≥ többlet, 5000-re kerek", [i.minFt >= i.tobbletFt, i.minFt % 5000], [true, 0]);
+  eq("kérj ≥ min", i.kerjFt >= i.minFt, true);
+  eq("rossz nap → nem illik", illeszt(res, { varos: "D", pont: P.debrecen, nap: "2026-10-16" }, { varos: "H", pont: P.hszob, nap: null }, p), null);
+  eq("nagy kerülő → nem illik", illeszt(res, { varos: "B", pont: P.tompa, nap: null }, { varos: "B", pont: P.szakoly, nap: null }, p), null);
+  eq("hely nélkül → nem illik", illeszt(res, { varos: "?", pont: null, nap: null }, { varos: "H", pont: P.hszob, nap: null }, p), null);
+  const el = illeszt(res, { varos: "Debrecen", pont: P.debrecen, nap: null }, { varos: "Budapest", pont: P.bp, nap: null }, { ...p, ftKmElozmeny: 600 })!;
+  eq("ár-memória emeli a kérést", el.kerjFt, Math.ceil((600 * el.rakottKm) / 5000) * 5000);
+  eq("legjobb rés", legjobbRes([res], { varos: "Debrecen", pont: P.debrecen, nap: null }, { varos: "Budapest", pont: P.bp, nap: null }, p)?.res.kulcs, res.kulcs);
+  // Kiket hívj
+  const mult = [
+    { partner: "RBT", fel: P.teglas, felVaros: "Téglás", leVaros: "Budapest", nap: "2026-09-03", dijFt: 130000 },
+    { partner: "RBT", fel: P.teglas, felVaros: "Téglás", leVaros: "Gyöngyös", nap: "2026-08-19", dijFt: 90000 },
+    { partner: "Flott", fel: P.balkany, felVaros: "Nyírbátor", leVaros: "Budapest", nap: "2026-09-07", dijFt: 130000 },
+    { partner: "Flott", fel: P.balkany, felVaros: "Nyírbátor", leVaros: "Budapest", nap: "2026-09-01", dijFt: 130000 },
+    { partner: "Flott", fel: P.balkany, felVaros: "Nyírbátor", leVaros: "Budapest", nap: "2026-08-01", dijFt: 120000 },
+    { partner: "Egyszeri", fel: P.balkany, felVaros: "B", leVaros: "C", nap: "2026-09-01", dijFt: 1 },
+    { partner: "Messze", fel: P.tompa, felVaros: "T", leVaros: "C", nap: "2026-09-01", dijFt: 1 },
+    { partner: "Messze", fel: P.tompa, felVaros: "T", leVaros: "C", nap: "2026-09-02", dijFt: 1 },
+  ];
+  const h = kiketHivj(res, mult);
+  eq("kiket hívj sorrend", h.map((x) => [x.partner, x.db]), [["Flott", 3], ["RBT", 2]]);
+  eq("utolsó út", [h[1].utolsoUt, h[1].utolsoNap, h[1].utolsoDijFt], ["Téglás → Budapest", "2026-09-03", 130000]);
+}
+
+console.log(`teszt-tervezes-het: ${ok} ok, ${bad} hiba`);
+if (bad) process.exit(1);

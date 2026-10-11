@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import { PageHeader } from "@/components/layout/page-header";
 import { requireSession } from "@/lib/auth/dal";
 import { getTervezo } from "@/lib/fuvarozas2/tervezo";
 import { Fuvarozas2Fulek } from "@/components/fuvarozas2/fulek";
@@ -10,6 +9,8 @@ import { varosNev } from "@/lib/fuvarozas/varos";
 import { MenettervPanel } from "@/components/fuvarozas2/menetterv";
 import { getMenettervNap } from "@/lib/menet/akciok";
 import { budapestNapISO } from "@/lib/fuvarozas/idozona";
+import { getTervezesHet } from "@/lib/fuvarozas2/tervezes-het";
+import { TervezesHetNezet } from "@/components/fuvarozas2/tervezes-het";
 
 export const dynamic = "force-dynamic";
 
@@ -24,10 +25,11 @@ const napEltolva = (nap: string, n: number) => {
   return d.toISOString().slice(0, 10);
 };
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ m?: string; kocsi?: string; het?: string; menetnap?: string }> }) {
+export default async function Page({ searchParams }: { searchParams: Promise<{ m?: string; kocsi?: string; het?: string; menetnap?: string; res?: string }> }) {
   const sp = await searchParams;
   const session = await requireSession();
   const szerkeszthet = session.can("fuvarozas").edit;
+  const hetAdat = await getTervezesHet(sp.res);
   const t = await getTervezo({ m: sp.m && /^\d+$/.test(sp.m) ? sp.m : undefined, kocsi: sp.kocsi });
   const k = t.kivalasztott;
   // Menetterv (3. fázis): a választott nap (alapból ma, Budapest).
@@ -46,8 +48,14 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ m
   const menetNapCimke = `${menetNap === ma ? "ma, " : menetNap === napEltolva(ma, 1) ? "holnap, " : ""}${new Date(`${menetNap}T12:00:00Z`).toLocaleDateString("hu-HU", { timeZone: "UTC", weekday: "long", month: "2-digit", day: "2-digit" })}`;
   return (
     <div className="flex flex-col gap-4">
-      <PageHeader title="Fuvarozás · Tervezés" subtitle="Bejövő megbízás → megéri-e magában, a korábbi árakhoz és a kocsi hetéhez képest → döntés." />
-      <Fuvarozas2Fulek aktiv="/fuvarozas2/tervezes" />
+      <Fuvarozas2Fulek aktiv="/fuvarozas2/tervezes" cim="Tervezés" />
+      {/* Az új terv 2. oldala (2026-10-11): a hét a résekkel, ajánlatok, kiket hívj. */}
+      <TervezesHetNezet adat={hetAdat} />
+
+      <div className="mt-2 border-t pt-4">
+        <h2 className="text-lg font-semibold">Bejövő megbízások — döntés</h2>
+        <p className="text-sm text-muted-foreground">Megéri-e magában, a korábbi árakhoz és a kocsi hetéhez képest.</p>
+      </div>
       {t.hatterben > 0 ? <p className="-mt-2 text-xs text-muted-foreground">{t.hatterben} megbízás kalkulációja készül a háttérben — frissítéskor megjelenik.</p> : null}
 
       <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)_minmax(0,1fr)] xl:items-start">
