@@ -1,5 +1,6 @@
 import { requireSession } from "@/lib/auth/dal";
 import { EditPermissionProvider } from "@/components/auth/edit-permission-context";
+import { OldalNaplo } from "@/components/oldal-naplo";
 
 // A Fuvarozás 2 két jogkulccsal nyílik: a teljes modul ("fuvarozas") vagy
 // az Elszámolás hatóköre ("elszamolas", Szabina) — a ModuleGate egy kulcsot
@@ -20,6 +21,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
   return (
     <EditPermissionProvider canEdit={f.edit || e.edit}>
       <div className="fuvarozas2 -mx-4 -my-5 -mb-24 min-h-[calc(100vh-0px)] px-4 py-5 pb-24 md:-mx-8 md:-my-7 md:-mb-7 md:px-8 md:py-7 md:pb-7">
+        <OldalNaplo />
         {children}
       </div>
     </EditPermissionProvider>
