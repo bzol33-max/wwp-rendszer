@@ -35,7 +35,8 @@ export async function valtAllapotTx(
       break;
     case "szamlazhato": set("teljesitve = true, teljesitve_at = coalesce(teljesitve_at, now())"); break;
     case "szamlazva": if (sor.allapot === "postazva") set("postazva = false, postazva_at = null"); break;
-    case "postazva": set("postazva = true, postazva_at = coalesce(postazva_at, now()), papirok_beerkeztek_at = coalesce(papirok_beerkeztek_at, now())"); break;
+    // A postázás a papírt nem állítja (2026-10-11): azt Szabina külön nyugtázza (setPapirMegjott).
+    case "postazva": set("postazva = true, postazva_at = coalesce(postazva_at, now())"); break;
     case "lezart": if (sor.jelleg === "ber") set("postazva = true, postazva_at = coalesce(postazva_at, now() - interval '6 minutes')"); else set("teljesitve = true, teljesitve_at = coalesce(teljesitve_at, now())"); break;
   }
   // Állapotfeltételes írás az optimista zár megtartásához.
@@ -46,7 +47,7 @@ export async function valtAllapotTx(
   if (irt.length === 0) return { ok: false, hiba: "A megbízás állapota közben megváltozott — frissítsd az oldalt, és próbáld újra." };
   if (sor.jelleg === "ber") {
     await tx(`insert into fuvar_elszamolas (megbizas_id) values ($1) on conflict (megbizas_id) do nothing`, [id]);
-    if (hova === "postazva") await tx(`update fuvar_elszamolas set postazva_at = coalesce(postazva_at, now()), postazva_by = $2, papirok_beerkeztek_at = coalesce(papirok_beerkeztek_at, now()), papirok_beerkeztek_by = coalesce(papirok_beerkeztek_by, $2), frissitve_at = now() where megbizas_id = $1`, [id, ki]);
+    if (hova === "postazva") await tx(`update fuvar_elszamolas set postazva_at = coalesce(postazva_at, now()), postazva_by = $2, frissitve_at = now() where megbizas_id = $1`, [id, ki]);
     if (hova === "szamlazva" && sor.allapot === "postazva") await tx(`update fuvar_elszamolas set postazva_at = null, postazva_by = null, frissitve_at = now() where megbizas_id = $1`, [id]);
     if (hova === "email_elment") await tx(`update fuvar_elszamolas set email_elment_at = coalesce(email_elment_at, now()), email_elment_by = $2, frissitve_at = now() where megbizas_id = $1`, [id, ki]);
     if (hova === "teljesitve" && sor.allapot === "szamlazva") await tx(`update fuvar_elszamolas set szamla_id = null, szamla_szam = null, szamla_kelte = null, frissitve_at = now() where megbizas_id = $1`, [id]);

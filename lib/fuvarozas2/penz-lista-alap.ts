@@ -15,6 +15,8 @@ export const PENZ_SZUROK: { k: PenzSzuro; c: string }[] = [
 ];
 
 const KESZ = new Set(["teljesitve", "szamlazhato", "szamlazva", "email_elment", "postazva", "lezart"]);
+/** Bérfuvar: ezekben az állapotokban várjuk az eredeti papírt (a postázásig). */
+const PAPIRRA_VAR = new Set(["teljesitve", "szamlazhato", "szamlazva", "email_elment"]);
 
 export type PenzBemenet = {
   id: string;
@@ -24,7 +26,10 @@ export type PenzBemenet = {
   fuvardij: number | null;
   penznem: string;
   szamlaSzam: string | null;
+  /** Az eredeti papír (CMR) nyugtázva: csak a `papirok_beerkeztek_at` (2026-10-11). */
   vanPapir: boolean;
+  /** A sofőr fuvarlevél-fotója — külön jelzés, nem papír. */
+  fotoVan: boolean;
   szamla: { brutto: number; fizetett: number; penznem: string; kiallitas: string; hatarido: string | null; fizetve: boolean; fizetveNap: string | null } | null;
 };
 
@@ -32,6 +37,8 @@ export type PenzAllapot = {
   kesz: boolean;
   szamlazatlan: boolean;
   papirHianyzik: boolean;
+  /** Bérfuvar: már van számlaszám (postára vár), de az eredeti papír még nincs nyugtázva. */
+  szamlazvaPapirNelkul: boolean;
   kikuldve: boolean;
   lejart: boolean;
   fizetve: boolean;
@@ -49,18 +56,24 @@ export function penzAllapot(s: PenzBemenet, ma: string): PenzAllapot {
   const kesz = KESZ.has(s.allapot);
   const ber = s.jelleg === "ber";
   const szamlazatlan = kesz && ber && !s.szamlaSzam;
-  // Papír: csak ami még nem ment tovább (teljesítve / számlázható) — a már
-  // számlázott, postázott fuvar papírja nyilván megvolt; a saját fuvarnál
-  // 60 napnál régebbit nem kérünk számon (régi adatban nincs fotó-jelölés).
+  // Papír (2026-10-11, a tulajdonos döntése: jelzés, nem tiltás): bérfuvarnál
+  // a postázásig, amíg Szabina nem nyugtázta az eredeti papírt — a már
+  // számlázott (postára váró) is, hogy egy papír se vesszen el. A postázott /
+  // lezárt fuvar papírja elment, azt nem kérjük számon. A fotó nem papír.
+  // Saját fuvarnál nincs papír-nyugtázás: ott a lefotózott szállítólevél a
+  // papír, és 60 napnál régebbit nem kérünk számon (régi adatban nincs fotó).
   const kor = Math.max(0, napKul(s.nap, ma));
-  const papirHianyzik = (s.allapot === "teljesitve" || s.allapot === "szamlazhato") && !s.vanPapir && (ber || kor <= 60);
+  const papirHianyzik = ber
+    ? PAPIRRA_VAR.has(s.allapot) && !s.vanPapir
+    : (s.allapot === "teljesitve" || s.allapot === "szamlazhato") && !s.fotoVan && kor <= 60;
+  const szamlazvaPapirNelkul = ber && papirHianyzik && !!s.szamlaSzam;
   const sz = s.szamla;
   const fizetve = !!sz?.fizetve;
   const nyitott = !!sz && !sz.fizetve;
   const lejart = nyitott && !!sz!.hatarido && sz!.hatarido < ma;
   const kikuldve = nyitott && !lejart;
   return {
-    kesz, szamlazatlan, papirHianyzik, kikuldve, lejart, fizetve,
+    kesz, szamlazatlan, papirHianyzik, szamlazvaPapirNelkul, kikuldve, lejart, fizetve,
     kor,
     lejartNap: lejart ? napKul(sz!.hatarido!, ma) : 0,
   };

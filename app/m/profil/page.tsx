@@ -24,8 +24,9 @@ export default async function Page() {
           </>
         ) : (
           <>
-            <p>Számla fül: a visszaért fuvarok — a számlaszám a Számlázz.hu-ból magától is párosul, ha nem, írd be.</p>
-            <p className="mt-2">Posta fül: a „Feladva ✓” azt jelenti, hogy a papírt postára adtad — ezzel a fuvar kész.</p>
+            <p>Posta fül: a kiszámlázott fuvarok, amelyek papírját postára kell adni. Ha megjött az eredeti papír (CMR / fuvarlevél), jelöld: „Papír megjött ✓” — tévedésből visszavonható.</p>
+            <p className="mt-2">A „Feladva ✓” azt jelenti, hogy a papírt postára adtad — ezzel a fuvar kész. Ha a papír még nincs nyugtázva, a rendszer rákérdez, de nem tilt.</p>
+            <p className="mt-2">Számlázni az asztali Elszámolásban lehet; a számlaszám a Számlázz.hu-ból magától is párosul.</p>
           </>
         )}
       </div>

@@ -171,6 +171,9 @@ export async function valtAllapot(id: string, hova: Allapot, opciok: { kezi?: bo
 /** Kézi számlaszám (a Számlázz.hu-szinkron helyett/mellett). Számlázható → számlázva átmenettel. */
 export async function setSzamlaSzam(id: string, szamlaSzam: string | null): Promise<{ ok: true } | { ok: false; hiba: string }> { return actions.setSzamlaSzam(id, szamlaSzam); }
 
+/** „Papír megjött ✓” (true) / visszavonás (false) — csak jelzés, a számlázást nem tiltja (2026-10-11). */
+export async function setPapirMegjott(id: string, megjott: boolean): Promise<{ ok: true } | { ok: false; hiba: string }> { return actions.setPapirMegjott(id, megjott); }
+
 /** Megjegyzés / szabad szöveges módosítás naplózva (a többi mező szerkesztése a régi részletben marad a cutoverig). */
 export async function setMegjegyzes(id: string, megjegyzes: string | null): Promise<void> { return actions.setMegjegyzes(id, megjegyzes); }
 
