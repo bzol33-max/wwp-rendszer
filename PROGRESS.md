@@ -1,5 +1,23 @@
 # PROGRESS
 
+## 2026-10-11 — Timocom → WWP böngésző-gomb (fuvarszervező pult, B út)
+
+- Új lap: Fuvarozás · **Timocom** (`/fuvarozas2/timocom`). A „→ WWP” könyvjelző-gombot
+  innen kell a Chrome könyvjelzősávjába húzni. A Timocom fuvarkeresőjében nyitott
+  ajánlaton kattintva a gomb kiolvassa a részletpanelt (megbízó, TC ID, helyek
+  fel/le jelöléssel, dátum/idősáv, kapcsolat, méret, áru, felépítmény, ár,
+  fizetési határidő, megjegyzés), és új fülön ide nyit (`#d=` — az adat nem megy
+  a szerver naplójába). Kézi beillesztés (A út) ugyanazzal a feldolgozóval.
+- Rögzítés: `radar_kiiras` (forras = 'timocom', kulcs = Timocom ajánlat-ID; ugyanaz
+  újra küldve frissül, az állapotot megtartja). `037_timocom_kiiras.sql`: reszletek,
+  nyers_szoveg, url, rogzitette (additív).
+- Kártya: figyelmeztetések (ADR, hulladék/engedély, hűtő, nem ponyvás felépítmény,
+  >13,6 m, >24 t, több megálló, külföld, nincs ár), kattintható telefonszám,
+  állapot (ajánlatot adtam / elvetem). Alatta a Kalkulátor a megállókkal kitöltve.
+- A gomb a valódi Timocom-oldalon kipróbálva (2026-10-11): helyek, kapcsolat-rész
+  kinyitása csak ha csukva van. A Timocom-oldal átalakítása eltörheti → beillesztés.
+- Teszt: `scripts/teszt-timocom.ts` (45), helyi Postgres + Playwright végigjárás.
+
 ## 2026-10-11 — HU-GO „Díjtételek” export beolvasása
 
 - A portál valódi exportját (ISO-8859-2, `;`, „Költség”, „Használat ideje”,

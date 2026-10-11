@@ -13,6 +13,8 @@ const FULEK: { href: string; label: string; csakFuvarozas?: boolean; csakRendsze
   { href: "/fuvarozas2/diszpecser", label: "Diszpécser", csakFuvarozas: true },
   { href: "/fuvarozas2/megbizasok", label: "Megbízások" },
   { href: "/fuvarozas2/kalkulator", label: "Kalkulátor", csakFuvarozas: true },
+  // Timocom → WWP (fuvarszervező pult, B út: böngésző-gomb + beillesztés).
+  { href: "/fuvarozas2/timocom", label: "Timocom", csakFuvarozas: true },
   { href: "/fuvarozas2/levelek", label: "Levelek" },
   { href: "/fuvarozas2/tervezes", label: "Tervezés", csakFuvarozas: true },
   { href: "/fuvarozas2/gps", label: "Élő GPS", csakFuvarozas: true },
