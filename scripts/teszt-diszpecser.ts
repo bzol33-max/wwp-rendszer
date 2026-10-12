@@ -243,7 +243,8 @@ const BEALL = { gpsKesoiPerc: 10, gpsElavultPerc: 30, uresIndulasKm: 30 };
   eq("fülsor: az Ajánlat címe /timocom marad (böngésző „→ WWP”)", fulSorok.find((f) => f.label === "Ajánlat")?.href, "/fuvarozas2/timocom");
   const konfig = readFileSync("next.config.ts", "utf8");
   eq("átirányítás: kalkulátor → Ajánlat", /source: "\/fuvarozas2\/kalkulator", destination: "\/fuvarozas2\/timocom", permanent: false/.test(konfig), true);
-  eq("átirányítás: elszámolás → Megbízások", /source: "\/fuvarozas2\/elszamolas", destination: "\/fuvarozas2\/megbizasok", permanent: false/.test(konfig), true);
+  // Az Elszámolás NEM irányít át: a postázási e-mail piszkozata csak ott van (rejtett lap marad).
+  eq("az elszámolás lap elérhető marad (nincs átirányítás)", /source: "\/fuvarozas2\/elszamolas"/.test(konfig), false);
   const lap = readFileSync("app/fuvarozas2/diszpecser/page.tsx", "utf8");
   eq("Diszpécser lap: menetterv a Diszpécser napjára", /getMenettervNap\(adat\.nap\)/.test(lap) && /<MenettervPanel/.test(lap), true);
   eq("Diszpécser lap: menetterv-szerkesztés a fuvarozás szerkesztési jogával", /szerkeszthet=\{session\.can\("fuvarozas"\)\.edit\}/.test(lap), true);

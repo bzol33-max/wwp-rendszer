@@ -32,8 +32,7 @@ const nextConfig: NextConfig = {
       // lapok kódja megvan — a sor törlésével visszaállítható.
       // A kézi kalkulátor az Ajánlat (Timocom) lapon; a ?honnan=&hova= továbbmegy.
       { source: "/fuvarozas2/kalkulator", destination: "/fuvarozas2/timocom", permanent: false },
-      // Az Elszámolás a Megbízások pénz-nézetében (Teendő szűrő: számlázatlan, papír hiányzik, lejárt).
-      { source: "/fuvarozas2/elszamolas", destination: "/fuvarozas2/megbizasok", permanent: false },
+      // Az Elszámolás rejtett lap marad (a postázási e-mail piszkozata csak ott van); a linkek a pénz-nézetre mutatnak.
       // A menetterv a Diszpécserben, a Diszpécser napjára (régi könyvjelző: Tervezés ?menetnap=…#menetterv).
       {
         source: "/fuvarozas2/tervezes",

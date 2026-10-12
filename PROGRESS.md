@@ -1,5 +1,25 @@
 # PROGRESS
 
+## 2026-10-12 — Gergő menete + a Fuvarozás navigáció rendbetétele
+
+- **Hiba (Gergő, sofőr-app rossz sorrend):** a reggel kiosztott Gászler-fuvar (Hajdúszoboszló →
+  Dunakeszi) nem került be a már jóváhagyott, elkezdett menetbe (az első feladat lezárt → se
+  javaslat-frissítés, se visszavonás). Javítás: `bovitJovahagyottMenetet` (lib/menet/muveletek.ts)
+  + `bovitettSorrend` (menet-alap, teszt): a lezárt előtag marad, a jóváhagyott sorrend marad, az új
+  fuvar a napi szabály szerinti helyére. Hívja: kocsi-hozzárendelés után azonnal, az óránkénti kör,
+  és a Menetterv „Új fuvarok be” gombja. Napló: 'bovites'.
+- Gergő mai menete élesben rendbe téve (v6, optimalizáló javaslat elfogadva): Szakoly → Nádudvar ✓,
+  Hajdúszoboszló → Dunakeszi (Gászler), Dunakeszi → Tata, Tata → Tompaládony.
+  A napi szabály a Gászlert Tata mögé tette (azonos terv-idő, id-sorrend) — a GPS-tény
+  (Hajdúszoboszlón áll) még nem érkezett be; ezt az optimalizáló helyesen rendezte.
+- **Navigáció** (components/fuvarozas2/fulek.tsx): Ma → Most · Diszpécser · GPS; Tervezés → A hét ·
+  Ajánlat; Megbízások → Lista · Levelek · Partnerek; Eredmény változatlan. A Menetterv a Diszpécserben
+  (a Diszpécser napjára), a Kalkulátor az Ajánlat (Timocom) lapon kézi módban is. Levéve (kód
+  megvan): Tervezés „A hét minden kocsija”, GPS régi idővonal, Ma „Részletek” heti rácsa.
+  Átirányítás: /kalkulator → /timocom, /tervezes?menetnap= → /diszpecser?nap=. Az Elszámolás rejtett
+  lap marad (e-mail piszkozat), a rá mutató linkek a pénz-nézetre mennek.
+- Nyitott: holnaputáni kocsi nélküli fuvar egyik új nézetben sem látszik (a régi hét mutatta).
+
 ## 2026-10-11 — Tervezés hét: a rések végre megjelennek
 
 - Hiba: „egyik résbe sem illik” minden Timocom-ajánlatra (pl. Gergő H: Nádudvar → Tata üres út).
