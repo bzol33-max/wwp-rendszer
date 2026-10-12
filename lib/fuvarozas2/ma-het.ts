@@ -1,16 +1,8 @@
-// A Ma oldal heti rácsa (Budaházi Zoltán, 2026-10-05, „R2” terv): soronként
-// egy kocsi, előtte a „Most” oszlop — hol tart a mostani fuvar (kész
-// megállók aránya, következő megálló, ETA) —, utána hétfőtől péntekig a
-// megbízások kártyái. A kész fuvarok is a helyükön maradnak (lezárt, fotóra
-// vár, számlázható…), a több napos fuvar a következő napokon „folytatódik”.
-//
-// Tiszta modul (nincs adatbázis) — scripts/teszt-ma-het.ts teszteli.
+// A Ma oldal közös, tiszta segédei (nincs adatbázis) — scripts/teszt-ma-het.ts.
+// 2026-10-12: a heti rács (R2) és a Diszpécser megszűnt; ami innen és a
+// diszpecser-alap.ts-ből a Ma lapnak kell, itt maradt.
 
-import { varosNev } from "@/lib/fuvarozas/varos";
 import type { Allapot } from "@/lib/fuvarozas/allapot";
-import type { TukorSor } from "@/lib/fuvarozas2/ma-tukor";
-import { napiSorrend, tervIdoMegbizasbol } from "@/lib/fuvarozas2/napi-sorrend";
-import { alkalmazMenetSorrendet } from "@/lib/menet/menet-alap";
 
 export type HetFuvar = {
   id: string;
@@ -27,35 +19,6 @@ export type HetFuvar = {
   felrakas_ablak_tol?: string | null;
   idopont?: string | null;
 };
-
-/** Egy megálló annyiban, amennyi a kártya állapotához kell. */
-export type HetMegallo = { tipus: "felrako" | "lerako"; varos: string; nap: string | null; ott: boolean; kesz: boolean };
-
-export type HetSzin = "kesz" | "foto" | "uton" | "ott" | "terv" | "ellenorzes";
-
-export type HetKartya = {
-  id: string;
-  partner: string;
-  /** „Szakoly → Tata”. */
-  utvonal: string;
-  jelleg: "ber" | "sajat";
-  szin: HetSzin;
-  /** „lezárt”, „fotóra vár”, „úton”, „rakodik”, „tervezett”… */
-  cimke: string;
-  /** Igaz a fuvar második, harmadik… napján. */
-  folytatodik: boolean;
-  /** A folytatódó napon: aznapi megállók („Debrecen le”), különben null. */
-  aznap: string | null;
-  /** A folytatódó nap teendője kész (a fuvar lezárult, vagy aznapi megállói mind készek). */
-  aznapKesz: boolean;
-};
-
-export type HetMost =
-  | { tipus: "fuvar"; fuvarId: string; partner: string; szazalek: number; kovetkezo: string; ido: string | null; szin: "blue" | "amber" }
-  | { tipus: "kesz" }
-  | { tipus: "ures" }
-  /** Vasárnap, fuvar nélkül: pihenőnap — nem kell fuvart keresni (Zoltán, 2026-10-11). */
-  | { tipus: "piheno" };
 
 export type HetNap = { nap: string; cimke: string; ma: boolean; /** Szombat / vasárnap (csak ha aznap van fuvar). */ hetvege?: boolean };
 
@@ -75,126 +38,10 @@ export function hetNapjai(ma: string): HetNap[] {
   return ki;
 }
 
-/**
- * A heti rács napjai a hétvégével együtt (QA 2026-10-10: szombaton a vasárnapi
- * fuvar sehol nem látszott a Ma oldalon). A hét öt munkanapja (hetNapjai)
- * mellé bekerül minden hétvégi nap, amelyen van fuvar (`vanFuvar`):
- *   • hétköznap az e heti szombat és vasárnap (a péntek után);
- *   • hétvégén a MAI naptól a hétfőig hátralévő hétvégi nap(ok) (a hétfő előtt).
- * A hétvégi nap `hetvege: true` jelet kap. Fuvar nélküli hétvégi nap nem kerül be.
- */
-export function hetNapjaiHetvegevel(ma: string, vanFuvar: (nap: string) => boolean): HetNap[] {
-  const munkanapok = hetNapjai(ma);
-  const nap = (iso: string, n: number) => {
-    const d = new Date(`${iso}T12:00:00Z`);
-    d.setUTCDate(d.getUTCDate() + n);
-    return { nap: d.toISOString().slice(0, 10), het: d.getUTCDay(), datum: d.getUTCDate() };
-  };
-  const hetvegiNap = (n: { nap: string; het: number; datum: number }): HetNap => ({ nap: n.nap, cimke: `${NAPNEV[n.het]} ${n.datum}.`, ma: n.nap === ma, hetvege: true });
-  const maHet = new Date(`${ma}T12:00:00Z`).getUTCDay();
-  if (maHet === 6 || maHet === 0) {
-    const elotte = (maHet === 6 ? [nap(ma, 0), nap(ma, 1)] : [nap(ma, 0)]).filter((n) => vanFuvar(n.nap)).map(hetvegiNap);
-    return [...elotte, ...munkanapok];
-  }
-  const pentek = munkanapok[munkanapok.length - 1].nap;
-  const utana = [nap(pentek, 1), nap(pentek, 2)].filter((n) => vanFuvar(n.nap)).map(hetvegiNap);
-  return [...munkanapok, ...utana];
-}
-
-/**
- * A Ma oldal kocsi-helykitöltője: „még nem üzemel” CSAK akkor, ha a kocsinak
- * nincs hozzárendelt fuvarja, és nincs GPS-eszköze vagy rendszáma. Ha van
- * fuvarja (QA 2026-10-10: JANI mai fuvarja rejtve maradt), a kocsi a
- * feladataival látszik, GPS nélkül „nincs GPS” állapottal.
- */
+/** Helykitöltő felirat a még nem üzemelő kocsihoz (nincs GPS, rendszám, fuvar); egyébként null. */
 export function kocsiHelykitolto(k: { vanGps: boolean; vanRendszam: boolean; vanFuvar: boolean }): string | null {
   if (k.vanGps || k.vanFuvar) return null;
   return k.vanRendszam ? null : "még nem üzemel";
-}
-
-/** ISO hét száma — „41. hét”. */
-export function hetSzama(nap: string): number {
-  const d = new Date(`${nap}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + 3 - ((d.getUTCDay() + 6) % 7));
-  const jan4 = new Date(Date.UTC(d.getUTCFullYear(), 0, 4));
-  return 1 + Math.round(((d.getTime() - jan4.getTime()) / 86400000 - 3 + ((jan4.getUTCDay() + 6) % 7)) / 7);
-}
-
-const KESZ_CIMKE: Partial<Record<Allapot, string>> = {
-  teljesitve: "fotóra vár",
-  szamlazhato: "számlázható",
-  szamlazva: "számlázva",
-  email_elment: "számlázva",
-  postazva: "számlázva",
-  lezart: "lezárt",
-};
-
-function allapotKartya(f: HetFuvar, megallok: HetMegallo[]): { szin: HetSzin; cimke: string } {
-  if (f.allapot === "teljesitve") return { szin: "foto", cimke: "fotóra vár" };
-  const kesz = KESZ_CIMKE[f.allapot];
-  if (kesz) return { szin: "kesz", cimke: kesz };
-  if (f.allapot === "ellenorzesre_var") return { szin: "ellenorzes", cimke: "ellenőrzésre vár" };
-  if (f.allapot === "folyamatban") {
-    const ott = megallok.find((m) => m.ott && !m.kesz);
-    if (ott) return { szin: "ott", cimke: ott.tipus === "felrako" ? `rakodik · ${ott.varos}` : `lerakón · ${ott.varos}` };
-    return { szin: "uton", cimke: "úton" };
-  }
-  return { szin: "terv", cimke: "tervezett" };
-}
-
-const varos = (cim: string | null) => (cim ? varosNev(cim) ?? cim : "—");
-
-/**
- * Egy kocsi (vagy a kocsi nélküliek) cellái a hét öt napjára. Egy fuvar
- * minden olyan napon megjelenik, amely a felrakás és a lerakás napja közé
- * esik; az első napon teljes kártya, utána „folytatódik”. Ha egy napra
- * JÓVÁHAGYOTT menet van (`menetSorrend(nap)`, lib/menet), az a nap sorrendje.
- */
-export function hetCellak(
-  fuvarok: HetFuvar[],
-  megallok: Map<string, HetMegallo[]>,
-  napok: HetNap[],
-  menetSorrend: (nap: string) => readonly string[] | null | undefined = () => null
-): HetKartya[][] {
-  return napok.map(({ nap }) => {
-    const aznapiak = fuvarok.filter((f) => {
-      const tol = f.felrakas_nap ?? f.lerakas_nap;
-      const ig = f.lerakas_nap && tol && f.lerakas_nap >= tol ? f.lerakas_nap : tol;
-      return tol != null && ig != null && tol <= nap && nap <= ig;
-    });
-    // A közös sorrend (napi-sorrend.ts): a lezárt elöl, a kiírt időpontú a
-    // nélküle lévők előtt — itt nincs tény-idő, csak a terv.
-    const sorrendben = alkalmazMenetSorrendet(
-      napiSorrend(aznapiak, (f) => ({
-        id: f.id, felrakasNap: f.felrakas_nap, lerakasNap: f.lerakas_nap, felrako: f.felrako, lerako: f.lerako,
-        lezart: !!KESZ_CIMKE[f.allapot],
-        tervIdo: tervIdoMegbizasbol(f.felrakas_nap, f.felrakas_ablak_tol, f.idopont),
-      })),
-      menetSorrend(nap),
-      (f) => f.id
-    );
-    return sorrendben.map((f) => {
-      const gs = megallok.get(f.id) ?? [];
-      const elsoNap = nap === napok[0].nap ? (f.felrakas_nap ?? nap) >= nap : (f.felrakas_nap ?? nap) === nap;
-      const folytatodik = !elsoNap;
-      const aznapiGs = gs.filter((m) => m.nap === nap);
-      const aznapMegallok = aznapiGs.map((m) => `${m.varos} ${m.tipus === "felrako" ? "fel" : "le"}`);
-      const allapot = allapotKartya(f, gs);
-      // Kedden a hétfőn indult, már lezárt Lösung/ÁB Speed fuvar ne látsszon
-      // nyitott „folytatódik”-nak (Budaházi Zoltán, 2026-10-07).
-      const aznapKesz = folytatodik && (allapot.szin === "kesz" || allapot.szin === "foto" || (aznapiGs.length > 0 && aznapiGs.every((m) => m.kesz)));
-      return {
-        id: f.id,
-        partner: f.partner ?? "(nincs megbízó)",
-        utvonal: `${varos(f.felrako)} → ${varos(f.lerako)}`,
-        jelleg: f.jelleg,
-        ...allapot,
-        folytatodik,
-        aznap: folytatodik ? (aznapMegallok.join(", ") || (nap === f.lerakas_nap ? `${varos(f.lerako)} le` : "úton")) : null,
-        aznapKesz,
-      };
-    });
-  });
 }
 
 /** Pihenőnap-e a nap ("YYYY-MM-DD"): vasárnapra nem kell fuvar (Zoltán, 2026-10-11). */
@@ -203,27 +50,11 @@ export function pihenoNapE(nap: string | null | undefined): boolean {
   return new Date(`${nap}T12:00:00Z`).getUTCDay() === 0;
 }
 
-/**
- * A „Most” oszlop a mai tükör-sorokból (ma-tukor.ts): az első még nem kész
- * megálló fuvarja, a kész megállói arányával. Ha minden mai megálló kész:
- * „kesz”; ha ma nincs megálló: „ures”.
- */
-export function hetMost(sorok: TukorSor[], ma?: string): HetMost {
-  const megallok = sorok.filter((s): s is Extract<TukorSor, { tipus: "megallo" }> => s.tipus === "megallo");
-  if (megallok.length === 0) return pihenoNapE(ma) ? { tipus: "piheno" } : { tipus: "ures" };
-  const kov = megallok.find((m) => m.allapot !== "kesz");
-  if (!kov) return { tipus: "kesz" };
-  const sajat = megallok.filter((m) => m.fuvarId === kov.fuvarId);
-  const kesz = sajat.filter((m) => m.allapot === "kesz").length;
-  const fej = sorok.find((s): s is Extract<TukorSor, { tipus: "fuvar" }> => s.tipus === "fuvar" && s.fuvarId === kov.fuvarId);
-  const ott = kov.allapot === "most";
-  return {
-    tipus: "fuvar",
-    fuvarId: kov.fuvarId,
-    partner: fej?.partner ?? "(nincs megbízó)",
-    szazalek: Math.round((kesz / sajat.length) * 100),
-    kovetkezo: `${kov.varos} ${kov.felLe === "felrako" ? "fel" : "le"}`,
-    ido: kov.teny ?? kov.terv,
-    szin: ott || kov.kiemelt ? "amber" : "blue",
-  };
+/** A kocsi neve a felületen: „NMZ-492 · Gergő”, vagy csak a kód / címke, ha a másik üres vagy benne van. */
+export function jarmuNev(j: { kod: string | null | undefined; cimke: string | null | undefined }): string {
+  const kod = (j.kod ?? "").trim();
+  const cimke = (j.cimke ?? "").trim();
+  if (!kod) return cimke || "?";
+  if (!cimke || cimke.toLocaleUpperCase("hu-HU").includes(kod.toLocaleUpperCase("hu-HU"))) return cimke || kod;
+  return `${kod} · ${cimke}`;
 }

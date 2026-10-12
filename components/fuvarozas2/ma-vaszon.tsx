@@ -2,9 +2,8 @@ import Link from "next/link";
 import type { MaVaszon, Elteres, MaKocsi, MaBlokk, CsempeSzin, MaKocsiAllapot, TukorSor, TukorAllas } from "@/lib/fuvarozas2/ma-vaszon";
 import { AllasRogzitesGomb } from "@/components/fuvarozas2/allas-rogzites";
 import { NyugtaGomb, VisszavonGomb } from "@/components/fuvarozas2/elteres-nyugta";
-import { AutoFrissites, AutoFrissitesFelirat } from "@/components/fuvarozas2/auto-frissites";
+import { AutoFrissites } from "@/components/fuvarozas2/auto-frissites";
 import { Csempesor } from "@/components/fuvarozas2/csempesor";
-import { HetRacs } from "@/components/fuvarozas2/het-racs";
 import { pihenoNapE } from "@/lib/fuvarozas2/ma-het";
 
 // A „Ma" képernyő (Budaházi Zoltán, 2026-09-28): négy kocsi-oszlop egymás
@@ -287,15 +286,14 @@ function NyugtazottLista({ adat, kulon = false }: { adat: MaVaszon; kulon?: bool
   );
 }
 
-/** `sajatFrissito={false}`: beágyazva (a Ma-élő alatt) nem indít saját frissítőt, csak kiírja az időt. */
-export function MaVaszonNezet({ adat, sajatFrissito = true, hetRacs = true }: { adat: MaVaszon; sajatFrissito?: boolean; hetRacs?: boolean }) {
+export function MaVaszonNezet({ adat }: { adat: MaVaszon }) {
   const iroda = adat.csempek.filter((c) => c.kulcs !== "uton" && c.kulcs !== "elteres");
   return (
     <div className="flex flex-col gap-4">
       <Csempesor berHavi={adat.berHavi} berHeti={adat.berHeti} berHonapHetei={adat.berHonapHetei} />
 
       <div className="-mb-2 flex justify-end">
-        {sajatFrissito ? <AutoFrissites frissitve={adat.frissitve} /> : <AutoFrissitesFelirat frissitve={adat.frissitve} />}
+        <AutoFrissites frissitve={adat.frissitve} />
       </div>
 
       {adat.elteresek.length === 0 && adat.nyugtazott.length === 0 ? null : adat.elteresek.length === 0 ? (
@@ -314,7 +312,6 @@ export function MaVaszonNezet({ adat, sajatFrissito = true, hetRacs = true }: { 
         </div>
       )}
 
-      {hetRacs ? <HetRacs het={adat.het} /> : null}
 
       <div className="grid items-start gap-3 md:grid-cols-2 xl:grid-cols-4">
         {adat.kocsik.map((k, i) => <KocsiOszlop key={k.kod ?? `hely-${i}`} k={k} holnapCimke={adat.holnapCimke} piheno={pihenoNapE(adat.ma)} />)}

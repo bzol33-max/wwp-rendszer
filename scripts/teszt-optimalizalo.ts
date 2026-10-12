@@ -369,7 +369,8 @@ function bemenet(munkak: MenetMunka[], sorrend: string[] | null, x: Partial<OptB
     igaz("szerver: javaslat-állapotú menetnél újragenerálás a sorrendben", /frissitMenetJavaslatot\(menet\.jarmuId, menet\.nap, ki, szerverTav\(\), sorrend\)/.test(szerver));
     igaz("szerver: az elavult jelölés", szerver.includes("'elavult'"));
     const akciok = readFileSync("lib/menet/optimalizalo-akciok.ts", "utf8");
-    igaz("akciók: írás szerkesztési joggal", (akciok.match(/requireEditPermission\("fuvarozas"\)/g) ?? []).length >= 3);
+    // 2026-10-12: a Menetterv panel megszűnt — csak a számoló (nem író) hozzárendelés-javaslat maradt.
+    igaz("akciók: csak a hozzárendelés-javaslat, megtekintési joggal", /export async function hozzarendelesJavaslat[\s\S]*requireViewPermission\("fuvarozas"\)/.test(akciok) && !/requireEditPermission/.test(akciok));
     const utem = readFileSync("lib/fuvarozas2/modell-szinkron-scheduler.ts", "utf8");
     igaz("ütemező: az optimalizáló a saját try/catch blokkjában", /try \{\s*const op = await futtatRendszerkent\("optimalizalo"/.test(utem));
     const migr = readFileSync("db/migrations/033_optimalizalo_javaslat.sql", "utf8");

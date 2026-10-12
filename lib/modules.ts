@@ -42,7 +42,7 @@ export const MODULES: ModuleInfo[] = [
     href: "/fuvarozas2",
     icon: Truck,
     status: "elkeszult",
-    description: "Ma (most, diszpécser a napi menettervvel, GPS) · Tervezés (a hét réseivel, ajánlat: Timocom + kalkulátor — útdíj, üzemanyag, önköltség, ár) · Megbízások (bér- és saját fuvarok, pénz-nézet, levelek, partnerek) · Eredmény (áttekintés, kimutatás, költségek).",
+    description: "Ma (kocsinként a mai és holnapi megállók, eltérések, csempék) · Tervezés (a hét réseivel és a kocsira váró fuvarokkal, ajánlat: Timocom + kalkulátor — útdíj, üzemanyag, önköltség, ár) · Megbízások (bér- és saját fuvarok, pénz-nézet, levelek, partnerek) · Eredmény (áttekintés, kimutatás, költségek).",
   },
   {
     key: "jarmuvek",

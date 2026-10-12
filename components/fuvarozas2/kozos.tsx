@@ -8,26 +8,6 @@ export { ALLAPOT_CIMKE };
 
 // A terv jelzőszínei: menta = rendben/pénz, borostyán = figyelem, vörös =
 // gond, kék = információ/terv, sötét = lezárt.
-const ALLAPOT_SZIN: Record<Allapot, string> = {
-  ellenorzesre_var: "bg-[var(--f2-amb-l)] text-[var(--f2-amb)]",
-  tervezett: "bg-[var(--f2-blue-l)] text-[var(--f2-blue)]",
-  folyamatban: "bg-[var(--f2-blue)] text-white",
-  teljesitve: "bg-[var(--f2-amb-l)] text-[var(--f2-amb)]",
-  szamlazhato: "bg-[var(--f2-mint-l)] text-[var(--f2-mint)]",
-  szamlazva: "bg-[var(--f2-mint)] text-white",
-  email_elment: "bg-[var(--f2-mint-l)] text-[var(--f2-mint)]",
-  postazva: "bg-[var(--f2-dark)] text-white",
-  lezart: "bg-[var(--secondary)] text-[var(--muted-foreground)]",
-};
-
-export function AllapotBadge({ allapot, className }: { allapot: Allapot; className?: string }) {
-  return (
-    <Badge variant="outline" className={cn("border-transparent", ALLAPOT_SZIN[allapot], className)}>
-      {ALLAPOT_CIMKE[allapot]}
-    </Badge>
-  );
-}
-
 const LEPES_SZIN: Record<Lepes, string> = {
   beerkezett: "bg-[var(--f2-blue-l)] text-[var(--f2-blue)]",
   uton: "bg-[var(--f2-blue)] text-white",

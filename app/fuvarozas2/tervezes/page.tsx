@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { requireSession } from "@/lib/auth/dal";
 import { getTervezo } from "@/lib/fuvarozas2/tervezo";
 import { Fuvarozas2Fulek } from "@/components/fuvarozas2/fulek";
@@ -14,10 +13,7 @@ export const dynamic = "force-dynamic";
 // bérmegbízások, középen a kiválasztott kalkulációja és ár-előzménye, jobbra
 // a kocsi hete a fuvarral együtt, alul a döntés.
 // 2026-10-12 (navigáció: minden funkció egy helyen): sorrend: a hét (rések +
-// ajánlatok) → bejövő megbízások döntése → link a menettervre. A Menetterv a
-// Ma → Diszpécser lapra került (components/fuvarozas2/menetterv.tsx), a régi
-// „A hét minden kocsija” (components/fuvarozas2/regi-terv-het.tsx) lekerült
-// a lapról — a kódjuk megvan.
+// ajánlatok, kocsira váró fuvarok) → bejövő megbízások döntése.
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ m?: string; kocsi?: string; res?: string }> }) {
   const sp = await searchParams;
@@ -65,11 +61,6 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ m
         />
       ) : null}
 
-      <p className="text-sm">
-        <Link href="/fuvarozas2/diszpecser#menetterv" className="font-medium text-[var(--f2-blue)] hover:underline">
-          A napi sorrend (menetterv) a Ma → Diszpécser lapon van →
-        </Link>
-      </p>
     </div>
   );
 }

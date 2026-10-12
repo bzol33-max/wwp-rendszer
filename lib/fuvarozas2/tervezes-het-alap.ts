@@ -190,3 +190,23 @@ export function tervHetNapjai(ma: string): string[] {
   }
   return ki;
 }
+
+/**
+ * Kocsira váró (még ki nem osztott) fuvarok a hét napjaira bontva (2026-10-12:
+ * a Ma heti rácsa megszűnt, ez volt az egyetlen hely, ahol a holnaputáni kocsi
+ * nélküli fuvar látszott). A fuvar a felrakása napján áll; ha az a hét előtt
+ * volt, de a fuvar még tart, a hét első napján. A már lerakott (a mai nap
+ * előtt véget ért) és a hét utáni fuvar nem kerül be.
+ */
+export function kiosztatlanCellak(fuvarok: HetiFuvar[], napok: string[], ma: string): HetiFuvar[][] {
+  const cellak: HetiFuvar[][] = napok.map(() => []);
+  if (!napok.length) return cellak;
+  const utolso = napok[napok.length - 1];
+  for (const f of fuvarok) {
+    if (f.leNap < ma || f.leNap < napok[0] || f.felNap > utolso) continue;
+    const nap = f.felNap < napok[0] ? napok[0] : f.felNap;
+    const i = napok.indexOf(nap);
+    if (i >= 0) cellak[i].push(f);
+  }
+  return cellak;
+}

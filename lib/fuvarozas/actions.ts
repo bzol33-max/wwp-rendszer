@@ -45,7 +45,6 @@ import { bontsMegallokra, varosNev } from "./varos";
 import { geokodolCachelve, megalloAblakKezdet, megalloAblakTagithato,
   megalloEjszakaiAllasKizarva, megalloPontossaga, mozogE } from "./erintes-felismeres";
 import { cachelve } from "./idovonal-cache";
-import { getFuvarokIdoszakban } from "./megbizasok";
 import type { FuvardijPenznem, FuvarTipus, MaiFuvarSor } from "./fuvar-constants";
 import { budapestFalioraToInstant, budapestHetNapja, budapestNapISO, budapestOra, formatBudapestFaliora } from "./idozona";
 import { getSajatTelephelyek } from "./telephelyek-db";
@@ -265,17 +264,6 @@ function budapestNapHatarok(nap?: string): { kezdet: Date; veg: Date; napISO: st
   const maiNap = celNap === maiNapISO;
   const veg = maiNap ? new Date() : budapestFalioraToInstant(ev, ho, napSzam, 23, 59, 59);
   return { kezdet, veg, napISO: celNap, maiNap };
-}
-
-/**
- * Egy "YYYY-MM-DD" naptári naphoz `delta` nappal odébbi naptári nap
- * ("YYYY-MM-DD") — dél (UTC 12:00) horgonnyal számolva, hogy a naptári nap
- * a nyári/téli időszámítás-váltás körül se csúszhasson el.
- */
-function napIsoEltolva(napISO: string, delta: number): string {
-  const [ev, ho, napSzam] = napISO.split("-").map(Number);
-  const d = new Date(Date.UTC(ev, ho - 1, napSzam + delta, 12));
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
 }
 
 /**
@@ -578,61 +566,6 @@ async function szamitsKalibraciot(): Promise<KalibraciosEredmeny> {
 /** A megadott (várható indulási) időponthoz illő korrekciós szorzó: a napszak/nap-típus szerinti, ha van rá elég minta, egyébként a globális. */
 function valasszKalibraciosSzorzot(kalibracio: KalibraciosEredmeny, idopont: Date): number {
   return kalibracio.idosavSzorzok[idosavja(idopont)] ?? kalibracio.globalisSzorzo;
-}
-
-/** Egy jövőbeli nap egyetlen fel-/lerakó pontja a "következő napok" előnézetben — csak városnévvel, geokódolás/útvonalszámítás nélkül. */
-export type KovetkezoNapMegallo = {
-  fuvarId: string;
-  fuvarTipus: FuvarTipus;
-  megrendelo: string | null;
-  tipus: "felrako" | "lerako";
-  cim: string;
-};
-
-export type KovetkezoNap = {
-  napISO: string;
-  megallok: KovetkezoNapMegallo[];
-};
-
-/**
- * A mai napot követő `napokSzama` naptári nap tervezett fuvarjainak gyors
- * előnézete, saját járművenként, napi bontásban — csak városnévvel (nincs
- * geokódolás/útvonalszámítás, hogy a nézet gyors maradjon; a pontos
- * időbecslés úgyis csak akkor lenne értelmes, ha az adott nap ténylegesen
- * elérkezett és van élő GPS-pozíció, lásd getIdovonalak).
- */
-export async function getKovetkezoNapokElonezet(napokSzama = 3): Promise<Record<string, KovetkezoNap[]>> {
-  const maiNapISO = budapestNapISO();
-  const elsoNap = napIsoEltolva(maiNapISO, 1);
-  const utolsoNap = napIsoEltolva(maiNapISO, napokSzama);
-  const sorok = await getFuvarokIdoszakban(elsoNap, utolsoNap).catch(() => []);
-
-  const jarmuLista = await getJarmuvek();
-  const eredmeny: Record<string, KovetkezoNap[]> = {};
-  for (const jarmu of jarmuLista) {
-    const napok: KovetkezoNap[] = [];
-    for (let i = 1; i <= napokSzama; i++) napok.push({ napISO: napIsoEltolva(maiNapISO, i), megallok: [] });
-    eredmeny[jarmu.sofor] = napok;
-  }
-
-  for (const row of sorok) {
-    const jarmu = jarmuLista.find((j) => driverMatchesRow(j, row, jarmuLista));
-    if (!jarmu) continue;
-    // A felrakás és a lerakás külön napra eshet (row.lerakas_datum) — pl.
-    // ha a fuvar egy éjszakai (saját telephelyi) megállással jár, a
-    // felrakás és a lerakás más-más napi bontásba kerül, nem mindkettő a
-    // felrakás napjára.
-    const felrakoNap = eredmeny[jarmu.sofor].find((n) => n.napISO === row.datum);
-    if (row.felrako && felrakoNap) {
-      felrakoNap.megallok.push({ fuvarId: row.id, fuvarTipus: row.tipus, megrendelo: row.megrendelo, tipus: "felrako", cim: varosNev(row.felrako) });
-    }
-    const lerakoNap = eredmeny[jarmu.sofor].find((n) => n.napISO === (row.lerakas_datum ?? row.datum));
-    if (lerakoNap) {
-      lerakoNap.megallok.push({ fuvarId: row.id, fuvarTipus: row.tipus, megrendelo: row.megrendelo, tipus: "lerako", cim: varosNev(row.lerako) });
-    }
-  }
-
-  return eredmeny;
 }
 
 async function becsulFuvarSzakasz(row: MaiFuvarSor, fuvarTipus: FuvarTipus, kalibracio: KalibraciosEredmeny): Promise<TervezettFuvarSzakasz> {

@@ -423,7 +423,7 @@ const BP = (hhmm: string) => Date.parse(`${NAP}T${hhmm}:00+02:00`);
   ]);
 
   // ---------------------------------------------------------------- 9. a nézetek a közös forrást használják
-  for (const fajl of ["lib/fuvarozas2/ma-tukor.ts", "lib/fuvarozas2/ma-het.ts", "lib/fuvarozas2/ma-vaszon.ts", "lib/fuvarozas/actions.ts", "lib/fuvarozas/megbizasok.ts", "lib/fuvarozas2/tervezes.ts", "lib/fuvarozas2/tervezo.ts"]) {
+  for (const fajl of ["lib/fuvarozas2/ma-tukor.ts", "lib/fuvarozas2/ma-vaszon.ts", "lib/fuvarozas/actions.ts", "lib/fuvarozas/megbizasok.ts", "lib/fuvarozas2/tervezo.ts"]) {
     eq(`${fajl}: a jóváhagyott menet sorrendjét alkalmazza`, /alkalmazMenetSorrende(t|ket)\(/.test(readFileSync(fajl, "utf8")), true);
   }
   eq("az idővonal párosítási szabálya érintetlen (nem ismeri a menetet)", /lib\/menet|MenetSorrend/.test(readFileSync("lib/fuvarozas/idovonal.ts", "utf8")), false);

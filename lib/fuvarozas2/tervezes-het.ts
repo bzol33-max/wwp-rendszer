@@ -19,7 +19,7 @@ import { getTimocomAjanlatok } from "@/lib/fuvarozas2/timocom";
 import { getEurArfolyamok } from "@/lib/fuvarozas/arfolyam";
 import type { Pont } from "@/lib/fuvarozas2/tervezo-alap";
 import {
-  hetiReszek, illeszt, kiketHivj, legjobbRes, tervHetNapjai, utKm,
+  hetiReszek, illeszt, kiketHivj, kiosztatlanCellak, legjobbRes, tervHetNapjai, utKm,
   type AjanlatHely, type HetiFuvar, type HivandoPartner, type Illeszkedes, type MultFuvar, type NapCella, type Res,
 } from "@/lib/fuvarozas2/tervezes-het-alap";
 
@@ -40,6 +40,8 @@ export type TervezesHet = {
   ma: string;
   napok: string[];
   kocsik: { kod: string; sofor: string; cellak: NapCella[] }[];
+  /** Kocsira váró (ki nem osztott) fuvarok napra bontva, a `napok` sorrendjében. */
+  kiosztatlan: HetiFuvar[][];
   resek: Res[];
   uresKmOssz: number;
   ajanlatok: HetAjanlat[];
@@ -198,8 +200,10 @@ export async function getTervezesHet(resKulcs?: string): Promise<TervezesHet> {
   }));
   ajanlatok.sort((a, b) => (a.illik ? a.illik.tobbletFt : 1e12) - (b.illik ? b.illik.tobbletFt : 1e12));
 
+  const kiosztatlan = kiosztatlanCellak(sorok.filter((s) => !s.jarmu_kod).map(hetiFuvar), napok, ma);
+
   return {
-    ma, napok, kocsik, resek,
+    ma, napok, kocsik, kiosztatlan, resek,
     uresKmOssz: resek.reduce((a, r) => a + r.km, 0),
     ajanlatok, kijelolt,
     hivandok: kijelolt ? kiketHivj(kijelolt, mult) : [],

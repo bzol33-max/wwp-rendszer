@@ -1,5 +1,28 @@
 # PROGRESS
 
+## 2026-10-12 — Fuvarozás rendrakás: duplikált és fölösleges lapok, halott kód ki
+
+Budaházi Zoltán döntései (kérdés-válasz alapján): a Ma fülből csak a megállók és csempék nézete
+(a korábbi „Részletek”) kell; az Elszámolás lap nem kell; az Eredmény két lapja egyelőre marad; a
+kocsira váró fuvarok a Tervezés → A hét alá.
+
+- **Megszűnt lapok** (átirányítással, next.config.ts): Ma → Most (élő térkép), Diszpécser (benne a
+  Menetterv-panel), GPS → `/fuvarozas2`; Elszámolás → `/fuvarozas2/megbizasok`; a régi
+  `/tervezes?menetnap=` → `/fuvarozas2`. A Ma lap: `MaVaszonNezet`, saját percenkénti frissítővel.
+- **Törölt kód** (~6 100 sor): ma-elo(-terkep, -szinek), ma-utvonal(-alap), diszpecser(-terkep, -alap),
+  menetterv.tsx, lib/menet/akciok.ts, gps-vaszon, elszamolas(-vaszon), het-racs, a ma-het heti rácsa,
+  a régi idővonal (components/fuvarozas/idovonal.tsx), regi-terv-het + lib/fuvarozas2/tervezes.ts,
+  a kalkulator lap, `getKovetkezoNapokElonezet`, `AllapotBadge`, az optimalizálás/elfogadás/elutasítás
+  szerver-akciók. A `getMaVaszon` már nem számolja a heti rácsot és az élő nézetet (kevesebb lekérdezés
+  és HU-GO útvonalhívás minden frissítéskor). `jarmuNev` → lib/fuvarozas2/ma-het.ts.
+- **Új:** Tervezés → A hét alján „Kocsira vár” sor (`kiosztatlanCellak`, tervezes-het-alap.ts, teszt) —
+  a holnaputáni kocsi nélküli fuvar is látszik (a 10-12-i nyitott pont lezárva).
+- **Marad, felület nélkül:** a menet-motor (lib/menet: generálás, bővítés kocsi-hozzárendeléskor,
+  óránkénti kör, optimalizáló-javaslat); a sofőr-app a jóváhagyott menetet, ennek híján a közös napi
+  szabályt követi. Kézi jóváhagyás / átrendezés / javaslat-elfogadás most nincs.
+- Ellenőrzés: typecheck, eslint (a Fuvarozás fájljai tiszták; a 19 meglévő react-hooks hiba más
+  modulokban), `npm run teszt` 50 szkript / 2 203 ellenőrzés zöld, `next build` rendben.
+
 ## 2026-10-12 — Ma térkép: útvonal az úthálózaton
 
 - A megtett út (3 km-nél hosszabb szakaszok) és a hátralévő terv a HU-GO útvonaltervező J5

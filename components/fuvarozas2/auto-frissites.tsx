@@ -10,7 +10,7 @@ import { useRouter } from "next/navigation";
 /**
  * Az oldal-frissítő horog: percenként `router.refresh()`, de csak látható fülön,
  * és visszaváltáskor azonnal (ha legalább 15 mp telt el). Egy oldalon EGY
- * példány fusson (a Ma oldalon a Ma-élő nézet hívja).
+ * példány fusson.
  */
 export function useAutoFrissites(intervallMs = 60_000) {
   const router = useRouter();

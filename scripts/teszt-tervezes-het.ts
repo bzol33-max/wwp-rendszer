@@ -1,7 +1,7 @@
 // Tervezés · A hét: rések, ajánlat-illesztés, kiket hívj (lib/fuvarozas2/tervezes-het-alap.ts).
 // Futtatás: npx tsx scripts/teszt-tervezes-het.ts
 
-import { hetiReszek, illeszt, kiketHivj, legjobbRes, tervHetNapjai, utKm, type HetiFuvar } from "@/lib/fuvarozas2/tervezes-het-alap";
+import { hetiReszek, illeszt, kiketHivj, kiosztatlanCellak, legjobbRes, tervHetNapjai, utKm, type HetiFuvar } from "@/lib/fuvarozas2/tervezes-het-alap";
 
 let ok = 0, bad = 0;
 function eq(nev: string, kapott: unknown, vart: unknown) {
@@ -109,6 +109,16 @@ if (P.nadudvar && P.szakoly) {
   const h = kiketHivj(res, mult);
   eq("kiket hívj sorrend", h.map((x) => [x.partner, x.db]), [["Flott", 3], ["RBT", 2]]);
   eq("utolsó út", [h[1].utolsoUt, h[1].utolsoNap, h[1].utolsoDijFt], ["Téglás → Budapest", "2026-09-03", 130000]);
+}
+
+{
+  // Kocsira váró fuvarok a hét napjain (2026-10-12).
+  const k = (id: string, felNap: string, leNap = felNap): HetiFuvar => ({ id, cim: id, felVaros: "A", leVaros: "B", fel: null, le: null, felNap, leNap, sajat: false });
+  const c = kiosztatlanCellak([k("szerda", "2026-10-14"), k("multheti", "2026-10-09", "2026-10-13"), k("lerakva", "2026-10-12"), k("jovohet", "2026-10-19"), k("szombat", "2026-10-17")], napok, "2026-10-13");
+  eq("kiosztatlan: a felrakás napján", c[2].map((x) => x.id), ["szerda"]);
+  eq("kiosztatlan: a hét előtt indult, még tartó a hétfőn", c[0].map((x) => x.id), ["multheti"]);
+  eq("kiosztatlan: a már lerakott és a jövő heti kimarad", c.flat().map((x) => x.id).sort(), ["multheti", "szerda", "szombat"]);
+  eq("kiosztatlan: üres hét", kiosztatlanCellak([], napok, "2026-10-13").flat().length, 0);
 }
 
 console.log(`teszt-tervezes-het: ${ok} ok, ${bad} hiba`);
