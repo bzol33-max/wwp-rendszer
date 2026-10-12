@@ -15,6 +15,7 @@ import { napiSorrend, type SorrendAdat } from "@/lib/fuvarozas2/napi-sorrend";
 import {
   alkalmazMenetSorrendeket,
   alkalmazMenetSorrendet,
+  bovitettSorrend,
   ellenorizAtrendezest,
   ellenorizIndokot,
   ellenorizLezarasInvarianst,
@@ -426,6 +427,16 @@ const BP = (hhmm: string) => Date.parse(`${NAP}T${hhmm}:00+02:00`);
     eq(`${fajl}: a jóváhagyott menet sorrendjét alkalmazza`, /alkalmazMenetSorrende(t|ket)\(/.test(readFileSync(fajl, "utf8")), true);
   }
   eq("az idővonal párosítási szabálya érintetlen (nem ismeri a menetet)", /lib\/menet|MenetSorrend/.test(readFileSync("lib/fuvarozas/idovonal.ts", "utf8")), false);
+
+  // Jóváhagyott menet bővítése (2026-10-12, Gergő): Tata a jóváhagyott, a Gászler (G) reggel jött.
+  eq("bővítés: az új fuvar a napi szabály szerinti helyére", bovitettSorrend(["tata"], ["G", "tata"]), ["G", "tata"]);
+  eq("bővítés: a végére, ha utána nincs mentett", bovitettSorrend(["a", "b"], ["a", "b", "c"]), ["a", "b", "c"]);
+  eq("bővítés: az ember sorrendje marad", bovitettSorrend(["b", "a"], ["a", "b", "n"]), ["b", "a", "n"]);
+  eq("bővítés: két új egymás után", bovitettSorrend(["a", "d"], ["a", "n1", "n2", "d"]), ["a", "n1", "n2", "d"]);
+  eq("bővítés: lekerült fuvar kiesik", bovitettSorrend(["a", "x", "b"], ["a", "b"]), ["a", "b"]);
+  eq("bővítés: üres mentett", bovitettSorrend([], ["a", "b"]), ["a", "b"]);
+  eq("bővítés: nincs változás", bovitettSorrend(["b", "a"], ["a", "b"]), ["b", "a"]);
+  eq("a kocsira tett fuvar azonnal frissíti a menetet", /frissitMegbizasMenetet/.test(readFileSync("lib/megbizasok/akciok.ts", "utf8")), true);
 
   console.log(`\nMenetterv: ${ok} rendben, ${bad} hibás`);
   if (bad > 0) process.exit(1);

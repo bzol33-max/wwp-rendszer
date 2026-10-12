@@ -33,6 +33,7 @@ const ESEMENY_CIMKE: Record<string, string> = {
   feladat_lezarva: "feladat kész",
   vissza_javaslatba: "visszavonva javaslatba",
   optimalizalo_elfogadva: "optimalizáló javaslat elfogadva",
+  bovites: "új fuvar beillesztve",
 };
 
 const FT = (x: number) => `${new Intl.NumberFormat("hu-HU").format(Math.round(x))} Ft`;
@@ -184,6 +185,13 @@ function KocsiMenet({ k, nap, szerkeszthet }: { k: MenettervKocsi; nap: string; 
               aria-controls={k.optimalizalo ? optDobozId : undefined}
               className="rounded-lg border border-foreground/15 px-2.5 py-1 text-xs font-semibold hover:bg-muted disabled:opacity-45">
               {k.optimalizalo ? `Javaslat #${k.optimalizalo.id}` : "Optimalizálás"}
+            </button>
+          ) : null}
+          {szerkeszthet && m && (m.allapot === "jovahagyott" || m.allapot === "folyamatban") ? (
+            <button type="button" disabled={pending} onClick={() => futtat(() => javaslatFrissites(k.jarmuId, nap), "Menet frissítve — az új fuvarok a helyükre kerültek.")}
+              title="Ha a kocsira azóta új fuvar került, a helyére teszi (a kész feladatok és a jóváhagyott sorrend maradnak)"
+              className="rounded-lg border border-foreground/15 px-2.5 py-1 text-xs font-semibold hover:bg-muted disabled:opacity-45">
+              Új fuvarok be
             </button>
           ) : null}
           {szerkeszthet && m?.allapot === "jovahagyott" ? (
@@ -379,7 +387,7 @@ function Naplo({ esemenyek }: { esemenyek: MenetEsemeny[] }) {
               {e.verzio != null ? <span className="text-muted-foreground"> · v{e.verzio}</span> : null}
               {e.ki ? <span className="text-muted-foreground"> · {e.ki}</span> : null}
               {e.ok ? <span> — „{e.ok}”</span> : null}
-              {e.esemeny === "atrendezes" && Array.isArray(r.regi) && Array.isArray(r.uj) ? (
+              {(e.esemeny === "atrendezes" || e.esemeny === "bovites") && Array.isArray(r.regi) && Array.isArray(r.uj) ? (
                 <span className="block font-mono text-[10px] text-muted-foreground">
                   {r.regi.filter((x) => /^\d+$/.test(String(x))).map((x) => `#${x}`).join(" ")} → {r.uj.filter((x) => /^\d+$/.test(String(x))).map((x) => `#${x}`).join(" ")}
                 </span>

@@ -522,6 +522,27 @@ export function alkalmazMenetSorrendeket<T>(lista: T[], sorrendek: readonly (rea
   return sorrendek.reduce<T[]>((l, s) => alkalmazMenetSorrendet(l, s, id), lista);
 }
 
+/**
+ * Jóváhagyott menet bővítése (2026-10-12, Gergő: a reggel kiosztott Gászler-fuvar
+ * kimaradt a jóváhagyott menetből, a sofőr-app rossz sorrendet mutatott).
+ * `mentett`: a menet nyitott részének munka-sorrendje (ember hagyta jóvá / rendezte át);
+ * `alap`: ugyanezen nap nyitott munkái a közös napi szabály szerint. A mentett
+ * sorrend marad; ami a kocsin már nincs, kiesik; az új munka a napi szabály szerinti
+ * helyére kerül (az alapban utána következő első mentett munka elé, különben a végére).
+ */
+export function bovitettSorrend(mentett: readonly string[], alap: readonly string[]): string[] {
+  const alapHalmaz = new Set(alap);
+  const ki = mentett.filter((id) => alapHalmaz.has(id));
+  const benne = new Set(ki);
+  alap.forEach((id, i) => {
+    if (benne.has(id)) return;
+    const kovetkezo = alap.slice(i + 1).find((x) => benne.has(x));
+    ki.splice(kovetkezo ? ki.indexOf(kovetkezo) : ki.length, 0, id);
+    benne.add(id);
+  });
+  return ki;
+}
+
 /** Egy menet feladataiból a megbízások sorrendje. */
 export function megbizasSorrend(feladatok: { sorszam: number; megbizasId: string | null }[]): string[] {
   return [...feladatok].sort((a, b) => a.sorszam - b.sorszam).flatMap((f) => (f.megbizasId ? [f.megbizasId] : []));

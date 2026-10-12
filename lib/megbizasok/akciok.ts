@@ -2,6 +2,8 @@
 
 import { query, withTransaction } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { frissitMegbizasMenetet } from "@/lib/menet/generalas";
 import { szkennelj } from "@/lib/fuvarozas/doksi-kivagas";
 import { requireSession } from "@/lib/auth/dal";
 import { requireAnyEditPermission, requireEditPermission } from "@/lib/auth/require-permission";
@@ -199,6 +201,8 @@ export async function setFuvarJarmu(id: string, jarmuKod: string | null): Promis
   // Mező-szintű napló (fuvar_valtozas) — a hiánya nem buktathatja a hozzárendelést.
   await irValtozasokat(query, "fuvar_megbizasok", id, naplozandoValtozasok({ jarmu: sor.jarmu }, { jarmu: cimke }), session.name ?? session.username)
     .catch((err) => console.error("[fuvar_valtozas] nem íródott:", err));
+  // A kocsi menete azonnal (a jóváhagyott menetbe is bekerül a fuvar a helyére) — nem az óránkénti körben.
+  if (cimke) after(() => frissitMegbizasMenetet(id, session.name ?? session.username));
   return { ok: true, cimke };
 }
 

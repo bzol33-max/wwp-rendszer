@@ -23,7 +23,7 @@ import { getMenetEsemenyek, getMenetek } from "@/lib/menet/repo";
 import { ATLAG_SEBESSEG_KMH, frissitMenetJavaslatot } from "@/lib/menet/generalas";
 import { getFuvarBeallitasok } from "@/lib/beallitasok/fuvar";
 import { menetVezetes } from "@/lib/menet/menet-alap";
-import { atrendezMenet, jovahagyMenet, lezarMenetFeladatot, visszaJavaslatbaMenet, type Valasz } from "@/lib/menet/muveletek";
+import { atrendezMenet, bovitJovahagyottMenetet, jovahagyMenet, lezarMenetFeladatot, visszaJavaslatbaMenet, type Valasz } from "@/lib/menet/muveletek";
 import { nyitottJavaslatok } from "@/lib/menet/optimalizalo-szerver";
 import type { OptJavaslatNezet } from "@/lib/menet/optimalizalo";
 import type { Menet, MenetEsemeny, MenetFigyelmeztetes } from "@/lib/menet/tipusok";
@@ -89,7 +89,12 @@ export async function javaslatFrissites(jarmuId: string, nap: string): Promise<V
   const ki = await kiVagyok();
   try {
     const r = await frissitMenetJavaslatot(jarmuId, nap, ki);
-    if (r.eredmeny === "jovahagyott") return { ok: false, hiba: "Ez a menet már jóvá van hagyva — a javaslat nem írja felül. Ha újra kell tervezni, előbb vond vissza javaslatba." };
+    if (r.eredmeny === "jovahagyott") {
+      // Jóváhagyott menet: a sorrend marad, csak az azóta kocsira került (vagy lekerült) fuvarok kerülnek a helyükre.
+      const b = await bovitJovahagyottMenetet(r.menetId, ki);
+      if (!b.ok) return b;
+      return { ok: true, eredmeny: b.eredmeny };
+    }
     return { ok: true, eredmeny: r.eredmeny };
   } catch (err) {
     console.error("[menetterv] javaslat-frissítés hiba:", err);
