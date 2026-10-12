@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireSession } from "@/lib/auth/dal";
 import { getSoforNap } from "@/lib/fuvarozas/sofor";
 import { logout } from "@/lib/auth/actions";
@@ -33,7 +34,7 @@ export default async function Page() {
       {sofor ? (
         <a href="/erkezes" className="rounded-xl bg-[var(--m-surf)] p-4 text-sm underline">Előlegek, jelenlét — a régi dolgozói nézet →</a>
       ) : (
-        <a href="/fuvarozas2/elszamolas" className="rounded-xl bg-[var(--m-surf)] p-4 text-sm underline">Teljes Elszámolás nézet →</a>
+        <Link href="/fuvarozas2/megbizasok" className="rounded-xl bg-[var(--m-surf)] p-4 text-sm underline">Teljes Elszámolás nézet (Megbízások · pénz) →</Link>
       )}
       <form action={logout}>
         <button type="submit" className="w-full rounded-xl border border-[var(--m-line)] py-3 text-sm font-semibold">Kijelentkezés</button>

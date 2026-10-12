@@ -42,7 +42,7 @@ export const MODULES: ModuleInfo[] = [
     href: "/fuvarozas2",
     icon: Truck,
     status: "elkeszult",
-    description: "Megbízások (bér- és saját fuvarok szakaszonként), időpont nélkül rögzíthető saját fuvarok a kocsik hetével, kalkulátor (útdíj, üzemanyag, önköltség, ajánlat), tervezés, élő GPS és kimutatás.",
+    description: "Ma (most, diszpécser a napi menettervvel, GPS) · Tervezés (a hét réseivel, ajánlat: Timocom + kalkulátor — útdíj, üzemanyag, önköltség, ár) · Megbízások (bér- és saját fuvarok, pénz-nézet, levelek, partnerek) · Eredmény (áttekintés, kimutatás, költségek).",
   },
   {
     key: "jarmuvek",

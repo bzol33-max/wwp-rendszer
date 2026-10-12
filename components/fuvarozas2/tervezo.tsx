@@ -79,7 +79,7 @@ export function BejovoLista({ sorok, valasztott }: { sorok: BejovoSor[]; valaszt
 export function DontesOszlop({ k, param }: { k: NonNullable<Tervezo["kivalasztott"]>; param: Tervezo["becslesParam"] }) {
   const e = k.kalk?.eredmeny;
   const o = e?.onkoltseg;
-  const kalkUrl = `/fuvarozas2/kalkulator?honnan=${encodeURIComponent(k.sor.felrako ?? "")}&hova=${encodeURIComponent(k.sor.lerako ?? "")}`;
+  const kalkUrl = `/fuvarozas2/timocom?honnan=${encodeURIComponent(k.sor.felrako ?? "")}&hova=${encodeURIComponent(k.sor.lerako ?? "")}`;
   return (
     <section className="flex min-w-0 flex-col gap-3 rounded-2xl border border-foreground/10 bg-card p-4" aria-label="Döntés">
       <div>

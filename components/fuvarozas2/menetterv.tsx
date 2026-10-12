@@ -12,7 +12,7 @@ import type { OptimalizalasEredmeny } from "@/lib/menet/optimalizalo-szerver";
 import { CELFUGGVENY_CIMKE, type Celfuggveny } from "@/lib/menet/optimalizalo";
 import { FELADAT_TIPUS_CIMKE, MENET_ALLAPOT_CIMKE, type FeladatTipus, type MenetEsemeny, type MenetFeladat } from "@/lib/menet/tipusok";
 
-// A Tervezés „Menetterv” panelje (3. fázis, 2026-10-10): kocsinként a nap
+// A Diszpécser (korábban a Tervezés) „Menetterv” panelje (3. fázis, 2026-10-10): kocsinként a nap
 // feladatai sorrendben (a jóváhagyott menet a sorrend egyetlen forrása —
 // a Ma oldal, a GPS lap, a sofőr app és a GPS-figyelő is ezt követi).
 // Átrendezés ▲/▼ gombokkal (billentyűzettel is), indokkal.
@@ -63,7 +63,8 @@ export function MenettervPanel({ nap, napCimke, kocsik, hiba, szerkeszthet, link
   kocsik: MenettervKocsi[];
   hiba: string | null;
   szerkeszthet: boolean;
-  linkek: { elozo: string; kovetkezo: string; ma: string };
+  /** Saját nap-léptető; ha nincs megadva (Diszpécser), a lap napválasztója dönti el a napot. */
+  linkek?: { elozo: string; kovetkezo: string; ma: string };
 }) {
   return (
     <section id="menetterv" className="flex flex-col gap-3 rounded-2xl border border-foreground/10 bg-card p-4" aria-label="Menetterv">
@@ -74,11 +75,13 @@ export function MenettervPanel({ nap, napCimke, kocsik, hiba, szerkeszthet, link
             Kocsinként a nap feladatai sorrendben. A jóváhagyott menet sorrendjét követi a Ma oldal, a GPS lap, a sofőr app és a GPS-figyelő; a javaslatot a rendszer óránként frissíti.
           </p>
         </div>
-        <nav className="flex items-center gap-1 text-sm" aria-label="Nap választása">
-          <Link href={linkek.elozo} scroll={false} className="rounded-lg border border-foreground/15 px-2.5 py-1 hover:bg-muted" aria-label="Előző nap">‹</Link>
-          <Link href={linkek.ma} scroll={false} className="rounded-lg border border-foreground/15 px-2.5 py-1 hover:bg-muted">ma</Link>
-          <Link href={linkek.kovetkezo} scroll={false} className="rounded-lg border border-foreground/15 px-2.5 py-1 hover:bg-muted" aria-label="Következő nap">›</Link>
-        </nav>
+        {linkek ? (
+          <nav className="flex items-center gap-1 text-sm" aria-label="Nap választása">
+            <Link href={linkek.elozo} scroll={false} className="rounded-lg border border-foreground/15 px-2.5 py-1 hover:bg-muted" aria-label="Előző nap">‹</Link>
+            <Link href={linkek.ma} scroll={false} className="rounded-lg border border-foreground/15 px-2.5 py-1 hover:bg-muted">ma</Link>
+            <Link href={linkek.kovetkezo} scroll={false} className="rounded-lg border border-foreground/15 px-2.5 py-1 hover:bg-muted" aria-label="Következő nap">›</Link>
+          </nav>
+        ) : null}
       </div>
       {hiba ? <p className="rounded-lg bg-[var(--f2-amb-l)] px-3 py-2 text-sm text-[var(--f2-amb)]">{hiba}</p> : null}
       <div className="grid gap-3 lg:grid-cols-2">

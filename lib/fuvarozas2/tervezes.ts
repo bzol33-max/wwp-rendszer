@@ -213,7 +213,7 @@ export async function getTervHet(hetKezdet?: string): Promise<TervHet> {
           jarmuKod: j.kod, jarmuCimke: j.cimke, nap, hol: hely, holVaros: varos,
           hazautKm: hazaut, korzet,
           keresoSzoveg: `Felrakás: ${varos}${korzet ? ` (HU ${korzet})` : ""} · ${nap} · lerakás: kelet-Magyarország (HU 40–45) · nyerges, 24 t`,
-          kalkulatorUrl: `/fuvarozas2/kalkulator?honnan=${encodeURIComponent(hely)}&hova=${encodeURIComponent(telephely)}`,
+          kalkulatorUrl: `/fuvarozas2/timocom?honnan=${encodeURIComponent(hely)}&hova=${encodeURIComponent(telephely)}`,
         });
       }
     }

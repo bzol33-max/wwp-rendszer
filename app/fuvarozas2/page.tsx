@@ -11,11 +11,11 @@ export default async function Page() {
     <div className="flex flex-col gap-3">
       <Fuvarozas2Fulek aktiv="/fuvarozas2" cim="Ma" />
       <MaEloNezet adat={adat} />
-      {/* A régi Ma-vászon minden funkciója megmarad, összecsukva. */}
+      {/* A régi Ma-vászon összecsukva; a heti rács nélkül (2026-10-12: a hét fő helye a Tervezés → A hét). */}
       <details className="rounded-lg border bg-card">
-        <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-muted-foreground">Részletek: megállók, heti rács, csempék</summary>
+        <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-muted-foreground">Részletek: megállók, csempék</summary>
         <div className="border-t p-3">
-          <MaVaszonNezet adat={adat} sajatFrissito={false} />
+          <MaVaszonNezet adat={adat} sajatFrissito={false} hetRacs={false} />
         </div>
       </details>
     </div>

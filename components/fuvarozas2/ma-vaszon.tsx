@@ -288,7 +288,7 @@ function NyugtazottLista({ adat, kulon = false }: { adat: MaVaszon; kulon?: bool
 }
 
 /** `sajatFrissito={false}`: beágyazva (a Ma-élő alatt) nem indít saját frissítőt, csak kiírja az időt. */
-export function MaVaszonNezet({ adat, sajatFrissito = true }: { adat: MaVaszon; sajatFrissito?: boolean }) {
+export function MaVaszonNezet({ adat, sajatFrissito = true, hetRacs = true }: { adat: MaVaszon; sajatFrissito?: boolean; hetRacs?: boolean }) {
   const iroda = adat.csempek.filter((c) => c.kulcs !== "uton" && c.kulcs !== "elteres");
   return (
     <div className="flex flex-col gap-4">
@@ -314,7 +314,7 @@ export function MaVaszonNezet({ adat, sajatFrissito = true }: { adat: MaVaszon; 
         </div>
       )}
 
-      <HetRacs het={adat.het} />
+      {hetRacs ? <HetRacs het={adat.het} /> : null}
 
       <div className="grid items-start gap-3 md:grid-cols-2 xl:grid-cols-4">
         {adat.kocsik.map((k, i) => <KocsiOszlop key={k.kod ?? `hely-${i}`} k={k} holnapCimke={adat.holnapCimke} piheno={pihenoNapE(adat.ma)} />)}

@@ -735,7 +735,8 @@ function ReszletPanel({ adat, kiv, mostMs, problemak, onBezar }: {
   const tervEllentmond = !!(f.tervIndulas && f.tervErkezes && Date.parse(f.tervErkezes) <= Date.parse(f.tervIndulas));
   const km = (f.uresKm ?? 0) + (f.rakottKm ?? 0);
   const menetZarhato = k.menetForras === "jovahagyott" && f.feladatId != null && f.allapot !== "kesz";
-  const tervezesLink = `/fuvarozas2/tervezes?menetnap=${adat.nap}#menetterv`;
+  // A nap menetterve ugyanezen a lapon, a Diszpécser alatt (ugyanarra a napra).
+  const menettervLink = "#menetterv";
   const ablak = (a: { tol: string | null; ig: string | null }) => (a.tol || a.ig ? `${oraPerc(a.tol) ?? "?"}–${oraPerc(a.ig) ?? "?"}` : "nincs megadva");
 
   function lezar() {
@@ -823,7 +824,7 @@ function ReszletPanel({ adat, kiv, mostMs, problemak, onBezar }: {
             <Link href={`/fuvarozas2/megbizasok/${f.megbizasId}`} title="A dokumentumok a megbízás lapján"  className={cn("rounded-lg border border-foreground/15 px-3 py-1.5 text-xs font-semibold hover:bg-muted", FOKUSZ)}>Dokumentumok ({f.dokDb})</Link>
           </>
         ) : null}
-        <Link href={tervezesLink} className={cn("rounded-lg border border-foreground/15 px-3 py-1.5 text-xs font-semibold hover:bg-muted", FOKUSZ)}>Átrendezés a Tervezésben</Link>
+        <a href={menettervLink} className={cn("rounded-lg border border-foreground/15 px-3 py-1.5 text-xs font-semibold hover:bg-muted", FOKUSZ)}>Átrendezés a menettervben ↓</a>
       </div>
 
       {adat.szerkeszthet ? (

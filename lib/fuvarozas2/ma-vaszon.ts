@@ -814,10 +814,10 @@ export async function getMaVaszon(): Promise<MaVaszon> {
     {
       cimke: "Postára vár", ertek: `${papir.length}`,
       also: papirSurgos.length > 0 ? `${papirSurgos[0].partner ?? ""} ${papirSurgos[0].hivatkozas ?? ""} · ${papirHatra(papirSurgos[0])} nap`.trim() : null,
-      href: "/fuvarozas2/elszamolas",
+      href: "/fuvarozas2/megbizasok?penz=papir",
     },
-    { cimke: "Számlázandó", ertek: `${elsz?.szamlazhato ?? 0}`, also: ft(elsz?.szamlazhato_ft ?? 0), href: "/fuvarozas2/elszamolas" },
-    { cimke: "Fotó még nincs", ertek: `${elsz?.fotora ?? 0}`, also: null, href: "/fuvarozas2/elszamolas" },
+    { cimke: "Számlázandó", ertek: `${elsz?.szamlazhato ?? 0}`, also: ft(elsz?.szamlazhato_ft ?? 0), href: "/fuvarozas2/megbizasok?penz=szamlazatlan" },
+    { cimke: "Fotó még nincs", ertek: `${elsz?.fotora ?? 0}`, also: null, href: "/fuvarozas2/megbizasok?penz=papir" },
   ];
 
   const holnapiak = sorok.filter((s) => aznap(s, holnap));

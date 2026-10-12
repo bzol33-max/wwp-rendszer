@@ -4,8 +4,8 @@ import { requireSession } from "@/lib/auth/dal";
 import { cn } from "@/lib/utils";
 
 // A Fuvarozás 2 fülsora. Szerver-komponens, mert a jogosultság dönti, mit
-// mutat: az „elszamolas" hatókör (Szabina) a Megbízásokat, a Leveleket és a
-// Költségeket látja — GPS-részletet, tervezést, kimutatást és rendszer-
+// mutat: az „elszamolas" hatókör (Szabina) a Megbízásokat (Lista, Levelek,
+// Partnerek) és a Költségeket látja — GPS-részletet, tervezést, kimutatást és rendszer-
 // egészséget nem (S16).
 //
 // 2026-10-11: 11 fül helyett 4 fő fül + fogaskerék (claude/… „4 fül” terv):
@@ -18,14 +18,18 @@ type Alful = { href: string; label: string; csakFuvarozas?: boolean; rejtett?: b
 type Fofül = { kulcs: string; label: string; alfulek: Alful[] };
 
 const FOFULEK: Fofül[] = [
+  // 2026-10-12 (a tulajdonos: „régi és új lapok közt kell keresgetni”): minden
+  // funkció pontosan EGY helyen. A régi címek átirányítással élnek tovább
+  // (next.config.ts redirects); a rejtett sorok csak azt döntik el, melyik
+  // főfül világít, ha az átirányítást valaha visszavesszük.
   {
     kulcs: "ma",
     label: "Ma",
     alfulek: [
-      { href: "/fuvarozas2", label: "Ma" },
-      // Diszpécser (6. fázis): kocsinkénti idővonal, probléma-sáv, heti beosztás, lista, térkép.
+      { href: "/fuvarozas2", label: "Most" },
+      // Diszpécser: kocsinkénti idővonal, probléma-sáv, lista, térkép — és a nap menetterve (sorrend).
       { href: "/fuvarozas2/diszpecser", label: "Diszpécser", csakFuvarozas: true },
-      { href: "/fuvarozas2/gps", label: "Élő GPS", csakFuvarozas: true },
+      { href: "/fuvarozas2/gps", label: "GPS", csakFuvarozas: true },
     ],
   },
   {
@@ -33,21 +37,22 @@ const FOFULEK: Fofül[] = [
     label: "Tervezés",
     alfulek: [
       { href: "/fuvarozas2/tervezes", label: "A hét", csakFuvarozas: true },
-      // Timocom → WWP (fuvarszervező pult, B út: böngésző-gomb + beillesztés).
-      { href: "/fuvarozas2/timocom", label: "Timocom", csakFuvarozas: true },
-      { href: "/fuvarozas2/kalkulator", label: "Kalkulátor", csakFuvarozas: true },
-      { href: "/fuvarozas2/levelek", label: "Levelek" },
+      // Ajánlat: Timocom → WWP (a böngésző „→ WWP” gombja ide küld) + kézi kalkulátor.
+      // A cím szándékosan /timocom marad.
+      { href: "/fuvarozas2/timocom", label: "Ajánlat", csakFuvarozas: true },
+      // A külön Kalkulátor-lap → /fuvarozas2/timocom átirányítás (next.config.ts).
+      { href: "/fuvarozas2/kalkulator", label: "Kalkulátor", csakFuvarozas: true, rejtett: true },
     ],
   },
   {
     kulcs: "megbizasok",
     label: "Megbízások",
     alfulek: [
-      { href: "/fuvarozas2/megbizasok", label: "Megbízások" },
-      // Az Elszámolás és a Partnerek 2026-09-25-én beolvadt a munkaasztalba;
-      // az oldalaik linkről elérhetők, ezért csak a főfület jelölik ki.
+      { href: "/fuvarozas2/megbizasok", label: "Lista" },
+      { href: "/fuvarozas2/levelek", label: "Levelek" },
+      { href: "/fuvarozas2/partnerek", label: "Partnerek" },
+      // Az Elszámolás → a Megbízások pénz-nézete (next.config.ts átirányítás).
       { href: "/fuvarozas2/elszamolas", label: "Elszámolás", rejtett: true },
-      { href: "/fuvarozas2/partnerek", label: "Partnerek", rejtett: true },
     ],
   },
   {

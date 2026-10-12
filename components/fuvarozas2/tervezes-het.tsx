@@ -149,7 +149,7 @@ export function TervezesHetNezet({ adat }: { adat: TervezesHet }) {
                 Mennyit kérj (félkövér): az ajánlat teljes önköltsége (ráállás + rakott út × {adat.kmKoltseg} Ft/km + az idő a napi fix arányában) + 20%; mellette +10% (minimum) és +30%. Alsó határ visszfuvarnál: a többlet + 10%. Felfelé kerekítve 1 000 Ft-ra, 10 €-ra{adat.eurArfolyam ? `, ${adat.eurArfolyam.toLocaleString("hu-HU", { maximumFractionDigits: 2 })} Ft/EUR` : ", EUR-árfolyam nélkül"}); előzmény: a hasonló korábbi fuvarjaink Ft/km-e, ha volt ilyen.
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
-                <Link href={`/fuvarozas2/kalkulator?honnan=${encodeURIComponent(k.honnan)}&hova=${encodeURIComponent(k.hova)}`} className="rounded-lg border px-3 py-1.5 text-sm hover:bg-muted">Kalkulátor ezzel a réssel →</Link>
+                <Link href={`/fuvarozas2/timocom?honnan=${encodeURIComponent(k.honnan)}&hova=${encodeURIComponent(k.hova)}`} className="rounded-lg border px-3 py-1.5 text-sm hover:bg-muted">Kalkulátor ezzel a réssel →</Link>
               </div>
             </div>
             <div>

@@ -28,6 +28,19 @@ const nextConfig: NextConfig = {
       { source: "/posta", destination: "/attekintes/posta", permanent: false },
       // A régi Fuvarozás felület 2026-10-04-én törölve — a könyvjelzők az újra vigyenek.
       { source: "/fuvarozas", destination: "/fuvarozas2", permanent: false },
+      // Fuvarozás 2 navigáció (2026-10-12): minden funkció egy helyen. A régi
+      // lapok kódja megvan — a sor törlésével visszaállítható.
+      // A kézi kalkulátor az Ajánlat (Timocom) lapon; a ?honnan=&hova= továbbmegy.
+      { source: "/fuvarozas2/kalkulator", destination: "/fuvarozas2/timocom", permanent: false },
+      // Az Elszámolás a Megbízások pénz-nézetében (Teendő szűrő: számlázatlan, papír hiányzik, lejárt).
+      { source: "/fuvarozas2/elszamolas", destination: "/fuvarozas2/megbizasok", permanent: false },
+      // A menetterv a Diszpécserben, a Diszpécser napjára (régi könyvjelző: Tervezés ?menetnap=…#menetterv).
+      {
+        source: "/fuvarozas2/tervezes",
+        has: [{ type: "query", key: "menetnap", value: "(?<nap>\\d{4}-\\d{2}-\\d{2})" }],
+        destination: "/fuvarozas2/diszpecser?nap=:nap",
+        permanent: false,
+      },
     ];
   },
   async headers() {

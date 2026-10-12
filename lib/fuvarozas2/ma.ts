@@ -55,9 +55,9 @@ export async function getMaAdat(): Promise<MaAdat> {
     { kulcs: "ellenorzes", szoveg: "ellenőrzésre vár", darab: n("ellenorzesre_var"), sulyossag: "figyelmeztetes", href: "/fuvarozas2/megbizasok?csoport=ellenorzes" },
     { kulcs: "lejart", szoveg: "lejárt, nincs teljesítve", darab: lejart, sulyossag: "sulyos", href: "/fuvarozas2/megbizasok?csoport=folyamatban" },
     { kulcs: "kocsi_nelkul", szoveg: "kocsi nélkül (ma/holnap)", darab: kocsiNelkul.length, sulyossag: "sulyos", href: "/fuvarozas2/megbizasok?csoport=folyamatban" },
-    { kulcs: "fotora_var", szoveg: "fotóra vár 2 óránál régebben", darab: fotora_var, sulyossag: "figyelmeztetes", href: "/fuvarozas2/elszamolas" },
-    { kulcs: "szamlazhato", szoveg: "számlázni (visszaért)", darab: n("szamlazhato") + n("teljesitve"), sulyossag: "info", href: "/fuvarozas2/elszamolas" },
-    { kulcs: "postazando", szoveg: "számlázva, postára vár", darab: postazando, sulyossag: "info", href: "/fuvarozas2/elszamolas" },
+    { kulcs: "fotora_var", szoveg: "fotóra vár 2 óránál régebben", darab: fotora_var, sulyossag: "figyelmeztetes", href: "/fuvarozas2/megbizasok?penz=papir" },
+    { kulcs: "szamlazhato", szoveg: "számlázni (visszaért)", darab: n("szamlazhato") + n("teljesitve"), sulyossag: "info", href: "/fuvarozas2/megbizasok?penz=szamlazatlan" },
+    { kulcs: "postazando", szoveg: "számlázva, postára vár", darab: postazando, sulyossag: "info", href: "/fuvarozas2/megbizasok" },
   ] as Jelzes[]).filter((j) => j.darab > 0);
 
   return { ma, holnap, kocsik, kocsiNelkul, jelzesek, allapotSzamok };
