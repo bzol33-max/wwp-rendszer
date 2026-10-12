@@ -1,5 +1,12 @@
 # PROGRESS
 
+## 2026-10-12 — Ma térkép: útvonal az úthálózaton
+
+- A megtett út (3 km-nél hosszabb szakaszok) és a hátralévő terv a HU-GO útvonaltervező J5
+  geometriáját követi (`lib/fuvarozas2/ma-utvonal(-alap).ts`, teszt: `scripts/teszt-ma-utvonal.ts`),
+  gyorsítótárazva; 6 mp-en belüli válasz nélkül egyenes marad. A további hátralévő megállók pöttyel.
+  Élőben ellenőrizve (Micó M3/M1 mentén, Gergő Hajdúszoboszló → Dunakeszi → Tata → Tompaládony).
+
 ## 2026-10-12 — Gergő menete + a Fuvarozás navigáció rendbetétele
 
 - **Hiba (Gergő, sofőr-app rossz sorrend):** a reggel kiosztott Gászler-fuvar (Hajdúszoboszló →
