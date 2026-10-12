@@ -54,6 +54,8 @@ export type MaElo = {
   nyomvonal: [number, number][];
   /** A hátralévő megállók (koordinátával), a tervezett út szaggatott vonalához. */
   hatraVan: { lat: number; lon: number; cim: string }[];
+  /** A hátralévő terv úthálózaton (lib/fuvarozas2/ma-utvonal.ts); null/hiányzik: egyenes vonalak. */
+  tervUt?: [number, number][] | null;
   sav: SavElem[];
   pontok: SavPont[];
 };

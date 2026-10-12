@@ -32,6 +32,8 @@ export type TerkepKocsiElo = {
   szin: "kek" | "borostyan" | "szurke";
   nyomvonal: [number, number][];
   hatraVan: { lat: number; lon: number; cim: string }[];
+  /** A hátralévő terv úthálózaton; null: egyenes vonalak a megállók között. */
+  tervUt?: [number, number][] | null;
   kovetkezoCim: string | null;
   vonalSzin: string;
 };
@@ -78,10 +80,22 @@ export function MaEloTerkep({ kocsik }: { kocsik: TerkepKocsiElo[] }) {
         k.hatraVan.length ? (
           <Polyline
             key={`h-${k.kod}`}
-            positions={[[k.lat, k.lon], ...k.hatraVan.map((h) => [h.lat, h.lon] as [number, number])]}
+            positions={k.tervUt && k.tervUt.length >= 2 ? k.tervUt : [[k.lat, k.lon], ...k.hatraVan.map((h) => [h.lat, h.lon] as [number, number])]}
             pathOptions={{ color: k.vonalSzin, weight: 3, dashArray: "8 8", opacity: 0.8 }}
           />
         ) : null
+      )}
+      {/* A további hátralévő megállók kis pöttyel, sorszámmal (a következő a nagy célkarika). */}
+      {kocsik.flatMap((k) =>
+        k.hatraVan.slice(1).map((h, i) => (
+          <Marker key={`m-${k.kod}-${i}`} position={[h.lat, h.lon]} icon={L.divIcon({
+            className: "",
+            html: `<span style="display:block;width:10px;height:10px;border-radius:9999px;background:${k.vonalSzin};border:2px solid #fff;transform:translate(-5px,-5px)"></span>`,
+            iconSize: [0, 0],
+          })}>
+            <Tooltip direction="top" offset={[0, -6]}>{k.nev} · {i + 2}. megálló: {h.cim}</Tooltip>
+          </Marker>
+        ))
       )}
       {kocsik.flatMap((k) =>
         k.hatraVan.slice(0, 1).map((h) => (

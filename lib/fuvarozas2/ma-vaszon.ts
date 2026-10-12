@@ -21,6 +21,7 @@
 // tachográf a sofőrnél van, ez előrejelzés.
 
 import { maEloKocsi, type MaElo } from "@/lib/fuvarozas2/ma-elo";
+import { utvonalraIllesztes } from "@/lib/fuvarozas2/ma-utvonal";
 import { megbizoMegjelenites } from "@/lib/fuvarozas/fuvar-constants";
 import { query } from "@/lib/db";
 import { requireSession } from "@/lib/auth/dal";
@@ -773,6 +774,8 @@ export async function getMaVaszon(): Promise<MaVaszon> {
         : null,
     };
   });
+  // A térkép vonalai úthálózaton (HU-GO geometria, gyorsítótárazva; hiba esetén egyenes marad).
+  await utvonalraIllesztes(kocsik.flatMap((k) => (k.elo ? [k.elo] : [])));
   while (kocsik.length < KOCSI_OSZLOP) {
     kocsik.push({
       kod: null, cimke: `${kocsik.length + 1}. kocsi`, sofor: null, helykitolto: "még nincs beállítva",

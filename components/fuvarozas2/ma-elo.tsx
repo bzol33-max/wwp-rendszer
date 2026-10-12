@@ -58,7 +58,7 @@ export function MaEloNezet({ adat }: { adat: MaVaszon }) {
   const elok = kocsik.map((k, i) => ({ k, elo: k.elo, szin: KOCSI_SZINEK_LISTA[i % KOCSI_SZINEK_LISTA.length] }));
   const terkepre = elok.filter((x) => x.elo).map(({ k, elo, szin }) => ({
     kod: k.kod!, nev: k.sofor ?? k.cimke, lat: elo!.lat, lon: elo!.lon, irany: elo!.irany, allapot: elo!.allapot, szam: elo!.szam, szin: elo!.szin,
-    nyomvonal: elo!.nyomvonal, hatraVan: elo!.hatraVan, kovetkezoCim: elo!.kovetkezo?.cel ?? null, vonalSzin: szin,
+    nyomvonal: elo!.nyomvonal, hatraVan: elo!.hatraVan, tervUt: elo!.tervUt ?? null, kovetkezoCim: elo!.kovetkezo?.cel ?? null, vonalSzin: szin,
   }));
 
   const teendok = adat.elteresek.slice(0, 3);
