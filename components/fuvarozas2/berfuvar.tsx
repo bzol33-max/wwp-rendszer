@@ -71,7 +71,11 @@ export function UjraolvasasGomb({ id, utanaHref }: { id: string; utanaHref: stri
     if (!(await confirm("A sor törlődik, és a Drive-irat a jelenlegi olvasóval újra beolvasásra kerül. Folytatod?"))) return;
     setFut(true);
     try {
-      await felszabaditFuvarDokumentumot(id);
+      const f = await felszabaditFuvarDokumentumot(id);
+      if (!f.ok) {
+        toast.error(f.hiba);
+        return;
+      }
       const e = await frissitsDriveBol();
       if (e.ujFuvarok > 0) toast.success("Az irat újra beolvasva — az új sor a Beérkezett csoportban van.");
       else toast.warning("Az irat felszabadítva, de a szinkron nem vett fel új sort: " + (e.figyelmeztetesek[0] ?? e.hibak[0] ?? "nézd meg a Drive-import naplót."));

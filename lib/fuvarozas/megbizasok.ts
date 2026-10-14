@@ -203,7 +203,7 @@ export async function addFuvar(input: AddFuvarInput): Promise<string | null> { r
  * lehetett javítani (2026-09-18, BB-Logistic 02215-2026). Ugyanaz, mint a
  * scripts/migrate.mjs egyszeri "szabaditsaFel…" javításai, csak gombról.
  */
-export async function felszabaditFuvarDokumentumot(id: string): Promise<void> { return actions.felszabaditFuvarDokumentumot(id); }
+export async function felszabaditFuvarDokumentumot(id: string): Promise<{ ok: true } | { ok: false; hiba: string }> { return actions.felszabaditFuvarDokumentumot(id); }
 
 /**
  * A Számla/Posta nézet soron belüli, azonnali javítása: postázási cím kitöltése.

@@ -1,5 +1,16 @@
 # PROGRESS
 
+## 2026-10-14 — #312 Gászler „eltűnt”: az Újraolvasás törölte; védelem + Drive-kapcsolat visszaállítása
+
+- **Mi történt:** 13:21-kor a #312-n (teljesítve, számla WLLWR-2026-359, 2 fuvarlevél-fotó) kétszer
+  lefutott az „Újraolvasás”: a sor törölt lett, a Drive-irat felszabadult; új sor nem jött létre.
+  A következő Drive-kör új, üres sorként húzhatta volna be ugyanazt a PDF-et.
+- **Javítás:** az újraolvasás nem engedélyezett számlázott vagy elindult (bármely megállón GPS /
+  sofőr-jelzés, vagy állapot a tervezett után) fuvarnál — érthető hibaüzenet, a sor marad.
+  A törölt fuvar „Visszaállítás”-a a Drive-irat kapcsolatát is visszaadja (a megjegyzésben
+  őrzött eredeti URL-ből), ha közben más élő sor nem fogja; a megjegyzésből a jel lekerül.
+- Ellenőrzés: typecheck, eslint, teszt-lánc zöld, build rendben.
+
 ## 2026-10-14 — Tervezés hét: egy fuvar se essen ki csendben
 
 - A #311 (Gergő) a 13:05-ös javítás után is kérdéses. A GPS-figyelés naplója szerint a „Kocsi”

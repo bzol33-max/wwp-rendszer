@@ -353,7 +353,33 @@ export async function visszaallitTorolt(id: string): Promise<{ ok: true } | { ok
     [id]
   );
   if (sorok.length === 0) return { ok: false, hiba: "Ez a fuvar nincs törölve." };
-  await query(`insert into fuvar_megbizas_esemeny (megbizas_id, esemeny, forras, ki, reszletek) values ($1, 'visszaallitva_torlesbol', 'ember', $2, '{}'::jsonb)`, [id, ki]);
+  // Újraolvasásra felszabadított sor (2026-10-14, #312): a Drive-irat
+  // kapcsolatát is visszaadjuk, különben a következő Drive-kör új, üres
+  // sorként húzná be ugyanazt az iratot. Ha közben már be is húzta (élő sor
+  // fogja az iratot), a kapcsolatot nem vesszük el tőle.
+  const JEL = "Újraolvasásra felszabadítva, eredeti dokumentum: ";
+  const [m] = await query<{ megjegyzes: string | null }>(`select megjegyzes from fuvar_megbizasok where id = $1`, [id]);
+  const url = m?.megjegyzes?.split(JEL)[1]?.split(" | ")[0]?.trim() ?? null;
+  let driveVissza = false;
+  if (url && url !== "-") {
+    const fileId = url.match(/\/file\/d\/([^/]+)\//)?.[1] ?? null;
+    const [foglalt] = await query<{ id: string }>(
+      `select id::text from fuvar_megbizasok where torolt_at is null and id <> $1 and (dokumentum_url = $2 or ($3::text is not null and drive_file_id = $3))`,
+      [id, url, fileId]
+    );
+    if (!foglalt) {
+      await query(
+        `update fuvar_megbizasok
+            set dokumentum_url = $2, drive_file_id = coalesce(drive_file_id, $3),
+                megjegyzes = nullif(trim(both ' |' from replace(megjegyzes, $4, '')), '')
+          where id = $1`,
+        [id, url, fileId, `${JEL}${url}`]
+      );
+      if (fileId) await query(`update fuvar_import_naplo set fuvar_id = $2 where drive_file_id = $1 and fuvar_id is null`, [fileId, id]);
+      driveVissza = true;
+    }
+  }
+  await query(`insert into fuvar_megbizas_esemeny (megbizas_id, esemeny, forras, ki, reszletek) values ($1, 'visszaallitva_torlesbol', 'ember', $2, $3)`, [id, ki, JSON.stringify({ drive_vissza: driveVissza })]);
   return { ok: true };
 }
 
@@ -368,13 +394,23 @@ export async function letrehoz(input: AddFuvarInput): Promise<string | null> {
   return id;
 }
 
-export async function felszabaditFuvarDokumentumot(id: string): Promise<void> {
+export async function felszabaditFuvarDokumentumot(id: string): Promise<{ ok: true } | { ok: false; hiba: string }> {
   await requireEditPermission("fuvarozas");
-  const [sor] = await query<{ drive_file_id: string | null; dokumentum_url: string | null }>(
-    `select drive_file_id, dokumentum_url from fuvar_megbizasok where id = $1`,
+  const [sor] = await query<{ drive_file_id: string | null; dokumentum_url: string | null; allapot: string | null; szamla_szam: string | null; elindult: boolean }>(
+    `select drive_file_id, dokumentum_url, allapot, szamla_szam,
+            exists (select 1 from fuvar_megallok g where g.megbizas_id = f.id
+                     and (g.gps_erkezes is not null or g.sofor_megerkezett_at is not null or g.sofor_kesz_at is not null)) as elindult
+       from fuvar_megbizasok f where id = $1 and torolt_at is null`,
     [id]
   );
-  if (!sor) throw new Error("Nincs ilyen fuvar.");
+  if (!sor) return { ok: false, hiba: "Nincs ilyen fuvar." };
+  // 2026-10-14 (#312 Gászler): az újraolvasás TÖRLI a sort — egy elindult,
+  // teljesített vagy számlázott fuvarnál ezzel a sofőr lezárásai, a fotók
+  // kapcsolata és a számlaszám kerülne egy új, üres sor mögé. Ott nem engedjük.
+  if (sor.szamla_szam) return { ok: false, hiba: `Számlázott fuvar (${sor.szamla_szam}) — nem olvasható újra. Javítsd a mezőket a „Szerkesztés” gombbal.` };
+  if (sor.elindult || (sor.allapot && !["ellenorzesre_var", "tervezett"].includes(sor.allapot))) {
+    return { ok: false, hiba: "A fuvar már elindult — nem olvasható újra (a sofőr lezárásai elvesznének). Javítsd a mezőket a „Szerkesztés” gombbal." };
+  }
   const fileId = sor.drive_file_id ?? sor.dokumentum_url?.match(/\/file\/d\/([^/]+)\//)?.[1] ?? null;
   await query(
     `update fuvar_megbizasok
@@ -396,6 +432,7 @@ export async function felszabaditFuvarDokumentumot(id: string): Promise<void> {
     await query(`update fuvar_import_naplo set fuvar_id = null where drive_file_id = $1 and fuvar_id = $2`, [fileId, id]);
   }
   toroljIdovonalCachet();
+  return { ok: true };
 }
 
 export async function setFuvarPostazasiCim(id: string, postazasiCim: string | null) {
