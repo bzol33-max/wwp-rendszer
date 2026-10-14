@@ -1,5 +1,21 @@
 # PROGRESS
 
+## 2026-10-14 — Tervezés · A hét: aktualitás és kezelhetőbb ajánlatok
+
+Aktualitás-átnézés (kód alapján): a hét a tervezett dátumokból számolt, a múlt napok réseit is
+számolta és a fejlécben összeadta, a kész / úton lévő fuvar nem látszott másnak, csak a mai hét
+volt elérhető (pénteken a jövő hét nem), nem írta ki, mikor frissült, a koordináta nélküli fuvarok
+körül csendben elmaradt a rés, a Timocom-ajánlatoknak nem látszott a koruk, és a limit (30, minden
+állapot) kiszoríthatta a nyitottakat.
+- `hetiReszek(..., ma)`: ma előtt nincs rés és nincs „szabad”; a fejléc „(mától)”.
+- Kártya: kész ✓ halványítva, úton pötty (`fuvarJel`). Hét-lapozás (`?het=`, `hetEltolva`).
+- „frissítve HH:MM · 5 percenként magától” (AutoFrissites intervallum-felirattal).
+- Sáv: „N fuvar helye nem ismert — körülöttük a rés nem számolható”, linkkel a megbízásra.
+- Ajánlatok: kor („3 órája”), 24 óra után „régi” (összecsukva), dátum nélküli jelölve; csak
+  nyitott és kiment ajánlat jön (`getTimocomAjanlatok(40, [...])`); „Ajánlatot adtam / Elvetem /
+  Mégis nyitott” gombok a listán és a rés táblában (`AjanlatGombok`); „Kiment ajánlataink” külön.
+- Teszt: teszt-tervezes-het 52 ok; lánc 2 215 zöld; typecheck, lint, build rendben.
+
 ## 2026-10-14 — Megbízások: egy asztali nézet (Munkafolyamat), a pénz-szűrők beépítve
 
 Budaházi Zoltán döntése: a Pénz / Munkafolyamat kapcsolóból csak a Munkafolyamat (szakaszok) marad.

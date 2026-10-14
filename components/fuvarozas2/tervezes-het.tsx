@@ -1,8 +1,10 @@
 import { Fragment } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
-import type { TervezesHet } from "@/lib/fuvarozas2/tervezes-het";
-import type { Res } from "@/lib/fuvarozas2/tervezes-het-alap";
+import type { HetAjanlat, TervezesHet } from "@/lib/fuvarozas2/tervezes-het";
+import { fuvarJel, type Res } from "@/lib/fuvarozas2/tervezes-het-alap";
+import { AutoFrissites } from "@/components/fuvarozas2/auto-frissites";
+import { AjanlatGombok } from "@/components/fuvarozas2/ajanlat-gombok";
 
 // Tervezés · A hét (az új terv 2. oldala): kocsinként a hét, a rések
 // kiemelve, alul a kocsira váró fuvarok, mellette a bejött ajánlatok, alatta a kijelölt rés teendői.
@@ -14,11 +16,17 @@ const ft = (x: number) => `${Math.round(x).toLocaleString("hu-HU")} Ft`;
 const ezer = (x: number) => `${Math.round(x / 1000).toLocaleString("hu-HU")} e`;
 const eur = (x: number) => Math.round(x).toLocaleString("hu-HU");
 const ido = (perc: number) => `${Math.floor(perc / 60)} ó ${String(perc % 60).padStart(2, "0")} p`;
-const resLink = (r: Res) => `/fuvarozas2/tervezes?res=${encodeURIComponent(r.kulcs)}#res`;
+const hetLink = (het: string | null, res?: string) => {
+  const p = new URLSearchParams();
+  if (het) p.set("het", het);
+  if (res) p.set("res", res);
+  const q = p.toString();
+  return `/fuvarozas2/tervezes${q ? `?${q}` : ""}${res ? "#res" : ""}`;
+};
 
-function ResChip({ r, aktiv }: { r: Res; aktiv: boolean }) {
+function ResChip({ r, aktiv, het }: { r: Res; aktiv: boolean; het: string | null }) {
   return (
-    <Link href={resLink(r)} scroll={false}
+    <Link href={hetLink(het, r.kulcs)} scroll={false}
       className={cn("block rounded-lg border border-dashed px-2 py-1 text-xs", aktiv ? "border-[var(--f2-amb)] bg-[var(--f2-amb-l)] ring-2 ring-[var(--f2-amb)]/40" : "border-[var(--f2-amb)]/60 bg-[var(--f2-amb-l)]/60 hover:bg-[var(--f2-amb-l)]")}>
       <div className="truncate text-[#5a3806]">{r.honnan} → {r.haza ? "haza" : r.hova}</div>
       <div className="font-semibold text-[var(--f2-amb)]">{r.km} km üres</div>
@@ -26,17 +34,37 @@ function ResChip({ r, aktiv }: { r: Res; aktiv: boolean }) {
   );
 }
 
-export function TervezesHetNezet({ adat }: { adat: TervezesHet }) {
+export function TervezesHetNezet({ adat, szerkeszthet }: { adat: TervezesHet; szerkeszthet: boolean }) {
   const k = adat.kijelolt;
+  const het = adat.ezAHet ? null : adat.hetKezdet;
   const ehhez = adat.ajanlatok.filter((a) => a.ehhez).sort((a, b) => a.ehhez!.tobbletFt - b.ehhez!.tobbletFt);
+  const friss = adat.ajanlatok.filter((a) => a.allapot !== "ajanlva" && !a.regi);
+  const regi = adat.ajanlatok.filter((a) => a.allapot !== "ajanlva" && a.regi);
+  const kiment = adat.ajanlatok.filter((a) => a.allapot === "ajanlva");
+  const utolso = adat.napok[adat.napok.length - 1];
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-baseline gap-3">
-        <p className="text-sm text-muted-foreground">a hét · hova kell fuvar · mit vállaljunk el</p>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        <nav className="flex items-center gap-1 text-sm" aria-label="Hét">
+          <Link href={hetLink(adat.elozoHet)} className="rounded-lg px-2 py-1 text-muted-foreground hover:bg-muted hover:text-foreground">‹ előző</Link>
+          <span className="px-1 font-semibold tabular-nums">{napCimke(adat.napok[0])} – {napCimke(utolso)}</span>
+          <Link href={hetLink(adat.kovetkezoHet)} className="rounded-lg px-2 py-1 text-muted-foreground hover:bg-muted hover:text-foreground">következő ›</Link>
+          {!adat.ezAHet ? <Link href={hetLink(null)} className="rounded-lg border px-2 py-0.5 text-xs hover:bg-muted">vissza a mai hétre</Link> : null}
+        </nav>
+        <AutoFrissites frissitve={adat.frissitve} intervallMs={300_000} />
         <span className={cn("ml-auto rounded-full px-3 py-1 text-sm font-medium", adat.resek.length ? "bg-[var(--f2-amb-l)] text-[#5a3806]" : "bg-[var(--f2-mint-l)] text-[var(--f2-mint)]")}>
-          {adat.resek.length ? `${adat.resek.length} rés · ${adat.uresKmOssz.toLocaleString("hu-HU")} km üres` : "nincs 100 km-nél hosszabb üres út"}
+          {adat.resek.length ? `${adat.resek.length} rés · ${adat.uresKmOssz.toLocaleString("hu-HU")} km üres${adat.ezAHet ? " (mától)" : ""}` : "nincs 100 km-nél hosszabb üres út"}
         </span>
       </div>
+      {adat.helyNelkul.length ? (
+        <p className="rounded-xl bg-[var(--f2-amb-l)] px-4 py-2 text-sm text-[#5a3806]">
+          <b>{adat.helyNelkul.length} fuvar helye nem ismert</b> — körülöttük a rés nem számolható:{" "}
+          {adat.helyNelkul.slice(0, 4).map((h, i) => (
+            <span key={h.id}>{i ? ", " : ""}<Link className="underline" href={`/fuvarozas2/megbizasok?reszlet=${h.id}`}>{h.cim} ({h.utvonal})</Link></span>
+          ))}
+          {adat.helyNelkul.length > 4 ? " …" : ""}. Javítsd a címet a megbízáson.
+        </p>
+      ) : null}
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px] xl:items-start">
         <section className="overflow-x-auto rounded-2xl bg-card ring-1 ring-foreground/10">
@@ -55,18 +83,21 @@ export function TervezesHetNezet({ adat }: { adat: TervezesHet }) {
                     <td key={c.nap} className={cn("px-1.5 py-2", c.nap === adat.ma && "bg-muted/40")}>
                       <div className="flex flex-col gap-1">
                         {/* Útvonal-sorrendben: minden üres út közvetlenül az elé a fuvar elé, amelyhez vezet. */}
-                        {c.resek.filter((r) => !r.haza && !c.fuvarok.some((f) => f.id === r.elott)).map((r) => <ResChip key={r.kulcs} r={r} aktiv={k?.kulcs === r.kulcs} />)}
+                        {c.resek.filter((r) => !r.haza && !c.fuvarok.some((f) => f.id === r.elott)).map((r) => <ResChip key={r.kulcs} r={r} aktiv={k?.kulcs === r.kulcs} het={het} />)}
                         {c.fuvarok.map((f) => (
                           <Fragment key={f.id}>
-                          {c.resek.filter((r) => !r.haza && r.elott === f.id).map((r) => <ResChip key={r.kulcs} r={r} aktiv={k?.kulcs === r.kulcs} />)}
+                          {c.resek.filter((r) => !r.haza && r.elott === f.id).map((r) => <ResChip key={r.kulcs} r={r} aktiv={k?.kulcs === r.kulcs} het={het} />)}
                           <Link href={`/fuvarozas2/megbizasok?reszlet=${f.id}`}
-                            className={cn("block rounded-lg px-2 py-1 text-xs", f.sajat ? "bg-[var(--f2-blue-l)] text-[var(--f2-blue)]" : "bg-[var(--f2-mint-l)] text-[#0f5240]")}>
-                            <div className="truncate font-semibold">{f.cim}</div>
+                            className={cn("block rounded-lg px-2 py-1 text-xs", f.sajat ? "bg-[var(--f2-blue-l)] text-[var(--f2-blue)]" : "bg-[var(--f2-mint-l)] text-[#0f5240]", fuvarJel(f.allapot) === "kesz" && "opacity-55")}>
+                            <div className="truncate font-semibold">
+                              {fuvarJel(f.allapot) === "kesz" ? "✓ " : fuvarJel(f.allapot) === "uton" ? <span className="mr-1 inline-block size-1.5 rounded-full bg-current align-middle" title="úton" /> : null}
+                              {f.cim}
+                            </div>
                             <div className="truncate">{f.felVaros} → {f.leVaros}</div>
                           </Link>
                           </Fragment>
                         ))}
-                        {c.resek.filter((r) => r.haza).map((r) => <ResChip key={r.kulcs} r={r} aktiv={k?.kulcs === r.kulcs} />)}
+                        {c.resek.filter((r) => r.haza).map((r) => <ResChip key={r.kulcs} r={r} aktiv={k?.kulcs === r.kulcs} het={het} />)}
                         {c.szabad ? <div className="rounded-lg px-2 py-1 text-xs text-muted-foreground/70">szabad</div> : null}
                       </div>
                     </td>
@@ -103,26 +134,27 @@ export function TervezesHetNezet({ adat }: { adat: TervezesHet }) {
           <section className="rounded-2xl bg-card ring-1 ring-foreground/10">
             <div className="flex items-baseline gap-2 px-4 pt-3 pb-1">
               <h2 className="font-semibold">Bejövő ajánlatok</h2>
-              <span className="rounded-full bg-muted px-2 text-xs">{adat.ajanlatok.length}</span>
+              <span className="rounded-full bg-muted px-2 text-xs">{friss.length}</span>
+              <span className="ml-auto text-[11px] text-muted-foreground">24 óránál régebbi: lent</span>
             </div>
-            {adat.ajanlatok.length ? (
-              <ul className="divide-y">
-                {adat.ajanlatok.map((a) => (
-                  <li key={a.id} className="px-4 py-2.5">
-                    <Link href={`/fuvarozas2/timocom?id=${a.id}`} className="block hover:underline">
-                      <div className="flex items-baseline gap-2 text-sm"><b className="truncate">{a.megbizo ?? "Timocom-ajánlat"}</b><span className="text-xs text-muted-foreground">Timocom</span></div>
-                      <div className="text-sm">{a.felVaros} → {a.leVaros}{a.felNap ? ` · ${a.felNap.slice(5).replace("-", ".")}.` : ""}{a.arSzoveg ? ` · ${a.arSzoveg}` : ""}</div>
-                    </Link>
-                    <div className={cn("text-xs", a.illik ? (a.illik.draga ? "text-[var(--f2-amb)]" : "text-[var(--f2-mint)]") : "text-muted-foreground")}>
-                      {a.illik
-                        ? <>illik: <Link className="underline" href={resLink(a.illik.res)} scroll={false}>{a.illik.res.sofor} {rovidNap(a.illik.res.nap)} rés</Link> · +{ft(a.illik.tobbletFt)}{a.illik.draga ? " · drága" : ""}</>
-                        : a.nincsHely ? "a helyet nem sikerült térképre tenni" : "egyik résbe sem illik"}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : <p className="px-4 pb-3 text-sm text-muted-foreground">Nincs nyitott ajánlat.</p>}
+            {friss.length ? <AjanlatLista lista={friss} het={het} /> : <p className="px-4 pb-3 text-sm text-muted-foreground">Nincs friss nyitott ajánlat.</p>}
+            {regi.length ? (
+              <details className="border-t">
+                <summary className="cursor-pointer px-4 py-2 text-sm text-muted-foreground">Régebbi ajánlatok ({regi.length}) — valószínűleg már elkeltek</summary>
+                <AjanlatLista lista={regi} het={het} />
+              </details>
+            ) : null}
           </section>
+          {kiment.length ? (
+            <section className="rounded-2xl bg-card ring-1 ring-foreground/10">
+              <div className="flex items-baseline gap-2 px-4 pt-3 pb-1">
+                <h2 className="font-semibold">Kiment ajánlataink</h2>
+                <span className="rounded-full bg-muted px-2 text-xs">{kiment.length}</span>
+                <span className="ml-auto text-[11px] text-muted-foreground">válaszra vár</span>
+              </div>
+              <AjanlatLista lista={kiment} het={het} />
+            </section>
+          ) : null}
           <Link href="/fuvarozas2/timocom" className="rounded-2xl border border-dashed px-4 py-3 text-sm hover:bg-muted/50">
             <b>Ajánlat beillesztése</b>
             <div className="text-xs text-muted-foreground">Timocom szöveg vagy „→ WWP” gomb</div>
@@ -146,7 +178,8 @@ export function TervezesHetNezet({ adat }: { adat: TervezesHet }) {
                   <tbody>
                     {ehhez.map((a) => (
                       <tr key={a.id} className="border-t border-foreground/5">
-                        <td className="py-2"><b>{a.megbizo ?? "Timocom"}</b> <span className="text-muted-foreground">· {a.felVaros} → {a.leVaros}</span>{a.ehhez!.draga ? <span className="ml-2 rounded-full bg-[var(--f2-amb-l)] px-2 text-[11px] text-[#5a3806]">drága</span> : null}</td>
+                        <td className="py-2"><b>{a.megbizo ?? "Timocom"}</b> <span className="text-muted-foreground">· {a.felVaros} → {a.leVaros}</span>{a.ehhez!.draga ? <span className="ml-2 rounded-full bg-[var(--f2-amb-l)] px-2 text-[11px] text-[#5a3806]">drága</span> : null}
+                          <span className={cn("block text-[11px]", a.regi ? "text-[var(--f2-amb)]" : "text-muted-foreground")}>{a.allapot === "ajanlva" ? "ajánlat kiment · " : ""}{a.kor}{a.regi ? " · valószínűleg elkelt" : ""}</span></td>
                         <td className="px-2 py-2 text-right tabular-nums">+{a.ehhez!.plusKm}</td>
                         <td className="px-2 py-2 text-right tabular-nums">+{ido(a.ehhez!.plusPerc)}</td>
                         <td className="px-2 py-2 text-right tabular-nums">+{ft(a.ehhez!.tobbletFt)}</td>
@@ -159,7 +192,7 @@ export function TervezesHetNezet({ adat }: { adat: TervezesHet }) {
                           <span className="block text-xs text-muted-foreground">{a.ehhez!.letra.fokok.map((f) => (f.eur != null ? eur(f.eur) : "—")).join(" · ")} €</span>
                           <span className="block text-[11px] text-muted-foreground/80">alsó határ visszfuvarnál {ezer(a.ehhez!.alsoFt)}{a.ehhez!.alsoEur != null ? ` · ${eur(a.ehhez!.alsoEur)} €` : ""}{a.ehhez!.elozmenyFt ? ` · előzmény ${ezer(a.ehhez!.elozmenyFt)}` : ""}</span>
                         </td>
-                        <td className="py-2 pl-2 text-right"><Link href={`/fuvarozas2/timocom?id=${a.id}`} className="rounded-lg border px-2.5 py-1 text-xs font-medium hover:bg-muted">Megnyitom</Link></td>
+                        <td className="py-2 pl-2 text-right"><span className="flex flex-col items-end gap-1"><Link href={`/fuvarozas2/timocom?id=${a.id}`} className="rounded-lg border px-2.5 py-1 text-xs font-medium hover:bg-muted">Megnyitom</Link>{szerkeszthet ? <AjanlatGombok id={a.id} allapot={a.allapot} /> : null}</span></td>
                       </tr>
                     ))}
                   </tbody>
@@ -191,5 +224,28 @@ export function TervezesHetNezet({ adat }: { adat: TervezesHet }) {
         </section>
       ) : null}
     </div>
+  );
+}
+
+function AjanlatLista({ lista, het }: { lista: HetAjanlat[]; het: string | null }) {
+  return (
+    <ul className="divide-y">
+      {lista.map((a) => (
+        <li key={a.id} className={cn("px-4 py-2.5", a.regi && a.allapot !== "ajanlva" && "opacity-70")}>
+          <Link href={`/fuvarozas2/timocom?id=${a.id}`} className="block hover:underline">
+            <div className="flex items-baseline gap-2 text-sm"><b className="truncate">{a.megbizo ?? "Timocom-ajánlat"}</b><span className="ml-auto shrink-0 text-xs text-muted-foreground">{a.kor}</span></div>
+            <div className="text-sm">{a.felVaros} → {a.leVaros}{a.felNap ? ` · ${a.felNap.slice(5).replace("-", ".")}.` : " · dátum nélkül"}{a.arSzoveg ? ` · ${a.arSzoveg}` : ""}</div>
+          </Link>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className={cn("text-xs", a.illik ? (a.illik.draga ? "text-[var(--f2-amb)]" : "text-[var(--f2-mint)]") : "text-muted-foreground")}>
+              {a.illik
+                ? <>illik: <Link className="underline" href={hetLink(het, a.illik.res.kulcs)} scroll={false}>{a.illik.res.sofor} {rovidNap(a.illik.res.nap)} rés</Link> · +{ft(a.illik.tobbletFt)}{a.illik.draga ? " · drága" : ""}</>
+                : a.nincsHely ? "a helyet nem sikerült térképre tenni" : "egyik résbe sem illik"}
+            </span>
+            <span className="ml-auto"><AjanlatGombok id={a.id} allapot={a.allapot} /></span>
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }

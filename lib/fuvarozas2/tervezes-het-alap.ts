@@ -20,6 +20,8 @@ export type HetiFuvar = {
   felNap: string;
   leNap: string;
   sajat: boolean;
+  /** A megbízás állapota (allapotgep) — a kártya kész / úton jeléhez. */
+  allapot?: string;
 };
 
 export type Res = {
@@ -47,7 +49,11 @@ export function utKm(a: Pont, b: Pont): number {
 }
 
 /** Kocsinként a hét rései (üres út ≥ 100 km) és napcellái. */
-export function hetiReszek(k: HetiKocsi, napok: string[], telephely: { pont: Pont; varos: string }, kmKoltseg: number): { cellak: NapCella[]; resek: Res[] } {
+/**
+ * `ma` (2026-10-14): a ma előtti napokra nem számolunk rést és nem írunk
+ * „szabad”-ot — ami elmúlt, abba már nem lehet fuvart tenni.
+ */
+export function hetiReszek(k: HetiKocsi, napok: string[], telephely: { pont: Pont; varos: string }, kmKoltseg: number, ma?: string): { cellak: NapCella[]; resek: Res[] } {
   const elso = napok[0], utolso = napok[napok.length - 1];
   const heti = k.fuvarok.filter((f) => f.felNap <= utolso && f.leNap >= elso).sort((x, y) => x.felNap.localeCompare(y.felNap) || x.leNap.localeCompare(y.leNap));
   const resek: Res[] = [];
@@ -71,12 +77,13 @@ export function hetiReszek(k: HetiKocsi, napok: string[], telephely: { pont: Pon
       resek.push({ kulcs: `${k.kod}:${resek.length}`, kocsi: k.kod, sofor: k.sofor, nap: holNap < elso ? elso : holNap, honnan: hol.varos, hova: telephely.varos, a: hol.pont, b: telephely.pont, km, ft: Math.round(km * kmKoltseg), haza: true });
     }
   }
+  const elo = ma ? resek.filter((x) => x.nap >= ma) : resek;
   const cellak = napok.map((nap) => {
     const fuvarok = heti.filter((f) => f.felNap <= nap && f.leNap >= nap);
-    const r = resek.filter((x) => x.nap === nap);
-    return { nap, fuvarok, resek: r, szabad: fuvarok.length === 0 && r.length === 0 };
+    const r = elo.filter((x) => x.nap === nap);
+    return { nap, fuvarok, resek: r, szabad: fuvarok.length === 0 && r.length === 0 && (!ma || nap >= ma) };
   });
-  return { cellak, resek };
+  return { cellak, resek: elo };
 }
 
 export type AjanlatHely = { varos: string; pont: Pont | null; nap: string | null };
@@ -209,4 +216,30 @@ export function kiosztatlanCellak(fuvarok: HetiFuvar[], napok: string[], ma: str
     if (i >= 0) cellak[i].push(f);
   }
   return cellak;
+}
+
+/** A hét kezdőnapja (hétfő) `n` héttel odébb — a hét-lapozáshoz. */
+export function hetEltolva(hetfo: string, n: number): string {
+  const d = new Date(`${hetfo}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 7 * n);
+  return d.toISOString().slice(0, 10);
+}
+
+/** A kártya állapot-jele: kész (lerakva / utána), úton, vagy terv. */
+export function fuvarJel(allapot: string | undefined): "kesz" | "uton" | "terv" {
+  if (!allapot) return "terv";
+  if (allapot === "folyamatban") return "uton";
+  if (["teljesitve", "szamlazhato", "szamlazva", "email_elment", "postazva", "lezart"].includes(allapot)) return "kesz";
+  return "terv";
+}
+
+/**
+ * Mennyire friss egy Timocom-ajánlat (2026-10-14). A Timocomon egy ajánlat
+ * jellemzően órák alatt elkel: 24 óra után „régi”, és dátum nélkül sem
+ * tartjuk elöl 24 óránál tovább.
+ */
+export function ajanlatFrissesseg(rogzitveIso: string, most: Date): { orak: number; szoveg: string; regi: boolean } {
+  const orak = Math.max(0, Math.floor((most.getTime() - Date.parse(rogzitveIso)) / 3_600_000));
+  const szoveg = orak < 1 ? "most jött" : orak < 24 ? `${orak} órája` : `${Math.floor(orak / 24)} napja`;
+  return { orak, szoveg, regi: orak >= 24 };
 }

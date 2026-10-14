@@ -71,12 +71,14 @@ export async function getTimocomAjanlat(id: string): Promise<TimocomSor | null> 
   return rows[0] ? sorbol(rows[0]) : null;
 }
 
-export async function getTimocomAjanlatok(limit = 30): Promise<TimocomSor[]> {
+/** `allapotok`: csak ezek (pl. a Tervezés hete a nyitott és a kiment ajánlatokat kéri) — a limit így nem vágja le őket. */
+export async function getTimocomAjanlatok(limit = 30, allapotok?: string[]): Promise<TimocomSor[]> {
   await requireViewPermission("fuvarozas");
   const rows = await query<Nyers>(
     `select id::text, allapot, letrehozva_at::text, frissitve_at::text, rogzitette, reszletek, nyers_szoveg, url
-       from radar_kiiras where forras = 'timocom' order by frissitve_at desc limit $1`,
-    [Math.min(Math.max(limit, 1), 100)]
+       from radar_kiiras where forras = 'timocom' and ($2::text[] is null or allapot = any($2::text[]))
+      order by frissitve_at desc limit $1`,
+    [Math.min(Math.max(limit, 1), 100), allapotok ?? null]
   );
   return rows.map(sorbol);
 }

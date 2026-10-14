@@ -36,11 +36,12 @@ export function useAutoFrissites(intervallMs = 60_000) {
   }, [router, intervallMs]);
 }
 
-export function AutoFrissitesFelirat({ frissitve }: { frissitve: string }) {
-  return <span className="text-[11px] text-muted-foreground tabular-nums">frissítve {frissitve} · percenként magától</span>;
+export function AutoFrissitesFelirat({ frissitve, intervallMs = 60_000 }: { frissitve: string; intervallMs?: number }) {
+  const perc = Math.round(intervallMs / 60_000);
+  return <span className="text-[11px] text-muted-foreground tabular-nums">frissítve {frissitve} · {perc <= 1 ? "percenként" : `${perc} percenként`} magától</span>;
 }
 
 export function AutoFrissites({ frissitve, intervallMs = 60_000 }: { frissitve: string; intervallMs?: number }) {
   useAutoFrissites(intervallMs);
-  return <AutoFrissitesFelirat frissitve={frissitve} />;
+  return <AutoFrissitesFelirat frissitve={frissitve} intervallMs={intervallMs} />;
 }

@@ -19,7 +19,7 @@ import { getTimocomAjanlatok } from "@/lib/fuvarozas2/timocom";
 import { getEurArfolyamok } from "@/lib/fuvarozas/arfolyam";
 import type { Pont } from "@/lib/fuvarozas2/tervezo-alap";
 import {
-  hetiReszek, illeszt, kiketHivj, kiosztatlanCellak, legjobbRes, tervHetNapjai, utKm,
+  ajanlatFrissesseg, hetEltolva, hetiReszek, illeszt, kiketHivj, kiosztatlanCellak, legjobbRes, tervHetNapjai, utKm,
   type AjanlatHely, type HetiFuvar, type HivandoPartner, type Illeszkedes, type MultFuvar, type NapCella, type Res,
 } from "@/lib/fuvarozas2/tervezes-het-alap";
 
@@ -34,10 +34,24 @@ export type HetAjanlat = {
   /** A kijelölt réshez mért illeszkedés (ha más, mint a legjobb). */
   ehhez: Illeszkedes | null;
   nincsHely: boolean;
+  /** "nyitott" vagy "ajanlva" (kiment az árajánlatunk, válaszra vár). */
+  allapot: string;
+  /** Mióta van nálunk: „3 órája”; 24 óra után régi. */
+  kor: string;
+  regi: boolean;
 };
 
 export type TervezesHet = {
   ma: string;
+  /** Az adat előállításának ideje („10:42”). */
+  frissitve: string;
+  /** A mutatott hét hétfője, a lapozás szomszédai; `ezAHet`: a mai (vagy hétvégén a következő) hét-e. */
+  hetKezdet: string;
+  elozoHet: string;
+  kovetkezoHet: string;
+  ezAHet: boolean;
+  /** A hét még nem lerakott fuvarjai, amelyeknek a felrakó vagy a lerakó helye nem ismert — körülöttük nem számolható rés. */
+  helyNelkul: { id: string; cim: string; utvonal: string }[];
   napok: string[];
   kocsik: { kod: string; sofor: string; cellak: NapCella[] }[];
   /** Kocsira váró (ki nem osztott) fuvarok napra bontva, a `napok` sorrendjében. */
@@ -53,7 +67,7 @@ export type TervezesHet = {
 };
 
 type Sor = {
-  id: string; jelleg: "ber" | "sajat"; jarmu_kod: string | null; partner: string | null;
+  id: string; jelleg: "ber" | "sajat"; allapot: string; jarmu_kod: string | null; partner: string | null;
   felrako: string | null; lerako: string | null; fel_nap: string; le_nap: string;
   fuvardij: number | null; penznem: string;
   fel_lat: number | null; fel_lon: number | null; le_lat: number | null; le_lon: number | null;
@@ -74,13 +88,16 @@ function median(x: number[]): number | null {
   return s[Math.floor(s.length / 2)];
 }
 
-export async function getTervezesHet(resKulcs?: string): Promise<TervezesHet> {
+export async function getTervezesHet(resKulcs?: string, het?: string): Promise<TervezesHet> {
   await requireViewPermission("fuvarozas");
-  const [{ ma }] = await query<{ ma: string }>(`select ((now() at time zone 'Europe/Budapest')::date)::text as ma`);
-  const napok = tervHetNapjai(ma);
+  const [{ ma, ora }] = await query<{ ma: string; ora: string }>(
+    `select ((now() at time zone 'Europe/Budapest')::date)::text as ma, to_char(now() at time zone 'Europe/Budapest', 'HH24:MI') as ora`
+  );
+  const mostaniHet = tervHetNapjai(ma)[0];
+  const napok = tervHetNapjai(het && /^\d{4}-\d{2}-\d{2}$/.test(het) ? het : ma);
 
   const sorok = await query<Sor>(
-    `select m.id::text, m.jelleg, j.kod as jarmu_kod, coalesce(p.nev, m.megrendelo) as partner,
+    `select m.id::text, m.jelleg, m.allapot, j.kod as jarmu_kod, coalesce(p.nev, m.megrendelo) as partner,
        coalesce(fel.cim_nyers, m.felrako) as felrako, coalesce(le.cim_nyers, m.lerako) as lerako,
        to_char(m.datum, 'YYYY-MM-DD') as fel_nap, to_char(coalesce(m.lerakas_datum, m.datum), 'YYYY-MM-DD') as le_nap,
        m.fuvardij, coalesce(m.fuvardij_penznem, 'Ft') as penznem,
@@ -144,6 +161,7 @@ export async function getTervezesHet(resKulcs?: string): Promise<TervezesHet> {
   const hetiFuvar = (s: Sor): HetiFuvar => ({
     id: s.id, cim: megbizoMegjelenites(s.jelleg, s.partner), felVaros: varos(s.felrako), leVaros: varos(s.lerako),
     fel: pont(s.fel_lat, s.fel_lon), le: pont(s.le_lat, s.le_lon), felNap: s.fel_nap, leNap: s.le_nap, sajat: s.jelleg === "sajat",
+    allapot: s.allapot,
   });
 
   const resek: Res[] = [];
@@ -152,7 +170,7 @@ export async function getTervezesHet(resKulcs?: string): Promise<TervezesHet> {
     const elozo = sajat.filter((s) => s.le_nap < napok[0] && s.le_lat != null).pop();
     const r = hetiReszek(
       { kod: j.kod, sofor: j.sofor, fuvarok: sajat.map(hetiFuvar), elozoVeg: elozo ? { pont: pont(elozo.le_lat, elozo.le_lon)!, varos: varos(elozo.lerako) } : null },
-      napok, telephely, kmKoltseg
+      napok, telephely, kmKoltseg, ma
     );
     resek.push(...r.resek);
     return { kod: j.kod, sofor: j.sofor, cellak: r.cellak };
@@ -177,8 +195,8 @@ export async function getTervezesHet(resKulcs?: string): Promise<TervezesHet> {
   // Lejárt ajánlat (a felrakás napja ma előtt) nem kerül a hétre — a Timocom fülön megmarad.
   const felNapja = (t: Awaited<ReturnType<typeof getTimocomAjanlatok>>[number]) =>
     (t.ajanlat.helyek.find((h) => h.tipus === "fel") ?? t.ajanlat.helyek[0])?.datumTol ?? null;
-  const nyitott = (await getTimocomAjanlatok(30))
-    .filter((t) => t.allapot === "nyitott")
+  const most = new Date();
+  const nyitott = (await getTimocomAjanlatok(40, ["nyitott", "ajanlva"]))
     .filter((t) => { const n = felNapja(t); return !n || n >= ma; })
     .slice(0, 12);
   const ajanlatok: HetAjanlat[] = await Promise.all(nyitott.map(async (t) => {
@@ -196,14 +214,23 @@ export async function getTervezesHet(resKulcs?: string): Promise<TervezesHet> {
       id: t.id, megbizo: t.ajanlat.megbizo, felVaros: fel.varos, leVaros: le.varos, felNap: fel.nap,
       arSzoveg: t.ajanlat.ar ? `${t.ajanlat.ar.osszeg.toLocaleString("hu-HU")} ${t.ajanlat.ar.penznem ?? "(pénznem?)"}` : null,
       illik, ehhez, nincsHely: !fp || !lp,
+      allapot: t.allapot,
+      ...(({ szoveg, regi }) => ({ kor: szoveg, regi }))(ajanlatFrissesseg(t.frissitveAt, most)),
     };
   }));
-  ajanlatok.sort((a, b) => (a.illik ? a.illik.tobbletFt : 1e12) - (b.illik ? b.illik.tobbletFt : 1e12));
+  // Elöl a friss, nyitott ajánlat (a legjobban illő első), utána a régi; a kiment ajánlat külön listában.
+  const csoport = (a: HetAjanlat) => (a.allapot === "ajanlva" ? 2 : a.regi ? 1 : 0);
+  ajanlatok.sort((a, b) => csoport(a) - csoport(b) || (a.illik ? a.illik.tobbletFt : 1e12) - (b.illik ? b.illik.tobbletFt : 1e12));
 
   const kiosztatlan = kiosztatlanCellak(sorok.filter((s) => !s.jarmu_kod).map(hetiFuvar), napok, ma);
+  const utolsoNap = napok[napok.length - 1];
+  const helyNelkul = sorok
+    .filter((s) => s.fel_nap <= utolsoNap && s.le_nap >= napok[0] && s.le_nap >= ma && (s.fel_lat == null || s.le_lat == null))
+    .map((s) => ({ id: s.id, cim: megbizoMegjelenites(s.jelleg, s.partner), utvonal: `${varos(s.felrako)} → ${varos(s.lerako)}` }));
 
   return {
-    ma, napok, kocsik, kiosztatlan, resek,
+    ma, frissitve: ora, hetKezdet: napok[0], elozoHet: hetEltolva(napok[0], -1), kovetkezoHet: hetEltolva(napok[0], 1), ezAHet: napok[0] === mostaniHet, helyNelkul,
+    napok, kocsik, kiosztatlan, resek,
     uresKmOssz: resek.reduce((a, r) => a + r.km, 0),
     ajanlatok, kijelolt,
     hivandok: kijelolt ? kiketHivj(kijelolt, mult) : [],

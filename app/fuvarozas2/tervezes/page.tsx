@@ -15,18 +15,18 @@ export const dynamic = "force-dynamic";
 // 2026-10-12 (navigáció: minden funkció egy helyen): sorrend: a hét (rések +
 // ajánlatok, kocsira váró fuvarok) → bejövő megbízások döntése.
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ m?: string; kocsi?: string; res?: string }> }) {
+export default async function Page({ searchParams }: { searchParams: Promise<{ m?: string; kocsi?: string; res?: string; het?: string }> }) {
   const sp = await searchParams;
   const session = await requireSession();
   const szerkeszthet = session.can("fuvarozas").edit;
-  const hetAdat = await getTervezesHet(sp.res);
+  const hetAdat = await getTervezesHet(sp.res, sp.het);
   const t = await getTervezo({ m: sp.m && /^\d+$/.test(sp.m) ? sp.m : undefined, kocsi: sp.kocsi });
   const k = t.kivalasztott;
   return (
     <div className="flex flex-col gap-4">
       <Fuvarozas2Fulek aktiv="/fuvarozas2/tervezes" cim="Tervezés" />
       {/* Az új terv 2. oldala (2026-10-11): a hét a résekkel, ajánlatok, kiket hívj. */}
-      <TervezesHetNezet adat={hetAdat} />
+      <TervezesHetNezet adat={hetAdat} szerkeszthet={szerkeszthet} />
 
       <div className="mt-2 border-t pt-4">
         <h2 className="text-lg font-semibold">Bejövő megbízások — döntés</h2>

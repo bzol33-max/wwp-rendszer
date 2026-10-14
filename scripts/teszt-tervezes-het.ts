@@ -1,7 +1,7 @@
 // Tervezés · A hét: rések, ajánlat-illesztés, kiket hívj (lib/fuvarozas2/tervezes-het-alap.ts).
 // Futtatás: npx tsx scripts/teszt-tervezes-het.ts
 
-import { hetiReszek, illeszt, kiketHivj, kiosztatlanCellak, legjobbRes, tervHetNapjai, utKm, type HetiFuvar } from "@/lib/fuvarozas2/tervezes-het-alap";
+import { ajanlatFrissesseg, fuvarJel, hetEltolva, hetiReszek, illeszt, kiketHivj, kiosztatlanCellak, legjobbRes, tervHetNapjai, utKm, type HetiFuvar } from "@/lib/fuvarozas2/tervezes-het-alap";
 
 let ok = 0, bad = 0;
 function eq(nev: string, kapott: unknown, vart: unknown) {
@@ -119,6 +119,21 @@ if (P.nadudvar && P.szakoly) {
   eq("kiosztatlan: a hét előtt indult, még tartó a hétfőn", c[0].map((x) => x.id), ["multheti"]);
   eq("kiosztatlan: a már lerakott és a jövő heti kimarad", c.flat().map((x) => x.id).sort(), ["multheti", "szerda", "szombat"]);
   eq("kiosztatlan: üres hét", kiosztatlanCellak([], napok, "2026-10-13").flat().length, 0);
+}
+
+{
+  // Aktualitás (2026-10-14): szerdán a hétfői rés már nem számít, a múlt napok nem „szabadok”.
+  const r = hetiReszek({ kod: "AOPU", sofor: "Gergő", elozoVeg: null, fuvarok: [f("a", "tata", "tompa", "2026-10-12"), f("b", "tompa", "bp", "2026-10-13")] }, napok, tel, 300, "2026-10-14");
+  eq("múlt rés kimarad", r.resek.map((x) => x.nap), []);
+  eq("múlt napok nem szabadok", r.cellak.map((c) => c.szabad), [false, false, true, true, true, true]);
+  const r2 = hetiReszek({ kod: "AOPU", sofor: "Gergő", elozoVeg: null, fuvarok: [f("a", "tata", "tompa", "2026-10-12"), f("b", "tompa", "bp", "2026-10-13")] }, napok, tel, 300, "2026-10-13");
+  eq("mai rés marad", r2.resek.map((x) => [x.nap, x.haza]), [["2026-10-13", true]]);
+  eq("hét-lapozás", [hetEltolva("2026-10-12", 1), hetEltolva("2026-10-12", -1)], ["2026-10-19", "2026-10-05"]);
+  eq("fuvar-jel", [fuvarJel("folyamatban"), fuvarJel("teljesitve"), fuvarJel("lezart"), fuvarJel("tervezett"), fuvarJel(undefined)], ["uton", "kesz", "kesz", "terv", "terv"]);
+  const most = new Date("2026-10-14T10:00:00Z");
+  eq("ajánlat: friss", ajanlatFrissesseg("2026-10-14T09:40:00Z", most), { orak: 0, szoveg: "most jött", regi: false });
+  eq("ajánlat: órák", ajanlatFrissesseg("2026-10-14T05:00:00Z", most), { orak: 5, szoveg: "5 órája", regi: false });
+  eq("ajánlat: régi", ajanlatFrissesseg("2026-10-12T08:00:00Z", most), { orak: 50, szoveg: "2 napja", regi: true });
 }
 
 console.log(`teszt-tervezes-het: ${ok} ok, ${bad} hiba`);
