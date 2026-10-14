@@ -192,7 +192,12 @@ export async function setFuvarJarmu(id: string, jarmuKod: string | null): Promis
   if (!sor) return { ok: false, hiba: "Nincs ilyen fuvar." };
   if (sor.elokeszites) return { ok: false, hiba: "Ez a fuvar előkészítésben van — ott az űrlapon állítsd a kocsit, aztán „Kocsira adom”." };
   const cimke = jarmu ? jarmuLabel(jarmu) : null;
-  await query(`update fuvar_megbizasok set jarmu = $2, jarmu_id = null where id = $1`, [id, cimke]);
+  // A kocsi azonosítóját rögtön beírjuk (2026-10-14): eddig null lett, és a
+  // háttér-szinkronra várt — addig a Tervezés hete nem tudta, melyik kocsi.
+  await query(
+    `update fuvar_megbizasok set jarmu = $2, jarmu_id = (select id from fuvar_jarmuvek where kod = $3) where id = $1`,
+    [id, cimke, jarmu?.kod ?? null]
+  );
   await frissitsdFuvarozas2Modellt(id);
   await query(
     `insert into fuvar_megbizas_esemeny (megbizas_id, esemeny, forras, ki, reszletek) values ($1, 'hozzarendeles', 'ember', $2, $3)`,
@@ -756,9 +761,9 @@ export async function kocsiraAdom(id: string): Promise<Eredmeny> {
   const jarmu = findJarmuByPlate(sor.elokeszites_jarmu!, await getJarmuvek());
   if (!jarmu) return { ok: false, hiba: "Ismeretlen kocsi." };
   await query(
-    `update fuvar_megbizasok set jarmu = $2, jarmu_id = null, elokeszites = false, idopont_nyitott = false, kocsira_adva_at = now(), ellenorzott = true
+    `update fuvar_megbizasok set jarmu = $2, jarmu_id = (select id from fuvar_jarmuvek where kod = $3), elokeszites = false, idopont_nyitott = false, kocsira_adva_at = now(), ellenorzott = true
      where id = $1`,
-    [id, jarmuLabel(jarmu)]
+    [id, jarmuLabel(jarmu), jarmu.kod]
   );
   // Az előkészítés alatt a háttér-szinkron már felépíthette a megállókat a
   // korábbi címekből; a sofőr még nem látta őket, ezért a mostaniakból újra.

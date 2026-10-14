@@ -101,7 +101,10 @@ export async function frissitsdFuvarozas2Modellt(fuvarId: string): Promise<Model
     const jarmuSzoveg = sor.jarmu?.trim() || sor.sofor?.trim();
     if (!jarmuId && jarmuSzoveg) {
       const jarmu = resolveJarmu(jarmuSzoveg);
-      const kod = jarmu?.rendszamok[0] ?? null;
+      // A kocsi kódja (fuvar_jarmuvek.kod), nem az első rendszám: a törzsadatban
+      // a vontató rendszáma más írásmódú is lehet (és a JANI-nak még nincs) —
+      // akkor a rendszámra keresve a jarmu_id sosem töltődött ki (2026-10-14).
+      const kod = jarmu?.kod ?? null;
       if (kod) {
         const [j] = await query<{ id: string }>(`select id::text from fuvar_jarmuvek where kod = $1`, [kod]);
         jarmuId = j?.id ?? null;

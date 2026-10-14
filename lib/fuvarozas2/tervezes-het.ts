@@ -9,7 +9,7 @@ import { query } from "@/lib/db";
 import { requireViewPermission } from "@/lib/auth/require-permission";
 import { megbizoMegjelenites } from "@/lib/fuvarozas/fuvar-constants";
 import { varosNev } from "@/lib/fuvarozas/varos";
-import { findJarmuByKod } from "@/lib/fuvarozas/vehicles";
+import { findJarmuByKod, resolveJarmu } from "@/lib/fuvarozas/vehicles";
 import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
 import { geokodolCachelve } from "@/lib/fuvarozas/erintes-felismeres";
 import { getIndulasiTelephely } from "@/lib/fuvarozas/telephelyek-db";
@@ -67,7 +67,7 @@ export type TervezesHet = {
 };
 
 type Sor = {
-  id: string; jelleg: "ber" | "sajat"; allapot: string; jarmu_kod: string | null; partner: string | null;
+  id: string; jelleg: "ber" | "sajat"; allapot: string; jarmu_kod: string | null; jarmu_szoveg: string | null; partner: string | null;
   felrako: string | null; lerako: string | null; fel_nap: string; le_nap: string;
   fuvardij: number | null; penznem: string;
   fel_lat: number | null; fel_lon: number | null; le_lat: number | null; le_lon: number | null;
@@ -97,7 +97,7 @@ export async function getTervezesHet(resKulcs?: string, het?: string): Promise<T
   const napok = tervHetNapjai(het && /^\d{4}-\d{2}-\d{2}$/.test(het) ? het : ma);
 
   const sorok = await query<Sor>(
-    `select m.id::text, m.jelleg, m.allapot, j.kod as jarmu_kod, coalesce(p.nev, m.megrendelo) as partner,
+    `select m.id::text, m.jelleg, m.allapot, j.kod as jarmu_kod, coalesce(nullif(trim(m.jarmu), ''), nullif(trim(m.sofor), '')) as jarmu_szoveg, coalesce(p.nev, m.megrendelo) as partner,
        coalesce(fel.cim_nyers, m.felrako) as felrako, coalesce(le.cim_nyers, m.lerako) as lerako,
        to_char(m.datum, 'YYYY-MM-DD') as fel_nap, to_char(coalesce(m.lerakas_datum, m.datum), 'YYYY-MM-DD') as le_nap,
        m.fuvardij, coalesce(m.fuvardij_penznem, 'Ft') as penznem,
@@ -135,6 +135,15 @@ export async function getTervezesHet(resKulcs?: string, het?: string): Promise<T
     if (fp) { s.fel_lat = fp.lat; s.fel_lon = fp.lon; }
     const lp = s.le_lat == null && s.lerako ? cimPont.get(s.lerako) : null;
     if (lp) { s.le_lat = lp.lat; s.le_lon = lp.lon; }
+  }
+
+  // A kocsi: a megbízás „Kocsi” szövege a hiteles (mint a Ma oldalon és a
+  // sofőr-appban); a jarmu_id csak tartalék. 2026-10-14: a #311 (Gergő,
+  // Budapest → Balkány) azért hiányzott a hétről, mert a jarmu_id üres maradt.
+  const jarmuListaKod = await getJarmuvek();
+  for (const s of sorok) {
+    const szoveg = s.jarmu_szoveg ? resolveJarmu(s.jarmu_szoveg, jarmuListaKod)?.kod ?? null : null;
+    s.jarmu_kod = szoveg ?? s.jarmu_kod;
   }
 
   const beallitas = await getFuvarBeallitasok();

@@ -1,5 +1,17 @@
 # PROGRESS
 
+## 2026-10-14 — #311 (Gergő, Budapest → Balkány) hiányzott a Tervezés hetéről
+
+- **Ok:** a heti tábla a kocsit a `jarmu_id`-ből veszi; ez a fuvaron üres volt. A kocsira adás
+  (`kocsiraAdom`, `setFuvarJarmu`) a `jarmu_id`-t null-ra írta és a háttér-szinkronra bízta, a szinkron
+  pedig az első RENDSZÁMMAL kereste a `fuvar_jarmuvek.kod`-ot — ha a törzsadat rendszáma más
+  írásmódú (vagy nincs, mint a JANI-nál), sosem töltődött ki. Kocsi nélkül a fuvar a „Kocsira vár”
+  sorba ment, onnan pedig a már lerakott (tegnapi) fuvar kiesik.
+- **Javítás:** a két kocsira adó akció rögtön beírja a `jarmu_id`-t; a szinkron a kocsi kódjával
+  keres (`jarmu.kod`); a Tervezés hete a „Kocsi” szövegből oldja fel a kocsit (mint a Ma és a
+  sofőr-app), a `jarmu_id` csak tartalék. A lemaradt sorokat (14 nap) az óránkénti kör pótolja.
+- Ellenőrzés: typecheck, eslint, teszt-lánc zöld, build rendben.
+
 ## 2026-10-14 — Tervezés · A hét: aktualitás és kezelhetőbb ajánlatok
 
 Aktualitás-átnézés (kód alapján): a hét a tervezett dátumokból számolt, a múlt napok réseit is
