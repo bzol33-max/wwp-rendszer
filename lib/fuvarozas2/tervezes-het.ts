@@ -9,7 +9,7 @@ import { query } from "@/lib/db";
 import { requireViewPermission } from "@/lib/auth/require-permission";
 import { megbizoMegjelenites } from "@/lib/fuvarozas/fuvar-constants";
 import { varosNev } from "@/lib/fuvarozas/varos";
-import { findJarmuByKod, resolveJarmu } from "@/lib/fuvarozas/vehicles";
+import { findJarmuByKod, findJarmuInSzoveg, resolveJarmu } from "@/lib/fuvarozas/vehicles";
 import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
 import { geokodolCachelve } from "@/lib/fuvarozas/erintes-felismeres";
 import { getIndulasiTelephely } from "@/lib/fuvarozas/telephelyek-db";
@@ -50,6 +50,8 @@ export type TervezesHet = {
   elozoHet: string;
   kovetkezoHet: string;
   ezAHet: boolean;
+  /** A hét fuvarjai, amelyek egyik kocsi-sorba és a „Kocsira vár” sorba sem kerültek — az okkal (sosem esik ki csendben). */
+  kimaradt: { id: string; cim: string; utvonal: string; ok: string }[];
   /** A hét még nem lerakott fuvarjai, amelyeknek a felrakó vagy a lerakó helye nem ismert — körülöttük nem számolható rés. */
   helyNelkul: { id: string; cim: string; utvonal: string }[];
   napok: string[];
@@ -142,7 +144,7 @@ export async function getTervezesHet(resKulcs?: string, het?: string): Promise<T
   // Budapest → Balkány) azért hiányzott a hétről, mert a jarmu_id üres maradt.
   const jarmuListaKod = await getJarmuvek();
   for (const s of sorok) {
-    const szoveg = s.jarmu_szoveg ? resolveJarmu(s.jarmu_szoveg, jarmuListaKod)?.kod ?? null : null;
+    const szoveg = s.jarmu_szoveg ? (resolveJarmu(s.jarmu_szoveg, jarmuListaKod) ?? findJarmuInSzoveg(s.jarmu_szoveg, jarmuListaKod))?.kod ?? null : null;
     s.jarmu_kod = szoveg ?? s.jarmu_kod;
   }
 
@@ -237,8 +239,37 @@ export async function getTervezesHet(resKulcs?: string, het?: string): Promise<T
     .filter((s) => s.fel_nap <= utolsoNap && s.le_nap >= napok[0] && s.le_nap >= ma && (s.fel_lat == null || s.le_lat == null))
     .map((s) => ({ id: s.id, cim: megbizoMegjelenites(s.jelleg, s.partner), utvonal: `${varos(s.felrako)} → ${varos(s.lerako)}` }));
 
+  const elhelyezett = new Set<string>([
+    ...kocsik.flatMap((k) => k.cellak.flatMap((c) => c.fuvarok.map((f) => f.id))),
+    ...kiosztatlan.flat().map((f) => f.id),
+  ]);
+  const aktivKodok = new Set(jarmuvek.map((j) => j.kod));
+  const kimaradt = sorok
+    .filter((s) => s.fel_nap <= utolsoNap && s.le_nap >= napok[0] && !elhelyezett.has(s.id))
+    .map((s) => ({
+      id: s.id, cim: megbizoMegjelenites(s.jelleg, s.partner), utvonal: `${varos(s.felrako)} → ${varos(s.lerako)}`,
+      ok: s.jarmu_kod && !aktivKodok.has(s.jarmu_kod)
+        ? `a kocsi (${s.jarmu_kod}) nincs az aktív kocsik közt`
+        : !s.jarmu_kod
+          ? `kocsi nélkül${s.jarmu_szoveg ? ` („${s.jarmu_szoveg}” nem ismerhető fel)` : ""}, már lerakva`
+          : "ismeretlen ok",
+    }));
+
+  // Amit a fenti lekérdezés ki sem hozott (állapot nélküli sor), az is látszódjon.
+  const allapotNelkul = await query<{ id: string; jelleg: "ber" | "sajat"; partner: string | null; felrako: string | null; lerako: string | null }>(
+    `select m.id::text, m.jelleg, coalesce(p.nev, m.megrendelo) as partner, m.felrako, m.lerako
+       from fuvar_megbizasok m left join fuvar_partnerek p on p.id = m.partner_id
+      where m.torolt_at is null and m.allapot is null and m.datum is not null
+        and m.datum <= $2::date and coalesce(m.lerakas_datum, m.datum) >= $1::date
+      limit 20`,
+    [napok[0], utolsoNap]
+  ).catch(() => []);
+  for (const s of allapotNelkul) {
+    kimaradt.push({ id: s.id, cim: megbizoMegjelenites(s.jelleg, s.partner), utvonal: `${varos(s.felrako)} → ${varos(s.lerako)}`, ok: "nincs állapota" });
+  }
+
   return {
-    ma, frissitve: ora, hetKezdet: napok[0], elozoHet: hetEltolva(napok[0], -1), kovetkezoHet: hetEltolva(napok[0], 1), ezAHet: napok[0] === mostaniHet, helyNelkul,
+    ma, frissitve: ora, kimaradt, hetKezdet: napok[0], elozoHet: hetEltolva(napok[0], -1), kovetkezoHet: hetEltolva(napok[0], 1), ezAHet: napok[0] === mostaniHet, helyNelkul,
     napok, kocsik, kiosztatlan, resek,
     uresKmOssz: resek.reduce((a, r) => a + r.km, 0),
     ajanlatok, kijelolt,

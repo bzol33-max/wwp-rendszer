@@ -56,6 +56,14 @@ export function TervezesHetNezet({ adat, szerkeszthet }: { adat: TervezesHet; sz
           {adat.resek.length ? `${adat.resek.length} rés · ${adat.uresKmOssz.toLocaleString("hu-HU")} km üres${adat.ezAHet ? " (mától)" : ""}` : "nincs 100 km-nél hosszabb üres út"}
         </span>
       </div>
+      {adat.kimaradt.length ? (
+        <p className="rounded-xl bg-[var(--f2-red-l)] px-4 py-2 text-sm text-[var(--f2-red)]">
+          <b>{adat.kimaradt.length} fuvar nem került a táblára:</b>{" "}
+          {adat.kimaradt.map((h, i) => (
+            <span key={h.id}>{i ? "; " : ""}<Link className="underline" href={`/fuvarozas2/megbizasok?reszlet=${h.id}`}>#{h.id} {h.cim} ({h.utvonal})</Link> — {h.ok}</span>
+          ))}
+        </p>
+      ) : null}
       {adat.helyNelkul.length ? (
         <p className="rounded-xl bg-[var(--f2-amb-l)] px-4 py-2 text-sm text-[#5a3806]">
           <b>{adat.helyNelkul.length} fuvar helye nem ismert</b> — körülöttük a rés nem számolható:{" "}

@@ -24,7 +24,7 @@ import { toroljIdovonalCachet } from "@/lib/fuvarozas/idovonal-cache";
 import { query } from "@/lib/db";
 import { megalloTerv } from "@/lib/fuvarozas2/megallo-terv";
 import { normalizaltCegKulcs } from "@/lib/fuvarozas/fuvar-constants";
-import { resolveJarmu } from "@/lib/fuvarozas/vehicles";
+import { findJarmuInSzoveg, resolveJarmu } from "@/lib/fuvarozas/vehicles";
 
 type Sor = {
   id: string;
@@ -100,7 +100,7 @@ export async function frissitsdFuvarozas2Modellt(fuvarId: string): Promise<Model
     let jarmuId: string | null = sor.jarmu_id;
     const jarmuSzoveg = sor.jarmu?.trim() || sor.sofor?.trim();
     if (!jarmuId && jarmuSzoveg) {
-      const jarmu = resolveJarmu(jarmuSzoveg);
+      const jarmu = resolveJarmu(jarmuSzoveg) ?? findJarmuInSzoveg(jarmuSzoveg);
       // A kocsi kódja (fuvar_jarmuvek.kod), nem az első rendszám: a törzsadatban
       // a vontató rendszáma más írásmódú is lehet (és a JANI-nak még nincs) —
       // akkor a rendszámra keresve a jarmu_id sosem töltődött ki (2026-10-14).

@@ -1,5 +1,14 @@
 # PROGRESS
 
+## 2026-10-14 — Tervezés hét: egy fuvar se essen ki csendben
+
+- A #311 (Gergő) a 13:05-ös javítás után is kérdéses. A GPS-figyelés naplója szerint a „Kocsi”
+  szövege Gergőre oldódik, így a pontos ok adatbázis nélkül nem dönthető el.
+- A hét most kiírja (piros sáv), ha egy fuvar egyik kocsi-sorba és a „Kocsira vár” sorba sem került,
+  az okkal: nem aktív kocsi-kód / kocsi nélkül (fel nem ismerhető szöveg) / nincs állapota.
+- A kocsi-feloldás a hétben és a háttér-szinkronban `resolveJarmu` után `findJarmuInSzoveg`-gel is
+  próbál (csak rendszámos „Kocsi” szöveg, pl. „AOPU-427/AOTY-474”).
+
 ## 2026-10-14 — #311 (Gergő, Budapest → Balkány) hiányzott a Tervezés hetéről
 
 - **Ok:** a heti tábla a kocsit a `jarmu_id`-ből veszi; ez a fuvaron üres volt. A kocsira adás
