@@ -1,5 +1,19 @@
 # PROGRESS
 
+## 2026-10-14 — Megbízások: egy asztali nézet (Munkafolyamat), a pénz-szűrők beépítve
+
+Budaházi Zoltán döntése: a Pénz / Munkafolyamat kapcsolóból csak a Munkafolyamat (szakaszok) marad.
+- A kapcsoló és a külön pénz-nézet megszűnt. A szakasz-oszlopok fölött a pénz-sáv (`PenzSav`):
+  az öt csempe (Számlázatlan, Papír hiányzik, Kintlévőség, Lejárt, Befolyt) és a szűrők
+  („Minden nyitott” az alap, + Teendő · Számlázatlan · Papír · Kiküldve · Lejárt · Fizetve · Mind).
+- Szűrővel az oszlopok csak a találatokat mutatják; a postázott / lezárt találatok (egyik nyitott
+  oszlopban sincsenek) alul táblában (`PenzTabla`: papír, számla, esedékes, fizetve, Papír-gomb,
+  Számlázási segéd). A Ma oldal `?penz=papir` / `?penz=szamlazatlan` linkjei így szűrnek.
+- A kártyán a legsürgősebb pénz-jel (`penzJel`: lejárt > papír hiányzik > számlázatlan), teszttel.
+- „+ Új bérfuvar / + Új saját fuvar” csak szerkesztési joggal; a Számlázási segéd az elszámolási
+  jogot kapja (eddig fixen igaz volt, a szerver amúgy is ellenőrizte).
+- Ellenőrzés: typecheck, eslint (érintett fájlok), teszt-lánc 2 207 ellenőrzés zöld, build rendben.
+
 ## 2026-10-12 — Fuvarozás rendrakás: duplikált és fölösleges lapok, halott kód ki
 
 Budaházi Zoltán döntései (kérdés-válasz alapján): a Ma fülből csak a megállók és csempék nézete

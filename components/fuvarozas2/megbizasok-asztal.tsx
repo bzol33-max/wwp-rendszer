@@ -19,6 +19,7 @@ import {
   visszaElvinnivalokba,
 } from "@/lib/fuvarozas2/sajat-fuvar";
 import type { MunkaasztalSor } from "@/lib/fuvarozas2/megbizasok";
+import type { PenzJel } from "@/lib/fuvarozas2/penz-lista-alap";
 import type { ElvinniHet, ElvinniHetCella } from "@/lib/megbizasok/elvinni-het";
 import { beerkElokeszitesOszlopba } from "@/lib/megbizasok/elvinni-szabalyok";
 
@@ -247,10 +248,14 @@ function SzakaszOszlop({
   oszlop,
   ma,
   szuro,
+  jelek,
+  szamlazhat,
 }: {
   oszlop: Oszlop;
   ma: string;
   szuro: MunkaasztalSzuro;
+  jelek: Record<string, PenzJel>;
+  szamlazhat: boolean;
 }) {
   return (
     <section className="min-w-0 rounded-2xl border border-foreground/10 bg-card" aria-label={oszlop.cim}>
@@ -269,6 +274,7 @@ function SzakaszOszlop({
                 sor={sor}
                 ma={ma}
                 tipus={!szuro.jelleg}
+                penzJel={jelek[sor.id] ?? null}
                 href={munkaasztalLink(szuro, { reszlet: sor.id, elvinni: undefined, uj: false, ujBer: false, szerk: false })}
               />
               {/* Számlázandó bérfuvarnál a Számlázási segéd közvetlenül a kártya alatt
@@ -276,7 +282,7 @@ function SzakaszOszlop({
                   szerveroldalon a jogosultsághoz köti. */}
               {sor.jelleg === "ber" && sor.szakasz === "szamlazasra" && !sor.szamla_szam ? (
                 <div className="mt-1 flex justify-end">
-                  <SzamlazasiSegedGomb megbizasId={sor.id} elszamolasJog />
+                  <SzamlazasiSegedGomb megbizasId={sor.id} elszamolasJog={szamlazhat} />
                 </div>
               ) : null}
             </li>
@@ -441,6 +447,9 @@ export function MegbizasokAsztal({
   helyek = [],
   jarmuvek = [],
   ma,
+  penzIdk = null,
+  penzJelek = {},
+  szamlazhat = false,
 }: {
   sorok: MunkaasztalSor[];
   nyitottak: MunkaasztalSor[];
@@ -450,10 +459,16 @@ export function MegbizasokAsztal({
   helyek?: Cimadat[];
   jarmuvek?: { kod: string; cimke: string }[];
   ma: string;
+  /** Aktív pénz-szűrőnél a találatok azonosítói: az oszlopok csak ezeket mutatják. */
+  penzIdk?: string[] | null;
+  penzJelek?: Record<string, PenzJel>;
+  /** Elszámolási jog (a Számlázási segéd írhat-e). */
+  szamlazhat?: boolean;
 }) {
   const router = useRouter();
   const [confirm, confirmDialog] = useConfirm();
-  const szurtSorok = sorok.filter((sor) => !szuro.jelleg || sor.jelleg === szuro.jelleg);
+  const penzSzurt = penzIdk ? new Set(penzIdk) : null;
+  const szurtSorok = sorok.filter((sor) => (!szuro.jelleg || sor.jelleg === szuro.jelleg) && (!penzSzurt || penzSzurt.has(sor.id)));
   const elvinniSorok = nyitottak.filter((sor) => !szuro.jelleg || sor.jelleg === szuro.jelleg);
   const nyitva = szuro.elvinni ? elvinniSorok.find((sor) => sor.id === szuro.elvinni) : null;
 
@@ -522,8 +537,12 @@ export function MegbizasokAsztal({
         <div className="flex items-center gap-2">
           {/* Drive-ból az új megbízások (2026-10-07: az asztali nézetből kimaradt). */}
           {szerkesztheto ? <DriveFrissitesGomb /> : null}
-          <Link href={munkaasztalLink(szuro, { ujBer: true, reszlet: undefined, elvinni: undefined })} className="flex min-h-11 items-center rounded-lg bg-[var(--f2-blue)] px-4 text-sm font-bold text-white">+ Új bérfuvar</Link>
-          <Link href={munkaasztalLink(szuro, { uj: true, reszlet: undefined, elvinni: undefined })} className="flex min-h-11 items-center rounded-lg bg-[var(--f2-mint)] px-4 text-sm font-bold text-white">+ Új saját fuvar</Link>
+          {szerkesztheto ? (
+            <>
+              <Link href={munkaasztalLink(szuro, { ujBer: true, reszlet: undefined, elvinni: undefined })} className="flex min-h-11 items-center rounded-lg bg-[var(--f2-blue)] px-4 text-sm font-bold text-white">+ Új bérfuvar</Link>
+              <Link href={munkaasztalLink(szuro, { uj: true, reszlet: undefined, elvinni: undefined })} className="flex min-h-11 items-center rounded-lg bg-[var(--f2-mint)] px-4 text-sm font-bold text-white">+ Új saját fuvar</Link>
+            </>
+          ) : null}
         </div>
       </div>
 
@@ -549,7 +568,7 @@ export function MegbizasokAsztal({
           </ul>
         </section>
         {oszlopok.map((oszlop) => (
-          <SzakaszOszlop key={oszlop.kulcs} oszlop={oszlop} ma={ma} szuro={szuro} />
+          <SzakaszOszlop key={oszlop.kulcs} oszlop={oszlop} ma={ma} szuro={szuro} jelek={penzJelek} szamlazhat={szamlazhat} />
         ))}
       </div>
 

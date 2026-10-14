@@ -14,9 +14,7 @@ import type { MunkaasztalSor } from "@/lib/fuvarozas2/megbizasok";
 
 export type MunkaasztalSzuro = {
   q?: string; reszlet?: string; uj?: boolean; szerk?: boolean; ujBer?: boolean; jelleg?: "ber" | "sajat"; elvinni?: string; het?: string;
-  /** 2026-10-11: a Megbízások alapnézete a pénz-nézet; „asztal” = a szakasz-oszlopos munkafolyamat. */
-  nezet?: "asztal";
-  /** Pénz-nézet szűrője (lib/fuvarozas2/penz-lista-alap.ts PENZ_SZUROK); alapból „teendo”. */
+  /** Pénz-szűrő (lib/fuvarozas2/penz-lista-alap.ts PENZ_SZUROK); nincs = minden nyitott (2026-10-12). */
   penz?: string;
   sajatIs?: boolean;
 };
@@ -32,8 +30,7 @@ export function munkaasztalLink(alap: MunkaasztalSzuro, valtozas: Partial<Munkaa
   if (e.jelleg) p.set("jelleg", e.jelleg);
   if (e.elvinni) p.set("elvinni", e.elvinni);
   if (e.het) p.set("het", e.het);
-  if (e.nezet) p.set("nezet", e.nezet);
-  if (e.penz && e.penz !== "teendo") p.set("penz", e.penz);
+  if (e.penz) p.set("penz", e.penz);
   if (e.sajatIs) p.set("sajat", "1");
   const q = p.toString();
   return `/fuvarozas2/megbizasok${q ? `?${q}` : ""}`;

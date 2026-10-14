@@ -1,7 +1,7 @@
 // Megbízások · pénz-nézet besorolás és összesítő (lib/fuvarozas2/penz-lista-alap.ts).
 // Futtatás: npx tsx scripts/teszt-penz-lista.ts
 
-import { osszegSzoveg, osszesit, penzAllapot, szurobeEsik, type PenzBemenet } from "@/lib/fuvarozas2/penz-lista-alap";
+import { osszegSzoveg, osszesit, penzAllapot, penzJel, szurobeEsik, type PenzBemenet } from "@/lib/fuvarozas2/penz-lista-alap";
 
 let ok = 0, bad = 0;
 function eq(nev: string, kapott: unknown, vart: unknown) {
@@ -62,6 +62,12 @@ const o2 = osszesit([
 ].map((s) => ({ ...s, a: penzAllapot(s, MA) })), MA);
 eq("csempe: fotós és számlázott papír nélküli is számít, a postázott nem", [o2.papir.db, o2.szamok.papir], [2, 2]);
 eq("szűrő-számok", [o.szamok.teendo, o.szamok.szamlazatlan, o.szamok.papir, o.szamok.kikuldve, o.szamok.lejart, o.szamok.fizetve, o.szamok.mind], [5, 2, 1, 1, 2, 2, 8]);
+
+// A kártya pénz-jele (2026-10-12): a legsürgősebb egy.
+eq("jel: lejárt a legerősebb", penzJel(lej), { szoveg: "számla lejárt 10 napja", szin: "red" });
+eq("jel: papír hiányzik", penzJel(fotoNemPapir), { szoveg: "papír hiányzik · 2 napja", szin: "amb" });
+eq("jel: számlázatlan", penzJel(a1), { szoveg: "számlázatlan · 2 napja", szin: "amb" });
+eq("jel: kiküldve / fizetve nincs jel", [penzJel(kik), penzJel(fiz)], [null, null]);
 
 console.log(`teszt-penz-lista: ${ok} ok, ${bad} hiba`);
 if (bad) process.exit(1);

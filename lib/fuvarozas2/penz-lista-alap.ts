@@ -146,3 +146,14 @@ export function osszesit(sorok: (PenzBemenet & { a: PenzAllapot })[], ma: string
   }
   return o;
 }
+
+/** A munkafolyamat-kártya pénz-jele (2026-10-12: a pénz-nézet beolvadt a szakasz-oszlopokba). */
+export type PenzJel = { szoveg: string; szin: "amb" | "red" };
+
+/** Mi a legsürgősebb pénz-teendő a megbízáson: lejárt számla > hiányzó papír > számlázatlan; null, ha nincs. */
+export function penzJel(a: PenzAllapot): PenzJel | null {
+  if (a.lejart) return { szoveg: `számla lejárt ${a.lejartNap} napja`, szin: "red" };
+  if (a.papirHianyzik) return { szoveg: `papír hiányzik · ${a.kor} napja`, szin: "amb" };
+  if (a.szamlazatlan) return { szoveg: `számlázatlan · ${a.kor} napja`, szin: "amb" };
+  return null;
+}

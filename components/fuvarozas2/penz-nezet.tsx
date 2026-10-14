@@ -6,8 +6,8 @@ import { munkaasztalLink, type MunkaasztalSzuro } from "@/components/fuvarozas2/
 import { osszegSzoveg, PENZ_SZUROK, type PenzSzuro } from "@/lib/fuvarozas2/penz-lista-alap";
 import type { PenzLista, PenzSor } from "@/lib/fuvarozas2/penz-lista";
 
-// Megbízások · pénz-nézet (az új terv 3. oldala): összesítő csempék,
-// szűrők, és megbízásonként papír → számla → esedékes → fizetve.
+// Megbízások · pénz-sáv és a postázott / lezárt találatok táblája: összesítő
+// csempék, szűrők, és megbízásonként papír → számla → esedékes → fizetve.
 
 const datum = (iso: string | null) => (iso ? `${iso.slice(5, 7)}.${iso.slice(8, 10)}.` : "—");
 const HONAPOK = ["január", "február", "március", "április", "május", "június", "július", "augusztus", "szeptember", "október", "november", "december"];
@@ -25,9 +25,17 @@ function Csempe({ cim, ertek, al, szin, href }: { cim: string; ertek: string; al
     : <div className="rounded-xl bg-card px-4 py-3 ring-1 ring-foreground/10">{tartalom}</div>;
 }
 
-export function PenzNezet({ adat, szuro, penz, sajatIs, elszamolasJog }: { adat: PenzLista; szuro: MunkaasztalSzuro; penz: PenzSzuro; sajatIs: boolean; elszamolasJog: boolean }) {
+/**
+ * A pénz-sáv a szakasz-oszlopok fölött (2026-10-12, Budaházi Zoltán: a
+ * Megbízások egyetlen asztali nézete a munkafolyamat): összesítő csempék és a
+ * pénz-szűrők. Szűrő nélkül minden nyitott megbízás látszik; szűrővel az
+ * oszlopok csak a találatokat mutatják, a postázott / lezárt találatok pedig
+ * alul, a PenzTabla-ban.
+ */
+export function PenzSav({ adat, szuro }: { adat: PenzLista; szuro: MunkaasztalSzuro }) {
   const o = adat.ossz;
-  const link = (v: Partial<MunkaasztalSzuro>) => munkaasztalLink(szuro, { reszlet: undefined, ...v });
+  const penz = szuro.penz as PenzSzuro | undefined;
+  const link = (v: Partial<MunkaasztalSzuro>) => munkaasztalLink(szuro, { reszlet: undefined, elvinni: undefined, ...v });
   const kintSavok = o.kintlevo.savok.map(osszegSzoveg);
   return (
     <div className="flex flex-col gap-3">
@@ -40,39 +48,47 @@ export function PenzNezet({ adat, szuro, penz, sajatIs, elszamolasJog }: { adat:
       </div>
 
       <div className="flex flex-wrap items-center gap-1">
+        <Link href={link({ penz: undefined })} scroll={false}
+          className={cn("rounded-full px-3 py-1 text-sm", !penz ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted hover:text-foreground")}>
+          Minden nyitott
+        </Link>
         {PENZ_SZUROK.map((f) => (
           <Link key={f.k} href={link({ penz: f.k })} scroll={false}
             className={cn("rounded-full px-3 py-1 text-sm", penz === f.k ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted hover:text-foreground")}>
             {f.c}{f.k !== "mind" && f.k !== "fizetve" && o.szamok[f.k] ? ` · ${o.szamok[f.k]}` : ""}
           </Link>
         ))}
-        <Link href={link({ sajatIs: !sajatIs })} scroll={false} className="ml-auto flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-          <span className={cn("inline-block size-4 rounded border", sajatIs && "border-foreground bg-foreground")} aria-hidden />
-          Saját áru is (nincs számlája)
-        </Link>
+        {penz ? (
+          <Link href={link({ sajatIs: !szuro.sajatIs })} scroll={false} className="ml-auto flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+            <span className={cn("inline-block size-4 rounded border", szuro.sajatIs && "border-foreground bg-foreground")} aria-hidden />
+            Saját áru is (nincs számlája)
+          </Link>
+        ) : null}
       </div>
-
-      <section className="overflow-x-auto rounded-2xl bg-card ring-1 ring-foreground/10">
-        <table className="w-full min-w-[1100px] text-sm [&_td]:whitespace-nowrap">
-          <thead className="text-left text-xs text-muted-foreground">
-            <tr>
-              <th className="px-4 py-2 font-medium">Nap</th><th className="px-2 py-2 font-medium">#</th><th className="px-2 py-2 font-medium">Megbízó</th><th className="px-2 py-2 font-medium">Reláció</th>
-              <th className="px-2 py-2 text-right font-medium">km</th><th className="px-2 py-2 text-right font-medium">Ár</th><th className="px-2 py-2 text-right font-medium">Ft/km</th>
-              <th className="px-2 py-2 font-medium">Papír (CMR)</th><th className="px-2 py-2 font-medium">Számla</th><th className="px-2 py-2 font-medium">Esedékes</th><th className="px-2 py-2 font-medium">Fizetve</th><th className="px-4 py-2" />
-            </tr>
-          </thead>
-          <tbody>
-            {adat.sorok.map((s) => <Sor key={s.id} s={s} reszlet={munkaasztalLink(szuro, { reszlet: s.id })} elszamolasJog={elszamolasJog} />)}
-          </tbody>
-        </table>
-        {adat.sorok.length === 0 ? <p className="px-4 py-6 text-center text-sm text-muted-foreground">{penz === "teendo" ? "Nincs teendő: minden kész fuvar számlázva, a papírok megvannak, nincs lejárt számla." : "Nincs ilyen megbízás."}</p> : null}
-        {adat.osszes > adat.sorok.length ? <p className="border-t px-4 py-2 text-xs text-muted-foreground">Az első {adat.sorok.length} látszik a(z) {adat.osszes}-ból — a keresővel szűkíthetsz.</p> : null}
-      </section>
-      <p className="text-xs text-muted-foreground">
-        Csak a lerakott (teljesített) fuvarok, az elmúlt egy évből. {adat.folyamatbanDb ? `Az úton lévő ${adat.folyamatbanDb} fuvar lerakás után jelenik meg itt teendőként; addig a Ma oldalon követed, a beérkezőket és az előkészítést a „Munkafolyamat” nézetben.` : ""}
-        {" "}A számla fizetettsége a Számlázz.hu-ból jön.
-      </p>
     </div>
+  );
+}
+
+/** A pénz-szűrő postázott / lezárt találatai (amelyek már egyik nyitott oszlopban sincsenek). */
+export function PenzTabla({ sorok, osszes, szuro, elszamolasJog }: { sorok: PenzSor[]; osszes: number; szuro: MunkaasztalSzuro; elszamolasJog: boolean }) {
+  return (
+    <section className="overflow-x-auto rounded-2xl bg-card ring-1 ring-foreground/10" aria-label="Postázott és lezárt találatok">
+      <h2 className="px-4 pt-3 text-sm font-semibold">Postázott / lezárt <span className="text-xs font-normal text-muted-foreground">{osszes}</span></h2>
+      <table className="w-full min-w-[1100px] text-sm [&_td]:whitespace-nowrap">
+        <thead className="text-left text-xs text-muted-foreground">
+          <tr>
+            <th className="px-4 py-2 font-medium">Nap</th><th className="px-2 py-2 font-medium">#</th><th className="px-2 py-2 font-medium">Megbízó</th><th className="px-2 py-2 font-medium">Reláció</th>
+            <th className="px-2 py-2 text-right font-medium">km</th><th className="px-2 py-2 text-right font-medium">Ár</th><th className="px-2 py-2 text-right font-medium">Ft/km</th>
+            <th className="px-2 py-2 font-medium">Papír (CMR)</th><th className="px-2 py-2 font-medium">Számla</th><th className="px-2 py-2 font-medium">Esedékes</th><th className="px-2 py-2 font-medium">Fizetve</th><th className="px-4 py-2" />
+          </tr>
+        </thead>
+        <tbody>
+          {sorok.map((s) => <Sor key={s.id} s={s} reszlet={munkaasztalLink(szuro, { reszlet: s.id })} elszamolasJog={elszamolasJog} />)}
+        </tbody>
+      </table>
+      {osszes > sorok.length ? <p className="border-t px-4 py-2 text-xs text-muted-foreground">Az első {sorok.length} látszik a(z) {osszes}-ból — a keresővel szűkíthetsz.</p> : null}
+      <p className="border-t px-4 py-2 text-xs text-muted-foreground">A számla fizetettsége a Számlázz.hu-ból jön.</p>
+    </section>
   );
 }
 

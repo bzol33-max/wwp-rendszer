@@ -5,6 +5,7 @@ import { megbizasCim, megalloDb, utolsoVaros, varos } from "@/lib/megbizasok/meg
 import { utSzakaszai } from "@/lib/fuvarozas2/munkaasztal";
 import { kovetkezoTeendo } from "@/lib/fuvarozas2/megbizas-szuro";
 import type { MunkaasztalSor } from "@/lib/fuvarozas2/megbizasok";
+import type { PenzJel } from "@/lib/fuvarozas2/penz-lista-alap";
 import { cn } from "@/lib/utils";
 
 export function MegbizasKartya({
@@ -12,11 +13,14 @@ export function MegbizasKartya({
   ma,
   href,
   tipus = false,
+  penzJel = null,
 }: {
   sor: MunkaasztalSor;
   ma: string;
   href: string;
   tipus?: boolean;
+  /** A legsürgősebb pénz-teendő (lejárt / papír / számlázatlan), ha van. */
+  penzJel?: PenzJel | null;
 }) {
   const utemezett = sor.elokeszites && !sor.idopont_nyitott && !!sor.elokeszites_jarmu;
   const teendo = utemezett
@@ -52,6 +56,11 @@ export function MegbizasKartya({
         {sor.jelleg === "ber" ? <><span>·</span><span>{formatFt(sor.fuvardij, sor.fuvardij_penznem)}</span></> : null}
         {sor.hivatkozas ? <><span>·</span><span className="font-mono text-[10px]">{sor.hivatkozas}</span></> : null}
       </div>
+      {penzJel ? (
+        <div className={cn("mt-1 inline-block rounded-full px-1.5 text-[11px] font-medium", penzJel.szin === "red" ? "bg-[var(--f2-red-l)] text-[var(--f2-red)]" : "bg-[var(--f2-amb-l)] text-[var(--f2-amb)]")}>
+          {penzJel.szoveg}
+        </div>
+      ) : null}
       <div className="mt-2 flex gap-1" aria-label={`Szakasz: ${sor.szakasz}`}>
         {ut.map((szakasz, i) => (
           <i
