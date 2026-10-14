@@ -1,5 +1,15 @@
 # PROGRESS
 
+## 2026-10-14 — Postázási cím: szám nélküli utalás nem cím (#312 Gászler); részlet-lap a menüsor fölött
+
+- **Gászler:** a megbízás-PDF-ből „Gászler Kft címére” került a postázási címbe, Szabina Posta lapja
+  ezt mutatta. A SOR_SQL postázási cím-forrásai (`postaiCim`, lib/megbizasok/repo.ts) mostantól csak
+  számot tartalmazó, nem e-mail szöveget fogadnak el; különben a partner törzse jön
+  (Gászler: 2233 Ecser, Ady Ipartelep 1328/4).
+- **Részlet-lap:** keskeny ablakban az alsó menüsor (z-40) eltakarta a lap alját („Fuvar törlése”) —
+  a lap z-50 és safe-area alsó helyet kapott.
+- Törölve kérésre: #321 SFL AirCargo (261014_026567).
+
 ## 2026-10-14 — #312 Gászler „eltűnt”: az Újraolvasás törölte; védelem + Drive-kapcsolat visszaállítása
 
 - **Mi történt:** 13:21-kor a #312-n (teljesítve, számla WLLWR-2026-359, 2 fuvarlevél-fotó) kétszer

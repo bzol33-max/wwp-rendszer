@@ -57,6 +57,16 @@ export async function letrehozTx(tx: Querier, input: AddFuvarInput & {
   return rows[0]?.id ?? null;
 }
 
+/**
+ * Postai cím-e a szöveg (SQL-kifejezés): van benne szám (irányítószám, házszám)
+ * és nem csupasz e-mail-cím — különben NULL, és a következő forrás jön
+ * (a partner törzse, a partner korábbi fuvarja). 2026-10-14: a Gászler (#312)
+ * megbízás-PDF-jéből „Gászler Kft címére” került a postázási címbe.
+ */
+function postaiCim(oszlop: string): string {
+  return `(case when ${oszlop} ~ '[0-9]' and ${oszlop} !~ '^[^[:space:]]+@[^[:space:]]+$' then nullif(trim(${oszlop}), '') end)`;
+}
+
 export const SOR_SQL = `
   select m.id::text, m.jelleg, m.allapot, m.allapot_at::text, m.created_at::text as letrehozva_at, m.partner_id::text, m.rakott_km::float8 as rakott_km,
     coalesce(p.nev, m.megrendelo) as partner_nev, m.kitol,
@@ -73,20 +83,22 @@ export const SOR_SQL = `
     coalesce(e.szamla_szam, m.szamla_szam) as szamla_szam, m.kieg_szamla_szamok,
     e.email_elment_at::text,
     coalesce(e.postazva_at, case when m.postazva then m.postazva_at end)::text as postazva_at,
-    -- Üres szöveg vagy csupasz e-mail-cím = nincs postai cím (a #293 Lösung
+    -- Üres szöveg, csupasz e-mail-cím vagy szám nélküli utalás („Gászler Kft
+    -- címére”, #312, 2026-10-14) = nincs postai cím (postaiCim).
+    -- Korábbról: üres szöveg vagy csupasz e-mail-cím = nincs postai cím (a #293 Lösung
     -- Trans megbízás PDF-jéből „pod@loesung-trans.hu” került ide). Ha sehol nincs, a partner legutóbbi olyan
     -- fuvarjáról, amelyiken volt (2026-10-07, Szabina Posta lapja: a Lösung
     -- Trans fuvarjánál „nincs postázási cím”, holott korábban már volt).
-    coalesce(nullif(regexp_replace(e.postazasi_cim, '^[^[:space:]]+@[^[:space:]]+$', ''), ''), nullif(regexp_replace(m.postazasi_cim, '^[^[:space:]]+@[^[:space:]]+$', ''), ''), nullif(regexp_replace(p.postazasi_cim, '^[^[:space:]]+@[^[:space:]]+$', ''), ''),
-      (select coalesce(nullif(regexp_replace(e2.postazasi_cim, '^[^[:space:]]+@[^[:space:]]+$', ''), ''), nullif(regexp_replace(m2.postazasi_cim, '^[^[:space:]]+@[^[:space:]]+$', ''), ''))
+    coalesce(${postaiCim("e.postazasi_cim")}, ${postaiCim("m.postazasi_cim")}, ${postaiCim("p.postazasi_cim")},
+      (select coalesce(${postaiCim("e2.postazasi_cim")}, ${postaiCim("m2.postazasi_cim")})
          from fuvar_megbizasok m2 left join fuvar_elszamolas e2 on e2.megbizas_id = m2.id
         where m.partner_id is not null and m2.partner_id = m.partner_id and m2.id <> m.id
-          and coalesce(nullif(regexp_replace(e2.postazasi_cim, '^[^[:space:]]+@[^[:space:]]+$', ''), ''), nullif(regexp_replace(m2.postazasi_cim, '^[^[:space:]]+@[^[:space:]]+$', ''), '')) is not null
+          and coalesce(${postaiCim("e2.postazasi_cim")}, ${postaiCim("m2.postazasi_cim")}) is not null
         order by m2.datum desc, m2.id desc limit 1),
       -- A fuvar nincs partnerhez kötve, vagy egy cím nélküli névrokon
       -- partnerhez: a név-kulcs szerint (normalizaltCegKulcs SQL-ben).
-      (select nullif(regexp_replace(p2.postazasi_cim, '^[^[:space:]]+@[^[:space:]]+$', ''), '') from fuvar_partnerek p2
-        where nullif(regexp_replace(p2.postazasi_cim, '^[^[:space:]]+@[^[:space:]]+$', ''), '') is not null
+      (select ${postaiCim("p2.postazasi_cim")} from fuvar_partnerek p2
+        where ${postaiCim("p2.postazasi_cim")} is not null
           and p2.nev_kulcs in (p.nev_kulcs, trim(regexp_replace(regexp_replace(regexp_replace(
                 translate(lower(coalesce(m.megrendelo, '')), 'áéíóöőúüű', 'aeiooouuu'),
                 '[-.,]', ' ', 'g'), '[[:space:]]+', ' ', 'g'), '[[:space:]]+(kft|zrt|bt|nyrt|kkt)[[:space:]]*$', '')))
