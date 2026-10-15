@@ -4,15 +4,29 @@
 // számlaszám és a postázási cím, alatta egy nagy „Postázva” gomb. Koppintásra
 // AZONNAL rögzül (postázva → lezárt, naplózva), a kártya bezöldül, és egy
 // percig visszavonható; utána eltűnik a listából, és a „Ma postázott” alá
-// kerül. Azonnal írunk, nem a perc végén: ha közben bezárja az appot, a
+// kerül. 2026-10-15: a kártyán a viszonylat (honnan → hová) és a fuvar napjai
+// is, hogy a papírt a fuvarhoz lehessen azonosítani. Azonnal írunk, nem a perc végén: ha közben bezárja az appot, a
 // postázás akkor se vesszen el.
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { valtAllapot, type MegbizasSor } from "@/lib/fuvarozas2/megbizasok";
+import { utolsoVaros, varos } from "@/lib/megbizasok/megjelenites";
 
 const ARCHIV_MS = 60_000;
+
+/** „Hajdúszoboszló → Dunakeszi” (több megállónál az első felrakó és az utolsó lerakó). */
+function viszonylat(s: MegbizasSor): string {
+  return `${varos(s.felrako)} → ${utolsoVaros(s.lerako)}`;
+}
+
+/** „10.12.” vagy „10.12. → 10.13.” — a felrakás és a lerakás napja. */
+function fuvarNapok(s: MegbizasSor): string {
+  const f = nap(s.felrakas_nap);
+  const l = nap(s.lerakas_nap);
+  return f && l && f !== l ? `${f} → ${l}` : f || l;
+}
 
 function nap(t: string | null | undefined) {
   if (!t) return "";
@@ -131,9 +145,12 @@ export function PostaKartyak({ varnak, maPostazott, szerkeszthet }: { varnak: Me
               </span>
               <span className="shrink-0 text-xs text-[var(--at-muted)]">{s.szamla_szam}</span>
             </div>
-            <div className="text-sm text-[var(--at-muted)]">{s.postazasi_cim ?? "nincs postázási cím a törzsben"}</div>
+            <div className="text-sm font-medium">{viszonylat(s)}</div>
             <div className="text-xs text-[var(--at-muted)]">
-              {[s.hivatkozas, nap(s.lerakas_nap)].filter(Boolean).join(" · ")}
+              {[fuvarNapok(s), s.hivatkozas ? `hiv.: ${s.hivatkozas}` : null, s.jarmu_cimke ?? s.jarmu_kod].filter(Boolean).join(" · ")}
+            </div>
+            <div className="mt-1 text-sm text-[var(--at-muted)]">
+              <span className="text-xs">Postázási cím: </span>{s.postazasi_cim ?? "nincs postázási cím a törzsben"}
             </div>
             {szerkeszthet ? <button
               type="button"
@@ -163,7 +180,7 @@ export function PostaKartyak({ varnak, maPostazott, szerkeszthet }: { varnak: Me
                 key={s.id}
                 className={`flex items-center justify-between gap-2 px-3 py-2 text-sm ${i > 0 ? "border-t border-[var(--at-border)]" : ""}`}
               >
-                <span className="min-w-0 truncate">{s.partner_nev ?? "(nincs megbízó)"}</span>
+                <span className="min-w-0 truncate">{s.partner_nev ?? "(nincs megbízó)"} <span className="text-xs text-[var(--at-muted)]">· {viszonylat(s)} · {fuvarNapok(s)}</span></span>
                 <span className="shrink-0 text-xs text-[var(--at-muted)]">
                   {s.szamla_szam} {ora(s.postazva_at)}
                 </span>

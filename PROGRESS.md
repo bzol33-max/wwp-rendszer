@@ -1,5 +1,11 @@
 # PROGRESS
 
+## 2026-10-15 — Szabina Posta lapja: viszonylat és napok a kártyán
+
+- A kártyán a megbízó és a számlaszám alatt: „Hajdúszoboszló → Dunakeszi”, a fuvar napjai
+  (felrakás → lerakás), hivatkozás és kocsi; utána „Postázási cím: …”. A „Ma postázott” sorokban is
+  a viszonylat és a nap — így a papír a fuvarhoz azonosítható (components/attekintes/posta-kartyak.tsx).
+
 ## 2026-10-14 — Postázási cím: szám nélküli utalás nem cím (#312 Gászler); részlet-lap a menüsor fölött
 
 - **Gászler:** a megbízás-PDF-ből „Gászler Kft címére” került a postázási címbe, Szabina Posta lapja
