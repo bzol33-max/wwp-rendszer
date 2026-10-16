@@ -151,8 +151,31 @@ type AjanlatNyers = {
 
 const ID_MINTA = /^\d+$/;
 const ISO_NAP = /^\d{4}-\d{2}-\d{2}$/;
-/** Ennyi másodpercig „folyamatban” egy megbízás nélküli 'nyert' foglalás (dupla kattintás ellen). */
-const FOGLALAS_MP = 120;
+/** Ennyi másodpercig „folyamatban” egy megbízás nélküli 'nyert' foglalás (dupla kattintás ellen;
+ * lassú megbízás-létrehozásnál se járjon le közben — QA 1. hullám #1). */
+const FOGLALAS_MP = 300;
+
+/** A megbízás tényleges kocsija (sofőrnév, ha ismert) — az idempotens válaszhoz. */
+async function megbizasKocsija(megbizasId: string, tartalek: string): Promise<string> {
+  const [m] = await query<{ jarmu: string | null }>(`select jarmu from fuvar_megbizasok where id = $1`, [megbizasId]).catch(() => []);
+  if (!m?.jarmu) return tartalek;
+  return findJarmuByPlate(m.jarmu, await getJarmuvek())?.sofor ?? m.jarmu;
+}
+
+/**
+ * Élő megbízás, ami már ebből az ajánlatból készült (a megjegyzése
+ * „Timocom-ajánlat #<id>” kezdetű) — ha egy korábbi kör a megbízást
+ * létrehozta, de az ajánlathoz kötés elmaradt, ne legyen belőle második.
+ */
+async function meglevoAjanlatMegbizas(ajanlatId: string): Promise<string | null> {
+  const [m] = await query<{ id: string }>(
+    `select id::text from fuvar_megbizasok
+      where torolt_at is null and (megjegyzes = $1 or megjegyzes like $1 || ' ·%')
+      order by id desc limit 1`,
+    [`Timocom-ajánlat #${ajanlatId}`]
+  );
+  return m?.id ?? null;
+}
 
 async function ajanlatSor(id: string): Promise<AjanlatNyers | null> {
   const [r] = await query<AjanlatNyers>(
@@ -237,7 +260,17 @@ export async function ajanlatMegnyerve(
   if (!r) return { ok: false, hiba: "Nincs ilyen Timocom-ajánlat." };
   // Idempotens: már megnyert, élő megbízással → a meglévő megbízás.
   if (r.allapot === "nyert" && r.megbizas_id) {
-    return { ok: true, megbizasId: r.megbizas_id, kocsi: jarmu.sofor, uzenet: `Már megnyert — megbízás #${r.megbizas_id}`, marMegvolt: true };
+    return { ok: true, megbizasId: r.megbizas_id, kocsi: await megbizasKocsija(r.megbizas_id, jarmu.sofor), uzenet: `Már megnyert — megbízás #${r.megbizas_id}`, marMegvolt: true };
+  }
+  // Árva megbízás (létrejött, de a kötés elmaradt) → kötjük, nem hozunk létre másodikat.
+  const arva = await meglevoAjanlatMegbizas(ajanlatId);
+  if (arva) {
+    await query(
+      `update radar_kiiras set allapot = 'nyert', megbizas_id = $2, eredmeny_at = coalesce(eredmeny_at, now()), frissitve_at = now()
+        where id = $1 and forras = 'timocom' and (megbizas_id is null or megbizas_id = $2)`,
+      [ajanlatId, arva]
+    );
+    return { ok: true, megbizasId: arva, kocsi: await megbizasKocsija(arva, jarmu.sofor), uzenet: `Már megnyert — megbízás #${arva}`, marMegvolt: true };
   }
   const a = ajanlatAdatbol(r);
   if (!a.honnan.trim() || !a.hova.trim()) return { ok: false, hiba: "Az ajánlatból hiányzik a fel- vagy a lerakóhely." };
@@ -256,7 +289,7 @@ export async function ajanlatMegnyerve(
   if (!fogl) {
     const most = await ajanlatSor(ajanlatId);
     if (most?.allapot === "nyert" && most.megbizas_id) {
-      return { ok: true, megbizasId: most.megbizas_id, kocsi: jarmu.sofor, uzenet: `Már megnyert — megbízás #${most.megbizas_id}`, marMegvolt: true };
+      return { ok: true, megbizasId: most.megbizas_id, kocsi: await megbizasKocsija(most.megbizas_id, jarmu.sofor), uzenet: `Már megnyert — megbízás #${most.megbizas_id}`, marMegvolt: true };
     }
     return { ok: false, hiba: "Ezt az ajánlatot épp most rögzíti valaki — frissítsd az oldalt egy perc múlva." };
   }
@@ -293,7 +326,7 @@ export async function ajanlatMegnyerve(
         [megbizasId, adat.rakottKm]
       );
       const kesz = await tx<{ id: string }>(
-        `update radar_kiiras set megbizas_id = $2, frissitve_at = now() where id = $1 and allapot = 'nyert' returning id::text`,
+        `update radar_kiiras set megbizas_id = $2, frissitve_at = now() where id = $1 and allapot = 'nyert' and megbizas_id is null returning id::text`,
         [ajanlatId, megbizasId]
       );
       if (!kesz.length) throw new Error("Az ajánlat állapota közben megváltozott.");

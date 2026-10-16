@@ -6,7 +6,6 @@ import { getEurArfolyamok } from "@/lib/fuvarozas/arfolyam";
 import { getJarmuIndulasiTelephely } from "@/lib/fuvarozas/telephelyek-db";
 import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
 import { findJarmuByKod, type JarmuSzin } from "@/lib/fuvarozas/vehicles";
-import { cachelve } from "@/lib/fuvarozas/idovonal-cache";
 import { dijFtban } from "@/lib/fuvarozas2/kalkulacio-tar";
 import { becsultTavolsag, lancKm } from "@/lib/fuvarozas2/ures-km";
 import {
@@ -72,7 +71,24 @@ export type KihasznaltsagAdat = {
 
 const HONAPOK = ["január", "február", "március", "április", "május", "június", "július", "augusztus", "szeptember", "október", "november", "december"];
 const UTDIJ_TARTALEK_FT_KM = 120;
-const IDOKORLAT_MS = 8_000;
+// A Ma lap ne várjon rá sokáig (QA #2): ha 2,5 mp alatt nincs kész, a sáv
+// most kimarad, a számítás a háttérben fut tovább és a következő betöltés a
+// saját tárból kapja. Saját tár, mert az idővonal-cache-t a megbízás-mentések
+// ürítik — a kihasználtságnak elég a 10 perces frissesség.
+const IDOKORLAT_MS = 2_500;
+const TAR_ERVENYES_MS = 10 * 60 * 1000;
+const tar = new Map<string, { lejar: number; ertek: Promise<KihasznaltsagAdat> }>();
+
+function sajatCachelve(kulcs: string, fn: () => Promise<KihasznaltsagAdat>): Promise<KihasznaltsagAdat> {
+  const most = Date.now();
+  const van = tar.get(kulcs);
+  if (van && van.lejar > most) return van.ertek;
+  for (const [k, v] of tar) if (v.lejar <= most) tar.delete(k);
+  const ertek = fn();
+  tar.set(kulcs, { lejar: most + TAR_ERVENYES_MS, ertek });
+  ertek.catch(() => { if (tar.get(kulcs)?.ertek === ertek) tar.delete(kulcs); });
+  return ertek;
+}
 
 function napEltol(nap: string, delta: number): string {
   const d = new Date(`${nap}T12:00:00Z`);
@@ -233,13 +249,13 @@ export async function szamoldKihasznaltsagot(ma: string): Promise<KihasznaltsagA
 }
 
 /**
- * A Ma lap belépési pontja: 10 perces gyorsítótár, 8 mp időkorlát. SOHA NEM
+ * A Ma lap belépési pontja: 10 perces saját gyorsítótár, 2,5 mp időkorlát. SOHA NEM
  * DOB — hiba vagy időtúllépés esetén null (a sáv ilyenkor egyszerűen elmarad).
  */
 export async function getKihasznaltsag(ma: string): Promise<KihasznaltsagAdat | null> {
   let idozito: ReturnType<typeof setTimeout> | undefined;
   try {
-    const szamitas = cachelve(`kihasznaltsag:${ma}`, 10 * 60 * 1000, () => szamoldKihasznaltsagot(ma));
+    const szamitas = sajatCachelve(`kihasznaltsag:${ma}`, () => szamoldKihasznaltsagot(ma));
     const korlat = new Promise<null>((resolve) => {
       idozito = setTimeout(() => resolve(null), IDOKORLAT_MS);
     });

@@ -331,6 +331,8 @@ async function futtasdSqlMigraciokatOnce(pool) {
     const client = await pool.connect();
     try {
       await client.query("begin");
+      // Ne álljon a végtelenségig, ha az élő app épp zárolja a táblát (QA #8).
+      await client.query("set local lock_timeout = '30s'");
       await client.query(sql);
       await client.query(`insert into alkalmazott_javitasok (kod) values ($1)`, [kod]);
       await client.query("commit");

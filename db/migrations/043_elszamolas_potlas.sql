@@ -46,7 +46,7 @@ begin
   insert into fuvar_elszamolas (megbizas_id, papirok_beerkeztek_at, szamla_id, szamla_szam, szamla_kelte,
                                 fizetesi_hatarido_nap, postazasi_cim, postazva_at)
   select new.id, new.papirok_beerkeztek_at, sz.id, nullif(new.szamla_szam, ''), sz.kiallitas_datum,
-         new.fizetesi_hatarido_nap, new.postazasi_cim, case when new.postazva then new.postazva_at end
+         new.fizetesi_hatarido_nap, null, case when new.postazva then new.postazva_at end
   from (select 1) x
   left join szamla sz on sz.szamlaszam = nullif(new.szamla_szam, '')
   on conflict (megbizas_id) do nothing;
@@ -63,7 +63,7 @@ create trigger trg_fuvar_megbizasok_elszamolas_potlas
 insert into fuvar_elszamolas (megbizas_id, papirok_beerkeztek_at, szamla_id, szamla_szam, szamla_kelte,
                               fizetesi_hatarido_nap, postazasi_cim, postazva_at)
 select m.id, m.papirok_beerkeztek_at, sz.id, nullif(m.szamla_szam, ''), sz.kiallitas_datum,
-       m.fizetesi_hatarido_nap, m.postazasi_cim, case when m.postazva then m.postazva_at end
+       m.fizetesi_hatarido_nap, null, case when m.postazva then m.postazva_at end
 from fuvar_megbizasok m
 left join szamla sz on sz.szamlaszam = nullif(m.szamla_szam, '')
 where m.jelleg = 'ber'

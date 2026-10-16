@@ -1,5 +1,26 @@
 # PROGRESS
 
+## 2026-10-16 — Fuvarozás 1. hullám: rendszer-javítások, kihasználtság, „Megnyertük → megbízás”, takarítás
+
+Terv és fájl-tulajdon: `docs/fuvarozas-1-hullam-terv.md`. Tesztek a kód előtt (teszt-1hullam-rendszer/kihasznaltsag/ajanlat: 47+42+41).
+
+- **Rendszer:** `043_elszamolas_potlas.sql` — hiányzó `fuvar_elszamolas` sorok pótlása + trigger (postázási cím NEM
+  másolódik, az a postázáskor kerül be); `rendszer_eletjel` — a teljesítés-figyelő minden kör végén életjelet ír, a
+  GPS-állapot ebből dönt (hétvégén, üres napon nincs hamis „figyelj”); csak az utolsó 2 nap aktív megállói számítanak.
+  Távozás-figyelés a lezárás után még 24 órán át. `migrate.mjs`: SQL-migrációnként `lock_timeout = 30s`.
+- **Kihasználtság-sáv a Ma lapon:** kocsinként hét|hónap — rakott munkanap, km, bevétel, becsült fedezet/munkanap.
+  Saját 10 perces tár, 2,5 mp időkorlát (ha lassú, a sáv kimarad, a lap nem vár).
+- **„Megnyertük → megbízás” (Timocom/Tervezés):** `044_ajanlat_eredmeny.sql`; a megnyert ajánlatból bérfuvar lesz a
+  kiválasztott kocsira (díj előtöltve: rögzített ár → Timocom-ár → árlétra). Dupla kattintás / lassú mentés ellen
+  5 perces foglalás, árva megbízás felismerése (megjegyzés „Timocom-ajánlat #id”), a kötés csak üres ajánlatra íródik.
+  „Elvesztettük” gomb is.
+- **Takarítás:** 9 nem használt API-útvonal, egyszeri scriptek, a telefonos vezetői nézet (/m fuvar, cég, rendszer,
+  számla, papír → átirányítás /m-re), óránkénti menet-motor futás, tükörtábla-írások; `045_takaritas.sql` 11 táblát
+  `regi_` előtagra nevez (nem töröl). Az /erkezes használata is naplózódik (a régi sofőrnézet kivezetésének méréséhez).
+- Független QA: 8/10, GO — a kötelező (#1) és javasolt (#2, #3, #7, #8, #6) javítások benne. Nyitott utómunka:
+  EUR tizedesvessző-értelmezés határesete (#4), múltbeli felrakási nap figyelmeztetés (#5), megnyert ajánlat árának
+  átvétele az ár-memóriába (#9).
+
 ## 2026-10-16 — Ecofleet telemetria: élő tachó, CAN-üzemanyag, szerviz, webhook + 0. heti javítások
 
 Döntés (5 szakértő, egyhangú): nincs új párhuzamos fuvarozási rész; a meglévő lapok bővülnek, az új adat egy

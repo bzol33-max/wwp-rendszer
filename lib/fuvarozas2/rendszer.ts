@@ -133,6 +133,7 @@ export async function getRendszerEgeszseg(): Promise<RendszerEgeszseg> {
          where m.torolt_at is null and m.allapot in ('ellenorzesre_var','tervezett','folyamatban')
            and (m.jarmu_id is not null or coalesce(m.jarmu, '') <> '')
            and g.tervezett_nap <= (now() at time zone 'Europe/Budapest')::date
+           and g.tervezett_nap >= (now() at time zone 'Europe/Budapest')::date - 2
            and g.gps_erkezes is null)::int as aktiv`
   );
   // A tábla a 043-ban jön létre — előtte (vagy hibánál) „nincs életjel”.
