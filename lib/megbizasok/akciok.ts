@@ -10,7 +10,7 @@ import { requireAnyEditPermission, requireEditPermission } from "@/lib/auth/requ
 import { type Allapot } from "@/lib/megbizasok/allapotgep";
 import { valtAllapotTx } from "@/lib/megbizasok/allapot-akcio";
 import { ujKodTranzakcio, irEsemenyt, elszamolasUpsert, BER_SQL, letrehozTx } from "@/lib/megbizasok/repo";
-import { findJarmuByPlate, jarmuLabel } from "@/lib/fuvarozas/vehicles";
+import { findJarmuByPlate, findJarmuInSzoveg, jarmuLabel, resolveJarmu } from "@/lib/fuvarozas/vehicles";
 import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
 import { frissitsdFuvarozas2Modellt } from "@/lib/fuvarozas2/modell-szinkron";
 import { kanonikusMegrendeloNev } from "@/lib/fuvarozas/megrendelo-nev";
@@ -26,6 +26,8 @@ import { utemezhetoNap } from "@/lib/megbizasok/elvinni-szabalyok";
 import { budapestNapISO } from "@/lib/fuvarozas/idozona";
 import { irValtozasokat, naplozandoValtozasok } from "@/lib/menet/valtozas";
 import { papirValtasHiba } from "@/lib/megbizasok/papir-alap";
+import { ujJarmuId } from "@/lib/megbizasok/jarmu-dontes";
+import { torlesSet } from "@/lib/megbizasok/torles";
 
 
 function egesz(s: string): number | null {
@@ -211,21 +213,50 @@ export async function setFuvarJarmu(id: string, jarmuKod: string | null): Promis
   return { ok: true, cimke };
 }
 
-export async function modositBerFuvart(id: string, a: BerFuvarAdat): Promise<{ ok: true } | { ok: false; hiba: string }> {
+/**
+ * A „Kocsi” (üresnél a „Sofőr”) szövegből a saját jármű fuvar_jarmuvek.id-ja —
+ * ugyanaz a feloldási lánc, mint a háttér-szinkronban (resolveJarmu, majd
+ * findJarmuInSzoveg; lib/fuvarozas2/modell-szinkron.ts), a kód alapján.
+ */
+async function feloldJarmuId(szoveg: string): Promise<number | null> {
+  if (!szoveg.trim()) return null;
+  const lista = await getJarmuvek();
+  const jarmu = resolveJarmu(szoveg, lista) ?? findJarmuInSzoveg(szoveg, lista);
+  if (!jarmu?.kod) return null;
+  const [j] = await query<{ id: string }>(`select id::text from fuvar_jarmuvek where kod = $1`, [jarmu.kod]);
+  return j ? Number(j.id) : null;
+}
+
+export async function modositBerFuvart(
+  id: string,
+  a: BerFuvarAdat
+): Promise<{ ok: true; figyelmeztetes?: string } | { ok: false; hiba: string }> {
   await requireEditPermission("fuvarozas");
   const session = await requireSession();
   const hiba = berFuvarHiba(a);
   if (hiba) return { ok: false, hiba };
   const megrendelo = await kanonikusMegrendeloNev(a.megrendelo);
+  // 2026-10-16 (ecofleet-telemetria-terv 4.): a jarmu_id-t nem nullázzuk a
+  // háttér-szinkronra bízva, hanem a kocsi-szövegből azonnal feloldjuk.
+  const ujKocsiSzoveg = a.jarmu.trim() || a.sofor.trim();
+  const feloldott = await feloldJarmuId(ujKocsiSzoveg);
   let valtozott: string[] = [];
+  let figyelmeztetes: string | null = null;
   const eredmeny = await ujKodTranzakcio(async (tx) => {
-    const [regi] = await tx<BerFuvarAdat & { allapot: string }>(
-      BER_SQL.replace("select ", "select m.allapot, ") + " for update of m",
+    const [regi] = await tx<BerFuvarAdat & { allapot: string; jarmuId: string | null }>(
+      BER_SQL.replace("select ", "select m.allapot, m.jarmu_id::text as \"jarmuId\", ") + " for update of m",
       [id]
     );
     if (!regi) return { hiba: "Nincs ilyen bérfuvar." };
     valtozott = valtozottMezok(regi, a);
     if (valtozott.length === 0) return { nincsValtozas: true };
+    const dontes = ujJarmuId(
+      regi.jarmuId === null ? null : Number(regi.jarmuId),
+      regi.jarmu.trim() || regi.sofor.trim(),
+      ujKocsiSzoveg,
+      feloldott
+    );
+    figyelmeztetes = dontes.figyelmeztetes;
     await tx(
       `update fuvar_megbizasok set
          datum = $2, lerakas_datum = $3, idopont = $4, felrako = $5, lerako = $6, megrendelo = $7,
@@ -234,13 +265,13 @@ export async function modositBerFuvart(id: string, a: BerFuvarAdat): Promise<{ o
          megjegyzes = $18, postazasi_cim = $19,
          -- mint az approveFuvar: más megrendelőnél/kocsinál a Fuvarozás 2 kulcsát a szinkron újraépíti
          partner_id = case when megrendelo is distinct from $7 then null else partner_id end,
-         jarmu_id = case when jarmu is distinct from $13 or sofor is distinct from $14 then null else jarmu_id end
+         jarmu_id = $20
        where id = $1`,
       [
         id, a.datum, a.lerakasDatum || null, a.idopont.trim() || null, a.felrako.trim(), a.lerako.trim(), megrendelo,
         a.pozicioszamNincs ? null : a.pozicioszam.trim() || null, a.pozicioszamNincs, a.aru.trim() || null, a.mennyiseg.trim() || null, a.suly.trim() || null,
         a.jarmu.trim() || null, a.sofor.trim() || null, egesz(a.fuvardij), a.fuvardijPenznem === "EUR" ? "EUR" : "Ft", egesz(a.koltseg),
-        a.megjegyzes.trim() || null, a.postazasiCim.trim() || null,
+        a.megjegyzes.trim() || null, a.postazasiCim.trim() || null, dontes.jarmuId,
       ]
     );
     // Az állapot marad, ami volt: ha a 002 trigger a dátumok miatt átírta, visszaállítjuk.
@@ -264,7 +295,7 @@ export async function modositBerFuvart(id: string, a: BerFuvarAdat): Promise<{ o
   if ("hiba" in eredmeny && eredmeny.hiba) return { ok: false, hiba: eredmeny.hiba };
   if (eredmeny.nincsValtozas) return { ok: true };
   await frissitsdFuvarozas2Modellt(id);
-  return { ok: true };
+  return figyelmeztetes ? { ok: true, figyelmeztetes } : { ok: true };
 }
 
 export async function ujBerFuvar(a: BerFuvarAdat): Promise<{ ok: true; id: string } | { ok: false; hiba: string }> {
@@ -313,7 +344,7 @@ export async function torolMegbizast(id: string): Promise<{ ok: true } | { ok: f
   if (!sor) return { ok: false, hiba: "Ez a fuvar már törölve van." };
   if (sor.szamlas) return { ok: false, hiba: "Számlázott fuvar nem törölhető." };
   const ki = session.name ?? session.username;
-  await query(`update fuvar_megbizasok set statusz = 'torolt', torolt_at = now(), torolt_by = $2 where id = $1`, [id, ki]);
+  await query(`update fuvar_megbizasok set ${torlesSet("$2")} where id = $1`, [id, ki]);
   // A törölt fuvarhoz párosított szállítólevél újra szabad: a 15 percenkénti
   // párosítás (lib/fuvarozas2/szallitolevel.ts) a valódi fuvarra teheti
   // (#274 duplikátum, 2026-10-06: az S-WLLWR-2026-165 a törölt soron ragadt
@@ -414,7 +445,7 @@ export async function felszabaditFuvarDokumentumot(id: string): Promise<{ ok: tr
   const fileId = sor.drive_file_id ?? sor.dokumentum_url?.match(/\/file\/d\/([^/]+)\//)?.[1] ?? null;
   await query(
     `update fuvar_megbizasok
-     set statusz = 'torolt',
+     set ${torlesSet()},
          megjegyzes = coalesce(megjegyzes || ' | ', '') ||
            'Újraolvasásra felszabadítva, eredeti dokumentum: ' || coalesce(dokumentum_url, '-'),
          dokumentum_url = null,
@@ -839,7 +870,7 @@ export async function torolElokeszitettet(id: string): Promise<Eredmeny> {
   await requireEditPermission("fuvarozas");
   const session = await requireSession();
   const [sor] = await query<{ id: string }>(
-    `update fuvar_megbizasok set statusz = 'torolt', torolt_at = now(), torolt_by = $2
+    `update fuvar_megbizasok set ${torlesSet("$2")}
      where id = $1 and elokeszites and torolt_at is null returning id::text`,
     [id, session.name ?? session.username]
   );

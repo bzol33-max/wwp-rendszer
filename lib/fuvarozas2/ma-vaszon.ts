@@ -43,6 +43,8 @@ import { berUtkozes, napiSorrend, tervIdoMegbizasbol } from "@/lib/fuvarozas2/na
 import { menetSorrendek } from "@/lib/menet/repo";
 import { alkalmazMenetSorrendet } from "@/lib/menet/menet-alap";
 import { hetNapjai, jarmuNev, kocsiHelykitolto, type HetFuvar } from "@/lib/fuvarozas2/ma-het";
+import { legutobbiTacho } from "@/lib/jarmu-telemetria/repo";
+import { tachoKijelzes } from "@/lib/fuvarozas2/tervezes-het-tacho";
 
 export type CsempeSzin = "normal" | "amber" | "red" | "mint";
 export type Csempe = { kulcs: string; cimke: string; ertek: string; also: string | null; szin: CsempeSzin; href: string | null };
@@ -91,8 +93,12 @@ export type MaKocsi = {
   allapot: MaKocsiAllapot | null;
   /** „Vezetés ma 3:20 · szünet 1:10 múlva · szolgálat 05:41 óta" — becslés a GPS-ből. */
   vezetesSor: string | null;
-  /** „Hét: 31 / 56 óra" — GPS-becslés. */
+  /** „Tachó: ma még 2 ó 40 p · hét 31/56 ó" (friss tachó), különben „Hét: 31 / 56 óra" GPS-becslés. */
   hetiSor: string | null;
+  /** A hetiSor forrása: "tacho" (Ecofleet tcoData, friss) vagy "gps" (útjelentésből becsült). */
+  hetiForras?: "tacho" | "gps" | null;
+  /** Friss tachónál a részletek (súgó): műszak, csökkentett pihenők, adat kora. */
+  tacho?: { reszletek: string } | null;
   napiKm: number | null;
   etaSor: string | null;
   /** A mai megbízások megállói és a GPS-állások, tükörben (lásd TukorSor). */
@@ -600,6 +606,8 @@ export async function getMaVaszon(): Promise<MaVaszon> {
     [ma]
   );
   const hetiPerc = await hetiVezetesPercek(gpsJarmuvek, ma).catch(() => new Map<string, number>());
+  // Tachó (Ecofleet tcoData, jarmu_telemetria): ha a tábla még nincs vagy üres, a GPS-becslés marad.
+  const tachok = await legutobbiTacho().catch(() => new Map<string, never>());
 
   const blokkKesz = (s: (typeof sorok)[number]): MaBlokk => {
     const gs = megalloMap.get(s.id) ?? [];
@@ -703,6 +711,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
       ].filter(Boolean).join(" · ");
     }
     const hp = hetiPerc.get(j.kod);
+    const tk = tachoKijelzes(tachok.get(j.kod)?.tacho, most);
     const etaSor = elo?.eloEta && !elo.eloEta.bizonytalan ? `ETA ${elo.eloEta.cel}: ${ORA(elo.eloEta.erkezes)}` : null;
     const pk = papirKocsinkent.find((x) => x.jarmu_id === j.id);
     const papirSorok: { szoveg: string; href: string }[] = [];
@@ -716,7 +725,9 @@ export async function getMaVaszon(): Promise<MaVaszon> {
       helykitolto,
       allapot: j.ecofleet_object_id ? kocsiAllapot(elo) : helykitolto ? null : { szoveg: "nincs GPS", szin: "amber", hely: null },
       vezetesSor,
-      hetiSor: hp != null ? `Hét: ${Math.round(hp / 60)} / 56 óra` : null,
+      hetiSor: tk ? tk.hetiSor : hp != null ? `Hét: ${Math.round(hp / 60)} / 56 óra` : null,
+      hetiForras: tk ? "tacho" : hp != null ? "gps" : null,
+      tacho: tk ? { reszletek: tk.reszletek } : null,
       napiKm: elo?.napiKm ?? null,
       etaSor,
       sorok: tukorSorok({

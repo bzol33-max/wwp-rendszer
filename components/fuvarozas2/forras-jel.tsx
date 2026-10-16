@@ -6,7 +6,8 @@ import type { Forras, Tetel } from "@/lib/fuvarozas2/koltseg-szamitas";
 // menta = tény (mért, számlázott), borostyán = becslés. Szerver- és
 // kliens-komponensből is használható (nincs állapota).
 
-export function ForrasJel({ forras, className }: { forras: Forras | null | undefined; className?: string }) {
+// A `cimke` / `title` felülírja az alapfeliratot (pl. „tachó”, „GPS-becslés” — Ecofleet telemetria, 2026-10).
+export function ForrasJel({ forras, className, cimke, title }: { forras: Forras | null | undefined; className?: string; cimke?: string; title?: string }) {
   if (!forras) return null;
   return (
     <span
@@ -15,9 +16,9 @@ export function ForrasJel({ forras, className }: { forras: Forras | null | undef
         forras === "teny" ? "bg-[var(--f2-mint-l)] text-[var(--f2-mint)]" : "bg-[var(--f2-amb-l)] text-[var(--f2-amb)]",
         className
       )}
-      title={forras === "teny" ? "Tény: mért vagy számlázott adat" : "Becslés: számított érték"}
+      title={title ?? (forras === "teny" ? "Tény: mért vagy számlázott adat" : "Becslés: számított érték")}
     >
-      {forras === "teny" ? "tény" : "becslés"}
+      {cimke ?? (forras === "teny" ? "tény" : "becslés")}
     </span>
   );
 }

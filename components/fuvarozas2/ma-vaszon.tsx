@@ -5,6 +5,7 @@ import { NyugtaGomb, VisszavonGomb } from "@/components/fuvarozas2/elteres-nyugt
 import { AutoFrissites } from "@/components/fuvarozas2/auto-frissites";
 import { Csempesor } from "@/components/fuvarozas2/csempesor";
 import { pihenoNapE } from "@/lib/fuvarozas2/ma-het";
+import { ForrasJel } from "@/components/fuvarozas2/forras-jel";
 
 // A „Ma" képernyő (Budaházi Zoltán, 2026-09-28): négy kocsi-oszlop egymás
 // mellett, mindegyik ugyanabban a sorrendben — fejléc (hol van most),
@@ -215,11 +216,20 @@ function KocsiOszlop({ k, holnapCimke, piheno }: { k: MaKocsi; holnapCimke: stri
         <div className="flex flex-col gap-3 px-4 py-3">
           {k.vezetesSor || k.hetiSor || k.napiKm != null ? (
             <div className="rounded-xl bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-              {k.vezetesSor ? <div>{k.vezetesSor}</div> : null}
-              <div>
-                {[k.hetiSor, k.napiKm != null ? `ma ${k.napiKm} km` : null].filter(Boolean).join(" · ")}
-                <span className="opacity-70"> · GPS-becslés, nem tachográf</span>
-              </div>
+              {k.hetiForras === "tacho" && k.hetiSor ? (
+                <div className="font-medium text-foreground" title={k.tacho?.reszletek}>
+                  {k.hetiSor} <ForrasJel forras="teny" cimke="tachó" title={`Ecofleet tachográf-adat\n${k.tacho?.reszletek ?? ""}`} />
+                </div>
+              ) : null}
+              {(() => {
+                const gpsSorok = [k.vezetesSor, [k.hetiForras === "tacho" ? null : k.hetiSor, k.napiKm != null ? `ma ${k.napiKm} km` : null].filter(Boolean).join(" · ")].filter(Boolean);
+                return gpsSorok.map((sor, i) => (
+                  <div key={i}>
+                    {sor}
+                    {i === gpsSorok.length - 1 ? <> <ForrasJel forras="becsles" cimke="GPS-becslés" title="GPS-ből számolt becslés, nem tachográf" /></> : null}
+                  </div>
+                ));
+              })()}
             </div>
           ) : null}
 

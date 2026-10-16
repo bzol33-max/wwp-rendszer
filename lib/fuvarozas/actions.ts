@@ -10,6 +10,7 @@ import { query } from "@/lib/db";
 import { getMaiSajatFuvarok, getMaiValodiSajatFuvarok, getMegalloAllapotok } from "@/lib/fuvarozas/napi-fuvarok";
 import { betoltEloElozmenyt, getEloElozmeny, rogzitEloMegfigyelest } from "./elo-elozmeny";
 import { getFleetLastPositions, getVehicleTrips, parseEcofleetTimestamp, EcofleetError, type EcofleetTrip } from "./ecofleet";
+import { kalibracioGyorsitotarazhato } from "./kalibracio-dontes";
 import {
   calculateToll,
   FIXED_VEHICLE,
@@ -457,6 +458,8 @@ const KALIBRACIO_MIN_MINTASZAM = 5;
 const KALIBRACIO_MIN_MINTASZAM_IDOSAV = 3;
 /** Ennyi óránként frissítjük legfeljebb a kalibrációt — nem kell minden getIdovonalak-híváskor újraszámolni. */
 const KALIBRACIO_ERVENYESSEG_ORA = 24;
+/** Ha az Ecofleet-hívás hibázott vagy 0 minta jött, a tartalék-eredmény csak ennyi percig él (nem 24 óráig) — lásd kalibracioGyorsitotarazhato. */
+const KALIBRACIO_TARTALEK_ERVENYESSEG_PERC = 5;
 
 /** Napszak/nap-típus sáv, aminek külön korrekciós szorzót tanulunk — a hétvége azért külön, mert a fuvarozási forgalom ott jellemzően egészen más képet mutat, mint hétköznap. */
 type Idosav = "hetvege" | "csucs_reggel" | "napkozben" | "csucs_delutan" | "esti_ejszakai";
@@ -479,6 +482,8 @@ type KalibraciosEredmeny = {
 };
 
 let kalibraciosCache: KalibraciosEredmeny | null = null;
+/** A kalibraciosCache érvényességi ideje (ms): 24 óra jó mintánál, 5 perc hibás/üres mintánál. */
+let kalibraciosCacheErvenyesMs = 0;
 
 /** [valós mp, HU-GO mp] összegekből 1.0-2.0 közé szorított arányt számol, vagy null-t, ha nincs elég minta. */
 function aranySzamitasa(valosSzumSec: number, hugoSzumSec: number, mintaSzam: number, minMintaszam: number): number | null {
@@ -500,7 +505,7 @@ function aranySzamitasa(valosSzumSec: number, hugoSzumSec: number, mintaSzam: nu
  */
 async function szamitsKalibraciot(): Promise<KalibraciosEredmeny> {
   const most = new Date();
-  if (kalibraciosCache && most.getTime() - kalibraciosCache.szamitva.getTime() < KALIBRACIO_ERVENYESSEG_ORA * 3600000) {
+  if (kalibraciosCache && most.getTime() - kalibraciosCache.szamitva.getTime() < kalibraciosCacheErvenyesMs) {
     return kalibraciosCache;
   }
 
@@ -508,8 +513,19 @@ async function szamitsKalibraciot(): Promise<KalibraciosEredmeny> {
   const kezdet = new Date(most.getTime() - KALIBRACIO_MINTA_NAP * 86400000);
   const jarmuvek = (await getJarmuvek()).filter((j) => j.ecofleetObjectId !== null);
 
+  // Járművenként külön elkapjuk a hibát (a többi kocsi mintája még használható),
+  // de jegyezzük, hogy volt-e — hibás Ecofleet-válasz mellett az eredmény nem
+  // kerülhet a 24 órás gyorsítótárba.
+  let voltEcofleetHiba = false;
   const mindenTrip = (
-    await Promise.all(jarmuvek.map((j) => getVehicleTrips(j.ecofleetObjectId!, kezdet, veg).catch(() => [] as EcofleetTrip[])))
+    await Promise.all(
+      jarmuvek.map((j) =>
+        getVehicleTrips(j.ecofleetObjectId!, kezdet, veg).catch(() => {
+          voltEcofleetHiba = true;
+          return [] as EcofleetTrip[];
+        })
+      )
+    )
   ).flat();
 
   const jelentosTripek = mindenTrip
@@ -560,6 +576,9 @@ async function szamitsKalibraciot(): Promise<KalibraciosEredmeny> {
   }
 
   kalibraciosCache = { globalisSzorzo, idosavSzorzok, mintaSzam: globalisMinta, szamitva: most };
+  kalibraciosCacheErvenyesMs = kalibracioGyorsitotarazhato(globalisMinta, voltEcofleetHiba)
+    ? KALIBRACIO_ERVENYESSEG_ORA * 3600000
+    : KALIBRACIO_TARTALEK_ERVENYESSEG_PERC * 60000;
   return kalibraciosCache;
 }
 
