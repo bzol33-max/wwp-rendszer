@@ -24,6 +24,8 @@ Rate limit nincs (percenkénti használat rendben). Tesztadat: `scripts/fixtures
   - Visszaad: a `response` mezőt.
 - `getLastDataCachelve(maxKorMs = 30_000): Promise<{ sorok: EcofleetLastData[]; lekerveAt: Date }>`
   — folyamaton belüli közös gyorsítótár, egyidejű hívók ugyanazt az ígéretet kapják (in-flight dedup); hiba NEM kerül gyorsítótárba.
+- **Teszt-horgok (kötelező exportok, a `scripts/teszt-ecofleet-kliens.ts` használja):** `_tesztFetchBeallit(fn: typeof fetch | null): void` — a `getLastDataCachelve` (és minden `fetchImpl` nélküli `ecofleetJson`-hívás) ezt a fetch-et használja, `null` → vissza a globális `fetch`-re; `_tesztCacheUrit(): void` — kiüríti a getLastData-gyorsítótárat és a függőben lévő ígéretet. Éles kód nem hívja őket.
+- Hibaosztály: `EcofleetError` (exportálva a `kliens.ts`-ből; ha a `lib/fuvarozas/ecofleet.ts`-ben is marad, az onnan re-exportálja ugyanazt az osztályt, hogy az `instanceof` mindkét helyen igaz legyen). Hálózati hiba, időtúllépés, nem-JSON válasz, HTTP-hiba és `status != 0` mind `EcofleetError`-ként jön ki (az eredeti hiba szövege csak `maszkol()`-va kerülhet bele; `key=` sem szerepelhet az üzenetben vagy a stackben).
 - `lib/fuvarozas/ecofleet.ts` `getFleetLastPositions()` maradjon ugyanazzal a visszatérési típussal, de mostantól 30 s-ig gyorsítótárazott (in-flight dedup) — a hívói (idővonal, figyelő, menet-generálás, sofőr) változatlanok. Az ottani hibaüzenetek is maszkolva.
 
 ## 2. Tiszta számítások — `lib/ecofleet/szamitas.ts` (Dev A; Tesztelő teszteli)
@@ -45,6 +47,9 @@ export type TachoAllapot = {
 export function tachoAllapotLastDatabol(sor: unknown): TachoAllapot | null; // nincs tcoData → null; hiányzó mező → null (nem 0!)
 export function tachoFriss(t: TachoAllapot, most: Date, maxKorPerc = 15): boolean;
 export function percSzoveg(perc: number): string; // 160 → "2 ó 40 p", 45 → "45 p", 0 → "0 p", negatív → "0 p"
+// percSzoveg pontos formátuma: Math.round(perc), negatív → 0; < 60 → "<p> p"; >= 60 → "<ó> ó <p> p" (a perc-rész 0-nál is kiíródik): 60 → "1 ó 0 p", 600 → "10 ó 0 p", 89.6 → "1 ó 30 p".
+// tachoAllapotLastDatabol: a perc-mezők = Math.round(mp / 60) (pl. 95097 mp → 1585). objectId = String(sor.objectId). Időpontok: "YYYY-MM-DD HH:mm:ss+ZZZZ" → Date (az eltolás figyelembevételével). Nem objektum bemenet → null.
+// tachoFriss: adatIdopont null → false; különben most − adatIdopont <= maxKorPerc.
 
 export type CanNap = {
   literCan: number | null;   // CANFuelUsed max − min a napon (számláló-visszaugrás/ugrás > 500 l/nap esetén null)
@@ -57,6 +62,11 @@ export type CanNap = {
   mintaDb: number;
 };
 export function canNapNyersbol(sorok: unknown[]): CanNap; // üres → minden null, mintaDb 0
+// canNapNyersbol részletek: a sorokat timestamp szerint időrendbe rendezi (a bemenet sorrendje nem számít); az „utolsó” = időrendben utolsó.
+// mintaDb = a sorok száma. Hiányzó/nem szám CAN-mező → az adott eredmény null (nem 0). Üres bemenet: szervizMegbizhato false, tankolasok [].
+// literCan null, ha két egymást követő CANFuelUsed közt visszaesés van VAGY bármely lépés > 500 l (számláló-hiba); kmCan ettől független.
+// tankolás: Fuel(i) − Fuel(i−1) >= 50 → { idopont: sor[i].timestamp (nyers szöveg), literElotte: Fuel(i−1), literUtana: Fuel(i), hozzaadott: különbség }.
+// szervizHatraKm: utolsó CANServiceDistance, <= 0 → 0; nincs ilyen mező → null. tengelyTerhelesKg: utolsó parse-olható CANAxleWeights, értékek számként (7787.0 → 7787).
 ```
 
 ## 3. Tény-réteg — DB + gyűjtő + webhook (Dev A)
@@ -73,9 +83,18 @@ export function canNapNyersbol(sorok: unknown[]): CanNap; // üres → minden nu
   - óránként (és induláskor 60 s késleltetéssel): minden aktív, `ecofleet_object_id`-s kocsira a TEGNAPI és a MAI nap `Vehicles/getRawData` (`objectId`, `begTimestamp`/`endTimestamp` `YYYY-MM-DD HH:mm:ss` Budapest-idő) → `canNapNyersbol` → `mentCanNap`.
   - Ecofleet-hiba: console.error (maszkolva), a kör megy tovább a következő kocsival; semmi nem kerül 0-ként mentésre.
   - 30 napnál régebbi tachó-pillanatok törlése naponta egyszer.
+- `webhook.ts` (tiszta, DB nélkül, a Tesztelő teszteli): `webhookKulcs(payload: unknown, nyersBody: string): string` — ha a payload objektum és van nem üres `id` (elsőbbséggel) vagy `eventId` mezője (szöveg vagy szám) → `String(érték)`; különben `"sha256:" + sha256(nyersBody, utf8).hex`. A route ezt használja.
 - `app/api/ecofleet/webhook/route.ts`: `POST`. Hitelesítés: `?token=` időállandó összevetése `process.env.ECOFLEET_WEBHOOK_TOKEN`-nel (nincs beállítva → 503; rossz → 401). Body JSON (vagy form → objektum). Kulcs: a payload `id`/`eventId` mezője, ennek híján sha256(nyers body). `webhookMent` → 200 `{ ok: true, uj: boolean }`. Mást NEM csinál (feldolgozás később). `GET` → 405.
 
 ## 4. Integritás-javítások (Dev B)
+> **Tesztelhetőség (Tesztelő, 2026-10-16):** az `actions.ts` `import "server-only"`, az `akciok.ts` `"use server"` + `next/cache` + DB — tsx alól nem importálhatók. Ezért a két döntőfüggvény KÜLÖN tiszta fájlba kerül (DB/Next-import nélkül), és az actions.ts / akciok.ts onnan importálja:
+> - `lib/fuvarozas/kalibracio-dontes.ts` → `export function kalibracioGyorsitotarazhato(mintaDb: number, voltHiba: boolean): boolean`
+> - `lib/megbizasok/jarmu-dontes.ts` → `export function ujJarmuId(...)` (aláírás lent). Szabályok: a kocsi-szövegeket `trim()` után hasonlítja (null ≡ ""); új szöveg üres → `{ jarmuId: null, figyelmeztetes: null }`; `feloldott !== null` → `{ jarmuId: feloldott, figyelmeztetes: null }` (változatlan szövegnél is a feloldott nyer); nem feloldott + változatlan szöveg → régi id; nem feloldott + változott → `{ jarmuId: null, figyelmeztetes: "<nem üres szöveg>" }`.
+>
+> **042 — a tényleges nevek (db/schema.sql + migrációk alapján):** a fuvar-tábla `fuvar_megbizasok` (pk `id bigint`). „Számla tartozik hozzá”, ha BÁRMELYIK igaz (ugyanaz a feltétel, mint a `torolMegbizast` `szamlas`-ellenőrzése, kiegészítve a `szamla_id`-vel):
+> `coalesce(OLD.szamla_szam, '') <> ''` OR `cardinality(OLD.kieg_szamla_szamok) > 0` OR `exists (select 1 from fuvar_elszamolas e where e.megbizas_id = OLD.id and (coalesce(e.szamla_szam, '') <> '' or e.szamla_id is not null))`.
+> Trigger: `create trigger trg_fuvar_megbizasok_szamlazott_torles_tilt before delete on fuvar_megbizasok for each row execute function fuvar_megbizasok_szamlazott_torles_tilt();` — tiltáskor `raise exception` (a sor nem törlődik); számla nélkül `return OLD`. (A `fuvar_elszamolas.megbizas_id` FK `on delete cascade`, ezért a vizsgálat a BEFORE triggerben még látja az elszámolás-sort.) A `scripts/migrate.mjs` nyitja a tranzakciót — a fájlban nincs begin/commit; `create or replace function` + `drop trigger if exists` → idempotens. Teszt: `TESZT_DATABASE_URL=postgres://postgres@localhost:5433/wwp npx tsx scripts/teszt-integritas-0het.ts`.
+
 - **Kalibráció** (`lib/fuvarozas/actions.ts` ~481–562): ha az Ecofleet-hívás hibázik vagy 0 minta jön, a szorzó NEM kerülhet a 24 órás gyorsítótárba (legfeljebb 5 percre, vagy sehogy). Tiszta, exportált döntőfüggvény: `kalibracioGyorsitotarazhato(mintaDb: number, voltHiba: boolean): boolean` (true csak ha mintaDb > 0 és nem volt hiba).
 - **jarmu_id** (`lib/megbizasok/akciok.ts` ~237): szerkesztéskor a `jarmu_id` NEM nullázódik a háttér-szinkronra bízva: a „Kocsi” szövegből azonnal feloldódik (`resolveJarmu`, majd `findJarmuInSzoveg` — mint a `kocsiraAdom`); ha nem oldható fel, a régi `jarmu_id` megmarad, ha a kocsi-szöveg nem változott; ha változott és nem oldható fel → null + figyelmeztetés a visszatérési értékben. Tiszta döntőfüggvény exportálva: `ujJarmuId(regiJarmuId: number|null, regiKocsi: string|null, ujKocsi: string|null, feloldott: number|null): { jarmuId: number|null; figyelmeztetes: string|null }`.
 - **Törlés egységesítése:** minden „törölt” állapotba tevés (`statusz='torolt'`) ugyanazzal a segédfüggvénnyel menjen, ami a `torolt_at = now()`-t is beállítja (az újraolvasás ága is). `042_szamlazott_fuvar_vedelem.sql`: BEFORE DELETE trigger a fuvar-táblán: fizikai DELETE tiltva, ha a sorhoz számla tartozik (a számla-hivatkozás tényleges oszlopát a kódból kell kideríteni). A kérésre végzett kézi soft-delete (statusz='torolt') MARAD engedélyezett.
