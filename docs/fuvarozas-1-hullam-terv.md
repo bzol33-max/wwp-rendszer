@@ -44,6 +44,37 @@ Ma lap: a `Csempesor` helyén kocsinként egy sor: **Fedezet/nap · Bevétel/nap
 - `044`: a Timocom-ajánlat tábla állapota bővül: `nyert`, `vesztett` (+ meglévők); új oszlopok: `ajanlott_ar numeric`, `ajanlott_penznem text`, `eredmeny_at timestamptz`, `megbizas_id bigint references fuvar_megbizasok(id) on delete set null`.
 - Tiszta: `lib/fuvarozas2/ajanlat-megbizas-alap.ts`:
   `megbizasAjanlatbol(a: AjanlatAdat, d: { jarmuKod: string; felrakasNap: string; dij: number; penznem: "HUF" | "EUR" }): BerFuvarAdat` — felrakás/lerakás hely és nap, megrendelő (ajánlattevő cég), díj + pénznem, rakott km ha ismert, forrás `timocom`, megjegyzés az ajánlat azonosítójával. Hiányzó lerakás-nap → felrakás nap + becsült menetnap (rakott km / 600, felfelé, min 0).
+- **Pontos típusok** (Tesztelő, 2026-10-16 — `scripts/teszt-1hullam-ajanlat.ts` ezt ellenőrzi). Az `AjanlatAdat` új típus az `ajanlat-megbizas-alap.ts`-ben; mezői 1:1 a `radar_kiiras` sorból (+ a `reszletek` JSON `TimocomAjanlat`-jából) jönnek, a `timocom.ts` akció állítja elő:
+  ```ts
+  export type AjanlatAdat = {
+    /** radar_kiiras.id (szövegként) — a WWP-beli ajánlat-azonosító. */
+    id: string;
+    /** TimocomAjanlat.ajanlatId (az URL-ből), ha van. */
+    timocomId: string | null;
+    /** TimocomAjanlat.tcId (a megbízó Timocom-azonosítója), ha van. */
+    tcId: string | null;
+    /** radar_kiiras.megbizo_jelolt — az ajánlattevő cég. */
+    megbizo: string | null;
+    /** radar_kiiras.honnan / hova — a kész hely-szöveg („4200 Hajdúszoboszló”, „AT 4020 Linz”). */
+    honnan: string;
+    hova: string;
+    /** radar_kiiras.felrakas_nap / lerakas_nap, "YYYY-MM-DD" vagy null. */
+    felrakasNap: string | null;
+    lerakasNap: string | null;
+    /** radar_kiiras.tav_km — a rakott km, ha ismert. */
+    tavKm: number | null;
+    /** TimocomAjanlat.aru / sulyT. */
+    aru: string | null;
+    sulyT: number | null;
+  };
+  /** A visszatérés a BerFuvarAdat bővítése (így közvetlenül adható az ujBerFuvar-nak). */
+  export type AjanlatMegbizas = BerFuvarAdat & { forras: "timocom"; rakottKm: number | null; jarmuKod: string };
+  export function megbizasAjanlatbol(a: AjanlatAdat, d: { jarmuKod: string; felrakasNap: string; dij: number; penznem: "HUF" | "EUR" }): AjanlatMegbizas;
+  ```
+  Leképezés: `datum = d.felrakasNap`; `felrako = a.honnan`, `lerako = a.hova`; `megrendelo = a.megbizo ?? ""`; `jarmu = d.jarmuKod` és `jarmuKod = d.jarmuKod` (a kód a meglévő `feloldJarmuId` láncon feloldható); `fuvardij = String(d.dij)`; `fuvardijPenznem = d.penznem === "EUR" ? "EUR" : "Ft"`; `rakottKm = a.tavKm`; `forras = "timocom"`; `aru = a.aru ?? ""`; a többi szöveg-mező `""`, `pozicioszamNincs = false`.
+  Lerakás nap: ha `a.lerakasNap` van és `>= d.felrakasNap` → az; különben `d.felrakasNap + ceil((a.tavKm ?? 0) / 600)` nap (min 0). A `lerakasDatum` a BerFuvarAdat szokása szerint `""`, ha a lerakás a felrakás napjára esik, egyébként a "YYYY-MM-DD" nap.
+  Megjegyzés: tartalmazza a „Timocom” szót, az `a.id`-t (`#<id>` alakban), és — amelyik van — a `timocomId`-t és a `tcId`-t; javasolt alak: `Timocom-ajánlat #<id> · <timocomId> · TC ID <tcId>`.
+  A `fuvar_megbizasok.forras` CHECK-je ma nem engedi a `'timocom'`-ot — a `044` bővítse (`kezi, pdf_import, drive_import, gmail_import, szallitolevel, kalkulacio, timocom`), és a megbízást `forras = 'timocom'`-mal kell létrehozni.
 - Akciók (`timocom.ts`): `ajanlatMegnyerve(ajanlatId, d)` → bérfuvar létrehozása a meglévő `ujBerFuvar` úton, kocsira adás a meglévő kocsira-adó úton (`jarmu_id` azonnal), ajánlat → `nyert` + ár + `megbizas_id`; idempotens (már nyert → a meglévő megbízás id-ja). `ajanlatElvesztve(ajanlatId, ar?)` → `vesztett`.
 - Felület: az ajánlat-kártyán „Megnyertük” (kis űrlap: kocsi, nap, díj — a rés kocsijával/napjával és a javasolt árral előtöltve) és „Nem nyertük”; a Tervezés rés-panelén ugyanez. Siker → toast „Megbízás #N létrehozva, Micóra adva”.
 - Ár-memória: a `nyert` ajánlatok Ft/km-e bekerül az ár-létra előzményébe (`ar-letra.ts` olvasó oldala — csak olvasás-bővítés).
