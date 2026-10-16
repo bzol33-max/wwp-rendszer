@@ -27,6 +27,7 @@ import {
   type JarmuAdat,
   type JarmuBemenet,
   type JarmuvekOldal,
+  type JarmuTelemetria,
   type OkmanyAdat,
   type OkmanyBemenet,
   type PotkocsiAdat,
@@ -43,6 +44,30 @@ const VALASZTO = "h-8 max-md:h-11 w-full rounded-lg border border-input bg-trans
 const HAMAROSAN = "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300";
 
 type Eredmeny = { ok: true } | { ok: false; hiba: string };
+
+// ---------------------------------------------------------------------------
+// CAN-telemetria cellák (Ecofleet) — csak ha van adat; mobilon a név alatt egy sorban
+
+const ezres = (n: number) => Math.round(n).toLocaleString("hu-HU");
+
+function Szervizig({ t }: { t: JarmuTelemetria | undefined }) {
+  if (!t || t.szervizHatraKm == null) return <span className="text-muted-foreground">—</span>;
+  if (!t.szervizMegbizhato) return <span className="text-muted-foreground" title="a jármű nem küldi">—</span>;
+  return <span className={t.szervizHatraKm <= 5000 ? "font-semibold text-[var(--f2-amb)]" : undefined}>{ezres(t.szervizHatraKm)} km</span>;
+}
+
+function CanFogyasztas({ t }: { t: JarmuTelemetria | undefined }) {
+  if (!t || t.canL100 == null) {
+    return <span className="text-muted-foreground" title={t ? `kevés adat (${ezres(t.canKm)} km a 7 napban, 100 km kell)` : undefined}>—</span>;
+  }
+  return <span title={`CAN-mérés, utolsó 7 nap, ${ezres(t.canKm)} km`}>{t.canL100.toLocaleString("hu-HU")} l/100</span>;
+}
+
+function Tengely({ t }: { t: JarmuTelemetria | undefined }) {
+  if (!t || t.tengelyOsszKg == null) return <span className="text-muted-foreground">—</span>;
+  const reszlet = t.tengelyek ? Object.entries(t.tengelyek).map(([k, v]) => `${k}: ${ezres(v)} kg`).join("\n") : undefined;
+  return <span title={reszlet}>{ezres(t.tengelyOsszKg)} kg</span>;
+}
 
 // ---------------------------------------------------------------------------
 // Közös apróságok
@@ -235,6 +260,8 @@ function kapacitas(p: { raklaphelyNormal: number | null; raklaphelyForgatott: nu
 function JarmuvekKartya({ adat }: { adat: JarmuvekOldal }) {
   const szerk = useCanEdit() && adat.torzsKesz;
   const [szerkesztett, setSzerkesztett] = useState<JarmuAdat | "uj" | null>(null);
+  const tele = adat.telemetria ?? {};
+  const vanTele = Object.keys(tele).length > 0;
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
@@ -252,6 +279,13 @@ function JarmuvekKartya({ adat }: { adat: JarmuvekOldal }) {
               <TableHead>GPS</TableHead>
               <TableHead>Fogyasztás</TableHead>
               <TableHead>Euro</TableHead>
+              {vanTele && (
+                <>
+                  <TableHead className="max-md:hidden">Szervizig</TableHead>
+                  <TableHead className="max-md:hidden">CAN fogyasztás (7 nap)</TableHead>
+                  <TableHead className="max-md:hidden">Tengely</TableHead>
+                </>
+              )}
               <TableHead className={MUVELET_OSZLOP} />
             </TableRow>
           </TableHeader>
@@ -265,6 +299,13 @@ function JarmuvekKartya({ adat }: { adat: JarmuvekOldal }) {
                     <span className="text-muted-foreground">{j.kod}</span>
                     {!j.aktiv && <Badge variant="outline">inaktív</Badge>}
                   </div>
+                  {tele[j.id] && (
+                    <div className="mt-1 flex flex-wrap gap-x-2 text-xs tabular-nums text-muted-foreground md:hidden">
+                      <span>Szervizig: <Szervizig t={tele[j.id]} /></span>
+                      <span>CAN 7 nap: <CanFogyasztas t={tele[j.id]} /></span>
+                      <span>Tengely: <Tengely t={tele[j.id]} /></span>
+                    </div>
+                  )}
                 </TableCell>
                 <TableCell>{j.vontatoRendszam ?? <span className="text-muted-foreground">nincs rendszám</span>}{j.potkocsiRendszam ? ` / ${j.potkocsiRendszam}` : ""}</TableCell>
                 <TableCell className="text-muted-foreground">{kapacitas(adat.potkocsik.find((p) => p.id === j.potkocsiId)) ?? "—"}</TableCell>
@@ -272,6 +313,13 @@ function JarmuvekKartya({ adat }: { adat: JarmuvekOldal }) {
                 <TableCell>{j.ecofleetObjectId ? <span className="tabular-nums">{j.ecofleetObjectId}</span> : <Badge variant="outline">nincs GPS</Badge>}</TableCell>
                 <TableCell className="tabular-nums">{j.fogyasztasL100 != null ? `${j.fogyasztasL100.toLocaleString("hu-HU")} l/100` : "—"}</TableCell>
                 <TableCell>{j.euroOsztaly ?? "—"}</TableCell>
+                {vanTele && (
+                  <>
+                    <TableCell className="tabular-nums max-md:hidden"><Szervizig t={tele[j.id]} /></TableCell>
+                    <TableCell className="tabular-nums max-md:hidden"><CanFogyasztas t={tele[j.id]} /></TableCell>
+                    <TableCell className="tabular-nums max-md:hidden"><Tengely t={tele[j.id]} /></TableCell>
+                  </>
+                )}
                 <TableCell className={`text-right ${MUVELET_OSZLOP}`}>
                   {szerk && <Button size="sm" variant="outline" onClick={() => setSzerkesztett(j)}>Szerkesztés</Button>}
                 </TableCell>

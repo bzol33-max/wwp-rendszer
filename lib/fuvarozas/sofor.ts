@@ -29,6 +29,8 @@ import { szkennelj } from "@/lib/fuvarozas/doksi-kivagas";
 import { sajatFuvarE } from "@/lib/fuvarozas/irat-jog";
 import { ellenorizAtmenet } from "@/lib/fuvarozas/allapot";
 import { fotoLezarasDontes, type LezarasMegallo, type MasikFuvar } from "@/lib/fuvarozas/fuvarlevel-lezaras";
+import { legutobbiTacho } from "@/lib/jarmu-telemetria/repo";
+import { tachoKijelzes } from "@/lib/fuvarozas2/tervezes-het-tacho";
 
 function budapestMaIso(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Budapest" });
@@ -418,6 +420,8 @@ export type SoforNap = {
   kovetkezo: { fuvarId: string; megalloIndex: number } | null;
   /** Hibaszöveg, ha az élő GPS-lekérdezés nem sikerült (a megbízások ettől függetlenül látszanak). */
   hiba: string | null;
+  /** „Ma még vezethetsz: 2 ó 40 p · a héten: 26 ó 25 p” — csak mára és friss tachó-adatnál (Ecofleet). */
+  tachoSor?: string | null;
 };
 
 type FuvarExtraSor = {
@@ -704,6 +708,9 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
       ? { fuvarId: kovetkezoMegallo.fuvarId, megalloIndex: kovetkezoMegallo.megalloIndex }
       : null,
     hiba: sajat?.hiba ?? null,
+    tachoSor: nap === budapestMaIso() && jarmu.kod
+      ? await legutobbiTacho().then((m) => tachoKijelzes(m.get(jarmu.kod!)?.tacho, new Date())?.soforSor ?? null).catch(() => null)
+      : null,
   };
 }
 

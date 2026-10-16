@@ -86,7 +86,14 @@ export function TervezesHetNezet({ adat, szerkeszthet }: { adat: TervezesHet; sz
             <tbody>
               {adat.kocsik.map((kocsi) => (
                 <tr key={kocsi.kod} className="border-t border-foreground/5 align-top">
-                  <td className="px-4 py-3"><div className="font-semibold">{kocsi.sofor}</div><div className="text-xs text-muted-foreground">{kocsi.kod}</div></td>
+                  <td className="px-4 py-3">
+                    <div className="font-semibold">{kocsi.sofor}</div><div className="text-xs text-muted-foreground">{kocsi.kod}</div>
+                    {kocsi.tacho ? (
+                      <div className="mt-1 rounded-md bg-[var(--f2-mint-l)] px-1.5 py-0.5 text-[10px] leading-tight text-[var(--f2-mint)]" title={`Tachó (Ecofleet)\n${kocsi.tacho.reszletek}`}>
+                        {kocsi.tacho.chip}
+                      </div>
+                    ) : null}
+                  </td>
                   {kocsi.cellak.map((c) => (
                     <td key={c.nap} className={cn("px-1.5 py-2", c.nap === adat.ma && "bg-muted/40")}>
                       <div className="flex flex-col gap-1">

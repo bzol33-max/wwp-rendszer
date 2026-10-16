@@ -8,4 +8,6 @@ export async function register() {
   inditTeljesitesFigyelesScheduler();
   const { inditModellSzinkronScheduler } = await import("@/lib/fuvarozas2/modell-szinkron-scheduler");
   inditModellSzinkronScheduler();
+  const { inditTelemetriaGyujtoScheduler } = await import("@/lib/jarmu-telemetria/gyujto-scheduler");
+  inditTelemetriaGyujtoScheduler();
 }

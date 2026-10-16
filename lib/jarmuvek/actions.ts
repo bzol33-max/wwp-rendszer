@@ -15,12 +15,15 @@ import { requireEditPermission, requireViewPermission } from "@/lib/auth/require
 import { jarmuCacheTorles } from "@/lib/fuvarozas/jarmuvek-db";
 import { jarmuSzinE } from "@/lib/fuvarozas/vehicles";
 import { getFuvarBeallitasok } from "@/lib/beallitasok/fuvar";
+import { canNapok } from "@/lib/jarmu-telemetria/repo";
 import {
   normalRendszam,
   tisztitJarmu,
   tisztitOkmany,
   tisztitPotkocsi,
   tisztitSoforProfil,
+  jarmuTelemetriaOsszesit,
+  type JarmuTelemetria,
   type JarmuAdat,
   type JarmuBemenet,
   type JarmuvekOldal,
@@ -140,6 +143,7 @@ export async function getJarmuvekOldal(): Promise<JarmuvekOldal> {
       alkalmazottak,
       telephelyek,
       alapFogyasztasL100,
+      telemetria: await jarmuTelemetriak(jarmuvek.filter((j) => j.aktiv).map((j) => j.id), ma),
     };
   } catch (err) {
     console.warn("[jarmuvek] törzsadat-táblák nem olvashatók (031-es migráció?):", err instanceof Error ? err.message : err);
@@ -166,6 +170,23 @@ export async function getJarmuvekOldal(): Promise<JarmuvekOldal> {
       alapFogyasztasL100,
     };
   }
+}
+
+/**
+ * Az utolsó 7 nap (ma is) CAN-összesítése járművenként (jarmu_can_nap). Bármi
+ * hiba (nincs még tábla, nincs adat) → az adott jármű kimarad, a lap nem törik.
+ */
+async function jarmuTelemetriak(ids: string[], ma: string): Promise<Record<string, JarmuTelemetria>> {
+  const d = new Date(`${ma}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 6);
+  const tol = d.toISOString().slice(0, 10);
+  const ki: Record<string, JarmuTelemetria> = {};
+  await Promise.all(ids.map(async (id) => {
+    const sorok = await canNapok(Number(id), tol, ma).catch(() => null);
+    const t = sorok ? jarmuTelemetriaOsszesit(sorok) : null;
+    if (t) ki[id] = t;
+  }));
+  return ki;
 }
 
 /**

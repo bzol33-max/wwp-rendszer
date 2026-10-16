@@ -22,6 +22,8 @@ import {
   ajanlatFrissesseg, hetEltolva, hetiReszek, illeszt, kiketHivj, kiosztatlanCellak, legjobbRes, tervHetNapjai, utKm,
   type AjanlatHely, type HetiFuvar, type HivandoPartner, type Illeszkedes, type MultFuvar, type NapCella, type Res,
 } from "@/lib/fuvarozas2/tervezes-het-alap";
+import { legutobbiTacho } from "@/lib/jarmu-telemetria/repo";
+import { tachoKijelzes } from "@/lib/fuvarozas2/tervezes-het-tacho";
 
 export type HetAjanlat = {
   id: string;
@@ -55,7 +57,8 @@ export type TervezesHet = {
   /** A hét még nem lerakott fuvarjai, amelyeknek a felrakó vagy a lerakó helye nem ismert — körülöttük nem számolható rés. */
   helyNelkul: { id: string; cim: string; utvonal: string }[];
   napok: string[];
-  kocsik: { kod: string; sofor: string; cellak: NapCella[] }[];
+  /** `tacho`: friss tachó-chip („ma 2 ó 40 p · hét 26 ó 25 p hátra”) + súgó — csak a mostani héten, különben nincs. */
+  kocsik: { kod: string; sofor: string; cellak: NapCella[]; tacho?: { chip: string; reszletek: string } | null }[];
   /** Kocsira váró (ki nem osztott) fuvarok napra bontva, a `napok` sorrendjében. */
   kiosztatlan: HetiFuvar[][];
   resek: Res[];
@@ -175,6 +178,10 @@ export async function getTervezesHet(resKulcs?: string, het?: string): Promise<T
     allapot: s.allapot,
   });
 
+  // Tachó csak a mostani héten (élő állapot); a tábla hiánya / hiba → nincs chip.
+  const tachoMost = new Date();
+  const tachok = napok[0] === mostaniHet ? await legutobbiTacho().catch(() => new Map<string, never>()) : new Map<string, never>();
+
   const resek: Res[] = [];
   const kocsik = jarmuvek.map((j) => {
     const sajat = sorok.filter((s) => s.jarmu_kod === j.kod);
@@ -184,7 +191,8 @@ export async function getTervezesHet(resKulcs?: string, het?: string): Promise<T
       napok, telephely, kmKoltseg, ma
     );
     resek.push(...r.resek);
-    return { kod: j.kod, sofor: j.sofor, cellak: r.cellak };
+    const tk = tachoKijelzes(tachok.get(j.kod)?.tacho, tachoMost);
+    return { kod: j.kod, sofor: j.sofor, cellak: r.cellak, tacho: tk ? { chip: tk.chip, reszletek: tk.reszletek } : null };
   });
 
   const mult: (MultFuvar & { le: Pont | null })[] = sorok

@@ -90,4 +90,5 @@ export const ZAR_KULCS = {
   szamlaSzinkron: 72_002,
   modellSzinkron: 72_003,
   driveSync: 72_004,
+  telemetriaGyujto: 72_005,
 } as const;

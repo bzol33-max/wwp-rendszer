@@ -1,5 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
 import { formatBudapestFaliora } from "./idozona";
+import { EcofleetError, maszkoltUzenet } from "@/lib/ecofleet/kliens";
 
 // Ecofleet (FleetComplete / "seeme") GPS API kliens.
 //
@@ -7,6 +8,11 @@ import { formatBudapestFaliora } from "./idozona";
 // a doksi elnevezése ellenére) — lásd https://app.ecofleet.com/seeme/services/apidoc/seeme
 // Válasz mindig XML, sikeres híváskor <status>0</status>, hiba esetén
 // <status> != 0 és <errormessage> tartalmazza az okot.
+//
+// 2026-10-16 (docs/ecofleet-telemetria-terv.md 1. pont): az új JSON-kliens a
+// lib/ecofleet/kliens.ts; az EcofleetError UGYANAZ az osztály (innen csak
+// re-exportálva), minden innen kijutó hibaüzenet maszkolva (kulcs/URL nélkül),
+// a getFleetLastPositions() pedig 30 s-ig gyorsítótárazott, in-flight dedup-pal.
 
 const ECOFLEET_BASE = "https://app.ecofleet.com/seeme/Api";
 
@@ -16,7 +22,17 @@ const parser = new XMLParser({
   isArray: (name) => name === "node",
 });
 
-export class EcofleetError extends Error {}
+export { EcofleetError };
+
+/** A kulcsos URL-lel hívott fetch: hálózati hiba/időtúllépés → maszkolt EcofleetError (az eredeti hiba nem kerül `cause`-ba). */
+async function vedettFetch(url: string): Promise<Response> {
+  try {
+    return await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(20_000) });
+  } catch (e) {
+    const ok = e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError") ? "időtúllépés" : e instanceof Error ? e.message : String(e);
+    throw new EcofleetError(`Ecofleet hálózati hiba: ${maszkoltUzenet(ok)}`);
+  }
+}
 
 type EcofleetEnvelope = {
   nodes?: {
@@ -41,8 +57,8 @@ async function ecofleetGet<T>(
     if (v !== undefined && v !== "") url.searchParams.set(k, v);
   }
 
-  const res = await fetch(url.toString(), { cache: "no-store", signal: AbortSignal.timeout(20_000) });
-  const xml = await res.text();
+  const res = await vedettFetch(url.toString());
+  const xml = await res.text().catch(() => "");
 
   let parsed: EcofleetEnvelope;
   try {
@@ -54,7 +70,10 @@ async function ecofleetGet<T>(
   const nodes = parsed.nodes;
   if (!nodes || String(nodes.status) !== "0") {
     throw new EcofleetError(
-      nodes?.errormessage || `Ecofleet hiba (HTTP ${res.status}, státusz: ${nodes?.status ?? "?"})`
+      maszkoltUzenet(
+        (nodes?.errormessage ? String(nodes.errormessage) : "") ||
+          `Ecofleet hiba (HTTP ${res.status}, státusz: ${nodes?.status ?? "?"})`
+      )
     );
   }
 
@@ -96,8 +115,34 @@ function toNumberOrNull(v: number | string | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-/** Az összes jármű utolsó ismert GPS-adata egy hívással. */
-export async function getFleetLastPositions(): Promise<EcofleetPosition[]> {
+const POZICIO_CACHE_MS = 30_000;
+let poziciokCache: { adat: EcofleetPosition[]; lekerveAt: number } | null = null;
+let poziciokFolyamatban: Promise<EcofleetPosition[]> | null = null;
+
+/**
+ * Az összes jármű utolsó ismert GPS-adata egy hívással. 30 s-ig
+ * folyamaton belül gyorsítótárazva; egyidejű hívók ugyanazt az ígéretet
+ * kapják, hiba nem kerül gyorsítótárba. A hívók ne módosítsák a tömböt
+ * (megosztott) — mindegyik csak olvassa / find-ol benne.
+ */
+export function getFleetLastPositions(): Promise<EcofleetPosition[]> {
+  if (poziciokCache && Date.now() - poziciokCache.lekerveAt <= POZICIO_CACHE_MS) {
+    return Promise.resolve(poziciokCache.adat);
+  }
+  if (poziciokFolyamatban) return poziciokFolyamatban;
+  const igeret = lekerFleetLastPositions().then((adat) => {
+    poziciokCache = { adat, lekerveAt: Date.now() };
+    return adat;
+  });
+  poziciokFolyamatban = igeret;
+  const takarit = () => {
+    if (poziciokFolyamatban === igeret) poziciokFolyamatban = null;
+  };
+  igeret.then(takarit, takarit);
+  return igeret;
+}
+
+async function lekerFleetLastPositions(): Promise<EcofleetPosition[]> {
   const response = await ecofleetGet<{ node?: RawLastData[] }>("Vehicles/getLastData");
   const nodes = response.node ?? [];
   return nodes
@@ -265,11 +310,11 @@ export async function getUtvonalJelentes(objectIds: string[], kezdetNapISO: stri
   url.searchParams.set("endTimestamp", `${vegNapISO} 23:59:59`);
   for (const id of objectIds) url.searchParams.append("objectIds[]", id);
 
-  const res = await fetch(url.toString(), { cache: "no-store", signal: AbortSignal.timeout(20_000) });
-  const szoveg = (await res.text()).replace(/\r/g, "");
+  const res = await vedettFetch(url.toString());
+  const szoveg = (await res.text().catch(() => "")).replace(/\r/g, "");
   if (/^\s*<\?xml/.test(szoveg)) {
     const uzenet = szoveg.match(/<errormessage>([^<]*)<\/errormessage>/)?.[1];
-    throw new EcofleetError(uzenet || `Ecofleet jelentés hiba (HTTP ${res.status}).`);
+    throw new EcofleetError(maszkoltUzenet(uzenet || `Ecofleet jelentés hiba (HTTP ${res.status}).`));
   }
   if (!res.ok) throw new EcofleetError(`Ecofleet jelentés hiba (HTTP ${res.status}).`);
 

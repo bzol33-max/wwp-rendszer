@@ -60,6 +60,12 @@ export function SoforNapNezet({ nap, ma, cim }: { nap: SoforNap | null; ma: bool
         {nap.hiba ? <div className="mt-1 text-xs text-[var(--m-amb)]">GPS: {nap.hiba}</div> : null}
       </div>
 
+      {ma && nap.tachoSor ? (
+        <div className="rounded-xl bg-[var(--m-mint-d)] px-3 py-2 text-sm font-semibold text-[var(--m-mint)]" title="Tachográf-adat (Ecofleet)">
+          {nap.tachoSor}
+        </div>
+      ) : null}
+
       {ma && kovMegallo && kovFuvar ? <KovetkezoKartya m={kovMegallo} f={kovFuvar} /> : null}
 
       {nap.fuvarok.length === 0 ? (

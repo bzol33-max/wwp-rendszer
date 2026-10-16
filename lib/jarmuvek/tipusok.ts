@@ -92,6 +92,8 @@ export type JarmuvekOldal = {
   telephelyek: TelephelyPontAdat[];
   /** A fuvar_beallitas alap fogyasztása (l/100 km) — az új jármű űrlapjának alapértéke. */
   alapFogyasztasL100: number;
+  /** CAN-telemetria jármű-id szerint (utolsó 7 nap); hiányzik, ha a tábla nincs vagy üres. */
+  telemetria?: Record<string, JarmuTelemetria>;
 };
 
 // ---------------------------------------------------------------------------
@@ -354,4 +356,71 @@ export function elsoSzabadSzin(hasznalt: JarmuSzin[], szinek: readonly JarmuSzin
   const szabad = szinek.find((s) => (db.get(s) ?? 0) === 0);
   if (szabad) return szabad;
   return [...szinek].sort((a, b) => (db.get(a) ?? 0) - (db.get(b) ?? 0))[0];
+}
+
+// ---------------------------------------------------------------------------
+// CAN-telemetria (Ecofleet, jarmu_can_nap) — a Járművek lista három oszlopa
+
+/** A jarmu_can_nap egy napi sorának az a része, ami a listához kell (a canNapok() sorai ennek megfelelnek; a numeric szövegként is jöhet). */
+export type CanNapSor = {
+  nap: string;
+  literCan: number | string | null;
+  kmCan: number | string | null;
+  szervizHatraKm: number | string | null;
+  szervizMegbizhato: boolean | null;
+  tengelyTerhelesKg: Record<string, number> | string | null;
+};
+
+export type JarmuTelemetria = {
+  /** Utolsó ismert szervizig hátralévő km; null: nincs adat. */
+  szervizHatraKm: number | null;
+  /** false: a jármű nem küld értelmes szerviz-távot („—”). */
+  szervizMegbizhato: boolean;
+  /** Σ liter / Σ km × 100 a megadott napokon, ha Σ km ≥ 100; különben null. */
+  canL100: number | null;
+  canKm: number;
+  /** Utolsó tengelyterhelés összesen (kg) és tengelyenként. */
+  tengelyOsszKg: number | null;
+  tengelyek: Record<string, number> | null;
+};
+
+const szamE = (v: unknown): number | null => {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
+function tengelyParse(v: CanNapSor["tengelyTerhelesKg"]): Record<string, number> | null {
+  let o: unknown = v;
+  if (typeof v === "string") {
+    try { o = JSON.parse(v); } catch { return null; }
+  }
+  if (!o || typeof o !== "object" || Array.isArray(o)) return null;
+  const ki: Record<string, number> = {};
+  for (const [k, x] of Object.entries(o)) {
+    const n = szamE(x);
+    if (n != null) ki[k] = n;
+  }
+  return Object.keys(ki).length ? ki : null;
+}
+
+/** Egy jármű napi CAN-soraiból a lista oszlopai (tiszta, tesztelhető). Üres bemenet → null. */
+export function jarmuTelemetriaOsszesit(sorok: CanNapSor[]): JarmuTelemetria | null {
+  if (!sorok.length) return null;
+  const rend = [...sorok].sort((a, b) => a.nap.localeCompare(b.nap));
+  let liter = 0, km = 0;
+  for (const s of rend) {
+    const l = szamE(s.literCan), k = szamE(s.kmCan);
+    if (l != null && k != null && k > 0) { liter += l; km += k; }
+  }
+  const szervizSor = [...rend].reverse().find((s) => szamE(s.szervizHatraKm) != null);
+  const tengelySor = [...rend].reverse().map((s) => tengelyParse(s.tengelyTerhelesKg)).find((t) => t != null) ?? null;
+  return {
+    szervizHatraKm: szervizSor ? szamE(szervizSor.szervizHatraKm) : null,
+    szervizMegbizhato: !!szervizSor?.szervizMegbizhato,
+    canL100: km >= 100 ? Math.round((liter / km) * 1000) / 10 : null,
+    canKm: Math.round(km),
+    tengelyOsszKg: tengelySor ? Math.round(Object.values(tengelySor).reduce((a, b) => a + b, 0)) : null,
+    tengelyek: tengelySor,
+  };
 }
