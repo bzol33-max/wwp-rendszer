@@ -14,6 +14,7 @@ import { query } from "@/lib/db";
 import { requireAnyViewPermission } from "@/lib/auth/require-permission";
 import { verifySession } from "@/lib/auth/dal";
 import { hasznalatOsszesit, type HasznalatSor, type HasznalatUtvonal } from "@/lib/fuvarozas2/oldal-naplo-alap";
+import { gpsEgeszseg } from "@/lib/fuvarozas2/rendszer-alap";
 
 /**
  * „Használat (14 nap)” (db/migrations/039_oldal_megnyitas.sql): útvonalanként
@@ -122,18 +123,37 @@ export async function getRendszerEgeszseg(): Promise<RendszerEgeszseg> {
     utoljara: null,
   });
 
-  // 3. GPS (Ecofleet) — a megállókra írt utolsó érintés.
-  const [gps] = await query<{ utolso: string | null }>(
-    `select greatest(max(gps_erkezes), max(gps_tavozas))::text as utolso from fuvar_megallok`
+  // 3. GPS (Ecofleet). A döntő a figyelő életjele (rendszer_eletjel, 043 —
+  // minden 5 perces kör végén íródik), nem az utolsó írás kora: hétvégén,
+  // üres napon nincs mit érinteni, az nem hiba. Az utolsó írás csak akkor
+  // számít, ha van aktív megálló (lásd rendszer-alap.ts gpsEgeszseg).
+  const [gps] = await query<{ utolso: string | null; aktiv: number }>(
+    `select (select greatest(max(gps_erkezes), max(gps_tavozas)) from fuvar_megallok)::text as utolso,
+       (select count(*) from fuvar_megallok g join fuvar_megbizasok m on m.id = g.megbizas_id
+         where m.torolt_at is null and m.allapot in ('ellenorzesre_var','tervezett','folyamatban')
+           and (m.jarmu_id is not null or coalesce(m.jarmu, '') <> '')
+           and g.tervezett_nap <= (now() at time zone 'Europe/Budapest')::date
+           and g.gps_erkezes is null)::int as aktiv`
   );
+  // A tábla a 043-ban jön létre — előtte (vagy hibánál) „nincs életjel”.
+  const eletjel = await query<{ utolso_kor: string; adat: { vizsgalt?: number; hibak?: number; elso_hiba?: string | null } | null }>(
+    `select utolso_kor::text, adat from rendszer_eletjel where kulcs = 'teljesites-figyeles'`
+  ).then((r) => r[0] ?? null, () => null);
   const gpsPerc = korPerc(gps?.utolso);
+  const eletjelPerc = eletjel ? (Date.now() - Date.parse(eletjel.utolso_kor)) / 60000 : null;
+  const gpsAll = gpsEgeszseg({
+    eletjelKorPerc: eletjelPerc === null || Number.isNaN(eletjelPerc) ? null : eletjelPerc,
+    aktivMegalloDb: gps?.aktiv ?? 0,
+    utolsoIrasOra: gpsPerc === null ? null : gpsPerc / 60,
+  });
+  const korHibak = eletjel?.adat?.hibak ?? 0;
   sorok.push({
     kulcs: "gps",
     cim: "GPS-érintések (Ecofleet)",
-    allapot: gpsPerc === null ? "nincs_adat" : gpsPerc > 60 * 12 ? "figyelmeztetes" : "rendben",
-    ertek: kor(gpsPerc),
-    reszlet: "a megállókra írt utolsó érkezés/távozás",
-    utoljara: gps?.utolso ?? null,
+    allapot: gpsAll.szint === "figyelj" ? "figyelmeztetes" : gpsAll.szint,
+    ertek: gpsAll.szoveg,
+    reszlet: `utolsó érkezés/távozás: ${kor(gpsPerc)}${korHibak ? ` · az utolsó körben ${korHibak} hiba${eletjel?.adat?.elso_hiba ? `: ${eletjel.adat.elso_hiba}` : ""}` : ""}`,
+    utoljara: eletjel?.utolso_kor ?? null,
   });
 
   // 4. Számlázz.hu szinkron.
@@ -155,7 +175,7 @@ export async function getRendszerEgeszseg(): Promise<RendszerEgeszseg> {
     `select
       (select count(*) from fuvar_megbizasok where torolt_at is null and allapot is null)::int as allapot_nelkul,
       (select count(*) from fuvar_migracio_hiba where rendezve_at is null)::int as migracio_hiba,
-      (select count(*) from fuvar_megbizasok m where m.jelleg = 'ber' and m.allapot in ('teljesitve','szamlazhato','szamlazva','email_elment','postazva','lezart')
+      (select count(*) from fuvar_megbizasok m where m.jelleg = 'ber' and m.torolt_at is null and m.allapot in ('teljesitve','szamlazhato','szamlazva','email_elment','postazva','lezart')
          and not exists (select 1 from fuvar_elszamolas e where e.megbizas_id = m.id))::int as elszamolas_nelkul,
       (select count(*) from fuvar_megbizasok m where m.torolt_at is null and m.allapot is not null
          and not exists (select 1 from fuvar_megallok g where g.megbizas_id = m.id))::int as megallo_nelkul`

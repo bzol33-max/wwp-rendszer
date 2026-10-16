@@ -37,6 +37,9 @@ import { rogzitGpsErinteseket } from "./megallo-naplo";
 import { betoltEloElozmenyt, getEloElozmeny, rogzitEloMegfigyelest } from "./elo-elozmeny";
 import { budapestFalioraToInstant, budapestNapISO, formatBudapestFaliora } from "./idozona";
 import type { IdovonalSzakasz, TervezettCim, TervezettMegallo } from "./idovonal";
+import { figyelendo } from "./figyeles-dontes";
+import { maszkoltUzenet } from "@/lib/ecofleet/kliens";
+import { query } from "@/lib/db";
 
 /** Ennyi nappal visszamenőleg vesszük figyelembe a lerakandó fuvarokat és a trip-előzményt. */
 const VISSZATEKINTES_NAP = 3;
@@ -46,6 +49,44 @@ export type TeljesitesFigyelesEredmeny = {
   automatikusanTeljesitve: number;
   hibak: string[];
 };
+
+/** Valódi, maszkolt hibaszöveg (a kulcs és az URL nem kerülhet a naplóba / az életjelbe). */
+function hibaSzoveg(err: unknown): string {
+  return maszkoltUzenet(err instanceof Error ? `${err.name}: ${err.message}` : String(err));
+}
+
+/** Mely fuvaroknak van olyan megállója, ahol a GPS érkezést látott, de távozást még nem. */
+async function nyitottTavozasuFuvarok(ids: string[]): Promise<Set<string>> {
+  if (ids.length === 0) return new Set();
+  const sorok = await query<{ id: string }>(
+    `select distinct megbizas_id::text as id from fuvar_megallok
+      where megbizas_id = any($1::bigint[]) and gps_erkezes is not null and gps_tavozas is null`,
+    [ids]
+  );
+  return new Set(sorok.map((r) => r.id));
+}
+
+/**
+ * A figyelő életjele (rendszer_eletjel, 043): a Rendszer lap ebből látja,
+ * fut-e a kör. Soha nem dob — ha a tábla még nincs meg (migráció előtt),
+ * csak naplóz.
+ */
+export async function rogzitEletjelet(eredmeny: TeljesitesFigyelesEredmeny): Promise<void> {
+  try {
+    await query(
+      `insert into rendszer_eletjel (kulcs, utolso_kor, adat) values ('teljesites-figyeles', now(), $1::jsonb)
+       on conflict (kulcs) do update set utolso_kor = excluded.utolso_kor, adat = excluded.adat`,
+      [JSON.stringify({
+        vizsgalt: eredmeny.vizsgalt,
+        hibak: eredmeny.hibak.length,
+        teljesitve: eredmeny.automatikusanTeljesitve,
+        elso_hiba: eredmeny.hibak[0] ?? null,
+      })]
+    );
+  } catch (err) {
+    console.error("[teljesites-figyeles] életjel írása sikertelen:", hibaSzoveg(err));
+  }
+}
 
 const ido = (d: Date | null) => (d ? formatBudapestFaliora(d).slice(5, 16) : "-");
 
@@ -131,23 +172,37 @@ export async function futtatTeljesitesFigyeles(): Promise<TeljesitesFigyelesEred
     eloPoziciok = await getFleetLastPositions();
   } catch (err) {
     eredmeny.hibak.push(
-      `Élő GPS-pozíciók lekérése sikertelen: ${err instanceof EcofleetError ? err.message : "ismeretlen hiba"}`
+      `Élő GPS-pozíciók lekérése sikertelen: ${err instanceof EcofleetError ? err.message : hibaSzoveg(err)}`
     );
     eloPoziciok = [];
   }
+
+  // A < 24 órája lezárt fuvar is figyelt marad, ha valamelyik megállójáról
+  // még nincs GPS-távozás (a sofőr „Indulok”-ja / a kézi zárás megelőzheti a
+  // tényleges elindulást) — lásd figyeles-dontes.ts.
+  const nyitottTavozas = await nyitottTavozasuFuvarok(sorok.filter((s) => s.teljesitve && !s.szamlas).map((s) => s.id));
+  const figyelt = (s: (typeof sorok)[number]) => {
+    const lezarvaMs = s.teljesitve && s.teljesitve_at ? Date.parse(s.teljesitve_at) : NaN;
+    return figyelendo({
+      nyitott: !s.teljesitve && !s.szamlas,
+      lezarvaOraja: Number.isNaN(lezarvaMs) ? null : Math.max(0, (most.getTime() - lezarvaMs) / 3_600_000),
+      vanNyitottTavozas: nyitottTavozas.has(s.id),
+      szamlazva: s.szamlas,
+    });
+  };
 
   const jarmuLista = await getJarmuvek();
   for (const jarmu of jarmuLista) {
     if (!jarmu.ecofleetObjectId) continue; // nincs GPS-kötés ehhez a járműhöz
     const sajat = sorok.filter((s) => resolveJarmu(s.jarmu, jarmuLista) === jarmu);
     if (sajat.length === 0) continue;
-    // Nyitott: még nem Teljesítve és nincs számlázva — a lerakási nap múlása
-    // (a Megbízások fülön Számla/Posta) nem zárja ki: a csúszó fuvar (a #130
-    // egy nappal a tervezett után ért Debrecenbe) is lezárandó, ha a GPS
-    // szerint kész.
-    const nyitottak = sajat.filter((s) => !s.teljesitve && !s.szamlas);
-    eredmeny.vizsgalt += nyitottak.length;
-    if (nyitottak.length === 0) continue; // csak naplózni nem érdemes külső hívásokat indítani
+    // Figyelt: nyitott (még nem Teljesítve és nincs számlázva — a lerakási
+    // nap múlása nem zárja ki: a csúszó fuvar, pl. a #130, is lezárandó, ha a
+    // GPS szerint kész), vagy < 24 órája lezárt, nyitott távozással. A
+    // lezárást továbbra is csak a nyitottak kaphatják (lent).
+    const figyeltek = sajat.filter(figyelt);
+    eredmeny.vizsgalt += figyeltek.length;
+    if (figyeltek.length === 0) continue; // csak naplózni nem érdemes külső hívásokat indítani
 
     try {
       const fuvarok = await Promise.all(sajat.map(async (sor) => ({ sor, megallok: await epitsErintesMegallokat(sor) })));
@@ -226,7 +281,7 @@ export async function futtatTeljesitesFigyeles(): Promise<TeljesitesFigyelesEred
       }
     } catch (err) {
       eredmeny.hibak.push(
-        `${jarmu.sofor}: ${err instanceof EcofleetError ? err.message : err instanceof Error ? err.message : "ismeretlen hiba"}`
+        `${jarmu.sofor}: ${err instanceof EcofleetError ? err.message : hibaSzoveg(err)}`
       );
     }
   }

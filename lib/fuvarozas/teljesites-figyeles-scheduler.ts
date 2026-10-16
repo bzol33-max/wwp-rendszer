@@ -5,7 +5,8 @@
 // meg üzleti órákon kívül. A `instrumentation.ts` indítja a szerver
 // induláskor.
 
-import { futtatTeljesitesFigyeles } from "./teljesites-figyeles";
+import { futtatTeljesitesFigyeles, rogzitEletjelet, type TeljesitesFigyelesEredmeny } from "./teljesites-figyeles";
+import { maszkoltUzenet } from "@/lib/ecofleet/kliens";
 import { futtatRendszerkent } from "@/lib/auth/system-context";
 import { egyetlenPeldanyban, ZAR_KULCS } from "@/lib/db";
 
@@ -15,9 +16,24 @@ let inditva = false;
 
 async function tick() {
   try {
-    const zar = await egyetlenPeldanyban(ZAR_KULCS.teljesitesFigyeles, () =>
-      futtatRendszerkent("teljesites-figyeles", futtatTeljesitesFigyeles)
-    );
+    // Az életjel (rendszer_eletjel) a zár alatt, minden lefutott kör végén
+    // íródik — akkor is, ha a kör hibával állt meg (a hibát az adatba írja).
+    // A rogzitEletjelet soha nem dob. Ha a zár foglalt, a másik példány írja.
+    const zar = await egyetlenPeldanyban(ZAR_KULCS.teljesitesFigyeles, async () => {
+      let eredmeny: TeljesitesFigyelesEredmeny;
+      try {
+        eredmeny = await futtatRendszerkent("teljesites-figyeles", futtatTeljesitesFigyeles);
+      } catch (err) {
+        await rogzitEletjelet({
+          vizsgalt: 0,
+          automatikusanTeljesitve: 0,
+          hibak: [maszkoltUzenet(err instanceof Error ? `${err.name}: ${err.message}` : String(err))],
+        });
+        throw err;
+      }
+      await rogzitEletjelet(eredmeny);
+      return eredmeny;
+    });
     if (!zar.futott) return; // az előző kör (vagy a másik példány) még fut
     const eredmeny = zar.eredmeny;
     if (eredmeny.automatikusanTeljesitve || eredmeny.hibak.length) {
