@@ -207,7 +207,7 @@ export function TervezesHetNezet({ adat, szerkeszthet }: { adat: TervezesHet; sz
                           <span className="block text-xs text-muted-foreground">{a.ehhez!.letra.fokok.map((f) => (f.eur != null ? eur(f.eur) : "—")).join(" · ")} €</span>
                           <span className="block text-[11px] text-muted-foreground/80">alsó határ visszfuvarnál {ezer(a.ehhez!.alsoFt)}{a.ehhez!.alsoEur != null ? ` · ${eur(a.ehhez!.alsoEur)} €` : ""}{a.ehhez!.elozmenyFt ? ` · előzmény ${ezer(a.ehhez!.elozmenyFt)}` : ""}</span>
                         </td>
-                        <td className="py-2 pl-2 text-right"><span className="flex flex-col items-end gap-1"><Link href={`/fuvarozas2/timocom?id=${a.id}`} className="rounded-lg border px-2.5 py-1 text-xs font-medium hover:bg-muted">Megnyitom</Link>{szerkeszthet ? <AjanlatGombok id={a.id} allapot={a.allapot} /> : null}</span></td>
+                        <td className="py-2 pl-2 text-right"><span className="flex flex-col items-end gap-1"><Link href={`/fuvarozas2/timocom?id=${a.id}`} className="rounded-lg border px-2.5 py-1 text-xs font-medium hover:bg-muted">Megnyitom</Link>{szerkeszthet ? <AjanlatGombok id={a.id} allapot={a.allapot} javaslat={{ jarmuKod: k.kocsi, felrakasNap: k.nap, dijFt: a.ehhez!.kerjFt }} /> : null}</span></td>
                       </tr>
                     ))}
                   </tbody>

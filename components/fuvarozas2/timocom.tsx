@@ -200,7 +200,7 @@ export function TimocomAjanlatKartya({ sor }: { sor: TimocomSor }) {
         ) : null}
         {canEdit && !lezart ? (
           <div className="flex flex-wrap gap-2">
-            <EredmenyGombok id={sor.id} allapot={sor.megbizasId ? sor.allapot : sor.allapot === "nyert" ? "ajanlva" : sor.allapot} nyitva={urlap} setNyitva={setUrlap} />
+            <EredmenyGombok id={sor.id} allapot={sor.allapot === "nyert" ? "ajanlva" : sor.allapot} nyitva={urlap} setNyitva={setUrlap} />
             {sor.allapot !== "ajanlva" ? <Button size="sm" variant="outline" disabled={fut} onClick={() => allit("ajanlva")}>Ajánlatot adtam</Button> : null}
             {sor.allapot !== "elvetve" ? <Button size="sm" variant="outline" disabled={fut} onClick={() => allit("elvetve")}>Elvetem</Button> : null}
             {sor.allapot !== "nyitott" ? <Button size="sm" variant="ghost" disabled={fut} onClick={() => allit("nyitott")}>Vissza nyitottra</Button> : null}
