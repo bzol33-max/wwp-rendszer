@@ -136,6 +136,7 @@ export function BerFuvarUrlap({ id, kezdo, megseHref, reszletHref, kocsiLista }:
         if (id) {
           const r = await modositBerFuvart(id, a);
           if (!r.ok) { toast.error(r.hiba); return; }
+          if (r.figyelmeztetes) toast.warning(r.figyelmeztetes, { duration: 15000 });
           celId = id;
         } else {
           const r = await ujBerFuvar(a);

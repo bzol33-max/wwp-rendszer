@@ -140,6 +140,7 @@ export async function mentDuvenbeckDokumentumot(
   const levaltott = await query<{ id: string }>(
     `update fuvar_megbizasok
      set statusz = 'torolt',
+         torolt_at = coalesce(torolt_at, now()),
          megjegyzes = coalesce(megjegyzes || ' | ', '') ||
            'A dokumentum determinisztikus újrafeldolgozása leváltotta (Út ID ' || $3 || ').',
          dokumentum_url = null,

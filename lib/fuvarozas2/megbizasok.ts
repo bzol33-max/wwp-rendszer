@@ -210,7 +210,7 @@ export async function getBerFuvarAdat(id: string): Promise<BerFuvarAdat | null> 
   return a ?? null;
 }
 
-export async function modositBerFuvart(id: string, a: BerFuvarAdat): Promise<{ ok: true } | { ok: false; hiba: string }> { return actions.modositBerFuvart(id, a); }
+export async function modositBerFuvart(id: string, a: BerFuvarAdat): Promise<{ ok: true; figyelmeztetes?: string } | { ok: false; hiba: string }> { return actions.modositBerFuvart(id, a); }
 
 /** Kézi új bérfuvar (ami nem e-mailben vagy Drive-on jött). */
 export async function ujBerFuvar(a: BerFuvarAdat): Promise<{ ok: true; id: string } | { ok: false; hiba: string }> { return actions.ujBerFuvar(a); }
