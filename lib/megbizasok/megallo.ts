@@ -31,12 +31,16 @@ export async function megalloKeszVisszavonTx(tx: Querier, fuvarId: string, index
   if (id) await tx(`update fuvar_megallok set sofor_kesz_at = null, sofor_kesz_by = null where id = $1`, [id]);
 }
 
-export async function megerkezettTx(tx: Querier, fuvarId: string, index: number, _nev: string | null) {
+// A `nev` a tükörtábla kesz_by mezőjébe ment; a hívó (lib/fuvarozas/sofor.ts)
+// kompatibilitásáért marad a paraméterlistában.
+export async function megerkezettTx(tx: Querier, fuvarId: string, index: number, nev: string | null) {
+  void nev;
   const id = await megalloIdTx(tx, fuvarId, index);
   if (id) await tx(`update fuvar_megallok set sofor_megerkezett_at = coalesce(sofor_megerkezett_at, now()) where id = $1`, [id]);
 }
 
-export async function varakozasTx(tx: Querier, fuvarId: string, index: number, muvelet: "kezd" | "vege", _nev: string | null) {
+export async function varakozasTx(tx: Querier, fuvarId: string, index: number, muvelet: "kezd" | "vege", nev: string | null) {
+  void nev;
   const id = await megalloIdTx(tx, fuvarId, index);
   if (muvelet === "kezd") {
     if (id) await tx(`update fuvar_megallok set varakozas_kezdete = coalesce(varakozas_kezdete, now()) where id = $1`, [id]);

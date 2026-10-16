@@ -84,8 +84,20 @@ export function megbizasAjanlatbol(a: AjanlatAdat, d: AjanlatDontes): AjanlatMeg
   };
 }
 
-/** A megnyert ajánlat Ft/km-e (ár-memória): csak Ft-os díj és ismert, pozitív km esetén. */
-export function nyertFtKm(x: { ar: number | null; penznem: string | null; km: number | null }): number | null {
-  if (x.ar == null || !(x.ar > 0) || x.penznem !== "HUF" || x.km == null || !(x.km > 0)) return null;
-  return Math.round((x.ar / x.km) * 10) / 10;
+/**
+ * Magyar -ra/-re rag egy névhez („Micóra”, „Gergőre”, „Janira”): az utolsó
+ * nem-i/í magánhangzó dönt (az i semleges); csak i → -re.
+ */
+export function raRe(nev: string): string {
+  const mh = nev.toLowerCase().match(/[aáeéiíoóöőuúüű]/g) ?? [];
+  const dont = [...mh].reverse().find((c) => c !== "i" && c !== "í") ?? mh[mh.length - 1];
+  return `${nev}${dont && "eéöőüűií".includes(dont) ? "re" : "ra"}`;
+}
+
+/** A „Megnyertük” űrlap díj-mezője: szóköz, ezres pont / tizedesvessző engedve; érvénytelen → null. */
+export function dijSzambol(s: string): number | null {
+  let t = s.replace(/\s/g, "");
+  t = /^\d{1,3}(\.\d{3})+$/.test(t) ? t.replace(/\./g, "") : t.replace(",", ".");
+  const n = Number(t);
+  return t && Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null;
 }

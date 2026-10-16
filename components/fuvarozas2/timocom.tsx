@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useCanEdit } from "@/components/auth/edit-permission-context";
 import { allitTimocomAllapotot, rogzitTimocomAjanlatot, type TimocomSor } from "@/lib/fuvarozas2/timocom";
 import { dekodolHash, konyvjelzoKod, type TimocomHely } from "@/lib/fuvarozas2/timocom-ajanlat";
+import { EredmenyGombok, MegbizasLink, MegnyeresUrlap } from "@/components/fuvarozas2/ajanlat-gombok";
 
 /** Ár kiírása; pénznem nélkül „pénznem?” (nem feltételezünk EUR-t). */
 function arCimke(ar: { osszeg: number; penznem: string | null }) {
@@ -123,16 +124,20 @@ export function TimocomBefogado({ vanAktiv }: { vanAktiv: boolean }) {
   );
 }
 
-const ALLAPOT: Record<string, string> = { nyitott: "nyitott", ajanlva: "ajánlat kiment", elvetve: "elvetve", hozzarendelve: "hozzárendelve", lejart: "lejárt" };
+const ALLAPOT: Record<string, string> = { nyitott: "nyitott", ajanlva: "ajánlat kiment", elvetve: "elvetve", hozzarendelve: "hozzárendelve", lejart: "lejárt", nyert: "megnyertük", vesztett: "nem nyertük" };
 
 export function TimocomAjanlatKartya({ sor }: { sor: TimocomSor }) {
   const a = sor.ajanlat;
   const canEdit = useCanEdit();
   const router = useRouter();
   const [fut, startTransition] = useTransition();
+  const [urlap, setUrlap] = useState(false);
+  // A megnyert, élő megbízással bíró ajánlat állapota nem állítható vissza (a megbízás a mérvadó).
+  const lezart = sor.allapot === "nyert" && !!sor.megbizasId;
   const allit = (x: "nyitott" | "ajanlva" | "elvetve") =>
     startTransition(async () => {
-      await allitTimocomAllapotot(sor.id, x);
+      const r = await allitTimocomAllapotot(sor.id, x);
+      if (!r.ok) toast.error("Nem sikerült menteni.");
       router.refresh();
     });
   return (
@@ -185,13 +190,23 @@ export function TimocomAjanlatKartya({ sor }: { sor: TimocomSor }) {
           </div>
           {a.megjegyzes ? <div className="sm:col-span-2"><span className="text-muted-foreground">Megjegyzés:</span> {a.megjegyzes}</div> : null}
         </div>
-        {canEdit ? (
+        {sor.allapot === "nyert" || sor.allapot === "vesztett" ? (
+          <p className={`rounded-md px-2 py-1 ${sor.allapot === "nyert" ? "bg-emerald-50 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100" : "bg-muted text-muted-foreground"}`}>
+            {sor.allapot === "nyert" ? "Megnyertük" : "Nem nyertük"}
+            {sor.ajanlottAr != null ? ` · ${sor.ajanlottAr.toLocaleString("hu-HU")} ${sor.ajanlottPenznem === "EUR" ? "EUR" : "Ft"}` : ""}
+            {sor.eredmenyAt ? ` · ${sor.eredmenyAt.slice(5, 10).replace("-", ".")}.` : ""}
+            {sor.megbizasId ? <> · <MegbizasLink megbizasId={sor.megbizasId} /></> : sor.allapot === "nyert" ? " · a megbízás törölve" : ""}
+          </p>
+        ) : null}
+        {canEdit && !lezart ? (
           <div className="flex flex-wrap gap-2">
+            <EredmenyGombok id={sor.id} allapot={sor.megbizasId ? sor.allapot : sor.allapot === "nyert" ? "ajanlva" : sor.allapot} nyitva={urlap} setNyitva={setUrlap} />
             {sor.allapot !== "ajanlva" ? <Button size="sm" variant="outline" disabled={fut} onClick={() => allit("ajanlva")}>Ajánlatot adtam</Button> : null}
             {sor.allapot !== "elvetve" ? <Button size="sm" variant="outline" disabled={fut} onClick={() => allit("elvetve")}>Elvetem</Button> : null}
             {sor.allapot !== "nyitott" ? <Button size="sm" variant="ghost" disabled={fut} onClick={() => allit("nyitott")}>Vissza nyitottra</Button> : null}
           </div>
         ) : null}
+        {canEdit && !lezart && urlap ? <MegnyeresUrlap id={sor.id} onBezar={() => setUrlap(false)} /> : null}
         <p className="text-xs text-muted-foreground">Lent a Kalkulátor a megállókkal kitöltve: válaszd ki a kocsit, és kapcsold be a telephelyről indulást, ha onnan menne.</p>
       </CardContent>
     </Card>
