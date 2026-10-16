@@ -13,6 +13,10 @@ export function ujJarmuId(
   feloldott: number | null
 ): { jarmuId: number | null; figyelmeztetes: string | null } {
   const uj = norm(ujKocsi);
+  // Változatlan kocsi-szöveg mellett a meglévő (kézzel / „Kocsira adom”-mal
+  // beállított) jarmu_id marad — más mező szerkesztése nem tehet át csendben
+  // másik kocsira (QA #1, 2026-10-16).
+  if (uj === norm(regiKocsi) && regiJarmuId !== null) return { jarmuId: regiJarmuId, figyelmeztetes: null };
   if (uj === "") return { jarmuId: null, figyelmeztetes: null };
   if (feloldott !== null) return { jarmuId: feloldott, figyelmeztetes: null };
   if (uj === norm(regiKocsi)) return { jarmuId: regiJarmuId, figyelmeztetes: null };

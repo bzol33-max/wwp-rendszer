@@ -459,7 +459,7 @@ const KALIBRACIO_MIN_MINTASZAM_IDOSAV = 3;
 /** Ennyi óránként frissítjük legfeljebb a kalibrációt — nem kell minden getIdovonalak-híváskor újraszámolni. */
 const KALIBRACIO_ERVENYESSEG_ORA = 24;
 /** Ha az Ecofleet-hívás hibázott vagy 0 minta jött, a tartalék-eredmény csak ennyi percig él (nem 24 óráig) — lásd kalibracioGyorsitotarazhato. */
-const KALIBRACIO_TARTALEK_ERVENYESSEG_PERC = 5;
+const KALIBRACIO_TARTALEK_ERVENYESSEG_PERC = 15;
 
 /** Napszak/nap-típus sáv, aminek külön korrekciós szorzót tanulunk — a hétvége azért külön, mert a fuvarozási forgalom ott jellemzően egészen más képet mutat, mint hétköznap. */
 type Idosav = "hetvege" | "csucs_reggel" | "napkozben" | "csucs_delutan" | "esti_ejszakai";

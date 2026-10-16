@@ -132,7 +132,16 @@ export function canNapNyersbol(sorok: unknown[]): CanNap {
   }
 
   const tavok = idorend.map((s) => szam(s.CANDistance)).filter((x): x is number => x !== null);
-  const kmCan = tavok.length > 0 ? kerekit2(Math.max(...tavok) - Math.min(...tavok)) : null;
+  // Km-számláló: visszaesés vagy > 2000 km lépés → hibás nap (QA #7).
+  let kmCan: number | null = null;
+  if (tavok.length > 0) {
+    let kmHibas = false;
+    for (let i = 1; i < tavok.length; i++) {
+      const lepes = tavok[i] - tavok[i - 1];
+      if (lepes < 0 || lepes > 2000) kmHibas = true;
+    }
+    if (!kmHibas) kmCan = kerekit2(Math.max(...tavok) - Math.min(...tavok));
+  }
 
   const l100 = literCan !== null && kmCan !== null && kmCan >= L100_MIN_KM ? kerekit2((literCan / kmCan) * 100) : null;
 

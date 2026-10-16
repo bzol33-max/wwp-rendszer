@@ -196,7 +196,7 @@ export async function webhookMent(kulcs: string, payload: unknown): Promise<"uj"
     `insert into ecofleet_webhook_esemeny (kulcs, payload) values ($1, $2::jsonb)
      on conflict (kulcs) do nothing
      returning id::text`,
-    [kulcs, JSON.stringify(payload ?? null)]
+    [kulcs, JSON.stringify(payload ?? null).replace(/\\u0000/g, "")] // a jsonb nem fogad \u0000-t (QA #8)
   );
   return r.length > 0 ? "uj" : "ismetelt";
 }

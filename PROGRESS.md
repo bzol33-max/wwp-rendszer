@@ -1,5 +1,29 @@
 # PROGRESS
 
+## 2026-10-16 — Ecofleet telemetria: élő tachó, CAN-üzemanyag, szerviz, webhook + 0. heti javítások
+
+Döntés (5 szakértő, egyhangú): nincs új párhuzamos fuvarozási rész; a meglévő lapok bővülnek, az új adat egy
+külön, csak hozzáadó rétegen jön be. Terv és fájl-tulajdon: `docs/ecofleet-telemetria-terv.md`.
+
+- **Új adatréteg:** `lib/ecofleet/` (JSON-kliens: 20 s timeout, 1 újrapróbálás 5xx/hálózati hibára, a kulcs soha
+  nem kerül hibaüzenetbe; `getLastDataCachelve` 30 s, in-flight dedup) és `lib/jarmu-telemetria/` (gyűjtő 2 percenként:
+  tachó-pillanat; óránként: tegnapi + mai `getRawData` → napi CAN-liter/km/l100, tankolások, szervizig km, tengelyterhelés).
+  Jármű-azonosítás csak `fuvar_jarmuvek.ecofleet_object_id` szerint. Ecofleet-hibánál semmi nem íródik 0-ként.
+  Migráció: `041_jarmu_telemetria.sql` (jarmu_tacho_pillanat, jarmu_can_nap, ecofleet_webhook_esemeny).
+- **Webhook:** `POST /api/ecofleet/webhook?token=…` (`ECOFLEET_WEBHOOK_TOKEN`, időállandó összevetés, 256 KB, idempotens
+  mentés). Egyelőre csak ment; feldolgozás a következő körben.
+- **Felület:** Ma kocsi-kártya „Tachó: ma még 2 ó 40 p · hét 31/56 ó” (+ régi „GPS-becslés” címkével), Tervezés → A hét
+  chip, sofőr `/m` „Ma még vezethetsz: …”, Járművek: Szervizig / CAN fogyasztás (7 nap) / Tengely. Adat nélkül (JANI) rejtve.
+- **0. heti javítások:** kalibráció Ecofleet-hiba / 0 minta esetén nem kerül 24 órára cache-be (15 perc tartalék);
+  bérfuvar-szerkesztéskor a `jarmu_id` azonnal feloldódik (változatlan kocsi-szövegnél a meglévő marad; feloldhatatlan új
+  szövegnél figyelmeztetés a felületen); egységes soft-delete (`torolt_at` mindig); `042_szamlazott_fuvar_vedelem.sql`:
+  számlázott fuvar fizikailag nem törölhető (trigger); `getFleetLastPositions` 30 s cache.
+- Ellenőrzés: typecheck, eslint, `npm run teszt` 58 szkript zöld (új: teszt-ecofleet-kliens 53, teszt-telemetria 83,
+  teszt-integritas-0het 28 a helyi DB-n), `next build` rendben, 041/042 helyi DB-n kétszer futtatva (idempotens). Független QA: 8/10 GO.
+- Nyitott (következő kör): tankolás-felismerés sűrű mintavételnél (halmozott emelkedés), tachó „friss” a kártya-állapottal is,
+  webhook-események feldolgozása (érkezés a megállóra), DDD-fájlok (üzemben tartói kártyára vár), ETA-lánc átállítása a tachóra
+  2 hét árnyék-üzem után.
+
 ## 2026-10-15 — Szabina Posta lapja: viszonylat és napok a kártyán
 
 - A kártyán a megbízó és a számlaszám alatt: „Hajdúszoboszló → Dunakeszi”, a fuvar napjai

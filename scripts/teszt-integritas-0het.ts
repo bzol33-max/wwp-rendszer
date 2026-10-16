@@ -62,7 +62,9 @@ eq("1 minta, hiba nélkül → igen", kalibracioGyorsitotarazhato(1, false), tru
 }
 {
   // Változatlan szöveg, de a feloldás MÁS kocsit talál (pl. törzs-javítás után): a feloldott nyer.
-  eq("változatlan szöveg, más feloldás → a feloldott id", ujJarmuId(7, "NMZ-492", "NMZ-492", 8), { jarmuId: 8, figyelmeztetes: null });
+  eq("változatlan szöveg, más feloldás → a meglévő id marad (QA #1)", ujJarmuId(7, "NMZ-492", "NMZ-492", 8), { jarmuId: 7, figyelmeztetes: null });
+  eq("változatlan üres szöveg, meglévő id → marad", ujJarmuId(7, null, "", null), { jarmuId: 7, figyelmeztetes: null });
+  eq("változatlan szöveg, nincs régi id → a feloldott", ujJarmuId(null, "NMZ-492", "NMZ-492", 8), { jarmuId: 8, figyelmeztetes: null });
 }
 
 // ── 3. 042 trigger (csak valódi adatbázissal) ──────────────────────────────

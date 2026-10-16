@@ -42,7 +42,7 @@ export const MODULES: ModuleInfo[] = [
     href: "/fuvarozas2",
     icon: Truck,
     status: "elkeszult",
-    description: "Ma (kocsinként a mai és holnapi megállók, eltérések, csempék) · Tervezés (a hét réseivel és a kocsira váró fuvarokkal, ajánlat: Timocom + kalkulátor — útdíj, üzemanyag, önköltség, ár) · Megbízások (bér- és saját fuvarok, pénz-nézet, levelek, partnerek) · Eredmény (áttekintés, kimutatás, költségek).",
+    description: "Ma (kocsinként a mai és holnapi megállók, eltérések, csempék) · Tervezés (a hét réseivel és a kocsira váró fuvarokkal, ajánlat: Timocom + kalkulátor — útdíj, üzemanyag, önköltség, ár) · Megbízások (bér- és saját fuvarok, pénz-nézet, levelek, partnerek) · Eredmény (áttekintés, kimutatás, költségek). Ecofleet telemetria: élő tachó-vezetési idő (Ma, Tervezés, sofőr-app), napi CAN-üzemanyag.",
   },
   {
     key: "jarmuvek",
@@ -50,7 +50,7 @@ export const MODULES: ModuleInfo[] = [
     href: "/jarmuvek",
     icon: Car,
     status: "fejlesztes-alatt",
-    description: "Járművek törzsadata (új kamion felvétele, rendszám, pótkocsi és raklap-kapacitás, sofőr, Ecofleet GPS, fogyasztás, Euro-osztály), pótkocsik, okmányok és sofőr-okmányok lejárat-figyeléssel.",
+    description: "Járművek törzsadata (új kamion felvétele, rendszám, pótkocsi és raklap-kapacitás, sofőr, Ecofleet GPS, fogyasztás, Euro-osztály; szervizig km, CAN-fogyasztás, tengelyterhelés), pótkocsik, okmányok és sofőr-okmányok lejárat-figyeléssel.",
   },
   {
     key: "szamlak",
