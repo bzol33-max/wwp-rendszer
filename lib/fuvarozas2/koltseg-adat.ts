@@ -13,8 +13,8 @@ import {
 } from "@/lib/fuvarozas2/koltseg-szamitas";
 
 // Egy időszak (nap/hét/hó) költség- és eredmény-számítása kocsinként és
-// megbízásonként — a Kimutatás (lib/fuvarozas2/kimutatas.ts) és az óránkénti
-// költségsor-mentés (taroldMegbizasKoltsegeket) közös adatbetöltője. A
+// megbízásonként — a Kimutatás (lib/fuvarozas2/kimutatas.ts) adatbetöltője
+// (az óránkénti gépi költségsor-mentés 2026-10-16-án megszűnt, D5). A
 // számolás maga tiszta: lib/fuvarozas2/koltseg-szamitas.ts. NEM "use server"
 // fájl — a jogosultságot a hívó ellenőrzi.
 
@@ -324,54 +324,4 @@ export async function koltsegIdoszakra(kezdet: string, veg: string): Promise<Ido
     atvaltatlanKezi,
     beallitas,
   };
-}
-
-/**
- * Az óránkénti kör: az utolsó 14 nap megbízásainak költségsorai a
- * fuvar_megbizas_koltseg táblába (forrás: tény/becslés), idempotensen — a
- * (megbizas_id, tipus, forras) kulcsra frissít, és törli a megbízás azon
- * gépi sorait, amelyek már nem érvényesek (pl. a becslésből tény lett).
- */
-export async function taroldMegbizasKoltsegeket(napVissza = 14): Promise<{ megbizas: number; sor: number }> {
-  const [h] = await query<{ kezdet: string; veg: string }>(
-    `select to_char((now() at time zone 'Europe/Budapest')::date - $1::int, 'YYYY-MM-DD') as kezdet,
-            to_char((now() at time zone 'Europe/Budapest')::date, 'YYYY-MM-DD') as veg`,
-    [napVissza]
-  );
-  const adat = await koltsegIdoszakra(h.kezdet, h.veg);
-  let megbizas = 0;
-  let sor = 0;
-  for (const j of adat.jarmuvek) {
-    for (const m of j.megbizasok) {
-      const tetelek: { tipus: string; forras: string; osszeg: number; mennyiseg: number | null; reszletek: Record<string, unknown> }[] = [];
-      // Kézi sorral felülírt tételhez nem írunk gépi sort (a kézi a mérvadó; így nincs kétszer).
-      if (m.uzemanyag && !m.uzemanyag.kezi) {
-        tetelek.push({ tipus: "uzemanyag", forras: m.uzemanyag.forras, osszeg: m.uzemanyag.ft, mennyiseg: m.liter?.ertek ?? null,
-          reszletek: { megjegyzes: m.uzemanyag.megjegyzes, km: m.km.ertek, kmForras: m.km.forras } });
-      }
-      if (m.utdij && !m.utdij.kezi) {
-        tetelek.push({ tipus: "utdij", forras: m.utdij.forras, osszeg: m.utdij.ft, mennyiseg: null, reszletek: { megjegyzes: m.utdij.megjegyzes } });
-      }
-      if (!m.napiFix.kezi) tetelek.push({ tipus: "napi_fix", forras: m.napiFix.forras, osszeg: m.napiFix.ft, mennyiseg: m.napok.length, reszletek: { megjegyzes: m.napiFix.megjegyzes, napok: m.napok } });
-      for (const t of tetelek) {
-        await query(
-          `insert into fuvar_megbizas_koltseg (megbizas_id, tipus, osszeg, penznem, forras, szamitott, mennyiseg, reszletek, megjegyzes)
-           values ($1::bigint, $2, $3, 'Ft', $4, true, $5, $6::jsonb, $7)
-           on conflict (megbizas_id, tipus, forras) where szamitott
-           do update set osszeg = excluded.osszeg, mennyiseg = excluded.mennyiseg, reszletek = excluded.reszletek,
-             megjegyzes = excluded.megjegyzes, letrehozva_at = now()`,
-          [m.id, t.tipus, t.osszeg, t.forras, t.mennyiseg, JSON.stringify(t.reszletek), String(t.reszletek.megjegyzes ?? "")]
-        );
-        sor++;
-      }
-      await query(
-        `delete from fuvar_megbizas_koltseg
-         where megbizas_id = $1::bigint and szamitott
-           and not ((tipus || ':' || forras) = any($2::text[]))`,
-        [m.id, tetelek.map((t) => `${t.tipus}:${t.forras}`)]
-      );
-      megbizas++;
-    }
-  }
-  return { megbizas, sor };
 }

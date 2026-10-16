@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, Building2, CalendarDays, Mail, Receipt, Sun, Truck, UserRound } from "lucide-react";
+import { CalendarDays, Mail, Sun, UserRound } from "lucide-react";
 
-const IKON = { nap: Sun, naptar: CalendarDays, posta: Mail, szamla: Receipt, profil: UserRound, fuvar: Truck, ceg: Building2, rendszer: Activity } as const;
+const IKON = { nap: Sun, naptar: CalendarDays, posta: Mail, profil: UserRound } as const;
 export type MTab = { href: string; label: string; ikon: keyof typeof IKON };
 
 /** A sofőr és az iroda más füleket lát — a szerepet az app/m/layout.tsx dönti el. */
@@ -23,12 +23,14 @@ export const IRODA_TABOK: MTab[] = [
   { href: "/m/posta", label: "Posta", ikon: "posta" },
   { href: "/m/profil", label: "Profil", ikon: "profil" },
 ];
-/** Vezetői fiók (terv: 4 fül) — a Profil a Rendszer-fül alján van, nem külön fül. */
+/**
+ * Vezetői fiók: Ma · Profil. A Fuvar · Cég · Rendszer fül 2026-10-16-án
+ * megszűnt (docs/fuvarozas-1-hullam-terv.md D4) — a régi könyvjelzők a /m-re
+ * visznek (next.config.ts); a kijelentkezés a Profil fülön van.
+ */
 export const VEZETO_TABOK: MTab[] = [
   { href: "/m", label: "Ma", ikon: "nap" },
-  { href: "/m/fuvar", label: "Fuvar", ikon: "fuvar" },
-  { href: "/m/ceg", label: "Cég", ikon: "ceg" },
-  { href: "/m/rendszer", label: "Rendszer", ikon: "rendszer" },
+  { href: "/m/profil", label: "Profil", ikon: "profil" },
 ];
 
 /** `holnapFelirat`: pénteken és szombaton „Hétfő” — a /m/holnap a következő munkanapot mutatja. */

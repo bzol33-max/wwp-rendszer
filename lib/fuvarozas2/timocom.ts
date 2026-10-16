@@ -7,8 +7,18 @@
 
 import { requireEditPermission, requireViewPermission } from "@/lib/auth/require-permission";
 import { requireSession } from "@/lib/auth/dal";
-import { query } from "@/lib/db";
+import { query, withTransaction } from "@/lib/db";
 import { parseTimocomAjanlat, timocomKulcs, type TimocomAjanlat, type TimocomBemenet } from "@/lib/fuvarozas2/timocom-ajanlat";
+import { megbizasAjanlatbol, raRe, type AjanlatAdat, type AjanlatDontes } from "@/lib/fuvarozas2/ajanlat-megbizas-alap";
+import { setFuvarJarmu, ujBerFuvar } from "@/lib/fuvarozas2/megbizasok";
+import { arLetra } from "@/lib/fuvarozas2/ar-letra";
+import { ATLAG_KMH } from "@/lib/fuvarozas2/tervezes-het-alap";
+import { getFuvarBeallitasok } from "@/lib/beallitasok/fuvar";
+import { getEurArfolyamok } from "@/lib/fuvarozas/arfolyam";
+import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
+import { findJarmuByPlate } from "@/lib/fuvarozas/vehicles";
+import { budapestNapISO } from "@/lib/fuvarozas/idozona";
+import { torlesSet } from "@/lib/megbizasok/torles";
 
 export type TimocomSor = {
   id: string;
@@ -17,6 +27,12 @@ export type TimocomSor = {
   frissitveAt: string;
   rogzitette: string | null;
   ajanlat: TimocomAjanlat;
+  /** Megnyert / elvesztett ajánlatnál: a díj, amennyiért elvittük (vagy amit ajánlottunk), és mikor dőlt el (044). */
+  ajanlottAr: number | null;
+  ajanlottPenznem: "HUF" | "EUR" | null;
+  eredmenyAt: string | null;
+  /** A megnyert ajánlatból létrehozott megbízás (ha még nincs törölve). */
+  megbizasId: string | null;
 };
 
 export async function rogzitTimocomAjanlatot(be: TimocomBemenet): Promise<{ ok: true; id: string; uj: boolean; ut: string } | { ok: false; hiba: string }> {
@@ -52,20 +68,31 @@ export async function rogzitTimocomAjanlatot(be: TimocomBemenet): Promise<{ ok: 
   return { ok: true, id: rows[0].id, uj: rows[0].uj, ut: `${a.megbizo ?? "?"}: ${fel.varos} → ${le.varos}${fel.datumTol ? ` (${fel.datumTol.slice(5).replace("-", ".")}.)` : ""}` };
 }
 
-type Nyers = { id: string; allapot: string; letrehozva_at: string; frissitve_at: string; rogzitette: string | null; reszletek: TimocomAjanlat | null; nyers_szoveg: string | null; url: string | null };
+type Nyers = {
+  id: string; allapot: string; letrehozva_at: string; frissitve_at: string; rogzitette: string | null; reszletek: TimocomAjanlat | null; nyers_szoveg: string | null; url: string | null;
+  ajanlott_ar: string | null; ajanlott_penznem: string | null; eredmeny_at: string | null; megbizas_id: string | null;
+};
+
+const NYERS_OSZLOPOK = `r.id::text, r.allapot, r.letrehozva_at::text, r.frissitve_at::text, r.rogzitette, r.reszletek, r.nyers_szoveg, r.url,
+  r.ajanlott_ar::text, r.ajanlott_penznem, r.eredmeny_at::text,
+  (select m.id::text from fuvar_megbizasok m where m.id = r.megbizas_id and m.torolt_at is null) as megbizas_id`;
 
 function sorbol(r: Nyers): TimocomSor {
   // A régebbi (feldolgozó-változás előtti) sort a nyers szövegből újra lehet olvasni.
   const ajanlat = r.reszletek ?? parseTimocomAjanlat({ szoveg: r.nyers_szoveg ?? "", url: r.url });
-  return { id: r.id, allapot: r.allapot, letrehozvaAt: r.letrehozva_at, frissitveAt: r.frissitve_at, rogzitette: r.rogzitette, ajanlat };
+  return {
+    id: r.id, allapot: r.allapot, letrehozvaAt: r.letrehozva_at, frissitveAt: r.frissitve_at, rogzitette: r.rogzitette, ajanlat,
+    ajanlottAr: r.ajanlott_ar != null ? Number(r.ajanlott_ar) : null,
+    ajanlottPenznem: r.ajanlott_penznem === "HUF" || r.ajanlott_penznem === "EUR" ? r.ajanlott_penznem : null,
+    eredmenyAt: r.eredmeny_at, megbizasId: r.megbizas_id,
+  };
 }
 
 export async function getTimocomAjanlat(id: string): Promise<TimocomSor | null> {
   await requireViewPermission("fuvarozas");
   if (!/^\d+$/.test(String(id))) return null;
   const rows = await query<Nyers>(
-    `select id::text, allapot, letrehozva_at::text, frissitve_at::text, rogzitette, reszletek, nyers_szoveg, url
-       from radar_kiiras where id = $1 and forras = 'timocom'`,
+    `select ${NYERS_OSZLOPOK} from radar_kiiras r where r.id = $1 and r.forras = 'timocom'`,
     [id]
   );
   return rows[0] ? sorbol(rows[0]) : null;
@@ -75,9 +102,9 @@ export async function getTimocomAjanlat(id: string): Promise<TimocomSor | null> 
 export async function getTimocomAjanlatok(limit = 30, allapotok?: string[]): Promise<TimocomSor[]> {
   await requireViewPermission("fuvarozas");
   const rows = await query<Nyers>(
-    `select id::text, allapot, letrehozva_at::text, frissitve_at::text, rogzitette, reszletek, nyers_szoveg, url
-       from radar_kiiras where forras = 'timocom' and ($2::text[] is null or allapot = any($2::text[]))
-      order by frissitve_at desc limit $1`,
+    `select ${NYERS_OSZLOPOK}
+       from radar_kiiras r where r.forras = 'timocom' and ($2::text[] is null or r.allapot = any($2::text[]))
+      order by r.frissitve_at desc limit $1`,
     [Math.min(Math.max(limit, 1), 100), allapotok ?? null]
   );
   return rows.map(sorbol);
@@ -86,6 +113,13 @@ export async function getTimocomAjanlatok(limit = 30, allapotok?: string[]): Pro
 export async function allitTimocomAllapotot(id: string, allapot: "nyitott" | "ajanlva" | "elvetve"): Promise<{ ok: boolean }> {
   await requireEditPermission("fuvarozas");
   if (!/^\d+$/.test(String(id)) || !["nyitott", "ajanlva", "elvetve"].includes(allapot)) return { ok: false };
-  await query(`update radar_kiiras set allapot = $2, frissitve_at = now() where id = $1 and forras = 'timocom'`, [id, allapot]);
-  return { ok: true };
+  // A megnyert (megbízássá vált) ajánlat állapota innen nem írható át — a megbízás él.
+  const sorok = await query<{ id: string }>(
+    `update radar_kiiras r set allapot = $2, frissitve_at = now()
+      where r.id = $1 and r.forras = 'timocom'
+        and not (r.allapot = 'nyert' and exists (select 1 from fuvar_megbizasok m where m.id = r.megbizas_id and m.torolt_at is null))
+      returning r.id::text`,
+    [id, allapot]
+  );
+  return { ok: sorok.length > 0 };
 }

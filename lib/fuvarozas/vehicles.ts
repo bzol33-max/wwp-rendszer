@@ -290,7 +290,7 @@ function findJarmuBySoforNev(szoveg: string, lista: SajatJarmu[]): SajatJarmu | 
 }
 
 /** Egy elmentett "Sofőr — címke" szöveg alapján visszaadja a hozzá tartozó saját járművet, ha van. */
-export function findJarmuByLabel(value: string, lista: SajatJarmu[] = jarmuLista()): SajatJarmu | null {
+function jarmuCimkeSzerint(value: string, lista: SajatJarmu[]): SajatJarmu | null {
   // Kis-/nagybetű-független: a DB-címke ("DAF XG (gyártás alatt)") és a régi,
   // elmentett szöveg ("DAF XG (Gyártás alatt)") csak ebben térhet el.
   const v = value.trim().toLowerCase();
@@ -306,7 +306,7 @@ export function findJarmuByLabel(value: string, lista: SajatJarmu[] = jarmuLista
  * majd sofőrnév (a szöveg eleje vagy egésze).
  */
 export function resolveJarmu(value: string, lista: SajatJarmu[] = jarmuLista()): SajatJarmu | null {
-  const exact = findJarmuByLabel(value, lista);
+  const exact = jarmuCimkeSzerint(value, lista);
   if (exact) return exact;
 
   const byPlate = findJarmuByPlate(value, lista);

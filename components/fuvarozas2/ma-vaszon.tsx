@@ -300,7 +300,7 @@ export function MaVaszonNezet({ adat }: { adat: MaVaszon }) {
   const iroda = adat.csempek.filter((c) => c.kulcs !== "uton" && c.kulcs !== "elteres");
   return (
     <div className="flex flex-col gap-4">
-      <Csempesor berHavi={adat.berHavi} berHeti={adat.berHeti} berHonapHetei={adat.berHonapHetei} />
+      <Csempesor berHavi={adat.berHavi} berHeti={adat.berHeti} berHonapHetei={adat.berHonapHetei} kihasznaltsag={adat.kihasznaltsag} />
 
       <div className="-mb-2 flex justify-end">
         <AutoFrissites frissitve={adat.frissitve} />

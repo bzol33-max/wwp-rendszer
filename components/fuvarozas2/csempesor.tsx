@@ -1,32 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
-import type { BerOsszesito, CsempeSzin, KmDij } from "@/lib/fuvarozas2/ma-vaszon";
+import type { BerOsszesito, KmDij } from "@/lib/fuvarozas2/ma-vaszon";
+import type { KihasznaltsagAdat, KihasznaltsagSor } from "@/lib/fuvarozas2/kihasznaltsag";
 import { JARMU_SZIN_DOT_CLASS } from "@/lib/fuvarozas/vehicles";
 
-const SZIN_ERTEK: Record<CsempeSzin, string> = {
-  normal: "text-foreground",
-  amber: "text-[var(--f2-amb)]",
-  red: "text-[var(--f2-red)]",
-  mint: "text-[var(--f2-mint)]",
-};
+// Csempesor a fejléc alatt. Eredetileg (1-es látványterv, 2026-09-29) tíz
+// hely egy sorban; az 1. hullámban (docs/fuvarozas-1-hullam-terv.md B,
+// 2026-10-16) a 4–10. üres hely megszűnt, a helyükön kocsinként egy
+// kihasználtság-sor áll (Fedezet/nap · Bevétel/nap · Üres km % · Fizetős
+// napok, hét | hónap váltóval). Megmaradt: 1. havi, 2. heti bérfuvar (a havira
+// kattintva alatta lenyílnak a hónap hetei), 3. havi átlag km-díj. Telefonon
+// nincs oldalra húzás: a csempék két oszlopba törnek, a kocsisorok egymás alá.
+// Kliens-komponens a lenyitás és a hét/hónap váltó miatt.
+const CSEMPE_OSZT = "flex min-h-[76px] min-w-0 flex-col rounded-xl";
 
-// Csempesor a fejléc alatt (1-es látványterv, 2026-09-29): tíz hely egy
-// sorban — Budaházi Zoltán sorban ad mindegyiknek funkciót. Az 1. hely a
-// havi, a 2. a heti bérfuvar (D terv, alacsony változat); a havira kattintva
-// alatta lenyílik a hónap heteinek sora. A 3. a havi átlag km-díj (fuvardíj ÷
-// rakott km, lib/fuvarozas2/rakott-km.ts). A többi hely egyelőre üres. Egy hely
-// kitöltése: a CSEMPE_HELYEK megfelelő elemét cseréld
-// { cimke, ertek, also?, szin, href? }-re. Telefonon oldalra húzható.
-// Kliens-komponens a lenyitás miatt.
-type CsempeHely = { cimke: string; ertek: string; also?: string; szin: CsempeSzin; href?: string } | null;
-/** A 4–10. hely. */
-const CSEMPE_HELYEK: CsempeHely[] = [null, null, null, null, null, null, null];
-const CSEMPE_OSZT = "flex min-h-[76px] w-[132px] shrink-0 snap-start flex-col rounded-xl md:w-auto";
-
-const rovidFt = (n: number) =>
-  n >= 1_000_000 ? `${(n / 1_000_000).toFixed(2).replace(".", ",")} M` : n >= 1000 ? `${Math.round(n / 1000)} e` : String(Math.round(n));
+const rovidFt = (n: number): string =>
+  n < 0 ? `−${rovidFt(-n)}` : n >= 1_000_000 ? `${(n / 1_000_000).toFixed(2).replace(".", ",")} M` : n >= 1000 ? `${Math.round(n / 1000)} e` : String(Math.round(n));
 const eur = (n: number) => `${new Intl.NumberFormat("hu-HU").format(Math.round(n))} €`;
 
 /** 1–2. csempe: a hónapban / héten kezdett bérfuvarok nettó díja, kocsinként; az euró külön. */
@@ -108,44 +98,112 @@ function KmDijCsempe({ b }: { b: BerOsszesito }) {
   );
 }
 
-export function Csempesor({ berHavi, berHeti, berHonapHetei }: { berHavi: BerOsszesito; berHeti: BerOsszesito; berHonapHetei: BerOsszesito[] }) {
+const tized = (n: number) => n.toFixed(1).replace(".", ",");
+const ezres = (n: number) => new Intl.NumberFormat("hu-HU").format(Math.round(n));
+
+/** Egy mutató a kocsisorban: kis felirat, alatta az érték. */
+function Mutato({ cimke, ertek, szin, title }: { cimke: string; ertek: string; szin?: "amber" | "red"; title?: string }) {
+  const szinOszt = szin === "red" ? "text-[var(--f2-red)]" : szin === "amber" ? "text-[var(--f2-amb)]" : "text-foreground";
+  return (
+    <div className="flex min-w-0 flex-col" title={title}>
+      <span className="truncate text-[10px] leading-tight text-muted-foreground">{cimke}</span>
+      <b className={`truncate text-sm font-semibold leading-tight tabular-nums ${szinOszt}`}>{ertek}</b>
+    </div>
+  );
+}
+
+function KocsiSor({ nev, szin, s }: { nev: string; szin: string | null; s: KihasznaltsagSor }) {
+  const fedezetSzin = s.fedezetPerNap != null && s.fedezetPerNap < 0 ? "red" : undefined;
+  const uresSzin = s.uresKmSzazalek != null && s.uresKmSzazalek > 30 ? "amber" : undefined;
+  const eurMegj = s.atvaltatlanEur > 0 ? ` (+ ${eur(s.atvaltatlanEur)} árfolyam nélkül, nincs benne)` : "";
+  return (
+    <div className="flex flex-col gap-1 py-1.5 sm:flex-row sm:items-center sm:gap-3">
+      <span className="flex w-24 shrink-0 items-center gap-1.5 truncate text-xs font-semibold">
+        <span className={`inline-block size-2 shrink-0 rounded-full ${szin ?? "bg-foreground/40"}`} />
+        <span className="truncate">{nev}</span>
+      </span>
+      <div className="grid min-w-0 flex-1 grid-cols-4 gap-2">
+        <Mutato
+          cimke="Fedezet/nap"
+          ertek={s.fedezetPerNap != null ? `${rovidFt(s.fedezetPerNap)} Ft` : "—"}
+          szin={fedezetSzin}
+          title={`Fedezet: ${ezres(s.fedezetFt)} Ft = bevétel ${ezres(s.berBevetelFt)} Ft − km-költség ${ezres(s.kmKoltsegFt)} Ft − napi fix × ${s.munkanapok} munkanap${eurMegj}`}
+        />
+        <Mutato
+          cimke="Bevétel/nap"
+          ertek={s.bevetelPerNap != null ? `${rovidFt(s.bevetelPerNap)} Ft` : "—"}
+          title={`Bérbevétel: ${ezres(s.berBevetelFt)} Ft, ${s.berDb} bérfuvar, ${s.munkanapok} munkanap${eurMegj}`}
+        />
+        <Mutato
+          cimke="Üres km"
+          ertek={s.uresKmSzazalek != null ? `${tized(s.uresKmSzazalek)} %` : "—"}
+          szin={uresSzin}
+          title={`Üres ${ezres(s.uresKm)} km, rakott ${ezres(s.rakottKm)} km (fuvarláncból — becslés)`}
+        />
+        <Mutato
+          cimke="Fizetős nap"
+          ertek={s.munkanapok > 0 ? `${s.fizetosNapok}/${s.munkanapok}` : "—"}
+          title={`${s.fizetosNapok} nap bérfuvarral, ${s.sajatNapok} csak saját fuvarral, ${s.munkanapok} munkanap`}
+        />
+      </div>
+    </div>
+  );
+}
+
+/** Kocsinkénti kihasználtság (1. hullám B): a szerver mindkét időszakot küldi, a váltó csak kliensoldali. */
+function KihasznaltsagSav({ k }: { k: KihasznaltsagAdat }) {
+  const [idoszak, setIdoszak] = useState<"het" | "honap">("het");
+  const fejlec = idoszak === "het" ? k.het : k.honap;
+  const p = k.param;
+  return (
+    <div className="flex flex-col rounded-xl border border-foreground/10 bg-card px-3 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <span
+          className="min-w-0 truncate text-xs text-muted-foreground"
+          title={`Km-költség: ${p.fogyasztasL100} l/100 km × ${ezres(p.uzemanyagFtL)} Ft/l + ${ezres(p.utdijFtKm)} Ft/km útdíj; napi fix ${ezres(p.napiFixFt)} Ft/munkanap`}
+        >
+          <b className="font-semibold text-foreground">Kihasználtság</b> · {fejlec.cim}
+        </span>
+        <div role="group" aria-label="Időszak" className="flex shrink-0 rounded-lg border border-foreground/10 p-0.5 text-xs">
+          {([["het", "Hét"], ["honap", "Hónap"]] as const).map(([kulcs, felirat]) => (
+            <button
+              key={kulcs}
+              type="button"
+              aria-pressed={idoszak === kulcs}
+              onClick={() => setIdoszak(kulcs)}
+              className={`min-h-8 rounded-md px-3 ${idoszak === kulcs ? "bg-[var(--f2-mint)] font-semibold text-white" : "text-muted-foreground hover:bg-muted"}`}
+            >
+              {felirat}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="divide-y divide-foreground/10">
+        {k.kocsik.map((x) => (
+          <KocsiSor key={x.kod} nev={x.nev} szin={x.szin ? JARMU_SZIN_DOT_CLASS[x.szin] : null} s={idoszak === "het" ? x.het : x.honap} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function Csempesor({ berHavi, berHeti, berHonapHetei, kihasznaltsag }: {
+  berHavi: BerOsszesito; berHeti: BerOsszesito; berHonapHetei: BerOsszesito[]; kihasznaltsag: KihasznaltsagAdat | null;
+}) {
   const [hetekNyitva, setHetekNyitva] = useState(false);
+  const vanSav = !!kihasznaltsag && kihasznaltsag.kocsik.length > 0;
   return (
     <div className="flex flex-col gap-2">
-      {/* Telefonon a sor oldalra húzható — a jobb szélen elhalványul, és egy felirat jelzi (QA 2026-10-10: levágottnak tűnt). */}
-      <div className="relative">
-      <div className="-mx-4 flex snap-x items-stretch gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:grid md:grid-cols-5 md:overflow-visible md:px-0 md:pb-0 xl:grid-cols-10" aria-label="Mutatók — oldalra húzható">
-        <BerCsempe b={berHavi} onClick={() => setHetekNyitva((x) => !x)} nyitva={hetekNyitva} />
-        <BerCsempe b={berHeti} />
-        <KmDijCsempe b={berHavi} />
-        {CSEMPE_HELYEK.map((c, i) => {
-          const oszt = `${CSEMPE_OSZT} gap-0.5 px-3 py-2.5`;
-          if (!c) {
-            return (
-              <div key={i} className={`${oszt} items-start justify-between border border-dashed border-foreground/15 text-muted-foreground/60`}>
-                <span className="text-[11px] tabular-nums">{i + 4}.</span>
-              </div>
-            );
-          }
-          const belso = (
-            <>
-              <span className="text-xs text-muted-foreground">{c.cimke}</span>
-              <b className={`text-xl font-semibold tabular-nums ${SZIN_ERTEK[c.szin]}`}>{c.ertek}</b>
-              {c.also ? <span className="truncate text-[11px] text-muted-foreground">{c.also}</span> : null}
-            </>
-          );
-          return c.href ? (
-            <Link key={i} href={c.href} className={`${oszt} border border-foreground/10 bg-card hover:bg-muted`}>{belso}</Link>
-          ) : (
-            <div key={i} className={`${oszt} border border-foreground/10 bg-card`}>{belso}</div>
-          );
-        })}
+      <div className={`grid items-start gap-2 ${vanSav ? "lg:grid-cols-[minmax(0,3fr)_minmax(0,4fr)]" : ""}`}>
+        <div className="grid grid-cols-2 items-stretch gap-2 sm:grid-cols-3">
+          <BerCsempe b={berHavi} onClick={() => setHetekNyitva((x) => !x)} nyitva={hetekNyitva} />
+          <BerCsempe b={berHeti} />
+          <KmDijCsempe b={berHavi} />
+        </div>
+        {vanSav ? <KihasznaltsagSav k={kihasznaltsag} /> : null}
       </div>
-      <span aria-hidden className="pointer-events-none absolute inset-y-0 -right-4 w-10 bg-gradient-to-l from-background to-transparent md:hidden" />
-      </div>
-      <p className="-mt-1 text-right text-[10px] text-muted-foreground md:hidden">← húzd oldalra a többi mutatóért →</p>
       {hetekNyitva ? (
-        <div className="-mx-4 flex snap-x items-stretch gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:grid md:grid-cols-5 md:overflow-visible md:px-0 md:pb-0 xl:grid-cols-10">
+        <div className="grid grid-cols-2 items-stretch gap-2 sm:grid-cols-3 md:grid-cols-5">
           {berHonapHetei.map((h) => <BerCsempe key={h.cim} b={h} />)}
         </div>
       ) : null}

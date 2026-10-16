@@ -5,15 +5,17 @@
 // MIÉRT VAN EZ ITT? A drive-import és a drive-frissites végpont hitelesítés
 // nélkül írt a fuvar-adatokba (Fuvarozás 2 átállás-ellenőrzés, B5). A közös
 // guard (lib/fuvarozas/drive-sync-guard.ts) viselkedése: nincs titok → 503,
-// rossz/hiányzó fejléc → 401, jó fejléc → átenged. Ez a teszt mindhárom
-// route handleren ellenőrzi, hogy a guard TÉNYLEG be van kötve — a modul
-// önmagában nem elég, ha egy route nem hívja.
+// rossz/hiányzó fejléc → 401, jó fejléc → átenged. Ez a teszt a route
+// handleren ellenőrzi, hogy a guard TÉNYLEG be van kötve — a modul
+// önmagában nem elég, ha egy route nem hívja. (2026-10-16, D2: a
+// drive-import és a drive-frissites végpont törölve — 30 napja 0 hívás —,
+// csak a drive-sync maradt; a teszt azt is őrzi, hogy ne térjenek vissza.)
 //
 // Szándékosan .ts (nem .mts): Node 22.22 + tsx alatt az .mts tesztek a
 // „@/…" importok névvel exportált tagjait nem látják (CJS/ESM interop), a
 // .ts változat viszont mindenhol fut.
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { requireDriveSyncSecret } from "@/lib/fuvarozas/drive-sync-guard";
@@ -30,7 +32,7 @@ function eq(nev: string, kapott: unknown, vart: unknown) {
 }
 
 const keres = (auth?: string) =>
-  new Request("http://teszt/api/fuvarozas/drive-import", {
+  new Request("http://teszt/api/fuvarozas/drive-sync", {
     method: "POST",
     headers: auth ? { authorization: auth } : {},
   });
@@ -45,15 +47,15 @@ eq("rossz titok → 401", requireDriveSyncSecret(keres("Bearer rossz"))?.status,
 eq("nem Bearer séma → 401", requireDriveSyncSecret(keres("teszt-titok"))?.status, 401);
 eq("jó titok → átenged", requireDriveSyncSecret(keres("Bearer teszt-titok")), null);
 
-// 2. A három route handler tényleg a guardot hívja: rossz titokkal 401-et
-//    kell adniuk MIELŐTT a body-hoz vagy az adatbázishoz nyúlnának (a body
-//    itt szándékosan üres/érvénytelen — ha a guard nem futna előbb, 400 jönne).
-// 2. A három route handler tényleg a guardot hívja, MÉG a body beolvasása
+// 2. A route handler tényleg a guardot hívja, MÉG a body beolvasása
 //    előtt. A route-okat nem importáljuk (a teljes szerver-oldalt húznák be:
 //    server-only, pg, googleapis), hanem a forrásukat ellenőrizzük — így a
 //    teszt adatbázis és Next-futtatókörnyezet nélkül is fut.
 const gyoker = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
-for (const nev of ["drive-sync", "drive-import", "drive-frissites"]) {
+for (const nev of ["drive-import", "drive-frissites"]) {
+  eq(`${nev}: törölve (D2)`, existsSync(path.join(gyoker, "app/api/fuvarozas", nev)), false);
+}
+for (const nev of ["drive-sync"]) {
   const forras = readFileSync(path.join(gyoker, "app/api/fuvarozas", nev, "route.ts"), "utf8");
   const guardHely = forras.indexOf("requireDriveSyncSecret(req)");
   const bodyHely = forras.search(/req\.json\(\)|futtatRendszerkent\(/);

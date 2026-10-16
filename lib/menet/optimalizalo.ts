@@ -4,9 +4,11 @@
 // 'becsles' jelöléssel — lib/menet/optimalizalo-szerver.ts). Teszt:
 // scripts/teszt-optimalizalo.ts.
 //
-// CSAK JAVASLAT: az eredményt a szerver 'nyitott' optimalizalo_javaslat
-// sorként tárolja; jóváhagyott menetet csak az ember „Elfogadás” gombja
-// rendez át, a meglévő átrendezés-úton (verzióval, indokkal, naplóval).
+// CSAK SZÁMOL, nem ír. Élő hívó: a Tervezés hozzárendelés-javaslata (b).
+// 2026-10-16 (docs/fuvarozas-1-hullam-terv.md D1): a tárolt sorrend-javaslatok
+// (optimalizalo_javaslat: küszöb, ujjlenyomat, elfogadás) kivezetve. Az (a)
+// sorrend-optimalizálás tiszta függvényként marad: a teszt ezen át ellenőrzi
+// a (b)-vel közös szimulációs magot (késés, kapacitás, vezetési idő).
 //
 // CÉLFÜGGVÉNY (minimalizálandó, minden tag Ft-ban):
 //   J = üzemanyag + útdíj + napi + késés-büntetés + várakozás-büntetés
@@ -198,10 +200,6 @@ export type OptBemenet = {
 
 /** Teljes bejárás eddig a mozgatható munka-számig. */
 export const TELJES_BEJARAS_MAX = 7;
-/** Ennyi megtakarítás alatt nincs javaslat (Ft) … */
-export const MEGTAKARITAS_KUSZOB_FT = 1000;
-/** … vagy ennyi km alatt. */
-export const MEGTAKARITAS_KUSZOB_KM = 5;
 
 export const VEZETES_BECSLES_MEGJEGYZES = "A vezetési idő a HU-GO / terv menetidejéből becsült — nem tachográf-adat.";
 
@@ -639,18 +637,6 @@ export async function optimalizalSorrendet(be: OptBemenet): Promise<SorrendEredm
   };
 }
 
-/**
- * Megéri-e javaslatként eltárolni: más a sorrend, a legjobb megengedett, és
- * vagy a mostani sérti a kemény korlátokat, vagy a megtakarítás eléri a
- * küszöböt (1 000 Ft vagy 5 km).
- */
-export function erdemesJavasolni(e: SorrendEredmeny): boolean {
-  if (!e.legjobb) return false;
-  if (e.legjobb.sorrend.join(",") === e.jelenlegi.sorrend.join(",")) return false;
-  if (!e.jelenlegi.megengedett) return true;
-  return e.megtakaritasFt >= MEGTAKARITAS_KUSZOB_FT || (e.megtakaritasKm >= MEGTAKARITAS_KUSZOB_KM && e.megtakaritasFt > 0);
-}
-
 // ---------------------------------------------------------------- (b) hozzárendelés
 
 export type KocsiNap = {
@@ -733,101 +719,4 @@ export async function javasolHozzarendelest(uj: MenetMunka, nap: string, kocsik:
   const jo = sorok.filter((s) => s.megengedett && s.hatarFt != null);
   const legjobb = jo.reduce<HozzarendelesSor | null>((a, b) => (!a || b.hatarFt! < a.hatarFt! - 0.5 || (Math.abs(b.hatarFt! - a.hatarFt!) <= 0.5 && b.kod.localeCompare(a.kod) < 0) ? b : a), null);
   return { legjobb, kocsik: sorok };
-}
-
-// ---------------------------------------------------------------- ujjlenyomat
-
-/** FNV-1a (32 bit) két maggal → 16 hex jegy. Nem kriptográfiai, csak változás-jelző. */
-function fnv(s: string, mag: number): string {
-  let h = mag >>> 0;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 0x01000193) >>> 0;
-  }
-  return h.toString(16).padStart(8, "0");
-}
-
-/**
- * A bemenet ujjlenyomata: a munkák (helyek, ablakok, tény, lezárás, raklap),
- * az indulás, a mostani sorrend, a rögzítettek, a kapacitás és a menet
- * verziója. Ha változik, a régi nyitott javaslat elavult.
- */
-export function bemenetUjjlenyomat(be: Pick<OptBemenet, "nap" | "munkak" | "jelenlegiSorrend" | "rogzitett" | "indulas" | "kapacitas"> & { menetVerzio: number | null }): string {
-  const hely = (h: Hely) => [h.cim?.trim() ?? null, h.pont ? [h.pont.lat.toFixed(4), h.pont.lon.toFixed(4)] : null];
-  const s = JSON.stringify([
-    be.nap,
-    be.menetVerzio,
-    hely(be.indulas),
-    be.jelenlegiSorrend ?? [],
-    [...(be.rogzitett ?? [])].sort(),
-    be.kapacitas,
-    [...be.munkak].sort((a, b) => a.id.localeCompare(b.id)).map((m) => [
-      m.id, m.jelleg, m.felrakasNap, m.lerakasNap, hely(m.felrako), hely(m.lerako), m.tervIdo, m.felrakasAblakIg ?? null,
-      m.lerakasAblakTol ?? null, m.lerakasAblakIg ?? null, m.tenyIdo ?? null, !!m.lezart, m.rakottKm, m.raklapDb, m.raklaphely ?? null,
-    ]),
-  ]);
-  return fnv(s, 0x811c9dc5) + fnv(s, 0x01234567);
-}
-
-// ---------------------------------------------------------------- megjelenítés (kliens is)
-
-/** A felületnek: egy nyitott javaslat. */
-export type OptJavaslatNezet = {
-  id: string;
-  menetId: string | null;
-  letrehozvaAt: string;
-  megtakaritasFt: number;
-  megtakaritasKm: number;
-  jelenlegi: { id: string; ut: string }[];
-  javasolt: { id: string; ut: string }[];
-  celfuggveny: { javasolt: Celfuggveny; jelenlegi: Celfuggveny };
-  km: { javasolt: { ures: number; rakott: number; haza: number }; jelenlegi: { ures: number; rakott: number; haza: number } };
-  megjegyzesek: string[];
-  figyelmeztetesek: string[];
-};
-
-export const CELFUGGVENY_CIMKE: Record<Exclude<keyof Celfuggveny, "osszesen">, string> = {
-  uzemanyag: "üzemanyag",
-  utdij: "útdíj",
-  napi: "napi költség",
-  keses_buntetes: "késés",
-  varakozas_buntetes: "várakozás",
-  hazaut: "hazaút",
-  sajat_ertek: "saját áru értéke",
-};
-
-// ---------------------------------------------------------------- elfogadás: a munka-sorrendből feladat-sorrend
-
-/**
- * A javasolt MUNKA-sorrendből a menet FELADAT-id-inek új sorrendje az
- * átrendezéshez (lib/menet/muveletek.ts atrendezMenet): a lezárt előtag (az
- * utolsó lezárt feladatig) marad; utána minden megbízás-feladat a közvetlenül
- * előtte álló nem-megbízás feladatokkal (üres pozicionálás) együtt mozog — az
- * átrendezés ezeket úgyis újraszámolja. null, ha a javaslat munkái nem
- * egyeznek a menet mozgatható munkáival (közben változott a menet).
- */
-export function feladatSorrendJavaslatbol(
-  feladatok: readonly { id: string; sorszam: number; megbizasId: string | null; lezarvaAt: string | null }[],
-  munkaSorrend: readonly string[]
-): string[] | null {
-  const rend = [...feladatok].sort((a, b) => a.sorszam - b.sorszam);
-  const utolsoLezart = rend.reduce((h, f, i) => (f.lezarvaAt ? i : h), -1);
-  const elotag = rend.slice(0, utolsoLezart + 1);
-  const maradek = rend.slice(utolsoLezart + 1);
-  const csoportok: { megbizasId: string; ids: string[] }[] = [];
-  let fuggo: string[] = [];
-  for (const f of maradek) {
-    fuggo.push(f.id);
-    if (f.megbizasId) {
-      csoportok.push({ megbizasId: f.megbizasId, ids: fuggo });
-      fuggo = [];
-    }
-  }
-  const elotagMunkak = new Set(elotag.flatMap((f) => (f.megbizasId ? [f.megbizasId] : [])));
-  const cel = munkaSorrend.filter((id) => !elotagMunkak.has(id));
-  const benne = new Set(csoportok.map((c) => c.megbizasId));
-  if (cel.length !== csoportok.length || cel.some((id) => !benne.has(id)) || new Set(cel).size !== cel.length) return null;
-  const rang = new Map(cel.map((id, i) => [id, i]));
-  const rendezett = [...csoportok].sort((a, b) => rang.get(a.megbizasId)! - rang.get(b.megbizasId)!);
-  return [...elotag.map((f) => f.id), ...rendezett.flatMap((c) => c.ids), ...fuggo];
 }

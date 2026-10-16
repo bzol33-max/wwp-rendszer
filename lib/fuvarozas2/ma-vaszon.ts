@@ -45,6 +45,7 @@ import { alkalmazMenetSorrendet } from "@/lib/menet/menet-alap";
 import { hetNapjai, jarmuNev, kocsiHelykitolto, type HetFuvar } from "@/lib/fuvarozas2/ma-het";
 import { legutobbiTacho } from "@/lib/jarmu-telemetria/repo";
 import { tachoKijelzes } from "@/lib/fuvarozas2/tervezes-het-tacho";
+import { getKihasznaltsag, type KihasznaltsagAdat } from "@/lib/fuvarozas2/kihasznaltsag";
 
 export type CsempeSzin = "normal" | "amber" | "red" | "mint";
 export type Csempe = { kulcs: string; cimke: string; ertek: string; also: string | null; szin: CsempeSzin; href: string | null };
@@ -133,6 +134,8 @@ export type MaVaszon = {
   berHeti: BerOsszesito;
   /** A hónap hetei (a hónapba eső napokra vágva), a havi csempe lenyitásához. */
   berHonapHetei: BerOsszesito[];
+  /** Kocsi-kihasználtság (hét és hónap eleje óta) — null, ha nem számolható (a sáv elmarad). */
+  kihasznaltsag: KihasznaltsagAdat | null;
 };
 
 /**
@@ -219,6 +222,8 @@ export async function getMaVaszon(): Promise<MaVaszon> {
   // A „holnap” a következő munkanap: pénteken és szombaton a hétfő.
   const holnap = kovetkezoMunkanapISO(ma);
   const holnapCimke = holnap === naptariHolnap ? "Holnap" : "Hétfő";
+  // Kocsi-kihasználtság (1. hullám B): párhuzamosan indul, soha nem dob.
+  const kihasznaltsagIgeret = getKihasznaltsag(ma);
 
   // 1. A nyitott megbízások (ma és holnap) kocsival, partnerrel.
   type MegbizasSor = {
@@ -788,6 +793,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
 
   return {
     ma, holnap, holnapCimke, csempek, berHavi, berHeti, berHonapHetei, nyugtazott,
+    kihasznaltsag: await kihasznaltsagIgeret,
     nyugtazhat: session.can("fuvarozas").edit,
     frissitve: ORA(most),
     elteresek: elteresek.sort((a, b) => (a.szin === b.szin ? 0 : a.szin === "red" ? -1 : 1)),

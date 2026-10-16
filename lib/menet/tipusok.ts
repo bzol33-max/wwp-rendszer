@@ -121,7 +121,6 @@ export type MenetFeladat = Omit<FeladatJavaslat, "tervezettIndulas" | "tervezett
   hivatkozas?: string | null;
 };
 
-export type MenetEsemeny = { id: string; esemeny: string; verzio: number | null; ki: string | null; mikor: string; ok: string | null; reszletek: Record<string, unknown> };
 
 export type Menet = {
   id: string;

@@ -3,7 +3,6 @@ import { query, withTransaction, type Querier } from "@/lib/db";
 import { calculateToll, TollCalcError } from "@/lib/fuvarozas/utdijkalkulacio";
 import { geokodolCachelve } from "@/lib/fuvarozas/erintes-felismeres";
 import { getJarmuIndulasiTelephely } from "@/lib/fuvarozas/telephelyek-db";
-import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
 import { getFuvarBeallitasok } from "@/lib/beallitasok/fuvar";
 import { budapestNapISO } from "@/lib/fuvarozas/idozona";
 import { getFleetLastPositions, parseEcofleetTimestamp } from "@/lib/fuvarozas/ecofleet";
@@ -443,48 +442,9 @@ export async function frissitMenetJavaslatot(
 }
 
 /**
- * Árnyék-generálás az óránkénti körből: minden aktív kocsira ma és holnap
- * (budapesti napok) a 'javaslat' menet frissítése; a jóváhagyottat kihagyja.
- * SOHA nem dob — kocsinként elkapja és naplózza a hibát.
- */
-export async function frissitsMenetJavaslatokat(most: Date = new Date(), kor: HugoKor = ujHugoKor()): Promise<{ frissult: number; valtozatlan: number; jovahagyott: number; hiba: number }> {
-  const eredmeny = { frissult: 0, valtozatlan: 0, jovahagyott: 0, hiba: 0 };
-  try {
-    const ma = budapestNapISO(most);
-    const holnap = budapestNapISO(new Date(Date.parse(`${ma}T12:00:00Z`) + 24 * 3600 * 1000));
-    const jarmuvek = (await getJarmuvek()).filter((j): j is typeof j & { id: string } => !!j.id);
-    const tav = szerverTav(kor);
-    for (const j of jarmuvek) {
-      for (const nap of [ma, holnap]) {
-        try {
-          const r = await frissitMenetJavaslatot(j.id, nap, "rendszer:menetterv", tav);
-          if (r.eredmeny === "jovahagyott") {
-            eredmeny.jovahagyott++;
-            // Jóváhagyott menet: az azóta kocsira került fuvar a helyére (lásd bovitJovahagyottMenetet).
-            const { bovitJovahagyottMenetet } = await import("@/lib/menet/muveletek");
-            const b = await bovitJovahagyottMenetet(r.menetId, "rendszer:menetterv", tav);
-            if (b.ok && b.eredmeny === "bovitve") console.info(`[menetterv] ${j.kod ?? j.id} ${nap}: jóváhagyott menet bővítve (+${b.uj.join(",")}${b.kivett.length ? `, -${b.kivett.join(",")}` : ""})`);
-          }
-          else if (r.eredmeny === "valtozatlan" || r.eredmeny === "km_frissult") eredmeny.valtozatlan++;
-          else eredmeny.frissult++;
-        } catch (err) {
-          eredmeny.hiba++;
-          console.error(`[menetterv] ${j.kod ?? j.id} ${nap} javaslata nem frissült:`, err instanceof Error ? err.message : err);
-        }
-      }
-    }
-  } catch (err) {
-    eredmeny.hiba++;
-    console.error("[menetterv] váratlan hiba:", err instanceof Error ? err.message : err);
-  }
-  if (kor.leallt) console.warn(`[menetterv] a HU-GO ebben a körben leállt (${kor.ok}) — a további szakaszok légvonal × 1,3 becslések.`);
-  return eredmeny;
-}
-
-/**
  * Egy megbízás kocsijának menete frissül (javaslat újraszámolva, jóváhagyott
- * menet bővítve) — kocsi-hozzárendelés után, hogy ne kelljen az óránkénti körre
- * várni. Soha nem dob.
+ * menet bővítve) — kocsi-hozzárendelés után. (Az óránkénti árnyék-generálás
+ * 2026-10-16-án megszűnt, docs/fuvarozas-1-hullam-terv.md D1.) Soha nem dob.
  */
 export async function frissitMegbizasMenetet(megbizasId: string, ki: string): Promise<void> {
   try {

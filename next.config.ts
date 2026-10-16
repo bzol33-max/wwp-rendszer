@@ -43,6 +43,13 @@ const nextConfig: NextConfig = {
         destination: "/fuvarozas2",
         permanent: false,
       },
+      // Telefonos vezetői nézet megszűnt (2026-10-16, docs/fuvarozas-1-hullam-terv.md D4):
+      // a Fuvar · Cég · Rendszer · Számla · Papír fül régi könyvjelzői a /m-re visznek.
+      { source: "/m/fuvar/:path*", destination: "/m", permanent: false },
+      { source: "/m/ceg/:path*", destination: "/m", permanent: false },
+      { source: "/m/rendszer/:path*", destination: "/m", permanent: false },
+      { source: "/m/szamla/:path*", destination: "/m", permanent: false },
+      { source: "/m/papir/:path*", destination: "/m", permanent: false },
     ];
   },
   async headers() {

@@ -6,15 +6,14 @@
 // KEMÉNY korlát; a 45 perces szünet beszúrása; a rögzített (elkezdett)
 // előtag marad; a 30 km-es üres indulás csak figyelmeztetés; a
 // hozzárendelés a legkisebb határköltségű kocsit adja (GPS nélkülit is);
-// az eredmény determinisztikus; a javaslat-küszöb és az ujjlenyomat.
+// az eredmény determinisztikus. 2026-10-16 (docs/fuvarozas-1-hullam-terv.md
+// D1): a tárolt javaslatok (küszöb, ujjlenyomat, elfogadás) és az óránkénti
+// kör kivezetve — a 14. blokk azt őrzi, hogy ne térjenek vissza.
 
 import { readFileSync } from "node:fs";
 import { alapFuvarBeallitasok } from "@/lib/beallitasok/fuvar-alap";
 import {
   TELJES_BEJARAS_MAX,
-  bemenetUjjlenyomat,
-  erdemesJavasolni,
-  feladatSorrendJavaslatbol,
   javasolHozzarendelest,
   optParamBeallitasbol,
   optimalizalSorrendet,
@@ -94,7 +93,6 @@ function bemenet(munkak: MenetMunka[], sorrend: string[] | null, x: Partial<OptB
     eq("3 munka: megtakarítás km", e.megtakaritasKm, 280);
     eq("3 munka: megtakarítás Ft = 280 km × 168 Ft", e.megtakaritasFt, e.jelenlegi.celfuggveny.osszesen - e.legjobb!.celfuggveny.osszesen);
     igaz("3 munka: megtakarítás > 40 000 Ft", e.megtakaritasFt > 40_000);
-    igaz("3 munka: érdemes javasolni", erdemesJavasolni(e));
     const cf = e.legjobb!.celfuggveny;
     eq("J = a tagok összege", cf.osszesen, cf.uzemanyag + cf.utdij + cf.napi + cf.keses_buntetes + cf.varakozas_buntetes + cf.hazaut + cf.sajat_ertek);
     eq("J: napi költség egy napra", cf.napi, 50_000);
@@ -109,7 +107,6 @@ function bemenet(munkak: MenetMunka[], sorrend: string[] | null, x: Partial<OptB
     const e2 = await optimalizalSorrendet(bemenet([A, Bm, C], ["B", "A", "C"]));
     eq("jó sorrend: a legjobb a mostani", e2.legjobb?.sorrend, ["B", "A", "C"]);
     eq("jó sorrend: nincs megtakarítás", e2.megtakaritasFt, 0);
-    eq("jó sorrend: nem érdemes javasolni", erdemesJavasolni(e2), false);
   }
 
   // ---------------------------------------------------------------- 2. saját áru értéke (p)
@@ -163,13 +160,11 @@ function bemenet(munkak: MenetMunka[], sorrend: string[] | null, x: Partial<OptB
     igaz("késés: büntetés a kiírásban", e.jelenlegi.celfuggveny.keses_buntetes > 0);
     eq("késés: a javaslat K, L", e.legjobb?.sorrend, ["K", "L"]);
     eq("késés: a javaslat megengedett", e.legjobb?.megengedett, true);
-    igaz("késés: a mostani sérti a korlátot → érdemes javasolni", erdemesJavasolni(e));
     // Lerakási ablak vége is kemény.
     const M = munka("M", 10, 300, { tervIdo: T("08:00"), lerakasAblakIg: T("10:00") });
     const e2 = await optimalizalSorrendet(bemenet([M], null));
     eq("lerakási ablak: késés → nincs megengedett", e2.legjobb, null);
     igaz("lerakási ablak: megjegyzés", e2.megjegyzesek.some((m) => m.startsWith("Nincs megengedett sorrend")));
-    eq("nincs megengedett → nem javasol", erdemesJavasolni(e2), false);
   }
 
   // ---------------------------------------------------------------- 5. kapacitás = elutasítva
@@ -327,55 +322,16 @@ function bemenet(munkak: MenetMunka[], sorrend: string[] | null, x: Partial<OptB
     eq("hozzárendelés: kapacitás miatt senki", (await javasolHozzarendelest(tul, NAP, kocsik, szakasz, TELEPHELYEK)).legjobb, null);
   }
 
-  // ---------------------------------------------------------------- 12. ujjlenyomat és küszöb
-  {
-    const A = munka("A", 10, 20, { tervIdo: T("08:00") }), Bm = munka("B", 30, 40);
-    const alap = { nap: NAP, munkak: [A, Bm], jelenlegiSorrend: ["A", "B"], indulas: H(0), kapacitas: KAP, menetVerzio: 3 };
-    const u = bemenetUjjlenyomat(alap);
-    eq("ujjlenyomat: 16 hex", /^[0-9a-f]{16}$/.test(u), true);
-    eq("ujjlenyomat: a munkák tömb-sorrendje nem számít", bemenetUjjlenyomat({ ...alap, munkak: [Bm, A] }), u);
-    igaz("ujjlenyomat: ablak-változás", bemenetUjjlenyomat({ ...alap, munkak: [{ ...A, tervIdo: T("09:00") }, Bm] }) !== u);
-    igaz("ujjlenyomat: menet-verzió", bemenetUjjlenyomat({ ...alap, menetVerzio: 4 }) !== u);
-    igaz("ujjlenyomat: sorrend", bemenetUjjlenyomat({ ...alap, jelenlegiSorrend: ["B", "A"] }) !== u);
-    igaz("ujjlenyomat: tény", bemenetUjjlenyomat({ ...alap, munkak: [{ ...A, tenyIdo: T("08:05") }, Bm] }) !== u);
-
-    const minta = (ft: number, km: number, megengedett = true): SorrendEredmeny => ({
-      jelenlegi: { sorrend: ["A", "B"], megengedett } as SorrendEredmeny["jelenlegi"],
-      legjobb: { sorrend: ["B", "A"], megengedett: true } as SorrendEredmeny["jelenlegi"],
-      modszer: "teljes_bejaras", vizsgalt: 3, megtakaritasFt: ft, megtakaritasKm: km, megjegyzesek: [], legkevesbeRosszSerulesek: [],
-    });
-    eq("küszöb: 999 Ft, 4 km → nem", erdemesJavasolni(minta(999, 4)), false);
-    eq("küszöb: 1 000 Ft → igen", erdemesJavasolni(minta(1000, 0)), true);
-    eq("küszöb: 5 km és pozitív Ft → igen", erdemesJavasolni(minta(500, 5)), true);
-    eq("küszöb: a mostani nem megengedett → igen", erdemesJavasolni(minta(-2000, -3, false)), true);
-  }
-
-  // ---------------------------------------------------------------- 13. elfogadás: feladat-sorrend az átrendezéshez
-  {
-    const f = (id: string, sorszam: number, megbizasId: string | null, lezarvaAt: string | null = null) => ({ id, sorszam, megbizasId, lezarvaAt });
-    // 1 üres → 2 A(lezárt) · 3 üres → 4 B · 5 C · 6 üres → 7 D
-    const feladatok = [f("1", 1, null, "x"), f("2", 2, "A", "x"), f("3", 3, null), f("4", 4, "B"), f("5", 5, "C"), f("6", 6, null), f("7", 7, "D")];
-    eq("feladat-sorrend: a lezárt előtag marad, az üres pozicionálás a munkájával mozog", feladatSorrendJavaslatbol(feladatok, ["A", "D", "B", "C"]), ["1", "2", "6", "7", "3", "4", "5"]);
-    eq("feladat-sorrend: az előtag munkája nélkül is megy", feladatSorrendJavaslatbol(feladatok, ["C", "B", "D"]), ["1", "2", "5", "3", "4", "6", "7"]);
-    eq("feladat-sorrend: eltérő munkák → null", feladatSorrendJavaslatbol(feladatok, ["B", "C"]), null);
-    eq("feladat-sorrend: ismeretlen munka → null", feladatSorrendJavaslatbol(feladatok, ["B", "C", "X"]), null);
-  }
-
-  // ---------------------------------------------------------------- 14. a szerver-kör szabályai (forrás-ellenőrzés)
+  // ---------------------------------------------------------------- 12. a kivezetett rész nem tér vissza (forrás-ellenőrzés)
   {
     const szerver = readFileSync("lib/menet/optimalizalo-szerver.ts", "utf8");
-    igaz("szerver: az elfogadás a meglévő átrendezés-úton megy", /atrendezMenet\(/.test(szerver));
-    igaz("szerver: indok „optimalizáló javaslat #id”", szerver.includes("optimalizáló javaslat #"));
-    igaz("szerver: javaslat-állapotú menetnél újragenerálás a sorrendben", /frissitMenetJavaslatot\(menet\.jarmuId, menet\.nap, ki, szerverTav\(\), sorrend\)/.test(szerver));
-    igaz("szerver: az elavult jelölés", szerver.includes("'elavult'"));
+    igaz("szerver: a hozzárendelés-javaslat megvan", /export async function hozzarendelesJavaslat\(/.test(szerver));
+    igaz("szerver: nem ír optimalizalo_javaslat-ot", !/optimalizalo_javaslat/.test(szerver));
+    igaz("szerver: nincs elfogadás / elutasítás / óránkénti kör", !/elfogadJavaslatot|elutasitJavaslatot|nyitottJavaslatok|optimalizalMenetet|frissitsOptimalizaloJavaslatokat/.test(szerver));
     const akciok = readFileSync("lib/menet/optimalizalo-akciok.ts", "utf8");
-    // 2026-10-12: a Menetterv panel megszűnt — csak a számoló (nem író) hozzárendelés-javaslat maradt.
     igaz("akciók: csak a hozzárendelés-javaslat, megtekintési joggal", /export async function hozzarendelesJavaslat[\s\S]*requireViewPermission\("fuvarozas"\)/.test(akciok) && !/requireEditPermission/.test(akciok));
     const utem = readFileSync("lib/fuvarozas2/modell-szinkron-scheduler.ts", "utf8");
-    igaz("ütemező: az optimalizáló a saját try/catch blokkjában", /try \{\s*const op = await futtatRendszerkent\("optimalizalo"/.test(utem));
-    const migr = readFileSync("db/migrations/033_optimalizalo_javaslat.sql", "utf8");
-    igaz("migráció: nincs begin/commit", !/^\s*(begin|commit)\s*;/im.test(migr));
-    igaz("migráció: állapot-check", migr.includes("'nyitott', 'elfogadva', 'elutasitva', 'elavult'"));
+    igaz("ütemező: nincs menetterv- és optimalizáló-kör", !/futtatRendszerkent\("(menetterv|optimalizalo)"/.test(utem) && !/lib\/menet\//.test(utem.replace(/^\/\/.*$/gm, "")));
   }
 
   console.log(`\nOptimalizáló: ${ok} rendben, ${bad} hibás`);

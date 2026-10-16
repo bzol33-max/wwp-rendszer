@@ -1,6 +1,6 @@
 import "server-only";
 import { query, type Querier } from "@/lib/db";
-import { JOVAHAGYOTT_ALLAPOTOK, type Figyelmeztetes, type Menet, type MenetAllapot, type MenetEsemeny, type MenetFeladat } from "@/lib/menet/tipusok";
+import { JOVAHAGYOTT_ALLAPOTOK, type Figyelmeztetes, type Menet, type MenetAllapot, type MenetFeladat } from "@/lib/menet/tipusok";
 
 // Menetterv — olvasás (fuvar_menet, menet_feladat, menet_esemeny; 032-es
 // migráció). A nézetek a `menetSorrendek`-et hívják oldalbetöltésenként
@@ -95,36 +95,6 @@ export async function getMenetById(menetId: string, q: Querier = query): Promise
   );
   if (!m) return null;
   return menetSorbol(m, (await menetFeladatai([m.id], q)).get(m.id) ?? []);
-}
-
-/** A menetek egy napközben (mindkét vég zárt), feladatokkal. */
-export async function getMenetek(napTol: string, napIg: string): Promise<Menet[]> {
-  const menetek = await query<MenetSor>(
-    `select ${MENET_OSZLOPOK} from fuvar_menet m join fuvar_jarmuvek j on j.id = m.jarmu_id
-     where m.nap between $1::date and $2::date order by m.nap, j.id`,
-    [napTol, napIg]
-  );
-  const feladatok = await menetFeladatai(menetek.map((m) => m.id));
-  return menetek.map((m) => menetSorbol(m, feladatok.get(m.id) ?? []));
-}
-
-/** A menetek naplója (a legfrissebb elöl, menetenként legfeljebb `limit`). */
-export async function getMenetEsemenyek(menetIds: string[], limit = 8): Promise<Map<string, MenetEsemeny[]>> {
-  const ki = new Map<string, MenetEsemeny[]>();
-  if (menetIds.length === 0) return ki;
-  const sorok = await query<MenetEsemeny & { menet_id: string }>(
-    `select menet_id, id, esemeny, verzio, ki, mikor, ok, reszletek from (
-       select e.menet_id::text, e.id::text, e.esemeny, e.verzio, e.ki, e.mikor::text as mikor, e.ok, e.reszletek,
-         row_number() over (partition by e.menet_id order by e.mikor desc, e.id desc) as rn
-       from menet_esemeny e where e.menet_id = any($1::bigint[])
-     ) x where rn <= $2 order by mikor desc`,
-    [menetIds, limit]
-  );
-  for (const s of sorok) {
-    const { menet_id, ...e } = s;
-    ki.set(menet_id, [...(ki.get(menet_id) ?? []), e]);
-  }
-  return ki;
 }
 
 /**

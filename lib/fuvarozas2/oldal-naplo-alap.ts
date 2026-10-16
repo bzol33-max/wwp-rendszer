@@ -9,10 +9,14 @@ export const DEDUP_MS = 30_000;
 const MAX_UTVONAL = 200;
 const MAX_ERTEK = 40;
 
-/** Naplózandó-e az útvonal: csak /fuvarozas2 és /m (és alattuk). */
+/**
+ * Naplózandó-e az útvonal: /fuvarozas2, /m és /erkezes (és alattuk). Az
+ * /erkezes (a régi dolgozói nézet) 2026-10-16 óta: a kivezetése előtt látni
+ * kell, ki használja még (docs/fuvarozas-1-hullam-terv.md D8).
+ */
 export function naplozando(utvonal: string | null | undefined): boolean {
   if (!utvonal || utvonal.length > MAX_UTVONAL) return false;
-  return /^\/(fuvarozas2|m)(\/|$)/.test(utvonal);
+  return /^\/(fuvarozas2|m|erkezes)(\/|$)/.test(utvonal);
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
