@@ -9,8 +9,31 @@ import { SITES } from "@/lib/nav";
 import { MODULES } from "@/lib/modules";
 import { requireSession } from "@/lib/auth/dal";
 import { getAttekintesProfil } from "@/lib/attekintes/tabs";
+import { NapiNaplo, type NapiNaploAdat } from "@/components/kokpit/napi-naplo";
+import {
+  naploHatarok,
+  getFelvasarlasNaplo,
+  getTelepekNaplo,
+  getSzamlaNaplo,
+  getNyitottFeladatok,
+  getSzabadsagok,
+} from "@/lib/kokpit/naplo";
+import { getKimutatas } from "@/lib/fuvarozas2/kimutatas";
+import { getPenzLista } from "@/lib/fuvarozas2/penz-lista";
 
-export default async function Home() {
+export const dynamic = "force-dynamic";
+
+/** Egy blokk betöltése: hiba esetén a blokk kimarad (null), a lap többi része megjelenik. */
+async function biztos<T>(nev: string, f: () => Promise<T>): Promise<T | null> {
+  try {
+    return await f();
+  } catch (e) {
+    console.error(`[napló] ${nev}:`, e instanceof Error ? e.message : e);
+    return null;
+  }
+}
+
+export default async function Home({ searchParams }: { searchParams: Promise<{ nap?: string; idoszak?: string }> }) {
   const session = await requireSession();
 
   // Akinek van "attekintes" (vezetői, mobilra tervezett csempés/tabsávos
@@ -43,8 +66,39 @@ export default async function Home() {
     redirect("/login");
   }
 
+  // Napi napló (C6 terv, 2026-10-17): a kezdőlap teteje. Minden blokk csak
+  // annak látszik, akinek az adott modulhoz joga van.
+  const sp = await searchParams;
+  const latKeszlet = session.can("keszlet").view;
+  const latFuvar = session.can("fuvarozas").view || session.can("elszamolas").view;
+  const latSzamla = session.can("szamlak").view;
+  const latJelenlet = session.can("jelenlet").view || session.can("dolgozok").view;
+  let naplo: NapiNaploAdat | null = null;
+  if (latKeszlet || latFuvar || latSzamla || latJelenlet) {
+    const h = await naploHatarok(sp.nap, sp.idoszak);
+    let kimutatasHiba: string | null = null;
+    const [felvasarlas, telepek, kimutatas, penz, szamlak, feladatok, szabadsagok] = await Promise.all([
+      latKeszlet ? biztos("felvásárlás", () => getFelvasarlasNaplo(h)) : null,
+      latKeszlet ? biztos("telepek", () => getTelepekNaplo(h)) : null,
+      latFuvar
+        ? getKimutatas(h.idoszak, h.nap).catch((e) => {
+            kimutatasHiba = e instanceof Error ? e.message : "ismeretlen hiba";
+            console.error("[napló] kimutatás:", kimutatasHiba);
+            return null;
+          })
+        : null,
+      latFuvar ? biztos("pénz-lista", () => getPenzLista("teendo", false)) : null,
+      latSzamla ? biztos("számlák", () => getSzamlaNaplo(h)) : null,
+      latJelenlet ? biztos("feladatok", () => getNyitottFeladatok(h)) : null,
+      latJelenlet ? biztos("szabadság", () => getSzabadsagok(h)) : null,
+    ]);
+    naplo = { h, felvasarlas, telepek, kimutatas, kimutatasHiba, penz, szamlak, feladatok, szabadsagok };
+  }
+
   return (
     <div className="flex flex-col gap-6">
+      {naplo ? <NapiNaplo {...naplo} /> : null}
+
       <PageHeader
         title="Info"
         subtitle="Well-Worn Pallet Kft. — a rendszer áttekintése és gyorslinkek a modulokhoz"

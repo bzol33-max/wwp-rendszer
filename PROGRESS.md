@@ -3819,3 +3819,18 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
   „húzd oldalra” felirattal.
 - **Teszt**: `teszt-diszpecser.ts` 125/0, `teszt-ma-het.ts` 35/0; teljes `npm run teszt`, typecheck, eslint,
   build; Playwright 1440×900 és 390×844 (`/tmp/qa-shots/fixdisz_*.png`).
+
+## 2026-10-17 — Kezdőlap: Napi napló (C6 terv)
+
+- **Mi**: az asztali kezdőlap (`app/page.tsx`) tetején „Napi napló”: ‹ › lapozás, Nap / Hét / Hónap
+  (`?nap=YYYY-MM-DD&idoszak=nap|het|ho`), nyomtatás / PDF (böngésző). Alatta változatlanul az Info + modul-rács.
+- **Blokkok** (csak annak, akinek joga van; hibánál a blokk kimarad, a lap megjelenik):
+  Felvásárlás · Nyíregyháza (típusonként db / átlagár / Ft, kp / átutalás, kassza nyitó → záró, kifizetésre váró) ·
+  Be- és kiszállítás telepenként (nyitó / be / ki / záró, típusonként, átvételre váró, mozgáslista) ·
+  Kamionok (a meglévő `getKimutatas(idoszak, nap)`) · Számlák (`szamla` tükör + `getPenzLista("teendo")`) ·
+  Teendők (automatikus: számlázatlan, papír, lejárt, függő felvásárlás, átvétel, szabadság-kérelem, álló kocsi + Jelenléti feladatok) ·
+  Folyamatban · Jelentések (nap/hét/hó linkek, Kimutatás) · Mini naptár + szabadság.
+- **Adat**: `lib/kokpit/naplo.ts` (csak olvas, nem "use server"; a jogot a lap ellenőrzi). Telep-készlet ugyanazzal a
+  szabállyal, mint a `getStock` (mozgatas_be az átvételkor számít, „Csere” kimarad).
+- **Még nincs**: projektek tábla, automatikus e-mail kiküldés, bejövő (szállítói) számlák.
+- **Teszt**: typecheck, eslint, `npm run teszt` (0 hiba), build; scratch Postgres-en mintaadattal Playwright 1440 px (nap/hét/hó).
