@@ -2,63 +2,11 @@ import Link from "next/link";
 import { Settings } from "lucide-react";
 import { requireSession } from "@/lib/auth/dal";
 import { cn } from "@/lib/utils";
+import { FOFULEK, aktivFofulKulcs, type Alful } from "@/lib/fuvarozas2/fulek-szerkezet";
 
 // A Fuvarozás 2 fülsora. Szerver-komponens, mert a jogosultság dönti, mit
-// mutat: az „elszamolas" hatókör (Szabina) a Megbízásokat (Lista, Levelek,
-// Partnerek) és a Költségeket látja — GPS-részletet, tervezést, kimutatást és rendszer-
-// egészséget nem (S16).
-//
-// 2026-10-11: 11 fül helyett 4 fő fül + fogaskerék (claude/… „4 fül” terv):
-// Ma · Tervezés · Megbízások · Eredmény · ⚙ Rendszer. A régi oldalak
-// VÁLTOZATLAN címen, a főfül alatti alfülként érhetők el — így minden régi
-// link és a Timocom „→ WWP” gomb (/fuvarozas2/timocom#d=…) tovább működik,
-// és a jogosultság alfülenként ugyanaz, mint eddig.
-
-type Alful = { href: string; label: string; csakFuvarozas?: boolean };
-type Fofül = { kulcs: string; label: string; alfulek: Alful[] };
-
-const FOFULEK: Fofül[] = [
-  // 2026-10-12 (a tulajdonos: „régi és új lapok közt kell keresgetni”): minden
-  // funkció pontosan EGY helyen. A régi címek átirányítással élnek tovább
-  // (next.config.ts redirects).
-  {
-    kulcs: "ma",
-    label: "Ma",
-    // 2026-10-12: az élő térkép (Most), a Diszpécser és a GPS lap megszűnt —
-    // a Ma a megállók és a csempék nézete.
-    alfulek: [{ href: "/fuvarozas2", label: "Ma" }],
-  },
-  {
-    kulcs: "tervezes",
-    label: "Tervezés",
-    alfulek: [
-      { href: "/fuvarozas2/tervezes", label: "A hét", csakFuvarozas: true },
-      // Ajánlat: Timocom → WWP (a böngésző „→ WWP” gombja ide küld) + kézi kalkulátor.
-      // A cím szándékosan /timocom marad.
-      { href: "/fuvarozas2/timocom", label: "Ajánlat", csakFuvarozas: true },
-    ],
-  },
-  {
-    kulcs: "megbizasok",
-    label: "Megbízások",
-    alfulek: [
-      { href: "/fuvarozas2/megbizasok", label: "Lista" },
-      { href: "/fuvarozas2/levelek", label: "Levelek" },
-      { href: "/fuvarozas2/partnerek", label: "Partnerek" },
-    ],
-  },
-  {
-    kulcs: "eredmeny",
-    label: "Eredmény",
-    alfulek: [
-      // Az új Eredmény-áttekintés (2026-10-11): három kérdés, vízesés, havi fedezet, megbízók.
-      { href: "/fuvarozas2/eredmeny", label: "Áttekintés", csakFuvarozas: true },
-      { href: "/fuvarozas2/kimutatas", label: "Kimutatás", csakFuvarozas: true },
-      // Költségek (5. fázis): az Elszámolás hatóköre is látja (HU-GO import, tankolások).
-      { href: "/fuvarozas2/koltsegek", label: "Költségek" },
-    ],
-  },
-];
+// mutat (a `csakFuvarozas` alfülek csak a „fuvarozas" nézési joggal látszanak).
+// A fülszerkezet (FOFULEK) és a magyarázata: lib/fuvarozas2/fulek-szerkezet.ts.
 
 const RENDSZER = "/fuvarozas2/rendszer";
 
@@ -69,7 +17,8 @@ export async function Fuvarozas2Fulek({ aktiv, cim }: { aktiv: string; cim?: str
   const lathato = (a: Alful) => (a.csakFuvarozas ? fuvarozas : true);
 
   const fulek = FOFULEK.map((f) => ({ ...f, alfulek: f.alfulek.filter(lathato) })).filter((f) => f.alfulek.length > 0);
-  const aktivFofül = fulek.find((f) => f.alfulek.some((a) => a.href === aktiv)) ?? null;
+  const aktivKulcs = aktivFofulKulcs(fulek, aktiv);
+  const aktivFofül = fulek.find((f) => f.kulcs === aktivKulcs) ?? null;
   const alfulek = aktivFofül ? aktivFofül.alfulek : [];
 
   return (
