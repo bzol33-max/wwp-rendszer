@@ -45,11 +45,11 @@ export function TervezesHetNezet({ adat, szerkeszthet }: { adat: TervezesHet; sz
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-        <nav className="flex items-center gap-1 text-sm" aria-label="Hét">
+        <nav className="flex items-center gap-1 text-sm" aria-label="Napok">
           <Link href={hetLink(adat.elozoHet)} className="rounded-lg px-2 py-1 text-muted-foreground hover:bg-muted hover:text-foreground">‹ előző</Link>
           <span className="px-1 font-semibold tabular-nums">{napCimke(adat.napok[0])} – {napCimke(utolso)}</span>
           <Link href={hetLink(adat.kovetkezoHet)} className="rounded-lg px-2 py-1 text-muted-foreground hover:bg-muted hover:text-foreground">következő ›</Link>
-          {!adat.ezAHet ? <Link href={hetLink(null)} className="rounded-lg border px-2 py-0.5 text-xs hover:bg-muted">vissza a mai hétre</Link> : null}
+          {!adat.ezAHet ? <Link href={hetLink(null)} className="rounded-lg border px-2 py-0.5 text-xs hover:bg-muted">vissza mához</Link> : null}
         </nav>
         <AutoFrissites frissitve={adat.frissitve} intervallMs={300_000} />
         <span className={cn("ml-auto rounded-full px-3 py-1 text-sm font-medium", adat.resek.length ? "bg-[var(--f2-amb-l)] text-[#5a3806]" : "bg-[var(--f2-mint-l)] text-[var(--f2-mint)]")}>

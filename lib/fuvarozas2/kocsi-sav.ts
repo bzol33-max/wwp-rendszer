@@ -10,8 +10,7 @@ import { query } from "@/lib/db";
 import { requireSession } from "@/lib/auth/dal";
 import type { MaVaszon } from "@/lib/fuvarozas2/ma-vaszon";
 import { getTervezesHet, type TervezesHet } from "@/lib/fuvarozas2/tervezes-het";
-import { kovetkezoMunkanap, tervHetNapjai, type VisszfuvarRiasztas } from "@/lib/fuvarozas2/tervezes-het-alap";
-import { budapestNapISO } from "@/lib/fuvarozas/idozona";
+import { ablakKezdet, type VisszfuvarRiasztas } from "@/lib/fuvarozas2/tervezes-het-alap";
 import { kocsiSav, type KocsiSav } from "@/lib/fuvarozas2/kocsi-sav-alap";
 
 const IDOKORLAT_MS = 2_500;
@@ -106,11 +105,8 @@ export async function elotoltKocsiSavok(): KocsiSavElotoltes {
   // Pénteken / hétvégén a következő munkanap (hétfő) a jövő héten van — a riasztáshoz azt is betöltjük.
   // A hét-tár felhasználók közt közös → csak Fuvarozás-joggal töltjük (a getTervezesHet jogellenőrzése a tár miatt nem futna le mindenkinél).
   if (!(await latjaFuvarozast())) return [null, -1, null];
-  const ma = budapestNapISO();
-  const kov = kovetkezoMunkanap(ma);
-  const ezAHet = tervHetNapjai(ma);
-  const kovHet = kov > ezAHet[ezAHet.length - 1] ? hetIdokorlattal(kov) : Promise.resolve(null);
-  return Promise.all([hetIdokorlattal(), bejovoKorlattal(), kovHet]);
+  // Az alapablak (egy munkanap vissza + előre) mindig tartalmazza a következő munkanapot — elég egy betöltés.
+  return Promise.all([hetIdokorlattal(), bejovoKorlattal(), Promise.resolve(null)]);
 }
 
 function riasztasokBol(...hetek: (TervezesHet | null)[]): Riasztas[] {
@@ -130,7 +126,7 @@ function riasztasokBol(...hetek: (TervezesHet | null)[]): Riasztas[] {
 export async function getKocsiSavok(vaszon: MaVaszon, elotoltes?: KocsiSavElotoltes): Promise<KocsiSavok> {
   const [het, bejovo, kovHet] = await (elotoltes ?? elotoltKocsiSavok());
   const riasztasok = bejovo < 0 ? [] : riasztasokBol(het, kovHet);
-  const hetKezdet = het?.hetKezdet ?? tervHetNapjai(vaszon.ma)[0];
+  const hetKezdet = het?.hetKezdet ?? ablakKezdet(vaszon.ma);
   let savok: KocsiSav[] = [];
   try {
     savok = vaszon.kocsik.map((k) => {

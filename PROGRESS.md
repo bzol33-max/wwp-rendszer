@@ -1,5 +1,13 @@
 # PROGRESS
 
+## 2026-10-17 — Hét nézet: gördülő ablak (egy munkanap vissza + előre)
+
+Budaházi Zoltán: „szombaton nagyon ritkán megyünk, vasárnap soha, nem konkrét hét kell, elég egy nap vissza, a többi
+előre”. A Hét (Tervezés) nem naptári hét: az előző munkanap + 5 munkanap előre; szombat és ünnep csak akkor oszlop, ha
+aznap van fel- vagy lerakás, vasárnap soha. Lapozás 5 munkanappal (egy nap átfedés), „vissza mához”. A kocsi-sávok és a
+visszfuvar-riasztás is ebből az ablakból számol (nem kell külön a jövő hetet betölteni). `tervezes-het-alap.ts`:
+ablakKezdet, elozoMunkanap, munkanapLepes, tervAblak (Jelenlét-ünnepnaptár). Teszt: teszt-tervezes-het (+9).
+
 ## 2026-10-17 — Visszfuvar-riasztás (2. hullám #3)
 
 A Kocsik → Ma lap tetején: „Üresen indul — keress rá fuvart”: a ma és a következő munkanap (hétvége és ünnep

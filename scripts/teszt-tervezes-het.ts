@@ -1,7 +1,7 @@
 // Tervezés · A hét: rések, ajánlat-illesztés, kiket hívj (lib/fuvarozas2/tervezes-het-alap.ts).
 // Futtatás: npx tsx scripts/teszt-tervezes-het.ts
 
-import { ajanlatFrissesseg, fuvarJel, hetEltolva, hetiReszek, napBelulFuzve, kovetkezoMunkanap, riasztandoResek, riasztasOsszerak, type Res, type RiasztasAjanlat, illeszt, kiketHivj, kiosztatlanCellak, legjobbRes, tervHetNapjai, utKm, type HetiFuvar } from "@/lib/fuvarozas2/tervezes-het-alap";
+import { ajanlatFrissesseg, fuvarJel, hetEltolva, hetiReszek, napBelulFuzve, ablakKezdet, elozoMunkanap, munkanapLepes, tervAblak, kovetkezoMunkanap, riasztandoResek, riasztasOsszerak, type Res, type RiasztasAjanlat, illeszt, kiketHivj, kiosztatlanCellak, legjobbRes, tervHetNapjai, utKm, type HetiFuvar } from "@/lib/fuvarozas2/tervezes-het-alap";
 
 let ok = 0, bad = 0;
 function eq(nev: string, kapott: unknown, vart: unknown) {
@@ -169,6 +169,19 @@ if (P.nadudvar && P.szakoly) {
   eq("összerak: max 3 hívandó", r.hivandok.map((h) => h.partner), ["P1", "P2", "P3"]);
   eq("összerak: csak régi → az is jó", riasztasOsszerak(resek[0], [a("régi", 5, true)], []).ajanlat?.id, "régi");
   eq("összerak: nincs jelölt → null", riasztasOsszerak(resek[0], [], []).ajanlat, null);
+}
+
+// Hét nézet ablaka (2026-10-17): egy munkanap vissza + előre, szombat csak fuvarral, vasárnap soha.
+{
+  eq("előző munkanap: hétfő → péntek", elozoMunkanap("2026-10-19"), "2026-10-16");
+  eq("ablak kezdete szombaton: péntek", ablakKezdet("2026-10-17"), "2026-10-16");
+  eq("ablak kezdete szerdán: kedd", ablakKezdet("2026-10-14"), "2026-10-13");
+  eq("ablak: péntek + 5 munkanap, okt. 23. és hétvége nélkül", tervAblak("2026-10-16"), ["2026-10-16", "2026-10-19", "2026-10-20", "2026-10-21", "2026-10-22", "2026-10-26"]);
+  eq("ablak: szombat fuvarral bekerül", tervAblak("2026-10-16", (n) => n === "2026-10-17"), ["2026-10-16", "2026-10-17", "2026-10-19", "2026-10-20", "2026-10-21", "2026-10-22", "2026-10-26"]);
+  eq("ablak: vasárnap fuvarral sem", tervAblak("2026-10-16", (n) => n === "2026-10-18").includes("2026-10-18"), false);
+  eq("ablak: ünnep fuvarral bekerül", tervAblak("2026-10-16", (n) => n === "2026-10-23").includes("2026-10-23"), true);
+  eq("lapozás előre 5 munkanap", munkanapLepes("2026-10-16", 5), "2026-10-26");
+  eq("lapozás vissza 5 munkanap", munkanapLepes("2026-10-26", -5), "2026-10-16");
 }
 
 console.log(`teszt-tervezes-het: ${ok} ok, ${bad} hiba`);

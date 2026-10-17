@@ -19,8 +19,8 @@ import { getTimocomAjanlatok } from "@/lib/fuvarozas2/timocom";
 import { getEurArfolyamok } from "@/lib/fuvarozas/arfolyam";
 import type { Pont } from "@/lib/fuvarozas2/tervezo-alap";
 import {
-  ajanlatFrissesseg, hetEltolva, hetiReszek, illeszt, kiketHivj, kiosztatlanCellak, legjobbRes, tervHetNapjai, utKm,
-  riasztandoResek, riasztasOsszerak, type RiasztasAjanlat, type VisszfuvarRiasztas,
+  ajanlatFrissesseg, hetiReszek, illeszt, kiketHivj, kiosztatlanCellak, legjobbRes, utKm,
+  riasztandoResek, riasztasOsszerak, ablakKezdet, munkanapLepes, tervAblak, ABLAK_MUNKANAP, type RiasztasAjanlat, type VisszfuvarRiasztas,
   type AjanlatHely, type HetiFuvar, type HivandoPartner, type Illeszkedes, type MultFuvar, type NapCella, type Res,
 } from "@/lib/fuvarozas2/tervezes-het-alap";
 import { legutobbiTacho } from "@/lib/jarmu-telemetria/repo";
@@ -101,8 +101,11 @@ export async function getTervezesHet(resKulcs?: string, het?: string): Promise<T
   const [{ ma, ora }] = await query<{ ma: string; ora: string }>(
     `select ((now() at time zone 'Europe/Budapest')::date)::text as ma, to_char(now() at time zone 'Europe/Budapest', 'HH24:MI') as ora`
   );
-  const mostaniHet = tervHetNapjai(ma)[0];
-  const napok = tervHetNapjai(het && /^\d{4}-\d{2}-\d{2}$/.test(het) ? het : ma);
+  // 2026-10-17: nem naptári hét — egy munkanap vissza + előre (szombat csak fuvarral, vasárnap soha).
+  // A `het` paraméter az ablak első napja (lapozás 5 munkanappal, egy nap átfedéssel).
+  const alapKezdet = ablakKezdet(ma);
+  const kezdet = het && /^\d{4}-\d{2}-\d{2}$/.test(het) ? het : alapKezdet;
+  const vazlat = tervAblak(kezdet);
 
   const sorok = await query<Sor>(
     `select m.id::text, m.jelleg, m.allapot, j.kod as jarmu_kod, coalesce(nullif(trim(m.jarmu), ''), nullif(trim(m.sofor), '')) as jarmu_szoveg, coalesce(p.nev, m.megrendelo) as partner,
@@ -118,8 +121,10 @@ export async function getTervezesHet(resKulcs?: string, het?: string): Promise<T
      where m.torolt_at is null and m.allapot is not null and m.datum is not null
        and coalesce(m.lerakas_datum, m.datum) >= $1::date - 180 and m.datum <= $2::date
      order by m.datum, m.id`,
-    [napok[0], napok[napok.length - 1]]
+    [vazlat[0], vazlat[vazlat.length - 1]]
   );
+  // Szombat / ünnep oszlop csak akkor, ha aznap van felrakás vagy lerakás.
+  const napok = tervAblak(kezdet, (nap) => sorok.some((s) => s.fel_nap === nap || s.le_nap === nap));
 
   // A megállók lat/lon oszlopát semmi nem tölti ki (a modell-szinkron csak a
   // címet írja), ezért koordináta nélkül egyetlen rés sem jött létre. A hét és
@@ -183,7 +188,7 @@ export async function getTervezesHet(resKulcs?: string, het?: string): Promise<T
 
   // Tachó csak a mostani héten (élő állapot); a tábla hiánya / hiba → nincs chip.
   const tachoMost = new Date();
-  const tachok = napok[0] === mostaniHet ? await legutobbiTacho().catch(() => new Map<string, never>()) : new Map<string, never>();
+  const tachok = kezdet === alapKezdet ? await legutobbiTacho().catch(() => new Map<string, never>()) : new Map<string, never>();
 
   const resek: Res[] = [];
   const kocsik = jarmuvek.map((j) => {
@@ -290,7 +295,7 @@ export async function getTervezesHet(resKulcs?: string, het?: string): Promise<T
   }
 
   return {
-    ma, frissitve: ora, kimaradt, hetKezdet: napok[0], elozoHet: hetEltolva(napok[0], -1), kovetkezoHet: hetEltolva(napok[0], 1), ezAHet: napok[0] === mostaniHet, helyNelkul,
+    ma, frissitve: ora, kimaradt, hetKezdet: napok[0], elozoHet: munkanapLepes(kezdet, -(ABLAK_MUNKANAP - 1)), kovetkezoHet: munkanapLepes(kezdet, ABLAK_MUNKANAP - 1), ezAHet: kezdet === alapKezdet, helyNelkul,
     napok, kocsik, kiosztatlan, resek,
     uresKmOssz: resek.reduce((a, r) => a + r.km, 0),
     ajanlatok, kijelolt,

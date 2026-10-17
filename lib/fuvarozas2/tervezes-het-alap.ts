@@ -222,6 +222,49 @@ export function kiketHivj(res: Res, mult: MultFuvar[], maxKm = 50): HivandoPartn
     .slice(0, 6);
 }
 
+/** A Hét nézet ablaka (2026-10-17, Budaházi Zoltán): nem naptári hét, hanem egy munkanap vissza + előre, 6 munkanap. */
+export const ABLAK_MUNKANAP = 6;
+
+const napLep = (nap: string, delta: number) => {
+  const d = new Date(`${nap}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + delta);
+  return d.toISOString().slice(0, 10);
+};
+
+/** Az előző munkanap (hétvége, ünnep átugorva). */
+export function elozoMunkanap(nap: string): string {
+  let d = nap;
+  for (let i = 0; i < 14; i++) { d = napLep(d, -1); if (munkanap(d)) return d; }
+  return d;
+}
+
+/** Az alapablak első napja: a mai előtti munkanap („egy nap vissza”). */
+export function ablakKezdet(ma: string): string {
+  return elozoMunkanap(ma);
+}
+
+/** `n` munkanappal odébb (negatív: vissza). A kiinduló nap nem számít. */
+export function munkanapLepes(nap: string, n: number): string {
+  let d = nap;
+  const irany = n < 0 ? -1 : 1;
+  for (let db = 0, i = 0; db < Math.abs(n) && i < 60; i++) { d = napLep(d, irany); if (munkanap(d)) db++; }
+  return d;
+}
+
+/**
+ * Az ablak napjai `kezdet`-től: `ABLAK_MUNKANAP` munkanap; a köztük lévő nem
+ * munkanap (szombat, ünnep) csak akkor oszlop, ha `fuvarVan(nap)` — vasárnap soha.
+ */
+export function tervAblak(kezdet: string, fuvarVan: (nap: string) => boolean = () => false): string[] {
+  const ki: string[] = [];
+  let d = kezdet;
+  for (let db = 0, i = 0; db < ABLAK_MUNKANAP && i < 60; i++, d = napLep(d, 1)) {
+    if (munkanap(d)) { ki.push(d); db++; continue; }
+    if (new Date(`${d}T12:00:00Z`).getUTCDay() !== 0 && fuvarVan(d)) ki.push(d);
+  }
+  return ki;
+}
+
 /** A tervezett hét: hétköznap az aktuális hét hétfőjétől, vasárnap a következő hétfőtől; hétfő–szombat. */
 export function tervHetNapjai(ma: string): string[] {
   const d = new Date(`${ma}T12:00:00Z`);
