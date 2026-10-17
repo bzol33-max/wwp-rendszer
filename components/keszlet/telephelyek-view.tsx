@@ -18,6 +18,7 @@ import { InventoryDialog } from "@/components/keszlet/inventory-dialog";
 import { MovementForm } from "@/components/keszlet/movement-form";
 import { VegyesSplitRow, type SzetvalogatasTetel } from "@/components/keszlet/vegyes-split-row";
 import { BejovoSzallitmanyok } from "@/components/keszlet/bejovo-szallitmanyok";
+import { MozgasOszlopok } from "@/components/keszlet/mozgas-oszlopok";
 import { Package, X } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -421,69 +422,12 @@ export function TelephelyekView({ site: active }: { site: SiteKey }) {
                   </TableBody>
                 </Table>
               ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Dátum/idő</TableHead>
-                      <TableHead>Típus</TableHead>
-                      <TableHead>Irány</TableHead>
-                      <TableHead>Partner / cél</TableHead>
-                      <TableHead className="text-right">Db</TableHead>
-                      <TableHead>Ki</TableHead>
-                      {canEdit && <TableHead className="w-8" />}
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {movements.map((m) => (
-                      <TableRow key={m.id}>
-                        <TableCell className="text-muted-foreground">{m.date}</TableCell>
-                        <TableCell>{m.type}</TableCell>
-                        <TableCell>
-                          {m.direction === "be" && (
-                            <Badge className="bg-success/15 text-success hover:bg-success/15">Be</Badge>
-                          )}
-                          {m.direction === "ki" && (
-                            <Badge variant="destructive" className="bg-destructive/10 text-destructive hover:bg-destructive/10">
-                              Ki
-                            </Badge>
-                          )}
-                          {m.direction === "mozgatas" && (
-                            <Badge className="bg-warning/15 text-warning hover:bg-warning/15">Mozgatás</Badge>
-                          )}
-                          {m.direction === "mozgatas_be" &&
-                            (m.accepted ? (
-                              <Badge className="bg-success/15 text-success hover:bg-success/15">Bejövő mozgatás</Badge>
-                            ) : (
-                              // Még nem vették át: a mennyiség nincs benne a készletben.
-                              <Badge className="bg-warning/15 text-warning hover:bg-warning/15">Átvételre vár</Badge>
-                            ))}
-                        </TableCell>
-                        <TableCell>
-                          {m.direction === "mozgatas" && `→ ${m.target_site}`}
-                          {m.direction === "mozgatas_be" && `← ${m.target_site}`}
-                          {m.direction !== "mozgatas" && m.direction !== "mozgatas_be" && m.partner}
-                        </TableCell>
-                        <TableCell className="text-right font-medium tabular-nums">
-                          {m.direction === "be" || m.direction === "mozgatas_be" ? "+" : "−"}
-                          {m.qty}
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">{m.created_by ?? "—"}</TableCell>
-                        {canEdit && (
-                          <TableCell>
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteMovement(m)}
-                              title="Törlés (hibás rögzítés)"
-                              className="text-destructive/70 hover:text-destructive"
-                            >
-                              <X className="h-3.5 w-3.5" />
-                            </button>
-                          </TableCell>
-                        )}
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <MozgasOszlopok
+                  site={active}
+                  movements={movements}
+                  canEdit={canEdit}
+                  onDelete={handleDeleteMovement}
+                />
               )}
             </CardContent>
           </Card>
