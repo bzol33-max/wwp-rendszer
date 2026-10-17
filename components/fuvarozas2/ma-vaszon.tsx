@@ -5,6 +5,12 @@ import { NyugtaGomb, VisszavonGomb } from "@/components/fuvarozas2/elteres-nyugt
 import { AutoFrissites } from "@/components/fuvarozas2/auto-frissites";
 import { pihenoNapE } from "@/lib/fuvarozas2/ma-het";
 import { ForrasJel } from "@/components/fuvarozas2/forras-jel";
+import type { CSSProperties } from "react";
+import { Lock } from "lucide-react";
+import { kocsiSzin } from "@/lib/fuvarozas2/kocsi-szin";
+import { tachoCsik } from "@/lib/fuvarozas2/ma-kartya-alap";
+import { bejegyzesIdo, tipusNev, TAVOLLET_NEV, type Bejegyzes, type TavolletTipus } from "@/lib/fuvarozas2/bejegyzes-alap";
+import { BejegyzesIkon } from "@/components/fuvarozas2/bejegyzes-ikon";
 
 // A „Ma" képernyő (Budaházi Zoltán, 2026-09-28): négy kocsi-oszlop egymás
 // mellett, mindegyik ugyanabban a sorrendben — fejléc (hol van most),
@@ -185,6 +191,30 @@ function Tukor({ sorok }: { sorok: TukorSor[] }) {
   );
 }
 
+// --- N1 kocsikártya (docs/ma-n1-terv.md): kocsiszín, szalag, tachó-csík, bejegyzés, távollét ---
+const szinValtozok = (szin: string | null | undefined): CSSProperties => {
+  const s = kocsiSzin(szin);
+  return { "--kc": s.c, "--kl": s.l, "--kd": s.d } as CSSProperties;
+};
+
+function BejegyzesSor({ b }: { b: Bejegyzes }) {
+  return (
+    <Link href="/fuvarozas2/tervezes" className="flex items-start gap-1.5 rounded-lg bg-muted/70 px-2 py-1 text-xs text-foreground/80 ring-1 ring-foreground/10 hover:bg-muted" title={b.megjegyzes ?? undefined}>
+      <BejegyzesIkon tipus={b.tipus} className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+      <span className="min-w-0"><b>{tipusNev(b.tipus)}</b> <span className="tabular-nums">{bejegyzesIdo(b)}</span>{b.hely ? <span className="text-muted-foreground"> · {b.hely}</span> : null}</span>
+    </Link>
+  );
+}
+
+function TavolletSor({ t }: { t: TavolletTipus }) {
+  return (
+    <div className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold text-[var(--kd)] ring-1 ring-[var(--kc)]"
+      style={{ backgroundImage: "repeating-linear-gradient(135deg, var(--kl) 0 7px, transparent 7px 14px)" }}>
+      <Lock className="size-3.5 shrink-0" aria-hidden />{TAVOLLET_NEV[t]} · Jelenlétből · ne tervezz
+    </div>
+  );
+}
+
 export function KocsiOszlop({ k, holnapCimke, piheno }: { k: MaKocsi; holnapCimke: string; piheno: boolean }) {
   if (k.helykitolto) {
     return (
@@ -195,24 +225,42 @@ export function KocsiOszlop({ k, holnapCimke, piheno }: { k: MaKocsi; holnapCimk
       </Doboz>
     );
   }
+  const csik = tachoCsik(k.tachoNapiHatraPerc);
+  const jelzesek = k.jelzesek ?? [];
   return (
-    <Doboz className="flex flex-col">
+    <div className="flex flex-col overflow-hidden rounded-2xl border border-foreground/10 bg-card" style={szinValtozok(k.szin)}>
       <details open className="group flex flex-col">
-        <summary className="flex cursor-pointer list-none flex-col gap-1 border-b border-foreground/10 px-4 py-3">
-          <div className="flex items-baseline justify-between gap-2">
+        <summary className="flex cursor-pointer list-none flex-col gap-1 bg-[var(--kl)] px-4 py-2.5 shadow-[inset_0_3px_0_var(--kc)]">
+          <div className="flex items-center gap-2.5">
+            <span className="grid size-8 shrink-0 place-items-center rounded-[10px] bg-[var(--kc)] text-sm font-bold text-white" aria-hidden>{(k.sofor ?? k.cimke).slice(0, 1).toUpperCase()}</span>
             <span className="text-base font-bold">{k.sofor ?? "nincs sofőr"}</span>
             <span className="text-xs text-muted-foreground">{k.cimke}</span>
+            {k.allapot ? (
+              <span className="ml-auto flex min-w-0 items-center gap-1.5 text-sm">
+                <span className={`size-2 shrink-0 rounded-full ${ALLAPOT_PONT[k.allapot.szin]}`} />
+                <span className={`truncate ${k.allapot.szin === "amber" ? "font-semibold text-[var(--f2-amb)]" : "font-semibold text-[var(--kd)]"}`}>{k.allapot.szoveg}</span>
+              </span>
+            ) : null}
           </div>
-          {k.allapot ? (
-            <div className="flex items-center gap-1.5 text-sm">
-              <span className={`size-2 shrink-0 rounded-full ${ALLAPOT_PONT[k.allapot.szin]}`} />
-              <span className={k.allapot.szin === "amber" ? "font-semibold text-[var(--f2-amb)]" : "font-semibold"}>{k.allapot.szoveg}</span>
-            </div>
-          ) : null}
-          {k.allapot?.hely ? <div className="truncate text-xs text-muted-foreground">{k.allapot.hely}</div> : null}
+          {k.allapot?.hely ? <div className="truncate pl-[42px] text-xs text-muted-foreground">{k.allapot.hely}</div> : null}
         </summary>
+        {jelzesek.length ? (
+          <div className="flex flex-col">
+            {jelzesek.map((j, i) => (
+              <div key={i} className={`px-4 py-1.5 text-xs font-semibold ${j.szin === "red" ? "bg-[var(--f2-red-l)] text-[var(--f2-red)]" : "bg-[var(--f2-amb-l)] text-[#6b430a]"}`}>⚠ {j.szoveg}</div>
+            ))}
+          </div>
+        ) : null}
 
         <div className="flex flex-col gap-3 px-4 py-3">
+          {csik != null ? (
+            <div className="flex items-center gap-2 text-[11px]" title={k.tacho?.reszletek}>
+              <span className="text-muted-foreground">tachó</span>
+              <span className="h-1.5 flex-1 rounded-full bg-foreground/10"><span className="block h-1.5 rounded-full bg-[var(--kc)]" style={{ width: `${csik}%` }} /></span>
+              <b className="tabular-nums">{Math.floor((k.tachoNapiHatraPerc ?? 0) / 60)}:{String((k.tachoNapiHatraPerc ?? 0) % 60).padStart(2, "0")}</b>
+              <span className="text-muted-foreground">ma hátra</span>
+            </div>
+          ) : null}
           {k.vezetesSor || k.hetiSor || k.napiKm != null ? (
             <div className="rounded-xl bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
               {k.hetiForras === "tacho" && k.hetiSor ? (
@@ -234,11 +282,13 @@ export function KocsiOszlop({ k, holnapCimke, piheno }: { k: MaKocsi; holnapCimk
 
           <div className="flex flex-col gap-1">
             <SzakaszCim>Ma</SzakaszCim>
+            {k.tavolletMa ? <TavolletSor t={k.tavolletMa} /> : null}
+            {(k.bejegyzesekMa ?? []).map((b) => <BejegyzesSor key={`${b.id}-${b.alkalom}`} b={b} />)}
             {k.sorok.length > 0 ? (
               <Tukor sorok={k.sorok} />
             ) : piheno ? (
               <div className="rounded-xl bg-muted/50 px-3 py-2 text-xs text-muted-foreground">Vasárnap — pihenőnap</div>
-            ) : (
+            ) : k.tavolletMa || (k.bejegyzesekMa ?? []).some((b) => !b.tol) ? null : (
               <Link href="/fuvarozas2/tervezes" className="rounded-xl bg-[var(--f2-amb-l)] px-3 py-2 text-xs font-semibold text-[var(--f2-amb)] hover:underline">
                 Üres nap — keress fuvart →
               </Link>
@@ -247,8 +297,10 @@ export function KocsiOszlop({ k, holnapCimke, piheno }: { k: MaKocsi; holnapCimk
 
           <div className="flex flex-col gap-2">
             <SzakaszCim>{holnapCimke}</SzakaszCim>
+            {k.tavolletHolnap ? <TavolletSor t={k.tavolletHolnap} /> : null}
+            {(k.bejegyzesekHolnap ?? []).map((b) => <BejegyzesSor key={`${b.id}-${b.alkalom}`} b={b} />)}
             {k.holnap.map((b) => <BlokkSorok key={b.id} b={b} osszecsuk />)}
-            {k.holnap.length === 0 ? (
+            {k.holnap.length === 0 && !k.tavolletHolnap && !(k.bejegyzesekHolnap ?? []).some((b) => !b.tol) ? (
               k.holnapFolytatodik ? (
                 <div className="text-xs text-muted-foreground">A mai fuvar folytatódik.</div>
               ) : (
@@ -259,17 +311,17 @@ export function KocsiOszlop({ k, holnapCimke, piheno }: { k: MaKocsi; holnapCimk
             ) : null}
           </div>
 
-          {k.papir.length > 0 ? (
-            <div className="flex flex-col gap-1">
-              <SzakaszCim>Papír / számla</SzakaszCim>
-              {k.papir.map((p) => (
-                <Link key={p.szoveg} href={p.href} className="text-xs font-semibold text-[var(--f2-amb)] hover:underline">{p.szoveg}</Link>
-              ))}
-            </div>
-          ) : null}
         </div>
+        {k.papir.length > 0 || k.napiKm != null ? (
+          <div className="mt-auto flex flex-wrap items-baseline gap-x-4 gap-y-1 border-t border-foreground/10 bg-muted/30 px-4 py-2 text-xs">
+            {k.napiKm != null ? <span className="text-muted-foreground">ma <b className="text-foreground">{k.napiKm} km</b></span> : null}
+            {k.papir.map((p) => (
+              <Link key={p.szoveg} href={p.href} className="font-semibold text-[var(--f2-amb)] hover:underline">{p.szoveg}</Link>
+            ))}
+          </div>
+        ) : null}
       </details>
-    </Doboz>
+    </div>
   );
 }
 
@@ -299,8 +351,21 @@ export function MaVaszonNezet({ adat }: { adat: MaVaszon }) {
   const iroda = adat.csempek.filter((c) => c.kulcs !== "uton" && c.kulcs !== "elteres");
   return (
     <div className="flex flex-col gap-4">
-      <div className="-mb-2 flex justify-end">
-        <AutoFrissites frissitve={adat.frissitve} />
+      {/* N1: az iroda számai és a holnapi ellenőrzés egy sorban, fölül (eddig lent egy dobozban). */}
+      <div className="-mb-1 flex flex-wrap items-center gap-2">
+        {iroda.map((c) => {
+          const belso = <><span className="text-muted-foreground">{c.cimke}</span> <b className={`tabular-nums ${SZIN_ERTEK[c.szin]}`}>{c.ertek}</b></>;
+          const oszt = "rounded-full bg-card px-3 py-1 text-xs ring-1 ring-foreground/15";
+          return c.href
+            ? <Link key={c.kulcs} href={c.href} className={`${oszt} hover:bg-muted`} title={c.also ?? undefined}>{belso}</Link>
+            : <span key={c.kulcs} className={oszt} title={c.also ?? undefined}>{belso}</span>;
+        })}
+        {adat.holnapDoboz.map((h) => (
+          <Link key={h.cimke} href="/fuvarozas2/tervezes" className="rounded-full bg-card px-3 py-1 text-xs ring-1 ring-foreground/15 hover:bg-muted">
+            <span className="text-muted-foreground">{h.cimke}</span> <b className={`tabular-nums ${SZIN_ERTEK[h.szin]}`}>{h.ertek}</b>
+          </Link>
+        ))}
+        <span className="ml-auto"><AutoFrissites frissitve={adat.frissitve} /></span>
       </div>
 
       {adat.elteresek.length === 0 && adat.nyugtazott.length === 0 ? null : adat.elteresek.length === 0 ? (
@@ -320,11 +385,11 @@ export function MaVaszonNezet({ adat }: { adat: MaVaszon }) {
       )}
 
 
-      <div className="grid items-start gap-3 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid items-stretch gap-3 lg:grid-cols-2">
         {adat.kocsik.map((k, i) => <KocsiOszlop key={k.kod ?? `hely-${i}`} k={k} holnapCimke={adat.holnapCimke} piheno={pihenoNapE(adat.ma)} />)}
       </div>
 
-      <div className="grid items-start gap-3 lg:grid-cols-2">
+      <div className="grid items-start gap-3">
         <Doboz className="flex flex-col gap-2 p-4">
           <SzakaszCim>Kocsi nélkül — ma / {adat.holnapCimke.toLowerCase()} ({adat.kocsiNelkul.length})</SzakaszCim>
           {adat.kocsiNelkul.length === 0 ? (
@@ -339,31 +404,7 @@ export function MaVaszonNezet({ adat }: { adat: MaVaszon }) {
           )}
         </Doboz>
 
-        <Doboz className="flex flex-col gap-2 p-4">
-          <SzakaszCim>Iroda és {adat.holnapCimke.toLowerCase()}</SzakaszCim>
-          <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 sm:grid-cols-3">
-            {iroda.map((c) => {
-              const belso = (
-                <>
-                  <span className="text-xs text-muted-foreground">{c.cimke}</span>
-                  <b className={`tabular-nums ${SZIN_ERTEK[c.szin]}`}>{c.ertek}</b>
-                  {c.also ? <span className="truncate text-[11px] text-muted-foreground">{c.also}</span> : null}
-                </>
-              );
-              return c.href ? (
-                <Link key={c.kulcs} href={c.href} className="flex flex-col hover:underline">{belso}</Link>
-              ) : (
-                <div key={c.kulcs} className="flex flex-col">{belso}</div>
-              );
-            })}
-            {adat.holnapDoboz.map((h) => (
-              <Link key={h.cimke} href="/fuvarozas2/tervezes" className="flex flex-col hover:underline">
-                <span className="text-xs text-muted-foreground">{h.cimke}</span>
-                <b className={`tabular-nums ${SZIN_ERTEK[h.szin]}`}>{h.ertek}</b>
-              </Link>
-            ))}
-          </div>
-        </Doboz>
+
       </div>
     </div>
   );
