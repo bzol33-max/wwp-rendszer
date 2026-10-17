@@ -121,6 +121,9 @@ export type HetNap = { nap: string; hetvege: "szombat" | "vasarnap" | null };
  * A hét MIND a 7 napja hétfőtől (YYYY-MM-DD) — a hétvége is, jelölve: a
  * szombati / vasárnapi fuvar is a hét része (ütközés, fuvarszám), ezért
  * nem rejtjük el; vasárnap kamionstop (szombat 22:00 – vasárnap 22:00).
+ * TODO: ez egyszerűsített szabály (nyári szombat 15:00, ünnepek, 2. § (2)
+ * nélkül) — a pontos tilalmi ablakok: lib/fuvarozas2/kamionstop.ts
+ * (tilalmiAblakok / tilalmonAtugrik).
  */
 export function hetNapjai(hetfo: string): HetNap[] {
   return Array.from({ length: 7 }, (_, i) => {

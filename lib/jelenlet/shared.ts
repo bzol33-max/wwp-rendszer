@@ -586,6 +586,20 @@ export function munkaszunetiNap(iso: string): string | null {
   );
 }
 
+/**
+ * Törvényes munkaszüneti nap (Mt. 102. §) neve, különben null. Az áthelyezett
+ * pihenőnapot NEM adja vissza (a munkaszunetiNap() azt is) — pl. a kamionstop
+ * (190/2008. Korm. r. 2. §) csak a törvényes ünnepekre vonatkozik.
+ */
+export function torvenyesUnnep(iso: string): string | null {
+  return FIX_UNNEPEK[iso.slice(5)] ?? mozgoUnnepek(Number(iso.slice(0, 4))).get(iso) ?? null;
+}
+
+/** Törvényes munkaszüneti nap-e (áthelyezett pihenőnap nélkül). */
+export function torvenyesUnnepE(iso: string): boolean {
+  return torvenyesUnnep(iso) !== null;
+}
+
 /** Ledolgozós szombat-e (áthelyezett munkanap). */
 export function ledolgozosSzombat(iso: string): boolean {
   return ATHELYEZETT_MUNKANAPOK.has(iso);
