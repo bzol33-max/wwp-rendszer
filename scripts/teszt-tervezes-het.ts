@@ -1,7 +1,7 @@
 // Tervezés · A hét: rések, ajánlat-illesztés, kiket hívj (lib/fuvarozas2/tervezes-het-alap.ts).
 // Futtatás: npx tsx scripts/teszt-tervezes-het.ts
 
-import { ajanlatFrissesseg, fuvarJel, hetEltolva, hetiReszek, illeszt, kiketHivj, kiosztatlanCellak, legjobbRes, tervHetNapjai, utKm, type HetiFuvar } from "@/lib/fuvarozas2/tervezes-het-alap";
+import { ajanlatFrissesseg, fuvarJel, hetEltolva, hetiReszek, napBelulFuzve, illeszt, kiketHivj, kiosztatlanCellak, legjobbRes, tervHetNapjai, utKm, type HetiFuvar } from "@/lib/fuvarozas2/tervezes-het-alap";
 
 let ok = 0, bad = 0;
 function eq(nev: string, kapott: unknown, vart: unknown) {
@@ -11,7 +11,7 @@ function eq(nev: string, kapott: unknown, vart: unknown) {
 const P = {
   szakoly: { lat: 47.77, lon: 21.93 }, nadudvar: { lat: 47.42, lon: 21.17 }, tata: { lat: 47.65, lon: 18.32 },
   tompa: { lat: 47.26, lon: 16.88 }, bp: { lat: 47.5, lon: 19.04 }, hszob: { lat: 47.44, lon: 21.39 }, debrecen: { lat: 47.53, lon: 21.63 },
-  balkany: { lat: 47.77, lon: 21.86 }, teglas: { lat: 47.71, lon: 21.68 },
+  balkany: { lat: 47.77, lon: 21.86 }, teglas: { lat: 47.71, lon: 21.68 }, nyirbator: { lat: 47.84, lon: 22.13 },
 };
 const tel = { pont: P.szakoly, varos: "Szakoly" };
 const napok = tervHetNapjai("2026-10-12");
@@ -134,6 +134,20 @@ if (P.nadudvar && P.szakoly) {
   eq("ajánlat: friss", ajanlatFrissesseg("2026-10-14T09:40:00Z", most), { orak: 0, szoveg: "most jött", regi: false });
   eq("ajánlat: órák", ajanlatFrissesseg("2026-10-14T05:00:00Z", most), { orak: 5, szoveg: "5 órája", regi: false });
   eq("ajánlat: régi", ajanlatFrissesseg("2026-10-12T08:00:00Z", most), { orak: 50, szoveg: "2 napja", regi: true });
+}
+
+// Gergő 10.19. (élő eset, 2026-10-17): ugyanaznap Budapest → Szakoly (#317, korábban rögzítve)
+// és Nyírbátor → Budapest (#323). Balkányból indulva a nyírbátori jön előbb, rés nincs.
+{
+  const fuv = [f("317", "bp", "szakoly", "2026-10-19"), f("323", "nyirbator", "bp", "2026-10-19")];
+  const het2 = tervHetNapjai("2026-10-19");
+  const r = hetiReszek({ kod: "AOPU", sofor: "Gergő", elozoVeg: { pont: P.balkany, varos: "Balkány" }, fuvarok: fuv }, het2, tel, 300);
+  eq("egy nap: földrajzi sorrend", r.cellak[0].fuvarok.map((x) => x.id), ["323", "317"]);
+  eq("egy nap: nincs hamis rés", r.resek.length, 0);
+  eq("fűzés: más nap sorrendje marad", napBelulFuzve([f("a", "bp", "szakoly", "2026-10-19"), f("b", "nyirbator", "bp", "2026-10-20")], P.balkany).map((x) => x.id), ["a", "b"]);
+  const nincsKoord = { ...f("x", "bp", "bp", "2026-10-19"), fel: null };
+  eq("fűzés: koordináta nélküli a végére", napBelulFuzve([nincsKoord, f("y", "nyirbator", "bp", "2026-10-19")], P.balkany).map((x) => x.id), ["y", "x"]);
+  eq("fűzés: ismeretlen kezdőpont → marad", napBelulFuzve(fuv, null).map((x) => x.id), ["317", "323"]);
 }
 
 console.log(`teszt-tervezes-het: ${ok} ok, ${bad} hiba`);

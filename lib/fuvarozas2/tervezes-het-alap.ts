@@ -48,6 +48,40 @@ export function utKm(a: Pont, b: Pont): number {
   return Math.round(legvonalKm(a, b));
 }
 
+/**
+ * Az egy napon induló fuvarok sorrendje (2026-10-17): nem a rögzítés
+ * sorrendje, hanem földrajzi fűzés — mindig az jön, amelyiknek a felrakója
+ * a legközelebb van ahhoz, ahol a kocsi épp áll (az előző lerakó, vagy a hét
+ * elején az indulási pont). Pl. Gergő H: Nyírbátor → Budapest, utána
+ * Budapest → Szakoly — nem fordítva (az 2 × 270 km hamis üres utat adott).
+ * Koordináta nélküli fuvar a csoport végére kerül, a sorrendje megmarad.
+ */
+export function napBelulFuzve(rendezett: HetiFuvar[], kezdo: Pont | null): HetiFuvar[] {
+  const ki: HetiFuvar[] = [];
+  let hol: Pont | null = kezdo;
+  let i = 0;
+  while (i < rendezett.length) {
+    let j = i;
+    while (j < rendezett.length && rendezett[j].felNap === rendezett[i].felNap) j++;
+    const maradek = rendezett.slice(i, j);
+    while (maradek.length) {
+      let leg = 0;
+      if (hol && maradek.length > 1) {
+        let legKm = Infinity;
+        maradek.forEach((f, n) => {
+          const km = f.fel ? legvonalKm(hol!, f.fel) : Infinity;
+          if (km < legKm) { legKm = km; leg = n; }
+        });
+      }
+      const [f] = maradek.splice(leg, 1);
+      ki.push(f);
+      hol = f.le ?? null;
+    }
+    i = j;
+  }
+  return ki;
+}
+
 /** Kocsinként a hét rései (üres út ≥ 100 km) és napcellái. */
 /**
  * `ma` (2026-10-14): a ma előtti napokra nem számolunk rést és nem írunk
@@ -55,7 +89,10 @@ export function utKm(a: Pont, b: Pont): number {
  */
 export function hetiReszek(k: HetiKocsi, napok: string[], telephely: { pont: Pont; varos: string }, kmKoltseg: number, ma?: string): { cellak: NapCella[]; resek: Res[] } {
   const elso = napok[0], utolso = napok[napok.length - 1];
-  const heti = k.fuvarok.filter((f) => f.felNap <= utolso && f.leNap >= elso).sort((x, y) => x.felNap.localeCompare(y.felNap) || x.leNap.localeCompare(y.leNap));
+  const heti = napBelulFuzve(
+    k.fuvarok.filter((f) => f.felNap <= utolso && f.leNap >= elso).sort((x, y) => x.felNap.localeCompare(y.felNap) || x.leNap.localeCompare(y.leNap)),
+    (k.elozoVeg ?? telephely).pont
+  );
   const resek: Res[] = [];
   // Ahol a kocsi áll; null, ha egy fuvar lerakójának nincs koordinátája (onnan nem becsülünk).
   let hol: { pont: Pont; varos: string } | null = k.elozoVeg ?? telephely;

@@ -112,7 +112,7 @@ async function dbTeszt(url: string) {
 
     // c) fuvar_elszamolas.szamla_szam
     const c = await ujFuvar("TESZT-042-c");
-    await kliens.query(`insert into fuvar_elszamolas (megbizas_id, szamla_szam) values ($1, 'TESZT-ELSZ-1')`, [c]);
+    await kliens.query(`insert into fuvar_elszamolas (megbizas_id, szamla_szam) values ($1, 'TESZT-ELSZ-1') on conflict (megbizas_id) do update set szamla_szam = excluded.szamla_szam`, [c]);
     eq("elszámolás-számlás fuvar fizikai törlése tiltva", (await torolhet(c)).sikerult, false);
 
     // d) fuvar_elszamolas.szamla_id (számlaszám nélkül is)
@@ -121,14 +121,14 @@ async function dbTeszt(url: string) {
       `insert into szamla (szamlaszam, vevo_nev, kiallitas_datum, brutto, kategoria)
        values ('TESZT-042-SZAMLA', 'Teszt Kft.', '2026-10-16', 1000, 'fuvar') returning id::text`
     );
-    await kliens.query(`insert into fuvar_elszamolas (megbizas_id, szamla_id) values ($1, $2)`, [d, sz[0].id]);
+    await kliens.query(`insert into fuvar_elszamolas (megbizas_id, szamla_id) values ($1, $2) on conflict (megbizas_id) do update set szamla_id = excluded.szamla_id`, [d, sz[0].id]);
     eq("szamla_id-s fuvar fizikai törlése tiltva", (await torolhet(d)).sikerult, false);
 
     // e) számla nélküli fuvar (elszámolás-sorral, de üres számlaszámmal is) törölhető
     const e = await ujFuvar("TESZT-042-e");
     eq("számla nélküli fuvar fizikailag törölhető", (await torolhet(e)).sikerult, true);
     const f = await ujFuvar("TESZT-042-f", "");
-    await kliens.query(`insert into fuvar_elszamolas (megbizas_id, szamla_szam) values ($1, '')`, [f]);
+    await kliens.query(`insert into fuvar_elszamolas (megbizas_id, szamla_szam) values ($1, '') on conflict (megbizas_id) do update set szamla_szam = excluded.szamla_szam`, [f]);
     eq("üres számlaszámú fuvar fizikailag törölhető", (await torolhet(f)).sikerult, true);
 
     // g) a soft-delete (statusz='torolt') számlás fuvaron is megy

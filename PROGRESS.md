@@ -1,5 +1,13 @@
 # PROGRESS
 
+## 2026-10-17 — Tervezés: egy napon belüli fuvarok földrajzi sorrendje
+
+Hiba: Gergő 10.19. — két ugyanaznapi fuvar (Budapest → Szakoly #317, Nyírbátor → Budapest #323) a rögzítés
+sorrendjében jelent meg, ezért 2 hamis rést (266 + 276 km üres) és rossz ajánlat-javaslatot adott.
+Javítás: `tervezes-het-alap.ts` `napBelulFuzve` — egy napon belül mindig a kocsi aktuális helyéhez legközelebbi
+felrakó jön (a Kihasználtság `lancKm` már így számolt). Teszt: teszt-tervezes-het (+5). Az integritás-teszt
+elszámolás-beszúrásai upsertre váltak (a 043-as trigger miatt; az app kódja már eddig is `on conflict`-tal ír).
+
 ## 2026-10-16 — Fuvarozás 1. hullám: rendszer-javítások, kihasználtság, „Megnyertük → megbízás”, takarítás
 
 Terv és fájl-tulajdon: `docs/fuvarozas-1-hullam-terv.md`. Tesztek a kód előtt (teszt-1hullam-rendszer/kihasznaltsag/ajanlat: 47+42+41).
