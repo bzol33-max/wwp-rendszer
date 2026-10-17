@@ -416,7 +416,7 @@ const kisvarda = (id: string, n: string, rakLe = 45): UtemFuvar =>
   eq("12 két pont: a szakasz", raallasSzakasz(h(P1, "Nyírbátor", null), h(P2, "Budapest", "Budapest, Fő u. 1."), sz, 120), { perc: 200, km: 230, becsles: false });
   eq("12 hiányzó cél-pont, más hely: ismeretlen tartalék", raallasSzakasz(h(P1, "Nyírbátor", null), h(null, "Budapest", "Budapest, Fő u. 1."), sz, 120), { perc: 120, km: 0, becsles: true });
   eq("12 hiányzó kiinduló pont, más hely", raallasSzakasz(h(null, "Győr", "Győr, Ipar u. 2."), h(P2, "Budapest", "Budapest, Fő u. 1."), sz, 120), { perc: 120, km: 0, becsles: true });
-  eq("12 azonos település: 0", raallasSzakasz(h(null, "Budapest", "Budapest, Ipar u. 2."), h(P2, "budapest", "Budapest, Fő u. 1."), sz, 120), { perc: 0, km: 0, becsles: false });
+  eq("12 azonos település, más cím: városon belüli 20 p (becslés)", raallasSzakasz(h(null, "Budapest", "Budapest, Ipar u. 2."), h(P2, "budapest", "Budapest, Fő u. 1."), sz, 120), { perc: 20, km: 0, becsles: true });
   eq("12 azonos cím (kis/nagybetű, szóköz): 0", raallasSzakasz(h(P1, "?", "Fő  u. 1."), h(null, "?", "fő u. 1."), sz, 120), { perc: 0, km: 0, becsles: false });
   eq("12 ismeretlen település (?) nem azonos", raallasSzakasz(h(null, "?", null), h(null, "?", null), sz, 120), { perc: 120, km: 0, becsles: true });
 }

@@ -1,5 +1,24 @@
 # PROGRESS
 
+## 2026-10-17 — Hét Rács 2.0: idő · km · díj · tartalék · napi mérleg · hétvége-sáv
+
+Terv: `docs/het-racs-2-terv.md` (Budaházi Zoltán: R1 kártya + R4 napi mérleg + R7 tartalék, „mehet”; hétvége/ünnep
+keskeny sávval). Csak ingyenes források.
+- **Becslő motor** `lib/fuvarozas2/heti-utemterv-alap.ts` (tiszta): fuvarlánc kocsinként a gördülő ablakra; EU 561
+  (4,5 ó → 45 p, 9 ó → 11 ó pihenő, beállított keret), időablak-várakozás, tanult rakodási idő, kamionstop
+  (`kamionstop.ts`, 190/2008. Korm. r. 2. §: hétvége, ünnep, nyári szombat 15:00), csúszás átvitele másnapra;
+  fuvaronként várható fel/le idő, rakott/üres km, díj, Ft/km, legszűkebb tartalék; naponként végzés, km, bér
+  (km-arányosan), vezetés, napi pihenő, kamionstop, „délután szabad”.
+- **Betöltő** `lib/fuvarozas2/heti-utemterv.ts`: megállók és időablakok, HU-GO menetidő × kalibráció (6 mp keret,
+  különben becslés), élő tachó a mai naphoz; a tanult rakodás/kalibráció kiemelve `lib/fuvarozas/menetido-tanulas.ts`-be
+  (viselkedés-változás nélkül), kalibráció és külső hívás egy közös futásban (roham ellen).
+- **Felület** `components/fuvarozas2/tervezes-het.tsx`: R1 kártya, tartalék-jelvény, napi mérleg, keskeny csíkos sáv a
+  kihagyott hétvége/ünnep helyén („P ünnep · Szo · V”).
+- Tesztek: teszt-het-utemterv 72, teszt-het-szunetsav 12, teszt-kamionstop 40, teszt-kulso-hivas 38.
+- Független QA 6/10 → javítva: úton lévő fuvar rakott szakasza, kalibráció-roham, azonos HU-GO-hívások, beállított
+  vezetési keret, koordináta nélküli ráállás (városon belül 20 p), tavaszi DST. Nyitott: a 2027-es áthelyezett
+  pihenőnapok felvétele a Jelenlét-naptárba.
+
 ## 2026-10-17 — Hét nézet: gördülő ablak (egy munkanap vissza + előre)
 
 Budaházi Zoltán: „szombaton nagyon ritkán megyünk, vasárnap soha, nem konkrét hét kell, elég egy nap vissza, a többi

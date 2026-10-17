@@ -317,13 +317,20 @@ export function lancKiindulasok<F, M extends LancMegalloBe>(
 
 const normHely = (s: string | null | undefined) => (s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
 
-/** Koordináta nélkül: azonos hely, ha a cím, vagy (cím híján / eltérő címmel) a település egyezik. */
+/** Koordináta nélkül: azonos hely, ha a cím egyezik. */
 export function azonosHely(a: { varos: string; cim: string | null }, b: { varos: string; cim: string | null }): boolean {
   const ac = normHely(a.cim), bc = normHely(b.cim);
-  if (ac && ac === bc) return true;
+  return !!ac && ac === bc;
+}
+
+/** Azonos település (eltérő cím): városon belüli ráállás. */
+function azonosTelepules(a: { varos: string }, b: { varos: string }): boolean {
   const av = normHely(a.varos), bv = normHely(b.varos);
   return !!av && av !== "?" && av === bv;
 }
+
+/** Városon belüli ráállás becsült ideje, ha nincs koordináta (pl. Debrecen BMW → Nyomdász u.). */
+export const VAROSON_BELULI_PERC = 20;
 
 /**
  * A ráállás szakasza: két ismert pont között a `szakasz` (HU-GO / becslés); ha valamelyik pont
@@ -337,5 +344,6 @@ export function raallasSzakasz(
 ): { perc: number; km: number; becsles: boolean } {
   if (honnan.pont && elso.pont) return szakasz(honnan.pont, elso.pont);
   if (azonosHely(honnan, elso)) return { perc: 0, km: 0, becsles: false };
+  if (azonosTelepules(honnan, elso)) return { perc: VAROSON_BELULI_PERC, km: 0, becsles: true };
   return { perc: ismeretlenPerc, km: 0, becsles: true };
 }
