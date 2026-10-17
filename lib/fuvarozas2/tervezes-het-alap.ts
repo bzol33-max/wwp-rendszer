@@ -5,7 +5,7 @@
 // Kalkulátor számol pontosan (HU-GO). Teszt: scripts/teszt-tervezes-het.ts.
 
 import { legvonalKm, type Pont } from "@/lib/fuvarozas2/tervezo-alap";
-import { munkanap } from "@/lib/jelenlet/shared";
+import { munkanap, munkaszunetiNap, torvenyesUnnep } from "@/lib/jelenlet/shared";
 import { arLetra, felfeleKerekit, FT_LEPES, type ArLetra } from "@/lib/fuvarozas2/ar-letra";
 
 export const RES_MIN_KM = 100;
@@ -352,4 +352,26 @@ export type VisszfuvarRiasztas = { res: Res; ajanlat: RiasztasAjanlat | null; hi
 export function riasztasOsszerak(res: Res, jeloltek: RiasztasAjanlat[], hivandok: HivandoPartner[]): VisszfuvarRiasztas {
   const rendezve = [...jeloltek].sort((a, b) => Number(a.regi) - Number(b.regi) || a.illik.tobbletFt - b.illik.tobbletFt);
   return { res, ajanlat: rendezve[0] ?? null, hivandok: hivandok.slice(0, 3) };
+}
+
+const ROVID_NAPNEV = ["V", "H", "K", "Sze", "Cs", "P", "Szo"];
+
+/**
+ * Hétvége/ünnep sáv (Rács 2.0, 2026-10-17): két egymást követő oszlop közti
+ * kihagyott nem-munkanapok, a második oszlop napja előtt. Címke: rövid napnév, + „ünnep”
+ * (törvényes ünnep) vagy „pihenőnap” (áthelyezett pihenőnap), „ · ” elválasztóval,
+ * pl. „P ünnep · Szo · V”. Teszt: scripts/teszt-het-szunetsav.ts.
+ */
+export function szunetSavok(napok: string[]): { elott: string; cimke: string }[] {
+  const ki: { elott: string; cimke: string }[] = [];
+  for (let i = 1; i < napok.length; i++) {
+    const cimkek: string[] = [];
+    for (let d = napLep(napok[i - 1], 1), n = 0; d < napok[i] && n < 60; d = napLep(d, 1), n++) {
+      if (munkanap(d)) continue; // a kihagyott munkanap (pl. tesztben, lapozásnál) nem sáv
+      const nev = ROVID_NAPNEV[new Date(`${d}T12:00:00Z`).getUTCDay()];
+      cimkek.push(torvenyesUnnep(d) ? `${nev} ünnep` : munkaszunetiNap(d) ? `${nev} pihenőnap` : nev);
+    }
+    if (cimkek.length) ki.push({ elott: napok[i], cimke: cimkek.join(" · ") });
+  }
+  return ki;
 }
