@@ -235,7 +235,8 @@ export async function getTervezesHet(resKulcs?: string, het?: string): Promise<T
     const illik = legjobbRes(resek, fel, le, p);
     const ehhez = kijelolt ? illeszt(kijelolt, fel, le, p) : null;
     const regi = ajanlatFrissesseg(t.frissitveAt, most).regi;
-    if (t.allapot === "nyitott") {
+    // Csak nyitott, napra szóló ajánlat (nap nélkülit nem ajánlunk egy konkrét napi üres útra — QA #4).
+    if (t.allapot === "nyitott" && fel.nap) {
       for (const r of riasztandok) {
         const i = illeszt(r, fel, le, p);
         if (i) riasztasJeloltek.get(r.kulcs)!.push({ id: t.id, megbizo: t.ajanlat.megbizo, felVaros: fel.varos, leVaros: le.varos, regi, illik: i });

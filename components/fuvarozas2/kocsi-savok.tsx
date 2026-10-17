@@ -181,7 +181,7 @@ export function VisszfuvarRiasztasok({ riasztasok, ma }: { riasztasok: Riasztas[
       {riasztasok.map((r) => {
         const href = `/fuvarozas2/tervezes?het=${r.hetKezdet}&res=${encodeURIComponent(r.res.kulcs)}#res`;
         return (
-          <Link key={`${r.res.kocsi}|${r.res.nap}|${r.res.honnan}`} href={href} className="flex flex-col gap-0.5 rounded-xl bg-card/70 px-3 py-2 text-foreground hover:underline">
+          <Link key={`${r.hetKezdet}|${r.res.kulcs}`} href={href} className="flex min-w-0 flex-col gap-0.5 break-words rounded-xl bg-card/70 px-3 py-2 text-foreground hover:bg-card">
             <span className="min-w-0">
               <b>{r.res.sofor}</b> {napCimke(r.res.nap, ma)}: {r.res.honnan} → {r.res.hova}
               <span className="text-muted-foreground"> · {r.res.km} km üres ≈ {ezer(r.res.ft)} Ft</span>
@@ -190,7 +190,7 @@ export function VisszfuvarRiasztasok({ riasztasok, ma }: { riasztasok: Riasztas[
               <span className="text-xs text-muted-foreground">
                 Illő ajánlat: <b className="text-foreground">{r.ajanlat.megbizo ?? "Timocom"}</b> {r.ajanlat.felVaros} → {r.ajanlat.leVaros}
                 {` · +${r.ajanlat.illik.plusKm} km · kérj ${ezer(r.ajanlat.illik.kerjFt)} Ft`}
-                {r.ajanlat.regi ? " · régi" : ""}
+                {r.ajanlat.regi ? " · régi (24 órán túli)" : ""}
               </span>
             ) : (
               <span className="text-xs text-muted-foreground">Nincs illő nyitott ajánlat — keress a Timocomon {r.res.honnan} környékéről.</span>

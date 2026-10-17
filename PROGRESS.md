@@ -1,5 +1,14 @@
 # PROGRESS
 
+## 2026-10-17 — Visszfuvar-riasztás (2. hullám #3)
+
+A Kocsik → Ma lap tetején: „Üresen indul — keress rá fuvart”: a ma és a következő munkanap (hétvége és ünnep
+átugorva, Jelenlét-naptár) ≥ 100 km-es üres útjai és hazaútjai kocsinként, a legjobban illő nyitott, napra szóló
+Timocom-ajánlattal (többlet km, „kérj”) és legfeljebb 3 hívandó partnerrel; kattintásra a Tervezés hete, kijelölve a
+rés. Pénteken/szombaton a jövő hetet is betölti; a hét-számítás 90 mp-ig közös tárban (csak Fuvarozás-joggal).
+`tervezes-het-alap.ts`: kovetkezoMunkanap, riasztandoResek, riasztasOsszerak; teszt-tervezes-het (+11).
+QA 7/10 GO; javítva: tár (#1), ünnepnap (#2), nap nélküli ajánlat (#4), kulcs (#5), mobil tördelés (#7).
+
 ## 2026-10-17 — Kihasználtság: saját fuvar belső díjjal (Budaházi Zoltán: „1”)
 
 A saját (raklap-)fuvar eddig csak költség volt a kocsinál (km + napi fix), bevétel nélkül → Gergő október −80 e Ft/nap.

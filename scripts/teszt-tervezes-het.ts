@@ -156,6 +156,7 @@ if (P.nadudvar && P.szakoly) {
   eq("köv. munkanap: péntek → hétfő", kovetkezoMunkanap("2026-10-16"), "2026-10-19");
   eq("köv. munkanap: szombat → hétfő", kovetkezoMunkanap("2026-10-17"), "2026-10-19");
   eq("köv. munkanap: vasárnap → hétfő", kovetkezoMunkanap("2026-10-18"), "2026-10-19");
+  eq("köv. munkanap: okt. 23. ünnep átugorva", kovetkezoMunkanap("2026-10-22"), "2026-10-26");
   const res = (kulcs: string, nap: string, km: number): Res => ({ kulcs, kocsi: "X", sofor: "X", nap, honnan: "a", hova: "b", a: P.bp, b: P.szakoly, km, ft: km * 300, haza: false });
   const resek = [res("1", "2026-10-15", 150), res("2", "2026-10-16", 300), res("3", "2026-10-15", 250), res("4", "2026-10-14", 400), res("5", "2026-10-19", 200)];
   eq("riasztandó: ma és holnap, időrend, hosszabb elöl", riasztandoResek(resek, "2026-10-15").map((r) => r.kulcs), ["3", "1", "2"]);

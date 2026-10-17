@@ -5,6 +5,7 @@
 // Kalkulátor számol pontosan (HU-GO). Teszt: scripts/teszt-tervezes-het.ts.
 
 import { legvonalKm, type Pont } from "@/lib/fuvarozas2/tervezo-alap";
+import { munkanap } from "@/lib/jelenlet/shared";
 import { arLetra, felfeleKerekit, FT_LEPES, type ArLetra } from "@/lib/fuvarozas2/ar-letra";
 
 export const RES_MIN_KM = 100;
@@ -281,10 +282,14 @@ export function ajanlatFrissesseg(rogzitveIso: string, most: Date): { orak: numb
   return { orak, szoveg, regi: orak >= 24 };
 }
 
-/** A következő munkanap (H–P): péntek, szombat, vasárnap után hétfő. */
+/** A következő munkanap: hétvégét és munkaszüneti napot átugorja (a Jelenlét ünnepnaptárával), ledolgozós szombat munkanap. */
 export function kovetkezoMunkanap(ma: string): string {
   const d = new Date(`${ma}T12:00:00Z`);
-  do d.setUTCDate(d.getUTCDate() + 1); while (d.getUTCDay() === 0 || d.getUTCDay() === 6);
+  for (let i = 0; i < 14; i++) {
+    d.setUTCDate(d.getUTCDate() + 1);
+    const iso = d.toISOString().slice(0, 10);
+    if (munkanap(iso)) return iso;
+  }
   return d.toISOString().slice(0, 10);
 }
 

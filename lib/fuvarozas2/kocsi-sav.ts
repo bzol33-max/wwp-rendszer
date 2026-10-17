@@ -21,10 +21,26 @@ export type Riasztas = VisszfuvarRiasztas & { hetKezdet: string };
 export type KocsiSavok = { savok: KocsiSav[]; dontesreVar: { bejovo: number; kocsiraVar: number }; riasztasok: Riasztas[] };
 
 /** A Tervezés hete legfeljebb 2,5 mp-ig; hiba/időtúllépés → null. A számítás a háttérben lefuthat. */
+// 90 mp-es tár a hét-számításra (QA #1): a Ma lap 5 percenként frissül, péntek–szombat
+// két hetet is betölt — ne számoljon újra minden betöltésnél. Hiba nem kerül a tárba.
+const HET_TAR_MS = 90_000;
+const hetTar = new Map<string, { lejar: number; ertek: Promise<TervezesHet | null> }>();
+
+function hetTarbol(het: string | undefined): Promise<TervezesHet | null> {
+  const kulcs = het ?? "ma";
+  const most = Date.now();
+  const van = hetTar.get(kulcs);
+  if (van && van.lejar > most) return van.ertek;
+  const ertek = getTervezesHet(undefined, het);
+  hetTar.set(kulcs, { lejar: most + HET_TAR_MS, ertek });
+  ertek.catch(() => { if (hetTar.get(kulcs)?.ertek === ertek) hetTar.delete(kulcs); });
+  return ertek;
+}
+
 async function hetIdokorlattal(het?: string): Promise<TervezesHet | null> {
   let idozito: ReturnType<typeof setTimeout> | undefined;
   try {
-    const szamitas = getTervezesHet(undefined, het).catch((err: unknown) => {
+    const szamitas = hetTarbol(het).catch((err: unknown) => {
       console.warn("[kocsi-sav] a hét nem tölthető:", err instanceof Error ? err.message : err);
       return null;
     });
@@ -88,6 +104,8 @@ async function bejovoKorlattal(): Promise<number> {
 
 export async function elotoltKocsiSavok(): KocsiSavElotoltes {
   // Pénteken / hétvégén a következő munkanap (hétfő) a jövő héten van — a riasztáshoz azt is betöltjük.
+  // A hét-tár felhasználók közt közös → csak Fuvarozás-joggal töltjük (a getTervezesHet jogellenőrzése a tár miatt nem futna le mindenkinél).
+  if (!(await latjaFuvarozast())) return [null, -1, null];
   const ma = budapestNapISO();
   const kov = kovetkezoMunkanap(ma);
   const ezAHet = tervHetNapjai(ma);
