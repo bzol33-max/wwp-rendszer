@@ -65,8 +65,13 @@ function sorOsszeg(row: SzamlaRow): number {
 function ReszfizetesJelzes({ row }: { row: SzamlaRow }) {
   if (!reszbenFizetve(row)) return null;
   return (
-    <div className="text-[11px] font-normal text-primary">
-      részben fizetve · {formatOsszeg(row.fizetett_osszeg, row.penznem)} / {formatOsszeg(row.brutto, row.penznem)}
+    // Két rövid sor, tördelhetően: egy sorban (a cella whitespace-nowrap-ja
+    // miatt) kitolta a táblázatot, és vízszintesen kellett görgetni.
+    <div className="whitespace-normal text-[11px] font-normal leading-tight text-primary">
+      <div>részben fizetve</div>
+      <div>
+        {formatOsszeg(row.fizetett_osszeg, row.penznem)} / {formatOsszeg(row.brutto, row.penznem)}
+      </div>
     </div>
   );
 }
