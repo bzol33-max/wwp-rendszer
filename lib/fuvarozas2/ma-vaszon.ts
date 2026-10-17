@@ -66,6 +66,8 @@ export type Elteres = {
   /** N1: melyik kocsié (a kártya szalagjához) és rövid hely („Debrecen lerakó”). */
   kocsiKod?: string | null;
   hely?: string | null;
+  /** Sofőr-gondjelzésnél: a sofőr (beceneve) — ebből kerül a kocsi kártyájára. */
+  soforNev?: string | null;
 };
 
 export type MaMegalloSor = {
@@ -133,6 +135,8 @@ export type MaVaszon = {
   holnap: string;
   /** „Holnap”, vagy pénteken/szombaton „Hétfő” (a következő munkanap). */
   holnapCimke: string;
+  /** Ma hétvége / ünnep (nem munkanap) — nincs „üres nap” jelzés. */
+  maPihenonap?: boolean;
   csempek: Csempe[];
   /** A még nem nyugtázott eltérések (a sáv). */
   elteresek: Elteres[];
@@ -314,11 +318,19 @@ export async function getMaVaszon(): Promise<MaVaszon> {
   const [{ ma, naptariHolnap }] = await query<{ ma: string; naptariHolnap: string }>(
     `select ((now() at time zone 'Europe/Budapest')::date)::text as ma, ((now() at time zone 'Europe/Budapest')::date + 1)::text as "naptariHolnap"`
   );
-  // A „holnap” a következő munkanap: pénteken és szombaton a hétfő.
-  const holnap = kovetkezoMunkanapISO(ma);
-  const holnapCimke = holnap === naptariHolnap ? "Holnap" : "Hétfő";
+  // A „holnap” a következő munkanap: pénteken és szombaton a hétfő; ünnep előtt az ünnep utáni
+  // munkanap (N1 QA #2 — eddig az ünnepet „holnapnak” vette).
+  let holnap = kovetkezoMunkanapISO(ma);
+  for (let i = 0; i < 10 && !munkanap(holnap); i++) holnap = kovetkezoMunkanapISO(holnap);
+  const NAPNEVEK = ["Vasárnap", "Hétfő", "Kedd", "Szerda", "Csütörtök", "Péntek", "Szombat"];
+  const holnapCimke = holnap === naptariHolnap ? "Holnap" : NAPNEVEK[new Date(`${holnap}T12:00:00Z`).getUTCDay()];
   // Kocsi-kihasználtság (1. hullám B): párhuzamosan indul, soha nem dob.
   const kihasznaltsagIgeret = getKihasznaltsag(ma);
+  // N1: a mai és a holnapi bejegyzések és távollétek — párhuzamosan (hiba esetén üres; a lap nem törhet el).
+  const bejTavIgeret = Promise.all([
+    getBejegyzesSorok(ma, holnap).catch(() => []),
+    getTavolletek(ma, holnap).catch(() => []),
+  ]);
 
   // 1. A nyitott megbízások (ma és holnap) kocsival, partnerrel.
   type MegbizasSor = {
@@ -500,6 +512,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
         kulcs: `ell-${s.id}`,
         cim: `${s.partner ?? "(nincs megbízó)"}${s.hivatkozas ? ` · ${s.hivatkozas}` : ""}`,
         badge: hiany.length > 0 ? "hiányos import" : "jóváhagyásra vár",
+        kocsiKod: s.jarmu_kod, hely: s.partner ?? null,
         szin: "amber",
         sorok: [
           hiany.length > 0 ? `Hiányzik: ${hiany.join(", ")}` : "Az import beolvasta, de még senki nem hagyta jóvá.",
@@ -532,6 +545,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
         elteresek.push({
           kulcs: `gond-${blokk.fuvarId}-${gond.mikor.getTime()}`,
           cim: `${gond.nev} · gondot jelzett`,
+          soforNev: j.sofor ?? null, hely: gond.szoveg,
           badge: "gond van",
           szin: "red",
           sorok: [gond.szoveg, `${blokk.megrendelo ?? ""}${blokk.pozicioszam ? ` · ${blokk.pozicioszam}` : ""}`.trim() || "—"],
@@ -718,11 +732,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
     };
   };
 
-  // N1: a mai és a holnapi bejegyzések és távollétek (hiba esetén üres — a lap nem törhet el).
-  const [bejSorok, tavSorok] = await Promise.all([
-    getBejegyzesSorok(ma, holnap).catch(() => []),
-    getTavolletek(ma, holnap).catch(() => []),
-  ]);
+  const [bejSorok, tavSorok] = await bejTavIgeret;
   const bejTerkep = bejegyzesekNapokra(bejSorok, [ma, holnap]);
   const tavTerkep = tavolletekNapokra(tavSorok);
   // Hétvégén / ünnepen nincs „ma nincs fuvar” szalag (szombaton ritkán, vasárnap soha nem megyünk).
@@ -787,12 +797,12 @@ export async function getMaVaszon(): Promise<MaVaszon> {
     const tavHolnap = tavTerkep[j.kod]?.[holnap] ?? null;
     const holnapFolytatodik = maiak.some((s) => (s.lerakas_nap ?? "") >= holnap);
     const jelzesek = helykitolto ? [] : kocsiJelzesek({
-      elteresek: elteresek.filter((e) => e.kocsiKod === j.kod).map((e) => ({ szin: e.szin, badge: e.badge, hely: e.hely ?? null })),
+      elteresek: elteresek.filter((e) => e.kocsiKod === j.kod || (!e.kocsiKod && !!becenev && e.soforNev === becenev)).map((e) => ({ szin: e.szin, badge: e.badge, hely: e.hely ?? null })),
       vanMaiFuvar: maiak.length > 0 || maiLezartak.length > 0,
       vanHolnapiFuvar: holnapiak.length > 0,
       holnapFolytatodik,
       tavolletMa: tavMa, tavolletHolnap: tavHolnap,
-      egeszNaposMa: bejMa.some((b) => !b.tol), egeszNaposHolnap: bejHolnap.some((b) => !b.tol),
+      egeszNaposMa: bejMa.some((b) => b.tol == null || b.ig == null), egeszNaposHolnap: bejHolnap.some((b) => b.tol == null || b.ig == null),
       maPihenonap, holnapCimke,
     });
     return {
@@ -878,7 +888,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
       utvonal: `${varosNev(s.felrako ?? "") ?? s.felrako ?? "—"} → ${varosNev(s.lerako ?? "") ?? s.lerako ?? "—"}`,
       nap: s.felrakas_nap, allapot: s.allapot,
     })),
-    teendok, holnapDoboz,
+    teendok, holnapDoboz, maPihenonap,
   };
 }
 

@@ -22,6 +22,8 @@ eq("pihenőnapon nincs „ma nincs fuvar”", J({ vanMaiFuvar: false, maPihenona
 eq("egész napos bejegyzés ma → nincs „ma nincs fuvar”", J({ vanMaiFuvar: false, egeszNaposMa: true }), []);
 eq("holnapra nincs fuvar", J({ vanHolnapiFuvar: false }), [{ szin: "amber", szoveg: "Holnapra még nincs fuvar" }]);
 eq("hétfőre nincs fuvar (pénteken)", J({ vanHolnapiFuvar: false, holnapCimke: "Hétfő" }), [{ szin: "amber", szoveg: "Hétfőre még nincs fuvar" }]);
+eq("szerdára (ünnep után)", J({ vanHolnapiFuvar: false, holnapCimke: "Szerda" }), [{ szin: "amber", szoveg: "Szerdára még nincs fuvar" }]);
+eq("keddre", J({ vanHolnapiFuvar: false, holnapCimke: "Kedd" }), [{ szin: "amber", szoveg: "Keddre még nincs fuvar" }]);
 eq("folytatódó fuvar → holnap nem üres", J({ vanHolnapiFuvar: false, holnapFolytatodik: true }), []);
 eq("egész napos holnap → nem üres", J({ vanHolnapiFuvar: false, egeszNaposHolnap: true }), []);
 eq("holnap szabadság, nincs fuvar", J({ vanHolnapiFuvar: false, tavolletHolnap: "szabadsag" }), [{ szin: "amber", szoveg: "Holnap szabadság (Jelenlét) — ne tervezz" }]);

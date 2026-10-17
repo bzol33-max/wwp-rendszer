@@ -17,9 +17,13 @@ export type JelzesBemenet = {
   /** Egész napos bejegyzés (szerviz, műszaki …) — aznap nem hiányzik a fuvar. */
   egeszNaposMa: boolean;
   egeszNaposHolnap: boolean;
-  /** Ma pihenőnap (vasárnap / ünnep) — nincs „ma nincs fuvar” jelzés. */
+  /** Ma nem munkanap (szombat, vasárnap, ünnep) — nincs „ma nincs fuvar” jelzés. */
   maPihenonap: boolean;
   holnapCimke: string;
+};
+
+const RAGOS: Record<string, string> = {
+  holnap: "Holnapra", "hétfő": "Hétfőre", kedd: "Keddre", szerda: "Szerdára", "csütörtök": "Csütörtökre", "péntek": "Péntekre", szombat: "Szombatra", "vasárnap": "Vasárnapra",
 };
 
 /** A szalag sorai súlyosság szerint (piros elöl), a sorrend egyébként a felsorolásé. */
@@ -41,7 +45,7 @@ export function kocsiJelzesek(b: JelzesBemenet): KartyaJelzes[] {
       ? { szin: "red", szoveg: `${b.holnapCimke} ${TAVOLLET_NEV[b.tavolletHolnap].toLowerCase()} (Jelenlét) — de van fuvar` }
       : { szin: "amber", szoveg: `${b.holnapCimke} ${TAVOLLET_NEV[b.tavolletHolnap].toLowerCase()} (Jelenlét) — ne tervezz` });
   } else if (!b.vanHolnapiFuvar && !b.holnapFolytatodik && !b.egeszNaposHolnap) {
-    ki.push({ szin: "amber", szoveg: `${holnap === "holnap" ? "Holnapra" : `${b.holnapCimke}re`} még nincs fuvar` });
+    ki.push({ szin: "amber", szoveg: `${RAGOS[holnap] ?? `${b.holnapCimke}ra`} még nincs fuvar` });
   }
 
   return ki.map((j, i) => ({ j, i })).sort((x, y) => (x.j.szin === y.j.szin ? x.i - y.i : x.j.szin === "red" ? -1 : 1)).map((x) => x.j);

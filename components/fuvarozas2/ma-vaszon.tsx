@@ -243,11 +243,14 @@ export function KocsiOszlop({ k, holnapCimke, piheno }: { k: MaKocsi; holnapCimk
             ) : null}
           </div>
           {k.allapot?.hely ? <div className="truncate pl-[42px] text-xs text-muted-foreground">{k.allapot.hely}</div> : null}
+          {jelzesek.length ? (
+            <div className="hidden pl-[42px] text-xs font-semibold text-[var(--f2-red)] group-[:not([open])]:block">⚠ {jelzesek.length} figyelmeztetés</div>
+          ) : null}
         </summary>
         {jelzesek.length ? (
-          <div className="flex flex-col">
+          <div className="flex flex-col" role="status" aria-label="Figyelmeztetések">
             {jelzesek.map((j, i) => (
-              <div key={i} className={`px-4 py-1.5 text-xs font-semibold ${j.szin === "red" ? "bg-[var(--f2-red-l)] text-[var(--f2-red)]" : "bg-[var(--f2-amb-l)] text-[#6b430a]"}`}>⚠ {j.szoveg}</div>
+              <div key={i} className={`px-4 py-1.5 text-xs font-semibold ${j.szin === "red" ? "bg-[var(--f2-red-l)] text-[var(--f2-red)]" : "bg-[var(--f2-amb-l)] text-[#6b430a]"}`}><span aria-hidden>⚠ </span>{j.szoveg}</div>
             ))}
           </div>
         ) : null}
@@ -256,8 +259,8 @@ export function KocsiOszlop({ k, holnapCimke, piheno }: { k: MaKocsi; holnapCimk
           {csik != null ? (
             <div className="flex items-center gap-2 text-[11px]" title={k.tacho?.reszletek}>
               <span className="text-muted-foreground">tachó</span>
-              <span className="h-1.5 flex-1 rounded-full bg-foreground/10"><span className="block h-1.5 rounded-full bg-[var(--kc)]" style={{ width: `${csik}%` }} /></span>
-              <b className="tabular-nums">{Math.floor((k.tachoNapiHatraPerc ?? 0) / 60)}:{String((k.tachoNapiHatraPerc ?? 0) % 60).padStart(2, "0")}</b>
+              <span className="h-1.5 flex-1 rounded-full bg-foreground/10" role="meter" aria-label="Napi vezetési idő hátra" aria-valuemin={0} aria-valuemax={100} aria-valuenow={csik}><span className="block h-1.5 rounded-full bg-[var(--kc)]" style={{ width: `${csik}%` }} /></span>
+              <b className="tabular-nums">{(() => { const p = Math.max(0, Math.round(k.tachoNapiHatraPerc ?? 0)); return `${Math.floor(p / 60)}:${String(p % 60).padStart(2, "0")}`; })()}</b>
               <span className="text-muted-foreground">ma hátra</span>
             </div>
           ) : null}
@@ -269,7 +272,7 @@ export function KocsiOszlop({ k, holnapCimke, piheno }: { k: MaKocsi; holnapCimk
                 </div>
               ) : null}
               {(() => {
-                const gpsSorok = [k.vezetesSor, [k.hetiForras === "tacho" ? null : k.hetiSor, k.napiKm != null ? `ma ${k.napiKm} km` : null].filter(Boolean).join(" · ")].filter(Boolean);
+                const gpsSorok = [k.vezetesSor, [k.hetiForras === "tacho" ? null : k.hetiSor].filter(Boolean).join(" · ")].filter(Boolean);
                 return gpsSorok.map((sor, i) => (
                   <div key={i}>
                     {sor}
@@ -287,7 +290,7 @@ export function KocsiOszlop({ k, holnapCimke, piheno }: { k: MaKocsi; holnapCimk
             {k.sorok.length > 0 ? (
               <Tukor sorok={k.sorok} />
             ) : piheno ? (
-              <div className="rounded-xl bg-muted/50 px-3 py-2 text-xs text-muted-foreground">Vasárnap — pihenőnap</div>
+              <div className="rounded-xl bg-muted/50 px-3 py-2 text-xs text-muted-foreground">Pihenőnap (hétvége / ünnep)</div>
             ) : k.tavolletMa || (k.bejegyzesekMa ?? []).some((b) => !b.tol) ? null : (
               <Link href="/fuvarozas2/tervezes" className="rounded-xl bg-[var(--f2-amb-l)] px-3 py-2 text-xs font-semibold text-[var(--f2-amb)] hover:underline">
                 Üres nap — keress fuvart →
@@ -354,7 +357,7 @@ export function MaVaszonNezet({ adat }: { adat: MaVaszon }) {
       {/* N1: az iroda számai és a holnapi ellenőrzés egy sorban, fölül (eddig lent egy dobozban). */}
       <div className="-mb-1 flex flex-wrap items-center gap-2">
         {iroda.map((c) => {
-          const belso = <><span className="text-muted-foreground">{c.cimke}</span> <b className={`tabular-nums ${SZIN_ERTEK[c.szin]}`}>{c.ertek}</b></>;
+          const belso = <><span className="text-muted-foreground">{c.cimke}</span> <b className={`tabular-nums ${SZIN_ERTEK[c.szin]}`}>{c.ertek}</b>{c.also ? <span className="ml-1 text-muted-foreground">· {c.also}</span> : null}</>;
           const oszt = "rounded-full bg-card px-3 py-1 text-xs ring-1 ring-foreground/15";
           return c.href
             ? <Link key={c.kulcs} href={c.href} className={`${oszt} hover:bg-muted`} title={c.also ?? undefined}>{belso}</Link>
@@ -385,8 +388,8 @@ export function MaVaszonNezet({ adat }: { adat: MaVaszon }) {
       )}
 
 
-      <div className="grid items-stretch gap-3 lg:grid-cols-2">
-        {adat.kocsik.map((k, i) => <KocsiOszlop key={k.kod ?? `hely-${i}`} k={k} holnapCimke={adat.holnapCimke} piheno={pihenoNapE(adat.ma)} />)}
+      <div className="grid items-stretch gap-3 md:grid-cols-2">
+        {adat.kocsik.map((k, i) => <KocsiOszlop key={k.kod ?? `hely-${i}`} k={k} holnapCimke={adat.holnapCimke} piheno={adat.maPihenonap ?? pihenoNapE(adat.ma)} />)}
       </div>
 
       <div className="grid items-start gap-3">
