@@ -17,13 +17,13 @@ export default async function Page() {
   // A hét (szabad nap, rés) és a bejövő-szám a Ma-vászonnal párhuzamosan töltődik.
   const elotoltes = elotoltKocsiSavok();
   const adat = await getMaVaszon();
-  const { dontesreVar, riasztasok } = await getKocsiSavok(adat, elotoltes);
+  const { savok, dontesreVar, riasztasok } = await getKocsiSavok(adat, elotoltes);
   return (
     <div className="flex flex-col gap-3">
       <Fuvarozas2Fulek aktiv="/fuvarozas2" cim="Kocsik" />
       <DontesreVarSor bejovo={dontesreVar.bejovo} kocsiraVar={dontesreVar.kocsiraVar} />
       <VisszfuvarRiasztasok riasztasok={riasztasok} ma={adat.ma} />
-      <MaVaszonNezet adat={adat} />
+      <MaVaszonNezet adat={adat} savok={savok} />
     </div>
   );
 }

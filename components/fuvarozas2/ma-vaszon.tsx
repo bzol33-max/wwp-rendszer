@@ -11,6 +11,8 @@ import { kocsiSzin } from "@/lib/fuvarozas2/kocsi-szin";
 import { tachoCsik } from "@/lib/fuvarozas2/ma-kartya-alap";
 import { bejegyzesIdo, tipusNev, TAVOLLET_NEV, type Bejegyzes, type TavolletTipus } from "@/lib/fuvarozas2/bejegyzes-alap";
 import { BejegyzesIkon } from "@/components/fuvarozas2/bejegyzes-ikon";
+import { KocsiSavLab } from "@/components/fuvarozas2/kocsi-savok";
+import type { KocsiSav } from "@/lib/fuvarozas2/kocsi-sav-alap";
 
 // A „Ma" képernyő (Budaházi Zoltán, 2026-09-28): négy kocsi-oszlop egymás
 // mellett, mindegyik ugyanabban a sorrendben — fejléc (hol van most),
@@ -215,7 +217,7 @@ function TavolletSor({ t }: { t: TavolletTipus }) {
   );
 }
 
-export function KocsiOszlop({ k, holnapCimke, piheno }: { k: MaKocsi; holnapCimke: string; piheno: boolean }) {
+export function KocsiOszlop({ k, holnapCimke, piheno, sav }: { k: MaKocsi; holnapCimke: string; piheno: boolean; sav?: KocsiSav | null }) {
   if (k.helykitolto) {
     return (
       <Doboz className="flex flex-col gap-1 border-dashed p-4 text-muted-foreground xl:min-h-40">
@@ -261,12 +263,12 @@ export function KocsiOszlop({ k, holnapCimke, piheno }: { k: MaKocsi; holnapCimk
               <span className="text-muted-foreground">tachó</span>
               <span className="h-1.5 flex-1 rounded-full bg-foreground/10" role="meter" aria-label="Napi vezetési idő hátra" aria-valuemin={0} aria-valuemax={100} aria-valuenow={csik}><span className="block h-1.5 rounded-full bg-[var(--kc)]" style={{ width: `${csik}%` }} /></span>
               <b className="tabular-nums">{(() => { const p = Math.max(0, Math.round(k.tachoNapiHatraPerc ?? 0)); return `${Math.floor(p / 60)}:${String(p % 60).padStart(2, "0")}`; })()}</b>
-              <span className="text-muted-foreground">ma hátra</span>
+              <span className="text-muted-foreground">ma hátra{(() => { const h = k.hetiSor?.split(" · ").find((x) => x.startsWith("hét")); return h ? ` · ${h}` : ""; })()}</span>
             </div>
           ) : null}
           {k.vezetesSor || k.hetiSor || k.napiKm != null ? (
             <div className="rounded-xl bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-              {k.hetiForras === "tacho" && k.hetiSor ? (
+              {k.hetiForras === "tacho" && k.hetiSor && csik == null ? (
                 <div className="font-medium text-foreground" title={k.tacho?.reszletek}>
                   {k.hetiSor} <ForrasJel forras="teny" cimke="tachó" title={`Ecofleet tachográf-adat\n${k.tacho?.reszletek ?? ""}`} />
                 </div>
@@ -315,6 +317,7 @@ export function KocsiOszlop({ k, holnapCimke, piheno }: { k: MaKocsi; holnapCimk
           </div>
 
         </div>
+        {sav ? <KocsiSavLab s={sav} /> : null}
         {k.papir.length > 0 || k.napiKm != null ? (
           <div className="mt-auto flex flex-wrap items-baseline gap-x-4 gap-y-1 border-t border-foreground/10 bg-muted/30 px-4 py-2 text-xs">
             {k.napiKm != null ? <span className="text-muted-foreground">ma <b className="text-foreground">{k.napiKm} km</b></span> : null}
@@ -350,7 +353,10 @@ function NyugtazottLista({ adat, kulon = false }: { adat: MaVaszon; kulon?: bool
   );
 }
 
-export function MaVaszonNezet({ adat }: { adat: MaVaszon }) {
+export function MaVaszonNezet({ adat, savok = [] }: { adat: MaVaszon; savok?: KocsiSav[] }) {
+  const savSzerint = new Map(savok.map((s) => [s.kod, s]));
+  const aktiv = adat.kocsik.filter((k) => !k.helykitolto);
+  const helyek = adat.kocsik.filter((k) => k.helykitolto);
   const iroda = adat.csempek.filter((c) => c.kulcs !== "uton" && c.kulcs !== "elteres");
   return (
     <div className="flex flex-col gap-4">
@@ -389,8 +395,15 @@ export function MaVaszonNezet({ adat }: { adat: MaVaszon }) {
 
 
       <div className="grid items-stretch gap-3 md:grid-cols-2">
-        {adat.kocsik.map((k, i) => <KocsiOszlop key={k.kod ?? `hely-${i}`} k={k} holnapCimke={adat.holnapCimke} piheno={adat.maPihenonap ?? pihenoNapE(adat.ma)} />)}
+        {aktiv.map((k, i) => <KocsiOszlop key={k.kod ?? `k-${i}`} k={k} holnapCimke={adat.holnapCimke} piheno={adat.maPihenonap ?? pihenoNapE(adat.ma)} sav={k.kod ? savSzerint.get(k.kod) ?? null : null} />)}
       </div>
+      {helyek.length ? (
+        <div className="-mt-1 flex flex-wrap gap-2 text-sm text-muted-foreground">
+          {helyek.map((k, i) => (
+            <span key={k.kod ?? `h-${i}`} className="rounded-full border border-dashed border-foreground/20 px-3 py-1"><b className="text-foreground/70">{k.sofor ?? k.cimke}</b> · {k.helykitolto}</span>
+          ))}
+        </div>
+      ) : null}
 
       <div className="grid items-start gap-3">
         <Doboz className="flex flex-col gap-2 p-4">

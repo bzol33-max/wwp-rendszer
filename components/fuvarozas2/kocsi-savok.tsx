@@ -72,7 +72,8 @@ function Futo({ futo }: { futo: NonNullable<KocsiSav["futo"]> }) {
   );
 }
 
-function Lab({ s }: { s: KocsiSav }) {
+/** A kocsi heti mérlege és a következő szabad napja (a Ma oldal N1 kártyájának aljára is). */
+export function KocsiSavLab({ s }: { s: KocsiSav }) {
   const h = s.hetSzamok;
   if (!h && !s.szabad) return null;
   return (
@@ -134,7 +135,7 @@ function SavKartya({ s, holnapCimke }: { s: KocsiSav; holnapCimke: string }) {
           <div className="text-sm font-semibold text-[var(--f2-mint)]">Szabad</div>
         )}
       </div>
-      <Lab s={s} />
+      <KocsiSavLab s={s} />
     </div>
   );
 }
