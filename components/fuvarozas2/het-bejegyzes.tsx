@@ -7,9 +7,8 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { BEJEGYZES_TIPUSOK, ellenorizBejegyzes, type BejegyzesTipus } from "@/lib/fuvarozas2/bejegyzes-alap";
+import { BEJEGYZES_TIPUSOK, ellenorizBejegyzes, type BejegyzesTipus, type TorlesMod } from "@/lib/fuvarozas2/bejegyzes-alap";
 import { ujBejegyzes, torolBejegyzes } from "@/lib/fuvarozas2/bejegyzes-actions";
 import { kocsiSzin } from "@/lib/fuvarozas2/kocsi-szin";
 import { BejegyzesIkon } from "@/components/fuvarozas2/bejegyzes-ikon";
@@ -183,27 +182,47 @@ export function BejegyzesFelvitel({
   );
 }
 
-export function BejegyzesTorles({ id, cimke, ismetlodo, szerk }: { id: string; cimke: string; ismetlodo: boolean; szerk: boolean }) {
+export function BejegyzesTorles({ id, cimke, ismetlodo, alkalom, szerk }: { id: string; cimke: string; ismetlodo: boolean; alkalom: string; szerk: boolean }) {
   const router = useRouter();
+  const [nyitva, setNyitva] = useState(false);
   const [fut, inditas] = useTransition();
-  const [confirm, confirmDialog] = useConfirm();
+  const [hiba, setHiba] = useState<string | null>(null);
   if (!szerk) return null;
-  const torol = async () => {
-    const kerdes = ismetlodo ? `Törlöd a(z) „${cimke}” bejegyzést? Ismétlődő — az összes alkalma törlődik.` : `Törlöd a(z) „${cimke}” bejegyzést?`;
-    if (!(await confirm(kerdes, { title: "Bejegyzés törlése", confirmLabel: "Törlés" }))) return;
-    inditas(async () => {
-      const r = await torolBejegyzes(id).catch(() => ({ ok: false }));
-      if (!r.ok) { toast.error("Nem sikerült törölni."); return; }
-      router.refresh();
-    });
-  };
+  const torol = (mod: TorlesMod) => inditas(async () => {
+    const r = await torolBejegyzes(id, mod, alkalom).catch(() => ({ ok: false as const, hiba: "Nem sikerült törölni." }));
+    if (!r.ok) { setHiba(r.hiba); return; }
+    setNyitva(false);
+    toast.success(mod === "alkalom" ? `Törölve: ${hosszuNap(alkalom)}` : mod === "ettol" ? `Törölve ${hosszuNap(alkalom)}-tól` : "Bejegyzés törölve");
+    router.refresh();
+  });
+  const gomb = "flex min-h-11 w-full flex-col items-start justify-center rounded-xl px-3 py-2 text-left ring-1 ring-foreground/15 hover:bg-muted disabled:opacity-60";
   return (
     <>
-      <button type="button" onClick={torol} disabled={fut} title="Bejegyzés törlése" aria-label={`${cimke} törlése`}
+      <button type="button" onClick={() => { setHiba(null); setNyitva(true); }} title="Bejegyzés törlése" aria-label={`${cimke} törlése`}
         className="-my-1 -mr-1 ml-auto grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground opacity-60 hover:bg-foreground/10 hover:opacity-100">
         <X className="size-3.5" aria-hidden />
       </button>
-      {confirmDialog}
+      <Dialog open={nyitva} onOpenChange={setNyitva}>
+        <DialogContent className="fuvarozas2 sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{cimke} törlése</DialogTitle>
+            <DialogDescription>{ismetlodo ? `Hetente ismétlődő bejegyzés — ez az alkalom: ${hosszuNap(alkalom)}.` : hosszuNap(alkalom)}</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2 text-sm">
+            {ismetlodo ? (
+              <>
+                <button type="button" disabled={fut} onClick={() => torol("alkalom")} className={gomb}><b>Csak ezt az alkalmat</b><span className="text-xs text-muted-foreground">a többi hét marad</span></button>
+                <button type="button" disabled={fut} onClick={() => torol("ettol")} className={gomb}><b>Ettől kezdve mindet</b><span className="text-xs text-muted-foreground">a korábbiak megmaradnak</span></button>
+                <button type="button" disabled={fut} onClick={() => torol("egesz")} className={cn(gomb, "text-[var(--f2-red)]")}><b>Az egész sorozatot</b><span className="text-xs text-muted-foreground">minden alkalom törlődik</span></button>
+              </>
+            ) : (
+              <button type="button" disabled={fut} onClick={() => torol("egesz")} className={cn(gomb, "items-center font-semibold text-[var(--f2-red)]")}>Törlés</button>
+            )}
+            {hiba ? <p className="rounded-xl bg-[var(--f2-red-l)] px-3 py-2 text-[var(--f2-red)]" role="alert">{hiba}</p> : null}
+            <button type="button" onClick={() => setNyitva(false)} className="h-11 rounded-xl px-4 text-muted-foreground hover:bg-muted">Mégse</button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

@@ -244,7 +244,15 @@ export async function getTervezesHet(resKulcs?: string, het?: string): Promise<T
     let t: ReturnType<typeof setTimeout> | undefined;
     try {
       const ido = new Promise<null>((r) => { t = setTimeout(() => r(null), 8000); });
-      return await Promise.race([szamoljUtemtervet({ napok, ma, most: `${ma}T${ora}`, telephely, kocsik: utemBemenet }).catch(() => null), ido]);
+      // B1: a bejegyzések megállóként / foglalt időszakként, a távollét foglalt időszakként kerül a becslőbe.
+      const tav = tavolletekNapokra(await tavolletIgeret);
+      const bej = bejegyzesekNapokra(bejegyzesElore, napok);
+      const kocsikB1 = utemBemenet.map((k) => ({
+        ...k,
+        bejegyzesek: Object.values(bej[k.kod] ?? {}).flat(),
+        tavolletNapok: Object.keys(tav[k.kod] ?? {}),
+      }));
+      return await Promise.race([szamoljUtemtervet({ napok, ma, most: `${ma}T${ora}`, telephely, kocsik: kocsikB1 }).catch(() => null), ido]);
     } catch {
       return null;
     } finally {

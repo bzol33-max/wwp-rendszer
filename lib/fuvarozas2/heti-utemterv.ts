@@ -31,6 +31,10 @@ import {
   lancKiindulasok, raallasSzakasz, utemterv,
   type KocsiUtemterv, type LancHely, type UtemFuvar, type UtemKezdes, type UtemMegallo, type UtemParam,
 } from "@/lib/fuvarozas2/heti-utemterv-alap";
+import {
+  bejegyzesFoglalas, bejegyzesFuvarId, bejegyzesMegallo, bejegyzesPerc, idoSzerintBeszur, tavolletFoglalas, tipusNev,
+  type Bejegyzes,
+} from "@/lib/fuvarozas2/bejegyzes-alap";
 
 /** Egy fuvar a betöltőtől: a Hét rács fuvarja + a díj és a nyers címek. */
 export type UtemSor = HetiFuvar & {
@@ -47,6 +51,10 @@ export type UtemKocsiBemenet = {
   fuvarok: UtemSor[];
   /** A kocsi utolsó ismert lerakója az ablak előtt — ugyanaz, mint a rés-számításé. */
   elozoVeg: { pont: Pont; varos: string } | null;
+  /** B1: a kocsi bejegyzés-alkalmai az ablakban (megálló vagy foglalt időszak lesz belőlük). */
+  bejegyzesek?: Bejegyzes[];
+  /** B1: a sofőr távolléti napjai (foglalt időszak). */
+  tavolletNapok?: string[];
 };
 
 export type UtemBemenet = {
@@ -132,7 +140,7 @@ export async function szamoljUtemtervet(b: UtemBemenet, opciok: UtemOpciok = {})
         .sort((x, y) => x.felNap.localeCompare(y.felNap) || x.leNap.localeCompare(y.leNap)),
       (k.elozoVeg ?? b.telephely).pont
     ).map((f) => szerint.get(f.id)!);
-    return { kod: k.kod, elozoVeg: k.elozoVeg, heti };
+    return { kod: k.kod, elozoVeg: k.elozoVeg, heti, bejegyzesek: k.bejegyzesek ?? [], tavolletNapok: k.tavolletNapok ?? [] };
   });
   const osszes = lancok.flatMap((l) => l.heti);
   const ids = [...new Set(osszes.map((f) => f.id))];
@@ -226,6 +234,28 @@ export async function szamoljUtemtervet(b: UtemBemenet, opciok: UtemOpciok = {})
     megallokFuvar.set(f.id, lista);
   }
 
+  // 3/b. B1: a hellyel, időponthoz kötött bejegyzés megálló lesz (odamegy, ott tölti az időt) — a helyét is geokódoljuk.
+  const bejegyzesSor = (bj: Bejegyzes): UtemSor => {
+    const varos = varosNev(bj.hely ?? "") || bj.hely || "?";
+    return {
+      id: bejegyzesFuvarId(bj), cim: tipusNev(bj.tipus), felVaros: varos, leVaros: varos, fel: null, le: null,
+      felNap: bj.alkalom, leNap: bj.alkalom, sajat: true, allapot: "tervezett",
+      jelleg: "sajat", fuvardij: null, penznem: "Ft", felrako: bj.hely, lerako: bj.hely,
+    };
+  };
+  for (const l of lancok) {
+    for (const bj of l.bejegyzesek) {
+      if (!bejegyzesMegallo(bj)) continue;
+      const sor = bejegyzesSor(bj);
+      megallokFuvar.set(sor.id, [{
+        tipus: "felrako", varos: sor.felVaros, cim: bj.hely ?? "", nap: bj.alkalom,
+        ablakTol: `${bj.alkalom}T${bj.tol}`, ablakIg: `${bj.alkalom}T${bj.tol}`,
+        rakodasPerc: bejegyzesPerc(bj) ?? 0, pont: null, kesz: maMod && `${bj.alkalom}T${bj.ig}` <= b.most,
+      }]);
+      if (bj.hely?.trim()) geokodKell.add(bj.hely);
+    }
+  }
+
   // 4. Hiányzó pontok geokódolása (gyorsítótárazott; szakaszonkénti és teljes korláttal).
   const geokod = new Map<string, Pont | null>();
   await sorban([...geokodKell].map((cim) => async () => {
@@ -239,14 +269,37 @@ export async function szamoljUtemtervet(b: UtemBemenet, opciok: UtemOpciok = {})
 
   // 5. Láncok: kész fuvarok/megállók kiszűrése (ma-módban), szakasz-igények.
   type Lanc = { kod: string; fuvarok: { f: UtemSor; megallok: MunkaMegallo[]; honnan: LancHely; raallasRakott: boolean }[] };
-  const lancLista: Lanc[] = lancok.map((l) => ({
-    kod: l.kod,
-    fuvarok: lancKiindulasok(
-      l.heti.map((f) => ({ f, mind: megallokFuvar.get(f.id) ?? [], keszFuvar: fuvarJel(f.allapot) === "kesz", le: f.le })),
-      l.elozoVeg ?? b.telephely,
-      maMod
-    ),
-  }));
+  // B1: a megtalált helyű bejegyzés megálló (idő szerint a fuvarok közé); a többi + távollét foglalt időszak.
+  const foglaltKocsi = new Map<string, { tol: string; ig: string }[]>();
+  const lancLista: Lanc[] = lancok.map((l) => {
+    const foglalt = l.tavolletNapok.map((n) => tavolletFoglalas(n, NAP_KEZDES));
+    const ujak: { elem: UtemSor; kulcs: string }[] = [];
+    for (const bj of l.bejegyzesek) {
+      const id = bejegyzesFuvarId(bj);
+      const m = megallokFuvar.get(id)?.[0];
+      if (m?.pont) ujak.push({ elem: bejegyzesSor(bj), kulcs: m.ablakTol ?? `${bj.alkalom}T${NAP_KEZDES}` });
+      else foglalt.push(bejegyzesFoglalas(bj, NAP_KEZDES));
+    }
+    foglaltKocsi.set(l.kod, foglalt);
+    const kezdoKulcs = (f: UtemSor) => {
+      const ms = megallokFuvar.get(f.id) ?? [];
+      const m = (maMod ? ms.find((x) => !x.kesz) : undefined) ?? ms[0];
+      return m ? m.ablakTol ?? `${m.nap}T${NAP_KEZDES}` : `${f.felNap}T${NAP_KEZDES}`;
+    };
+    const sor = idoSzerintBeszur(l.heti, kezdoKulcs, ujak);
+    return {
+      kod: l.kod,
+      fuvarok: lancKiindulasok(
+        sor.map((f) => {
+          const mind = megallokFuvar.get(f.id) ?? [];
+          const bejegyzes = f.id.startsWith("bej:");
+          return { f, mind, keszFuvar: bejegyzes ? mind.every((x) => x.kesz) : fuvarJel(f.allapot) === "kesz", le: bejegyzes ? mind[0]?.pont ?? null : f.le };
+        }),
+        l.elozoVeg ?? b.telephely,
+        maMod
+      ),
+    };
+  });
 
   const igenyek = new Map<string, { a: Pont; b: Pont }>();
   const igeny = (a: Pont | null, c: Pont | null) => {
@@ -311,7 +364,7 @@ export async function szamoljUtemtervet(b: UtemBemenet, opciok: UtemOpciok = {})
         // folyamatosPerc: 0 — a tachó-adatban nincs „utolsó szünet óta vezetett” mező.
         kezdes = { ido: b.most, folyamatosPerc: 0, napiPerc: hatra != null ? Math.max(0, Math.round(param.napiMaxPerc - hatra)) : 0 };
       }
-      ki.set(l.kod, utemterv(fuvarok, kezdes, param, napok));
+      ki.set(l.kod, utemterv(fuvarok, kezdes, { ...param, foglalt: foglaltKocsi.get(l.kod) ?? [] }, napok));
     } catch {
       ki.set(l.kod, null);
     }

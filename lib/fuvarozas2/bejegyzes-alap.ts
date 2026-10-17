@@ -28,6 +28,8 @@ export type BejegyzesSor = {
   ismetles: "nincs" | "heti";
   /** Heti ismétlésnél az utolsó lehetséges nap (null: nyitott). */
   ismetlesIg: string | null;
+  /** Ismétlődő sorozat egyenként törölt alkalmai ("YYYY-MM-DD"). */
+  kihagyott?: string[];
 };
 
 /** Egy alkalom egy konkrét napon (ismétlődőnél a sorozat egy előfordulása). */
@@ -50,7 +52,7 @@ export type BejegyzesBemenet = {
   ismetlesIg?: string | null;
 };
 
-export type BejegyzesAdat = Omit<BejegyzesSor, "id">;
+export type BejegyzesAdat = Omit<BejegyzesSor, "id" | "kihagyott">;
 
 const NAP_RE = /^\d{4}-\d{2}-\d{2}$/;
 const IDO_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
@@ -110,6 +112,7 @@ function napKulonbseg(a: string, b: string): number {
 
 /** Előfordul-e a bejegyzés az adott napon (heti ismétlést is számolva). */
 export function elofordulNapon(s: BejegyzesSor, nap: string): boolean {
+  if (s.kihagyott?.includes(nap)) return false;
   if (nap === s.nap) return true;
   if (s.ismetles !== "heti" || nap < s.nap) return false;
   if (s.ismetlesIg && nap > s.ismetlesIg) return false;
@@ -158,3 +161,82 @@ export function napFoglalt(bejegyzesek: readonly BejegyzesSor[], tavollet: Tavol
 
 /** A kártya idő-felirata: „egész nap” vagy „13:00–16:00”. */
 export const bejegyzesIdo = (b: Pick<BejegyzesSor, "tol" | "ig">) => (b.tol && b.ig ? `${b.tol}–${b.ig}` : "egész nap");
+
+// --- Törlés (egy alkalom / ettől kezdve / az egész) ---
+
+export type TorlesMod = "egesz" | "alkalom" | "ettol";
+export type TorlesTerv =
+  | { muvelet: "torol" }
+  | { muvelet: "kihagy"; nap: string }
+  | { muvelet: "vege"; ig: string }
+  | { muvelet: "hiba"; hiba: string };
+
+export function napEltolas(nap: string, n: number): string {
+  const d = new Date(`${nap}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Mi történjen a törléskor. Nem ismétlődő bejegyzés, vagy a sorozat első alkalma „ettől kezdve”:
+ * a sor törlődik. „Csak ezt”: az alkalom a kihagyottak közé kerül (ha ez volt az utolsó élő
+ * alkalom egy véges sorozatban, a sor törlődik). „Ettől kezdve”: a sorozat az előző napon véget ér.
+ */
+export function torlesTerv(s: BejegyzesSor, mod: TorlesMod, alkalom: string | null | undefined): TorlesTerv {
+  if (mod === "egesz" || s.ismetles !== "heti") return { muvelet: "torol" };
+  if (!alkalom || !valosNap(alkalom)) return { muvelet: "hiba", hiba: "Hibás alkalom." };
+  if (!elofordulNapon(s, alkalom)) return { muvelet: "hiba", hiba: "Ezen a napon nincs ilyen alkalom." };
+  if (mod === "ettol") return alkalom <= s.nap ? { muvelet: "torol" } : { muvelet: "vege", ig: napEltolas(alkalom, -1) };
+  if (s.ismetlesIg) {
+    const kihagy = new Set([...(s.kihagyott ?? []), alkalom]);
+    let van = false;
+    for (let d = s.nap; d <= s.ismetlesIg; d = napEltolas(d, 7)) if (!kihagy.has(d)) { van = true; break; }
+    if (!van) return { muvelet: "torol" };
+  }
+  return { muvelet: "kihagy", nap: alkalom };
+}
+
+// --- Becslő (ETA) bemenet ---
+
+/** A becslőben a bejegyzés-megálló azonosítója (nem megbízás). */
+export const bejegyzesFuvarId = (b: Pick<Bejegyzes, "id" | "alkalom">) => `bej:${b.id}:${b.alkalom}`;
+
+const perc = (hm: string) => Number(hm.slice(0, 2)) * 60 + Number(hm.slice(3, 5));
+/** A bejegyzés hossza percben (egész napos: null). */
+export const bejegyzesPerc = (b: Pick<BejegyzesSor, "tol" | "ig">) => (b.tol && b.ig ? Math.max(0, perc(b.ig) - perc(b.tol)) : null);
+
+/**
+ * Megállóként kerül-e a kocsi útvonalába (odamegy, ott tölti az időt): időponthoz kötött és van
+ * helye. Különben (egész nap, hely nélkül, vagy nem található hely) foglalt időszak.
+ */
+export const bejegyzesMegallo = (b: Pick<BejegyzesSor, "tol" | "ig" | "hely">) => !!(b.tol && b.ig && b.hely);
+
+/**
+ * Foglalt időszak a becslőnek, helyi "YYYY-MM-DDTHH:MM": időponthoz kötött → tol–ig;
+ * egész napos → a nap elejétől a másnapi napkezdésig.
+ */
+export function bejegyzesFoglalas(b: Pick<Bejegyzes, "tol" | "ig" | "alkalom">, napKezdes: string): { tol: string; ig: string } {
+  return b.tol && b.ig
+    ? { tol: `${b.alkalom}T${b.tol}`, ig: `${b.alkalom}T${b.ig}` }
+    : { tol: `${b.alkalom}T00:00`, ig: `${napEltolas(b.alkalom, 1)}T${napKezdes}` };
+}
+
+/** Sofőr-távollét napja → foglalt időszak (a nap elejétől a másnapi napkezdésig). */
+export const tavolletFoglalas = (nap: string, napKezdes: string) => ({ tol: `${nap}T00:00`, ig: `${napEltolas(nap, 1)}T${napKezdes}` });
+
+/**
+ * A bejegyzés-megállók beszúrása a kocsi fuvar-sorrendjébe idő szerint: mindegyik az első olyan
+ * fuvar elé kerül, amelynek a kezdő kulcsa ("YYYY-MM-DDTHH:MM") későbbi; a fuvarok sorrendje marad.
+ */
+export function idoSzerintBeszur<T>(lista: readonly T[], kulcs: (x: T) => string, uj: readonly { elem: T; kulcs: string }[]): T[] {
+  const ki: T[] = [];
+  const sor = [...uj].sort((a, b) => a.kulcs.localeCompare(b.kulcs));
+  let j = 0;
+  for (const x of lista) {
+    const k = kulcs(x);
+    while (j < sor.length && sor[j].kulcs < k) ki.push(sor[j++].elem);
+    ki.push(x);
+  }
+  while (j < sor.length) ki.push(sor[j++].elem);
+  return ki;
+}

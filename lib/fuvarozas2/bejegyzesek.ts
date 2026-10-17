@@ -9,11 +9,12 @@ import type { BejegyzesSor, BejegyzesTipus, Tavollet, TavolletTipus } from "@/li
 export async function getBejegyzesSorok(tol: string, ig: string): Promise<BejegyzesSor[]> {
   const sorok = await query<{
     id: string; jarmu_kod: string; tipus: BejegyzesTipus; nap: string; tol: string | null; ig: string | null;
-    hely: string | null; megjegyzes: string | null; ismetles: "nincs" | "heti"; ismetles_ig: string | null;
+    hely: string | null; megjegyzes: string | null; ismetles: "nincs" | "heti"; ismetles_ig: string | null; kihagyott: string[] | null;
   }>(
     `select id::text, jarmu_kod, tipus, to_char(nap, 'YYYY-MM-DD') as nap,
             to_char(tol, 'HH24:MI') as tol, to_char(ig, 'HH24:MI') as ig, hely, megjegyzes, ismetles,
-            to_char(ismetles_ig, 'YYYY-MM-DD') as ismetles_ig
+            to_char(ismetles_ig, 'YYYY-MM-DD') as ismetles_ig,
+            array(select to_char(d, 'YYYY-MM-DD') from unnest(kihagyott) d order by d) as kihagyott
        from fuvar_bejegyzesek
       where torolt_at is null and nap <= $2::date
         and (nap >= $1::date or (ismetles = 'heti' and (ismetles_ig is null or ismetles_ig >= $1::date)))
@@ -22,7 +23,7 @@ export async function getBejegyzesSorok(tol: string, ig: string): Promise<Bejegy
   );
   return sorok.map((s) => ({
     id: s.id, jarmuKod: s.jarmu_kod, tipus: s.tipus, nap: s.nap, tol: s.tol, ig: s.ig,
-    hely: s.hely, megjegyzes: s.megjegyzes, ismetles: s.ismetles, ismetlesIg: s.ismetles_ig,
+    hely: s.hely, megjegyzes: s.megjegyzes, ismetles: s.ismetles, ismetlesIg: s.ismetles_ig, kihagyott: s.kihagyott ?? [],
   }));
 }
 

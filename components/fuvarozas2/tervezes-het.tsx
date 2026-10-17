@@ -9,7 +9,7 @@ import { ledolgozosSzombat, munkaszunetiNap, torvenyesUnnep } from "@/lib/jelenl
 import { AutoFrissites } from "@/components/fuvarozas2/auto-frissites";
 import { AjanlatGombok } from "@/components/fuvarozas2/ajanlat-gombok";
 import { Lock } from "lucide-react";
-import { bejegyzesIdo, napFoglalt, tipusNev, TAVOLLET_NEV, type Bejegyzes, type TavolletTipus } from "@/lib/fuvarozas2/bejegyzes-alap";
+import { bejegyzesFuvarId, bejegyzesIdo, napFoglalt, tipusNev, TAVOLLET_NEV, type Bejegyzes, type TavolletTipus } from "@/lib/fuvarozas2/bejegyzes-alap";
 import { kocsiSzin } from "@/lib/fuvarozas2/kocsi-szin";
 import { BejegyzesIkon } from "@/components/fuvarozas2/bejegyzes-ikon";
 import { BejegyzesFelvitel, BejegyzesTorles } from "@/components/fuvarozas2/het-bejegyzes";
@@ -75,17 +75,24 @@ function TipusCimke({ sajat }: { sajat: boolean }) {
   );
 }
 
-function BejegyzesKartya({ b, szerk }: { b: Bejegyzes; szerk: boolean }) {
+function BejegyzesKartya({ b, szerk, e }: { b: Bejegyzes; szerk: boolean; e?: FuvarEredmeny }) {
   const cimke = tipusNev(b.tipus);
   return (
     <div className="flex items-start gap-1.5 rounded-lg bg-muted/70 px-2 py-1 text-xs text-foreground/80 ring-1 ring-foreground/10" title={b.megjegyzes ?? undefined}>
       <BejegyzesIkon tipus={b.tipus} className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
-      <div className="min-w-0 flex-1 break-words">
-        <div className="font-semibold">{cimke}{b.ismetles === "heti" ? <span className="ml-1 font-normal text-muted-foreground" title="hetente ismétlődik">↻</span> : null}</div>
-        <div className="tabular-nums">{bejegyzesIdo(b)}</div>
-        {b.hely || b.megjegyzes ? <div className="text-muted-foreground">{b.hely ?? b.megjegyzes}</div> : null}
+      <div className="min-w-0 flex-1">
+        <div className="font-semibold [hyphens:auto]" lang="hu">{cimke}{b.ismetles === "heti" ? <span className="ml-1 font-normal text-muted-foreground" title="hetente ismétlődik">↻</span> : null}</div>
+        <div className="whitespace-nowrap tabular-nums">{bejegyzesIdo(b)}</div>
+        {b.hely || b.megjegyzes ? <div className="truncate text-muted-foreground" title={b.hely ?? b.megjegyzes ?? undefined}>{b.hely ?? b.megjegyzes}</div> : null}
+        {e?.megallok[0] ? (
+          <div className={cn("tabular-nums", (e.legszukebbTartalek ?? 0) < 0 ? "font-semibold text-[var(--f2-red)]" : "text-muted-foreground")}
+            title="A becslő szerint (odaút a kocsi előző helyéről)">
+            odaér ~{hhmm(e.megallok[0].erkezes)}{e.uresKmElotte > 0 ? ` · ${km(e.uresKmElotte)} km` : ""}
+            {(e.legszukebbTartalek ?? 0) < 0 ? ` · késik ${-(e.legszukebbTartalek ?? 0)} p` : ""}
+          </div>
+        ) : null}
       </div>
-      <BejegyzesTorles id={b.id} cimke={cimke} ismetlodo={b.ismetles === "heti"} szerk={szerk} />
+      <BejegyzesTorles id={b.id} cimke={cimke} ismetlodo={b.ismetles === "heti"} alkalom={b.alkalom} szerk={szerk} />
     </div>
   );
 }
@@ -340,7 +347,7 @@ export function TervezesHetNezet({ adat, szerkeszthet }: { adat: TervezesHet; sz
                           </Link>}
                           </Fragment>
                         ))}
-                        {bej.map((b) => <BejegyzesKartya key={`${b.id}-${b.alkalom}`} b={b} szerk={szerkeszthet} />)}
+                        {bej.map((b) => <BejegyzesKartya key={`${b.id}-${b.alkalom}`} b={b} szerk={szerkeszthet} e={eredmeny.get(bejegyzesFuvarId(b))} />)}
                         {c.resek.filter((r) => r.haza).map((r) => <ResChip key={r.kulcs} r={r} aktiv={k?.kulcs === r.kulcs} het={het} />)}
                         {c.szabad && !foglalt ? <BejegyzesFelvitel kocsik={felvitelKocsik} kocsiKod={kocsi.kod} nap={c.nap} mod="cella" szerk={szerkeszthet} vegez={m?.vegez ? { ido: hhmm(m.vegez.ido), varos: m.vegez.varos } : null} /> : null}
                         {m ? <NapMerlegSav m={m} szabadHref={szabadHref} foglalt={foglalt} /> : null}

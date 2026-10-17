@@ -1180,3 +1180,5 @@ create table if not exists fuvar_bejegyzesek (
   check (ismetles_ig is null or ismetles_ig >= nap)
 );
 create index if not exists idx_fuvar_bejegyzesek_nap on fuvar_bejegyzesek (nap) where torolt_at is null;
+-- Ismétlődő sorozat egyenként törölt alkalmai (B1, „csak ezt az alkalmat”).
+alter table fuvar_bejegyzesek add column if not exists kihagyott date[] not null default '{}';

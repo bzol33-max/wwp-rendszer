@@ -3,6 +3,7 @@
 
 import {
   ellenorizBejegyzes, bejegyzesekNapokra, tavolletekNapokra, napFoglalt, elofordulNapon, bejegyzesIdo, tipusNev,
+  torlesTerv, idoSzerintBeszur, bejegyzesMegallo, bejegyzesPerc, bejegyzesFuvarId,
   type BejegyzesSor, type BejegyzesBemenet,
 } from "@/lib/fuvarozas2/bejegyzes-alap";
 import { kocsiSzin, SZURKE_SZIN } from "@/lib/fuvarozas2/kocsi-szin";
@@ -111,6 +112,38 @@ eq("sárga", kocsiSzin("yellow").c, "#c99a1a");
 eq("zöld és lila különbözik", kocsiSzin("green").c !== kocsiSzin("purple").c, true);
 eq("ismeretlen → szürke", kocsiSzin("pink"), SZURKE_SZIN);
 eq("null → szürke", kocsiSzin(null), SZURKE_SZIN);
+
+// --- egy alkalom törlése ---
+{
+  const heti = S({ id: "9", nap: "2026-10-06", ismetles: "heti" });
+  eq("nem ismétlődő → törlés", torlesTerv(S({ id: "1" }), "alkalom", "2026-10-20"), { muvelet: "torol" });
+  eq("egész sorozat → törlés", torlesTerv(heti, "egesz", null), { muvelet: "torol" });
+  eq("csak ezt → kihagy", torlesTerv(heti, "alkalom", "2026-10-20"), { muvelet: "kihagy", nap: "2026-10-20" });
+  eq("ettől → vége előző nap", torlesTerv(heti, "ettol", "2026-10-20"), { muvelet: "vege", ig: "2026-10-19" });
+  eq("ettől az elsőtől → törlés", torlesTerv(heti, "ettol", "2026-10-06"), { muvelet: "torol" });
+  eq("nem alkalom-nap → hiba", torlesTerv(heti, "alkalom", "2026-10-21").muvelet, "hiba");
+  eq("hibás nap → hiba", torlesTerv(heti, "alkalom", "x").muvelet, "hiba");
+  eq("már kihagyott → hiba", torlesTerv({ ...heti, kihagyott: ["2026-10-20"] }, "alkalom", "2026-10-20").muvelet, "hiba");
+  const veges = S({ id: "8", nap: "2026-10-06", ismetles: "heti", ismetlesIg: "2026-10-13", kihagyott: ["2026-10-06"] });
+  eq("véges sorozat utolsó élő alkalma → törlés", torlesTerv(veges, "alkalom", "2026-10-13"), { muvelet: "torol" });
+  eq("kihagyott nap nem fordul elő", elofordulNapon({ ...heti, kihagyott: ["2026-10-20"] }, "2026-10-20"), false);
+  eq("kihagyás mellett a többi marad", elofordulNapon({ ...heti, kihagyott: ["2026-10-20"] }, "2026-10-27"), true);
+  eq("kibontás kihagyással", Object.keys(bejegyzesekNapokra([{ ...heti, kihagyott: ["2026-10-20"] }], napok)["AOPU-427"] ?? {}), ["2026-10-27"]);
+}
+
+// --- becslő-bemenet segédek ---
+{
+  eq("megálló: idő + hely", bejegyzesMegallo({ tol: "13:00", ig: "16:00", hely: "Nyh" }), true);
+  eq("hely nélkül nem megálló", bejegyzesMegallo({ tol: "13:00", ig: "16:00", hely: null }), false);
+  eq("egész nap nem megálló", bejegyzesMegallo({ tol: null, ig: null, hely: "Nyh" }), false);
+  eq("hossz percben", bejegyzesPerc({ tol: "13:00", ig: "16:30" }), 210);
+  eq("egész nap hossz null", bejegyzesPerc({ tol: null, ig: null }), null);
+  eq("fuvar-id", bejegyzesFuvarId({ id: "5", alkalom: "2026-10-20" }), "bej:5:2026-10-20");
+  const be = idoSzerintBeszur(["A", "B", "C"], (x) => ({ A: "2026-10-20T06:00", B: "2026-10-20T14:00", C: "2026-10-21T06:00" })[x]!,
+    [{ elem: "s2", kulcs: "2026-10-22T08:00" }, { elem: "s1", kulcs: "2026-10-20T13:00" }]);
+  eq("beszúrás idő szerint", be, ["A", "s1", "B", "C", "s2"]);
+  eq("üres listába", idoSzerintBeszur<string>([], () => "", [{ elem: "s", kulcs: "x" }]), ["s"]);
+}
 
 console.log(`teszt-bejegyzes: ${ok} ok, ${bad} hiba`);
 if (bad) process.exit(1);

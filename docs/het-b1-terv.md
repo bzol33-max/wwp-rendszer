@@ -38,17 +38,24 @@ Döntés: Budaházi Zoltán, 2026-10-17 („B1, B3 bevitelével”), a terv-vás
 5. **A mai oszlop szélesebb** (E1), a többi változatlan (gördülő ablak: egy
    munkanap vissza + előre, marad).
 
-## Nem része (később)
+## Becslő (ETA) és törlés (2. kör, 2026-10-17: „ezeket is komplett működő rendszert”)
 
-- A bejegyzés még NEM tolja el a becslő (ETA) idejeit — csak a szabad
-  kapacitás-jelzést veszi el. Következő lépés: a bejegyzés mint fix megálló az
-  ütemtervben.
-- Ismétlődő sorozatból egy alkalom törlése.
+- **Bejegyzés-megálló:** időponthoz kötött ÉS hellyel megadott bejegyzés (pl. szerviz 13–16, DAF Nyíregyháza)
+  a kocsi láncába kerül idő szerint (a hely geokódolva): üres ráállás a kocsi előző helyéről, várakozás a
+  kezdésig, ott tölti a bejegyzés hosszát, és a következő fuvar onnan indul (`id = bej:<id>:<nap>`).
+  A kártyán: „odaér ~HH:MM · km”, késésnél pirosan „késik N p”.
+- **Foglalt időszak:** hely nélküli vagy nem megtalálható helyű időponthoz kötött bejegyzés (tól–ig), egész
+  napos bejegyzés és sofőr-távollét (a nap 00:00-tól a másnapi 06:00-ig). A motor (`UtemParam.foglalt`):
+  közben nem indul, nem vezet (megáll és kivárja, mint a kamionstopot, de az nem kamionstop), és a rakodás
+  nem kezdődhet benne és nem is nyúlhat bele. A kivárás állásnak számít (szünet / napi pihenő nullázás).
+- **Törlés:** ismétlődő sorozatnál: *csak ezt az alkalmat* (`kihagyott` dátumtömb; ha egy véges sorozat
+  utolsó élő alkalma, a sor törlődik), *ettől kezdve mindet* (`ismetles_ig` = az előző nap; az első
+  alkalomtól = törlés), *az egész sorozatot* (soft delete). Logika: `torlesTerv()` (tiszta, tesztelt).
 
 ## Adat
 
 `fuvar_bejegyzesek` (db/schema.sql, idempotens):
-`id, jarmu_kod, tipus, nap, tol, ig, hely, megjegyzes, ismetles ('nincs'|'heti'), ismetles_ig, letrehozta, created_at, torolt_at`.
+`id, jarmu_kod, tipus, nap, tol, ig, hely, megjegyzes, ismetles ('nincs'|'heti'), ismetles_ig, kihagyott date[], letrehozta, created_at, torolt_at, torolte`.
 `tol` és `ig` vagy mindkettő üres (egész nap), vagy mindkettő kitöltve és `ig > tol`.
 
 ## Kód

@@ -49,6 +49,11 @@ export type UtemParam = {
   napKezdes: string;           // "06:00" — egy új nap legkorábbi indulása, ha nincs ablak
   szunetUtanPerc: number; szunetPerc: number; napiMaxPerc: number; napiPihenoPerc: number; // 270/45/540/660
   tilalmak: TilalmiAblak[];
+  /**
+   * B1 (docs/het-b1-terv.md): a kocsi foglalt időszakai (hely nélküli vagy egész napos bejegyzés,
+   * sofőr-távollét), helyi "YYYY-MM-DDTHH:MM". Közben nem vezet és nem rakodik; a kivárás állásnak számít.
+   */
+  foglalt?: { tol: string; ig: string }[];
 };
 
 export type MegalloEredmeny = {
@@ -94,8 +99,36 @@ export function utemterv(fuvarok: UtemFuvar[], kezdes: UtemKezdes, p: UtemParam,
     return x;
   };
   const tilalmak = p.tilalmak
-    .map((a) => ({ tol: valos(a.tol), ig: valos(a.ig), ablak: a }))
+    .map((a) => ({ tol: valos(a.tol), ig: valos(a.ig), ablak: a as TilalmiAblak | null }))
     .sort((a, b) => a.tol - b.tol);
+  const foglaltak = (p.foglalt ?? [])
+    .map((a) => ({ tol: valos(a.tol), ig: valos(a.ig), ablak: null as TilalmiAblak | null }))
+    .filter((a) => Number.isFinite(a.tol) && Number.isFinite(a.ig) && a.ig > a.tol)
+    .sort((a, b) => a.tol - b.tol);
+  /** Menet közbeni megállás-okok: kamionstop (ablak ≠ null) és foglalt időszak (ablak = null). */
+  const blokkok = [...tilalmak, ...foglaltak].sort((a, b) => a.tol - b.tol);
+
+  /** Ha `x` foglalt időszakba esik, annak a végéig tol (egymásba érő időszakokon át). */
+  const foglaltUtan = (x: number) => {
+    let y = x;
+    for (let kor = 0; kor < 50; kor++) {
+      const f = foglaltak.find((a) => a.tol <= y && y < a.ig);
+      if (!f) break;
+      y = f.ig;
+    }
+    return y;
+  };
+  /** Rakodás kezdete: ne essen foglalt időszakba, és ne is nyúljon bele (különben utána kezd). */
+  const rakodasKezd = (x: number, perc: number) => {
+    let y = x;
+    for (let kor = 0; kor < 50; kor++) {
+      y = foglaltUtan(y);
+      const bele = foglaltak.find((a) => a.tol > y && a.tol < y + perc);
+      if (!bele) break;
+      y = bele.ig;
+    }
+    return y;
+  };
 
   let t = valos(kezdes.ido);
   let folyamatos = Math.max(0, kezdes.folyamatosPerc);
@@ -145,10 +178,10 @@ export function utemterv(fuvarok: UtemFuvar[], kezdes: UtemKezdes, p: UtemParam,
     let maradek = ossz;
     // Védőkorlát hibás (óriási) menetidőre.
     for (let kor = 0; maradek > 0 && kor < 1000; kor++) {
-      const ban = tilalmak.find((a) => a.ig > t);
+      const ban = blokkok.find((a) => a.ig > t);
       if (ban && ban.tol <= t) {
         const x = g(napja(t));
-        x.kamionstop ??= { ...ban.ablak };
+        if (ban.ablak) x.kamionstop ??= { ...ban.ablak };
         x.vegez = null;
         allas(ban.ig - t);
         t = ban.ig;
@@ -195,7 +228,7 @@ export function utemterv(fuvarok: UtemFuvar[], kezdes: UtemKezdes, p: UtemParam,
       const m = f.megallok[i];
       if (i === 0) {
         // Indulás: max(előző távozás, a megálló napjának napKezdes-e); a tétlen rés várakozás.
-        const indulas = Math.max(t, valos(`${m.nap}T${p.napKezdes}`));
+        const indulas = foglaltUtan(Math.max(t, valos(`${m.nap}T${p.napKezdes}`)));
         allas(indulas - t);
         t = indulas;
         vezet(f.raallas.perc, f.raallas.km, !!f.raallasRakott, napKm);
@@ -206,7 +239,7 @@ export function utemterv(fuvarok: UtemFuvar[], kezdes: UtemKezdes, p: UtemParam,
       const erkezes = t;
       g(napja(erkezes)).vegez = null;
       const tol = m.ablakTol ? valos(m.ablakTol) : null;
-      const kezd = tol != null && tol > erkezes ? tol : erkezes;
+      const kezd = rakodasKezd(tol != null && tol > erkezes ? tol : erkezes, egesz(m.rakodasPerc));
       const varakozas = kezd - erkezes;
       allas(varakozas);
       const tavozas = kezd + egesz(m.rakodasPerc);
