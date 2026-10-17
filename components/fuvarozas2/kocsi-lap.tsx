@@ -230,7 +230,7 @@ function KihasznaltsagBlokk({ adat }: { adat: KocsiLap }) {
 
 function TelemetriaBlokk({ adat }: { adat: KocsiLap }) {
   const t = adat.telemetria;
-  const szerviz = t ? [...t].reverse().find((s) => s.szervizHatraKm != null) ?? null : null;
+  const szerviz = t ? [...t].reverse().find((s) => s.szervizHatraKm != null && s.szervizHatraKm > 0 && s.szervizMegbizhato) ?? null : null; // 0 / bizonytalan érték nem jelenik meg
   return (
     <Doboz className="flex flex-col gap-2 p-4">
       <SzakaszCim>Telemetria · elmúlt 7 nap</SzakaszCim>
@@ -274,7 +274,8 @@ export function KocsiLapNezet({ adat }: { adat: KocsiLap }) {
   return (
     <div className="flex min-w-0 flex-col gap-3">
       <Link href="/fuvarozas2" className="self-start text-sm text-muted-foreground hover:text-foreground hover:underline">← Kocsik</Link>
-      <Fej adat={adat} />
+      {/* A mai kártya fejében ugyanez van — külön fej csak, ha a mai kártya nincs meg. */}
+      {adat.maBlokk?.kocsi ? null : <Fej adat={adat} />}
       <div className="grid items-start gap-3 lg:grid-cols-2">
         <div className="flex min-w-0 flex-col gap-3">
           <MaBlokk adat={adat} />
