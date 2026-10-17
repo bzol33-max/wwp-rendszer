@@ -6,7 +6,7 @@
 // fedezet = bérbevétel − km-költség − napi fix × munkanap. Ft egészre, % egy tizedesre.
 // 0 munkanap → a napi értékek és a fizetős-nap arány null; 0 km → üres km % null.
 
-import { kihasznaltsag, type KocsiIdoszak } from "@/lib/fuvarozas2/kihasznaltsag-alap";
+import { kihasznaltsag, sajatBelsoDij, type KocsiIdoszak } from "@/lib/fuvarozas2/kihasznaltsag-alap";
 
 let ok = 0, bad = 0;
 function all(nev: string, felt: boolean) {
@@ -126,6 +126,21 @@ const alap: KocsiIdoszak = {
   eq("0 km: fedezetFt", k.fedezetFt, 170_000);
   eq("0 km: fedezetPerNap", k.fedezetPerNap, 34_000);
   eq("0 km: bevetelPerNap", k.bevetelPerNap, 84_000);
+}
+
+// ── Saját fuvar belső díja (2026-10-17, „1”) ───────────────────────────────
+// 300 saját rakott km × 524 Ft/km = 157 200 → a fedezethez és a bevétel/naphoz is hozzáadódik.
+{
+  eq("belső díj: km × Ft/km", sajatBelsoDij(300, 524), 157_200);
+  eq("belső díj: nincs Ft/km → 0", sajatBelsoDij(300, null), 0);
+  eq("belső díj: 0 km → 0", sajatBelsoDij(0, 524), 0);
+  eq("belső díj: negatív Ft/km → 0", sajatBelsoDij(300, -5), 0);
+  const nelkul = kihasznaltsag(alap);
+  const vele = kihasznaltsag({ ...alap, sajatBevetelFt: 157_200 });
+  eq("belső díjjal: fedezet +157 200", vele.fedezetFt - nelkul.fedezetFt, 157_200);
+  eq("belső díjjal: bevétel/nap", vele.bevetelPerNap, Math.round((420_000 + 157_200) / 5));
+  eq("belső díjjal: km-költség változatlan", vele.kmKoltsegFt, nelkul.kmKoltsegFt);
+  eq("belső díjjal: mezők változatlanok", Object.keys(vele).sort(), Object.keys(nelkul).sort());
 }
 
 console.log(`\n1. hullám — kihasználtság teszt: ${ok} rendben, ${bad} hiba`);

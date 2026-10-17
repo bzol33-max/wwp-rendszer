@@ -9,7 +9,7 @@ import { findJarmuByKod, type JarmuSzin } from "@/lib/fuvarozas/vehicles";
 import { dijFtban } from "@/lib/fuvarozas2/kalkulacio-tar";
 import { becsultTavolsag, lancKm } from "@/lib/fuvarozas2/ures-km";
 import {
-  hetkoznapE, kihasznaltsag, munkanapokSzama, napokListaja,
+  hetkoznapE, kihasznaltsag, munkanapokSzama, napokListaja, sajatBelsoDij,
   type KocsiIdoszak, type Kihasznaltsag,
 } from "@/lib/fuvarozas2/kihasznaltsag-alap";
 
@@ -45,6 +45,10 @@ export type KihasznaltsagSor = Kihasznaltsag & {
   fizetosNapok: number;
   sajatNapok: number;
   berBevetelFt: number;
+  /** Saját fuvarok belső díja (rakott km × belső Ft/km) — a bevétel/nap és a fedezet tartalmazza. */
+  sajatBevetelFt: number;
+  /** A saját fuvarok rakott km-e (a belső díj alapja). */
+  sajatRakottKm: number;
   /** EUR-os bérdíj, amihez nem volt árfolyam — a bevételben NINCS benne. */
   atvaltatlanEur: number;
   rakottKm: number;
@@ -66,7 +70,7 @@ export type KihasznaltsagAdat = {
   honap: { cim: string; kezdet: string; veg: string };
   kocsik: KihasznaltsagKocsi[];
   /** A számításhoz használt paraméterek, a felület kiírja (title). */
-  param: { fogyasztasL100: number; uzemanyagFtL: number; utdijFtKm: number; napiFixFt: number };
+  param: { fogyasztasL100: number; uzemanyagFtL: number; utdijFtKm: number; napiFixFt: number; belsoFtKm: number | null };
 };
 
 const HONAPOK = ["január", "február", "március", "április", "május", "június", "július", "augusztus", "szeptember", "október", "november", "december"];
@@ -119,7 +123,7 @@ export async function szamoldKihasznaltsagot(ma: string): Promise<KihasznaltsagA
   const honapKezdet = `${ma.slice(0, 7)}-01`;
   const kezdet = hetKezdet < honapKezdet ? hetKezdet : honapKezdet;
 
-  const [beallitas, jarmuvek, fuvarok, elozoLerako, utdijAtlag, gazolaj, jarmuLista] = await Promise.all([
+  const [beallitas, jarmuvek, fuvarok, elozoLerako, utdijAtlag, gazolaj, jarmuLista, belsoDij] = await Promise.all([
     getFuvarBeallitasok(),
     query<{ id: string; kod: string; cimke: string; sofor: string | null }>(
       `select j.id::text, j.kod, j.cimke, a.name as sofor
@@ -153,6 +157,15 @@ export async function szamoldKihasznaltsagot(ma: string): Promise<KihasznaltsagA
     ).catch(() => [] as { ft_km: number | null }[]),
     gazolajArKedvezmennyel(),
     getJarmuvek().catch(() => undefined),
+    // A saját fuvar belső díja: a forintos bérfuvarok átlagos Ft/rakott km-e, 90 nap.
+    query<{ ft_km: number | null }>(
+      `select sum(m.fuvardij)::float8 / nullif(sum(m.rakott_km), 0)::float8 as ft_km
+       from fuvar_megbizasok m
+       where m.torolt_at is null and m.jelleg = 'ber' and m.fuvardij > 0 and m.rakott_km > 0
+         and coalesce(m.fuvardij_penznem, 'Ft') in ('Ft', 'HUF')
+         and m.datum >= $1::date - 90 and m.datum <= $1::date`,
+      [ma]
+    ).catch(() => [] as { ft_km: number | null }[]),
   ]);
 
   const param = {
@@ -160,6 +173,7 @@ export async function szamoldKihasznaltsagot(ma: string): Promise<KihasznaltsagA
     uzemanyagFtL: Math.round(gazolaj.ar),
     utdijFtKm: utdijAtlag[0]?.ft_km != null && Number(utdijAtlag[0].ft_km) > 0 ? Math.round(Number(utdijAtlag[0].ft_km)) : UTDIJ_TARTALEK_FT_KM,
     napiFixFt: beallitas.napi_koltseg_ft,
+    belsoFtKm: belsoDij[0]?.ft_km != null && Number(belsoDij[0].ft_km) > 0 ? Math.round(Number(belsoDij[0].ft_km)) : null,
   };
 
   const eurNapok = fuvarok.filter((f) => f.jelleg === "ber" && f.penznem === "EUR" && f.fuvardij).map((f) => f.felrakas_nap);
@@ -186,7 +200,7 @@ export async function szamoldKihasznaltsagot(ma: string): Promise<KihasznaltsagA
 
     const idoszak = (tol: string): KihasznaltsagSor => {
       const benne = sajat.filter((f) => f.felrakas_nap >= tol && f.felrakas_nap <= ma);
-      let berBevetelFt = 0, atvaltatlanEur = 0, rakottKm = 0, uresKm = 0;
+      let berBevetelFt = 0, atvaltatlanEur = 0, rakottKm = 0, uresKm = 0, sajatRakottKm = 0;
       const berNapok = new Set<string>();
       const sajatFuvarNapok = new Set<string>();
       for (const f of benne) {
@@ -202,6 +216,7 @@ export async function szamoldKihasznaltsagot(ma: string): Promise<KihasznaltsagA
           else if (f.penznem === "EUR" && f.fuvardij) atvaltatlanEur += Number(f.fuvardij);
           for (const n of napok) berNapok.add(n);
         } else {
+          sajatRakottKm += l?.rakott ?? 0;
           for (const n of napok) sajatFuvarNapok.add(n);
         }
       }
@@ -213,7 +228,11 @@ export async function szamoldKihasznaltsagot(ma: string): Promise<KihasznaltsagA
         uresKm: Math.round(uresKm),
         fizetosNapok: berNapok.size,
         sajatNapok,
-        ...param,
+        fogyasztasL100: param.fogyasztasL100,
+        uzemanyagFtL: param.uzemanyagFtL,
+        utdijFtKm: param.utdijFtKm,
+        napiFixFt: param.napiFixFt,
+        sajatBevetelFt: sajatBelsoDij(Math.round(sajatRakottKm), param.belsoFtKm),
       };
       return {
         ...kihasznaltsag(bemenet),
@@ -221,6 +240,8 @@ export async function szamoldKihasznaltsagot(ma: string): Promise<KihasznaltsagA
         fizetosNapok: bemenet.fizetosNapok,
         sajatNapok,
         berBevetelFt: bemenet.berBevetelFt,
+        sajatBevetelFt: bemenet.sajatBevetelFt ?? 0,
+        sajatRakottKm: Math.round(sajatRakottKm),
         atvaltatlanEur,
         rakottKm: bemenet.rakottKm,
         uresKm: bemenet.uresKm,

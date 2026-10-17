@@ -5,7 +5,10 @@
 //
 // Fő mérőszám: fedezet / kocsi / munkanap.
 //   km-költség = (rakott + üres km) × (l/100 km ÷ 100 × Ft/l + útdíj Ft/km)
-//   fedezet    = bérbevétel − km-költség − napi fix × munkanap
+//   fedezet    = bérbevétel + saját fuvar belső díja − km-költség − napi fix × munkanap
+// A saját (raklap-)fuvar belső díja (2026-10-17, Budaházi Zoltán: „1”): a saját
+// fuvar rakott km-e × a bérfuvarok átlagos Ft/km-e — így a saját fuvar nem tiszta
+// veszteség a kocsinál. A bevétel/nap is tartalmazza.
 // Ft egészre, % egy tizedesre kerekítve. 0 munkanap → a napi értékek és a
 // fizetős-nap arány null; 0 km → az üres km % null.
 
@@ -20,6 +23,8 @@ export type KocsiIdoszak = {
   uzemanyagFtL: number;
   utdijFtKm: number;
   napiFixFt: number;
+  /** Saját fuvarok belső díja (Ft), alapból 0. */
+  sajatBevetelFt?: number;
 };
 
 export type Kihasznaltsag = {
@@ -36,10 +41,11 @@ export function kihasznaltsag(k: KocsiIdoszak): Kihasznaltsag {
   const osszKm = k.rakottKm + k.uresKm;
   const ftPerKm = (k.fogyasztasL100 / 100) * k.uzemanyagFtL + k.utdijFtKm;
   const kmKoltseg = osszKm * ftPerKm;
-  const fedezet = k.berBevetelFt - kmKoltseg - k.napiFixFt * k.munkanapok;
+  const bevetel = k.berBevetelFt + (k.sajatBevetelFt ?? 0);
+  const fedezet = bevetel - kmKoltseg - k.napiFixFt * k.munkanapok;
   const vanNap = k.munkanapok > 0;
   return {
-    bevetelPerNap: vanNap ? Math.round(k.berBevetelFt / k.munkanapok) : null,
+    bevetelPerNap: vanNap ? Math.round(bevetel / k.munkanapok) : null,
     // A kerekítetlen fedezetből osztunk (egy kerekítés, nem kettő).
     fedezetPerNap: vanNap ? Math.round(fedezet / k.munkanapok) : null,
     uresKmSzazalek: osszKm > 0 ? Math.round((k.uresKm / osszKm) * 1000) / 10 : null,
@@ -71,4 +77,13 @@ export function hetkoznapE(nap: string): boolean {
 /** A hétköznapok száma [tol, ig] között, mindkét végét beleértve. */
 export function munkanapokSzama(tol: string, ig: string): number {
   return napokListaja(tol, ig).filter(hetkoznapE).length;
+}
+
+/**
+ * A saját fuvar belső díja: rakott km × belső Ft/km (egészre kerekítve).
+ * Nincs belső díj (null / ≤ 0) vagy nincs km → 0.
+ */
+export function sajatBelsoDij(rakottKm: number, belsoFtKm: number | null): number {
+  if (belsoFtKm == null || !(belsoFtKm > 0) || !(rakottKm > 0)) return 0;
+  return Math.round(rakottKm * belsoFtKm);
 }

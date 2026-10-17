@@ -127,12 +127,12 @@ function KocsiSor({ nev, szin, s }: { nev: string; szin: string | null; s: Kihas
           cimke="Fedezet/nap"
           ertek={s.fedezetPerNap != null ? `${rovidFt(s.fedezetPerNap)} Ft` : "—"}
           szin={fedezetSzin}
-          title={`Fedezet: ${ezres(s.fedezetFt)} Ft = bevétel ${ezres(s.berBevetelFt)} Ft − km-költség ${ezres(s.kmKoltsegFt)} Ft − napi fix × ${s.munkanapok} munkanap${eurMegj}`}
+          title={`Fedezet: ${ezres(s.fedezetFt)} Ft = bérbevétel ${ezres(s.berBevetelFt)} Ft + saját fuvar belső díja ${ezres(s.sajatBevetelFt)} Ft − km-költség ${ezres(s.kmKoltsegFt)} Ft − napi fix × ${s.munkanapok} munkanap${eurMegj}`}
         />
         <Mutato
           cimke="Bevétel/nap"
           ertek={s.bevetelPerNap != null ? `${rovidFt(s.bevetelPerNap)} Ft` : "—"}
-          title={`Bérbevétel: ${ezres(s.berBevetelFt)} Ft, ${s.berDb} bérfuvar, ${s.munkanapok} munkanap${eurMegj}`}
+          title={`Bérbevétel: ${ezres(s.berBevetelFt)} Ft (${s.berDb} bérfuvar) + saját fuvar belső díja: ${ezres(s.sajatBevetelFt)} Ft (${s.sajatDb} saját fuvar, ${ezres(s.sajatRakottKm)} rakott km × a bérfuvarok átlag Ft/km-e), ${s.munkanapok} munkanap${eurMegj}`}
         />
         <Mutato
           cimke="Üres km"

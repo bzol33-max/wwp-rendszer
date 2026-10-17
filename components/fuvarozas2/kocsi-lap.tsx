@@ -191,7 +191,7 @@ function KihasznaltsagOszlop({ cim, s }: { cim: string; s: KihasznaltsagSor }) {
     <div className="flex min-w-0 flex-col gap-1.5">
       <div className="text-xs font-semibold">{cim}</div>
       <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
-        <Mutato cimke="Bevétel / nap" ertek={formatFt(s.bevetelPerNap)} />
+        <Mutato cimke="Bevétel / nap" ertek={formatFt(s.bevetelPerNap)} title={`Bér: ${formatFt(s.berBevetelFt)} + saját fuvar belső díja: ${formatFt(s.sajatBevetelFt)} (${szam(s.sajatRakottKm)} rakott km)`} />
         <Mutato cimke="Fedezet / nap" ertek={formatFt(s.fedezetPerNap)} szin={s.fedezetPerNap != null && s.fedezetPerNap < 0 ? "red" : undefined} />
         <Mutato
           cimke="Üres km"

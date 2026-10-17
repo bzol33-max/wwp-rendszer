@@ -1,5 +1,12 @@
 # PROGRESS
 
+## 2026-10-17 — Kihasználtság: saját fuvar belső díjjal (Budaházi Zoltán: „1”)
+
+A saját (raklap-)fuvar eddig csak költség volt a kocsinál (km + napi fix), bevétel nélkül → Gergő október −80 e Ft/nap.
+Most: belső díj = saját rakott km × a forintos bérfuvarok átlag Ft/rakott km-e (90 nap). A bevétel/nap és a fedezet
+tartalmazza (Ma-sáv, Pénz → Kihasználtság, kocsi lapja; a súgóban bontva). `kihasznaltsag-alap.ts` `sajatBelsoDij`,
+`KocsiIdoszak.sajatBevetelFt`. Teszt: teszt-1hullam-kihasznaltsag (+8).
+
 ## 2026-10-17 — Fuvarozás 2. kör: kocsi-központú felépítés (Kocsik · Megbízások · Pénz)
 
 Terv és fájl-tulajdon: `docs/fuvarozas-2-kor-terv.md`. Tesztek a kód előtt (teszt-2kor-kocsi-sav 111, teszt-2kor-navigacio 23).

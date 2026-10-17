@@ -78,11 +78,11 @@ function Lab({ s }: { s: KocsiSav }) {
     <div className="flex flex-col gap-1 border-t border-foreground/10 px-4 py-2 text-xs text-muted-foreground">
       {h ? (
         <div className="tabular-nums">
-          Hét: {ezer(h.bevetelFt)} Ft
+          Hét: {ezer(h.bevetelFt)} Ft bér
           {h.uresSzazalek != null ? ` · üres ${Math.round(h.uresSzazalek)} %` : ""}
           {h.fedezetPerNap != null ? (
             <>
-              {" · fedezet/nap "}
+              {" · fedezet/nap (saját fuvar belső díjjal) "}
               <span className={h.fedezetPerNap < 0 ? "text-[var(--f2-red)]" : ""}>{ezer(h.fedezetPerNap)}</span>
             </>
           ) : null}
