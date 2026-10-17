@@ -28,7 +28,7 @@ import { tachoKijelzes } from "@/lib/fuvarozas2/tervezes-het-tacho";
 import { szamoljUtemtervet, type UtemKocsiBemenet } from "@/lib/fuvarozas2/heti-utemterv";
 import type { KocsiUtemterv } from "@/lib/fuvarozas2/heti-utemterv-alap";
 import { getBejegyzesSorok, getTavolletek } from "@/lib/fuvarozas2/bejegyzesek";
-import { bejegyzesekNapokra, tavolletekNapokra, type Bejegyzes, type TavolletTipus } from "@/lib/fuvarozas2/bejegyzes-alap";
+import { bejegyzesekNapokra, elofordulNapon, tavolletekNapokra, type Bejegyzes, type TavolletTipus } from "@/lib/fuvarozas2/bejegyzes-alap";
 import { getKihasznaltsag, type KihasznaltsagAdat } from "@/lib/fuvarozas2/kihasznaltsag";
 import type { JarmuSzin } from "@/lib/fuvarozas/vehicles";
 
@@ -142,11 +142,13 @@ export async function getTervezesHet(resKulcs?: string, het?: string): Promise<T
      order by m.datum, m.id`,
     [vazlat[0], vazlat[vazlat.length - 1]]
   );
-  // Szombat / ünnep oszlop csak akkor, ha aznap van felrakás vagy lerakás.
-  const napok = tervAblak(kezdet, (nap) => sorok.some((s) => s.fel_nap === nap || s.le_nap === nap));
-  // B1: bejegyzések, távollétek, heti/havi összefoglaló — párhuzamosan; hiba esetén üres / null (a lap nem törhet el).
+  // B1: a bejegyzések előre kellenek — a szombat / ünnep oszlop akkor is megjelenik, ha aznap bejegyzés van (QA #1).
+  const bejegyzesElore = await getBejegyzesSorok(vazlat[0], vazlat[vazlat.length - 1]).catch((e) => { console.warn("[het] bejegyzések:", e instanceof Error ? e.message : e); return [] as Awaited<ReturnType<typeof getBejegyzesSorok>>; });
+  // Szombat / ünnep oszlop csak akkor, ha aznap van felrakás, lerakás vagy bejegyzés.
+  const napok = tervAblak(kezdet, (nap) => sorok.some((s) => s.fel_nap === nap || s.le_nap === nap) || bejegyzesElore.some((b) => elofordulNapon(b, nap)));
+  // B1: távollétek, heti/havi összefoglaló — párhuzamosan; hiba esetén üres / null (a lap nem törhet el).
   const ablakTol = napok[0], ablakIg = napok[napok.length - 1];
-  const bejegyzesIgeret = getBejegyzesSorok(ablakTol, ablakIg).catch((e) => { console.warn("[het] bejegyzések:", e instanceof Error ? e.message : e); return []; });
+  const bejegyzesIgeret = Promise.resolve(bejegyzesElore);
   const tavolletIgeret = getTavolletek(ablakTol, ablakIg).catch((e) => { console.warn("[het] távollétek:", e instanceof Error ? e.message : e); return []; });
   const osszegzesIgeret = getKihasznaltsag(ma).catch(() => null);
 

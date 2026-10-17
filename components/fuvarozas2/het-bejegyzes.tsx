@@ -7,7 +7,6 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useCanEdit } from "@/components/auth/edit-permission-context";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { BEJEGYZES_TIPUSOK, ellenorizBejegyzes, type BejegyzesTipus } from "@/lib/fuvarozas2/bejegyzes-alap";
@@ -26,8 +25,10 @@ const hosszuNap = (iso: string) => {
 const mezo = "h-11 w-full rounded-xl bg-background px-3 text-sm ring-1 ring-foreground/15 outline-none focus:ring-2 focus:ring-[var(--kc)]";
 
 export function BejegyzesFelvitel({
-  kocsik, kocsiKod, nap, vegez, mod,
+  kocsik, kocsiKod, nap, vegez, mod, szerk,
 }: {
+  /** A `fuvarozas` modul szerkesztési joga (a szerver-akció is ezt kéri). */
+  szerk: boolean;
   kocsik: FelvitelKocsi[];
   kocsiKod?: string;
   nap: string;
@@ -36,7 +37,6 @@ export function BejegyzesFelvitel({
   /** „gomb”: a lap tetején; „cella”: egy szabad cellában. */
   mod: "gomb" | "cella";
 }) {
-  const szerk = useCanEdit();
   const router = useRouter();
   const [nyitva, setNyitva] = useState(false);
   const [fut, inditas] = useTransition();
@@ -150,6 +150,9 @@ export function BejegyzesFelvitel({
               <span className="text-xs text-muted-foreground">megjegyzés</span>
               <input className={mezo} value={megj} maxLength={500} placeholder="pl. olajcsere, fékbetét" onChange={(e) => setMegj(e.target.value)} />
             </label>
+            {new Date(`${datum}T12:00:00Z`).getUTCDay() === 0 ? (
+              <p className="rounded-xl bg-[var(--f2-amb-l)] px-3 py-2 text-xs text-[#5a3806]">Vasárnap — a Hét táblán nem jelenik meg (vasárnapi oszlop nincs).</p>
+            ) : null}
             {ugyanaz && vegez ? (
               <p className="rounded-xl bg-[var(--f2-amb-l)] px-3 py-2 text-xs text-[#5a3806]">
                 A becslő szerint aznap ~{vegez.ido}-kor végez · {vegez.varos}.
@@ -180,8 +183,7 @@ export function BejegyzesFelvitel({
   );
 }
 
-export function BejegyzesTorles({ id, cimke, ismetlodo }: { id: string; cimke: string; ismetlodo: boolean }) {
-  const szerk = useCanEdit();
+export function BejegyzesTorles({ id, cimke, ismetlodo, szerk }: { id: string; cimke: string; ismetlodo: boolean; szerk: boolean }) {
   const router = useRouter();
   const [fut, inditas] = useTransition();
   const [confirm, confirmDialog] = useConfirm();

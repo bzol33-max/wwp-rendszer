@@ -75,7 +75,7 @@ function TipusCimke({ sajat }: { sajat: boolean }) {
   );
 }
 
-function BejegyzesKartya({ b }: { b: Bejegyzes }) {
+function BejegyzesKartya({ b, szerk }: { b: Bejegyzes; szerk: boolean }) {
   const cimke = tipusNev(b.tipus);
   return (
     <div className="flex items-start gap-1.5 rounded-lg bg-muted/70 px-2 py-1 text-xs text-foreground/80 ring-1 ring-foreground/10" title={b.megjegyzes ?? undefined}>
@@ -85,7 +85,7 @@ function BejegyzesKartya({ b }: { b: Bejegyzes }) {
         <div className="tabular-nums">{bejegyzesIdo(b)}</div>
         {b.hely || b.megjegyzes ? <div className="text-muted-foreground">{b.hely ?? b.megjegyzes}</div> : null}
       </div>
-      <BejegyzesTorles id={b.id} cimke={cimke} ismetlodo={b.ismetles === "heti"} />
+      <BejegyzesTorles id={b.id} cimke={cimke} ismetlodo={b.ismetles === "heti"} szerk={szerk} />
     </div>
   );
 }
@@ -227,7 +227,7 @@ export function TervezesHetNezet({ adat, szerkeszthet }: { adat: TervezesHet; sz
     adat.napok.filter((n) => n >= adat.ma).flatMap((n) => (x.bejegyzesek?.[n] ?? []).map((b) => ({ kocsi: x, nap: n, b })))
   ).sort((a, b) => a.nap.localeCompare(b.nap) || (a.b.tol ?? "").localeCompare(b.b.tol ?? ""));
   const tavolletLista = adat.kocsik.flatMap((x) => {
-    const napok = Object.keys(x.tavollet ?? {}).filter((n) => n >= adat.ma).sort();
+    const napok = Object.keys(x.tavollet ?? {}).filter((n) => n >= adat.ma && adat.napok.includes(n)).sort();
     const ki: { kocsi: typeof x; tol: string; ig: string; t: TavolletTipus }[] = [];
     for (const n of napok) {
       const t = x.tavollet[n];
@@ -248,7 +248,7 @@ export function TervezesHetNezet({ adat, szerkeszthet }: { adat: TervezesHet; sz
           {!adat.ezAHet ? <Link href={hetLink(null)} className="rounded-lg border px-2 py-0.5 text-xs hover:bg-muted">vissza mához</Link> : null}
         </nav>
         <AutoFrissites frissitve={adat.frissitve} intervallMs={300_000} />
-        <BejegyzesFelvitel kocsik={felvitelKocsik} nap={adat.napok.find((n) => n >= adat.ma) ?? adat.ma} mod="gomb" />
+        <BejegyzesFelvitel kocsik={felvitelKocsik} nap={adat.napok.find((n) => n >= adat.ma) ?? adat.ma} mod="gomb" szerk={szerkeszthet} />
         <span className={cn("ml-auto rounded-full px-3 py-1 text-sm font-medium", adat.resek.length ? "bg-[var(--f2-amb-l)] text-[#5a3806]" : "bg-[var(--f2-mint-l)] text-[var(--f2-mint)]")}>
           {adat.resek.length ? `${adat.resek.length} rés · ${adat.uresKmOssz.toLocaleString("hu-HU")} km üres${adat.ezAHet ? " (mától)" : ""}` : "nincs 100 km-nél hosszabb üres út"}
         </span>
@@ -340,9 +340,9 @@ export function TervezesHetNezet({ adat, szerkeszthet }: { adat: TervezesHet; sz
                           </Link>}
                           </Fragment>
                         ))}
-                        {bej.map((b) => <BejegyzesKartya key={`${b.id}-${b.alkalom}`} b={b} />)}
+                        {bej.map((b) => <BejegyzesKartya key={`${b.id}-${b.alkalom}`} b={b} szerk={szerkeszthet} />)}
                         {c.resek.filter((r) => r.haza).map((r) => <ResChip key={r.kulcs} r={r} aktiv={k?.kulcs === r.kulcs} het={het} />)}
-                        {c.szabad && !foglalt ? <BejegyzesFelvitel kocsik={felvitelKocsik} kocsiKod={kocsi.kod} nap={c.nap} mod="cella" vegez={m?.vegez ? { ido: hhmm(m.vegez.ido), varos: m.vegez.varos } : null} /> : null}
+                        {c.szabad && !foglalt ? <BejegyzesFelvitel kocsik={felvitelKocsik} kocsiKod={kocsi.kod} nap={c.nap} mod="cella" szerk={szerkeszthet} vegez={m?.vegez ? { ido: hhmm(m.vegez.ido), varos: m.vegez.varos } : null} /> : null}
                         {m ? <NapMerlegSav m={m} szabadHref={szabadHref} foglalt={foglalt} /> : null}
                       </div>
                     </td>

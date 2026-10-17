@@ -37,7 +37,7 @@ export async function ujBejegyzes(be: BejegyzesBemenet): Promise<{ ok: true; id:
 export async function torolBejegyzes(id: string): Promise<{ ok: boolean }> {
   await requireEditPermission("fuvarozas");
   const session = await requireSession();
-  if (!/^\d+$/.test(String(id))) return { ok: false };
+  if (!/^\d{1,18}$/.test(String(id))) return { ok: false };
   const sor = await query<{ id: string }>(
     `update fuvar_bejegyzesek set torolt_at = now(), torolte = $2 where id = $1 and torolt_at is null returning id::text`,
     [id, session.name ?? session.username]

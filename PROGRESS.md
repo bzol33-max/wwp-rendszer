@@ -1,5 +1,18 @@
 # PROGRESS
 
+## 2026-10-17 — Hét B1: kocsiszín, nem-fuvar bejegyzés, szabadnap a Jelenlétből, heti/havi összefoglaló
+
+Terv: `docs/het-b1-terv.md` (Budaházi Zoltán: „B1, B3 bevitelével”).
+- **Kocsiszín** (törzsadat `szin`): sor-csík, betű-jelvény, fuvar-kártya csík; a típus BÉR / SAJÁT címkéből.
+- **Bejegyzés** (`fuvar_bejegyzesek`, schema.sql): szerviz, gumis, mosás, műszaki, tachó, egyéb; tól–ig vagy egész
+  nap, hely, megjegyzés, heti ismétlés. Felvitel: „+ Bejegyzés” vagy szabad cellára kattintás (B3 ablak), törlés ×
+  (soft). Egész napos / 12 után tartó → a nap nem „szabad”, nincs „délután szabad”. Szombati bejegyzés oszlopot nyit.
+- **Távollét**: `jelenletek.day_type` szabadság / beteg a kocsi sofőrjénél → csíkozott, lakatos cella; fuvar rajta → piros jelzés.
+- **Oldalsáv**: heti / havi összefoglaló (`getKihasznaltsag`), „Nem fuvar” és „Távollét” lista; az ajánlatok alatta.
+- Még nincs: a bejegyzés nem tolja az ETA-t; sorozatból egy alkalom törlése.
+- **Teszt:** teszt-bejegyzes 59/0, teljes `npm run teszt` zöld, tsc, eslint (az új fájlok), next build; helyi
+  dev-szerver: felvitel, ellenőrzés, törlés, szombati oszlop; független QA (4 kis javítás beépítve).
+
 ## 2026-10-17 — Hét Rács 2.0: idő · km · díj · tartalék · napi mérleg · hétvége-sáv
 
 Terv: `docs/het-racs-2-terv.md` (Budaházi Zoltán: R1 kártya + R4 napi mérleg + R7 tartalék, „mehet”; hétvége/ünnep
