@@ -1,5 +1,17 @@
 # PROGRESS
 
+## 2026-10-17 — Ajánlat Q2: merre keress fuvart a kiürülő kocsiknak
+
+Terv: `docs/ajanlat-q2-terv.md` (Budaházi Zoltán: „Q2”; az útdíj-kalkulátor marad).
+- **Kocsikártyák** a felszabadulás sorrendjében (Hét-ütemterv utolsó fuvarja; hétvégén / ünnepen a következő munkanap
+  06:00), kocsinként ≤ 3 irány: több pénz (díj − ráállás+rakott km költség, a célig tartó napokra), gyakori (≥ 2),
+  hazafelé / Haza (Szakoly). Haza-nap: a hét utolsó munkanapja, ünnep és Jelenlét-távollét szerint.
+- Forrás: saját bérfuvarok 365 nap (város-szintű geokódolás, gyorsítótárral), nyitott Timocom-ajánlatok.
+- **keres** → `?kocsi=&irany=`: Timocom-keresés szövege, illő ajánlatok, kit hívjak, kitöltött kalkulátor.
+- Fájlok: `lib/fuvarozas2/kereses-javaslat(-alap).ts`, `components/fuvarozas2/kereses-javaslat.tsx`, a timocom lap.
+- **Teszt:** teszt-kereses-javaslat 43/0, teljes `npm run teszt`, tsc, eslint, next build; helyi dev-szerver;
+  független QA (hétvége, redirect, időkorlát, címek, NaN, kulcsok, pénznem, 44 px — beépítve).
+
 ## 2026-10-17 — Hét B1: kocsiszín, nem-fuvar bejegyzés, szabadnap a Jelenlétből, heti/havi összefoglaló
 
 Terv: `docs/het-b1-terv.md` (Budaházi Zoltán: „B1, B3 bevitelével”).
