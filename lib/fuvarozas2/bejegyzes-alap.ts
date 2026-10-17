@@ -186,7 +186,14 @@ export function torlesTerv(s: BejegyzesSor, mod: TorlesMod, alkalom: string | nu
   if (mod === "egesz" || s.ismetles !== "heti") return { muvelet: "torol" };
   if (!alkalom || !valosNap(alkalom)) return { muvelet: "hiba", hiba: "Hibás alkalom." };
   if (!elofordulNapon(s, alkalom)) return { muvelet: "hiba", hiba: "Ezen a napon nincs ilyen alkalom." };
-  if (mod === "ettol") return alkalom <= s.nap ? { muvelet: "torol" } : { muvelet: "vege", ig: napEltolas(alkalom, -1) };
+  if (mod === "ettol") {
+    if (alkalom <= s.nap) return { muvelet: "torol" };
+    // Ha előtte sincs már élő alkalom, a sor törlődik (QA2 #6).
+    const kihagy = new Set(s.kihagyott ?? []);
+    let van = false;
+    for (let d = s.nap; d < alkalom; d = napEltolas(d, 7)) if (!kihagy.has(d)) { van = true; break; }
+    return van ? { muvelet: "vege", ig: napEltolas(alkalom, -1) } : { muvelet: "torol" };
+  }
   if (s.ismetlesIg) {
     const kihagy = new Set([...(s.kihagyott ?? []), alkalom]);
     let van = false;

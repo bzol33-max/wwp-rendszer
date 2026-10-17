@@ -247,10 +247,12 @@ export async function szamoljUtemtervet(b: UtemBemenet, opciok: UtemOpciok = {})
     for (const bj of l.bejegyzesek) {
       if (!bejegyzesMegallo(bj)) continue;
       const sor = bejegyzesSor(bj);
+      // Ma-módban a már elkezdett (folyamatban lévő) bejegyzés „kész” megálló: a kocsi ott van,
+      // a hátralévő idő foglalt időszak lesz (QA2 #3).
       megallokFuvar.set(sor.id, [{
         tipus: "felrako", varos: sor.felVaros, cim: bj.hely ?? "", nap: bj.alkalom,
         ablakTol: `${bj.alkalom}T${bj.tol}`, ablakIg: `${bj.alkalom}T${bj.tol}`,
-        rakodasPerc: bejegyzesPerc(bj) ?? 0, pont: null, kesz: maMod && `${bj.alkalom}T${bj.ig}` <= b.most,
+        rakodasPerc: bejegyzesPerc(bj) ?? 0, allasnakSzamit: true, pont: null, kesz: maMod && `${bj.alkalom}T${bj.tol}` <= b.most,
       }]);
       if (bj.hely?.trim()) geokodKell.add(bj.hely);
     }
@@ -277,12 +279,16 @@ export async function szamoljUtemtervet(b: UtemBemenet, opciok: UtemOpciok = {})
     for (const bj of l.bejegyzesek) {
       const id = bejegyzesFuvarId(bj);
       const m = megallokFuvar.get(id)?.[0];
-      if (m?.pont) ujak.push({ elem: bejegyzesSor(bj), kulcs: m.ablakTol ?? `${bj.alkalom}T${NAP_KEZDES}` });
-      else foglalt.push(bejegyzesFoglalas(bj, NAP_KEZDES));
+      if (m?.pont) {
+        ujak.push({ elem: bejegyzesSor(bj), kulcs: m.ablakTol ?? `${bj.alkalom}T${NAP_KEZDES}` });
+        if (m.kesz && `${bj.alkalom}T${bj.ig}` > b.most) foglalt.push(bejegyzesFoglalas(bj, NAP_KEZDES));
+      } else foglalt.push(bejegyzesFoglalas(bj, NAP_KEZDES));
     }
     foglaltKocsi.set(l.kod, foglalt);
     const kezdoKulcs = (f: UtemSor) => {
       const ms = megallokFuvar.get(f.id) ?? [];
+      // Ma-módban az elkezdett (már van kész megállója) élő fuvar marad elöl: a lánc onnan indul (QA2 #1).
+      if (maMod && ms.some((x) => x.kesz) && ms.some((x) => !x.kesz) && fuvarJel(f.allapot) !== "kesz") return "";
       const m = (maMod ? ms.find((x) => !x.kesz) : undefined) ?? ms[0];
       return m ? m.ablakTol ?? `${m.nap}T${NAP_KEZDES}` : `${f.felNap}T${NAP_KEZDES}`;
     };
@@ -351,7 +357,7 @@ export async function szamoljUtemtervet(b: UtemBemenet, opciok: UtemOpciok = {})
         cim: f.cim,
         jelleg: f.jelleg,
         dijFt: f.jelleg === "ber" ? dijFtban(f.fuvardij, f.penznem, arfolyamok.get(f.felNap) ?? null) : null,
-        megallok: megallok.map(({ tipus, varos, nap, ablakTol, ablakIg, rakodasPerc }) => ({ tipus, varos, nap, ablakTol, ablakIg, rakodasPerc })),
+        megallok: megallok.map(({ tipus, varos, nap, ablakTol, ablakIg, rakodasPerc, allasnakSzamit }) => ({ tipus, varos, nap, ablakTol, ablakIg, rakodasPerc, ...(allasnakSzamit ? { allasnakSzamit } : {}) })),
         szakaszok: megallok.slice(1).map((m, i) => szakaszKi(megallok[i].pont, m.pont, ISMERETLEN_SZAKASZ_PERC)),
         raallas: raallasSzakasz(honnan, megallok[0], ismertSzakasz, ISMERETLEN_SZAKASZ_PERC),
         ...(raallasRakott ? { raallasRakott: true } : {}),

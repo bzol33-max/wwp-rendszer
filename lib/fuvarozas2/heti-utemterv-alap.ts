@@ -25,6 +25,8 @@ export type UtemMegallo = {
   ablakTol: string | null;     // helyi "YYYY-MM-DDTHH:MM"
   ablakIg: string | null;
   rakodasPerc: number;         // tanult vagy alapértelmezett
+  /** B1: a megállóban töltött idő állásnak számít (bejegyzés-megálló: szerviz, mosás …), nem rakodás. */
+  allasnakSzamit?: boolean;
 };
 export type UtemFuvar = {
   id: string; cim: string; jelleg: "ber" | "sajat";
@@ -176,6 +178,8 @@ export function utemterv(fuvarok: UtemFuvar[], kezdes: UtemKezdes, p: UtemParam,
       return;
     }
     let maradek = ossz;
+    // Egymást követő megállás-okok (kamionstop, foglalt) kivárása összeadódik (QA2 #2).
+    let egymasUtan = 0;
     // Védőkorlát hibás (óriási) menetidőre.
     for (let kor = 0; maradek > 0 && kor < 1000; kor++) {
       const ban = blokkok.find((a) => a.ig > t);
@@ -183,10 +187,12 @@ export function utemterv(fuvarok: UtemFuvar[], kezdes: UtemKezdes, p: UtemParam,
         const x = g(napja(t));
         if (ban.ablak) x.kamionstop ??= { ...ban.ablak };
         x.vegez = null;
-        allas(ban.ig - t);
+        egymasUtan += ban.ig - t;
+        allas(egymasUtan);
         t = ban.ig;
         continue;
       }
+      egymasUtan = 0;
       const tilalomig = ban ? ban.tol - t : Infinity;
       const szunetig = p.szunetUtanPerc > 0 ? Math.max(0, p.szunetUtanPerc - folyamatos) : Infinity;
       const keretig = p.napiMaxPerc > 0 ? Math.max(0, p.napiMaxPerc - napi) : Infinity;
@@ -243,6 +249,7 @@ export function utemterv(fuvarok: UtemFuvar[], kezdes: UtemKezdes, p: UtemParam,
       const varakozas = kezd - erkezes;
       allas(varakozas);
       const tavozas = kezd + egesz(m.rakodasPerc);
+      if (m.allasnakSzamit) allas(tavozas - erkezes);
       t = tavozas;
       g(napja(tavozas)).vegez = { ido: helyi(tavozas), varos: m.varos };
       elsoTavozasNap ??= napja(tavozas);
@@ -281,8 +288,12 @@ export function utemterv(fuvarok: UtemFuvar[], kezdes: UtemKezdes, p: UtemParam,
   const napMerlegek: NapMerleg[] = napok.map((nap) => {
     const x = gyujto.get(nap) ?? ures();
     const maradek = p.napiMaxPerc - x.vezetes;
+    // Foglalt időszak a végzés és 18:00 között → nincs „délután szabad” (QA2 #5).
+    const foglaltDelutan = x.vegez
+      ? (() => { const v = valos(x.vegez.ido), e = valos(`${nap}T18:00`); return foglaltak.some((a) => a.tol < e && a.ig > v); })()
+      : false;
     const delutanSzabad =
-      x.vegez && x.vegez.ido < `${nap}T15:00` && maradek >= 180 ? { tol: x.vegez.ido, maradekVezetesPerc: maradek } : null;
+      x.vegez && !foglaltDelutan && x.vegez.ido < `${nap}T15:00` && maradek >= 180 ? { tol: x.vegez.ido, maradekVezetesPerc: maradek } : null;
     return {
       nap,
       vegez: x.vegez,

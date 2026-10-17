@@ -83,5 +83,31 @@ eq("g) idős", bejegyzesFoglalas({ tol: "07:00", ig: "09:00", alkalom: "2026-10-
   eq("i) üres foglalt = nincs", JSON.stringify(utemterv(f, K("2026-10-20T06:00"), P([]), napok)), JSON.stringify(utemterv(f, K("2026-10-20T06:00"), P(), napok)));
 }
 
+// j) Egymás utáni foglalt időszakok kivárása összeadódik → napi pihenőnek számít (QA2 #2).
+{
+  const k = { ido: "2026-10-20T06:00", folyamatosPerc: 0, napiPerc: 500 };
+  const f = [F("j", [M("2026-10-20", null, 30)], 60)];
+  const ketto = utemterv(f, k, P([{ tol: "2026-10-20T06:20", ig: "2026-10-20T12:00" }, { tol: "2026-10-20T12:00", ig: "2026-10-20T18:00" }]), napok);
+  const egy = utemterv(f, k, P([{ tol: "2026-10-20T06:20", ig: "2026-10-20T18:00" }]), napok);
+  eq("j) két szomszédos = egy hosszú", ketto.fuvarok[0].megallok[0].erkezes, egy.fuvarok[0].megallok[0].erkezes);
+}
+// k) A bejegyzés-megállóban töltött idő állás (szünet): utána nem kell külön 45 p (QA2 #4).
+{
+  const k = { ido: "2026-10-20T06:00", folyamatosPerc: 0, napiPerc: 0 };
+  const allas = { ...M("2026-10-20", null, 60), allasnakSzamit: true };
+  const r = utemterv([F("x", [M("2026-10-20", null, 0)], 240), F("bej:3:2026-10-20", [allas], 0), F("y", [M("2026-10-20", null, 0)], 60)], k, P(), napok);
+  eq("k) szerviz után szünet nélkül: 12:00", r.fuvarok[2].megallok[0].erkezes, "2026-10-20T12:00");
+  const r2 = utemterv([F("x", [M("2026-10-20", null, 0)], 240), F("z", [M("2026-10-20", null, 60)], 0), F("y", [M("2026-10-20", null, 0)], 60)], k, P(), napok);
+  eq("k) rakodás nem szünet: 45 p-vel később", r2.fuvarok[2].megallok[0].erkezes, "2026-10-20T12:45");
+}
+// l) Foglalt időszak délután → nincs „délután szabad” (QA2 #5).
+{
+  const f = [F("l", [M("2026-10-20", null, 30)], 60)];
+  const nincs = utemterv(f, K("2026-10-20T08:00"), P(), napok);
+  eq("l) foglalt nélkül van délután szabad", nincs.napok[1].delutanSzabad != null, true);
+  const van = utemterv(f, K("2026-10-20T08:00"), P([{ tol: "2026-10-20T11:00", ig: "2026-10-20T12:00" }]), napok);
+  eq("l) foglalt délután → nincs", van.napok[1].delutanSzabad, null);
+}
+
 console.log(`teszt-het-foglalt: ${ok} ok, ${bad} hiba`);
 if (bad) process.exit(1);

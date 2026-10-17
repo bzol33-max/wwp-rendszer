@@ -51,6 +51,13 @@ Döntés: Budaházi Zoltán, 2026-10-17 („B1, B3 bevitelével”), a terv-vás
 - **Törlés:** ismétlődő sorozatnál: *csak ezt az alkalmat* (`kihagyott` dátumtömb; ha egy véges sorozat
   utolsó élő alkalma, a sor törlődik), *ettől kezdve mindet* (`ismetles_ig` = az előző nap; az első
   alkalomtól = törlés), *az egész sorozatot* (soft delete). Logika: `torlesTerv()` (tiszta, tesztelt).
+- Részletek (QA 2. kör): a bejegyzés-megállóban töltött idő állásnak számít (szünet / pihenő), nem rakodás;
+  egymás utáni foglalt időszakok és kamionstop kivárása összeadódik; ma-módban az elkezdett fuvar marad a
+  lánc elején, a már elkezdett bejegyzés „kész” megálló + a hátralévő része foglalt; foglalt időszak a
+  végzés és 18:00 között → nincs „délután szabad”; a törlés feltételes a beolvasott állapotra (párhuzamos
+  törlésnél „közben módosult”).
+- Ismert korlát: több napos fuvar közepére eső bejegyzés a fuvar UTÁN kerül a láncba (felrakó hétfő,
+  szerviz kedd, lerakó szerda → a szerviz késést mutat).
 
 ## Adat
 

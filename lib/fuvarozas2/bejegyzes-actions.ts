@@ -59,8 +59,13 @@ export async function torolBejegyzes(
     terv.muvelet === "torol"
       ? await query(`update fuvar_bejegyzesek set torolt_at = now(), torolte = $2 where id = $1 and torolt_at is null returning id`, [id, ki])
       : terv.muvelet === "kihagy"
-        ? await query(`update fuvar_bejegyzesek set kihagyott = array(select distinct unnest(kihagyott || $2::date) order by 1) where id = $1 and torolt_at is null returning id`, [id, terv.nap])
-        : await query(`update fuvar_bejegyzesek set ismetles_ig = $2::date where id = $1 and torolt_at is null and nap <= $2::date returning id`, [id, terv.ig]);
+        // Csak ha közben senki nem módosította (a beolvasott állapotra feltételes — QA2 #7).
+        ? await query(`update fuvar_bejegyzesek set kihagyott = array(select distinct unnest(kihagyott || $2::date) order by 1)
+                        where id = $1 and torolt_at is null and kihagyott::text[] <@ $3::text[] and kihagyott::text[] @> $3::text[]
+                          and ismetles_ig is not distinct from $4::date returning id`, [id, terv.nap, s.kihagyott, s.ismetles_ig])
+        : await query(`update fuvar_bejegyzesek set ismetles_ig = $2::date
+                        where id = $1 and torolt_at is null and nap <= $2::date and ismetles_ig is not distinct from $3::date
+                          and kihagyott::text[] <@ $4::text[] and kihagyott::text[] @> $4::text[] returning id`, [id, terv.ig, s.ismetles_ig, s.kihagyott]);
   revalidatePath("/fuvarozas2/tervezes");
-  return frissitve.length ? { ok: true } : { ok: false, hiba: "Nem sikerült törölni." };
+  return frissitve.length ? { ok: true } : { ok: false, hiba: terv.muvelet === "torol" ? "Nem sikerült törölni." : "Közben módosult — frissítsd a lapot, és próbáld újra." };
 }
