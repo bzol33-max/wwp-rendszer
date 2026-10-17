@@ -1,7 +1,7 @@
 // Kamionstop (190/2008. Korm. r. 2. §): tilalmi ablakok és átugrás (lib/fuvarozas2/kamionstop.ts).
 // Futtatás: npx tsx scripts/teszt-kamionstop.ts
 
-import { tilalmiAblakok, tilalmonAtugrik } from "@/lib/fuvarozas2/kamionstop";
+import { helyi, napEltol, tilalmiAblakok, tilalmonAtugrik, valos } from "@/lib/fuvarozas2/kamionstop";
 import { munkaszunetiNap, torvenyesUnnep, torvenyesUnnepE } from "@/lib/jelenlet/shared";
 
 let ok = 0, bad = 0;
@@ -91,6 +91,32 @@ eq("márc. 29. 2026 (nyári időre át): 1380 perc", tilalmonAtugrik("2026-03-28
 eq("hosszú vezetés két ablakon át", tilalmonAtugrik("2026-10-22T20:00", 3000), {
   erkezes: "2026-10-26T22:00", varakozasPerc: 1440 + 1500, ablak: A("2026-10-22T22:00", "2026-10-23T22:00", "Nemzeti ünnep (okt. 23.)"),
 });
+
+// valos/helyi oda-vissza a két óraátállítási napon (QA: helyi() UTC 00:00–01:00 márc. utolsó vasárnapján hibázott)
+eq("márc. 29. 01:30 oda-vissza", helyi(valos("2026-03-29T01:30")), "2026-03-29T01:30");
+const utc = (s: string) => Date.parse(`${s}:00Z`) / 60000;
+eq("márc. 29. 00:59 UTC = 01:59 helyi", helyi(utc("2026-03-29T00:59")), "2026-03-29T01:59");
+eq("márc. 29. 01:00 UTC = 03:00 helyi", helyi(utc("2026-03-29T01:00")), "2026-03-29T03:00");
+eq("okt. 25. 00:59 UTC = 02:59 helyi (nyári)", helyi(utc("2026-10-25T00:59")), "2026-10-25T02:59");
+eq("okt. 25. 01:00 UTC = 02:00 helyi (téli)", helyi(utc("2026-10-25T01:00")), "2026-10-25T02:00");
+for (const nap of ["2026-03-29", "2026-10-25"]) {
+  const rossz: string[] = [];
+  for (let n = napEltol(nap, -1); n <= napEltol(nap, 1); n = napEltol(n, 1)) {
+    for (let p = 0; p < 1440; p += 15) {
+      const s = `${n}T${String(Math.floor(p / 60)).padStart(2, "0")}:${String(p % 60).padStart(2, "0")}`;
+      if (n === "2026-03-29" && s.slice(11, 13) === "02") continue; // nem létező helyi óra
+      if (helyi(valos(s)) !== s) rossz.push(s);
+    }
+  }
+  eq(`${nap} ±1 nap: minden negyedóra oda-vissza`, rossz, []);
+}
+// Valós percenként végig a két napon: a helyi idő monoton (a tavaszi napon sosem lép vissza).
+{
+  const t0 = utc("2026-03-28T22:00");
+  let elozo = helyi(t0), monoton = true;
+  for (let v = t0 + 1; v < t0 + 1440; v++) { const h = helyi(v); if (h <= elozo) monoton = false; elozo = h; }
+  eq("márc. 29.: a helyi idő valós percenként szigorúan nő", monoton, true);
+}
 
 console.log(`teszt-kamionstop: ${ok} ok, ${bad} hiba`);
 if (bad) process.exit(1);

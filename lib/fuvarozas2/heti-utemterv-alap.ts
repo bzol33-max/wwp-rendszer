@@ -16,6 +16,7 @@
 // aznap nincs több menet / érkezés / napi pihenő / kamionstop; különben null.
 
 import { helyi, napEltol, valos, type TilalmiAblak } from "@/lib/fuvarozas2/kamionstop";
+import type { Pont } from "@/lib/fuvarozas2/tervezo-alap";
 
 export type UtemMegallo = {
   tipus: "felrako" | "lerako";
@@ -33,6 +34,11 @@ export type UtemFuvar = {
   szakaszok: { perc: number; km: number; becsles: boolean }[];
   /** Üres ráállás az előző pontról az első megállóig. */
   raallas: { perc: number; km: number; becsles: boolean };
+  /**
+   * A „ráállás” valójában rakott menet: a fuvar felrakója (ma-módban) már kész, a lánc onnan
+   * indul, és az első hátralévő megálló lerakó. Ekkor a km rakott (rakottKm, ftKm, bér-szétosztás).
+   */
+  raallasRakott?: boolean;
 };
 export type UtemKezdes = {
   ido: string;                 // a lánc legkorábbi kezdése (pl. holnap 06:00, vagy most)
@@ -192,7 +198,7 @@ export function utemterv(fuvarok: UtemFuvar[], kezdes: UtemKezdes, p: UtemParam,
         const indulas = Math.max(t, valos(`${m.nap}T${p.napKezdes}`));
         allas(indulas - t);
         t = indulas;
-        vezet(f.raallas.perc, f.raallas.km, false, napKm);
+        vezet(f.raallas.perc, f.raallas.km, !!f.raallasRakott, napKm);
       } else {
         const sz = f.szakaszok[i - 1] ?? { perc: 0, km: 0, becsles: false };
         vezet(sz.perc, sz.km, true, napKm);
@@ -215,13 +221,13 @@ export function utemterv(fuvarok: UtemFuvar[], kezdes: UtemKezdes, p: UtemParam,
       });
     }
 
-    const rakottKm = f.szakaszok.reduce((s, x) => s + x.km, 0);
+    const rakottKm = f.szakaszok.reduce((s, x) => s + x.km, 0) + (f.raallasRakott ? f.raallas.km : 0);
     const tartalekok = megallok.map((m) => m.tartalekPerc).filter((x): x is number => x != null);
     fuvarEredmenyek.push({
       id: f.id,
       megallok,
       rakottKm,
-      uresKmElotte: f.raallas.km,
+      uresKmElotte: f.raallasRakott ? 0 : f.raallas.km,
       dijFt: f.dijFt,
       ftKm: f.dijFt != null && rakottKm > 0 ? Math.round(f.dijFt / rakottKm) : null,
       legszukebbTartalek: tartalekok.length ? Math.min(...tartalekok) : null,
@@ -258,4 +264,78 @@ export function utemterv(fuvarok: UtemFuvar[], kezdes: UtemKezdes, p: UtemParam,
   });
 
   return { fuvarok: fuvarEredmenyek, napok: napMerlegek };
+}
+
+// --- Betöltő-segédek (tiszta; a heti-utemterv.ts 5. lépése használja, a teszt közvetlenül hívja) ---
+
+export type LancMegalloBe = { tipus: "felrako" | "lerako"; varos: string; cim: string; pont: Pont | null; kesz: boolean };
+/** Honnan indul a ráállás: pont (ha ismert) és a hely neve (a koordináta nélküli „azonos hely” döntéshez). */
+export type LancHely = { pont: Pont | null; varos: string; cim: string | null };
+
+/**
+ * A kocsi láncának kiindulópontjai fuvaronként. Ma-módban a kész fuvarok kimaradnak (csak a
+ * kiindulópontot adják, ha még nincs előttük élő fuvar), a kész megállók is kimaradnak; az első
+ * élő fuvar a saját utolsó kész megállójából indul. `raallasRakott`: ekkor a fuvar egy felrakója
+ * már kész és az első hátralévő megálló lerakó — a ráállás valójában rakott menet.
+ */
+export function lancKiindulasok<F, M extends LancMegalloBe>(
+  fuvarok: { f: F; mind: M[]; keszFuvar: boolean; le: Pont | null }[],
+  kezdo: { pont: Pont; varos: string },
+  maMod: boolean,
+): { f: F; megallok: M[]; honnan: LancHely; raallasRakott: boolean }[] {
+  const hely = (m: M): LancHely => ({ pont: m.pont, varos: m.varos, cim: m.cim });
+  let hol: LancHely = { pont: kezdo.pont, varos: kezdo.varos, cim: null };
+  let vanMarElo = false;
+  const ki: { f: F; megallok: M[]; honnan: LancHely; raallasRakott: boolean }[] = [];
+  for (const { f, mind, keszFuvar, le } of fuvarok) {
+    const hatra = maMod ? mind.filter((m) => !m.kesz) : mind;
+    if (maMod && (keszFuvar || hatra.length === 0)) {
+      // A már elvégzett fuvar csak a kiindulópontot adja (ha még nincs előtte élő fuvar).
+      if (!vanMarElo) {
+        const u = [...mind].reverse().find((m) => m.pont);
+        const utolso = mind[mind.length - 1];
+        if (u) hol = hely(u);
+        else if (le) hol = { pont: le, varos: utolso?.varos ?? "", cim: utolso?.cim ?? null };
+      }
+      continue;
+    }
+    let raallasRakott = false;
+    if (maMod && !vanMarElo) {
+      const kezdettKesz = mind.filter((m) => m.kesz && m.pont);
+      if (kezdettKesz.length) {
+        hol = hely(kezdettKesz[kezdettKesz.length - 1]);
+        raallasRakott = hatra[0]?.tipus === "lerako" && mind.some((m) => m.kesz && m.tipus === "felrako");
+      }
+    }
+    ki.push({ f, megallok: hatra, honnan: hol, raallasRakott });
+    vanMarElo = true;
+    const utolso = hatra[hatra.length - 1];
+    hol = { pont: [...hatra].reverse().find((m) => m.pont)?.pont ?? null, varos: utolso?.varos ?? "", cim: utolso?.cim ?? null };
+  }
+  return ki;
+}
+
+const normHely = (s: string | null | undefined) => (s ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+
+/** Koordináta nélkül: azonos hely, ha a cím, vagy (cím híján / eltérő címmel) a település egyezik. */
+export function azonosHely(a: { varos: string; cim: string | null }, b: { varos: string; cim: string | null }): boolean {
+  const ac = normHely(a.cim), bc = normHely(b.cim);
+  if (ac && ac === bc) return true;
+  const av = normHely(a.varos), bv = normHely(b.varos);
+  return !!av && av !== "?" && av === bv;
+}
+
+/**
+ * A ráállás szakasza: két ismert pont között a `szakasz` (HU-GO / becslés); ha valamelyik pont
+ * hiányzik, azonos helyen 0, különben az ismeretlen-szakasz tartalék (`ismeretlenPerc`, 0 km, becslés).
+ */
+export function raallasSzakasz(
+  honnan: LancHely,
+  elso: { pont: Pont | null; varos: string; cim: string | null },
+  szakasz: (a: Pont, b: Pont) => { perc: number; km: number; becsles: boolean },
+  ismeretlenPerc: number,
+): { perc: number; km: number; becsles: boolean } {
+  if (honnan.pont && elso.pont) return szakasz(honnan.pont, elso.pont);
+  if (azonosHely(honnan, elso)) return { perc: 0, km: 0, becsles: false };
+  return { perc: ismeretlenPerc, km: 0, becsles: true };
 }

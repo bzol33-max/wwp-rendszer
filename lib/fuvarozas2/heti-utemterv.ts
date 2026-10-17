@@ -28,7 +28,8 @@ import { tilalmiAblakok } from "@/lib/fuvarozas2/kamionstop";
 import { legvonalKm, type Pont } from "@/lib/fuvarozas2/tervezo-alap";
 import { fuvarJel, napBelulFuzve, type HetiFuvar } from "@/lib/fuvarozas2/tervezes-het-alap";
 import {
-  utemterv, type KocsiUtemterv, type UtemFuvar, type UtemKezdes, type UtemMegallo, type UtemParam,
+  lancKiindulasok, raallasSzakasz, utemterv,
+  type KocsiUtemterv, type LancHely, type UtemFuvar, type UtemKezdes, type UtemMegallo, type UtemParam,
 } from "@/lib/fuvarozas2/heti-utemterv-alap";
 
 /** Egy fuvar a betöltőtől: a Hét rács fuvarja + a díj és a nyers címek. */
@@ -237,30 +238,15 @@ export async function szamoljUtemtervet(b: UtemBemenet, opciok: UtemOpciok = {})
   }
 
   // 5. Láncok: kész fuvarok/megállók kiszűrése (ma-módban), szakasz-igények.
-  type Lanc = { kod: string; fuvarok: { f: UtemSor; megallok: MunkaMegallo[]; honnan: Pont | null }[] };
-  const lancLista: Lanc[] = lancok.map((l) => {
-    let hol: Pont | null = (l.elozoVeg ?? b.telephely).pont;
-    let vanMarElo = false;
-    const fuvarok: Lanc["fuvarok"] = [];
-    for (const f of l.heti) {
-      const mind = megallokFuvar.get(f.id) ?? [];
-      const hatra = maMod ? mind.filter((m) => !m.kesz) : mind;
-      const kesz = maMod && (fuvarJel(f.allapot) === "kesz" || hatra.length === 0);
-      if (kesz) {
-        // A már elvégzett fuvar csak a kiindulópontot adja (ha még nincs előtte élő fuvar).
-        if (!vanMarElo) { const u = [...mind].reverse().find((m) => m.pont)?.pont ?? f.le; if (u) hol = u; }
-        continue;
-      }
-      if (maMod && !vanMarElo) {
-        const kezdettKesz = mind.filter((m) => m.kesz && m.pont);
-        if (kezdettKesz.length) hol = kezdettKesz[kezdettKesz.length - 1].pont;
-      }
-      fuvarok.push({ f, megallok: hatra, honnan: hol });
-      vanMarElo = true;
-      hol = [...hatra].reverse().find((m) => m.pont)?.pont ?? null;
-    }
-    return { kod: l.kod, fuvarok };
-  });
+  type Lanc = { kod: string; fuvarok: { f: UtemSor; megallok: MunkaMegallo[]; honnan: LancHely; raallasRakott: boolean }[] };
+  const lancLista: Lanc[] = lancok.map((l) => ({
+    kod: l.kod,
+    fuvarok: lancKiindulasok(
+      l.heti.map((f) => ({ f, mind: megallokFuvar.get(f.id) ?? [], keszFuvar: fuvarJel(f.allapot) === "kesz", le: f.le })),
+      l.elozoVeg ?? b.telephely,
+      maMod
+    ),
+  }));
 
   const igenyek = new Map<string, { a: Pont; b: Pont }>();
   const igeny = (a: Pont | null, c: Pont | null) => {
@@ -269,7 +255,7 @@ export async function szamoljUtemtervet(b: UtemBemenet, opciok: UtemOpciok = {})
   };
   for (const l of lancLista) {
     for (const { megallok, honnan } of l.fuvarok) {
-      igeny(honnan, megallok[0]?.pont ?? null);
+      igeny(honnan.pont, megallok[0]?.pont ?? null);
       for (let i = 1; i < megallok.length; i++) igeny(megallok[i - 1].pont, megallok[i].pont);
     }
   }
@@ -288,10 +274,13 @@ export async function szamoljUtemtervet(b: UtemBemenet, opciok: UtemOpciok = {})
       ? { km: Math.round(route.distanceKm), perc: Math.round(route.durationMin * kalibracio), becsles: false }
       : becsles);
   }), PARHUZAMOS_HIVAS);
+  const ismertSzakasz = (a: Pont, c: Pont): Szakasz => szakaszok.get(`${pontKulcs(a)}>${pontKulcs(c)}`) ?? becsultSzakasz(a, c);
   const szakaszKi = (a: Pont | null, c: Pont | null, alapPerc: number): Szakasz =>
-    a && c ? szakaszok.get(`${pontKulcs(a)}>${pontKulcs(c)}`) ?? becsultSzakasz(a, c) : { km: 0, perc: alapPerc, becsles: true };
+    a && c ? ismertSzakasz(a, c) : { km: 0, perc: alapPerc, becsles: true };
 
-  // 7. Paraméterek és kezdés.
+  // 7. Paraméterek és kezdés. A beállítható szabályértékek (fuvar_beallitas) mindenhol a
+  // beállításból jönnek — a tachó-kezdőérték is a beállított napi keretből számol; a szünet
+  // (45) és a napi pihenő (660) nem beállítható (mint az actions.ts láncszabályában).
   const param: UtemParam = {
     napKezdes: NAP_KEZDES,
     szunetUtanPerc: ervenyes(beallitas.szunet_utan_perc, 270),
@@ -304,20 +293,23 @@ export async function szamoljUtemtervet(b: UtemBemenet, opciok: UtemOpciok = {})
 
   for (const l of lancLista) {
     try {
-      const fuvarok: UtemFuvar[] = l.fuvarok.filter((x) => x.megallok.length > 0).map(({ f, megallok, honnan }) => ({
+      const fuvarok: UtemFuvar[] = l.fuvarok.filter((x) => x.megallok.length > 0).map(({ f, megallok, honnan, raallasRakott }) => ({
         id: f.id,
         cim: f.cim,
         jelleg: f.jelleg,
         dijFt: f.jelleg === "ber" ? dijFtban(f.fuvardij, f.penznem, arfolyamok.get(f.felNap) ?? null) : null,
         megallok: megallok.map(({ tipus, varos, nap, ablakTol, ablakIg, rakodasPerc }) => ({ tipus, varos, nap, ablakTol, ablakIg, rakodasPerc })),
         szakaszok: megallok.slice(1).map((m, i) => szakaszKi(megallok[i].pont, m.pont, ISMERETLEN_SZAKASZ_PERC)),
-        raallas: szakaszKi(honnan, megallok[0].pont, 0),
+        raallas: raallasSzakasz(honnan, megallok[0], ismertSzakasz, ISMERETLEN_SZAKASZ_PERC),
+        ...(raallasRakott ? { raallasRakott: true } : {}),
       }));
       let kezdes: UtemKezdes = { ido: `${elso}T${NAP_KEZDES}`, folyamatosPerc: 0, napiPerc: 0 };
       if (maMod) {
         const t = tachok.get(l.kod)?.tacho;
         const hatra = t && tachoFriss(t, mostDate, 15) ? t.napiVezetesHatraPerc : null;
-        kezdes = { ido: b.most, folyamatosPerc: 0, napiPerc: hatra != null ? Math.max(0, Math.round(540 - hatra)) : 0 };
+        // napiPerc: a beállított napi keretből a tachó szerinti hátralévőt levonva (régi tachó → 0).
+        // folyamatosPerc: 0 — a tachó-adatban nincs „utolsó szünet óta vezetett” mező.
+        kezdes = { ido: b.most, folyamatosPerc: 0, napiPerc: hatra != null ? Math.max(0, Math.round(param.napiMaxPerc - hatra)) : 0 };
       }
       ki.set(l.kod, utemterv(fuvarok, kezdes, param, napok));
     } catch {

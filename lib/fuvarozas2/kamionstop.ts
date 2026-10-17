@@ -1,5 +1,5 @@
 // Kamionstop: 7,5 t feletti tehergépkocsik hétvégi / ünnepnapi forgalomkorlátozása
-// — 190/2008. (VII. 30.) Korm. rendelet 2. § (hatályos szöveg, njt.hu, 2026-10-17):
+// — a 190/2008. (VII. 30.) Korm. r. 2. § alapján (ellenőrizendő: njt.hu):
 //
 // (1) a) július 1. – augusztus 31.:
 //        aa) szombaton – amennyiben az nem munkanap – 15 órától vasárnap 22 óráig,
@@ -85,10 +85,13 @@ export function valos(s: string): number {
   return h - eltolas(h);
 }
 
-/** Valós (UTC) perc → helyi sztring. */
+/** Valós (UTC) perc → helyi sztring. A váltás valós pillanata mindkét irányban
+ *  01:00 UTC a márc./okt. utolsó vasárnapján — ehhez hasonlítunk (nem helyi időhöz). */
 export function helyi(v: number): string {
-  const nyari = v + 120;
-  return helyiSztring(eltolas(nyari) === 120 ? nyari : v + 60);
+  const ev = new Date(v * 60000).getUTCFullYear();
+  const kezd = helyiPerc(`${utolsoVasarnap(ev, 3)}T01:00`); // UTC-ként olvasva = valós pillanat
+  const veg = helyiPerc(`${utolsoVasarnap(ev, 10)}T01:00`);
+  return helyiSztring(v + (v >= kezd && v < veg ? 120 : 60));
 }
 
 function unnepOk(nap: string, nev: string): string {

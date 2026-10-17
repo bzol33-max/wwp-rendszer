@@ -22,7 +22,9 @@
 //       pihenővel/kamionstoppal útközben végződő napon NEM (nyitott kérdés).
 // A teszt a mezőket kiválogatva hasonlítja (az eredmény kaphat plusz mezőket).
 
-import { utemterv, type UtemFuvar, type UtemKezdes, type UtemMegallo, type UtemParam } from "@/lib/fuvarozas2/heti-utemterv-alap";
+import {
+  lancKiindulasok, raallasSzakasz, utemterv, type UtemFuvar, type UtemKezdes, type UtemMegallo, type UtemParam,
+} from "@/lib/fuvarozas2/heti-utemterv-alap";
 import { tilalmiAblakok } from "@/lib/fuvarozas2/kamionstop";
 
 let ok = 0, bad = 0;
@@ -348,6 +350,75 @@ const kisvarda = (id: string, n: string, rakLe = 45): UtemFuvar =>
   const r = utemterv([], K("2026-10-19T06:00"), P, ["2026-10-19", "2026-10-20"]);
   eq("9 nincs fuvar", r.fuvarok, []);
   eq("9 üres napok", r.napok.map((n) => [nap(r, n.nap), n.vegez]), [[URES("2026-10-19"), null], [URES("2026-10-20"), null]]);
+}
+
+// ---------------------------------------------------------------------------
+// 10. Rakott „ráállás” (QA): a felrakó ma már kész, a lánc onnan indul, az első hátralévő megálló
+//     lerakó → a ráállás km-je rakott (rakottKm, ftKm, bér-szétosztás), nem üres.
+// ---------------------------------------------------------------------------
+{
+  const fr = (raallasRakott: boolean | undefined, perc: number, km: number): UtemFuvar => ({
+    ...F("RR", "ber", perc === 300 ? 125000 : 120000, [M("lerako", "Budapest", "2026-10-21", null, null, 60)], [], [perc, km]),
+    ...(raallasRakott === undefined ? {} : { raallasRakott }),
+  });
+  // 08:00 + 300: szünetig 270 → 12:30, 45 p szünet → 13:15, maradék 30 → 13:45; rakodás 60 → 14:45.
+  const r = utemterv([fr(true, 300, 250)], K("2026-10-21T08:00"), P, ["2026-10-21"]);
+  eq("10 megállók", megT(r, 0), [["lerako", "Budapest", "2026-10-21T13:45", "2026-10-21T13:45", "2026-10-21T14:45", 0, null]]);
+  eq("10 összesítő: rakott km és díj/km", fuvT(r, 0), { id: "RR", rakottKm: 250, uresKmElotte: 0, dijFt: 125000, ftKm: 500, legszukebbTartalek: null, becsles: false });
+  const sz = nap(r, "2026-10-21");
+  eq("10 napi mérleg: rakott, nem üres", sz && [sz.rakottKm, sz.uresKm, sz.berFt, sz.vezetesPerc], [250, 0, 125000, 300]);
+  // Jelölés nélkül (és false-szal) marad a régi: üres ráállás.
+  for (const jel of [undefined, false]) {
+    const u = utemterv([fr(jel, 300, 250)], K("2026-10-21T08:00"), P, ["2026-10-21"]);
+    eq(`10 jelölés nélkül (${jel}) üres`, [fuvT(u, 0).rakottKm, fuvT(u, 0).uresKmElotte, fuvT(u, 0).ftKm, nap(u, "2026-10-21")?.uresKm], [0, 250, null, 250]);
+  }
+  // Két napra nyúló rakott ráállás: 600 p / 600 km. 08:00+270 → 12:30, szünet → 13:15, +270 → 17:45 (napi 540) →
+  // napi pihenő 660 → csüt 04:45, +60 → 05:45; rakodás → 06:45. Km: 540 / 60; bér 120000 → 108000 / 12000.
+  const r2 = utemterv([fr(true, 600, 600)], K("2026-10-21T08:00"), P, ["2026-10-21", "2026-10-22"]);
+  const sz2 = nap(r2, "2026-10-21"), cs2 = nap(r2, "2026-10-22");
+  eq("10 két nap: szerda", sz2 && [sz2.rakottKm, sz2.uresKm, sz2.berFt, sz2.vezetesPerc], [540, 0, 108000, 540]);
+  eq("10 két nap: csütörtök", cs2 && [cs2.rakottKm, cs2.uresKm, cs2.berFt, cs2.vezetesPerc], [60, 0, 12000, 60]);
+  eq("10 két nap: díj/km", fuvT(r2, 0).ftKm, 200);
+}
+
+// ---------------------------------------------------------------------------
+// 11. Betöltő-segéd: lancKiindulasok (ma-mód, kész megállók, raallasRakott).
+// ---------------------------------------------------------------------------
+{
+  const P0 = { lat: 47.9, lon: 22.0 }, P1 = { lat: 47.8, lon: 22.1 }, P2 = { lat: 47.5, lon: 19.0 }, P3 = { lat: 47.7, lon: 17.6 };
+  const m = (tipus: "felrako" | "lerako", varos: string, pont: typeof P0 | null, kesz: boolean) => ({ tipus, varos, cim: `${varos} 1.`, pont, kesz });
+  const kezdo = { pont: P0, varos: "Szakoly" };
+  const A = { f: "A", mind: [m("felrako", "Nyírbátor", P1, true), m("lerako", "Budapest", P2, false)], keszFuvar: false, le: P2 };
+  const B = { f: "B", mind: [m("felrako", "Budapest", P2, false), m("lerako", "Győr", P3, false)], keszFuvar: false, le: P3 };
+  const ki = (x: ReturnType<typeof lancKiindulasok>) => x.map((y) => [y.f, y.honnan.pont, y.raallasRakott, y.megallok.map((mm) => mm.varos)]);
+  eq("11 kész felrakó → rakott ráállás a felrakóból", ki(lancKiindulasok([A, B], kezdo, true)), [
+    ["A", P1, true, ["Budapest"]],
+    ["B", P2, false, ["Budapest", "Győr"]],
+  ]);
+  eq("11 nem ma-mód: minden megálló, üres ráállás", ki(lancKiindulasok([A], kezdo, false)), [["A", P0, false, ["Nyírbátor", "Budapest"]]]);
+  eq("11 semmi sem kész: a kezdőpontból, üres", ki(lancKiindulasok([B], kezdo, true)), [["B", P0, false, ["Budapest", "Győr"]]]);
+  const tobb = { f: "T", mind: [m("felrako", "Nyírbátor", P1, true), m("lerako", "Budapest", P2, true), m("lerako", "Győr", P3, false)], keszFuvar: false, le: P3 };
+  eq("11 többlerakós: az utolsó kész lerakóból, még rakott", ki(lancKiindulasok([tobb], kezdo, true)), [["T", P2, true, ["Győr"]]]);
+  const kesz = { f: "K", mind: [m("felrako", "Nyírbátor", P1, true), m("lerako", "Budapest", P2, true)], keszFuvar: false, le: P2 };
+  eq("11 kész fuvar csak a kiindulópontot adja", ki(lancKiindulasok([kesz, B], kezdo, true)), [["B", P2, false, ["Budapest", "Győr"]]]);
+  // A második élő fuvar nem örököl rakott jelzést, akkor sem, ha neki is van kész felrakója.
+  const B2 = { ...B, f: "B2", mind: [m("felrako", "Budapest", P2, true), m("lerako", "Győr", P3, false)] };
+  eq("11 csak az első élő fuvar indulhat kész megállóból", ki(lancKiindulasok([A, B2], kezdo, true)).map((x) => x[2]), [true, false]);
+}
+
+// ---------------------------------------------------------------------------
+// 12. Betöltő-segéd: raallasSzakasz — koordináta nélküli ráállás (QA: eddig 0 perc lett).
+// ---------------------------------------------------------------------------
+{
+  const P1 = { lat: 47.8, lon: 22.1 }, P2 = { lat: 47.5, lon: 19.0 };
+  const sz = () => ({ perc: 200, km: 230, becsles: false });
+  const h = (pont: typeof P1 | null, varos: string, cim: string | null) => ({ pont, varos, cim });
+  eq("12 két pont: a szakasz", raallasSzakasz(h(P1, "Nyírbátor", null), h(P2, "Budapest", "Budapest, Fő u. 1."), sz, 120), { perc: 200, km: 230, becsles: false });
+  eq("12 hiányzó cél-pont, más hely: ismeretlen tartalék", raallasSzakasz(h(P1, "Nyírbátor", null), h(null, "Budapest", "Budapest, Fő u. 1."), sz, 120), { perc: 120, km: 0, becsles: true });
+  eq("12 hiányzó kiinduló pont, más hely", raallasSzakasz(h(null, "Győr", "Győr, Ipar u. 2."), h(P2, "Budapest", "Budapest, Fő u. 1."), sz, 120), { perc: 120, km: 0, becsles: true });
+  eq("12 azonos település: 0", raallasSzakasz(h(null, "Budapest", "Budapest, Ipar u. 2."), h(P2, "budapest", "Budapest, Fő u. 1."), sz, 120), { perc: 0, km: 0, becsles: false });
+  eq("12 azonos cím (kis/nagybetű, szóköz): 0", raallasSzakasz(h(P1, "?", "Fő  u. 1."), h(null, "?", "fő u. 1."), sz, 120), { perc: 0, km: 0, becsles: false });
+  eq("12 ismeretlen település (?) nem azonos", raallasSzakasz(h(null, "?", null), h(null, "?", null), sz, 120), { perc: 120, km: 0, becsles: true });
 }
 
 console.log(`teszt-het-utemterv: ${ok} ok, ${bad} hiba`);

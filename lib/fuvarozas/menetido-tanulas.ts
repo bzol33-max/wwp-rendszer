@@ -13,6 +13,7 @@ import { calculateToll, FIXED_VEHICLE } from "./utdijkalkulacio";
 import { getJarmuvek } from "./jarmuvek-db";
 import { budapestHetNapja, budapestOra } from "./idozona";
 import { rakodasMedian, type TanultRakodasIdo } from "./eta-lanc";
+import { korlatozottan, megosztva } from "./parhuzamos";
 
 /**
  * Tanult rakodási idő helyenként: a GPS-sel mért érkezés→távozás medián
@@ -68,6 +69,8 @@ const KALIBRACIO_MIN_MINTASZAM_IDOSAV = 3;
 const KALIBRACIO_ERVENYESSEG_ORA = 24;
 /** Ha az Ecofleet-hívás hibázott vagy 0 minta jött, a tartalék-eredmény csak ennyi percig él (nem 24 óráig) — lásd kalibracioGyorsitotarazhato. */
 const KALIBRACIO_TARTALEK_ERVENYESSEG_PERC = 15;
+/** Egyszerre legfeljebb ennyi HU-GO összevetés fut (a kulso-hivas sor amúgy is sorosít, de a várakozás így átfedhet). */
+const KALIBRACIO_PARHUZAMOS = 6;
 
 /** Napszak/nap-típus sáv, aminek külön korrekciós szorzót tanulunk — a hétvége azért külön, mert a fuvarozási forgalom ott jellemzően egészen más képet mutat, mint hétköznap. */
 type Idosav = "hetvege" | "csucs_reggel" | "napkozben" | "csucs_delutan" | "esti_ejszakai";
@@ -92,6 +95,8 @@ export type KalibraciosEredmeny = {
 let kalibraciosCache: KalibraciosEredmeny | null = null;
 /** A kalibraciosCache érvényességi ideje (ms): 24 óra jó mintánál, 5 perc hibás/üres mintánál. */
 let kalibraciosCacheErvenyesMs = 0;
+/** A folyamatban lévő kalibráció-számítás (modul-szintű, minden hívó közös) — lásd szamitsKalibraciot. */
+const kalibracioFolyamatban = new Map<string, Promise<unknown>>();
 
 /** [valós mp, HU-GO mp] összegekből 1.0-2.0 közé szorított arányt számol, vagy null-t, ha nincs elég minta. */
 function aranySzamitasa(valosSzumSec: number, hugoSzumSec: number, mintaSzam: number, minMintaszam: number): number | null {
@@ -111,12 +116,18 @@ function aranySzamitasa(valosSzumSec: number, hugoSzumSec: number, mintaSzam: nu
  * alkalmazható. Gyorsítótárazva, hogy ne kelljen minden hívásnál
  * újraszámolni (ez mintánként egy calculateToll hálózati hívással jár).
  */
-export async function szamitsKalibraciot(): Promise<KalibraciosEredmeny> {
-  const most = new Date();
-  if (kalibraciosCache && most.getTime() - kalibraciosCache.szamitva.getTime() < kalibraciosCacheErvenyesMs) {
-    return kalibraciosCache;
+export function szamitsKalibraciot(): Promise<KalibraciosEredmeny> {
+  if (kalibraciosCache && Date.now() - kalibraciosCache.szamitva.getTime() < kalibraciosCacheErvenyesMs) {
+    return Promise.resolve(kalibraciosCache);
   }
+  // A folyamatban lévő számítást minden hívó (actions.ts idővonal, Hét nézet ütemterve)
+  // megosztja: a feladó hívó (időkorlát) után is végigfut és feltölti a gyorsítótárat;
+  // lezárultakor (hiba esetén is) törlődik, így hiba után a következő hívás újraszámol.
+  return megosztva(kalibracioFolyamatban, "kalibracio", kalibracioSzamitas);
+}
 
+async function kalibracioSzamitas(): Promise<KalibraciosEredmeny> {
+  const most = new Date();
   const veg = most;
   const kezdet = new Date(most.getTime() - KALIBRACIO_MINTA_NAP * 86400000);
   const jarmuvek = (await getJarmuvek()).filter((j) => j.ecofleetObjectId !== null);
@@ -152,27 +163,38 @@ export async function szamitsKalibraciot(): Promise<KalibraciosEredmeny> {
     esti_ejszakai: { valosSec: 0, hugoSec: 0, minta: 0 },
   };
 
-  for (const t of jelentosTripek) {
-    try {
-      const route = await calculateToll({
-        points: [
-          { lon: t.startLongitude, lat: t.startLatitude },
-          { lon: t.endLongitude, lat: t.endLatitude },
-        ],
-        ...FIXED_VEHICLE,
-      });
-      const hugoSec = route.durationMin * 60;
-      globalisValosSec += t.duration;
-      globalisHugoSec += hugoSec;
-      globalisMinta++;
+  // Az összevetések legfeljebb KALIBRACIO_PARHUZAMOS párhuzamos ágon; az összegzés utána,
+  // a minták sorrendjében (az eredmény ugyanaz, mint a korábbi soros ciklusé).
+  const osszevetesek = await korlatozottan(
+    jelentosTripek.map((t) => async () => {
+      try {
+        const route = await calculateToll({
+          points: [
+            { lon: t.startLongitude, lat: t.startLatitude },
+            { lon: t.endLongitude, lat: t.endLatitude },
+          ],
+          ...FIXED_VEHICLE,
+        });
+        return { t, hugoSec: route.durationMin * 60 };
+      } catch {
+        // egy sikertelen összevetés nem számít bele — a többi mintából még lehet becsülni
+        return null;
+      }
+    }),
+    KALIBRACIO_PARHUZAMOS
+  );
 
-      const sav = idosavja(parseEcofleetTimestamp(t.startTimestamp)!);
-      idosavOsszesek[sav].valosSec += t.duration;
-      idosavOsszesek[sav].hugoSec += hugoSec;
-      idosavOsszesek[sav].minta++;
-    } catch {
-      // egy sikertelen összevetés nem számít bele — a többi mintából még lehet becsülni
-    }
+  for (const o of osszevetesek) {
+    if (!o) continue;
+    const { t, hugoSec } = o;
+    globalisValosSec += t.duration;
+    globalisHugoSec += hugoSec;
+    globalisMinta++;
+
+    const sav = idosavja(parseEcofleetTimestamp(t.startTimestamp)!);
+    idosavOsszesek[sav].valosSec += t.duration;
+    idosavOsszesek[sav].hugoSec += hugoSec;
+    idosavOsszesek[sav].minta++;
   }
 
   const globalisSzorzo = aranySzamitasa(globalisValosSec, globalisHugoSec, globalisMinta, KALIBRACIO_MIN_MINTASZAM) ?? 1;

@@ -19,6 +19,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { createHash } from "node:crypto";
 import { query } from "@/lib/db";
+import { megosztva } from "./parhuzamos";
 
 /** Szolgáltatónkénti minimális szünet két kimenő kérés között (ms). */
 const SZUNET_MS: Record<string, number> = {
@@ -128,6 +129,14 @@ export async function cachelveHiv<T>(
   fn: () => Promise<T>
 ): Promise<T> {
   const kulcs = kulcsHash(szolgaltato, kulcsResz);
+  // Az azonos (szolgáltató, kulcs) párhuzamos hívásai egy ígéreten osztoznak; lezárultakor törlődik.
+  return megosztva(folyamatban, kulcs, () => cachelveHivEgyszer(szolgaltato, kulcs, ttlPerc, fn));
+}
+
+/** Folyamatban lévő cachelveHiv-hívások (a kulcs már tartalmazza a szolgáltatót). */
+const folyamatban = new Map<string, Promise<unknown>>();
+
+async function cachelveHivEgyszer<T>(szolgaltato: string, kulcs: string, ttlPerc: number, fn: () => Promise<T>): Promise<T> {
   try {
     const sor = await query<{ valasz: T }>(
       `update kulso_valasz_cache set talalat = talalat + 1
