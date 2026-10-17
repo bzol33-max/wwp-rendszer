@@ -24,7 +24,7 @@ import { megbizoMegjelenites } from "@/lib/fuvarozas/fuvar-constants";
 import { query } from "@/lib/db";
 import { requireSession } from "@/lib/auth/dal";
 import { revalidatePath } from "next/cache";
-import { requireAnyViewPermission, requireEditPermission } from "@/lib/auth/require-permission";
+import { requireAnyViewPermission, requireEditPermission, requireViewPermission } from "@/lib/auth/require-permission";
 import { getIdovonalak } from "@/lib/fuvarozas/actions";
 import { getSzamlaLista } from "@/lib/szamlak/actions";
 import { szamlaHatralek } from "@/lib/szamlak/szamla-constants";
@@ -210,6 +210,89 @@ type MegalloSor = {
   varakozas_vege: string | null;
   tervezett_nap: string | null;
 };
+
+type BerJarmu = { id: string; kod: string; cimke: string; sofor: string | null };
+
+/**
+ * A havi, a heti és a hónap heteire bontott bérfuvar-összesítő (a getMaVaszon
+ * és a getBerOsszesitok közös számítása). Jogosultságot NEM ellenőriz — csak
+ * ellenőrzött belépési pontból hívható.
+ */
+async function berOsszesitokSzamol(
+  ma: string,
+  osszesJarmu: BerJarmu[],
+  jarmuLista: Awaited<ReturnType<typeof getJarmuvek>>,
+): Promise<{ berHavi: BerOsszesito; berHeti: BerOsszesito; berHonapHetei: BerOsszesito[] }> {
+  const berOsszesit = async (kezdet: string, veg: string, cim: string): Promise<BerOsszesito> => {
+    const zaras = veg < ma ? veg : ma;
+    const berSorok = kezdet > zaras ? [] : await query<{ jarmu_id: string | null; ft: number; eur: number } & KmDij & { km_nelkul: number }>(
+      `select m.jarmu_id::text,
+         coalesce(sum(m.fuvardij) filter (where m.fuvardij_penznem = 'Ft'), 0)::float8 as ft,
+         coalesce(sum(m.fuvardij) filter (where m.fuvardij_penznem = 'EUR'), 0)::float8 as eur,
+         coalesce(sum(m.fuvardij) filter (where m.fuvardij_penznem = 'Ft' and m.fuvardij > 0 and m.rakott_km > 0), 0)::float8 as "kmFt",
+         coalesce(sum(m.rakott_km) filter (where m.fuvardij_penznem = 'Ft' and m.fuvardij > 0 and m.rakott_km > 0), 0)::float8 as "kmFtKm",
+         coalesce(sum(m.fuvardij) filter (where m.fuvardij_penznem = 'EUR' and m.fuvardij > 0 and m.rakott_km > 0), 0)::float8 as "kmEur",
+         coalesce(sum(m.rakott_km) filter (where m.fuvardij_penznem = 'EUR' and m.fuvardij > 0 and m.rakott_km > 0), 0)::float8 as "kmEurKm",
+         count(*) filter (where m.fuvardij > 0 and m.rakott_km is null)::int as km_nelkul
+       from fuvar_megbizasok m
+       where m.torolt_at is null and m.jelleg = 'ber'
+         and m.allapot is not null and m.allapot <> 'ellenorzesre_var'
+         and m.datum >= $1::date and m.datum <= $2::date
+       group by m.jarmu_id`,
+      [kezdet, zaras]
+    );
+    const kocsik = osszesJarmu.map((j) => {
+      const torzs = findJarmuByKod(j.kod, jarmuLista);
+      const r = berSorok.find((x) => x.jarmu_id === j.id);
+      return { nev: torzs?.sofor ?? j.sofor ?? j.cimke, szin: torzs?.szin ?? null, ft: r?.ft ?? 0, eur: r?.eur ?? 0, km: kmDij(r ? [r] : []) };
+    });
+    while (kocsik.length < KOCSI_OSZLOP) kocsik.push({ nev: `${kocsik.length + 1}. kocsi`, szin: null, ft: 0, eur: 0, km: kmDij([]) });
+    return {
+      cim, ft: berSorok.reduce((x, r) => x + r.ft, 0), eur: berSorok.reduce((x, r) => x + r.eur, 0), kocsik,
+      km: kmDij(berSorok), kmNelkul: berSorok.reduce((x, r) => x + r.km_nelkul, 0),
+    };
+  };
+  const napISO = (d: Date) => d.toISOString().slice(0, 10);
+  const hetfoje = (iso: string) => {
+    const d = new Date(`${iso}T12:00:00Z`);
+    d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+    return d;
+  };
+  const honapElso = `${ma.slice(0, 7)}-01`;
+  const honapUtolso = new Date(`${honapElso}T12:00:00Z`);
+  honapUtolso.setUTCMonth(honapUtolso.getUTCMonth() + 1, 0);
+  const hetfo = hetfoje(ma);
+  const vasarnap = new Date(hetfo.getTime() + 6 * 86400000);
+  const berHavi = await berOsszesit(honapElso, napISO(honapUtolso), HONAPOK[Number(ma.slice(5, 7)) - 1] ?? "hónap");
+  const berHeti = await berOsszesit(napISO(hetfo), napISO(vasarnap), `${isoHetSzam(hetfo)}. hét`);
+  // A havi csempére kattintva: a hónap hetei, a hónapba eső napokra vágva
+  // (így a hetek összege kiadja a havit).
+  const berHonapHetei: BerOsszesito[] = [];
+  for (let h = hetfoje(honapElso); napISO(h) <= napISO(honapUtolso); h = new Date(h.getTime() + 7 * 86400000)) {
+    const tol = napISO(h) < honapElso ? honapElso : napISO(h);
+    const vas = napISO(new Date(h.getTime() + 6 * 86400000));
+    const ig = vas > napISO(honapUtolso) ? napISO(honapUtolso) : vas;
+    berHonapHetei.push(await berOsszesit(tol, ig, `${isoHetSzam(h)}. hét · ${Number(tol.slice(8))}–${Number(ig.slice(8))}.`));
+  }
+  return { berHavi, berHeti, berHonapHetei };
+}
+
+/**
+ * A bérfuvar-csempék adata (havi, heti, a hónap hetei) önállóan — a Pénz →
+ * Áttekintés lap teteje (2026-10-17, 2. kör). Ugyanaz a számítás, mint a
+ * getMaVaszon-ban; a lap csak a „fuvarozas" nézési joggal érhető el.
+ */
+export async function getBerOsszesitok(): Promise<{ berHavi: BerOsszesito; berHeti: BerOsszesito; berHonapHetei: BerOsszesito[] }> {
+  await requireViewPermission("fuvarozas");
+  const [{ ma }] = await query<{ ma: string }>(`select ((now() at time zone 'Europe/Budapest')::date)::text as ma`);
+  const jarmuLista = await getJarmuvek();
+  const osszesJarmu = await query<BerJarmu>(
+    `select j.id::text, j.kod, j.cimke, a.name as sofor from fuvar_jarmuvek j
+     left join alkalmazottak a on a.id = j.sofor_id
+     where j.aktiv order by j.id`
+  );
+  return berOsszesitokSzamol(ma, osszesJarmu, jarmuLista);
+}
 
 export async function getMaVaszon(): Promise<MaVaszon> {
   await requireAnyViewPermission(["fuvarozas", "elszamolas"]);
@@ -546,57 +629,8 @@ export async function getMaVaszon(): Promise<MaVaszon> {
   }
 
   // ---------------------------------------------------------------- havi és heti bérfuvar
-  const berOsszesit = async (kezdet: string, veg: string, cim: string): Promise<BerOsszesito> => {
-    const zaras = veg < ma ? veg : ma;
-    const berSorok = kezdet > zaras ? [] : await query<{ jarmu_id: string | null; ft: number; eur: number } & KmDij & { km_nelkul: number }>(
-      `select m.jarmu_id::text,
-         coalesce(sum(m.fuvardij) filter (where m.fuvardij_penznem = 'Ft'), 0)::float8 as ft,
-         coalesce(sum(m.fuvardij) filter (where m.fuvardij_penznem = 'EUR'), 0)::float8 as eur,
-         coalesce(sum(m.fuvardij) filter (where m.fuvardij_penznem = 'Ft' and m.fuvardij > 0 and m.rakott_km > 0), 0)::float8 as "kmFt",
-         coalesce(sum(m.rakott_km) filter (where m.fuvardij_penznem = 'Ft' and m.fuvardij > 0 and m.rakott_km > 0), 0)::float8 as "kmFtKm",
-         coalesce(sum(m.fuvardij) filter (where m.fuvardij_penznem = 'EUR' and m.fuvardij > 0 and m.rakott_km > 0), 0)::float8 as "kmEur",
-         coalesce(sum(m.rakott_km) filter (where m.fuvardij_penznem = 'EUR' and m.fuvardij > 0 and m.rakott_km > 0), 0)::float8 as "kmEurKm",
-         count(*) filter (where m.fuvardij > 0 and m.rakott_km is null)::int as km_nelkul
-       from fuvar_megbizasok m
-       where m.torolt_at is null and m.jelleg = 'ber'
-         and m.allapot is not null and m.allapot <> 'ellenorzesre_var'
-         and m.datum >= $1::date and m.datum <= $2::date
-       group by m.jarmu_id`,
-      [kezdet, zaras]
-    );
-    const kocsik = osszesJarmu.map((j) => {
-      const torzs = findJarmuByKod(j.kod, jarmuLista);
-      const r = berSorok.find((x) => x.jarmu_id === j.id);
-      return { nev: torzs?.sofor ?? j.sofor ?? j.cimke, szin: torzs?.szin ?? null, ft: r?.ft ?? 0, eur: r?.eur ?? 0, km: kmDij(r ? [r] : []) };
-    });
-    while (kocsik.length < KOCSI_OSZLOP) kocsik.push({ nev: `${kocsik.length + 1}. kocsi`, szin: null, ft: 0, eur: 0, km: kmDij([]) });
-    return {
-      cim, ft: berSorok.reduce((x, r) => x + r.ft, 0), eur: berSorok.reduce((x, r) => x + r.eur, 0), kocsik,
-      km: kmDij(berSorok), kmNelkul: berSorok.reduce((x, r) => x + r.km_nelkul, 0),
-    };
-  };
-  const napISO = (d: Date) => d.toISOString().slice(0, 10);
-  const hetfoje = (iso: string) => {
-    const d = new Date(`${iso}T12:00:00Z`);
-    d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
-    return d;
-  };
-  const honapElso = `${ma.slice(0, 7)}-01`;
-  const honapUtolso = new Date(`${honapElso}T12:00:00Z`);
-  honapUtolso.setUTCMonth(honapUtolso.getUTCMonth() + 1, 0);
-  const hetfo = hetfoje(ma);
-  const vasarnap = new Date(hetfo.getTime() + 6 * 86400000);
-  const berHavi = await berOsszesit(honapElso, napISO(honapUtolso), HONAPOK[Number(ma.slice(5, 7)) - 1] ?? "hónap");
-  const berHeti = await berOsszesit(napISO(hetfo), napISO(vasarnap), `${isoHetSzam(hetfo)}. hét`);
-  // A havi csempére kattintva: a hónap hetei, a hónapba eső napokra vágva
-  // (így a hetek összege kiadja a havit).
-  const berHonapHetei: BerOsszesito[] = [];
-  for (let h = hetfoje(honapElso); napISO(h) <= napISO(honapUtolso); h = new Date(h.getTime() + 7 * 86400000)) {
-    const tol = napISO(h) < honapElso ? honapElso : napISO(h);
-    const vas = napISO(new Date(h.getTime() + 6 * 86400000));
-    const ig = vas > napISO(honapUtolso) ? napISO(honapUtolso) : vas;
-    berHonapHetei.push(await berOsszesit(tol, ig, `${isoHetSzam(h)}. hét · ${Number(tol.slice(8))}–${Number(ig.slice(8))}.`));
-  }
+  // (2026-10-17: kiemelve a berOsszesitokSzamol-ba, hogy a Pénz → Áttekintés is használja.)
+  const { berHavi, berHeti, berHonapHetei } = await berOsszesitokSzamol(ma, osszesJarmu, jarmuLista);
 
   // ---------------------------------------------------------------- kocsik
   // Kocsinként a hiányzó papír/számla (az elmúlt 30 nap lerakásai).

@@ -186,7 +186,7 @@ function Tukor({ sorok }: { sorok: TukorSor[] }) {
   );
 }
 
-function KocsiOszlop({ k, holnapCimke, piheno }: { k: MaKocsi; holnapCimke: string; piheno: boolean }) {
+export function KocsiOszlop({ k, holnapCimke, piheno }: { k: MaKocsi; holnapCimke: string; piheno: boolean }) {
   if (k.helykitolto) {
     return (
       <Doboz className="flex flex-col gap-1 border-dashed p-4 text-muted-foreground xl:min-h-40">

@@ -42,7 +42,7 @@ export const MODULES: ModuleInfo[] = [
     href: "/fuvarozas2",
     icon: Truck,
     status: "elkeszult",
-    description: "Ma (kocsinként a mai és holnapi megállók, eltérések, csempék, kocsi-kihasználtság hét/hónap: rakott nap, bevétel és fedezet kocsinként) · Tervezés (a hét réseivel és a kocsira váró fuvarokkal, ajánlat: Timocom + kalkulátor — útdíj, üzemanyag, önköltség, ár; „Megnyertük” egy kattintással megbízást csinál) · Megbízások (bér- és saját fuvarok, pénz-nézet, levelek, partnerek) · Eredmény (áttekintés, kimutatás, költségek). Ecofleet telemetria: élő tachó-vezetési idő (Ma, Tervezés, sofőr-app), napi CAN-üzemanyag.",
+    description: "Kocsik (kocsinként egy sáv: hol van, tachó, futó fuvar haladása, heti bevétel és üres km, következő szabad nap → ajánlat; kocsi lapja: nap, hét, kihasználtság, telemetria · Ma: mai és holnapi megállók, eltérések · Hét: a hét réseivel és a kocsira váró fuvarokkal · Ajánlat: Timocom + kalkulátor — útdíj, üzemanyag, önköltség, ár; „Megnyertük” egy kattintással megbízást csinál) · Megbízások (bér- és saját fuvarok, pénz-nézet, levelek, partnerek) · Pénz (Áttekintés: bérfuvar havi/heti csempék, kocsi-kihasználtság hét/hónap — rakott nap, bevétel és fedezet kocsinként —, eredmény; Kimutatás; Költségek). Ecofleet telemetria: élő tachó-vezetési idő (Kocsik, Hét, sofőr-app), napi CAN-üzemanyag.",
   },
   {
     key: "jarmuvek",

@@ -24,7 +24,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ m
   const k = t.kivalasztott;
   return (
     <div className="flex flex-col gap-4">
-      <Fuvarozas2Fulek aktiv="/fuvarozas2/tervezes" cim="Tervezés" />
+      <Fuvarozas2Fulek aktiv="/fuvarozas2/tervezes" cim="Hét" />
       {/* Az új terv 2. oldala (2026-10-11): a hét a résekkel, ajánlatok, kiket hívj. */}
       <TervezesHetNezet adat={hetAdat} szerkeszthet={szerkeszthet} />
 
