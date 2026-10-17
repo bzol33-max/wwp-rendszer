@@ -1,4 +1,4 @@
-import { Fragment } from "react";
+import { Fragment, type CSSProperties } from "react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import type { HetAjanlat, TervezesHet } from "@/lib/fuvarozas2/tervezes-het";
@@ -8,6 +8,12 @@ import type { TilalmiAblak } from "@/lib/fuvarozas2/kamionstop";
 import { ledolgozosSzombat, munkaszunetiNap, torvenyesUnnep } from "@/lib/jelenlet/shared";
 import { AutoFrissites } from "@/components/fuvarozas2/auto-frissites";
 import { AjanlatGombok } from "@/components/fuvarozas2/ajanlat-gombok";
+import { Lock } from "lucide-react";
+import { bejegyzesIdo, napFoglalt, tipusNev, TAVOLLET_NEV, type Bejegyzes, type TavolletTipus } from "@/lib/fuvarozas2/bejegyzes-alap";
+import { kocsiSzin } from "@/lib/fuvarozas2/kocsi-szin";
+import { BejegyzesIkon } from "@/components/fuvarozas2/bejegyzes-ikon";
+import { BejegyzesFelvitel, BejegyzesTorles } from "@/components/fuvarozas2/het-bejegyzes";
+import { HetOsszegzes } from "@/components/fuvarozas2/het-osszegzes";
 
 // Tervezés · A hét (az új terv 2. oldala): kocsinként a hét, a rések
 // kiemelve, alul a kocsira váró fuvarok, mellette a bejött ajánlatok, alatta a kijelölt rés teendői.
@@ -52,6 +58,52 @@ function nemMunkanap(iso: string): string | null {
 }
 const SAV_CSIK = { backgroundImage: "repeating-linear-gradient(135deg, var(--muted) 0 4px, transparent 4px 8px)" } as const;
 
+// --- B1 (docs/het-b1-terv.md): kocsiszín a kártyán, BÉR / SAJÁT címke, nem-fuvar bejegyzés, távollét ---
+/** Fuvar-kártya: fehér, bal oldalt a kocsi színe (a sor `--kc` változója). */
+const KARTYA = "block rounded-lg bg-card px-2 py-1 text-xs text-foreground shadow-[inset_3px_0_0_var(--kc)] ring-1 ring-foreground/10 hover:bg-muted/40";
+const szinValtozok = (szin: string | null): CSSProperties => {
+  const s = kocsiSzin(szin);
+  return { "--kc": s.c, "--kl": s.l, "--kd": s.d } as CSSProperties;
+};
+
+function TipusCimke({ sajat }: { sajat: boolean }) {
+  return (
+    <span className={cn("mr-1 rounded px-1 py-px align-[1px] text-[9px] font-bold tracking-wide",
+      sajat ? "bg-foreground/[0.07] text-foreground/70" : "bg-[var(--f2-mint-l)] text-[var(--f2-mint)]")}>
+      {sajat ? "SAJÁT" : "BÉR"}
+    </span>
+  );
+}
+
+function BejegyzesKartya({ b }: { b: Bejegyzes }) {
+  const cimke = tipusNev(b.tipus);
+  return (
+    <div className="flex items-start gap-1.5 rounded-lg bg-muted/70 px-2 py-1 text-xs text-foreground/80 ring-1 ring-foreground/10" title={b.megjegyzes ?? undefined}>
+      <BejegyzesIkon tipus={b.tipus} className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
+      <div className="min-w-0 flex-1 break-words">
+        <div className="font-semibold">{cimke}{b.ismetles === "heti" ? <span className="ml-1 font-normal text-muted-foreground" title="hetente ismétlődik">↻</span> : null}</div>
+        <div className="tabular-nums">{bejegyzesIdo(b)}</div>
+        {b.hely || b.megjegyzes ? <div className="text-muted-foreground">{b.hely ?? b.megjegyzes}</div> : null}
+      </div>
+      <BejegyzesTorles id={b.id} cimke={cimke} ismetlodo={b.ismetles === "heti"} />
+    </div>
+  );
+}
+
+function TavolletCella({ t, utkozik }: { t: TavolletTipus; utkozik: boolean }) {
+  return (
+    <div className="flex items-start gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold text-[var(--kd)] ring-1 ring-[var(--kc)]"
+      style={{ backgroundImage: "repeating-linear-gradient(135deg, var(--kl) 0 7px, transparent 7px 14px)" }}>
+      <Lock className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+      <div className="min-w-0">
+        <div>{TAVOLLET_NEV[t]}</div>
+        <div className="text-[10px] font-normal">Jelenlétből · ne tervezz</div>
+        {utkozik ? <div className="mt-0.5 text-[10px] font-semibold text-[var(--f2-red)]">⚠ fuvar van rajta, de a sofőr távol van</div> : null}
+      </div>
+    </div>
+  );
+}
+
 function SzunetSav({ cimke, fej }: { cimke: string; fej?: boolean }) {
   const Tag = fej ? "th" : "td";
   return (
@@ -86,25 +138,26 @@ function UtemKartya({ f, e, nap, szerep }: { f: HetiFuvar; e: FuvarEredmeny; nap
   const b = e.becsles ? "~" : "";
   return (
     <Link href={`/fuvarozas2/megbizasok?reszlet=${f.id}`}
-      className={cn("block rounded-lg px-2 py-1 text-xs", f.sajat ? "bg-[var(--f2-blue-l)] text-[var(--f2-blue)]" : "bg-[var(--f2-mint-l)] text-[#0f5240]", jel === "kesz" && "opacity-55")}>
+      className={cn(KARTYA, jel === "kesz" && "opacity-55")}>
       <div className="flex items-start gap-1">
         <div className="min-w-0 flex-1 truncate font-semibold">
+          <TipusCimke sajat={f.sajat} />
           {jel === "kesz" ? "✓ " : jel === "uton" ? <span className="mr-1 inline-block size-1.5 rounded-full bg-current align-middle" title="úton" /> : null}
           {f.cim}
         </div>
         {szerep !== "kozep" ? <TartalekJel e={e} /> : null}
       </div>
       <div className="truncate">{f.felVaros} → {f.leVaros}</div>
-      <div className="truncate tabular-nums">
+      <div className="truncate tabular-nums text-muted-foreground">
         {szerep === "kozep" ? "↳ úton"
           : szerep === "utolso" ? (le ? `◷ le ${b}${cellaIdo(le.erkezes, nap)}` : "◷ lerakás")
           : `◷ ${fel ? `fel ${cellaIdo(fel.kezdes, nap)}` : "fel"}${le && le !== fel ? ` → le ${b}${cellaIdo(le.erkezes, nap)}` : ""}`}
       </div>
       {szerep === "teljes" ? (
         <>
-          <div className="truncate tabular-nums">⇢ {km(e.rakottKm)} km rakott{e.uresKmElotte > 0 ? ` · ${km(e.uresKmElotte)} üres` : ""}</div>
-          {e.dijFt != null ? <div className="truncate tabular-nums">{ft(e.dijFt)}{e.ftKm != null ? ` · ${e.ftKm.toLocaleString("hu-HU")} Ft/km` : ""}</div>
-            : f.sajat ? <div className="truncate">saját</div> : null}
+          <div className="truncate tabular-nums text-muted-foreground">⇢ {km(e.rakottKm)} km rakott{e.uresKmElotte > 0 ? ` · ${km(e.uresKmElotte)} üres` : ""}</div>
+          {e.dijFt != null ? <div className="truncate tabular-nums text-muted-foreground">{ft(e.dijFt)}{e.ftKm != null ? ` · ${e.ftKm.toLocaleString("hu-HU")} Ft/km` : ""}</div>
+            : null}
         </>
       ) : null}
     </Link>
@@ -112,7 +165,7 @@ function UtemKartya({ f, e, nap, szerep }: { f: HetiFuvar; e: FuvarEredmeny; nap
 }
 
 /** R4 napi mérleg a cella alján (+ napi pihenő / kamionstop sor, délután szabad link). */
-function NapMerlegSav({ m, szabadHref }: { m: NapMerleg; szabadHref: string }) {
+function NapMerlegSav({ m, szabadHref, foglalt }: { m: NapMerleg; szabadHref: string; foglalt: boolean }) {
   const vanTartalom = m.vegez || m.vezetesPerc > 0 || m.rakottKm > 0 || m.uresKm > 0 || m.napiPihenoTol || m.kamionstop;
   if (!vanTartalom) return null;
   const k: TilalmiAblak | null = m.kamionstop;
@@ -130,7 +183,7 @@ function NapMerlegSav({ m, szabadHref }: { m: NapMerleg; szabadHref: string }) {
             style={{ width: `${Math.min(100, (v / NAPI_MAX_PERC) * 100)}%` }} />
         </div>
       </div>
-      {m.delutanSzabad ? (
+      {m.delutanSzabad && !foglalt ? (
         <Link href={szabadHref} scroll={false} className="font-medium text-[var(--f2-amb)] hover:underline">
           délután szabad · {ido(m.delutanSzabad.maradekVezetesPerc)} vezetés →
         </Link>
@@ -168,6 +221,23 @@ export function TervezesHetNezet({ adat, szerkeszthet }: { adat: TervezesHet; sz
   const kiment = adat.ajanlatok.filter((a) => a.allapot === "ajanlva");
   const utolso = adat.napok[adat.napok.length - 1];
   const savElott = new Map((adat.szunetSavok ?? []).map((s) => [s.elott, s.cimke]));
+  const felvitelKocsik = adat.kocsik.map((x) => ({ kod: x.kod, sofor: x.sofor, szin: x.szin ?? null }));
+  // Oldalsáv: a mától hátralévő bejegyzések és a távollétek (összefüggő napok egy sorban).
+  const bejegyzesLista = adat.kocsik.flatMap((x) =>
+    adat.napok.filter((n) => n >= adat.ma).flatMap((n) => (x.bejegyzesek?.[n] ?? []).map((b) => ({ kocsi: x, nap: n, b })))
+  ).sort((a, b) => a.nap.localeCompare(b.nap) || (a.b.tol ?? "").localeCompare(b.b.tol ?? ""));
+  const tavolletLista = adat.kocsik.flatMap((x) => {
+    const napok = Object.keys(x.tavollet ?? {}).filter((n) => n >= adat.ma).sort();
+    const ki: { kocsi: typeof x; tol: string; ig: string; t: TavolletTipus }[] = [];
+    for (const n of napok) {
+      const t = x.tavollet[n];
+      const utolso = ki[ki.length - 1];
+      const elozoOszlop = adat.napok[adat.napok.indexOf(n) - 1];
+      if (utolso && utolso.t === t && utolso.ig === elozoOszlop) utolso.ig = n;
+      else ki.push({ kocsi: x, tol: n, ig: n, t });
+    }
+    return ki;
+  }).sort((a, b) => a.tol.localeCompare(b.tol));
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -178,6 +248,7 @@ export function TervezesHetNezet({ adat, szerkeszthet }: { adat: TervezesHet; sz
           {!adat.ezAHet ? <Link href={hetLink(null)} className="rounded-lg border px-2 py-0.5 text-xs hover:bg-muted">vissza mához</Link> : null}
         </nav>
         <AutoFrissites frissitve={adat.frissitve} intervallMs={300_000} />
+        <BejegyzesFelvitel kocsik={felvitelKocsik} nap={adat.napok.find((n) => n >= adat.ma) ?? adat.ma} mod="gomb" />
         <span className={cn("ml-auto rounded-full px-3 py-1 text-sm font-medium", adat.resek.length ? "bg-[var(--f2-amb-l)] text-[#5a3806]" : "bg-[var(--f2-mint-l)] text-[var(--f2-mint)]")}>
           {adat.resek.length ? `${adat.resek.length} rés · ${adat.uresKmOssz.toLocaleString("hu-HU")} km üres${adat.ezAHet ? " (mától)" : ""}` : "nincs 100 km-nél hosszabb üres út"}
         </span>
@@ -205,13 +276,13 @@ export function TervezesHetNezet({ adat, szerkeszthet }: { adat: TervezesHet; sz
           <table className="w-full min-w-[760px] table-fixed text-sm">
             <thead>
               <tr className="text-left text-xs text-muted-foreground">
-                <th className="w-24 px-4 py-2 font-medium" />
+                <th className="w-36 px-4 py-2 font-medium" />
                 {adat.napok.map((n) => {
                   const szunet = nemMunkanap(n);
                   return (
                     <Fragment key={n}>
                       {savElott.has(n) ? <SzunetSav cimke={savElott.get(n)!} fej /> : null}
-                      <th className={cn("px-2 py-2 font-medium", n === adat.ma && "text-foreground", szunet && "bg-muted/50")} title={szunet ?? undefined}>
+                      <th className={cn("px-2 py-2 font-medium", n === adat.ma && "w-[26%] bg-[var(--f2-mint-l)] text-[var(--f2-mint)]", szunet && "bg-muted/50")} title={szunet ?? undefined}>
                         {napCimke(n)}{n === adat.ma ? " · ma" : ""}
                         {szunet && torvenyesUnnep(n) ? <span className="ml-1 rounded bg-[var(--f2-amb-l)] px-1 text-[10px] font-normal text-[#5a3806]">ünnep</span> : null}
                       </th>
@@ -227,9 +298,12 @@ export function TervezesHetNezet({ adat, szerkeszthet }: { adat: TervezesHet; sz
                 const merleg = new Map((ut?.napok ?? []).map((m) => [m.nap, m]));
                 const szerep = cellaSzerepek(kocsi.cellak);
                 return (
-                <tr key={kocsi.kod} className="border-t border-foreground/5 align-top">
-                  <td className="px-4 py-3">
-                    <div className="font-semibold">{kocsi.sofor}</div><div className="text-xs text-muted-foreground">{kocsi.kod}</div>
+                <tr key={kocsi.kod} className="border-t border-foreground/5 align-top" style={szinValtozok(kocsi.szin ?? null)}>
+                  <td className="px-3 py-3 shadow-[inset_4px_0_0_var(--kc)]">
+                    <div className="flex items-center gap-2 pl-1">
+                      <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-[var(--kc)] text-xs font-bold text-white" aria-hidden>{kocsi.sofor.slice(0, 1).toUpperCase()}</span>
+                      <div className="min-w-0"><div className="truncate font-semibold">{kocsi.sofor}</div><div className="truncate text-xs text-muted-foreground">{kocsi.kod}</div></div>
+                    </div>
                     {kocsi.tacho ? (
                       <div className="mt-1 rounded-md bg-[var(--f2-mint-l)] px-1.5 py-0.5 text-[10px] leading-tight text-[var(--f2-mint)]" title={`Tachó (Ecofleet)\n${kocsi.tacho.reszletek}`}>
                         {kocsi.tacho.chip}
@@ -238,22 +312,27 @@ export function TervezesHetNezet({ adat, szerkeszthet }: { adat: TervezesHet; sz
                   </td>
                   {kocsi.cellak.map((c) => {
                     const m = ut ? merleg.get(c.nap) : undefined;
+                    const bej = kocsi.bejegyzesek?.[c.nap] ?? [];
+                    const tav = kocsi.tavollet?.[c.nap] ?? null;
+                    const foglalt = napFoglalt(bej, tav);
                     const szabadRes = c.resek.find((r) => r.haza) ?? c.resek[c.resek.length - 1];
                     const szabadHref = szabadRes ? hetLink(het, szabadRes.kulcs)
                       : `/fuvarozas2/timocom?honnan=${encodeURIComponent(m?.vegez?.varos ?? "")}`;
                     return (
                     <Fragment key={c.nap}>
                     {savElott.has(c.nap) ? <SzunetSav cimke={savElott.get(c.nap)!} /> : null}
-                    <td className={cn("px-1.5 py-2", c.nap === adat.ma && "bg-muted/40")}>
+                    <td className={cn("px-1.5 py-2", c.nap === adat.ma && "bg-[var(--f2-mint-l)]/35")}>
                       <div className="flex flex-col gap-1">
+                        {tav ? <TavolletCella t={tav} utkozik={c.fuvarok.length > 0} /> : null}
                         {/* Útvonal-sorrendben: minden üres út közvetlenül az elé a fuvar elé, amelyhez vezet. */}
                         {c.resek.filter((r) => !r.haza && !c.fuvarok.some((f) => f.id === r.elott)).map((r) => <ResChip key={r.kulcs} r={r} aktiv={k?.kulcs === r.kulcs} het={het} />)}
                         {c.fuvarok.map((f) => (
                           <Fragment key={f.id}>
                           {c.resek.filter((r) => !r.haza && r.elott === f.id).map((r) => <ResChip key={r.kulcs} r={r} aktiv={k?.kulcs === r.kulcs} het={het} />)}
                           {eredmeny.has(f.id) ? <UtemKartya f={f} e={eredmeny.get(f.id)!} nap={c.nap} szerep={szerep(f.id, c.nap)} /> : <Link href={`/fuvarozas2/megbizasok?reszlet=${f.id}`}
-                            className={cn("block rounded-lg px-2 py-1 text-xs", f.sajat ? "bg-[var(--f2-blue-l)] text-[var(--f2-blue)]" : "bg-[var(--f2-mint-l)] text-[#0f5240]", fuvarJel(f.allapot) === "kesz" && "opacity-55")}>
+                            className={cn(KARTYA, fuvarJel(f.allapot) === "kesz" && "opacity-55")}>
                             <div className="truncate font-semibold">
+                              <TipusCimke sajat={f.sajat} />
                               {fuvarJel(f.allapot) === "kesz" ? "✓ " : fuvarJel(f.allapot) === "uton" ? <span className="mr-1 inline-block size-1.5 rounded-full bg-current align-middle" title="úton" /> : null}
                               {f.cim}
                             </div>
@@ -261,9 +340,10 @@ export function TervezesHetNezet({ adat, szerkeszthet }: { adat: TervezesHet; sz
                           </Link>}
                           </Fragment>
                         ))}
+                        {bej.map((b) => <BejegyzesKartya key={`${b.id}-${b.alkalom}`} b={b} />)}
                         {c.resek.filter((r) => r.haza).map((r) => <ResChip key={r.kulcs} r={r} aktiv={k?.kulcs === r.kulcs} het={het} />)}
-                        {c.szabad ? <div className="rounded-lg px-2 py-1 text-xs text-muted-foreground/70">szabad</div> : null}
-                        {m ? <NapMerlegSav m={m} szabadHref={szabadHref} /> : null}
+                        {c.szabad && !foglalt ? <BejegyzesFelvitel kocsik={felvitelKocsik} kocsiKod={kocsi.kod} nap={c.nap} mod="cella" vegez={m?.vegez ? { ido: hhmm(m.vegez.ido), varos: m.vegez.varos } : null} /> : null}
+                        {m ? <NapMerlegSav m={m} szabadHref={szabadHref} foglalt={foglalt} /> : null}
                       </div>
                     </td>
                     </Fragment>
@@ -281,7 +361,7 @@ export function TervezesHetNezet({ adat, szerkeszthet }: { adat: TervezesHet; sz
                   {adat.kiosztatlan.map((c, i) => (
                     <Fragment key={adat.napok[i]}>
                     {savElott.has(adat.napok[i]) ? <SzunetSav cimke={savElott.get(adat.napok[i])!} /> : null}
-                    <td className={cn("px-1.5 py-2", adat.napok[i] === adat.ma && "bg-muted/40")}>
+                    <td className={cn("px-1.5 py-2", adat.napok[i] === adat.ma && "bg-[var(--f2-mint-l)]/35")}>
                       <div className="flex flex-col gap-1">
                         {c.map((f) => (
                           <Link key={f.id} href={`/fuvarozas2/megbizasok?reszlet=${f.id}`}
@@ -302,6 +382,35 @@ export function TervezesHetNezet({ adat, szerkeszthet }: { adat: TervezesHet; sz
         </section>
 
         <aside className="flex flex-col gap-3">
+          {adat.osszegzes ? <HetOsszegzes adat={adat.osszegzes} /> : null}
+          {bejegyzesLista.length || tavolletLista.length ? (
+            <section className="flex flex-col gap-3 rounded-2xl bg-card p-4 ring-1 ring-foreground/10">
+              {bejegyzesLista.length ? (
+                <div className="flex flex-col gap-1.5">
+                  <h2 className="text-xs font-semibold">Nem fuvar</h2>
+                  {bejegyzesLista.map(({ kocsi, nap, b }) => (
+                    <div key={`${b.id}-${nap}`} className="flex items-center gap-2 rounded-lg bg-muted/60 px-2 py-1.5 text-xs" style={szinValtozok(kocsi.szin ?? null)}>
+                      <span className="size-2 shrink-0 rounded-full bg-[var(--kc)]" aria-hidden />
+                      <BejegyzesIkon tipus={b.tipus} className="size-3.5 shrink-0 text-muted-foreground" />
+                      <span className="truncate">{rovidNap(nap)} · {kocsi.sofor} · {tipusNev(b.tipus).toLowerCase()} {b.tol ? bejegyzesIdo(b) : "egész nap"}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {tavolletLista.length ? (
+                <div className="flex flex-col gap-1.5">
+                  <h2 className="text-xs font-semibold">Távollét · Jelenlétből</h2>
+                  {tavolletLista.map((t) => (
+                    <div key={`${t.kocsi.kod}-${t.tol}`} className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-medium text-[var(--kd)] ring-1 ring-[var(--kc)]"
+                      style={{ ...szinValtozok(t.kocsi.szin ?? null), backgroundImage: "repeating-linear-gradient(135deg, var(--kl) 0 7px, transparent 7px 14px)" }}>
+                      <Lock className="size-3.5 shrink-0" aria-hidden />
+                      <span className="truncate">{t.kocsi.sofor} · {napCimke(t.tol)}{t.ig !== t.tol ? ` – ${napCimke(t.ig)}` : ""} · {TAVOLLET_NEV[t.t].toLowerCase()}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </section>
+          ) : null}
           <section className="rounded-2xl bg-card ring-1 ring-foreground/10">
             <div className="flex items-baseline gap-2 px-4 pt-3 pb-1">
               <h2 className="font-semibold">Bejövő ajánlatok</h2>

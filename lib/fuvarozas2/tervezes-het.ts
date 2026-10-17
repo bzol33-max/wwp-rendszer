@@ -27,6 +27,10 @@ import { legutobbiTacho } from "@/lib/jarmu-telemetria/repo";
 import { tachoKijelzes } from "@/lib/fuvarozas2/tervezes-het-tacho";
 import { szamoljUtemtervet, type UtemKocsiBemenet } from "@/lib/fuvarozas2/heti-utemterv";
 import type { KocsiUtemterv } from "@/lib/fuvarozas2/heti-utemterv-alap";
+import { getBejegyzesSorok, getTavolletek } from "@/lib/fuvarozas2/bejegyzesek";
+import { bejegyzesekNapokra, tavolletekNapokra, type Bejegyzes, type TavolletTipus } from "@/lib/fuvarozas2/bejegyzes-alap";
+import { getKihasznaltsag, type KihasznaltsagAdat } from "@/lib/fuvarozas2/kihasznaltsag";
+import type { JarmuSzin } from "@/lib/fuvarozas/vehicles";
 
 export type HetAjanlat = {
   id: string;
@@ -66,7 +70,15 @@ export type TervezesHet = {
    * `tacho`: friss tachó-chip („ma 2 ó 40 p · hét 26 ó 25 p hátra”) + súgó — csak a mostani héten, különben nincs.
    * `utemterv`: a becslő motor (heti-utemterv-alap.ts) eredménye — null, ha hibázott / kifutott az időből (a rács a régi módon jelenik meg).
    */
-  kocsik: { kod: string; sofor: string; cellak: NapCella[]; tacho?: { chip: string; reszletek: string } | null; utemterv: KocsiUtemterv | null }[];
+  kocsik: {
+    kod: string; sofor: string; cellak: NapCella[]; tacho?: { chip: string; reszletek: string } | null; utemterv: KocsiUtemterv | null;
+    /** B1 (docs/het-b1-terv.md): a törzsadat színe, a nem-fuvar bejegyzések és a sofőr távollétei naponként. */
+    szin: JarmuSzin | null;
+    bejegyzesek: Record<string, Bejegyzes[]>;
+    tavollet: Record<string, TavolletTipus>;
+  }[];
+  /** Heti / havi összefoglaló az oldalsáv tetejére (getKihasznaltsag) — null: nem készült el időben / hiba. */
+  osszegzes: KihasznaltsagAdat | null;
   /** Kocsira váró (ki nem osztott) fuvarok napra bontva, a `napok` sorrendjében. */
   kiosztatlan: HetiFuvar[][];
   resek: Res[];
@@ -132,6 +144,11 @@ export async function getTervezesHet(resKulcs?: string, het?: string): Promise<T
   );
   // Szombat / ünnep oszlop csak akkor, ha aznap van felrakás vagy lerakás.
   const napok = tervAblak(kezdet, (nap) => sorok.some((s) => s.fel_nap === nap || s.le_nap === nap));
+  // B1: bejegyzések, távollétek, heti/havi összefoglaló — párhuzamosan; hiba esetén üres / null (a lap nem törhet el).
+  const ablakTol = napok[0], ablakIg = napok[napok.length - 1];
+  const bejegyzesIgeret = getBejegyzesSorok(ablakTol, ablakIg).catch((e) => { console.warn("[het] bejegyzések:", e instanceof Error ? e.message : e); return []; });
+  const tavolletIgeret = getTavolletek(ablakTol, ablakIg).catch((e) => { console.warn("[het] távollétek:", e instanceof Error ? e.message : e); return []; });
+  const osszegzesIgeret = getKihasznaltsag(ma).catch(() => null);
 
   // A megállók lat/lon oszlopát semmi nem tölti ki (a modell-szinkron csak a
   // címet írja), ezért koordináta nélkül egyetlen rés sem jött létre. A hét és
@@ -185,7 +202,10 @@ export async function getTervezesHet(resKulcs?: string, het?: string): Promise<T
   const jarmuvek = (await query<{ kod: string; sofor: string | null }>(
     `select j.kod, a.name as sofor from fuvar_jarmuvek j left join alkalmazottak a on a.id = j.sofor_id
      where j.aktiv order by j.id`
-  )).map((j) => ({ kod: j.kod, sofor: findJarmuByKod(j.kod, jarmuLista)?.sofor ?? j.sofor?.split(" ").pop() ?? j.kod }));
+  )).map((j) => {
+    const torzs = findJarmuByKod(j.kod, jarmuLista);
+    return { kod: j.kod, sofor: torzs?.sofor ?? j.sofor?.split(" ").pop() ?? j.kod, szin: torzs?.szin ?? null };
+  });
 
   const hetiFuvar = (s: Sor): HetiFuvar => ({
     id: s.id, cim: megbizoMegjelenites(s.jelleg, s.partner), felVaros: varos(s.felrako), leVaros: varos(s.lerako),
@@ -322,7 +342,14 @@ export async function getTervezesHet(resKulcs?: string, het?: string): Promise<T
   }
 
   const utem = await utemtervek;
-  const kocsik = kocsikAlap.map((k) => ({ ...k, utemterv: utem?.get(k.kod) ?? null }));
+  const [bejegyzesSorok, tavolletSorok, osszegzes] = await Promise.all([bejegyzesIgeret, tavolletIgeret, osszegzesIgeret]);
+  const bejegyzesTerkep = bejegyzesekNapokra(bejegyzesSorok, napok);
+  const tavolletTerkep = tavolletekNapokra(tavolletSorok);
+  const szinek = new Map(jarmuvek.map((j) => [j.kod, j.szin]));
+  const kocsik = kocsikAlap.map((k) => ({
+    ...k, utemterv: utem?.get(k.kod) ?? null,
+    szin: szinek.get(k.kod) ?? null, bejegyzesek: bejegyzesTerkep[k.kod] ?? {}, tavollet: tavolletTerkep[k.kod] ?? {},
+  }));
   let savok: { elott: string; cimke: string }[] = [];
   try { savok = szunetSavok(napok); } catch { savok = []; }
 
@@ -335,5 +362,6 @@ export async function getTervezesHet(resKulcs?: string, het?: string): Promise<T
     riasztasok: riasztandok.map((r) => riasztasOsszerak(r, riasztasJeloltek.get(r.kulcs) ?? [], kiketHivj(r, mult))),
     kmKoltseg,
     eurArfolyam,
+    osszegzes,
   };
 }

@@ -1156,3 +1156,27 @@ create index if not exists idx_szabadsag_igenyek_emp on szabadsag_igenyek (emplo
 -- A jóváhagyásra váró kérések listája a Jelenléti oldal láblécében: ez a
 -- részleges index tartja gyorsnak, bármennyi lezárt igény mellett is.
 create index if not exists idx_szabadsag_igenyek_nyitott on szabadsag_igenyek (tol) where allapot = 'kert';
+
+-- Hét nézet B1 (2026-10-17, docs/het-b1-terv.md): nem-fuvar bejegyzés egy
+-- kocsi egy napjára (szerviz, gumis, mosás, műszaki, tachó-kalibrálás,
+-- egyéb). tol/ig mindkettő üres = egész nap. Heti ismétlésnél ismetles_ig
+-- az utolsó lehetséges nap (üres: nyitott). Törlés: torolt_at (soft).
+create table if not exists fuvar_bejegyzesek (
+  id           bigserial primary key,
+  jarmu_kod    text not null,
+  tipus        text not null check (tipus in ('szerviz', 'gumis', 'mosas', 'muszaki', 'tacho', 'egyeb')),
+  nap          date not null,
+  tol          time,
+  ig           time,
+  hely         text,
+  megjegyzes   text,
+  ismetles     text not null default 'nincs' check (ismetles in ('nincs', 'heti')),
+  ismetles_ig  date,
+  letrehozta   text,
+  created_at   timestamptz not null default now(),
+  torolt_at    timestamptz,
+  torolte      text,
+  check ((tol is null and ig is null) or (tol is not null and ig is not null and ig > tol)),
+  check (ismetles_ig is null or ismetles_ig >= nap)
+);
+create index if not exists idx_fuvar_bejegyzesek_nap on fuvar_bejegyzesek (nap) where torolt_at is null;
