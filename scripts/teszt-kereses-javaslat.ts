@@ -104,5 +104,24 @@ const e = kocsiJavaslat(este, [{ partner: "Y", fel: H("kisvarda"), le: H("sarvar
 eq("Sárvár nem fér bele → csak a végén, nem ér haza", [e.iranyok.at(-1)?.nev, e.iranyok.at(-1)?.hazaer], ["Sarvar felé", false]);
 eq("az első a hazavezető sor", e.iranyok[0].cimke, "ures-haza");
 
+// --- QA: hétvégi felszabadulás → következő munkanap reggel, a jövő heti haza-nappal ---
+const szombat = kocsiJavaslat({ ...gergo, szabad: { nap: "2026-10-24", ido: "14:00", hely: H("kisvarda"), vezetesHatraPerc: 100, becsult: false } }, mult, ajanlatok, param);
+eq("szombat → hétfő 06:00, haza péntek", [szombat.szabad?.nap, szombat.szabad?.ido, szombat.szabad?.vezetesHatraPerc, szombat.hazaNap, szombat.csakHaza], ["2026-10-26", "06:00", null, "2026-10-30", false]);
+eq("ünnepen (10.23.) felszabadul → hétfő", kocsiJavaslat({ ...gergo, szabad: { ...gergo.szabad!, nap: "2026-10-23" } }, mult, ajanlatok, param).szabad?.nap, "2026-10-26");
+
+// --- QA: NaN-koordináta és rossz idő nem csúszik át ---
+const nanTel = kocsiJavaslat(gergo, mult, ajanlatok, { ...param, telephely: { varos: "?", pont: { lat: Number.NaN, lon: 21 } } });
+eq("NaN telephely → nincs irány", nanTel.iranyok, []);
+const nanMult = kocsiJavaslat(gergo, [{ partner: "Z", fel: { varos: "?", pont: { lat: Number.NaN, lon: 0 } }, le: H("gyor"), nap: "2026-10-01", dijFt: 1 }], [], param);
+eq("NaN felrakó kimarad", nanMult.nincsAdat, true);
+eq("rossz idő → teljes nap", elsoNapKeret({ nap: "2026-10-20", ido: "xx:yy", hely: H("kisvarda"), vezetesHatraPerc: null, becsult: false }), 540);
+
+// --- QA: egyedi irány-kulcsok ---
+const kozeli = kocsiJavaslat(gergo, [
+  { partner: "A", fel: H("kisvarda"), le: { varos: "Budapest", pont: P.budapest }, nap: "2026-10-01", dijFt: 200000 },
+  { partner: "B", fel: H("kisvarda"), le: { varos: "Budapest", pont: { lat: 47.5, lon: 19.04 + 0.9 } }, nap: "2026-10-02", dijFt: 200000 },
+], [], param);
+eq("kulcsok egyediek", new Set(kozeli.iranyok.map((i) => i.kulcs)).size, kozeli.iranyok.length);
+
 console.log(`teszt-kereses-javaslat: ${ok} ok, ${bad} hiba`);
 if (bad) process.exit(1);

@@ -52,7 +52,7 @@ function IranySor({ k, i, betu, aktiv }: { k: Kocsi; i: Irany; betu: string; akt
         ) : null}
       </div>
       <Link href={keresHref(k.kod, i.kulcs)} scroll={false}
-        className="flex min-h-9 shrink-0 items-center rounded-lg px-3 text-xs font-semibold text-white"
+        className="flex min-h-11 shrink-0 items-center rounded-lg px-3 text-xs font-semibold text-white" aria-current={aktiv ? "true" : undefined}
         style={{ background: c.szin }} aria-label={`${k.sofor}: ${i.nev} — keres`}>
         keres
       </Link>
@@ -82,6 +82,7 @@ function KocsiKartya({ k, ma, kivalasztott }: { k: Kocsi; ma: string; kivalaszto
           {k.csakHaza ? " · már csak hazafelé" : ""}
         </div>
       ) : null}
+      {sz?.becsult && !k.tavolletben ? <div className="rounded-lg bg-[var(--f2-amb-l)] px-2 py-1.5 text-xs text-[#6b4309]">A kocsi helye nem ismert — a telephelyről számolva. Nézd meg a Ma oldalon, hol áll.</div> : null}
       {k.tavolletben ? <div className="rounded-lg bg-[var(--kl)] px-2 py-1.5 text-xs font-semibold">Távollét a szabad napon (Jelenlét) — nincs mit keresni.</div> : null}
       {k.nincsAdat && !k.tavolletben && k.iranyok.length ? <div className="text-xs text-muted-foreground">Innen még nem volt fuvarunk, és nincs illő Timocom-ajánlat.</div> : null}
       {k.iranyok.map((i, n) => (
@@ -113,20 +114,18 @@ export function KeresesiJavaslatok({ adat, kocsi, irany }: { adat: KeresesJavasl
 }
 
 /** A kiválasztott irány: Timocom-keresés szövege, illő ajánlatok, kit hívjak. */
-export function KivalasztottIrany({ adat, kocsi, irany, ajanlatCim }: {
-  adat: KeresesJavaslatAdat | null; kocsi: string | null; irany: string | null;
-  ajanlatCim: Map<string, { cim: string; ar: string | null }>;
-}) {
+export function KivalasztottIrany({ adat, kocsi, irany }: { adat: KeresesJavaslatAdat | null; kocsi: string | null; irany: string | null }) {
   const k = adat?.kocsik.find((x) => x.kod === kocsi);
   const i = k?.iranyok.find((x) => x.kulcs === irany);
   if (!k || !i || !k.szabad) return null;
   const c = CIMKE[i.cimke];
+  const cimek = adat!.ajanlatCim;
   return (
     <section id="kereses" className="flex scroll-mt-4 flex-col gap-2 rounded-2xl border border-foreground/10 bg-card p-3" style={{ boxShadow: `inset 4px 0 0 ${c.szin}` }}>
       <div className="flex flex-wrap items-center gap-2">
         <b className="text-base">{k.sofor} → {i.nev}</b>
         <span className="text-xs text-muted-foreground">{napCimke(k.szabad.nap, adat!.ma)} {k.szabad.ido ?? ""} · indul: {k.szabad.hely.varos}</span>
-        <Link href="/fuvarozas2/timocom" scroll={false} className="ml-auto text-xs text-muted-foreground underline">× bezár</Link>
+        <Link href="/fuvarozas2/timocom" scroll={false} className="ml-auto flex min-h-11 items-center px-2 text-xs text-muted-foreground underline">× bezár</Link>
       </div>
       <div className="grid gap-3 md:grid-cols-3">
         <div className="flex flex-col gap-1 text-sm">
@@ -138,7 +137,7 @@ export function KivalasztottIrany({ adat, kocsi, irany, ajanlatCim }: {
           <div className="flex items-center gap-1.5 text-xs font-semibold text-muted-foreground"><ExternalLink className="size-3.5" aria-hidden />Illő nyitott Timocom-ajánlat</div>
           {i.ajanlatIdk.length ? i.ajanlatIdk.slice(0, 4).map((id) => (
             <Link key={id} href={`/fuvarozas2/timocom?id=${encodeURIComponent(id)}`} className="rounded-lg px-2 py-1 ring-1 ring-foreground/10 hover:bg-muted">
-              {ajanlatCim.get(id)?.cim ?? "ajánlat"}{ajanlatCim.get(id)?.ar ? <span className="text-muted-foreground"> · {ajanlatCim.get(id)!.ar}</span> : null}
+              {cimek[id]?.cim ?? "ajánlat"}{cimek[id]?.ar ? <span className="text-muted-foreground"> · {cimek[id].ar}</span> : null}
             </Link>
           )) : <span className="text-xs text-muted-foreground">nincs — a „→ WWP” gombbal hozd be, amit találsz</span>}
         </div>

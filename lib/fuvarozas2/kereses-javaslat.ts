@@ -29,9 +29,13 @@ export type KeresesJavaslatAdat = {
   multIsmert: number;
   multOssz: number;
   timocomDb: number;
+  /** Ajánlat-azonosító → „Megbízó: Fel → Le” és az ár (a kiválasztott irány listájához). */
+  ajanlatCim: Record<string, { cim: string; ar: string | null }>;
 };
 
+/** Az egész betöltés felső korlátja (QA #3): a hét és a lekérdezések 7 mp, a geokódolás a maradék, legfeljebb 4 mp. */
 const HET_KORLAT_MS = 7_000;
+const TELJES_KORLAT_MS = 10_000;
 const GEO_MAX = 80;
 const GEO_KORLAT_MS = 4_000;
 
@@ -45,13 +49,14 @@ async function korlattal<T>(p: Promise<T>, ms: number): Promise<T | null> {
 }
 
 /** Címek koordinátája: legfeljebb GEO_MAX cím (a fontosak elöl), párhuzamosan, összesen GEO_KORLAT_MS alatt. A gyorsítótár a következő betöltéseknél gyorsít. */
-async function pontok(cimek: string[]): Promise<Map<string, Pont | null>> {
+async function pontok(cimek: string[], vegso: number): Promise<Map<string, Pont | null>> {
   const ki = new Map<string, Pont | null>();
   const egyedi = [...new Set(cimek.filter(Boolean))].slice(0, GEO_MAX);
-  const hatar = Date.now() + GEO_KORLAT_MS;
+  const hatar = Math.min(Date.now() + GEO_KORLAT_MS, vegso);
   await Promise.all(egyedi.map(async (c) => {
     const g = await korlattal(geokodolCachelve(c), Math.max(0, hatar - Date.now()));
-    ki.set(c, g ? { lat: g.lat, lon: g.lon } : null);
+    const pt = g ? { lat: Number(g.lat), lon: Number(g.lon) } : null;
+    ki.set(c, pt && Number.isFinite(pt.lat) && Number.isFinite(pt.lon) ? pt : null);
   }));
   return ki;
 }
@@ -77,14 +82,26 @@ function szabadBol(k: TervezesHet["kocsik"][number], ma: string, most: string, t
   return { nap: kovetkezoMunkanap(ma), ido: "06:00", hely, vezetesHatraPerc: null, becsult };
 }
 
+/** Díj forintban: Ft/HUF változatlan, EUR az MNB-árfolyammal; más pénznem / árfolyam nélkül null. */
+function dijForintban(osszeg: number | string | null, penznem: string | null, eurArfolyam: number | null): number | null {
+  const x = Number(osszeg);
+  if (!osszeg || !Number.isFinite(x) || x <= 0) return null;
+  const p = (penznem ?? "").trim().toUpperCase();
+  if (p === "" || p === "FT" || p === "HUF") return Math.round(x);
+  if (p === "EUR" && eurArfolyam) return Math.round(x * eurArfolyam);
+  return null;
+}
+
 type MultSor = { partner: string | null; felrako: string | null; lerako: string | null; nap: string; fuvardij: number | null; penznem: string };
 
 export async function getKeresesJavaslatok(): Promise<KeresesJavaslatAdat | null> {
+  // A jogosultság-ellenőrzés a try ELŐTT: a /login átirányítást nem nyelheti el (QA #4).
+  await requireViewPermission("fuvarozas");
+  const vegso = Date.now() + TELJES_KORLAT_MS;
   try {
-    await requireViewPermission("fuvarozas");
-    const [het, multSorok, timocom, indulas] = await Promise.all([
+    const [het, multSorokN, timocomN, indulas] = await Promise.all([
       korlattal(getTervezesHet(), HET_KORLAT_MS),
-      query<MultSor>(
+      korlattal(query<MultSor>(
         `select coalesce(p.nev, m.megrendelo) as partner,
             coalesce((select g.cim_nyers from fuvar_megallok g where g.megbizas_id = m.id and g.tipus = 'felrako' order by g.sorszam limit 1), m.felrako) as felrako,
             coalesce((select g.cim_nyers from fuvar_megallok g where g.megbizas_id = m.id and g.tipus = 'lerako' order by g.sorszam desc limit 1), m.lerako) as lerako,
@@ -94,11 +111,13 @@ export async function getKeresesJavaslatok(): Promise<KeresesJavaslatAdat | null
             and m.datum >= (now() at time zone 'Europe/Budapest')::date - 365
             and m.datum < (now() at time zone 'Europe/Budapest')::date
           order by m.datum desc limit 600`
-      ).catch(() => [] as MultSor[]),
-      getTimocomAjanlatok(40, ["nyitott"]).catch(() => []),
-      getIndulasiTelephely().catch(() => null),
+      ), HET_KORLAT_MS),
+      korlattal(getTimocomAjanlatok(40, ["nyitott"]), HET_KORLAT_MS),
+      korlattal(getIndulasiTelephely(), HET_KORLAT_MS),
     ]);
     if (!het) return null;
+    const multSorok = multSorokN ?? [];
+    const timocom = timocomN ?? [];
 
     // Város-szintű pontok a múlthoz (kevesebb geokódolás); a gyakoriak elöl.
     const varosa = (c: string | null) => varosNev(c ?? "") || "";
@@ -117,7 +136,7 @@ export async function getKeresesJavaslatok(): Promise<KeresesJavaslatAdat | null
       ...tcHelyek.flatMap(({ f, l }) => [f ? tcCim(f) : "", l ? tcCim(l) : ""]),
       ...[...gyakorisag].sort((a, b) => b[1] - a[1]).map(([v]) => v),
     ];
-    const pt = await pontok(cimek);
+    const pt = await pontok(cimek, vegso);
 
     const tPont = indulas?.lat != null && indulas?.lon != null ? { lat: Number(indulas.lat), lon: Number(indulas.lon) } : pt.get(telephelyCim) ?? { lat: 47.77, lon: 21.91 };
     const telephely = { varos: varosNev(telephelyCim) || "Szakoly", pont: tPont };
@@ -127,7 +146,7 @@ export async function getKeresesJavaslatok(): Promise<KeresesJavaslatAdat | null
       fel: { varos: varosa(s.felrako) || "?", pont: pt.get(varosa(s.felrako)) ?? null },
       le: { varos: varosa(s.lerako) || "?", pont: pt.get(varosa(s.lerako)) ?? null },
       nap: s.nap,
-      dijFt: s.fuvardij && (s.penznem === "Ft" || s.penznem === "HUF") ? Number(s.fuvardij) : s.fuvardij && s.penznem === "EUR" && het.eurArfolyam ? Math.round(Number(s.fuvardij) * het.eurArfolyam) : null,
+      dijFt: dijForintban(s.fuvardij, s.penznem, het.eurArfolyam),
     }));
     const ajanlatok: KeresAjanlat[] = tcHelyek.filter(({ f, l }) => f && l).map(({ t, f, l }) => {
       const ar = t.ajanlat.ar;
@@ -137,7 +156,7 @@ export async function getKeresesJavaslatok(): Promise<KeresesJavaslatAdat | null
         fel: { varos: f!.varos ?? "?", pont: pt.get(tcCim(f!)) ?? null },
         le: { varos: l!.varos ?? "?", pont: pt.get(tcCim(l!)) ?? null },
         felNap: f!.datumTol ?? null,
-        arFt: !ar ? null : penz === "EUR" ? (het.eurArfolyam ? Math.round(ar.osszeg * het.eurArfolyam) : null) : penz === "" || penz === "FT" || penz === "HUF" ? ar.osszeg : null,
+        arFt: ar ? dijForintban(ar.osszeg, penz, het.eurArfolyam) : null,
       };
     });
 
@@ -155,6 +174,10 @@ export async function getKeresesJavaslatok(): Promise<KeresesJavaslatAdat | null
       multIsmert: mult.filter((m) => m.fel.pont && m.le.pont).length,
       multOssz: mult.length,
       timocomDb: ajanlatok.length,
+      ajanlatCim: Object.fromEntries(tcHelyek.map(({ t, f, l }) => [t.id, {
+        cim: `${t.ajanlat.megbizo ?? "?"}: ${f?.varos ?? "?"} → ${l?.varos ?? "?"}`,
+        ar: t.ajanlat.ar ? `${t.ajanlat.ar.osszeg.toLocaleString("hu-HU")} ${t.ajanlat.ar.penznem ?? ""}`.trim() : null,
+      }])),
     };
   } catch (err) {
     console.warn("[kereses-javaslat] nem készült el:", err instanceof Error ? err.message : err);

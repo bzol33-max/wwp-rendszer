@@ -4,7 +4,7 @@
 // bevétel szerint. Tiszta logika: nincs I/O, nincs Date.now().
 
 import { munkanap } from "@/lib/jelenlet/shared";
-import { utKm } from "@/lib/fuvarozas2/tervezes-het-alap";
+import { kovetkezoMunkanap, utKm } from "@/lib/fuvarozas2/tervezes-het-alap";
 import type { Pont } from "@/lib/fuvarozas2/tervezo-alap";
 
 export const MULT_KORZET_KM = 80;
@@ -95,9 +95,9 @@ function median(x: number[]): number | null {
 /** Az első nap vezetési kerete: a tachó/terv szerinti maradék, különben az idő szerint. */
 export function elsoNapKeret(sz: KeresSzabad): number {
   if (sz.vezetesHatraPerc != null && Number.isFinite(sz.vezetesHatraPerc)) return Math.max(0, Math.min(NAPI_MAX, Math.round(sz.vezetesHatraPerc)));
-  if (!sz.ido) return NAPI_MAX;
-  const [h, m] = sz.ido.split(":").map(Number);
-  const perc = h * 60 + (m || 0);
+  const [h, m] = (sz.ido ?? "").split(":").map(Number);
+  if (!Number.isFinite(h)) return NAPI_MAX;
+  const perc = h * 60 + (Number.isFinite(m) ? m : 0);
   // 18:00 után már nem indul; 06:00 előtt teljes nap.
   return Math.max(0, Math.min(NAPI_MAX, 18 * 60 - perc));
 }
@@ -108,19 +108,22 @@ export function napokKell(vezetesPerc: number, keret: number): number {
   return 1 + Math.ceil((vezetesPerc - keret) / NAPI_MAX);
 }
 
+/** Valódi koordináta-e (NaN / végtelen kiszűrve). */
+export const ervenyesPont = (p: Pont | null | undefined): p is Pont => !!p && Number.isFinite(p.lat) && Number.isFinite(p.lon);
+
 type Jelolt = { forras: "mult" | "timocom"; fel: Pont; le: Pont; leVaros: string; dijFt: number | null; partner: string | null; nap: string | null; id: string | null };
 
 function jeloltek(sz: KeresSzabad & { hely: { pont: Pont } }, mult: KeresMult[], ajanlatok: KeresAjanlat[]): Jelolt[] {
   const ki: Jelolt[] = [];
   const masnap = napLep(sz.nap, 1);
   for (const a of ajanlatok) {
-    if (!a.fel.pont || !a.le.pont) continue;
+    if (!ervenyesPont(a.fel.pont) || !ervenyesPont(a.le.pont)) continue;
     if (a.felNap && (a.felNap < sz.nap || a.felNap > masnap)) continue;
     if (utKm(sz.hely.pont, a.fel.pont) > TIMOCOM_KORZET_KM) continue;
     ki.push({ forras: "timocom", fel: a.fel.pont, le: a.le.pont, leVaros: a.le.varos, dijFt: a.arFt, partner: a.megbizo, nap: a.felNap, id: a.id });
   }
   for (const m of mult) {
-    if (!m.fel.pont || !m.le.pont) continue;
+    if (!ervenyesPont(m.fel.pont) || !ervenyesPont(m.le.pont)) continue;
     if (utKm(sz.hely.pont, m.fel.pont) > MULT_KORZET_KM) continue;
     ki.push({ forras: "mult", fel: m.fel.pont, le: m.le.pont, leVaros: m.le.varos, dijFt: m.dijFt, partner: m.partner, nap: m.nap, id: null });
   }
@@ -176,7 +179,7 @@ function iranyCsoportbol(tagok: Jelolt[], sz: KeresSzabad & { hely: { pont: Pont
     }
   }
   return {
-    kulcs: `${Math.round(cel.lat * 10)}:${Math.round(cel.lon * 10)}`,
+    kulcs: `${nev}@${cel.lat.toFixed(2)},${cel.lon.toFixed(2)}`,
     nev: `${nev} felé`,
     cel: { varos: nev, pont: cel },
     cimke: "tovabbi",
@@ -207,9 +210,12 @@ const hazafeleTart = (i: Irany, sz: { hely: { pont: Pont } }, p: KeresParam) =>
 /** Egy kocsi legfeljebb 3 iránya. */
 export function kocsiJavaslat(k: KeresKocsi, mult: KeresMult[], ajanlatok: KeresAjanlat[], p: KeresParam): KocsiJavaslat {
   const alap: KocsiJavaslat = { kod: k.kod, sofor: k.sofor, szabad: k.szabad, hazaNap: null, csakHaza: false, tavolletben: false, nincsAdat: false, iranyok: [] };
-  const sz0 = k.szabad;
-  if (!sz0 || !sz0.hely.pont) return alap;
+  let sz0 = k.szabad;
+  if (!sz0 || !ervenyesPont(sz0.hely.pont) || !ervenyesPont(p.telephely.pont)) return alap;
+  // Hétvégén / ünnepen felszabaduló kocsi: a következő munkanap reggelétől keres (QA #1).
+  if (!munkanap(sz0.nap)) sz0 = { ...sz0, nap: kovetkezoMunkanap(sz0.nap), ido: "06:00", vezetesHatraPerc: null };
   const sz = sz0 as KeresSzabad & { hely: { pont: Pont } };
+  alap.szabad = sz;
   if (k.tavolletNapok.includes(sz.nap)) return { ...alap, tavolletben: true };
   const hazaNap = hazaNapja(sz.nap, k.tavolletNapok);
   const csakHaza = hazaNap <= sz.nap;
@@ -217,6 +223,13 @@ export function kocsiJavaslat(k: KeresKocsi, mult: KeresMult[], ajanlatok: Keres
   let osszes: Irany[] = csoportosit(j).map((t) => iranyCsoportbol(t, sz, hazaNap, p));
   if (csakHaza) osszes = osszes.filter((i) => hazafeleTart(i, sz, p));
 
+  // Azonos kulcsú csoportok (közeli, azonos nevű cél) egyedi kulcsot kapnak (QA #9).
+  const latott = new Map<string, number>();
+  osszes = osszes.map((i) => {
+    const n = latott.get(i.kulcs) ?? 0;
+    latott.set(i.kulcs, n + 1);
+    return n ? { ...i, kulcs: `${i.kulcs}#${n}` } : i;
+  });
   const iranyok: Irany[] = [];
   const pool = new Set(osszes);
   const vesz = (i: Irany | undefined, cimke: IranyCimke) => {
@@ -228,7 +241,7 @@ export function kocsiJavaslat(k: KeresKocsi, mult: KeresMult[], ajanlatok: Keres
   const pontRend = (a: Irany, b: Irany) => Number(b.hazaer) - Number(a.hazaer) || (b.pontszam ?? -1e12) - (a.pontszam ?? -1e12) || gyakorisag(b) - gyakorisag(a);
   if (!csakHaza) {
     vesz([...pool].filter((i) => i.hazaer && i.pontszam != null).sort(pontRend)[0], "tobb-penz");
-    // „Gyakori” csak az, ahova legalább kétszer volt fuvar (vagy egy friss Timocom).
+    // „Gyakori” csak az, ahova legalább kétszer volt fuvar, vagy van rá nyitott Timocom-ajánlat (az duplán számít).
     vesz([...pool].filter((i) => i.hazaer && gyakorisag(i) >= 2).sort((a, b) => gyakorisag(b) - gyakorisag(a) || pontRend(a, b))[0], "gyakori");
   }
   vesz([...pool].filter((i) => hazafeleTart(i, sz, p)).sort(pontRend)[0], "hazafele");

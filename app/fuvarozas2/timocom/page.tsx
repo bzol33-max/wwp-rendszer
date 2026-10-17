@@ -30,15 +30,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ i
   const valIrany = valasztott?.iranyok.find((i) => i.kulcs === irany);
   const honnan = valIrany && valasztott?.szabad ? valasztott.szabad.hely.varos : sp.honnan ?? "";
   const hova = valIrany ? valIrany.cel.varos : sp.hova ?? "";
-  const ajanlatCim = new Map(lista.map((t) => {
-    const hs = t.ajanlat.helyek;
-    const f = hs.find((h) => h.tipus === "fel") ?? hs[0];
-    const l = [...hs].reverse().find((h) => h.tipus === "le") ?? hs[hs.length - 1];
-    return [t.id, {
-      cim: `${t.ajanlat.megbizo ?? "?"}: ${f?.varos ?? "?"} → ${l?.varos ?? "?"}`,
-      ar: t.ajanlat.ar ? `${t.ajanlat.ar.osszeg.toLocaleString("hu-HU")} ${t.ajanlat.ar.penznem ?? ""}`.trim() : null,
-    }] as const;
-  }));
+
   return (
     <div className="flex flex-col gap-5">
       <PageHeader title="Ajánlat" subtitle="Merre keress fuvart a kiürülő kocsiknak (saját múlt, Timocom, hazafelé), és mennyit kérj érte: útvonal, HU-GO útdíj, önköltség, ár." />
@@ -54,7 +46,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ i
       ) : (
         <>
           {sp.id ? <p className="text-sm text-muted-foreground">Ez az ajánlat nem található.</p> : null}
-          <KivalasztottIrany adat={javaslat} kocsi={kocsi} irany={irany} ajanlatCim={ajanlatCim} />
+          <KivalasztottIrany adat={javaslat} kocsi={kocsi} irany={irany} />
           <KozosKalkulator key={`kezi-${honnan}-${hova}`} jarmuvek={jarmuvek} kezdoMegallok={[honnan, hova]} />
         </>
       )}
