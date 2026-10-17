@@ -130,10 +130,6 @@ export type MaVaszon = {
   kocsiNelkul: { id: string; partner: string; utvonal: string; nap: string | null; allapot: Allapot }[];
   teendok: { cimke: string; ertek: string; also: string | null; href: string }[];
   holnapDoboz: { cimke: string; ertek: string; szin: CsempeSzin }[];
-  berHavi: BerOsszesito;
-  berHeti: BerOsszesito;
-  /** A hónap hetei (a hónapba eső napokra vágva), a havi csempe lenyitásához. */
-  berHonapHetei: BerOsszesito[];
   /** Kocsi-kihasználtság (hét és hónap eleje óta) — null, ha nem számolható (a sáv elmarad). */
   kihasznaltsag: KihasznaltsagAdat | null;
 };
@@ -628,9 +624,8 @@ export async function getMaVaszon(): Promise<MaVaszon> {
     }
   }
 
-  // ---------------------------------------------------------------- havi és heti bérfuvar
-  // (2026-10-17: kiemelve a berOsszesitokSzamol-ba, hogy a Pénz → Áttekintés is használja.)
-  const { berHavi, berHeti, berHonapHetei } = await berOsszesitokSzamol(ma, osszesJarmu, jarmuLista);
+  // A havi és heti bérfuvar-csempék 2026-10-17 óta a Pénz → Áttekintés lapon vannak
+  // (getBerOsszesitok) — a Ma lap nem számolja (QA 2. kör #4).
 
   // ---------------------------------------------------------------- kocsik
   // Kocsinként a hiányzó papír/számla (az elmúlt 30 nap lerakásai).
@@ -826,7 +821,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
   ];
 
   return {
-    ma, holnap, holnapCimke, csempek, berHavi, berHeti, berHonapHetei, nyugtazott,
+    ma, holnap, holnapCimke, csempek, nyugtazott,
     kihasznaltsag: await kihasznaltsagIgeret,
     nyugtazhat: session.can("fuvarozas").edit,
     frissitve: ORA(most),

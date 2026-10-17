@@ -1,5 +1,23 @@
 # PROGRESS
 
+## 2026-10-17 — Fuvarozás 2. kör: kocsi-központú felépítés (Kocsik · Megbízások · Pénz)
+
+Terv és fájl-tulajdon: `docs/fuvarozas-2-kor-terv.md`. Tesztek a kód előtt (teszt-2kor-kocsi-sav 111, teszt-2kor-navigacio 23).
+
+- **Fülek:** Kocsik (Ma · Hét · Ajánlat) · Megbízások · Pénz (Áttekintés · Kimutatás · Költségek); a régi címek változatlanok.
+  Szerkezet: `lib/fuvarozas2/fulek-szerkezet.ts`.
+- **Kocsi-sávok a Ma lap tetején** (`kocsi-sav-alap.ts` tiszta logika, `kocsi-sav.ts` betöltő, `kocsi-savok.tsx`):
+  hol van, tachó, futó fuvar (kész/összes megálló, következő megálló terv/tény/eltérés, késés pirosan — ahol a kocsi
+  most áll, az a futó fuvar), heti bevétel, üres km %, fedezet/nap, a következő szabad nap vagy rés → ajánlat.
+  „Döntésre vár” sor (bejövő bérmegbízás + kocsira váró) csak Fuvarozás-joggal. A hét 2,5 mp korláttal.
+- **Kocsi lapja** `/fuvarozas2/kocsi/[kod]`: fej, a mai kártya, a kocsi hete (rések, szabad napok), kihasználtság
+  hét/hónap, CAN-telemetria 7 nap + szervizig km. Blokkonként hibatűrő.
+- **Pénz → Áttekintés:** ide költöztek a bérfuvar-csempék és a kihasználtság-sáv (`getBerOsszesitok`); a Ma lap már
+  nem számolja őket (gyorsabb).
+- Független QA: 6/10 → a két blokkoló (#1 futó fuvar „most” elsőbbsége, #2 jogosultság) és két teljesítmény-pont
+  (#3, #4) javítva. Nyitott apróság: sofőr „Megérkeztem” GPS nélkül nem „most” (ma-tukor), a kocsi-szín a statikus
+  listából, aria-current a kocsi lapon.
+
 ## 2026-10-17 — Tervezés: egy napon belüli fuvarok földrajzi sorrendje
 
 Hiba: Gergő 10.19. — két ugyanaznapi fuvar (Budapest → Szakoly #317, Nyírbátor → Budapest #323) a rögzítés

@@ -7,6 +7,7 @@ import "server-only";
 // SOHA NEM DOB: hiba vagy időtúllépés esetén a sáv szabad nap nélkül jelenik meg.
 
 import { query } from "@/lib/db";
+import { requireSession } from "@/lib/auth/dal";
 import type { MaVaszon } from "@/lib/fuvarozas2/ma-vaszon";
 import { getTervezesHet, type TervezesHet } from "@/lib/fuvarozas2/tervezes-het";
 import { tervHetNapjai } from "@/lib/fuvarozas2/tervezes-het-alap";
@@ -69,8 +70,21 @@ export type KocsiSavElotoltes = Promise<[TervezesHet | null, number]>;
  * getMaVaszon()-nal PÁRHUZAMOSAN indíthatja, így a 2,5 mp-es korlát nem adódik
  * hozzá a Ma-vászon idejéhez.
  */
+/** Csak aki a Fuvarozást látja (nem az Elszámolás-hatókör), annak számolunk — a link a Tervezésre visz (QA #2). */
+async function latjaFuvarozast(): Promise<boolean> {
+  try { return (await requireSession()).can("fuvarozas").view; } catch { return false; }
+}
+
+/** A bejövő-szám 2,5 mp korláttal (QA #3) — a Ma lap nem várhat rá. */
+async function bejovoKorlattal(): Promise<number> {
+  if (!(await latjaFuvarozast())) return -1;
+  let idozito: ReturnType<typeof setTimeout> | undefined;
+  const korlat = new Promise<number>((resolve) => { idozito = setTimeout(() => resolve(0), IDOKORLAT_MS); });
+  try { return await Promise.race([bejovoDb(), korlat]); } finally { if (idozito) clearTimeout(idozito); }
+}
+
 export async function elotoltKocsiSavok(): KocsiSavElotoltes {
-  return Promise.all([hetIdokorlattal(), bejovoDb()]);
+  return Promise.all([hetIdokorlattal(), bejovoKorlattal()]);
 }
 
 export async function getKocsiSavok(vaszon: MaVaszon, elotoltes?: KocsiSavElotoltes): Promise<KocsiSavok> {
@@ -99,5 +113,7 @@ export async function getKocsiSavok(vaszon: MaVaszon, elotoltes?: KocsiSavElotol
     console.warn("[kocsi-sav] a sávok nem állíthatók össze:", err instanceof Error ? err.message : err);
     savok = [];
   }
+  // -1: nincs Fuvarozás-joga → a „Döntésre vár” sor nem jelenik meg.
+  if (bejovo < 0) return { savok, dontesreVar: { bejovo: 0, kocsiraVar: 0 } };
   return { savok, dontesreVar: { bejovo, kocsiraVar: vaszon.kocsiNelkul.length } };
 }

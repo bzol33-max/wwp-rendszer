@@ -95,7 +95,8 @@ export function napCimke(nap: string, ma: string): string;
 Szabályok:
 
 1. **futo**: a `sorok` „megallo” sorai fuvarId szerint csoportosítva, a sorok eredeti sorrendjében. Futó fuvar az
-   ELSŐ olyan fuvar, amelynek van `allapot === "most"` vagy `"kovetkezo"` megállója. `partner` és `jelleg` a hozzá
+   a fuvar, amelynek van `allapot === "most"` megállója (ahol a kocsi most áll); ha ilyen nincs, az ELSŐ olyan,
+   amelynek `"kovetkezo"` megállója van (QA 2. kör #1). `partner` és `jelleg` a hozzá
    tartozó `tipus: "fuvar"` sorból (ha nincs ilyen sor: partner `""`, jelleg `"ber"`). `keszDb` = a fuvar
    `allapot === "kesz"` megállói, `osszDb` = a fuvar összes megállója. `kovetkezo` = a fuvar első `"most"` megállója,
    ha nincs, az első `"kovetkezo"`. Ha nincs ilyen fuvar (minden kész, vagy nincs sor): `futo = null`.

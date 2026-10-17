@@ -198,15 +198,25 @@ eq("csak állás-sor → futo null", kocsiSav(bemenet({ sorok: [allasSor] })).fu
   eq("saját jelleg", s.futo?.jelleg, "sajat");
   eq("saját partner", s.futo?.partner, "WWP raklap");
 }
-// Több futásra alkalmas fuvar: az ELSŐ (sorrend szerint) nyer, akkor is, ha a második „most”.
+// Több fuvar: ahol a kocsi MOST áll, az nyer, akkor is, ha egy korábbi fuvarnak „következő”
+// megállója van (QA 2. kör #1 — A: Debrecen következő, B: Nyíregyháza, ott áll most).
+{
+  const sorok: TukorSor[] = [
+    fuvarSor("A", "Első"), megallo("A", "kesz", "Budapest"), megallo("A", "kovetkezo", "Debrecen"),
+    fuvarSor("B", "Második"), megallo("B", "most", "Nyíregyháza"),
+  ];
+  const s = kocsiSav(bemenet({ sorok }));
+  eq("több fuvar: a „most” fuvar nyer", s.futo?.fuvarId, "B");
+  eq("több fuvar: partner a „most” fuvaré", s.futo?.partner, "Második");
+  eq("több fuvar: következő megálló ott, ahol áll", s.futo?.kovetkezo?.varos, "Nyíregyháza");
+}
+// Ha sehol nincs „most”, az első „következő” fuvar nyer.
 {
   const sorok: TukorSor[] = [
     fuvarSor("A", "Első"), megallo("A", "kovetkezo", "Tata"),
-    fuvarSor("B", "Második"), megallo("B", "most", "Győr"),
+    fuvarSor("B", "Második"), megallo("B", "kovetkezo", "Győr"),
   ];
-  const s = kocsiSav(bemenet({ sorok }));
-  eq("több fuvar: az első nyer", s.futo?.fuvarId, "A");
-  eq("több fuvar: partner az elsőé", s.futo?.partner, "Első");
+  eq("több fuvar most nélkül: az első", kocsiSav(bemenet({ sorok })).futo?.fuvarId, "A");
 }
 // Összefésült megállók: a fuvar megállói nem egymás után állnak (közös napi sorrend).
 {

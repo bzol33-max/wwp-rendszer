@@ -75,9 +75,14 @@ function futoFuvar(sorok: TukorSor[]): KocsiSav["futo"] {
     if (lista) lista.push(s);
     else csoportok.set(s.fuvarId, [s]);
   }
-  for (const [fuvarId, megallok] of csoportok) {
-    const kov = megallok.find((m) => m.allapot === "most") ?? megallok.find((m) => m.allapot === "kovetkezo");
-    if (!kov) continue;
+  // Ahol a kocsi MOST áll, az a futó fuvar — akkor is, ha egy korábbi fuvarnak
+  // még van „következő” megállója (QA 2. kör #1; a ma-tukor is így dönt fuvaron belül).
+  const valasztott =
+    [...csoportok].find(([, m]) => m.some((x) => x.allapot === "most")) ??
+    [...csoportok].find(([, m]) => m.some((x) => x.allapot === "kovetkezo"));
+  if (valasztott) {
+    const [fuvarId, megallok] = valasztott;
+    const kov = megallok.find((m) => m.allapot === "most") ?? megallok.find((m) => m.allapot === "kovetkezo")!;
     const fejSor = sorok.find((s): s is Extract<TukorSor, { tipus: "fuvar" }> => s.tipus === "fuvar" && s.fuvarId === fuvarId);
     return {
       fuvarId,
