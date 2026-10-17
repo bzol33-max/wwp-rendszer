@@ -17,6 +17,9 @@ import { canNapok, type CanNapSor } from "@/lib/jarmu-telemetria/repo";
 import { budapestNapISO } from "@/lib/fuvarozas/idozona";
 
 export const BLOKK_IDOKORLAT_MS = 2500;
+// A Ma és a Hét a lap fő tartalma: a Ma lap sem ad fel rájuk 2,5 mp után, itt is tovább várunk.
+const MA_IDOKORLAT_MS = 20_000;
+const HET_IDOKORLAT_MS = 10_000;
 
 /** Lejár vagy hibázik → null (soha nem dob). Az elengedett ígéret hibáját elnyeli. */
 async function korlattal<T>(fn: () => Promise<T>, ms = BLOKK_IDOKORLAT_MS, nev = "blokk"): Promise<T | null> {
@@ -73,8 +76,8 @@ export async function getKocsiLap(kod: string): Promise<KocsiLap | null> {
   const ma = budapestNapISO();
 
   const [maV, hetV, kihV, telV] = await Promise.all([
-    korlattal(() => getMaVaszon(), BLOKK_IDOKORLAT_MS, "ma"),
-    korlattal(() => getTervezesHet(), BLOKK_IDOKORLAT_MS, "het"),
+    korlattal(() => getMaVaszon(), MA_IDOKORLAT_MS, "ma"),
+    korlattal(() => getTervezesHet(), HET_IDOKORLAT_MS, "het"),
     korlattal(() => getKihasznaltsag(ma), BLOKK_IDOKORLAT_MS, "kihasznaltsag"),
     korlattal(() => canNapok(j.id, napEltol(ma, -7), ma), BLOKK_IDOKORLAT_MS, "telemetria"),
   ]);

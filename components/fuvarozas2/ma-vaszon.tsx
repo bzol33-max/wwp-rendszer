@@ -3,7 +3,6 @@ import type { MaVaszon, Elteres, MaKocsi, MaBlokk, CsempeSzin, MaKocsiAllapot, T
 import { AllasRogzitesGomb } from "@/components/fuvarozas2/allas-rogzites";
 import { NyugtaGomb, VisszavonGomb } from "@/components/fuvarozas2/elteres-nyugta";
 import { AutoFrissites } from "@/components/fuvarozas2/auto-frissites";
-import { Csempesor } from "@/components/fuvarozas2/csempesor";
 import { pihenoNapE } from "@/lib/fuvarozas2/ma-het";
 import { ForrasJel } from "@/components/fuvarozas2/forras-jel";
 
@@ -300,8 +299,6 @@ export function MaVaszonNezet({ adat }: { adat: MaVaszon }) {
   const iroda = adat.csempek.filter((c) => c.kulcs !== "uton" && c.kulcs !== "elteres");
   return (
     <div className="flex flex-col gap-4">
-      <Csempesor berHavi={adat.berHavi} berHeti={adat.berHeti} berHonapHetei={adat.berHonapHetei} kihasznaltsag={adat.kihasznaltsag} />
-
       <div className="-mb-2 flex justify-end">
         <AutoFrissites frissitve={adat.frissitve} />
       </div>
