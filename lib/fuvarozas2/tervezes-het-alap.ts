@@ -280,3 +280,28 @@ export function ajanlatFrissesseg(rogzitveIso: string, most: Date): { orak: numb
   const szoveg = orak < 1 ? "most jött" : orak < 24 ? `${orak} órája` : `${Math.floor(orak / 24)} napja`;
   return { orak, szoveg, regi: orak >= 24 };
 }
+
+/** A következő munkanap (H–P): péntek, szombat, vasárnap után hétfő. */
+export function kovetkezoMunkanap(ma: string): string {
+  const d = new Date(`${ma}T12:00:00Z`);
+  do d.setUTCDate(d.getUTCDate() + 1); while (d.getUTCDay() === 0 || d.getUTCDay() === 6);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Visszfuvar-riasztás (2. hullám #3): a ma és a következő munkanap üres útjai
+ * (rés ≥ 100 km, a hazaút is) — időrendben, egy napon belül a hosszabb elöl.
+ */
+export function riasztandoResek(resek: Res[], ma: string): Res[] {
+  const kov = kovetkezoMunkanap(ma);
+  return resek.filter((r) => r.nap >= ma && r.nap <= kov).sort((a, b) => a.nap.localeCompare(b.nap) || b.km - a.km);
+}
+
+export type RiasztasAjanlat = { id: string; megbizo: string | null; felVaros: string; leVaros: string; regi: boolean; illik: Illeszkedes };
+export type VisszfuvarRiasztas = { res: Res; ajanlat: RiasztasAjanlat | null; hivandok: HivandoPartner[] };
+
+/** Egy réshez a legjobb ajánlat: friss előbb, azon belül a legkisebb többlet; a hívandókból az első 3. */
+export function riasztasOsszerak(res: Res, jeloltek: RiasztasAjanlat[], hivandok: HivandoPartner[]): VisszfuvarRiasztas {
+  const rendezve = [...jeloltek].sort((a, b) => Number(a.regi) - Number(b.regi) || a.illik.tobbletFt - b.illik.tobbletFt);
+  return { res, ajanlat: rendezve[0] ?? null, hivandok: hivandok.slice(0, 3) };
+}

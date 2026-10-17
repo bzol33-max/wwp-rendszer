@@ -20,6 +20,7 @@ import { getEurArfolyamok } from "@/lib/fuvarozas/arfolyam";
 import type { Pont } from "@/lib/fuvarozas2/tervezo-alap";
 import {
   ajanlatFrissesseg, hetEltolva, hetiReszek, illeszt, kiketHivj, kiosztatlanCellak, legjobbRes, tervHetNapjai, utKm,
+  riasztandoResek, riasztasOsszerak, type RiasztasAjanlat, type VisszfuvarRiasztas,
   type AjanlatHely, type HetiFuvar, type HivandoPartner, type Illeszkedes, type MultFuvar, type NapCella, type Res,
 } from "@/lib/fuvarozas2/tervezes-het-alap";
 import { legutobbiTacho } from "@/lib/jarmu-telemetria/repo";
@@ -66,6 +67,8 @@ export type TervezesHet = {
   ajanlatok: HetAjanlat[];
   kijelolt: Res | null;
   hivandok: HivandoPartner[];
+  /** Visszfuvar-riasztás: a ma és a következő munkanap üres útjai ennek a hétnek a napjaiból, a legjobb ajánlattal és a hívandókkal. */
+  riasztasok: VisszfuvarRiasztas[];
   kmKoltseg: number;
   /** Ft / 1 EUR (MNB), null: nincs árfolyam — az EUR oszlop „—”. */
   eurArfolyam: number | null;
@@ -218,6 +221,8 @@ export async function getTervezesHet(resKulcs?: string, het?: string): Promise<T
   const nyitott = (await getTimocomAjanlatok(40, ["nyitott", "ajanlva"]))
     .filter((t) => { const n = felNapja(t); return !n || n >= ma; })
     .slice(0, 12);
+  const riasztandok = riasztandoResek(resek, ma);
+  const riasztasJeloltek = new Map<string, RiasztasAjanlat[]>(riasztandok.map((r) => [r.kulcs, []]));
   const ajanlatok: HetAjanlat[] = await Promise.all(nyitott.map(async (t) => {
     const helyek = t.ajanlat.helyek;
     const f = helyek.find((h) => h.tipus === "fel") ?? helyek[0];
@@ -229,6 +234,13 @@ export async function getTervezesHet(resKulcs?: string, het?: string): Promise<T
     const p = { kmKoltseg, oraFt, ftKmElozmeny: fp && lp ? ftKmElozmeny(fp, lp) : null, eurArfolyam };
     const illik = legjobbRes(resek, fel, le, p);
     const ehhez = kijelolt ? illeszt(kijelolt, fel, le, p) : null;
+    const regi = ajanlatFrissesseg(t.frissitveAt, most).regi;
+    if (t.allapot === "nyitott") {
+      for (const r of riasztandok) {
+        const i = illeszt(r, fel, le, p);
+        if (i) riasztasJeloltek.get(r.kulcs)!.push({ id: t.id, megbizo: t.ajanlat.megbizo, felVaros: fel.varos, leVaros: le.varos, regi, illik: i });
+      }
+    }
     return {
       id: t.id, megbizo: t.ajanlat.megbizo, felVaros: fel.varos, leVaros: le.varos, felNap: fel.nap,
       arSzoveg: t.ajanlat.ar ? `${t.ajanlat.ar.osszeg.toLocaleString("hu-HU")} ${t.ajanlat.ar.penznem ?? "(pénznem?)"}` : null,
@@ -282,6 +294,7 @@ export async function getTervezesHet(resKulcs?: string, het?: string): Promise<T
     uresKmOssz: resek.reduce((a, r) => a + r.km, 0),
     ajanlatok, kijelolt,
     hivandok: kijelolt ? kiketHivj(kijelolt, mult) : [],
+    riasztasok: riasztandok.map((r) => riasztasOsszerak(r, riasztasJeloltek.get(r.kulcs) ?? [], kiketHivj(r, mult))),
     kmKoltseg,
     eurArfolyam,
   };

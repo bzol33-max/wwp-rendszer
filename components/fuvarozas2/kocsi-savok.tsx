@@ -1,5 +1,6 @@
 import Link from "next/link";
-import type { KocsiSav } from "@/lib/fuvarozas2/kocsi-sav-alap";
+import { napCimke, type KocsiSav } from "@/lib/fuvarozas2/kocsi-sav-alap";
+import type { Riasztas } from "@/lib/fuvarozas2/kocsi-sav";
 import { findJarmuByKod, JARMU_SZIN_DOT_CLASS } from "@/lib/fuvarozas/vehicles";
 
 // Fuvarozás 2. kör · Kocsik / Ma: kocsinként egy sáv (docs/fuvarozas-2-kor-terv.md,
@@ -163,6 +164,45 @@ export function KocsiSavok({ savok, holnapCimke }: { savok: KocsiSav[]; holnapCi
       {savok.map((s) => (
         <SavKartya key={s.kod} s={s} holnapCimke={holnapCimke} />
       ))}
+    </section>
+  );
+}
+
+/**
+ * Visszfuvar-riasztás (2. hullám #3): a ma és a következő munkanap üres útjai
+ * kocsinként — mellé a legjobban illő nyitott Timocom-ajánlat és kiket hívj.
+ * Rákattintva a Tervezés hete, kijelölve ez a rés.
+ */
+export function VisszfuvarRiasztasok({ riasztasok, ma }: { riasztasok: Riasztas[]; ma: string }) {
+  if (riasztasok.length === 0) return null;
+  return (
+    <section aria-label="Visszfuvar" className="flex flex-col gap-2 rounded-2xl border border-[var(--f2-amb)]/30 bg-[var(--f2-amb-l)] p-3 text-sm text-[#5a3806]">
+      <div className="font-semibold">Üresen indul — keress rá fuvart</div>
+      {riasztasok.map((r) => {
+        const href = `/fuvarozas2/tervezes?het=${r.hetKezdet}&res=${encodeURIComponent(r.res.kulcs)}#res`;
+        return (
+          <Link key={`${r.res.kocsi}|${r.res.nap}|${r.res.honnan}`} href={href} className="flex flex-col gap-0.5 rounded-xl bg-card/70 px-3 py-2 text-foreground hover:underline">
+            <span className="min-w-0">
+              <b>{r.res.sofor}</b> {napCimke(r.res.nap, ma)}: {r.res.honnan} → {r.res.hova}
+              <span className="text-muted-foreground"> · {r.res.km} km üres ≈ {ezer(r.res.ft)} Ft</span>
+            </span>
+            {r.ajanlat ? (
+              <span className="text-xs text-muted-foreground">
+                Illő ajánlat: <b className="text-foreground">{r.ajanlat.megbizo ?? "Timocom"}</b> {r.ajanlat.felVaros} → {r.ajanlat.leVaros}
+                {` · +${r.ajanlat.illik.plusKm} km · kérj ${ezer(r.ajanlat.illik.kerjFt)} Ft`}
+                {r.ajanlat.regi ? " · régi" : ""}
+              </span>
+            ) : (
+              <span className="text-xs text-muted-foreground">Nincs illő nyitott ajánlat — keress a Timocomon {r.res.honnan} környékéről.</span>
+            )}
+            {r.hivandok.length > 0 ? (
+              <span className="text-xs text-muted-foreground">
+                Hívd: {r.hivandok.map((h) => `${h.partner} (${h.db}×)`).join(", ")}
+              </span>
+            ) : null}
+          </Link>
+        );
+      })}
     </section>
   );
 }

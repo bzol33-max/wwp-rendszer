@@ -10,18 +10,21 @@ import { query } from "@/lib/db";
 import { requireSession } from "@/lib/auth/dal";
 import type { MaVaszon } from "@/lib/fuvarozas2/ma-vaszon";
 import { getTervezesHet, type TervezesHet } from "@/lib/fuvarozas2/tervezes-het";
-import { tervHetNapjai } from "@/lib/fuvarozas2/tervezes-het-alap";
+import { kovetkezoMunkanap, tervHetNapjai, type VisszfuvarRiasztas } from "@/lib/fuvarozas2/tervezes-het-alap";
+import { budapestNapISO } from "@/lib/fuvarozas/idozona";
 import { kocsiSav, type KocsiSav } from "@/lib/fuvarozas2/kocsi-sav-alap";
 
 const IDOKORLAT_MS = 2_500;
 
-export type KocsiSavok = { savok: KocsiSav[]; dontesreVar: { bejovo: number; kocsiraVar: number } };
+/** Visszfuvar-riasztás a hét hétfőjével (a Tervezés-link `het` paraméteréhez). */
+export type Riasztas = VisszfuvarRiasztas & { hetKezdet: string };
+export type KocsiSavok = { savok: KocsiSav[]; dontesreVar: { bejovo: number; kocsiraVar: number }; riasztasok: Riasztas[] };
 
 /** A Tervezés hete legfeljebb 2,5 mp-ig; hiba/időtúllépés → null. A számítás a háttérben lefuthat. */
-async function hetIdokorlattal(): Promise<TervezesHet | null> {
+async function hetIdokorlattal(het?: string): Promise<TervezesHet | null> {
   let idozito: ReturnType<typeof setTimeout> | undefined;
   try {
-    const szamitas = getTervezesHet().catch((err: unknown) => {
+    const szamitas = getTervezesHet(undefined, het).catch((err: unknown) => {
       console.warn("[kocsi-sav] a hét nem tölthető:", err instanceof Error ? err.message : err);
       return null;
     });
@@ -63,7 +66,7 @@ async function bejovoDb(): Promise<number> {
   }
 }
 
-export type KocsiSavElotoltes = Promise<[TervezesHet | null, number]>;
+export type KocsiSavElotoltes = Promise<[TervezesHet | null, number, TervezesHet | null]>;
 
 /**
  * A hét és a bejövő-szám betöltésének elindítása (soha nem utasít el) — a lap a
@@ -84,11 +87,31 @@ async function bejovoKorlattal(): Promise<number> {
 }
 
 export async function elotoltKocsiSavok(): KocsiSavElotoltes {
-  return Promise.all([hetIdokorlattal(), bejovoKorlattal()]);
+  // Pénteken / hétvégén a következő munkanap (hétfő) a jövő héten van — a riasztáshoz azt is betöltjük.
+  const ma = budapestNapISO();
+  const kov = kovetkezoMunkanap(ma);
+  const ezAHet = tervHetNapjai(ma);
+  const kovHet = kov > ezAHet[ezAHet.length - 1] ? hetIdokorlattal(kov) : Promise.resolve(null);
+  return Promise.all([hetIdokorlattal(), bejovoKorlattal(), kovHet]);
+}
+
+function riasztasokBol(...hetek: (TervezesHet | null)[]): Riasztas[] {
+  const ki: Riasztas[] = [];
+  const latott = new Set<string>();
+  for (const h of hetek) {
+    for (const r of h?.riasztasok ?? []) {
+      const kulcs = `${r.res.kocsi}|${r.res.nap}|${r.res.honnan}|${r.res.hova}`;
+      if (latott.has(kulcs)) continue;
+      latott.add(kulcs);
+      ki.push({ ...r, hetKezdet: h!.hetKezdet });
+    }
+  }
+  return ki.sort((a, b) => a.res.nap.localeCompare(b.res.nap) || b.res.km - a.res.km);
 }
 
 export async function getKocsiSavok(vaszon: MaVaszon, elotoltes?: KocsiSavElotoltes): Promise<KocsiSavok> {
-  const [het, bejovo] = await (elotoltes ?? elotoltKocsiSavok());
+  const [het, bejovo, kovHet] = await (elotoltes ?? elotoltKocsiSavok());
+  const riasztasok = bejovo < 0 ? [] : riasztasokBol(het, kovHet);
   const hetKezdet = het?.hetKezdet ?? tervHetNapjai(vaszon.ma)[0];
   let savok: KocsiSav[] = [];
   try {
@@ -114,6 +137,6 @@ export async function getKocsiSavok(vaszon: MaVaszon, elotoltes?: KocsiSavElotol
     savok = [];
   }
   // -1: nincs Fuvarozás-joga → a „Döntésre vár” sor nem jelenik meg.
-  if (bejovo < 0) return { savok, dontesreVar: { bejovo: 0, kocsiraVar: 0 } };
-  return { savok, dontesreVar: { bejovo, kocsiraVar: vaszon.kocsiNelkul.length } };
+  if (bejovo < 0) return { savok, dontesreVar: { bejovo: 0, kocsiraVar: 0 }, riasztasok };
+  return { savok, dontesreVar: { bejovo, kocsiraVar: vaszon.kocsiNelkul.length }, riasztasok };
 }

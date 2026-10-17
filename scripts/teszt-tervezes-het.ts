@@ -1,7 +1,7 @@
 // Tervezés · A hét: rések, ajánlat-illesztés, kiket hívj (lib/fuvarozas2/tervezes-het-alap.ts).
 // Futtatás: npx tsx scripts/teszt-tervezes-het.ts
 
-import { ajanlatFrissesseg, fuvarJel, hetEltolva, hetiReszek, napBelulFuzve, illeszt, kiketHivj, kiosztatlanCellak, legjobbRes, tervHetNapjai, utKm, type HetiFuvar } from "@/lib/fuvarozas2/tervezes-het-alap";
+import { ajanlatFrissesseg, fuvarJel, hetEltolva, hetiReszek, napBelulFuzve, kovetkezoMunkanap, riasztandoResek, riasztasOsszerak, type Res, type RiasztasAjanlat, illeszt, kiketHivj, kiosztatlanCellak, legjobbRes, tervHetNapjai, utKm, type HetiFuvar } from "@/lib/fuvarozas2/tervezes-het-alap";
 
 let ok = 0, bad = 0;
 function eq(nev: string, kapott: unknown, vart: unknown) {
@@ -148,6 +148,26 @@ if (P.nadudvar && P.szakoly) {
   const nincsKoord = { ...f("x", "bp", "bp", "2026-10-19"), fel: null };
   eq("fűzés: koordináta nélküli a végére", napBelulFuzve([nincsKoord, f("y", "nyirbator", "bp", "2026-10-19")], P.balkany).map((x) => x.id), ["y", "x"]);
   eq("fűzés: ismeretlen kezdőpont → marad", napBelulFuzve(fuv, null).map((x) => x.id), ["317", "323"]);
+}
+
+// Visszfuvar-riasztás (2. hullám #3).
+{
+  eq("köv. munkanap: szerda → csütörtök", kovetkezoMunkanap("2026-10-14"), "2026-10-15");
+  eq("köv. munkanap: péntek → hétfő", kovetkezoMunkanap("2026-10-16"), "2026-10-19");
+  eq("köv. munkanap: szombat → hétfő", kovetkezoMunkanap("2026-10-17"), "2026-10-19");
+  eq("köv. munkanap: vasárnap → hétfő", kovetkezoMunkanap("2026-10-18"), "2026-10-19");
+  const res = (kulcs: string, nap: string, km: number): Res => ({ kulcs, kocsi: "X", sofor: "X", nap, honnan: "a", hova: "b", a: P.bp, b: P.szakoly, km, ft: km * 300, haza: false });
+  const resek = [res("1", "2026-10-15", 150), res("2", "2026-10-16", 300), res("3", "2026-10-15", 250), res("4", "2026-10-14", 400), res("5", "2026-10-19", 200)];
+  eq("riasztandó: ma és holnap, időrend, hosszabb elöl", riasztandoResek(resek, "2026-10-15").map((r) => r.kulcs), ["3", "1", "2"]);
+  eq("riasztandó: péntek → hétfő is", riasztandoResek(resek, "2026-10-16").map((r) => r.kulcs), ["2", "5"]);
+  const illik = (tobbletFt: number) => ({ tobbletFt } as unknown as RiasztasAjanlat["illik"]);
+  const a = (id: string, tobblet: number, regi = false): RiasztasAjanlat => ({ id, megbizo: id, felVaros: "f", leVaros: "l", regi, illik: illik(tobblet) });
+  const hiv = [1, 2, 3, 4].map((i) => ({ partner: `P${i}`, db: 2, utolsoUt: "", utolsoNap: "", utolsoDijFt: null, tavKm: 10 }));
+  const r = riasztasOsszerak(resek[0], [a("drága", 90_000), a("régi-olcsó", 10_000, true), a("olcsó", 40_000)], hiv);
+  eq("összerak: friss és legkisebb többlet", r.ajanlat?.id, "olcsó");
+  eq("összerak: max 3 hívandó", r.hivandok.map((h) => h.partner), ["P1", "P2", "P3"]);
+  eq("összerak: csak régi → az is jó", riasztasOsszerak(resek[0], [a("régi", 5, true)], []).ajanlat?.id, "régi");
+  eq("összerak: nincs jelölt → null", riasztasOsszerak(resek[0], [], []).ajanlat, null);
 }
 
 console.log(`teszt-tervezes-het: ${ok} ok, ${bad} hiba`);
