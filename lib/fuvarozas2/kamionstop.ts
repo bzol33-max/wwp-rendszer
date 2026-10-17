@@ -49,7 +49,7 @@ function helyiSztring(perc: number): string {
   return new Date(perc * 60000).toISOString().slice(0, 16);
 }
 
-function napEltol(nap: string, n: number): string {
+export function napEltol(nap: string, n: number): string {
   const d = new Date(`${nap}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
@@ -80,13 +80,13 @@ function eltolas(helyi: number): number {
 }
 
 /** Helyi sztring → valós (UTC) perc. */
-function valos(s: string): number {
+export function valos(s: string): number {
   const h = helyiPerc(s);
   return h - eltolas(h);
 }
 
 /** Valós (UTC) perc → helyi sztring. */
-function helyi(v: number): string {
+export function helyi(v: number): string {
   const nyari = v + 120;
   return helyiSztring(eltolas(nyari) === 120 ? nyari : v + 60);
 }
