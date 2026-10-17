@@ -199,7 +199,7 @@ export function MovementForm({
     }
     setSubmitting(true);
     try {
-      await recordMovements({
+      const { hiba } = await recordMovements({
         site,
         direction,
         items,
@@ -207,6 +207,10 @@ export function MovementForm({
         afa: eladasLehet ? afa : undefined,
         fizetesiMod: eladasLehet ? fizetesiMod : undefined,
       });
+      if (hiba) {
+        toast.error(hiba);
+        return;
+      }
       setSorok([ujSor(types[0] ?? "", otherSites[0] ?? "")]);
       setPartner("");
       setAfa(false);

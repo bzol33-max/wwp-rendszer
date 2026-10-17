@@ -292,6 +292,8 @@ async function addMovement(q: Querier, input: {
 // ennyit fizet. Kassza csak Nyíregyházán van, ezért máshol nem adható ár.
 const AFA_KULCS = 0.27;
 
+class KeszletHiany extends Error {}
+
 export async function recordMovements(input: {
   site: string;
   /**
@@ -339,10 +341,40 @@ export async function recordMovements(input: {
   const bruttoOsszeg = input.afa ? Math.round(nettoOsszeg * (1 + AFA_KULCS)) : nettoOsszeg;
   // Átutalásos (számlás) eladásnál a pénz nem a kasszán keresztül jön be.
   const kasszaba = nettoOsszeg > 0 && fizetesiMod === "keszpenz";
-  if (input.items.length === 0) return;
+  if (input.items.length === 0) return { hiba: null };
 
   const movementGroup = randomUUID();
+  try {
   await withTransaction(async (q) => {
+    // Kiadás / eladás / átszállítás nem viheti mínuszba a telep készletét.
+    // A szerver a tranzakción belüli friss állapotból ellenőriz (zárolás
+    // után), típusonként összevonva — ugyanaz a típus több sorban is jöhet.
+    if (input.direction === "ki" || input.direction === "mozgatas") {
+      await zaroljKeszletet(q);
+      const kell = new Map<string, number>();
+      for (const item of input.items) kell.set(item.type, (kell.get(item.type) ?? 0) + item.qty);
+      for (const [type, qty] of kell) {
+        const keszlet = await q<{ qty: string }>(
+          `select coalesce(sum(case
+             when direction = 'be' then qty
+             when direction = 'mozgatas_be' and elfogadva_at is not null then qty
+             when direction in ('ki','mozgatas') then -qty
+             else 0
+           end), 0) as qty
+           from keszlet_movements
+           where site_id = (select id from sites where name = $1)
+             and type_id = (select id from pallet_types where name = $2)`,
+          [input.site, type]
+        );
+        const elerheto = Number(keszlet[0]?.qty ?? 0);
+        if (qty > elerheto) {
+          throw new KeszletHiany(
+            `Nincs elég ${type} ${input.site} telepen: ${Math.max(elerheto, 0)} db van, ${qty} db-ot próbáltál kiadni. ` +
+              `Ha bejövő átszállításra vár, előbb vedd át.`
+          );
+        }
+      }
+    }
     for (const item of input.items) {
       await addMovement(q, {
         site: input.site,
@@ -429,6 +461,13 @@ export async function recordMovements(input: {
     // A cél oldali "megérkezett" esemény NEM itt keletkezik, hanem az
     // átvételkor (acceptIncomingMovement) — a mozgatás az okézásig úton van.
   });
+  } catch (e) {
+    // A készlethiányt olvasható üzenetként adjuk vissza: a dobott hibák
+    // szövegét a Next éles módban elrejti.
+    if (e instanceof KeszletHiany) return { hiba: e.message };
+    throw e;
+  }
+  return { hiba: null };
 }
 
 // --- Telephelyek közti mozgatás átvétele a cél telepen ---

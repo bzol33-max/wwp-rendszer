@@ -435,7 +435,11 @@ export function MobilMozgatas({
     if (items.length === 0 || tullepes.length > 0 || !cel) return;
     setMentes(true);
     try {
-      await recordMovements({ site, direction: "mozgatas", items });
+      const { hiba } = await recordMovements({ site, direction: "mozgatas", items });
+      if (hiba) {
+        toast.error(hiba);
+        return;
+      }
       await onRecorded();
       toast.success(`${osszes} db elindítva ${cel} felé — ott átvételre vár.`);
       onOpenChange(false);
