@@ -5,6 +5,7 @@
 // lett rögzítve, mint a két saját fuvar, mégis az a nap utolsó fuvarja.
 
 import { berUtkozes, napiSorrend, osszehasonlitFuvarokat, parositasiSorrend, tervIdoMegbizasbol, type SorrendAdat } from "@/lib/fuvarozas2/napi-sorrend";
+import { varosPontTarba } from "../lib/fuvarozas2/varos-pont-tar";
 
 let ok = 0, bad = 0;
 function eq(nev: string, kapott: unknown, vart: unknown) {
@@ -90,6 +91,25 @@ eq("párosítás: a bejövő sorrend nem számít", parositasiSorrend([parSor("3
 
 eq("ütközés: Gergő 10.05. (1 bér + 2 saját) nem az", berUtkozes([{ jelleg: "ber" }, { jelleg: "sajat" }, { jelleg: "sajat" }]), false);
 eq("ütközés: két bérfuvar egy napon az", berUtkozes([{ jelleg: "ber" }, { jelleg: "ber" }]), true);
+
+// 2026-10-19: közelség-alapú lánc (Gergő 10.20.: #324 Szakoly → Kisvárda,
+// #325 Tata → Tompaládony, #329 Záhony → Dunakeszi — id-sorrendben jött,
+// pedig Kisvárda után a 20 km-re lévő Záhony következik, utána Dunakeszi → Tata).
+{
+  const p = (v: string, lat: number, lon: number) => varosPontTarba(v, { lat, lon });
+  p("Szakoly", 47.765, 21.917); p("Kisvárda", 48.226, 22.083); p("Tata", 47.652, 18.318);
+  p("Tompaládony", 47.380, 16.880); p("Záhony", 48.407, 22.175); p("Dunakeszi", 47.628, 19.127);
+  const s = (id: string, felrako: string, lerako: string) => ({ id, felrakasNap: "2026-10-20", lerakasNap: "2026-10-20", felrako, lerako, tervIdo: null, lezart: false });
+  eq("közelség: Kisvárda → Záhony → Dunakeszi → Tata",
+    napiSorrend([s("324", "Szakoly, Rákóczi utca 26", "Kisvárda"), s("325", "Tata", "9662 Tompaládony, 0117/8 hrsz."), s("329", "Záhony, Solinwest Agro Telep", "Dunakeszi, Tőzegtavi út 9.")], (x) => x).map((x) => x.id),
+    ["324", "329", "325"]);
+  eq("közelség: időpontos bérfuvar továbbra is elöl",
+    napiSorrend([s("324", "Szakoly", "Kisvárda"), { ...s("329", "Záhony", "Dunakeszi"), tervIdo: Date.parse("2026-10-20T05:00:00Z") }], (x) => x).map((x) => x.id),
+    ["329", "324"]);
+  eq("közelség: ismeretlen pont → régi szabály (id)",
+    napiSorrend([s("2", "Ismeretlenfalva", "Tata"), s("1", "Szakoly", "Kisvárda")], (x) => x).map((x) => x.id),
+    ["1", "2"]);
+}
 
 console.log(`napi sorrend: ${ok} ok, ${bad} hiba`);
 if (bad) process.exit(1);

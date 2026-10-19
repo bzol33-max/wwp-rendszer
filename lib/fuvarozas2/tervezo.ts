@@ -23,6 +23,7 @@ import { napiSorrend, tervIdoMegbizasbol } from "@/lib/fuvarozas2/napi-sorrend";
 import { alkalmazMenetSorrendet } from "@/lib/menet/menet-alap";
 import { menetSorrendek } from "@/lib/menet/repo";
 import { elozmenyElteres, hetHatas, hetNapjai, legjobbKocsi, type HetEredmeny, type HetFuvar, type HetNap, type HetParam, type Pont } from "@/lib/fuvarozas2/tervezo-alap";
+import { melegitVarosPontokat } from "@/lib/fuvarozas2/varos-pont";
 
 export type BejovoSor = {
   id: string;
@@ -134,6 +135,7 @@ export async function getTervezo(szuro: { m?: string; kocsi?: string }): Promise
      order by m.datum, m.id`,
     [ma]
   );
+  await melegitVarosPontokat(fuvarok.flatMap((f) => [f.felrako, f.lerako]));
 
   const bejovoFuvarok = fuvarok.filter(
     (f) => f.jelleg === "ber" && f.lerakas_nap >= napPlusz(ma, -14) && (f.allapot === "ellenorzesre_var" || (f.allapot === "tervezett" && !f.jarmu_kod))

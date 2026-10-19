@@ -12,6 +12,7 @@
 import { geokodolCachelve } from "@/lib/fuvarozas/erintes-felismeres";
 import { bontsMegallokra } from "@/lib/fuvarozas/varos";
 import { napiSorrend } from "@/lib/fuvarozas2/napi-sorrend";
+import { melegitVarosPontokat } from "@/lib/fuvarozas2/varos-pont";
 
 export type LancFuvar = {
   id: string;
@@ -42,6 +43,7 @@ export async function lancKm(fuvarok: LancFuvar[], kezdoHely: string | null, tav
   // után a téglási RBT, nem a szigetszentmiklósi Fabrika — az id-sorrend két
   // fölösleges, ~250 és ~400 km-es üres szakaszt adott). Egyezésnél a
   // napi-sorrend dönt.
+  await melegitVarosPontokat(fuvarok.flatMap((f) => [f.felrako, f.lerako]));
   const rendezett = napiSorrend(fuvarok, (x) => x);
   const ki: LancKm[] = [];
   let hol = kezdoHely;

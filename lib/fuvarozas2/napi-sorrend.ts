@@ -32,11 +32,18 @@
 // d) Végül az időpont nélküliek, a már időzítettek UTÁN: láncolás (ha egy
 //    fuvar ott rak fel, ahol egy másik lerak — Tata → Tata —, a lerakós
 //    megy előre), majd a rögzítés sorrendje (id).
+//    2026-10-19 (Zoltán: „mindig tudja, mi után mi jön”): ha a települések
+//    koordinátái ismertek (varos-pont-tar.ts), a láncolás KÖZELSÉG alapú —
+//    mindig az a fuvar jön, amelyiknek a felrakója a legközelebb van az
+//    előző lerakójához (Szakoly → Kisvárda után a 20 km-re lévő Záhony, nem
+//    a 300 km-re lévő Tata). Ha valamelyik pont hiányzik, a régi, pontos
+//    városegyezéses láncolás marad.
 // Mesterséges helykitöltő időt (éjfél UTC, reggel 7) a szabály nem használ.
 
 import { varosNev } from "@/lib/fuvarozas/varos";
 import { parseIdopontSzoveg } from "@/lib/fuvarozas/idovonal";
 import { budapestFalioraToInstant } from "@/lib/fuvarozas/idozona";
+import { legvonalKm, varosPontTarbol, type VarosPont } from "@/lib/fuvarozas2/varos-pont-tar";
 
 export type SorrendAdat = {
   id: string;
@@ -88,6 +95,9 @@ export function napiSorrend<T>(lista: T[], adat: (t: T) => SorrendAdat): T[] {
   });
   elemek.sort((x, y) => kulcsSorrend(x.k, y.k));
 
+  // d/1) Közelség-alapú láncolás (ha minden érintett pont ismert).
+  if (kozelsegiLancolas(elemek)) return elemek.map((e) => e.t);
+
   // d) Láncolás az időpont nélküliek között, azonos napon: ha egy későbbi
   // elem lerakója ennek a felrakója, az előre kerül. Az időzítettek és a már
   // elkezdettek sorrendjét nem bolygatja. Körbeérő láncnál (A → B → A) a
@@ -112,6 +122,59 @@ export function napiSorrend<T>(lista: T[], adat: (t: T) => SorrendAdat): T[] {
     if (!mozdult) break;
   }
   return elemek.map((e) => e.t);
+}
+
+function varosPont(cim: string | null, utolso: boolean): VarosPont | null {
+  if (!cim) return null;
+  const v = varosNev(cim);
+  if (!v) return null;
+  // Több megállós címnél („A + B”) a felrakó az első, a lerakó az utolsó település.
+  const reszek = v.split(" + ");
+  return varosPontTarbol(utolso ? reszek[reszek.length - 1] : reszek[0]) ?? null;
+}
+
+/**
+ * Az időpont nélküli (csoport 2) fuvarok csoportjain belül mohó legközelebbi-
+ * szomszéd lánc: mindig az jön, amelyik felrakója a legközelebb van az előző
+ * lerakójához. A kiinduló pont a csoport előtti elem lerakója; ha nincs
+ * ilyen, a csoport első eleme marad az első. Csak akkor dolgozik, ha a
+ * lista MINDEN időpont nélküli elemének mindkét pontja ismert — különben
+ * false, és a régi szabály fut. Egyenlő távolságnál a meglévő sorrend dönt.
+ */
+function kozelsegiLancolas(elemek: { a: SorrendAdat; k: FuvarSorrendKulcs }[]): boolean {
+  const csoport2 = elemek.filter((e) => e.k.csoport === 2);
+  if (csoport2.length < 2) return false;
+  const pontok = new Map(csoport2.map((e) => [e, { fel: varosPont(e.a.felrako, false), le: varosPont(e.a.lerako, true) }]));
+  if ([...pontok.values()].some((p) => !p.fel || !p.le)) return false;
+  const egyCsoport = (x: FuvarSorrendKulcs, y: FuvarSorrendKulcs) => x.nap === y.nap && x.nap2 === y.nap2 && x.csoport === y.csoport;
+  let i = 0;
+  while (i < elemek.length) {
+    if (elemek[i].k.csoport !== 2) { i++; continue; }
+    let veg = i + 1;
+    while (veg < elemek.length && egyCsoport(elemek[veg].k, elemek[i].k)) veg++;
+    const maradek = elemek.slice(i, veg);
+    const lanc: typeof maradek = [];
+    let elozo: VarosPont | null = i > 0 ? varosPont(elemek[i - 1].a.lerako, true) : null;
+    if (!elozo) {
+      const elso = maradek.shift()!;
+      lanc.push(elso);
+      elozo = pontok.get(elso)!.le;
+    }
+    while (maradek.length) {
+      let legjobb = 0;
+      let legjobbKm = Number.POSITIVE_INFINITY;
+      maradek.forEach((e, j) => {
+        const km = legvonalKm(elozo!, pontok.get(e)!.fel!);
+        if (km < legjobbKm - 0.5) { legjobbKm = km; legjobb = j; }
+      });
+      const [kov] = maradek.splice(legjobb, 1);
+      lanc.push(kov);
+      elozo = pontok.get(kov)!.le;
+    }
+    elemek.splice(i, lanc.length, ...lanc);
+    i = veg;
+  }
+  return true;
 }
 
 /** Időbélyeg ms-ban — a Postgres „2026-09-20 07:00:00+00” és az ISO „…Z” alakját is érti. */

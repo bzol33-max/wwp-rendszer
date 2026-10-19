@@ -51,6 +51,7 @@ import { bejegyzesekNapokra, tavolletekNapokra, type Bejegyzes, type TavolletTip
 import { kocsiJelzesek, type KartyaJelzes } from "@/lib/fuvarozas2/ma-kartya-alap";
 import { pihenoNapE } from "@/lib/fuvarozas2/ma-het";
 import { munkanap } from "@/lib/jelenlet/shared";
+import { melegitVarosPontokat } from "@/lib/fuvarozas2/varos-pont";
 
 export type CsempeSzin = "normal" | "amber" | "red" | "mint";
 export type Csempe = { kulcs: string; cimke: string; ertek: string; also: string | null; szin: CsempeSzin; href: string | null };
@@ -358,6 +359,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
      order by m.datum, m.id`,
     [ma, holnap]
   );
+  await melegitVarosPontokat(sorok.flatMap((s) => [s.felrako, s.lerako])); // napi sorrend: közelség-alapú lánc
 
   // 1b. A ma már lezárult (teljesítve vagy későbbi állapotú) fuvarok — CSAK a
   // kocsi tükréhez (a nap munkája), az eltérések, csempék, holnap és az

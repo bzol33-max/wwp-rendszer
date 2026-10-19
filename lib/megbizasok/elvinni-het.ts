@@ -9,6 +9,7 @@ import { napiSorrend, tervIdoMegbizasbol } from "@/lib/fuvarozas2/napi-sorrend";
 import { findJarmuByKod } from "@/lib/fuvarozas/vehicles";
 import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
 import { elvinniCellaKm, hetKezdeteElvinni } from "@/lib/megbizasok/elvinni-szabalyok";
+import { melegitVarosPontokat } from "@/lib/fuvarozas2/varos-pont";
 
 type HetiMegbizas = {
   id: string;
@@ -126,6 +127,7 @@ export async function getElvinniHet(
      order by m.datum, m.id`,
     [hetKezdet, hetVege]
   );
+  await melegitVarosPontokat(munkak.flatMap((m) => [m.felrako, m.lerako]));
 
   const [felrako] = await query<{ cim: string }>(
     `select felrako as cim from fuvar_megbizasok where id = $1`,

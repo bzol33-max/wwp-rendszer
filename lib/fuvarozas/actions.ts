@@ -54,6 +54,7 @@ import { alkalmazMenetSorrendet } from "@/lib/menet/menet-alap";
 import { menetSorrendek } from "@/lib/menet/repo";
 import { naplozEtat } from "./eta-naplo";
 import { megalloTavozas, soforAllapotSzakaszokbol, tanultRakodas, vezetSzaballyal, type LancSzabaly, type SoforAllapot } from "./eta-lanc";
+import { melegitVarosPontokat } from "@/lib/fuvarozas2/varos-pont";
 
 /**
  * A NAV hivatalos, aktuális havi gázolajárának automatikus lekérése (napi
@@ -828,6 +829,8 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
     ...berFuvarok.filter((row) => !napElottKesz(row)).map((row) => ({ row, tipus: "sajat" as const })),
     ...sajatFuvarok.filter((row) => !napElottKesz(row)).map((row) => ({ row, tipus: "ber" as const })),
   ];
+  // A napi sorrend közelség-alapú láncolásához (napi-sorrend.ts).
+  await melegitVarosPontokat(maiFuvarok.flatMap(({ row }) => [row.felrako, row.lerako]));
   // Csúszó: a lerakási napja a megjelenített nap előtt volt, és még nincs kész.
   const csuszoIds = new Set(
     maiFuvarok.filter(({ row }) => !row.teljesitve && (row.lerakas_datum ?? row.datum) < napISO).map(({ row }) => row.id)

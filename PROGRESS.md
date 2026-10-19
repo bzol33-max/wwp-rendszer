@@ -3883,3 +3883,9 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 - Most 5 oszlop: Partner (+ adószám alatta) · Fuvar (db + utolsó dátum) · Határidők („60 nap” + „papír 7 napon belül” / „papír: nincs kikötve”) · Számla e-mail (első cím + „+1”) · Postacím. A „számlán kért szám” és a sablon a lenyitott sorban.
 - A papír-határidő nem számít hiánynak (csak az adja meg, aki kiköti). Címek egy alakra: `lib/fuvarozas2/cim-formazas.ts` `cimSzep` (H-/HU- le, csupa nagybetű szelídítve, fordított sorrend javítva) — kijelzéskor és az automatikus kitöltéskor.
 - Teszt: `teszt-partner-kitoltes.ts` 22/0, teljes `npm run teszt`, tsc, eslint, build.
+
+## 2026-10-19 — Napi sorrend: közelség-alapú láncolás
+- Tünet: Gergő 10.20-i holnapja #324 (Szakoly → Kisvárda), #325 (Tata → Tompaládony), #329 (Záhony → Dunakeszi) sorrendben, azaz id szerint állt — egyiken sincs időpont, és a régi láncolás csak PONTOS városegyezést ismert.
+- Javítás: `lib/fuvarozas2/napi-sorrend.ts` d) szabály — ha a települések koordinátái ismertek, az időpont nélküli fuvarok mohó legközelebbi-szomszéd láncot alkotnak (az előző lerakóhoz legközelebbi felrakó jön). Hiányzó pontnál a régi szabály. Időpontos/elkezdett fuvarok sorrendje változatlan.
+- Új: `varos-pont-tar.ts` (tiszta, szinkron tár + haversine), `varos-pont.ts` (`melegitVarosPontokat`, HU-GO gyorsítótárazott geokód, max 3 mp). Melegítés a betöltőkben: Ma (ma-vaszon), idővonal/sofőr-app (actions), Tervező, elvinni-hét, lancKm.
+- Teszt: teszt-napi-sorrend +3 eset (Gergő 10.20.: 324 → 329 → 325), 33 ok; ures-km, ma-tukor, tervezo, elvinni-valo, ma-het, tervezes-het, menetterv, optimalizalo, eta-lanc, het-utemterv, kocsi-sav, ma-kartya, kereses-javaslat mind zöld; tsc, eslint, build OK.
