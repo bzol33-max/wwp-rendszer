@@ -228,3 +228,57 @@ export async function getElvinniHet(
 
   return { hetKezdet, napok, sorok, legkorabban: elvinni.legkorabban, legkesobb: elvinni.legkesobb };
 }
+
+export type ElvinniHely = { jarmuKod: string; cimke: string; nap: string; km: number; utan: string | null };
+
+/** Útba esőnek számít, ha ennyi üres km-en belül elérhető a felrakó (piros határidőnél nincs korlát). */
+export const UTBA_ESO_KM = 80;
+
+/**
+ * Egy rugalmas saját fuvar (Elvinni való) legjobb helye (2026-10-19, 2. lépés):
+ * az ablakán belül (legkorábban/ma … határidő, hétköznap) minden kocsi minden
+ * napjára az üres km a felrakóig — foglalt napon az aznapi utolsó lerakótól,
+ * szabad napon a kocsi állóhelyétől (getElvinniHet cellái). A legkevesebb km
+ * nyer, egyezésnél a korábbi nap. Legfeljebb 3 hetet néz előre.
+ */
+export async function legjobbElvinniHelyek(id: string, db = 3): Promise<ElvinniHely[]> {
+  const [sor] = await query<{ legkorabban: string | null; legkesobb: string | null; ma: string }>(
+    `select to_char(legkorabban, 'YYYY-MM-DD') as legkorabban, to_char(legkesobb, 'YYYY-MM-DD') as legkesobb,
+            (now() at time zone 'Europe/Budapest')::date::text as ma
+       from fuvar_megbizasok where id = $1 and idopont_nyitott and torolt_at is null`,
+    [id]
+  );
+  if (!sor) return [];
+  const tol = sor.legkorabban && sor.legkorabban > sor.ma ? sor.legkorabban : sor.ma;
+  // Lejárt határidőnél: ma és a következő 4 munkanap — mielőbb el kell vinni.
+  const ig = sor.legkesobb && sor.legkesobb >= tol ? sor.legkesobb : (() => {
+    const d = new Date(`${tol}T12:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + 6);
+    return d.toISOString().slice(0, 10);
+  })();
+  const hetek: string[] = [];
+  const d = new Date(`${tol}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  while (d.toISOString().slice(0, 10) <= ig && hetek.length < 3) {
+    hetek.push(d.toISOString().slice(0, 10));
+    d.setUTCDate(d.getUTCDate() + 7);
+  }
+  // Rendszám nélküli kocsi (pl. a még forgalomba nem állt JANI) nem kap javaslatot.
+  const jarmuLista = await getJarmuvek();
+  const uzemel = (kod: string) => (findJarmuByKod(kod, jarmuLista)?.rendszamok.length ?? 0) > 0;
+  const jeloltek: ElvinniHely[] = [];
+  const hetAdatok = await Promise.all(hetek.map((het) => getElvinniHet(id, het)));
+  for (const h of hetAdatok) {
+    for (const s of h.sorok) {
+      if (!uzemel(s.kod)) continue;
+      for (const c of s.napok) {
+        const hn = new Date(`${c.nap}T12:00:00Z`).getUTCDay();
+        if (c.nap < tol || c.nap > ig || hn === 0 || hn === 6 || c.km == null || c.megNemViheto) continue;
+        const utolso = c.megbizasok.at(-1);
+        jeloltek.push({ jarmuKod: s.kod, cimke: s.cimke, nap: c.nap, km: c.km, utan: utolso ? varosNev(utolso.lerako ?? "") || utolso.lerako : null });
+      }
+    }
+  }
+  jeloltek.sort((a, b) => a.km - b.km || a.nap.localeCompare(b.nap));
+  return jeloltek.slice(0, db);
+}
