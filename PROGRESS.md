@@ -3920,3 +3920,8 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 - Partnerek › Saját fuvar: magyarázó sáv (megbízó mindig a WWP, itt a címzettek/feladók) + link az útnaplóra.
 - Teszt: teljes `npm run teszt`, tsc, eslint, build.
 - (20:20) A „díja lett volna” alapja ezentúl a bérfuvarjaink tényleges átlagos Ft/rakott km-e (forintos fuvarok, az időszak végéig 90 nap, ugyanaz, mint a kocsi-kihasználtság belső díja); a `sajat_fuvar_km_dij_ft` beállítás csak tartalék, ha nincs adat. `koltseg-adat.ts` `sajatKmDijFt`/`sajatKmDijForras`; a Kimutatás kiírja az alapot.
+
+## 2026-10-19 — Rugalmas saját fuvar, 2. lépés: legjobb hely + „Ide” gomb
+- `lib/megbizasok/elvinni-het.ts` `legjobbElvinniHelyek`: az ablakon belül (legkorábban/ma … határidő, hétköznap, max 3 hét) minden üzemelő kocsi minden napjára az üres km a felrakóig (foglalt napon az aznapi utolsó lerakótól, szabad napon az állóhelytől — a meglévő getElvinniHet cellái). Legkevesebb km nyer, egyezésnél a korábbi nap. Rendszám nélküli kocsi (JANI) kimarad.
+- Tervezés hét, Elvinni való sor: a legjobb nap cellájában ★ kártya („Gergő · Dunakeszi után · +40 km”) és „Ide” gomb (`kocsihozAdom` — egy kattintással kocsin, a sofőr látja). Csillag csak „útba esőnél” (≤ 80 km, `UTBA_ESO_KM`), piros határidőnél kerülővel is. Számítás párhuzamosan, 6 mp-es korláttal.
+- Teszt: Postgres-teszt adatbázison ideiglenes elvinni fuvarral (Záhony → Szakoly, 10.20–10.24): Micó szabad napjai +109 km, Gergő +137 km, JANI kimarad; első futás 3,9 s, második 0,3 s (geokód-gyorsítótár). Tesztek, tsc, eslint, build OK.

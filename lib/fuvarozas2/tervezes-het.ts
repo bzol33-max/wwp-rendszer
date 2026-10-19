@@ -32,6 +32,7 @@ import { bejegyzesekNapokra, elofordulNapon, tavolletekNapokra, type Bejegyzes, 
 import { getKihasznaltsag, type KihasznaltsagAdat } from "@/lib/fuvarozas2/kihasznaltsag";
 import type { JarmuSzin } from "@/lib/fuvarozas/vehicles";
 import { elvinniSurgosseg, type ElvinniSurgosseg } from "@/lib/megbizasok/elvinni-szabalyok";
+import { legjobbElvinniHelyek, UTBA_ESO_KM, type ElvinniHely } from "@/lib/megbizasok/elvinni-het";
 
 export type HetAjanlat = {
   id: string;
@@ -87,7 +88,7 @@ export type TervezesHet = {
    * fuvar azokon a napokon jelenik meg, amelyekre vihető (legkorábban …
    * határidő, ma előtt nem). Sürgősség: elvinniSurgosseg.
    */
-  elvinni: { id: string; utvonal: string; legkesobb: string | null; surgosseg: ElvinniSurgosseg; hatarnap: boolean }[][];
+  elvinni: { id: string; utvonal: string; legkesobb: string | null; surgosseg: ElvinniSurgosseg; hatarnap: boolean; legjobb: (ElvinniHely & { utbaEso: boolean }) | null }[][];
   resek: Res[];
   uresKmOssz: number;
   ajanlatok: HetAjanlat[];
@@ -395,6 +396,14 @@ export async function getTervezesHet(resKulcs?: string, het?: string): Promise<T
       where jelleg = 'sajat' and elokeszites and idopont_nyitott and torolt_at is null
       order by legkesobb nulls last, id`
   ).catch(() => []);
+  // 2. lépés: fuvaronként a legjobb hely (kocsi + nap, legkevesebb üres km a felrakóig).
+  // Időkorlát: a lap nem várhat 6 mp-nél tovább — ami addig nem készül el, csillag nélkül marad (a geokód utána már gyorsítótárból jön).
+  const legjobbak = new Map<string, (ElvinniHely & { utbaEso: boolean }) | null>();
+  const legjobbMunka = Promise.all(elvinniSorok.slice(0, 15).map(async (e) => {
+    const [h] = await legjobbElvinniHelyek(e.id, 1).catch((err) => { console.warn("[het] elvinni legjobb hely:", err instanceof Error ? err.message : err); return [] as ElvinniHely[]; });
+    legjobbak.set(e.id, h ? { ...h, utbaEso: h.km <= UTBA_ESO_KM || elvinniSurgosseg(e.legkesobb, ma) === "piros" } : null);
+  }));
+  await Promise.race([legjobbMunka, new Promise((r) => setTimeout(r, 6000))]);
   const elvinni = napok.map((nap) =>
     elvinniSorok
       .filter((e) => nap >= ma && (!e.legkorabban || nap >= e.legkorabban) && (!e.legkesobb || nap <= e.legkesobb || (e.legkesobb < ma && nap === ma)))
@@ -404,6 +413,7 @@ export async function getTervezesHet(resKulcs?: string, het?: string): Promise<T
         legkesobb: e.legkesobb,
         surgosseg: elvinniSurgosseg(e.legkesobb, ma),
         hatarnap: !!e.legkesobb && (nap === e.legkesobb || (e.legkesobb < ma && nap === ma)),
+        legjobb: legjobbak.get(e.id) ?? null,
       }))
   );
 

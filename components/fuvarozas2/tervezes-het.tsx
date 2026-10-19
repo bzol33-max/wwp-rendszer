@@ -14,6 +14,7 @@ import { kocsiSzin } from "@/lib/fuvarozas2/kocsi-szin";
 import { BejegyzesIkon } from "@/components/fuvarozas2/bejegyzes-ikon";
 import { BejegyzesFelvitel, BejegyzesTorles } from "@/components/fuvarozas2/het-bejegyzes";
 import { HetOsszegzes } from "@/components/fuvarozas2/het-osszegzes";
+import { ElvinniIdeGomb } from "@/components/fuvarozas2/elvinni-ide-gomb";
 
 // Tervezés · A hét (az új terv 2. oldala): kocsinként a hét, a rések
 // kiemelve, alul a kocsira váró fuvarok, mellette a bejött ajánlatok, alatta a kijelölt rés teendői.
@@ -388,13 +389,25 @@ export function TervezesHetNezet({ adat, szerkeszthet }: { adat: TervezesHet; sz
                   <td className="px-4 py-3">
                     <div className="font-semibold">Elvinni való</div>
                     <div className="text-xs text-muted-foreground">{new Set(adat.elvinni.flat().map((e) => e.id)).size} rugalmas saját · bármelyik napon vihető</div>
+                    <div className="mt-1 text-xs text-muted-foreground">★ = ahol a legkevesebb üres km-rel útba esik (≤ 80 km; piros határidőnél kerülővel is)</div>
                   </td>
                   {adat.elvinni.map((c, i) => (
                     <Fragment key={adat.napok[i]}>
                     {savElott.has(adat.napok[i]) ? <SzunetSav cimke={savElott.get(adat.napok[i])!} /> : null}
                     <td className={cn("px-1.5 py-2", adat.napok[i] === adat.ma && "bg-[var(--f2-mint-l)]/35")}>
                       <div className="flex flex-col gap-1">
-                        {c.map((e) => (
+                        {c.map((e) => {
+                          const legjobbItt = e.legjobb && e.legjobb.utbaEso && e.legjobb.nap === adat.napok[i] ? e.legjobb : null;
+                          if (legjobbItt) return (
+                            <div key={e.id} className="rounded-lg bg-[var(--f2-mint-l)] px-2 py-1 text-xs ring-1 ring-[var(--f2-mint)]/60">
+                              <Link href={`/fuvarozas2/megbizasok?elvinni=${e.id}`} className="block">
+                                <div className="truncate font-semibold">★ {e.utvonal}</div>
+                                <div className="truncate text-muted-foreground">{legjobbItt.cimke.split(" (")[0]}{legjobbItt.utan ? ` · ${legjobbItt.utan} után` : ""} · +{legjobbItt.km} km</div>
+                              </Link>
+                              {szerkeszthet ? <ElvinniIdeGomb id={e.id} jarmuKod={legjobbItt.jarmuKod} nap={legjobbItt.nap} cimke={legjobbItt.cimke.split(" (")[0]} /> : null}
+                            </div>
+                          );
+                          return (
                           <Link key={e.id} href={`/fuvarozas2/megbizasok?elvinni=${e.id}`}
                             className={cn("block rounded-lg border border-dashed px-2 py-1 text-xs",
                               e.surgosseg === "piros" ? "border-[var(--f2-red)]/50 bg-[var(--f2-red-l)] text-[var(--f2-red)]"
@@ -403,7 +416,8 @@ export function TervezesHetNezet({ adat, szerkeszthet }: { adat: TervezesHet; sz
                             <div className="truncate font-semibold">{e.utvonal}</div>
                             {e.hatarnap ? <div className="truncate">{e.legkesobb && e.legkesobb < adat.ma ? "határidő lejárt" : "utolsó nap"}</div> : null}
                           </Link>
-                        ))}
+                          );
+                        })}
                       </div>
                     </td>
                     </Fragment>
