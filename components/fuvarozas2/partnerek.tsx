@@ -246,7 +246,7 @@ function PartnerSor({ p, nyitott, onNyit, szerkeszthet, kijelolve, onKijelol }: 
           </div>
         </td>
         <td className="whitespace-nowrap px-3 py-2.5 tabular-nums">
-          {p.fizetesi_hatarido_nap != null ? <>{p.fizetesi_hatarido_nap} nap</> : nincs}
+          {p.fizetesi_hatarido_nap === 0 ? "készpénz" : p.fizetesi_hatarido_nap != null ? <>{p.fizetesi_hatarido_nap} nap</> : nincs}
           <div className="text-xs text-muted-foreground">{p.papir_bekuldesi_hatarido_nap != null ? `papír ${p.papir_bekuldesi_hatarido_nap} napon belül` : p.berfuvar ? "papír: nincs kikötve" : ""}</div>
         </td>
         <td className="max-w-[17rem] px-3 py-2.5">
@@ -266,7 +266,7 @@ function PartnerSor({ p, nyitott, onNyit, szerkeszthet, kijelolve, onKijelol }: 
               {M("nevvaltozatok", "Névváltozatok (; elválasztva)")}
               {M("adoszam", "Adószám")}
               {M("szekhely", "Székhely")}
-              {M("fizetesi_hatarido_nap", "Fizetési határidő (nap)", "number")}
+              {M("fizetesi_hatarido_nap", "Fizetési határidő (nap, 0 = készpénz)", "number")}
               {M("papir_bekuldesi_hatarido_nap", "Papír beküldési határidő (nap)", "number")}
               {M("szamlazasi_email", "Számlázási e-mail")}
               {M("email_domainek", "E-mail domainek (; elválasztva)")}
@@ -277,7 +277,7 @@ function PartnerSor({ p, nyitott, onNyit, szerkeszthet, kijelolve, onKijelol }: 
                   <option value="pozicioszam">pozíciószám</option><option value="reise_id">Reise / Út ID</option><option value="hivatkozas">hivatkozás</option>
                 </select>
               </label>
-              <div className="flex flex-col gap-1 pt-4">{K("szamla_email_nem_kell", "nem kér számla-e-mailt")}{K("posta_nem_kell", "nem kér postát")}{K("megbizas_pdf_csatolva", "megbízás PDF-et is csatolni")}</div>
+              <div className="flex flex-col gap-1 pt-4">{K("szamla_email_nem_kell", "nem kér számla-e-mailt (pl. önszámlázás)")}{K("posta_nem_kell", "nem kér postát")}{K("megbizas_pdf_csatolva", "megbízás PDF-et is csatolni")}</div>
               {M("megjegyzes", "Megjegyzés")}
               <div className="flex flex-col gap-1 text-xs text-muted-foreground">Megbízás-sablon
                 <span className="text-sm text-foreground">{p.sablon_azonosito ?? "nincs (LLM olvassa)"}</span>

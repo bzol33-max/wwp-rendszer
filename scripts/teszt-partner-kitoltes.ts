@@ -67,7 +67,9 @@ eq("üres", emailLista(""), null);
 // Fizetési napok: 0 (készpénz) kimarad, a medián a szokásos értékre kerekít.
 const napos = (napok: number[]) => napok.map((n, i) => sz(`S-${i}`, "2026-01-01", new Date(Date.UTC(2026, 0, 1 + n)).toISOString().slice(0, 10), ""));
 eq("59/60/61/56 → 60", fizetesiNapSzamlakbol(napos([59, 60, 61, 56, 58])), 60);
-eq("csak készpénz → null", fizetesiNapSzamlakbol(napos([0, 0])), null);
+eq("csak készpénz → 0 (készpénz)", fizetesiNapSzamlakbol(napos([0, 0])), 0);
+eq("nincs számla → null", fizetesiNapSzamlakbol([]), null);
+eq("vegyes: a 0 kimarad", fizetesiNapSzamlakbol(napos([0, 30, 30])), 30);
 eq("20/21/31 → 21 (nem szokásos)", fizetesiNapSzamlakbol(napos([20, 21, 31])), 21);
 eq("44/45 → 45", fizetesiNapSzamlakbol(napos([44, 45])), 45);
 

@@ -3900,3 +3900,8 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 - A tulajdonos: „nekem az adószám nem is fontos — partner, kapcsolattartó, hány munkánk volt”.
 - Sor: Partner · Kapcsolattartó (a megbízást küldő levelek feladói a Levelekből — partnerhez kötve vagy a cég e-mail-domainje alapján — + Kapcsolatok törzs név szerint párosítva; a leggyakoribb elöl, „+N”) · Munkák (db, bérfuvar-forgalom pénznemenként, utolsó dátum) · Fizetés · Számla · posta. Adószám nincs a sorban és nem hiány (a szerkesztőben megmaradt).
 - Teszt: teljes `npm run teszt`, tsc, eslint, build.
+
+## 2026-10-19 (5) — Készpénzes partner nem hiány; önszámlázás
+- Tímár Dávid mindig készpénzzel fizetett: ha a partner összes számlája 0 napos, a fizetési határidő 0 = „készpénz” (kijelzés is így), nem hiány.
+- Kuehne + Nagel önszámlázással (Gutschrift) dolgozik: a partneren a „nem kér számla-e-mailt (pl. önszámlázás)” jelölés, a fuvar számlaszáma „GS-<bizonylatszám>”. Parkolt bővítés (csak ha lesz több ilyen partner): „Számlázás módja” mező, „jóváírásra vár” státusz 14 napos riasztással, Gutschrift rögzítés + egyeztetés, Gmail-figyelés „Gutschrift” tárgyra.
+- Teszt: `teszt-partner-kitoltes.ts` 24/0, teljes `npm run teszt`, tsc, eslint, build.

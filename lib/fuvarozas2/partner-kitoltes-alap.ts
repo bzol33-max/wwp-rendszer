@@ -103,8 +103,17 @@ export function emailLista(nyers: string | null): string | null {
 
 const SZOKASOS_NAPOK = [8, 15, 30, 45, 60, 90];
 
-/** A számlák kiállítás→határidő napjaiból a jellemző fizetési határidő (0 = készpénz, kimarad). */
+/**
+ * A számlák kiállítás→határidő napjaiból a jellemző fizetési határidő. A 0 nap
+ * (készpénz) kimarad — de ha a partner MINDIG készpénzzel fizetett, az eredmény
+ * 0 = „készpénz” (Budaházi Zoltán, 2026-10-19: Tímár Dávid kp-s, nem hiány).
+ */
 export function fizetesiNapSzamlakbol(szamlak: KitoltesSzamla[]): number | null {
+  const osszes = szamlak
+    .slice(0, 12)
+    .filter((sz) => sz.kiallitas_datum && sz.fizetesi_hatarido)
+    .map((sz) => Math.round((Date.parse(`${sz.fizetesi_hatarido!.slice(0, 10)}T12:00:00Z`) - Date.parse(`${sz.kiallitas_datum!.slice(0, 10)}T12:00:00Z`)) / 86400000));
+  if (osszes.length > 0 && osszes.every((n) => n === 0)) return 0;
   const napok = szamlak
     .slice(0, 12)
     .map((sz) => {
