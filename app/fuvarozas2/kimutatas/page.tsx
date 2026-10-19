@@ -36,11 +36,12 @@ function Mezo({ cim, ertek, alcim, szin, jel }: { cim: string; ertek: string; al
   );
 }
 
-export default async function Page({ searchParams }: { searchParams: Promise<{ idoszak?: string; nap?: string }> }) {
+export default async function Page({ searchParams }: { searchParams: Promise<{ idoszak?: string; nap?: string; jelleg?: string }> }) {
   const sp = await searchParams;
   const idoszak = (["nap", "het", "ho"] as const).includes(sp.idoszak as KimutatasIdoszak) ? (sp.idoszak as KimutatasIdoszak) : "het";
   const k = await getKimutatas(idoszak, sp.nap);
-  const link = (i: KimutatasIdoszak, n?: string) => `/fuvarozas2/kimutatas?idoszak=${i}${n ? `&nap=${n}` : ""}`;
+  const jelleg = sp.jelleg === "sajat" || sp.jelleg === "ber" ? sp.jelleg : undefined;
+  const link = (i: KimutatasIdoszak, n?: string) => `/fuvarozas2/kimutatas?idoszak=${i}${n ? `&nap=${n}` : ""}${jelleg ? `&jelleg=${jelleg}` : ""}`;
   const maxKm = Math.max(1, ...k.napok.map((n) => n.km));
   const arfolyamCimke = k.arfolyamok.length === 0
     ? null
@@ -192,7 +193,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ i
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-base">Megbízásonként</CardTitle></CardHeader>
         <CardContent className="p-0">
-          <KimutatasMegbizasok megbizasok={k.megbizasok} />
+          <KimutatasMegbizasok key={jelleg ?? "mind"} megbizasok={k.megbizasok} kezdoJelleg={jelleg} sajatKmDij={k.sajatKmDijBeallitas} />
         </CardContent>
       </Card>
 

@@ -3913,3 +3913,9 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 - Felület: Megbízások → Elvinni való kártya „határidő” címkével, „Legkésőbb” mező a rögzítőben és a panelben; Ma oldal: „Elvinni való” doboz sürgősség szerint; Tervezés hét: „Elvinni való” sor — minden fuvar a vihető napjain, szaggatott kártyán, az utolsó napon jelölve.
 - Következik: 2. lépés (legjobb hely kiszámítása kocsinként/naponként + „Ide” gomb), 3. lépés (áthúzás, bérfuvar elsőbbsége).
 - Teszt: teszt-elvinni-valo (+8 sürgősségi eset), tervezes-het, ma-het, ma-kartya, letrehoz-parancs, jogosultság-tesztek; migráció élesen tranzakcióban kipróbálva (rollback); tsc, eslint, build OK.
+
+## 2026-10-19 (6) — Saját utak útnaplója
+- Kérdés: „saját fuvaroknál mindig a Well-Worn a megbízó — hol találom, mikor hová mentünk saját áruval, egy-egy útnak mennyi lett volna a díja?”
+- Pénz › Kimutatás › „Saját” szűrő: külön útnapló (Nap · Honnan → hova · Kinek · Kocsi · Rakott km · Költségünk (+Ft/raklap) · Díja lett volna), felül összesítés (utak, km, költség, díj; alap: rakott km × `sajat_fuvar_km_dij_ft`). Közvetlen link: `/fuvarozas2/kimutatas?idoszak=ho&jelleg=sajat` (a Nap/Hét/Hónap lapozás megtartja).
+- Partnerek › Saját fuvar: magyarázó sáv (megbízó mindig a WWP, itt a címzettek/feladók) + link az útnaplóra.
+- Teszt: teljes `npm run teszt`, tsc, eslint, build.

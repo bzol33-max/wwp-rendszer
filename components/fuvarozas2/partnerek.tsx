@@ -107,6 +107,13 @@ export function PartnerekNezet({ partnerek, javaslatok, adatJavaslatok = [], sze
         {szerkeszthet ? <Button size="xs" disabled={pending} onClick={kitolt}>Hiányzók kitöltése</Button> : null}
       </div>
 
+      {kor === "sajat" ? (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-muted/40 px-3 py-2 text-sm">
+          <span>Saját fuvarnál a megbízó mindig a Well-Worn Pallet — itt az áru címzettjei és feladói vannak.</span>
+          <a href="/fuvarozas2/kimutatas?idoszak=ho&jelleg=sajat" className="font-medium hover:underline">Saját utak: mikor, hová, mennyi lett volna a díja →</a>
+        </div>
+      ) : null}
+
       {javasoltPartnerek.length > 0 ? (
         <details className="rounded-xl ring-1 ring-foreground/10">
           <summary className="cursor-pointer px-3 py-2 text-sm font-medium">

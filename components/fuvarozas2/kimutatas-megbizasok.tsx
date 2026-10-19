@@ -45,9 +45,14 @@ function Fej({ k, rend, setRend, children, jobb = true }: {
   );
 }
 
-export function KimutatasMegbizasok({ megbizasok }: { megbizasok: KimutatasMegbizas[] }) {
+export function KimutatasMegbizasok({ megbizasok, kezdoJelleg = "mind", sajatKmDij }: {
+  megbizasok: KimutatasMegbizas[];
+  kezdoJelleg?: "mind" | "ber" | "sajat";
+  /** A saját fuvar „díja lett volna” alapja: rakott km × ennyi Ft (beállítás: sajat_fuvar_km_dij_ft). */
+  sajatKmDij?: number;
+}) {
   const [rend, setRend] = useState<Rend>({ k: "nap", le: false });
-  const [jelleg, setJelleg] = useState<"mind" | "ber" | "sajat">("mind");
+  const [jelleg, setJelleg] = useState<"mind" | "ber" | "sajat">(kezdoJelleg);
   const sorok = useMemo(() => {
     const f = ERTEK[rend.k];
     return megbizasok
@@ -74,6 +79,7 @@ export function KimutatasMegbizasok({ megbizasok }: { megbizasok: KimutatasMegbi
         ))}
         <span className="ml-auto text-xs text-muted-foreground">{sorok.length} megbízás</span>
       </div>
+      {jelleg === "sajat" ? <SajatUtnaplo sorok={sorok} sajatKmDij={sajatKmDij} /> : <>
       {/* Telefonon kártyák: a 11 oszlopos táblából 390 px-en csak kettő látszott. */}
       <ul className="flex flex-col divide-y divide-foreground/5 sm:hidden">
         {sorok.map((m) => <MegbizasKartya key={m.id} m={m} />)}
@@ -150,6 +156,65 @@ export function KimutatasMegbizasok({ megbizasok }: { megbizasok: KimutatasMegbi
                     </>
                   ) : <span className="text-muted-foreground">—</span>}
                 </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      </>}
+    </div>
+  );
+}
+
+/**
+ * Saját fuvarok útnaplója (Budaházi Zoltán, 2026-10-19: „hol találom, mikor
+ * hová mentünk saját áruval, egy-egy útnak mennyi lett volna a díja?”). Saját
+ * fuvarnál a megbízó mindig a Well-Worn Pallet; a „kinek” az áru címzettje.
+ * Díja lett volna = rakott km × a saját fuvar km-díja (beállítás) — csak
+ * tájékoztató, az eredménybe nem számít.
+ */
+function SajatUtnaplo({ sorok, sajatKmDij }: { sorok: KimutatasMegbizas[]; sajatKmDij?: number }) {
+  if (sorok.length === 0) return <p className="px-3 py-4 text-sm text-muted-foreground">Ebben az időszakban nem volt saját fuvar.</p>;
+  const ossz = sorok.reduce((a, m) => ({
+    km: a.km + Math.round(m.rakottKmBecsles), koltseg: a.koltseg + (m.belsoKoltsegFt ?? m.koltsegFt), dij: a.dij + (m.elkerultKoltsegFt ?? 0),
+  }), { km: 0, koltseg: 0, dij: 0 });
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap gap-x-6 gap-y-1 px-3 text-sm">
+        <span><b>{sorok.length}</b> út</span>
+        <span><b>{ossz.km.toLocaleString("hu-HU")}</b> rakott km</span>
+        <span>költségünk <b>{formatFt(ossz.koltseg)}</b></span>
+        <span>díja lett volna <b className="text-[var(--f2-blue)]">{formatFt(ossz.dij)}</b></span>
+        {sajatKmDij ? <span className="text-xs text-muted-foreground">(rakott km × {sajatKmDij.toLocaleString("hu-HU")} Ft)</span> : null}
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
+            <tr>
+              <th className="px-3 py-2 font-medium">Nap</th>
+              <th className="px-3 py-2 font-medium">Honnan → hova</th>
+              <th className="px-3 py-2 font-medium">Kinek</th>
+              <th className="px-3 py-2 font-medium">Kocsi</th>
+              <th className="px-3 py-2 text-right font-medium">Rakott km</th>
+              <th className="px-3 py-2 text-right font-medium">Költségünk</th>
+              <th className="px-3 py-2 text-right font-medium">Díja lett volna</th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorok.map((m) => (
+              <tr key={m.id} className="border-t border-foreground/5 align-top">
+                <td className="whitespace-nowrap px-3 py-2 tabular-nums">
+                  <Link href={`/fuvarozas2/megbizasok/${m.id}`} className="hover:underline">{formatNap(m.nap)}</Link>
+                </td>
+                <td className="px-3 py-2">{m.felrako ?? "?"} → {m.lerako ?? "?"}</td>
+                <td className="px-3 py-2">{m.partner ?? <span className="text-muted-foreground">—</span>}</td>
+                <td className="whitespace-nowrap px-3 py-2">{m.jarmuKod}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{Math.round(m.rakottKmBecsles).toLocaleString("hu-HU")}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">
+                  {formatFt(m.belsoKoltsegFt ?? m.koltsegFt)}
+                  {m.ftPerRaklap != null ? <div className="text-[10px] text-muted-foreground">{formatFt(m.ftPerRaklap)}/raklap</div> : null}
+                </td>
+                <td className="whitespace-nowrap px-3 py-2 text-right font-semibold tabular-nums text-[var(--f2-blue)]">{m.elkerultKoltsegFt ? formatFt(m.elkerultKoltsegFt) : "—"}</td>
               </tr>
             ))}
           </tbody>
