@@ -11,6 +11,7 @@ import { requireAnyViewPermission, requireEditPermission } from "@/lib/auth/requ
 import { normalizaltCegKulcs } from "@/lib/fuvarozas/fuvar-constants";
 import { JAVASLAT_MEZOK, type JavaslatMezo } from "@/lib/fuvarozas2/partner-javaslat-alap";
 import { futtatPartnerKitoltest } from "@/lib/fuvarozas2/partner-kitoltes";
+import { futtatPartnerJavaslatokat } from "@/lib/fuvarozas2/partner-javaslat";
 
 /** Nyitott javaslat a partner egy hiányzó adatára (lásd lib/fuvarozas2/partner-javaslat.ts). */
 export type PartnerAdatJavaslat = {
@@ -245,6 +246,8 @@ export async function setPartnerPostazasiCim(partnerId: string, cim: string): Pr
 export async function kitoltHianyzoPartnerAdatokat(): Promise<{ partner: number; mezo: number }> {
   await requireEditPermission("fuvarozas");
   const session = await requireSession();
+  // Előbb a még ki nem olvasott megbízás-iratok (PDF, Word), hogy az új megbízó adatai is meglegyenek.
+  await futtatPartnerJavaslatokat(5).catch((err) => console.error("[partner-javaslat] kézi kör:", err));
   const r = await futtatPartnerKitoltest(`${session.name ?? session.username} (automatikus kitöltés)`);
   return { partner: r.partner, mezo: r.mezo };
 }

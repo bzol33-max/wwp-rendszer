@@ -16,7 +16,7 @@ import { javaslatokKiolvasasbol, vevoCimSzamlaXmlbol, type Javaslat, type NyersK
 
 const MAX_PDF_BAJT = 8 * 1024 * 1024;
 
-const UTASITAS = `Egy magyar fuvarmegbízás PDF-jét kapod. A MEGBÍZÓ (az iratot kiadó cég) adatait keresd — NEM a címzettét: a címzett mi vagyunk (Well-Worn Pallet Kft., Szakoly), a mi adatainkat SOHA ne add vissza. Rakodóhely (felrakó, lerakó) címét se.
+const UTASITAS = `Egy magyar fuvarmegbízást kapod (PDF-ként vagy egy Word-irat szövegeként). A MEGBÍZÓ (az iratot kiadó cég) adatait keresd — NEM a címzettét: a címzett mi vagyunk (Well-Worn Pallet Kft., Szakoly), a mi adatainkat SOHA ne add vissza. Rakodóhely (felrakó, lerakó) címét se.
 
 Nézd meg a fejlécet, a logó melletti szöveget és a láblécet is — a megbízó címe gyakran csak ott áll.
 
@@ -30,7 +30,25 @@ Válasz kizárólag JSON:
 }
 Ha valamit nem látsz egyértelműen, null — ne találj ki adatot.`;
 
-async function kiolvasPdfbol(pdf: Buffer, nev: string): Promise<NyersKiolvasas | null> {
+/**
+ * Word-megbízás (.doc / .docx) szövege — 2026-10-19: a Krajnik Sped megbízása
+ * régi .doc volt, a kiolvasás csak PDF-et nézett, így az e-mail és a fizetési
+ * feltétel sosem jutott el a partner-törzsbe (a tulajdonos az első számlát
+ * mindig a megbízásban álló utasítás szerint állítja ki).
+ */
+async function wordSzovege(buffer: Buffer, mimeType: string | null): Promise<string> {
+  if (mimeType === "application/msword") {
+    const { default: WordExtractor } = await import("word-extractor");
+    const doc = await new WordExtractor().extract(buffer);
+    return [doc.getHeaders?.() ?? "", doc.getBody(), doc.getFooters?.() ?? ""].filter(Boolean).join("\n");
+  }
+  const mammoth = await import("mammoth");
+  return (await mammoth.extractRawText({ buffer })).value;
+}
+
+const WORD_MIME = new Set(["application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]);
+
+async function kiolvasPdfbol(pdf: Buffer, nev: string, szoveg?: string): Promise<NyersKiolvasas | null> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("Hiányzik az OPENROUTER_API_KEY környezeti változó.");
   const model = process.env.OPENROUTER_PDF_MODEL || "google/gemini-2.5-flash";
@@ -45,8 +63,12 @@ async function kiolvasPdfbol(pdf: Buffer, nev: string): Promise<NyersKiolvasas |
         {
           role: "user",
           content: [
-            { type: "text", text: "A megbízás PDF-je:" },
-            { type: "file", file: { filename: nev, file_data: `data:application/pdf;base64,${pdf.toString("base64")}` } },
+            ...(szoveg != null
+              ? [{ type: "text", text: `A megbízás szövege (Word-irat, ${nev}):\n\n${szoveg.slice(0, 30_000)}` }]
+              : [
+                  { type: "text", text: "A megbízás PDF-je:" },
+                  { type: "file", file: { filename: nev, file_data: `data:application/pdf;base64,${pdf.toString("base64")}` } },
+                ]),
           ],
         },
       ],
@@ -133,7 +155,7 @@ export async function futtatPartnerJavaslatokat(korlat = 10): Promise<{ irat: nu
      from fuvar_dokumentumok d
      join fuvar_megbizasok m on m.id = d.fuvar_id
      where d.tipus = 'megbizas' and m.partner_id = any($1::bigint[]) and m.torolt_at is null
-       and coalesce(d.fajlnev, '') ~* '\\.pdf$'
+       and coalesce(d.fajlnev, '') ~* '\\.(pdf|docx?)$'
        and not exists (select 1 from fuvar_partner_kiolvasas k where k.drive_file_id = d.drive_file_id)
      order by m.partner_id, d.created_at desc`,
     [partnerek.map((p) => p.id)]
@@ -144,8 +166,11 @@ export async function futtatPartnerJavaslatokat(korlat = 10): Promise<{ irat: nu
     eredmeny.irat++;
     try {
       const fajl = await letoltDriveFajlt(irat.drive_file_id);
-      if (fajl.mimeType !== "application/pdf" || fajl.buffer.length > MAX_PDF_BAJT) throw new Error(`nem olvasható PDF (${fajl.mimeType}, ${fajl.buffer.length} bájt)`);
-      const nyers = await kiolvasPdfbol(fajl.buffer, irat.fajlnev ?? "megbizas.pdf");
+      if (fajl.buffer.length > MAX_PDF_BAJT) throw new Error(`túl nagy irat (${fajl.buffer.length} bájt)`);
+      let nyers: NyersKiolvasas | null;
+      if (fajl.mimeType === "application/pdf") nyers = await kiolvasPdfbol(fajl.buffer, irat.fajlnev ?? "megbizas.pdf");
+      else if (fajl.mimeType && WORD_MIME.has(fajl.mimeType)) nyers = await kiolvasPdfbol(fajl.buffer, irat.fajlnev ?? "megbizas.doc", await wordSzovege(fajl.buffer, fajl.mimeType));
+      else throw new Error(`nem olvasható irat (${fajl.mimeType})`);
       const javaslatok = javaslatokKiolvasasbol(nyers, [p.nev, ...p.nevvaltozatok]);
       eredmeny.javaslat += await rogzit(p, javaslatok, "megbizas_pdf", irat.fajlnev, irat.megbizas_id);
       await query(

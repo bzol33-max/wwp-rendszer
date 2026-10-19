@@ -3889,3 +3889,9 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 - Javítás: `lib/fuvarozas2/napi-sorrend.ts` d) szabály — ha a települések koordinátái ismertek, az időpont nélküli fuvarok mohó legközelebbi-szomszéd láncot alkotnak (az előző lerakóhoz legközelebbi felrakó jön). Hiányzó pontnál a régi szabály. Időpontos/elkezdett fuvarok sorrendje változatlan.
 - Új: `varos-pont-tar.ts` (tiszta, szinkron tár + haversine), `varos-pont.ts` (`melegitVarosPontokat`, HU-GO gyorsítótárazott geokód, max 3 mp). Melegítés a betöltőkben: Ma (ma-vaszon), idővonal/sofőr-app (actions), Tervező, elvinni-hét, lancKm.
 - Teszt: teszt-napi-sorrend +3 eset (Gergő 10.20.: 324 → 329 → 325), 33 ok; ures-km, ma-tukor, tervezo, elvinni-valo, ma-het, tervezes-het, menetterv, optimalizalo, eta-lanc, het-utemterv, kocsi-sav, ma-kartya, kereses-javaslat mind zöld; tsc, eslint, build OK.
+
+## 2026-10-19 (3) — Partner-adat Word-megbízásból is
+- Tünet: Krajnik Sped Kft. e-mailje és fizetési határideje üres maradt, pedig a megbízásban (régi .doc) benne van — a tulajdonos az első számlát mindig ebből állítja ki.
+- Ok: a partner-javaslat kiolvasó csak `.pdf` megbízást keresett.
+- Javítás (`lib/fuvarozas2/partner-javaslat.ts`): `.doc` (word-extractor, fej- és lábléccel) és `.docx` (mammoth) szövege is a modellhez megy; a „Hiányzók kitöltése” gomb előbb lefuttat egy kiolvasási kört (max. 5 irat), aztán tölt.
+- Teszt: teljes `npm run teszt`, tsc, eslint, build.
