@@ -3858,3 +3858,9 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 - Új fül: `/m/osszes` (Ma · Holnap · Összes · Profil). A saját kocsi következő 14 napjának megbízásai naponként egymás alatt, időrendben, ugyanazokkal a kártyákkal (idő, megállók, Navigáció/térkép), mint a Holnap fül; teendő-gombok továbbra is a Ma fülön.
 - `lib/fuvarozas/sofor.ts` → `getSoforNapokElore`: a napokat a DB-ből gyűjti, a kocsira szűrést napról napra a meglévő `getSoforNap` végzi (ugyanaz a besorolás). `components/m/sofor-nap.tsx`: üres `cim` esetén csak a dátum a fejléc.
 - Teszt: a napgyűjtő SQL élesben lefutott (10-19, 10-20, 10-21), tsc, eslint, `next build` OK.
+
+## 2026-10-19 — Heti tervező: „fuvar helye nem ismert” cégnévvel írt címnél
+- Tünet: #329 (Krajnik Sped, Záhony → Dunakeszi) a Tervezés hetében „helye nem ismert”.
+- Ok: a címekben telepnév áll („Záhony, Solinwest Agro Telep”, „Dunakeszi, Solinwest Telep, Tőzegtavi út 9.”); a HU-GO címkereső ezekre 0 találatot ad.
+- Javítás (`lib/fuvarozas2/tervezes-het.ts` `geo`): tartalék-sorrend — teljes cím → település + számot tartalmazó részek → csak település. Csak a heti rés-számítást érinti, az érintés-felismerést nem.
+- Teszt: HU-GO élesben: a teljes címekre 0 találat, „Záhony” és „Dunakeszi, Tőzegtavi út 9.” megtalálva; a jelöltlista ezeket adja. tsc, eslint, `next build` OK.

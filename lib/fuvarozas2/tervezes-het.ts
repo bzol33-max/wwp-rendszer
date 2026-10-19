@@ -103,10 +103,29 @@ type Sor = {
 const pont = (lat: number | null, lon: number | null): Pont | null => (lat != null && lon != null ? { lat: Number(lat), lon: Number(lon) } : null);
 const varos = (s: string | null) => varosNev(s ?? "") || "?";
 
-async function geo(cim: string): Promise<Pont | null> {
+async function geo1(cim: string): Promise<Pont | null> {
   const ido = new Promise<null>((r) => setTimeout(() => r(null), 4000));
   const g = await Promise.race([geokodolCachelve(cim).catch(() => null), ido]);
   return g ? { lat: g.lat, lon: g.lon } : null;
+}
+
+/**
+ * A címben gyakran cég- vagy telepnév áll („Záhony, Solinwest Agro Telep”,
+ * #329, 2026-10-19), amit a HU-GO címkereső nem ismer → a fuvar „helye nem
+ * ismert” lett. Tartalék, sorrendben: a teljes cím; csak a település + a
+ * számot tartalmazó (utca/házszám) részek; végül csak a település. A rés-
+ * számításhoz a településszintű pont is elég.
+ */
+async function geo(cim: string): Promise<Pont | null> {
+  const telepules = varosNev(cim);
+  const reszek = cim.split(",").map((r) => r.trim()).filter(Boolean);
+  const tisztitott = [reszek[0], ...reszek.slice(1).filter((r) => /\d/.test(r))].join(", ");
+  const jeloltek = [...new Set([cim, tisztitott, telepules].filter((c) => c && c.trim().length >= 2))];
+  for (const c of jeloltek) {
+    const p = await geo1(c);
+    if (p) return p;
+  }
+  return null;
 }
 
 function median(x: number[]): number | null {
