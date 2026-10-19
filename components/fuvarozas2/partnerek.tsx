@@ -9,13 +9,16 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { kitoltHianyzoPartnerAdatokat, osszevonPartnereket, updatePartner, type Partner, type PartnerAdatJavaslat } from "@/lib/fuvarozas2/partnerek";
 import { AdatJavaslatSor } from "@/components/fuvarozas2/partner-adat-javaslat";
+import { cimSzep } from "@/lib/fuvarozas2/cim-formazas";
 
 type Javaslat = { a: Partner; b: Partner; indok: string };
 type Kor = "ber" | "sajat" | "mind";
 
 /**
- * A partner hiányzó adatai. A számlázáshoz a bérfuvar-megbízónál kell mind
- * (adószám, cím, e-mail, határidők); saját fuvar partnerénél nem számít hiánynak.
+ * A partner hiányzó adatai — ami a számlázáshoz és a papír elküldéséhez KELL
+ * (adószám, postacím, e-mail, fizetési határidő). A papír-beküldési határidőt
+ * csak az a megbízó adja meg, aki kiköti; ha nincs, az nem hiány (2026-10-19).
+ * Saját fuvar partnerénél semmi nem számít hiánynak.
  */
 function hianyok(p: Partner): string[] {
   if (!p.berfuvar) return [];
@@ -24,7 +27,6 @@ function hianyok(p: Partner): string[] {
   if (!p.postazasi_cim && !p.posta_nem_kell) h.push("postacím");
   if (!p.szamlazasi_email && !p.szamla_email_nem_kell) h.push("e-mail");
   if (p.fizetesi_hatarido_nap == null) h.push("fizetési határidő");
-  if (p.papir_bekuldesi_hatarido_nap == null) h.push("papír-határidő");
   return h;
 }
 
@@ -149,20 +151,17 @@ export function PartnerekNezet({ partnerek, javaslatok, adatJavaslatok = [], sze
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
             <tr>
-              {szerkeszthet ? <th className="px-2 py-2" /> : null}
+              {szerkeszthet ? <th className="w-8 px-2 py-2" /> : null}
               <th className="px-3 py-2 font-medium">Partner</th>
-              <th className="px-3 py-2 font-medium">Adószám</th>
-              <th className="px-3 py-2 text-right font-medium">Megbízás</th>
-              <th className="px-3 py-2 text-right font-medium">Fizet (nap)</th>
-              <th className="px-3 py-2 text-right font-medium">Papír (nap)</th>
-              <th className="px-3 py-2 font-medium">Számlázási e-mail</th>
-              <th className="px-3 py-2 font-medium">Postázási cím</th>
-              <th className="px-3 py-2 font-medium">Számlán kért szám</th>
+              <th className="px-3 py-2 text-right font-medium">Fuvar</th>
+              <th className="px-3 py-2 font-medium">Határidők</th>
+              <th className="px-3 py-2 font-medium">Számla e-mail</th>
+              <th className="px-3 py-2 font-medium">Postacím</th>
             </tr>
           </thead>
           <tbody>
             {lathato.length === 0 ? (
-              <tr><td colSpan={szerkeszthet ? 9 : 8} className="px-3 py-6 text-center text-sm text-muted-foreground">Nincs a szűrésnek megfelelő partner.</td></tr>
+              <tr><td colSpan={szerkeszthet ? 6 : 5} className="px-3 py-6 text-center text-sm text-muted-foreground">Nincs a szűrésnek megfelelő partner.</td></tr>
             ) : null}
             {lathato.map((p) => (
               <PartnerSor key={p.id} p={p} nyitott={nyitott === p.id} onNyit={() => setNyitott(nyitott === p.id ? null : p.id)}
@@ -189,6 +188,7 @@ function PartnerSor({ p, nyitott, onNyit, szerkeszthet, kijelolve, onKijelol }: 
   });
   const szam = (s: string) => (s.trim() === "" ? null : Number(s));
   const hiany = hianyok(p);
+  const emailek = (p.szamlazasi_email ?? "").split(/[,;]\s*/).map((e) => e.trim()).filter(Boolean);
   // Bérfuvar-megbízónál a hiány jelölt (a számlázáshoz kell), saját fuvar partnerénél csak „—”.
   const nincs = p.berfuvar ? <span className="text-xs text-[var(--f2-amb)]">hiányzik</span> : <span className="text-muted-foreground">—</span>;
   function ment() {
@@ -217,25 +217,31 @@ function PartnerSor({ p, nyitott, onNyit, szerkeszthet, kijelolve, onKijelol }: 
     <>
       <tr id={`p-${p.id}`} className="scroll-mt-20 border-t border-foreground/5 hover:bg-muted/40">
         {szerkeszthet ? <td className="px-2 py-2"><input type="checkbox" checked={kijelolve} onChange={(e) => onKijelol(e.target.checked)} aria-label="kijelölés összevonáshoz" /></td> : null}
-        <td className="px-3 py-2">
+        <td className="px-3 py-2.5">
           <button className="text-left font-medium hover:underline" onClick={onNyit}>{p.nev}</button>
-          {p.nevvaltozatok.length > 0 ? <div className="text-xs text-muted-foreground">= {p.nevvaltozatok.join(", ")}</div> : null}
-          {hiany.length > 0 ? <div className="text-xs text-[var(--f2-amb)]">hiányzik: {hiany.join(", ")}</div> : null}
+          <div className="text-xs tabular-nums text-muted-foreground">{p.adoszam ?? (p.berfuvar ? <span className="text-[var(--f2-amb)]">adószám hiányzik</span> : null)}</div>
+          {hiany.filter((h) => h !== "adószám").length > 0 ? <div className="text-xs text-[var(--f2-amb)]">hiányzik: {hiany.filter((h) => h !== "adószám").join(", ")}</div> : null}
         </td>
-        <td className="whitespace-nowrap px-3 py-2 tabular-nums">{p.adoszam ?? nincs}</td>
-        <td className="px-3 py-2 text-right tabular-nums">
-          <a href={`/fuvarozas2/megbizasok?partner=${p.id}`} className="hover:underline">{p.megbizas_db}</a>
-          <div className="text-xs text-muted-foreground">{p.utolso_megbizas ?? ""}</div>
+        <td className="px-3 py-2.5 text-right tabular-nums">
+          <a href={`/fuvarozas2/megbizasok?partner=${p.id}`} className="font-medium hover:underline">{p.megbizas_db}</a>
+          {p.utolso_megbizas ? <div className="text-xs text-muted-foreground">{p.utolso_megbizas.slice(5).replace("-", ".")}.</div> : null}
         </td>
-        <td className="px-3 py-2 text-right tabular-nums">{p.fizetesi_hatarido_nap ?? nincs}</td>
-        <td className="px-3 py-2 text-right tabular-nums">{p.papir_bekuldesi_hatarido_nap ?? nincs}</td>
-        <td className="max-w-[14rem] truncate px-3 py-2" title={p.szamlazasi_email ?? undefined}>{p.szamlazasi_email ?? (p.szamla_email_nem_kell ? <span className="text-muted-foreground">nem kér</span> : nincs)}</td>
-        <td className="max-w-[16rem] truncate px-3 py-2" title={p.postazasi_cim ?? undefined}>{p.postazasi_cim ?? (p.posta_nem_kell ? <span className="text-muted-foreground">nem kér</span> : nincs)}</td>
-        <td className="px-3 py-2 text-xs">{p.szamlan_kert_szam}{p.szamla_email_nem_kell ? " · nem kér e-mailt" : ""}{p.posta_nem_kell ? " · nem kér postát" : ""}</td>
+        <td className="whitespace-nowrap px-3 py-2.5 tabular-nums">
+          {p.fizetesi_hatarido_nap != null ? <>{p.fizetesi_hatarido_nap} nap</> : nincs}
+          <div className="text-xs text-muted-foreground">{p.papir_bekuldesi_hatarido_nap != null ? `papír ${p.papir_bekuldesi_hatarido_nap} napon belül` : p.berfuvar ? "papír: nincs kikötve" : ""}</div>
+        </td>
+        <td className="max-w-[15rem] px-3 py-2.5">
+          {p.szamla_email_nem_kell ? <span className="text-muted-foreground">nem kér</span> : emailek.length === 0 ? nincs : (
+            <span className="block truncate" title={emailek.join(", ")}>{emailek[0]}{emailek.length > 1 ? <span className="text-xs text-muted-foreground"> +{emailek.length - 1}</span> : null}</span>
+          )}
+        </td>
+        <td className="max-w-[17rem] px-3 py-2.5">
+          {p.posta_nem_kell ? <span className="text-muted-foreground">nem kér</span> : p.postazasi_cim ? <span className="line-clamp-2" title={p.postazasi_cim}>{cimSzep(p.postazasi_cim)}</span> : nincs}
+        </td>
       </tr>
       {nyitott ? (
         <tr className="border-t border-foreground/5 bg-muted/20">
-          <td colSpan={szerkeszthet ? 9 : 8} className="px-3 py-3">
+          <td colSpan={szerkeszthet ? 6 : 5} className="px-3 py-3">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {M("nev", "Név")}
               {M("nevvaltozatok", "Névváltozatok (; elválasztva)")}

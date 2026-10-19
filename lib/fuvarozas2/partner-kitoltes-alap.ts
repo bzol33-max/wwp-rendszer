@@ -25,6 +25,7 @@ import { sajatCegunkE } from "@/lib/fuvarozas/fuvar-constants";
 import { partnerEgyezik } from "@/lib/fuvarozas/szamla-parositas";
 import { vevoXmlbol } from "@/lib/fuvarozas2/szamlazasi-seged-alap";
 import { hihetoCim, vevoCimSzamlaXmlbol } from "@/lib/fuvarozas2/partner-javaslat-alap";
+import { cimSzep } from "@/lib/fuvarozas2/cim-formazas";
 
 export const KITOLTHETO_MEZOK = [
   "adoszam", "szamlazasi_cim", "postazasi_cim", "szamlazasi_email", "fizetesi_hatarido_nap", "papir_bekuldesi_hatarido_nap",
@@ -146,13 +147,13 @@ export function kitoltesTerv(p: KitoltesPartner, osszesSzamla: KitoltesSzamla[],
   }
   if (hiany.has("szamlazasi_cim") && vevo?.telepules && vevo.cim) {
     const cim = `${vevo.irsz ? `${vevo.irsz} ` : ""}${vevo.telepules}, ${vevo.cim}`.replace(/\s+/g, " ");
-    if (hihetoCim(cim)) ki.push({ mezo: "szamlazasi_cim", ertek: cim, forras: "szamla", leiras: legujabb!.szamlaszam });
+    if (hihetoCim(cim)) ki.push({ mezo: "szamlazasi_cim", ertek: cimSzep(cim), forras: "szamla", leiras: legujabb!.szamlaszam });
   }
   if (hiany.has("postazasi_cim")) {
     const pdf = egyertelmu(javaslatok, "postazasi_cim", "megbizas_pdf");
     const szamlaCim = legujabb ? vevoCimSzamlaXmlbol(legujabb.raw_xml) : null;
-    if (pdf && hihetoCim(pdf.ertek)) ki.push({ mezo: "postazasi_cim", ertek: pdf.ertek.replace(/^H-\s*/i, ""), forras: "megbizas_pdf", leiras: pdf.forras_leiras });
-    else if (szamlaCim) ki.push({ mezo: "postazasi_cim", ertek: szamlaCim, forras: "szamla", leiras: legujabb!.szamlaszam });
+    if (pdf && hihetoCim(pdf.ertek)) ki.push({ mezo: "postazasi_cim", ertek: cimSzep(pdf.ertek), forras: "megbizas_pdf", leiras: pdf.forras_leiras });
+    else if (szamlaCim) ki.push({ mezo: "postazasi_cim", ertek: cimSzep(szamlaCim), forras: "szamla", leiras: legujabb!.szamlaszam });
   }
   if (hiany.has("szamlazasi_email")) {
     const szamlaEmail = szamlak.map((sz) => ({ sz, e: emailLista(vevoXmlbol(sz.raw_xml).email) })).find((x) => x.e);

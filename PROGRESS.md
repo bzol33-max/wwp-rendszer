@@ -3877,3 +3877,9 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 - Fül: szűrő (Bérfuvar megbízók · Saját fuvar · Mind), „csak hiányos”, keresés, hiányszámláló; Adószám oszlop (a Sablon a lenyitott sorba került);
   hiány narancs „hiányzik” jelöléssel csak bérfuvar-megbízónál; a javaslat-kártya összecsukva („Eldöntendő javaslatok”); szerkesztőben Adószám, Székhely.
 - Teszt: `teszt-partner-kitoltes.ts` 16/0, teljes `npm run teszt`, tsc (csak a meglévő LayoutProps), eslint, `next build`.
+
+## 2026-10-19 (2) — Partnerek fül: letisztítva
+- A tulajdonos szerint az adatkitöltés után is „katyvasz”: 9 zsúfolt oszlop, szinte minden sorban narancs „hiányzik” (a papír-határidő miatt), eltérő írásmódú címek, nyers „pozicioszam”.
+- Most 5 oszlop: Partner (+ adószám alatta) · Fuvar (db + utolsó dátum) · Határidők („60 nap” + „papír 7 napon belül” / „papír: nincs kikötve”) · Számla e-mail (első cím + „+1”) · Postacím. A „számlán kért szám” és a sablon a lenyitott sorban.
+- A papír-határidő nem számít hiánynak (csak az adja meg, aki kiköti). Címek egy alakra: `lib/fuvarozas2/cim-formazas.ts` `cimSzep` (H-/HU- le, csupa nagybetű szelídítve, fordított sorrend javítva) — kijelzéskor és az automatikus kitöltéskor.
+- Teszt: `teszt-partner-kitoltes.ts` 22/0, teljes `npm run teszt`, tsc, eslint, build.

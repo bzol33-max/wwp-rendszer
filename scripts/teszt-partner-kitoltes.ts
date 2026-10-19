@@ -1,6 +1,7 @@
 // Partner-törzs automatikus kitöltése (lib/fuvarozas2/partner-kitoltes-alap.ts).
 // Futtatás: npx tsx scripts/teszt-partner-kitoltes.ts
 
+import { cimSzep } from "@/lib/fuvarozas2/cim-formazas";
 import { kitoltesTerv, emailLista, fizetesiNapSzamlakbol, hianyzoMezok, partnerSzamlai, type KitoltesPartner, type KitoltesSzamla } from "@/lib/fuvarozas2/partner-kitoltes-alap";
 
 let ok = 0, bad = 0;
@@ -73,6 +74,14 @@ eq("44/45 → 45", fizetesiNapSzamlakbol(napos([44, 45])), 45);
 // Hiány-számítás
 eq("hiány: nem kér e-mailt", hianyzoMezok({ ...ures, szamla_email_nem_kell: true }).includes("szamlazasi_email"), false);
 eq("hiány: üres string is hiány", hianyzoMezok({ ...ures, adoszam: "  " }).includes("adoszam"), true);
+
+// Címek egységes alakra
+eq("fordított cím", cimSzep("Újtelep utca 41 8445 Csehbánya"), "8445 Csehbánya, Újtelep utca 41");
+eq("csupa nagybetű", cimSzep("3300 EGER, KISTÁLYAI U.12."), "3300 Eger, Kistályai U.12.");
+eq("H- előtag", cimSzep("H-5600 BÉKÉSCSABA, Őszi utca 6241/35 hrsz."), "5600 Békéscsaba, Őszi utca 6241/35 hrsz.");
+eq("vessző nélkül", cimSzep("1222 Budapest Pannónia utca 9."), "1222 Budapest, Pannónia utca 9.");
+eq("külföldi", cimSzep("DE 85386 ECHING, FREISINGER STRASSE 7"), "DE 85386 Eching, Freisinger Strasse 7");
+eq("rendben lévő változatlan", cimSzep("1601 Budapest, Pf. 131"), "1601 Budapest, Pf. 131");
 
 console.log(`teszt-partner-kitoltes: ${ok} ok, ${bad} hiba`);
 if (bad > 0) process.exit(1);
