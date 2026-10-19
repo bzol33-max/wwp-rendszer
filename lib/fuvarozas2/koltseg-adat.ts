@@ -1,5 +1,5 @@
 import "server-only";
-import { megbizoMegjelenites } from "@/lib/fuvarozas/fuvar-constants";
+import { megbizoMegjelenites, sajatCegunkE } from "@/lib/fuvarozas/fuvar-constants";
 import { query } from "@/lib/db";
 import { becsultTavolsag, lancKm, type LancKm } from "@/lib/fuvarozas2/ures-km";
 import { getJarmuIndulasiTelephely } from "@/lib/fuvarozas/telephelyek-db";
@@ -24,6 +24,8 @@ export type IdoszakMegbizas = MegbizasEredmeny & {
   lerako: string | null;
   partner: string | null;
   hivatkozas: string | null;
+  /** Saját fuvarnál: „kitől → kinek” (a WWP „Well-Worn” néven), bérnél null. */
+  kitolKinek: string | null;
 };
 
 export type IdoszakJarmu = {
@@ -90,13 +92,13 @@ export async function koltsegIdoszakra(kezdet: string, veg: string): Promise<Ido
 
   const megbizasok = await query<{
     id: string; jarmu_id: string | null; nap: string; felrakas_nap: string; jelleg: "ber" | "sajat"; fuvardij: number | null; penznem: string;
-    felrako: string | null; lerako: string | null; rakott_km: number | null; partner: string | null; hivatkozas: string | null;
+    felrako: string | null; lerako: string | null; rakott_km: number | null; partner: string | null; hivatkozas: string | null; kitol: string | null; kitol_kinek?: string | null;
     teny_tol: string | null; teny_ig: string | null; raklap_db: number | null; utdij_becsles: number | null;
   }>(
     `select m.id::text, m.jarmu_id::text, to_char(coalesce(m.lerakas_datum, m.datum), 'YYYY-MM-DD') as nap,
        to_char(m.datum, 'YYYY-MM-DD') as felrakas_nap, m.jelleg,
        m.fuvardij::float8 as fuvardij, coalesce(m.fuvardij_penznem, 'Ft') as penznem, m.felrako, m.lerako, m.rakott_km::float8 as rakott_km,
-       m.megrendelo as partner, coalesce(m.hivatkozas_kanonikus, m.hivatkozas_nyers) as hivatkozas,
+       m.megrendelo as partner, m.kitol, coalesce(m.hivatkozas_kanonikus, m.hivatkozas_nyers) as hivatkozas,
        (select to_char(coalesce(g.gps_erkezes, g.sofor_megerkezett_at, g.gps_tavozas, g.sofor_kesz_at) at time zone 'Europe/Budapest', 'YYYY-MM-DD HH24:MI:SS')
           from fuvar_megallok g where g.megbizas_id = m.id order by g.sorszam asc limit 1) as teny_tol,
        (select to_char(coalesce(g.gps_tavozas, g.sofor_kesz_at, g.gps_erkezes, g.sofor_megerkezett_at) at time zone 'Europe/Budapest', 'YYYY-MM-DD HH24:MI:SS')
@@ -109,6 +111,9 @@ export async function koltsegIdoszakra(kezdet: string, veg: string): Promise<Ido
     [kezdet, veg]
   );
   // Saját árunál a megbízó mindig a Well-Worn Pallet (Zoltán, 2026-10-11).
+  // A kitől → kinek az útnaplóhoz (2026-10-19): befelé jövő útnál a feladó az érdekes.
+  const nev = (x: string | null) => (!x?.trim() || sajatCegunkE(x) ? "Well-Worn" : x.trim());
+  for (const m of megbizasok) if (m.jelleg === "sajat") m.kitol_kinek = `${nev(m.kitol)} → ${nev(m.partner)}`;
   for (const m of megbizasok) if (m.jelleg === "sajat") m.partner = megbizoMegjelenites(m.jelleg, m.partner);
   const kocsiNelkul = megbizasok.filter((m) => !m.jarmu_id).length;
 
@@ -292,7 +297,7 @@ export async function koltsegIdoszakra(kezdet: string, veg: string): Promise<Ido
         },
         kontextus, param, napiFix.get(m.id) ?? 0, arfolyamok.get(m.nap) ?? null
       );
-      return { ...e, jarmuKod: j.kod, felrako: m.felrako, lerako: m.lerako, partner: m.partner, hivatkozas: m.hivatkozas };
+      return { ...e, jarmuKod: j.kod, felrako: m.felrako, lerako: m.lerako, partner: m.partner, hivatkozas: m.hivatkozas, kitolKinek: m.kitol_kinek ?? null };
     });
 
     // Aktív nap: GPS-mozgás VAGY megbízás az adott napon (a GPS nélküli kocsi is kap napi költséget).

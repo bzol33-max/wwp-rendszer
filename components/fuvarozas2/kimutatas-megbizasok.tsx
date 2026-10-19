@@ -193,7 +193,7 @@ function SajatUtnaplo({ sorok, sajatKmDij }: { sorok: KimutatasMegbizas[]; sajat
             <tr>
               <th className="px-3 py-2 font-medium">Nap</th>
               <th className="px-3 py-2 font-medium">Honnan → hova</th>
-              <th className="px-3 py-2 font-medium">Kinek</th>
+              <th className="px-3 py-2 font-medium">Kitől → kinek</th>
               <th className="px-3 py-2 font-medium">Kocsi</th>
               <th className="px-3 py-2 text-right font-medium">Rakott km</th>
               <th className="px-3 py-2 text-right font-medium">Költségünk</th>
@@ -207,7 +207,7 @@ function SajatUtnaplo({ sorok, sajatKmDij }: { sorok: KimutatasMegbizas[]; sajat
                   <Link href={`/fuvarozas2/megbizasok/${m.id}`} className="hover:underline">{formatNap(m.nap)}</Link>
                 </td>
                 <td className="px-3 py-2">{m.felrako ?? "?"} → {m.lerako ?? "?"}</td>
-                <td className="px-3 py-2">{m.partner ?? <span className="text-muted-foreground">—</span>}</td>
+                <td className="px-3 py-2">{m.kitolKinek ?? m.partner ?? <span className="text-muted-foreground">—</span>}</td>
                 <td className="whitespace-nowrap px-3 py-2">{m.jarmuKod}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{Math.round(m.rakottKmBecsles).toLocaleString("hu-HU")}</td>
                 <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">
