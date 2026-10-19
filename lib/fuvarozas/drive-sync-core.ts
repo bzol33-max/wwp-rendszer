@@ -128,6 +128,7 @@ const TAMOGATOTT_MIME_TIPUSOK = new Set([
   "application/pdf",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
   "application/vnd.google-apps.document", // Google Docs
+  "application/msword", // régi Word .doc (2026-10-19: „fuvarmegbízás 2 (1)(127).doc” csendben kimaradt)
   ...EXCEL_MIME_TIPUSOK, // Excel-megbízás (2026-10-06: Endo-Star, régi .xls sablon) — lib/fuvarozas/import/excel.ts
 ]);
 async function listazDriveFajlok(drive: ReturnType<typeof driveClient>): Promise<DriveFile[]> {
@@ -185,7 +186,8 @@ export async function feltoltMegbizasIratot(
 }
 
 /**
- * A fájl szöveges tartalma — PDF-hez pdf-parse, DOCX-hez mammoth, Google
+ * A fájl szöveges tartalma — PDF-hez pdf-parse, DOCX-hez mammoth, .doc-hoz
+ * word-extractor, Google
  * Docs-hoz natív export. PDF-nél a letöltött bájtok is visszajönnek, hogy a
  * hasábos partner-sablonok koordinátás olvasója (pdf-elemek.ts) ugyanabból
  * a letöltésből dolgozhasson.
@@ -221,6 +223,13 @@ async function fajlSzovege(
 
   if (EXCEL_MIME_TIPUSOK.has(file.mimeType)) {
     return { szoveg: await excelSzovege(buffer), pdfBuffer: null };
+  }
+
+  // Régi bináris Word (.doc) — a mammoth csak .docx-et olvas.
+  if (file.mimeType === "application/msword") {
+    const { default: WordExtractor } = await import("word-extractor");
+    const doc = await new WordExtractor().extract(buffer);
+    return { szoveg: doc.getBody(), pdfBuffer: null };
   }
 
   // .docx

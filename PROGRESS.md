@@ -3846,3 +3846,9 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
   szabállyal, mint a `getStock` (mozgatas_be az átvételkor számít, „Csere” kimarad).
 - **Még nincs**: projektek tábla, automatikus e-mail kiküldés, bejövő (szállítói) számlák.
 - **Teszt**: typecheck, eslint, `npm run teszt` (0 hiba), build; scratch Postgres-en mintaadattal Playwright 1440 px (nap/hét/hó).
+
+## 2026-10-19 — Drive-import: régi Word .doc megbízás csendben kimaradt
+- Tünet: a Drive `Fuvarmegbizások` mappába tett új megbízás (`fuvarmegbízás 2 (1)(127).doc`, Krajnik Sped) nem jelent meg az appban, naplóbejegyzés sem lett róla.
+- Ok: a `listazDriveFajlok` csak PDF / .docx / Google Docs / Excel MIME-típust enged; a régi bináris Word (`application/msword`) már a listázásnál kiesett.
+- Javítás (`lib/fuvarozas/drive-sync-core.ts`): `application/msword` felvéve a támogatottak közé, szöveg-kinyerés `word-extractor`-ral (a mammoth csak .docx-et olvas). Új függőség: `word-extractor` (+ `@types/word-extractor` dev).
+- Teszt: az éles .doc-ból a word-extractor teljes szöveget adott (felrakó, lerakó, időpont, fuvardíj, rendszám); tsc (a meglévő LayoutProps-hibán kívül tiszta), eslint, `next build` OK.
