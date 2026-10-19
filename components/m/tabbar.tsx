@@ -2,15 +2,16 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarDays, Mail, Sun, UserRound } from "lucide-react";
+import { CalendarDays, ListOrdered, Mail, Sun, UserRound } from "lucide-react";
 
-const IKON = { nap: Sun, naptar: CalendarDays, posta: Mail, profil: UserRound } as const;
+const IKON = { nap: Sun, naptar: CalendarDays, lista: ListOrdered, posta: Mail, profil: UserRound } as const;
 export type MTab = { href: string; label: string; ikon: keyof typeof IKON };
 
 /** A sofőr és az iroda más füleket lát — a szerepet az app/m/layout.tsx dönti el. */
 export const SOFOR_TABOK: MTab[] = [
   { href: "/m", label: "Ma", ikon: "nap" },
   { href: "/m/holnap", label: "Holnap", ikon: "naptar" },
+  { href: "/m/osszes", label: "Összes", ikon: "lista" },
   { href: "/m/profil", label: "Profil", ikon: "profil" },
 ];
 /**

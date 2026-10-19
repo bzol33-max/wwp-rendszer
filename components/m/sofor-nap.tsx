@@ -37,6 +37,7 @@ function napNev(iso: string) {
 }
 
 export function SoforNapNezet({ nap, ma, cim }: { nap: SoforNap | null; ma: boolean; cim?: string }) {
+  // cim === "": csak a dátum (az „Összes” fül későbbi napjai).
   const felirat = cim ?? (ma ? "Ma" : "Holnap");
   if (!nap) {
     return (
@@ -53,7 +54,7 @@ export function SoforNapNezet({ nap, ma, cim }: { nap: SoforNap | null; ma: bool
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <h1 className="text-xl font-bold">{felirat} · {napNev(nap.napISO)}</h1>
+        <h1 className="text-xl font-bold">{felirat ? `${felirat} · ` : ""}{napNev(nap.napISO)}</h1>
         <div className="text-sm text-[var(--m-muted)]">
           {nap.jarmuLabel} · {nap.fuvarok.length} megbízás{ma && hatra > 0 ? ` · ${hatra} megálló hátra` : ""}
         </div>

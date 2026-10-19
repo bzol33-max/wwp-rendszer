@@ -474,6 +474,33 @@ function visszavonhatoE(
  *
  * Null, ha az alkalmazotthoz nem tartozik saját jármű.
  */
+/**
+ * A sofőr „Összes” füle (2026-10-19, Budaházi Zoltán kérése): a saját kocsi
+ * MINDEN közelgő megbízása, naponként, időrendben — nem csak a Ma/Holnap.
+ * A napokat olcsón a DB-ből gyűjtjük (bármely nem törölt fuvar felrakás–
+ * lerakás napjai a következő 14 napban), a kocsira szűrést és a megjelenítést
+ * a getSoforNap végzi napról napra, így a besorolás ugyanaz, mint a Ma/Holnap
+ * fülön. Az üres napok kimaradnak.
+ */
+export async function getSoforNapokElore(employeeId: string, napokSzama = 14): Promise<SoforNap[]> {
+  const ma = budapestMaIso();
+  const napok = await query<{ nap: string }>(
+    `select distinct to_char(g::date, 'YYYY-MM-DD') as nap
+       from fuvar_megbizasok f,
+            generate_series(greatest(f.datum, $1::date), least(coalesce(f.lerakas_datum, f.datum), $1::date + $2::int), interval '1 day') g
+      where f.torolt_at is null and f.statusz is distinct from 'torolt'
+        and f.datum is not null and coalesce(f.lerakas_datum, f.datum) >= $1::date and f.datum <= $1::date + $2::int
+      order by 1`,
+    [ma, napokSzama]
+  );
+  const eredmeny: SoforNap[] = [];
+  for (const { nap } of napok) {
+    const n = await getSoforNap(employeeId, nap);
+    if (n && n.fuvarok.length > 0) eredmeny.push(n);
+  }
+  return eredmeny;
+}
+
 export async function getSoforNap(employeeId: string, napISO?: string): Promise<SoforNap | null> {
   await requireSajatVagyModulJog({
     employeeId,
