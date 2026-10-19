@@ -17,6 +17,7 @@ import { futtatRendszerkent } from "@/lib/auth/system-context";
 import { egyetlenPeldanyban, query, ZAR_KULCS } from "@/lib/db";
 import { frissitsKalkulaciokat, tervezettBerMegbizasok } from "@/lib/fuvarozas2/kalkulacio-tar";
 import { futtatPartnerJavaslatokat } from "@/lib/fuvarozas2/partner-javaslat";
+import { futtatPartnerKitoltest } from "@/lib/fuvarozas2/partner-kitoltes";
 import { hatterHivasban } from "@/lib/fuvarozas/kulso-hivas";
 
 const INTERVALL_MS = 60 * 60 * 1000;
@@ -75,6 +76,13 @@ async function tickBelso() {
     if (pj.irat + pj.javaslat + pj.hiba > 0) console.log(`[partner-javaslat] ${pj.irat} irat kiolvasva, ${pj.javaslat} új javaslat, ${pj.hiba} hiba.`);
   } catch (err) {
     console.error("[partner-javaslat] váratlan hiba:", err);
+  }
+  // …és ami egyértelmű (saját számláink vevő-adata, egyértelmű PDF-adat), az üres mezőbe be is kerül.
+  try {
+    const pk = await futtatPartnerKitoltest();
+    if (pk.mezo > 0) console.log(`[partner-kitoltes] ${pk.partner} partner, ${pk.mezo} mező kitöltve.`);
+  } catch (err) {
+    console.error("[partner-kitoltes] váratlan hiba:", err);
   }
 }
 

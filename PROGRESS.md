@@ -3864,3 +3864,16 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 - Ok: a címekben telepnév áll („Záhony, Solinwest Agro Telep”, „Dunakeszi, Solinwest Telep, Tőzegtavi út 9.”); a HU-GO címkereső ezekre 0 találatot ad.
 - Javítás (`lib/fuvarozas2/tervezes-het.ts` `geo`): tartalék-sorrend — teljes cím → település + számot tartalmazó részek → csak település. Csak a heti rés-számítást érinti, az érintés-felismerést nem.
 - Teszt: HU-GO élesben: a teljes címekre 0 találat, „Záhony” és „Dunakeszi, Tőzegtavi út 9.” megtalálva; a jelöltlista ezeket adja. tsc, eslint, `next build` OK.
+## 2026-10-19 — Megbízások › Partnerek: automatikus kitöltés + áttekinthető fül
+- Tünet: 55 partnerből 49-nél nem volt postacím, 50-nél számlázási e-mail, 54-nél adószám; 52 nyitott javaslat egy
+  hosszú kártyán ült elfogadatlanul; a saját fuvar „partnerei” (Fabrika, Keter, Jupiker…) üres sorokként keveredtek a megbízók közé.
+- Ok: a javaslat-rendszer (2026-10-01) csak javasolt, a törzsbe semmi nem került magától; az adószámot és a
+  számlázási címet senki nem gyűjtötte, pedig a saját kiállított számláink (`szamla.raw_xml`) tartalmazzák.
+- Javítás: `lib/fuvarozas2/partner-kitoltes-alap.ts` (tiszta) + `partner-kitoltes.ts` (futtató). CSAK üres mezőt tölt:
+  adószám, számlázási cím ← számláink vevője; postacím ← egyértelmű megbízás-PDF > számla postacím > vevőcím;
+  e-mail ← számláink vevő-e-mailje > PDF; fizetési határidő ← PDF > számlák medián napja (8/15/30/45/60/90-re kerekítve);
+  papír-határidő ← csak PDF. Eltérő adószámú számlák esetén a számlákból semmit. Óránként fut (modell-szinkron kör), és a fülön
+  „Hiányzók kitöltése” gombbal. A felhasznált javaslat „elfogadva”, a mező többi nyitott javaslata „elvetve” (dontes_by: automatikus kitöltés).
+- Fül: szűrő (Bérfuvar megbízók · Saját fuvar · Mind), „csak hiányos”, keresés, hiányszámláló; Adószám oszlop (a Sablon a lenyitott sorba került);
+  hiány narancs „hiányzik” jelöléssel csak bérfuvar-megbízónál; a javaslat-kártya összecsukva („Eldöntendő javaslatok”); szerkesztőben Adószám, Székhely.
+- Teszt: `teszt-partner-kitoltes.ts` 16/0, teljes `npm run teszt`, tsc (csak a meglévő LayoutProps), eslint, `next build`.

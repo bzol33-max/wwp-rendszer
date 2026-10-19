@@ -10,6 +10,7 @@ import { requireSession } from "@/lib/auth/dal";
 import { requireAnyViewPermission, requireEditPermission } from "@/lib/auth/require-permission";
 import { normalizaltCegKulcs } from "@/lib/fuvarozas/fuvar-constants";
 import { JAVASLAT_MEZOK, type JavaslatMezo } from "@/lib/fuvarozas2/partner-javaslat-alap";
+import { futtatPartnerKitoltest } from "@/lib/fuvarozas2/partner-kitoltes";
 
 /** Nyitott javaslat a partner egy hiányzó adatára (lásd lib/fuvarozas2/partner-javaslat.ts). */
 export type PartnerAdatJavaslat = {
@@ -26,6 +27,7 @@ export type Partner = {
   nev: string;
   nev_kulcs: string;
   nevvaltozatok: string[];
+  adoszam: string | null;
   szekhely: string | null;
   szamlazasi_cim: string | null;
   postazasi_cim: string | null;
@@ -41,6 +43,8 @@ export type Partner = {
   megjegyzes: string | null;
   megbizas_db: number;
   utolso_megbizas: string | null;
+  /** Van (nem törölt) bérfuvar-megbízása — ő a számlázandó megbízó; a többi saját fuvar partnere. */
+  berfuvar: boolean;
   /** Kapcsolattartók a megbízásokból gyűjtve (fuvar_kapcsolatok). */
   kapcsolatok: { nev: string | null; telefon: string | null; email: string | null }[];
   /** Tanult rakodási idő percben, a megállókon mért érkezés→távozás mediánja. */
@@ -81,11 +85,12 @@ type PartnerAlap = Omit<Partner, "kapcsolatok" | "rakodasFelrako" | "rakodasLera
 
 async function getPartnerAlap(): Promise<PartnerAlap[]> {
   return query<PartnerAlap>(
-    `select p.id::text, p.nev, p.nev_kulcs, p.nevvaltozatok, p.szekhely, p.szamlazasi_cim, p.postazasi_cim, p.szamlazasi_email,
+    `select p.id::text, p.nev, p.nev_kulcs, p.nevvaltozatok, p.adoszam, p.szekhely, p.szamlazasi_cim, p.postazasi_cim, p.szamlazasi_email,
        p.fizetesi_hatarido_nap, p.papir_bekuldesi_hatarido_nap, p.szamlan_kert_szam, p.sablon_azonosito,
        p.szamla_email_nem_kell, p.posta_nem_kell, p.megbizas_pdf_csatolva, p.email_domainek, p.megjegyzes,
        (select count(*) from fuvar_megbizasok m where m.partner_id = p.id and m.torolt_at is null)::int as megbizas_db,
-       (select to_char(max(m.datum), 'YYYY-MM-DD') from fuvar_megbizasok m where m.partner_id = p.id) as utolso_megbizas
+       (select to_char(max(m.datum), 'YYYY-MM-DD') from fuvar_megbizasok m where m.partner_id = p.id) as utolso_megbizas,
+       coalesce((select bool_or(m.jelleg = 'ber') from fuvar_megbizasok m where m.partner_id = p.id and m.torolt_at is null), false) as berfuvar
      from fuvar_partnerek p
      order by megbizas_db desc, p.nev`
   );
@@ -108,9 +113,9 @@ export async function getOsszevonasJavaslatok(): Promise<{ a: Partner; b: Partne
   return out;
 }
 
-export async function updatePartner(id: string, mezok: Partial<Omit<Partner, "id" | "nev_kulcs" | "megbizas_db" | "utolso_megbizas">>): Promise<void> {
+export async function updatePartner(id: string, mezok: Partial<Omit<Partner, "id" | "nev_kulcs" | "megbizas_db" | "utolso_megbizas" | "berfuvar">>): Promise<void> {
   await requireEditPermission("fuvarozas");
-  const engedett = ["nev", "nevvaltozatok", "szekhely", "szamlazasi_cim", "postazasi_cim", "szamlazasi_email", "fizetesi_hatarido_nap",
+  const engedett = ["nev", "nevvaltozatok", "adoszam", "szekhely", "szamlazasi_cim", "postazasi_cim", "szamlazasi_email", "fizetesi_hatarido_nap",
     "papir_bekuldesi_hatarido_nap", "szamlan_kert_szam", "sablon_azonosito", "szamla_email_nem_kell", "posta_nem_kell", "megbizas_pdf_csatolva", "email_domainek", "megjegyzes"] as const;
   const set: string[] = [];
   const par: unknown[] = [id];
@@ -234,4 +239,12 @@ export async function setPartnerPostazasiCim(partnerId: string, cim: string): Pr
     [partnerId]
   );
   return { ok: true };
+}
+
+/** „Hiányzók kitöltése”: a partner-törzs üres mezői a számláinkból és az egyértelmű megbízás-adatokból (lib/fuvarozas2/partner-kitoltes.ts). */
+export async function kitoltHianyzoPartnerAdatokat(): Promise<{ partner: number; mezo: number }> {
+  await requireEditPermission("fuvarozas");
+  const session = await requireSession();
+  const r = await futtatPartnerKitoltest(`${session.name ?? session.username} (automatikus kitöltés)`);
+  return { partner: r.partner, mezo: r.mezo };
 }
