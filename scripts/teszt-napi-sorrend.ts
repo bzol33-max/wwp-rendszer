@@ -101,7 +101,7 @@ eq("ütközés: két bérfuvar egy napon az", berUtkozes([{ jelleg: "ber" }, { j
   p("Tompaládony", 47.380, 16.880); p("Záhony", 48.407, 22.175); p("Dunakeszi", 47.628, 19.127);
   const s = (id: string, felrako: string, lerako: string) => ({ id, felrakasNap: "2026-10-20", lerakasNap: "2026-10-20", felrako, lerako, tervIdo: null, lezart: false });
   eq("közelség: Kisvárda → Záhony → Dunakeszi → Tata",
-    napiSorrend([s("324", "Szakoly, Rákóczi utca 26", "Kisvárda"), s("325", "Tata", "9662 Tompaládony, 0117/8 hrsz."), s("329", "Záhony, Solinwest Agro Telep", "Dunakeszi, Tőzegtavi út 9.")], (x) => x).map((x) => x.id),
+    napiSorrend([s("324", "Szakoly, Rákóczi utca 26", "Kisvárda"), s("325", "Tata", "9662 Tompaládony, 0117/8 hrsz."), s("329", "Záhony, Solinwest Agro Telep", "Dunakeszi, Solinwest Telep, Tőzegtavi út 9.")], (x) => x).map((x) => x.id),
     ["324", "329", "325"]);
   eq("közelség: időpontos bérfuvar továbbra is elöl",
     napiSorrend([s("324", "Szakoly", "Kisvárda"), { ...s("329", "Záhony", "Dunakeszi"), tervIdo: Date.parse("2026-10-20T05:00:00Z") }], (x) => x).map((x) => x.id),

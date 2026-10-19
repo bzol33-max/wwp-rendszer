@@ -6,12 +6,12 @@
 // szabály szerint áll, a lap nem lassul tovább.
 
 import { geokodolCachelve } from "@/lib/fuvarozas/erintes-felismeres";
-import { bontsMegallokra, varosNev } from "@/lib/fuvarozas/varos";
-import { varosPontTarba, varosPontTarbol } from "@/lib/fuvarozas2/varos-pont-tar";
+import { bontsMegallokra } from "@/lib/fuvarozas/varos";
+import { megalloTelepules, varosPontTarba, varosPontTarbol } from "@/lib/fuvarozas2/varos-pont-tar";
 
 function telepulesek(cim: string | null | undefined): string[] {
   if (!cim) return [];
-  return bontsMegallokra(cim).map((m) => varosNev(m)).filter((v) => v && v.trim().length >= 2);
+  return bontsMegallokra(cim).map((m) => megalloTelepules(m)).filter((v) => v && v.trim().length >= 2);
 }
 
 export async function melegitVarosPontokat(cimek: (string | null | undefined)[]): Promise<void> {

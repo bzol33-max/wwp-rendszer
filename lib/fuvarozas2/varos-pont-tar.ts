@@ -4,7 +4,20 @@
 // betöltők töltik fel előre (varos-pont.ts → melegitVarosPontokat). Üres tár
 // mellett a sorrend a régi, pontos városegyezéses láncolásra esik vissza.
 
+import { varosNev } from "@/lib/fuvarozas/varos";
+
 export type VarosPont = { lat: number; lon: number };
+
+/**
+ * Egy megálló címének települése a tár kulcsához. A varosNev a telepnevet
+ * tartalmazó címnél („Dunakeszi, Solinwest Telep, Tőzegtavi út 9.”) a teljes
+ * szöveget adja vissza — ilyenkor az első vessző előtti rész a település
+ * (2026-10-19: emiatt maradt el Gergő 10.20-i közelségi sorrendje).
+ */
+export function megalloTelepules(cim: string): string {
+  const v = (varosNev(cim) || cim).trim();
+  return v.includes(",") ? v.split(",")[0].trim() : v;
+}
 
 const tar = new Map<string, VarosPont | null>();
 

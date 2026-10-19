@@ -40,10 +40,10 @@
 //    városegyezéses láncolás marad.
 // Mesterséges helykitöltő időt (éjfél UTC, reggel 7) a szabály nem használ.
 
-import { varosNev } from "@/lib/fuvarozas/varos";
+import { bontsMegallokra, varosNev } from "@/lib/fuvarozas/varos";
 import { parseIdopontSzoveg } from "@/lib/fuvarozas/idovonal";
 import { budapestFalioraToInstant } from "@/lib/fuvarozas/idozona";
-import { legvonalKm, varosPontTarbol, type VarosPont } from "@/lib/fuvarozas2/varos-pont-tar";
+import { legvonalKm, megalloTelepules, varosPontTarbol, type VarosPont } from "@/lib/fuvarozas2/varos-pont-tar";
 
 export type SorrendAdat = {
   id: string;
@@ -126,11 +126,10 @@ export function napiSorrend<T>(lista: T[], adat: (t: T) => SorrendAdat): T[] {
 
 function varosPont(cim: string | null, utolso: boolean): VarosPont | null {
   if (!cim) return null;
-  const v = varosNev(cim);
-  if (!v) return null;
-  // Több megállós címnél („A + B”) a felrakó az első, a lerakó az utolsó település.
-  const reszek = v.split(" + ");
-  return varosPontTarbol(utolso ? reszek[reszek.length - 1] : reszek[0]) ?? null;
+  // Több megállós címnél a felrakó az első, a lerakó az utolsó megálló települése.
+  const megallok = bontsMegallokra(cim);
+  if (megallok.length === 0) return null;
+  return varosPontTarbol(megalloTelepules(utolso ? megallok[megallok.length - 1] : megallok[0])) ?? null;
 }
 
 /**
