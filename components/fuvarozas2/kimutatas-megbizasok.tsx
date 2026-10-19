@@ -45,11 +45,12 @@ function Fej({ k, rend, setRend, children, jobb = true }: {
   );
 }
 
-export function KimutatasMegbizasok({ megbizasok, kezdoJelleg = "mind", sajatKmDij }: {
+export function KimutatasMegbizasok({ megbizasok, kezdoJelleg = "mind", sajatKmDij, sajatKmDijForras }: {
   megbizasok: KimutatasMegbizas[];
   kezdoJelleg?: "mind" | "ber" | "sajat";
   /** A saját fuvar „díja lett volna” alapja: rakott km × ennyi Ft (beállítás: sajat_fuvar_km_dij_ft). */
   sajatKmDij?: number;
+  sajatKmDijForras?: "berfuvar_atlag" | "beallitas";
 }) {
   const [rend, setRend] = useState<Rend>({ k: "nap", le: false });
   const [jelleg, setJelleg] = useState<"mind" | "ber" | "sajat">(kezdoJelleg);
@@ -79,7 +80,7 @@ export function KimutatasMegbizasok({ megbizasok, kezdoJelleg = "mind", sajatKmD
         ))}
         <span className="ml-auto text-xs text-muted-foreground">{sorok.length} megbízás</span>
       </div>
-      {jelleg === "sajat" ? <SajatUtnaplo sorok={sorok} sajatKmDij={sajatKmDij} /> : <>
+      {jelleg === "sajat" ? <SajatUtnaplo sorok={sorok} sajatKmDij={sajatKmDij} forras={sajatKmDijForras} /> : <>
       {/* Telefonon kártyák: a 11 oszlopos táblából 390 px-en csak kettő látszott. */}
       <ul className="flex flex-col divide-y divide-foreground/5 sm:hidden">
         {sorok.map((m) => <MegbizasKartya key={m.id} m={m} />)}
@@ -170,10 +171,11 @@ export function KimutatasMegbizasok({ megbizasok, kezdoJelleg = "mind", sajatKmD
  * Saját fuvarok útnaplója (Budaházi Zoltán, 2026-10-19: „hol találom, mikor
  * hová mentünk saját áruval, egy-egy útnak mennyi lett volna a díja?”). Saját
  * fuvarnál a megbízó mindig a Well-Worn Pallet; a „kinek” az áru címzettje.
- * Díja lett volna = rakott km × a saját fuvar km-díja (beállítás) — csak
+ * Díja lett volna = rakott km × a bérfuvarjaink átlagos Ft/km-e (90 nap; ha
+ * nincs adat, a beállítás) — csak
  * tájékoztató, az eredménybe nem számít.
  */
-function SajatUtnaplo({ sorok, sajatKmDij }: { sorok: KimutatasMegbizas[]; sajatKmDij?: number }) {
+function SajatUtnaplo({ sorok, sajatKmDij, forras }: { sorok: KimutatasMegbizas[]; sajatKmDij?: number; forras?: "berfuvar_atlag" | "beallitas" }) {
   if (sorok.length === 0) return <p className="px-3 py-4 text-sm text-muted-foreground">Ebben az időszakban nem volt saját fuvar.</p>;
   const ossz = sorok.reduce((a, m) => ({
     km: a.km + Math.round(m.rakottKmBecsles), koltseg: a.koltseg + (m.belsoKoltsegFt ?? m.koltsegFt), dij: a.dij + (m.elkerultKoltsegFt ?? 0),
@@ -185,7 +187,7 @@ function SajatUtnaplo({ sorok, sajatKmDij }: { sorok: KimutatasMegbizas[]; sajat
         <span><b>{ossz.km.toLocaleString("hu-HU")}</b> rakott km</span>
         <span>költségünk <b>{formatFt(ossz.koltseg)}</b></span>
         <span>díja lett volna <b className="text-[var(--f2-blue)]">{formatFt(ossz.dij)}</b></span>
-        {sajatKmDij ? <span className="text-xs text-muted-foreground">(rakott km × {sajatKmDij.toLocaleString("hu-HU")} Ft)</span> : null}
+        {sajatKmDij ? <span className="text-xs text-muted-foreground">(rakott km × {sajatKmDij.toLocaleString("hu-HU")} Ft{forras === "berfuvar_atlag" ? " — a bérfuvarjaink 90 napos átlaga" : ""})</span> : null}
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-sm">

@@ -47,6 +47,9 @@ export type IdoszakJarmu = {
 };
 
 export type IdoszakKoltseg = {
+  /** A saját fuvar „díja lett volna” Ft/km-e: a bérfuvarok 90 napos átlaga, vagy a beállítás. */
+  sajatKmDijFt: number;
+  sajatKmDijForras: "berfuvar_atlag" | "beallitas";
   kezdet: string;
   veg: string;
   jarmuvek: IdoszakJarmu[];
@@ -217,10 +220,24 @@ export async function koltsegIdoszakra(kezdet: string, veg: string): Promise<Ido
     keziMegbizasonkent.set(r.megbizas_id, lista);
   }
 
+  // A saját fuvar „díja lett volna” alapja (Budaházi Zoltán, 2026-10-19): a
+  // bérfuvarjaink tényleges átlagos Ft/rakott km-e, az időszak végéig 90 nap
+  // (forintos fuvarok — ugyanaz, mint a kocsi-kihasználtság belső díja).
+  // Ha nincs elég adat, a beállítás (sajat_fuvar_km_dij_ft) marad.
+  const [berFtKm] = await query<{ ft_km: number | null }>(
+    `select sum(m.fuvardij)::float8 / nullif(sum(m.rakott_km), 0)::float8 as ft_km
+     from fuvar_megbizasok m
+     where m.torolt_at is null and m.jelleg = 'ber' and m.fuvardij > 0 and m.rakott_km > 0
+       and coalesce(m.fuvardij_penznem, 'Ft') in ('Ft', 'HUF')
+       and m.datum >= $1::date - 90 and m.datum <= $1::date`,
+    [veg]
+  ).catch(() => [] as { ft_km: number | null }[]);
+  const sajatKmDijFt = berFtKm?.ft_km != null && Number(berFtKm.ft_km) > 0 ? Math.round(Number(berFtKm.ft_km)) : beallitas.sajat_fuvar_km_dij_ft;
+
   const param: Parameterek = {
     napiKoltsegFt: beallitas.napi_koltseg_ft,
     fogyasztasL100: beallitas.fogyasztas_alap_l_100km,
-    sajatKmDijFt: beallitas.sajat_fuvar_km_dij_ft,
+    sajatKmDijFt,
     gazolajAr,
     gazolajCimke,
     atlagUtdijFtKm: atlag?.ft_km != null ? Number(atlag.ft_km) : null,
@@ -328,5 +345,7 @@ export async function koltsegIdoszakra(kezdet: string, veg: string): Promise<Ido
     arfolyamok: [...hasznaltArf.values()].sort((a, b) => a.nap.localeCompare(b.nap)),
     atvaltatlanKezi,
     beallitas,
+    sajatKmDijFt,
+    sajatKmDijForras: berFtKm?.ft_km != null && Number(berFtKm.ft_km) > 0 ? "berfuvar_atlag" : "beallitas",
   };
 }

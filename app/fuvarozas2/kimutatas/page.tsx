@@ -193,7 +193,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ i
       <Card>
         <CardHeader className="pb-2"><CardTitle className="text-base">Megbízásonként</CardTitle></CardHeader>
         <CardContent className="p-0">
-          <KimutatasMegbizasok key={jelleg ?? "mind"} megbizasok={k.megbizasok} kezdoJelleg={jelleg} sajatKmDij={k.sajatKmDijBeallitas} />
+          <KimutatasMegbizasok key={jelleg ?? "mind"} megbizasok={k.megbizasok} kezdoJelleg={jelleg} sajatKmDij={k.sajatKmDijBeallitas} sajatKmDijForras={k.sajatKmDijForras} />
         </CardContent>
       </Card>
 
@@ -225,7 +225,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ i
         tételt felülírja, a többi hozzáadódik. A HU-GO-tranzakciók megbízásokra felosztott része is tény („felosztva”).
         A napi fix ({k.napiKoltsegBeallitas.toLocaleString("hu-HU")} Ft/nap) a nap fuvarjai közt oszlik meg; ami nem jut
         megbízásra (üres utak, állás), az a „nem hozzárendelt” költség. A saját fuvar belső költség — az „elkerült költség”
-        (saját rakott km × {k.sajatKmDijBeallitas} Ft/km) csak tájékoztató, egyik eredménybe sem számít bele.
+        (saját rakott km × {k.sajatKmDijBeallitas} Ft/km{k.sajatKmDijForras === "berfuvar_atlag" ? ", a bérfuvarok 90 napos átlaga" : ""}) csak tájékoztató, egyik eredménybe sem számít bele.
         {arfolyamCimke ? ` EUR-átváltás: ${arfolyamCimke}.` : " Az EUR-os díj a teljesítés napjának MNB-árfolyamán váltódik át."}
       </p>
     </div>

@@ -3919,3 +3919,4 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 - Pénz › Kimutatás › „Saját” szűrő: külön útnapló (Nap · Honnan → hova · Kitől → kinek · Kocsi · Rakott km · Költségünk (+Ft/raklap) · Díja lett volna), felül összesítés (utak, km, költség, díj; alap: rakott km × `sajat_fuvar_km_dij_ft`). Közvetlen link: `/fuvarozas2/kimutatas?idoszak=ho&jelleg=sajat` (a Nap/Hét/Hónap lapozás megtartja).
 - Partnerek › Saját fuvar: magyarázó sáv (megbízó mindig a WWP, itt a címzettek/feladók) + link az útnaplóra.
 - Teszt: teljes `npm run teszt`, tsc, eslint, build.
+- (20:20) A „díja lett volna” alapja ezentúl a bérfuvarjaink tényleges átlagos Ft/rakott km-e (forintos fuvarok, az időszak végéig 90 nap, ugyanaz, mint a kocsi-kihasználtság belső díja); a `sajat_fuvar_km_dij_ft` beállítás csak tartalék, ha nincs adat. `koltseg-adat.ts` `sajatKmDijFt`/`sajatKmDijForras`; a Kimutatás kiírja az alapot.
