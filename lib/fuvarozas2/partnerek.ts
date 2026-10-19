@@ -9,6 +9,7 @@ import { pool, query } from "@/lib/db";
 import { requireSession } from "@/lib/auth/dal";
 import { requireAnyViewPermission, requireEditPermission } from "@/lib/auth/require-permission";
 import { normalizaltCegKulcs } from "@/lib/fuvarozas/fuvar-constants";
+import { partnerEgyezik } from "@/lib/fuvarozas/szamla-parositas";
 import { JAVASLAT_MEZOK, type JavaslatMezo } from "@/lib/fuvarozas2/partner-javaslat-alap";
 import { futtatPartnerKitoltest } from "@/lib/fuvarozas2/partner-kitoltes";
 import { futtatPartnerJavaslatokat } from "@/lib/fuvarozas2/partner-javaslat";
@@ -46,8 +47,13 @@ export type Partner = {
   utolso_megbizas: string | null;
   /** Van (nem törölt) bérfuvar-megbízása — ő a számlázandó megbízó; a többi saját fuvar partnere. */
   berfuvar: boolean;
-  /** Kapcsolattartók a megbízásokból gyűjtve (fuvar_kapcsolatok). */
-  kapcsolatok: { nev: string | null; telefon: string | null; email: string | null }[];
+  /**
+   * Kapcsolattartók, a leggyakoribb elöl: akik a megbízásokat küldik (Levelek,
+   * fuvar_level feladói) és a Kapcsolatok törzs (fuvar_kapcsolatok, név szerint is párosítva).
+   */
+  kapcsolatok: { nev: string | null; telefon: string | null; email: string | null; levelDb?: number }[];
+  /** A nem törölt bérfuvar-megbízások díja pénznemenként (a „mennyit dolgoztunk neki”). */
+  forgalom: { penznem: string; osszeg: number }[];
   /** Tanult rakodási idő percben, a megállókon mért érkezés→távozás mediánja. */
   rakodasFelrako: { perc: number; minta: number } | null;
   rakodasLerako: { perc: number; minta: number } | null;
@@ -55,12 +61,23 @@ export type Partner = {
 
 export async function getPartnerek(): Promise<Partner[]> {
   await requireAnyViewPermission(["fuvarozas", "elszamolas"]);
-  const [alap, kapcsolatok, rakodas] = await Promise.all([
+  const [alap, kapcsolatok, levelezok, forgalom, rakodas] = await Promise.all([
     getPartnerAlap(),
-    query<{ partner_id: string; nev: string | null; telefon: string | null; email: string | null }>(
-      `select partner_id::text, kapcsolattarto as nev, telefon, email from fuvar_kapcsolatok
-       where partner_id is not null order by partner_id, id`
-    ),
+    query<{ partner_id: string | null; ceg: string; nev: string | null; telefon: string | null; email: string | null }>(
+      `select partner_id::text, ceg, kapcsolattarto as nev, telefon, email from fuvar_kapcsolatok order by id`
+    ).catch(() => []),
+    // A megbízást küldő emberek: feladó név + cím, partnerhez kötve vagy a domain alapján.
+    query<{ partner_id: string | null; domain: string | null; nev: string | null; email: string; db: number }>(
+      `select partner_id::text, lower(felado_domain) as domain, max(felado_nev) as nev, lower(felado) as email, count(*)::int as db
+       from fuvar_level
+       where coalesce(kezi_osztaly, osztaly) in ('megbizas', 'modositas', 'adatkeres', 'okmanykeres', 'papirok', 'fizetes')
+       group by 1, 2, 4 order by db desc`
+    ).catch(() => []),
+    query<{ partner_id: string; penznem: string; osszeg: number }>(
+      `select partner_id::text, coalesce(nullif(fuvardij_penznem, ''), 'Ft') as penznem, sum(fuvardij)::float as osszeg
+       from fuvar_megbizasok where partner_id is not null and torolt_at is null and jelleg = 'ber' and fuvardij > 0
+       group by 1, 2`
+    ).catch(() => []),
     query<{ partner_id: string; tipus: string; percek: number[] }>(
       `select m.partner_id::text, g.tipus,
          array_agg(extract(epoch from (g.gps_tavozas - g.gps_erkezes)) / 60) as percek
@@ -74,15 +91,41 @@ export async function getPartnerek(): Promise<Partner[]> {
     const e = (sorok.percek ?? []).map(Number).filter((n) => Number.isFinite(n) && n > 0 && n < 600).sort((a, b) => a - b);
     return e.length >= 3 ? { perc: Math.round(e[Math.floor(e.length / 2)]), minta: e.length } : null;
   };
+  const SZABAD_DOMAIN = /^(gmail|freemail|t-online|citromail|yahoo|hotmail|outlook|icloud)\./;
+  const kapcsolatai = (p: PartnerAlap): Partner["kapcsolatok"] => {
+    const nevek = [p.nev, ...p.nevvaltozatok];
+    // A cég saját domainjei: a megadott e-mail-domainek és a számlázási e-mail domainje (ingyenes postafiók nem).
+    const domainek = new Set([...p.email_domainek, ...(p.szamlazasi_email ?? "").split(/[,;]\s*/).map((e) => e.split("@")[1] ?? "")]
+      .map((d) => d.trim().toLowerCase()).filter((d) => d && !SZABAD_DOMAIN.test(d)));
+    const ki: Partner["kapcsolatok"] = [];
+    const lattuk = new Set<string>();
+    for (const l of levelezok) {
+      if (l.partner_id !== p.id && !(l.partner_id == null && l.domain && domainek.has(l.domain))) continue;
+      if (/well-?worn|noreply|no-reply|timocom|notification/.test(l.email) || lattuk.has(l.email)) continue;
+      lattuk.add(l.email);
+      ki.push({ nev: l.nev?.replace(/^"|"$/g, "") || null, telefon: null, email: l.email, levelDb: l.db });
+    }
+    for (const k of kapcsolatok) {
+      if (k.partner_id !== p.id && !(k.partner_id == null && partnerEgyezik(k.ceg, nevek))) continue;
+      const kulcs = (k.email ?? k.nev ?? k.telefon ?? "").toLowerCase();
+      const megvan = ki.find((x) => (k.email && x.email === k.email.toLowerCase()) || (k.nev && x.nev?.toLowerCase() === k.nev.toLowerCase()));
+      if (megvan) { megvan.telefon ??= k.telefon; megvan.nev ??= k.nev; continue; }
+      if (!kulcs || lattuk.has(kulcs)) continue;
+      lattuk.add(kulcs);
+      ki.push({ nev: k.nev, telefon: k.telefon, email: k.email });
+    }
+    return ki;
+  };
   return alap.map((p) => ({
     ...p,
-    kapcsolatok: kapcsolatok.filter((k) => k.partner_id === p.id).map(({ nev, telefon, email }) => ({ nev, telefon, email })),
+    kapcsolatok: kapcsolatai(p),
+    forgalom: forgalom.filter((f) => f.partner_id === p.id).map(({ penznem, osszeg }) => ({ penznem, osszeg })),
     rakodasFelrako: median(rakodas.find((r) => r.partner_id === p.id && r.tipus === "felrako")),
     rakodasLerako: median(rakodas.find((r) => r.partner_id === p.id && r.tipus === "lerako")),
   }));
 }
 
-type PartnerAlap = Omit<Partner, "kapcsolatok" | "rakodasFelrako" | "rakodasLerako">;
+type PartnerAlap = Omit<Partner, "kapcsolatok" | "forgalom" | "rakodasFelrako" | "rakodasLerako">;
 
 async function getPartnerAlap(): Promise<PartnerAlap[]> {
   return query<PartnerAlap>(
@@ -114,7 +157,7 @@ export async function getOsszevonasJavaslatok(): Promise<{ a: Partner; b: Partne
   return out;
 }
 
-export async function updatePartner(id: string, mezok: Partial<Omit<Partner, "id" | "nev_kulcs" | "megbizas_db" | "utolso_megbizas" | "berfuvar">>): Promise<void> {
+export async function updatePartner(id: string, mezok: Partial<Omit<Partner, "id" | "nev_kulcs" | "megbizas_db" | "utolso_megbizas" | "berfuvar" | "kapcsolatok" | "forgalom" | "rakodasFelrako" | "rakodasLerako">>): Promise<void> {
   await requireEditPermission("fuvarozas");
   const engedett = ["nev", "nevvaltozatok", "adoszam", "szekhely", "szamlazasi_cim", "postazasi_cim", "szamlazasi_email", "fizetesi_hatarido_nap",
     "papir_bekuldesi_hatarido_nap", "szamlan_kert_szam", "sablon_azonosito", "szamla_email_nem_kell", "posta_nem_kell", "megbizas_pdf_csatolva", "email_domainek", "megjegyzes"] as const;

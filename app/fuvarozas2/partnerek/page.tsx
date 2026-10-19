@@ -12,7 +12,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ n
   const [partnerek, javaslatok, adatJavaslatok] = await Promise.all([getPartnerek(), getOsszevonasJavaslatok(), getPartnerAdatJavaslatok()]);
   return (
     <div className="flex flex-col gap-5">
-      <PageHeader title="Fuvarozás · Partnerek" subtitle="Megbízók törzse: fizetési és papír-határidő, számlázási e-mail, postázási cím, számlán kért szám. Az E5 összevonás itt." />
+      <PageHeader title="Fuvarozás · Partnerek" subtitle="Megbízóink: ki a kapcsolattartó, hány munkánk volt, fizetés és számlázás. Névre kattintva szerkeszthető." />
       <Fuvarozas2Fulek aktiv="/fuvarozas2/partnerek" />
       <PartnerekNezet partnerek={partnerek} javaslatok={javaslatok} adatJavaslatok={adatJavaslatok} szerkeszthet={session.can("fuvarozas").edit} nyit={nyit && /^\d+$/.test(nyit) ? nyit : undefined} />
     </div>

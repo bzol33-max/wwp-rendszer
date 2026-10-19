@@ -16,14 +16,14 @@ type Kor = "ber" | "sajat" | "mind";
 
 /**
  * A partner hiányzó adatai — ami a számlázáshoz és a papír elküldéséhez KELL
- * (adószám, postacím, e-mail, fizetési határidő). A papír-beküldési határidőt
+ * (postacím, e-mail, fizetési határidő). Az adószám a tulajdonosnak nem fontos
+ * (2026-10-19), a számlán úgyis a Számlázz.hu vevő-adata áll. A papír-beküldési határidőt
  * csak az a megbízó adja meg, aki kiköti; ha nincs, az nem hiány (2026-10-19).
  * Saját fuvar partnerénél semmi nem számít hiánynak.
  */
 function hianyok(p: Partner): string[] {
   if (!p.berfuvar) return [];
   const h: string[] = [];
-  if (!p.adoszam) h.push("adószám");
   if (!p.postazasi_cim && !p.posta_nem_kell) h.push("postacím");
   if (!p.szamlazasi_email && !p.szamla_email_nem_kell) h.push("e-mail");
   if (p.fizetesi_hatarido_nap == null) h.push("fizetési határidő");
@@ -32,6 +32,15 @@ function hianyok(p: Partner): string[] {
 
 function KorGomb({ aktiv, onClick, cimke, db }: { aktiv: boolean; onClick: () => void; cimke: string; db: number }) {
   return <Button size="xs" variant={aktiv ? "default" : "outline"} onClick={onClick}>{cimke} <span className="opacity-70">{db}</span></Button>;
+}
+
+/** 1 234 567 Ft → „1,2 M Ft”, 850 000 → „850 e Ft”, euró egészre. */
+function penzRovid(f: { penznem: string; osszeg: number }): string {
+  const eur = /^(eur|€)$/i.test(f.penznem);
+  if (eur) return `${Math.round(f.osszeg).toLocaleString("hu-HU")} €`;
+  if (f.osszeg >= 1_000_000) return `${(f.osszeg / 1_000_000).toLocaleString("hu-HU", { maximumFractionDigits: 1 })} M Ft`;
+  if (f.osszeg >= 10_000) return `${Math.round(f.osszeg / 1000).toLocaleString("hu-HU")} e Ft`;
+  return `${Math.round(f.osszeg).toLocaleString("hu-HU")} ${f.penznem}`;
 }
 
 const ekezetNelkul = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
@@ -82,7 +91,7 @@ export function PartnerekNezet({ partnerek, javaslatok, adatJavaslatok = [], sze
   const lathato = partnerek
     .filter((p) => (kor === "ber" ? p.berfuvar : kor === "sajat" ? !p.berfuvar : true))
     .filter((p) => !csakHianyos || hianyok(p).length > 0)
-    .filter((p) => !q || ekezetNelkul([p.nev, ...p.nevvaltozatok, p.adoszam ?? "", p.szamlazasi_email ?? ""].join(" ")).includes(q));
+    .filter((p) => !q || ekezetNelkul([p.nev, ...p.nevvaltozatok, p.adoszam ?? "", p.szamlazasi_email ?? "", ...p.kapcsolatok.flatMap((k) => [k.nev ?? "", k.email ?? "", k.telefon ?? ""])].join(" ")).includes(q));
   return (
     <div className="flex flex-col gap-4">
       {confirmDialog}
@@ -91,7 +100,7 @@ export function PartnerekNezet({ partnerek, javaslatok, adatJavaslatok = [], sze
         <KorGomb aktiv={kor === "sajat"} onClick={() => setKor("sajat")} cimke="Saját fuvar" db={partnerek.length - berPartnerek.length} />
         <KorGomb aktiv={kor === "mind"} onClick={() => setKor("mind")} cimke="Mind" db={partnerek.length} />
         <label className="ml-1 flex items-center gap-1.5 text-sm"><input type="checkbox" checked={csakHianyos} onChange={(e) => setCsakHianyos(e.target.checked)} />csak hiányos</label>
-        <Input value={kereses} onChange={(e) => setKereses(e.target.value)} placeholder="Keresés: név, adószám, e-mail" className="h-8 w-full text-sm sm:w-64" />
+        <Input value={kereses} onChange={(e) => setKereses(e.target.value)} placeholder="Keresés: partner, kapcsolattartó, e-mail" className="h-8 w-full text-sm sm:w-64" />
         <span className="ml-auto text-sm text-muted-foreground">
           {hianyosBer.length === 0 ? "Minden megbízó adata teljes" : <>Hiányos megbízó: <b className="text-[var(--f2-amb)]">{hianyosBer.length}</b> / {berPartnerek.length}</>}
         </span>
@@ -153,10 +162,10 @@ export function PartnerekNezet({ partnerek, javaslatok, adatJavaslatok = [], sze
             <tr>
               {szerkeszthet ? <th className="w-8 px-2 py-2" /> : null}
               <th className="px-3 py-2 font-medium">Partner</th>
-              <th className="px-3 py-2 text-right font-medium">Fuvar</th>
-              <th className="px-3 py-2 font-medium">Határidők</th>
-              <th className="px-3 py-2 font-medium">Számla e-mail</th>
-              <th className="px-3 py-2 font-medium">Postacím</th>
+              <th className="px-3 py-2 font-medium">Kapcsolattartó</th>
+              <th className="px-3 py-2 text-right font-medium">Munkák</th>
+              <th className="px-3 py-2 font-medium">Fizetés</th>
+              <th className="px-3 py-2 font-medium">Számla · posta</th>
             </tr>
           </thead>
           <tbody>
@@ -188,6 +197,7 @@ function PartnerSor({ p, nyitott, onNyit, szerkeszthet, kijelolve, onKijelol }: 
   });
   const szam = (s: string) => (s.trim() === "" ? null : Number(s));
   const hiany = hianyok(p);
+  const fo = p.kapcsolatok[0] ?? null;
   const emailek = (p.szamlazasi_email ?? "").split(/[,;]\s*/).map((e) => e.trim()).filter(Boolean);
   // Bérfuvar-megbízónál a hiány jelölt (a számlázáshoz kell), saját fuvar partnerénél csak „—”.
   const nincs = p.berfuvar ? <span className="text-xs text-[var(--f2-amb)]">hiányzik</span> : <span className="text-muted-foreground">—</span>;
@@ -219,24 +229,33 @@ function PartnerSor({ p, nyitott, onNyit, szerkeszthet, kijelolve, onKijelol }: 
         {szerkeszthet ? <td className="px-2 py-2"><input type="checkbox" checked={kijelolve} onChange={(e) => onKijelol(e.target.checked)} aria-label="kijelölés összevonáshoz" /></td> : null}
         <td className="px-3 py-2.5">
           <button className="text-left font-medium hover:underline" onClick={onNyit}>{p.nev}</button>
-          <div className="text-xs tabular-nums text-muted-foreground">{p.adoszam ?? (p.berfuvar ? <span className="text-[var(--f2-amb)]">adószám hiányzik</span> : null)}</div>
-          {hiany.filter((h) => h !== "adószám").length > 0 ? <div className="text-xs text-[var(--f2-amb)]">hiányzik: {hiany.filter((h) => h !== "adószám").join(", ")}</div> : null}
+          {hiany.length > 0 ? <div className="text-xs text-[var(--f2-amb)]">hiányzik: {hiany.join(", ")}</div> : null}
         </td>
-        <td className="px-3 py-2.5 text-right tabular-nums">
-          <a href={`/fuvarozas2/megbizasok?partner=${p.id}`} className="font-medium hover:underline">{p.megbizas_db}</a>
-          {p.utolso_megbizas ? <div className="text-xs text-muted-foreground">{p.utolso_megbizas.slice(5).replace("-", ".")}.</div> : null}
+        <td className="max-w-[15rem] px-3 py-2.5">
+          {fo ? (
+            <>
+              <div className="truncate" title={fo.email ?? undefined}>{fo.nev ?? fo.email}{p.kapcsolatok.length > 1 ? <span className="text-xs text-muted-foreground"> +{p.kapcsolatok.length - 1}</span> : null}</div>
+              <div className="truncate text-xs text-muted-foreground">{[fo.telefon, fo.nev ? fo.email : null].filter(Boolean).join(" · ")}</div>
+            </>
+          ) : <span className="text-muted-foreground">—</span>}
+        </td>
+        <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">
+          <a href={`/fuvarozas2/megbizasok?partner=${p.id}`} className="font-medium hover:underline">{p.megbizas_db} munka</a>
+          <div className="text-xs text-muted-foreground">
+            {[p.forgalom.map(penzRovid).join(" + "), p.utolso_megbizas ? `utolsó ${p.utolso_megbizas.slice(5).replace("-", ".")}.` : null].filter(Boolean).join(" · ")}
+          </div>
         </td>
         <td className="whitespace-nowrap px-3 py-2.5 tabular-nums">
           {p.fizetesi_hatarido_nap != null ? <>{p.fizetesi_hatarido_nap} nap</> : nincs}
           <div className="text-xs text-muted-foreground">{p.papir_bekuldesi_hatarido_nap != null ? `papír ${p.papir_bekuldesi_hatarido_nap} napon belül` : p.berfuvar ? "papír: nincs kikötve" : ""}</div>
         </td>
-        <td className="max-w-[15rem] px-3 py-2.5">
-          {p.szamla_email_nem_kell ? <span className="text-muted-foreground">nem kér</span> : emailek.length === 0 ? nincs : (
-            <span className="block truncate" title={emailek.join(", ")}>{emailek[0]}{emailek.length > 1 ? <span className="text-xs text-muted-foreground"> +{emailek.length - 1}</span> : null}</span>
-          )}
-        </td>
         <td className="max-w-[17rem] px-3 py-2.5">
-          {p.posta_nem_kell ? <span className="text-muted-foreground">nem kér</span> : p.postazasi_cim ? <span className="line-clamp-2" title={p.postazasi_cim}>{cimSzep(p.postazasi_cim)}</span> : nincs}
+          <div className="truncate" title={emailek.join(", ")}>
+            {p.szamla_email_nem_kell ? <span className="text-muted-foreground">e-mailt nem kér</span> : emailek.length === 0 ? nincs : <>{emailek[0]}{emailek.length > 1 ? <span className="text-xs text-muted-foreground"> +{emailek.length - 1}</span> : null}</>}
+          </div>
+          <div className="truncate text-xs text-muted-foreground" title={p.postazasi_cim ?? undefined}>
+            {p.posta_nem_kell ? "postát nem kér" : p.postazasi_cim ? cimSzep(p.postazasi_cim) : p.berfuvar ? <span className="text-[var(--f2-amb)]">postacím hiányzik</span> : null}
+          </div>
         </td>
       </tr>
       {nyitott ? (
@@ -268,11 +287,11 @@ function PartnerSor({ p, nyitott, onNyit, szerkeszthet, kijelolve, onKijelol }: 
               <div>
                 <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Kapcsolattartók</div>
                 {p.kapcsolatok.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">Még nincs kapcsolattartó a megbízásokból.</p>
+                  <p className="text-xs text-muted-foreground">Még nincs kapcsolattartó — a megbízást küldő levelekből és a Kapcsolatok törzsből gyűlik.</p>
                 ) : (
                   <ul className="mt-1 flex flex-col gap-0.5 text-sm">
                     {p.kapcsolatok.map((k, i) => (
-                      <li key={i}>{k.nev ?? "—"}{k.telefon ? ` · ${k.telefon}` : ""}{k.email ? ` · ${k.email}` : ""}</li>
+                      <li key={i}>{k.nev ?? "—"}{k.telefon ? ` · ${k.telefon}` : ""}{k.email ? ` · ${k.email}` : ""}{k.levelDb ? <span className="text-xs text-muted-foreground"> · {k.levelDb} levél</span> : null}</li>
                     ))}
                   </ul>
                 )}

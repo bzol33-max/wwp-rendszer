@@ -3895,3 +3895,8 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 - Ok: a partner-javaslat kiolvasó csak `.pdf` megbízást keresett.
 - Javítás (`lib/fuvarozas2/partner-javaslat.ts`): `.doc` (word-extractor, fej- és lábléccel) és `.docx` (mammoth) szövege is a modellhez megy; a „Hiányzók kitöltése” gomb előbb lefuttat egy kiolvasási kört (max. 5 irat), aztán tölt.
 - Teszt: teljes `npm run teszt`, tsc, eslint, build.
+
+## 2026-10-19 (4) — Partnerek: kapcsolattartó és munkák előre
+- A tulajdonos: „nekem az adószám nem is fontos — partner, kapcsolattartó, hány munkánk volt”.
+- Sor: Partner · Kapcsolattartó (a megbízást küldő levelek feladói a Levelekből — partnerhez kötve vagy a cég e-mail-domainje alapján — + Kapcsolatok törzs név szerint párosítva; a leggyakoribb elöl, „+N”) · Munkák (db, bérfuvar-forgalom pénznemenként, utolsó dátum) · Fizetés · Számla · posta. Adószám nincs a sorban és nem hiány (a szerkesztőben megmaradt).
+- Teszt: teljes `npm run teszt`, tsc, eslint, build.
