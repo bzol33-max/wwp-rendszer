@@ -383,6 +383,33 @@ export function TervezesHetNezet({ adat, szerkeszthet }: { adat: TervezesHet; sz
                   ))}
                 </tr>
               ) : null}
+              {adat.elvinni.some((c) => c.length) ? (
+                <tr className="border-t border-foreground/10 align-top">
+                  <td className="px-4 py-3">
+                    <div className="font-semibold">Elvinni való</div>
+                    <div className="text-xs text-muted-foreground">{new Set(adat.elvinni.flat().map((e) => e.id)).size} rugalmas saját · bármelyik napon vihető</div>
+                  </td>
+                  {adat.elvinni.map((c, i) => (
+                    <Fragment key={adat.napok[i]}>
+                    {savElott.has(adat.napok[i]) ? <SzunetSav cimke={savElott.get(adat.napok[i])!} /> : null}
+                    <td className={cn("px-1.5 py-2", adat.napok[i] === adat.ma && "bg-[var(--f2-mint-l)]/35")}>
+                      <div className="flex flex-col gap-1">
+                        {c.map((e) => (
+                          <Link key={e.id} href={`/fuvarozas2/megbizasok?elvinni=${e.id}`}
+                            className={cn("block rounded-lg border border-dashed px-2 py-1 text-xs",
+                              e.surgosseg === "piros" ? "border-[var(--f2-red)]/50 bg-[var(--f2-red-l)] text-[var(--f2-red)]"
+                              : e.surgosseg === "sarga" ? "border-[var(--f2-amb)]/50 bg-[var(--f2-amb-l)] text-[var(--f2-amb)]"
+                              : "border-foreground/25 text-muted-foreground")}>
+                            <div className="truncate font-semibold">{e.utvonal}</div>
+                            {e.hatarnap ? <div className="truncate">{e.legkesobb && e.legkesobb < adat.ma ? "határidő lejárt" : "utolsó nap"}</div> : null}
+                          </Link>
+                        ))}
+                      </div>
+                    </td>
+                    </Fragment>
+                  ))}
+                </tr>
+              ) : null}
             </tbody>
           </table>
           <p className="border-t px-4 py-2 text-xs text-muted-foreground">Rés: 100 km-nél hosszabb üres út két fuvar között vagy hazafelé (légvonal × 1,3). Kattints rá: lent látod, mi illik bele és kit érdemes hívni.</p>

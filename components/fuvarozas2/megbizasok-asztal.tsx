@@ -21,7 +21,7 @@ import {
 import type { MunkaasztalSor } from "@/lib/fuvarozas2/megbizasok";
 import type { PenzJel } from "@/lib/fuvarozas2/penz-lista-alap";
 import type { ElvinniHet, ElvinniHetCella } from "@/lib/megbizasok/elvinni-het";
-import { beerkElokeszitesOszlopba } from "@/lib/megbizasok/elvinni-szabalyok";
+import { beerkElokeszitesOszlopba, elvinniSurgosseg } from "@/lib/megbizasok/elvinni-szabalyok";
 
 const NAPNEV = ["Vas", "Hét", "Kedd", "Sze", "Csüt", "Pén", "Szo"];
 
@@ -30,6 +30,7 @@ type ElvinniAdat = {
   honnan: string;
   hova: string;
   legkorabban: string;
+  legkesobb: string;
   kitol: string;
   kinek: string;
   megjegyzes: string;
@@ -51,7 +52,7 @@ function napFejlec(nap: string) {
 }
 
 function uresAdat(): ElvinniAdat {
-  return { honnan: "", hova: "", legkorabban: "", kitol: "", kinek: "", megjegyzes: "" };
+  return { honnan: "", hova: "", legkorabban: "", legkesobb: "", kitol: "", kinek: "", megjegyzes: "" };
 }
 
 function Rögzítő({
@@ -127,6 +128,7 @@ function Rögzítő({
       {mezo("honnan", "Honnan *", "text", true)}
       {mezo("hova", "Hová *", "text", true)}
       {mezo("legkorabban", "Legkorábban", "date")}
+      {mezo("legkesobb", "Legkésőbb (üresen: +7 nap)", "date")}
       <button
         type="button"
         onClick={() => setReszletek(!reszletek)}
@@ -203,6 +205,7 @@ function ElvinniKartya({
       <span className="mt-1 block text-xs text-muted-foreground">
         {sor.legkorabban ? `legkorábban: ${napRovid(sor.legkorabban)}` : "bármikor"} · {napokOta} napja vár
       </span>
+      {sor.legkesobb ? <HataridoCimke legkesobb={sor.legkesobb} ma={ma} /> : null}
       {sor.megjegyzes ? (
         <span className="block truncate text-xs text-muted-foreground">{sor.megjegyzes.split("\n")[0]}</span>
       ) : null}
@@ -241,6 +244,17 @@ function ElvinniKartya({
         Kocsik hete · szerkesztés ›
       </Link>
     </div>
+  );
+}
+
+/** A rugalmas saját fuvar határideje, sürgősség szerint színezve (elvinniSurgosseg). */
+function HataridoCimke({ legkesobb, ma }: { legkesobb: string; ma: string }) {
+  const s = elvinniSurgosseg(legkesobb, ma);
+  const szin = s === "piros" ? "bg-[var(--f2-red-l)] text-[var(--f2-red)]" : s === "sarga" ? "bg-[var(--f2-amb-l)] text-[var(--f2-amb)]" : "text-muted-foreground";
+  return (
+    <span className={`mt-1 inline-block rounded px-1.5 py-0.5 text-xs font-semibold ${szin}`}>
+      {legkesobb < ma ? `lejárt: ${napRovid(legkesobb)}` : `határidő: ${napRovid(legkesobb)}`}
+    </span>
   );
 }
 
@@ -381,6 +395,7 @@ function KocsiHetPanel({
             <h2 className="text-lg font-semibold">{utvonal}</h2>
             <p className="text-sm text-muted-foreground">
               {adat.legkorabban ? `Legkorábban: ${napRovid(adat.legkorabban)}` : "Bármikor vihető"}
+              {adat.legkesobb ? ` · határidő: ${napRovid(adat.legkesobb)}` : ""}
             </p>
           </div>
           <div className="flex gap-2">
@@ -392,11 +407,11 @@ function KocsiHetPanel({
 
         {szerkesztheto ? (
           <div className="grid gap-2 rounded-xl bg-muted/40 p-3 sm:grid-cols-3">
-            {(["honnan", "hova", "legkorabban", "kitol", "kinek", "megjegyzes"] as const).map((kulcs) => (
+            {(["honnan", "hova", "legkorabban", "legkesobb", "kitol", "kinek", "megjegyzes"] as const).map((kulcs) => (
               <label key={kulcs} className="flex flex-col gap-1 text-xs text-muted-foreground">
-                {({ honnan: "Honnan", hova: "Hová", legkorabban: "Legkorábban", kitol: "Kitől", kinek: "Kinek", megjegyzes: "Megjegyzés" })[kulcs]}
+                {({ honnan: "Honnan", hova: "Hová", legkorabban: "Legkorábban", legkesobb: "Legkésőbb", kitol: "Kitől", kinek: "Kinek", megjegyzes: "Megjegyzés" })[kulcs]}
                 <input
-                  type={kulcs === "legkorabban" ? "date" : "text"}
+                  type={kulcs === "legkorabban" || kulcs === "legkesobb" ? "date" : "text"}
                   value={szerkesztes[kulcs]}
                   onChange={(e) => setSzerkesztes({ ...szerkesztes, [kulcs]: e.target.value })}
                   className="min-h-11 rounded-lg border bg-background px-3 text-sm text-foreground"
@@ -607,6 +622,7 @@ export function MegbizasokAsztal({
             honnan: nyitva.felrako ?? "",
             hova: nyitva.lerako ?? "",
             legkorabban: nyitva.legkorabban ?? "",
+            legkesobb: nyitva.legkesobb ?? "",
             kitol: nyitva.kitol ?? "",
             kinek: nyitva.partner_nev ?? "",
             megjegyzes: nyitva.megjegyzes ?? "",

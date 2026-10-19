@@ -420,7 +420,19 @@ export function MaVaszonNezet({ adat, savok = [] }: { adat: MaVaszon; savok?: Ko
           )}
         </Doboz>
 
-
+        {adat.elvinni.length > 0 ? (
+          <Doboz className="flex flex-col gap-2 p-4">
+            <SzakaszCim>Elvinni való — rugalmas saját fuvarok ({adat.elvinni.length})</SzakaszCim>
+            {adat.elvinni.map((e) => (
+              <Link key={e.id} href={`/fuvarozas2/megbizasok?elvinni=${e.id}`} className="flex items-baseline justify-between gap-2 text-sm hover:underline">
+                <span className={`min-w-0 truncate font-semibold ${e.surgosseg === "piros" ? "text-[var(--f2-red)]" : e.surgosseg === "sarga" ? "text-[var(--f2-amb)]" : ""}`}>{e.utvonal}</span>
+                <span className={`shrink-0 text-xs ${e.surgosseg === "rendben" ? "text-muted-foreground" : "font-semibold"}`}>
+                  {e.legkesobb ? (e.legkesobb < adat.ma ? `lejárt ${e.legkesobb.slice(5).replace("-", ".")}.` : `határidő ${e.legkesobb.slice(5).replace("-", ".")}.`) : "bármikor"}
+                </span>
+              </Link>
+            ))}
+          </Doboz>
+        ) : null}
       </div>
     </div>
   );

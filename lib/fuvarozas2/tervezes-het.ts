@@ -31,6 +31,7 @@ import { getBejegyzesSorok, getTavolletek } from "@/lib/fuvarozas2/bejegyzesek";
 import { bejegyzesekNapokra, elofordulNapon, tavolletekNapokra, type Bejegyzes, type TavolletTipus } from "@/lib/fuvarozas2/bejegyzes-alap";
 import { getKihasznaltsag, type KihasznaltsagAdat } from "@/lib/fuvarozas2/kihasznaltsag";
 import type { JarmuSzin } from "@/lib/fuvarozas/vehicles";
+import { elvinniSurgosseg, type ElvinniSurgosseg } from "@/lib/megbizasok/elvinni-szabalyok";
 
 export type HetAjanlat = {
   id: string;
@@ -81,6 +82,12 @@ export type TervezesHet = {
   osszegzes: KihasznaltsagAdat | null;
   /** Kocsira váró (ki nem osztott) fuvarok napra bontva, a `napok` sorrendjében. */
   kiosztatlan: HetiFuvar[][];
+  /**
+   * Rugalmas saját fuvarok (Elvinni való, 2026-10-19) napra bontva: minden
+   * fuvar azokon a napokon jelenik meg, amelyekre vihető (legkorábban …
+   * határidő, ma előtt nem). Sürgősség: elvinniSurgosseg.
+   */
+  elvinni: { id: string; utvonal: string; legkesobb: string | null; surgosseg: ElvinniSurgosseg; hatarnap: boolean }[][];
   resek: Res[];
   uresKmOssz: number;
   ajanlatok: HetAjanlat[];
@@ -382,8 +389,26 @@ export async function getTervezesHet(resKulcs?: string, het?: string): Promise<T
   let savok: { elott: string; cimke: string }[] = [];
   try { savok = szunetSavok(napok); } catch { savok = []; }
 
+  const elvinniSorok = await query<{ id: string; felrako: string | null; lerako: string | null; legkorabban: string | null; legkesobb: string | null }>(
+    `select id::text, felrako, lerako, to_char(legkorabban, 'YYYY-MM-DD') as legkorabban, to_char(legkesobb, 'YYYY-MM-DD') as legkesobb
+       from fuvar_megbizasok
+      where jelleg = 'sajat' and elokeszites and idopont_nyitott and torolt_at is null
+      order by legkesobb nulls last, id`
+  ).catch(() => []);
+  const elvinni = napok.map((nap) =>
+    elvinniSorok
+      .filter((e) => nap >= ma && (!e.legkorabban || nap >= e.legkorabban) && (!e.legkesobb || nap <= e.legkesobb || (e.legkesobb < ma && nap === ma)))
+      .map((e) => ({
+        id: e.id,
+        utvonal: `${varos(e.felrako)} → ${varos(e.lerako)}`,
+        legkesobb: e.legkesobb,
+        surgosseg: elvinniSurgosseg(e.legkesobb, ma),
+        hatarnap: !!e.legkesobb && (nap === e.legkesobb || (e.legkesobb < ma && nap === ma)),
+      }))
+  );
+
   return {
-    ma, frissitve: ora, kimaradt, hetKezdet: napok[0], elozoHet: munkanapLepes(kezdet, -(ABLAK_MUNKANAP - 1)), kovetkezoHet: munkanapLepes(kezdet, ABLAK_MUNKANAP - 1), ezAHet: kezdet === alapKezdet, helyNelkul,
+    ma, frissitve: ora, kimaradt, elvinni, hetKezdet: napok[0], elozoHet: munkanapLepes(kezdet, -(ABLAK_MUNKANAP - 1)), kovetkezoHet: munkanapLepes(kezdet, ABLAK_MUNKANAP - 1), ezAHet: kezdet === alapKezdet, helyNelkul,
     napok, szunetSavok: savok, kocsik, kiosztatlan, resek,
     uresKmOssz: resek.reduce((a, r) => a + r.km, 0),
     ajanlatok, kijelolt,

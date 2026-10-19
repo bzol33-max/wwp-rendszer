@@ -52,6 +52,7 @@ import { kocsiJelzesek, type KartyaJelzes } from "@/lib/fuvarozas2/ma-kartya-ala
 import { pihenoNapE } from "@/lib/fuvarozas2/ma-het";
 import { munkanap } from "@/lib/jelenlet/shared";
 import { melegitVarosPontokat } from "@/lib/fuvarozas2/varos-pont";
+import { elvinniSurgosseg, type ElvinniSurgosseg } from "@/lib/megbizasok/elvinni-szabalyok";
 
 export type CsempeSzin = "normal" | "amber" | "red" | "mint";
 export type Csempe = { kulcs: string; cimke: string; ertek: string; also: string | null; szin: CsempeSzin; href: string | null };
@@ -149,6 +150,8 @@ export type MaVaszon = {
   frissitve: string;
   kocsik: MaKocsi[];
   kocsiNelkul: { id: string; partner: string; utvonal: string; nap: string | null; allapot: Allapot }[];
+  /** Rugalmas saját fuvarok (Elvinni való), határidő szerint — a sárga/piros jelzéshez (elvinniSurgosseg). */
+  elvinni: { id: string; utvonal: string; legkorabban: string | null; legkesobb: string | null; surgosseg: ElvinniSurgosseg }[];
   teendok: { cimke: string; ertek: string; also: string | null; href: string }[];
   holnapDoboz: { cimke: string; ertek: string; szin: CsempeSzin }[];
   /** Kocsi-kihasználtság (hét és hónap eleje óta) — null, ha nem számolható (a sáv elmarad). */
@@ -878,8 +881,20 @@ export async function getMaVaszon(): Promise<MaVaszon> {
     { cimke: "Ütközés", ertek: utkozes === 0 ? "nincs" : `${utkozes} kocsi`, szin: utkozes > 0 ? "amber" : "normal" },
   ];
 
+  const elvinniSorok = await query<{ id: string; felrako: string | null; lerako: string | null; legkorabban: string | null; legkesobb: string | null }>(
+    `select id::text, felrako, lerako, to_char(legkorabban, 'YYYY-MM-DD') as legkorabban, to_char(legkesobb, 'YYYY-MM-DD') as legkesobb
+       from fuvar_megbizasok
+      where jelleg = 'sajat' and elokeszites and idopont_nyitott and torolt_at is null
+      order by legkesobb nulls last, id`
+  ).catch(() => []);
+  const elvinni = elvinniSorok.map((e) => ({
+    id: e.id,
+    utvonal: `${varosNev(e.felrako ?? "") || e.felrako || "—"} → ${varosNev(e.lerako ?? "") || e.lerako || "—"}`,
+    legkorabban: e.legkorabban, legkesobb: e.legkesobb, surgosseg: elvinniSurgosseg(e.legkesobb, ma),
+  }));
+
   return {
-    ma, holnap, holnapCimke, csempek, nyugtazott,
+    ma, holnap, holnapCimke, csempek, nyugtazott, elvinni,
     kihasznaltsag: await kihasznaltsagIgeret,
     nyugtazhat: session.can("fuvarozas").edit,
     frissitve: ORA(most),

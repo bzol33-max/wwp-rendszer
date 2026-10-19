@@ -59,6 +59,8 @@ export type ElvinniHet = {
   napok: string[];
   sorok: ElvinniHetSor[];
   legkorabban: string | null;
+  /** Határidő (047) — a panel fejlécében. */
+  legkesobb: string | null;
 };
 
 function hetNapjai(hetKezdete: string) {
@@ -77,8 +79,8 @@ export async function getElvinniHet(
 ): Promise<ElvinniHet> {
   await requireAnyViewPermission(["fuvarozas", "elszamolas"]);
 
-  const [elvinni] = await query<{ legkorabban: string | null }>(
-    `select to_char(legkorabban, 'YYYY-MM-DD') as legkorabban
+  const [elvinni] = await query<{ legkorabban: string | null; legkesobb: string | null }>(
+    `select to_char(legkorabban, 'YYYY-MM-DD') as legkorabban, to_char(legkesobb, 'YYYY-MM-DD') as legkesobb
      from fuvar_megbizasok
      where id = $1 and idopont_nyitott and torolt_at is null`,
     [id]
@@ -224,5 +226,5 @@ export async function getElvinniHet(
     return { kod: jarmu.kod, cimke: sofor ? `${sofor} (${jarmu.kod})` : jarmu.cimke, napok: cellak };
   }));
 
-  return { hetKezdet, napok, sorok, legkorabban: elvinni.legkorabban };
+  return { hetKezdet, napok, sorok, legkorabban: elvinni.legkorabban, legkesobb: elvinni.legkesobb };
 }

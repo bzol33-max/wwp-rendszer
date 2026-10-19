@@ -7,14 +7,14 @@ export function letrehozInsert(input: AddFuvarInput & {
   referencia?: string; jarmuEloiras?: string; elokeszites?: boolean;
   elokeszitesJarmu?: string | null; kitol?: string | null; allapot?: string; statusz?: string; allapotAtMost?: boolean;
   letrehozasUt?: "sajat-elokeszites" | "duvenbeck";
-  idopontNyitott?: boolean; legkorabban?: string | null;
+  idopontNyitott?: boolean; legkorabban?: string | null; legkesobb?: string | null;
 }, megrendelo: string | null) {
   if (input.letrehozasUt === "sajat-elokeszites") {
     return {
-      columns: ["tipus", "datum", "felrako", "lerako", "megrendelo", "megjegyzes", "statusz", "forras", "ellenorzott", "elokeszites", "elokeszites_jarmu", "allapot", "allapot_at", "created_by", "kitol", "idopont_nyitott", "legkorabban"],
+      columns: ["tipus", "datum", "felrako", "lerako", "megrendelo", "megjegyzes", "statusz", "forras", "ellenorzott", "elokeszites", "elokeszites_jarmu", "allapot", "allapot_at", "created_by", "kitol", "idopont_nyitott", "legkorabban", "legkesobb"],
       // A régi INSERT nyersen adta át a „honnan” és a megjegyzés értékét ("" is maradt "").
-      values: [input.tipus, input.datum, input.felrako ?? null, input.lerako, megrendelo, input.megjegyzes ?? null, input.statusz ?? "uj", input.forras ?? "kezi", input.ellenorzott ?? true, input.elokeszites ?? true, input.elokeszitesJarmu ?? null, input.allapot ?? "tervezett", input.createdBy ?? null, input.kitol ?? null, input.idopontNyitott ?? false, input.legkorabban ?? null],
-      expressions: ["$1", "$2", "$3", "$4", "$5", "$6", "$7", "$8", "$9", "$10", "$11", "$12", "now()", "$13", "$14", "$15", "$16"],
+      values: [input.tipus, input.datum, input.felrako ?? null, input.lerako, megrendelo, input.megjegyzes ?? null, input.statusz ?? "uj", input.forras ?? "kezi", input.ellenorzott ?? true, input.elokeszites ?? true, input.elokeszitesJarmu ?? null, input.allapot ?? "tervezett", input.createdBy ?? null, input.kitol ?? null, input.idopontNyitott ?? false, input.legkorabban ?? null, input.legkesobb ?? null],
+      expressions: ["$1", "$2", "$3", "$4", "$5", "$6", "$7", "$8", "$9", "$10", "$11", "$12", "now()", "$13", "$14", "$15", "$16", "$17"],
     };
   }
   if (input.letrehozasUt === "duvenbeck") {

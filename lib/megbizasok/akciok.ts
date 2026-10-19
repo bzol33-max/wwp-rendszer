@@ -622,6 +622,8 @@ export type ElvinniAdat = {
   honnan: string;
   hova: string;
   legkorabban?: string | null;
+  /** Határidő (047): eddig kell elvinni. Üresen: legkorábban (vagy ma) + 7 nap. */
+  legkesobb?: string | null;
   kitol?: string | null;
   kinek?: string | null;
   megjegyzes?: string | null;
@@ -632,10 +634,25 @@ function tisztaElvinni(adat: ElvinniAdat) {
     honnan: adat.honnan.trim(),
     hova: adat.hova.trim(),
     legkorabban: adat.legkorabban?.trim() || null,
+    legkesobb: adat.legkesobb?.trim() || null,
     kitol: adat.kitol?.trim() || null,
     kinek: adat.kinek?.trim() || null,
     megjegyzes: adat.megjegyzes?.trim() || null,
   };
+}
+
+/** Az elvinni való dátumainak ellenőrzése és a határidő alapértéke (legkorábban vagy ma + 7 nap). */
+function elvinniDatumok(adat: { legkorabban: string | null; legkesobb: string | null }, ma: string): { hiba: string } | { legkesobb: string } {
+  if (adat.legkorabban && !ISO_NAP.test(adat.legkorabban)) return { hiba: "Érvénytelen legkorábbi dátum." };
+  if (adat.legkesobb && !ISO_NAP.test(adat.legkesobb)) return { hiba: "Érvénytelen határidő." };
+  const tol = adat.legkorabban && adat.legkorabban > ma ? adat.legkorabban : ma;
+  if (adat.legkesobb) {
+    if (adat.legkorabban && adat.legkesobb < adat.legkorabban) return { hiba: "A határidő nem lehet a legkorábbi nap előtt." };
+    return { legkesobb: adat.legkesobb };
+  }
+  const d = new Date(`${tol}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 7);
+  return { legkesobb: d.toISOString().slice(0, 10) };
 }
 
 export async function rogzitElvinnivalot(nyers: ElvinniAdat): Promise<Eredmeny> {
@@ -644,9 +661,8 @@ export async function rogzitElvinnivalot(nyers: ElvinniAdat): Promise<Eredmeny> 
   if (!adat.honnan || !adat.hova) {
     return { ok: false, hiba: "A honnan és a hová mező kötelező." };
   }
-  if (adat.legkorabban && !ISO_NAP.test(adat.legkorabban)) {
-    return { ok: false, hiba: "Érvénytelen legkorábbi dátum." };
-  }
+  const datumok = elvinniDatumok(adat, budapestNapISO());
+  if ("hiba" in datumok) return { ok: false, hiba: datumok.hiba };
 
   const session = await requireSession();
   const id = await ujKodTranzakcio(async (tx) => {
@@ -671,6 +687,7 @@ export async function rogzitElvinnivalot(nyers: ElvinniAdat): Promise<Eredmeny> 
       letrehozasUt: "sajat-elokeszites",
       idopontNyitott: true,
       legkorabban: adat.legkorabban,
+      legkesobb: datumok.legkesobb,
       kanonikusNev: false,
     });
 
@@ -697,9 +714,8 @@ export async function modositElvinnivalot(id: string, nyers: ElvinniAdat): Promi
   if (!adat.honnan || !adat.hova) {
     return { ok: false, hiba: "A honnan és a hová mező kötelező." };
   }
-  if (adat.legkorabban && !ISO_NAP.test(adat.legkorabban)) {
-    return { ok: false, hiba: "Érvénytelen legkorábbi dátum." };
-  }
+  const datumok = elvinniDatumok(adat, budapestNapISO());
+  if ("hiba" in datumok) return { ok: false, hiba: datumok.hiba };
 
   const session = await requireSession();
   const sikeres = await withTransaction(async (tx) => {
@@ -707,11 +723,11 @@ export async function modositElvinnivalot(id: string, nyers: ElvinniAdat): Promi
       `update fuvar_megbizasok
        set felrako = $2, lerako = $3, legkorabban = $4,
            datum = coalesce($4::date, (now() at time zone 'Europe/Budapest')::date),
-           kitol = $5, megrendelo = $6, partner_id = null, megjegyzes = $7
+           kitol = $5, megrendelo = $6, partner_id = null, megjegyzes = $7, legkesobb = $8
        where id = $1 and jelleg = 'sajat' and elokeszites
          and idopont_nyitott and torolt_at is null
        returning id::text`,
-      [id, adat.honnan, adat.hova, adat.legkorabban, adat.kitol, adat.kinek, adat.megjegyzes]
+      [id, adat.honnan, adat.hova, adat.legkorabban, adat.kitol, adat.kinek, adat.megjegyzes, datumok.legkesobb]
     );
     if (sorok.length === 0) return false;
 

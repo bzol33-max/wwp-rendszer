@@ -3905,3 +3905,11 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 - Tímár Dávid mindig készpénzzel fizetett: ha a partner összes számlája 0 napos, a fizetési határidő 0 = „készpénz” (kijelzés is így), nem hiány.
 - Kuehne + Nagel önszámlázással (Gutschrift) dolgozik: a partneren a „nem kér számla-e-mailt (pl. önszámlázás)” jelölés, a fuvar számlaszáma „GS-<bizonylatszám>”. Parkolt bővítés (csak ha lesz több ilyen partner): „Számlázás módja” mező, „jóváírásra vár” státusz 14 napos riasztással, Gutschrift rögzítés + egyeztetés, Gmail-figyelés „Gutschrift” tárgyra.
 - Teszt: `teszt-partner-kitoltes.ts` 24/0, teljes `npm run teszt`, tsc, eslint, build.
+## 2026-10-19 — Rugalmas saját fuvar, 1. lépés: határidő + Elvinni való sor
+- Cél (Zoltán): a saját fuvar töltelék — nem fix napra kerül, hanem az ablakában (legkorábban … legkésőbb) oda, ahol a kocsinak útba esik; nem maradhat hetekig tallonban.
+- `db/migrations/047_elvinni_legkesobb.sql`: új `legkesobb` (határidő); a nyitott elvinni valók alapértéke legkorábban/rögzítés + 7 nap.
+- Rögzítés/szerkesztés (`akciok.ts` `elvinniDatumok`): üres határidő = legkorábban (vagy ma) + 7 nap; legkorábban előtti határidő hiba.
+- `elvinni-szabalyok.ts` `elvinniSurgosseg`: a határidő előtti 3 munkanapon sárga, az utolsó munkanapon és lejárat után piros.
+- Felület: Megbízások → Elvinni való kártya „határidő” címkével, „Legkésőbb” mező a rögzítőben és a panelben; Ma oldal: „Elvinni való” doboz sürgősség szerint; Tervezés hét: „Elvinni való” sor — minden fuvar a vihető napjain, szaggatott kártyán, az utolsó napon jelölve.
+- Következik: 2. lépés (legjobb hely kiszámítása kocsinként/naponként + „Ide” gomb), 3. lépés (áthúzás, bérfuvar elsőbbsége).
+- Teszt: teszt-elvinni-valo (+8 sürgősségi eset), tervezes-het, ma-het, ma-kartya, letrehoz-parancs, jogosultság-tesztek; migráció élesen tranzakcióban kipróbálva (rollback); tsc, eslint, build OK.

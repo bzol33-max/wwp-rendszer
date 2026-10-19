@@ -5,6 +5,8 @@ import {
   hetKezdeteElvinni,
   tavolsagElvinniKm,
   utemezhetoNap,
+  elvinniSurgosseg,
+  munkanapHatridoig,
 } from "../lib/megbizasok/elvinni-szabalyok";
 
 function ellenoriz(nev: string, sikeres: boolean) {
@@ -54,5 +56,15 @@ const uresNapiKm = elvinniCellaKm({
 });
 ellenoriz("foglalt napon az utolsó lerakótól számol km-t", foglaltNapiKm === tavolsagElvinniKm(lerakoPont, felrakoPont));
 ellenoriz("üres napon az állóhelytől számol km-t", uresNapiKm === tavolsagElvinniKm(allohelyPont, felrakoPont));
+
+// Határidő-sürgősség (2026-10-19): 2026-10-19 hétfő.
+ellenoriz("határidő nélkül rendben", elvinniSurgosseg(null, "2026-10-19") === "rendben");
+ellenoriz("jövő hét kedd (6 munkanap) rendben", elvinniSurgosseg("2026-10-27", "2026-10-19") === "rendben");
+ellenoriz("csütörtök (3 munkanap) sárga", elvinniSurgosseg("2026-10-22", "2026-10-19") === "sarga");
+ellenoriz("kedd (1 munkanap) piros", elvinniSurgosseg("2026-10-20", "2026-10-19") === "piros");
+ellenoriz("ma piros", elvinniSurgosseg("2026-10-19", "2026-10-19") === "piros");
+ellenoriz("lejárt piros", elvinniSurgosseg("2026-10-16", "2026-10-19") === "piros");
+ellenoriz("péntekről nézve a jövő keddi határidő (2 munkanap) sárga", elvinniSurgosseg("2026-10-27", "2026-10-23") === "sarga");
+ellenoriz("munkanapszám: hétvége kimarad", munkanapHatridoig("2026-10-26", "2026-10-23") === 1);
 
 console.log("Elvinni való szabályteszt: rendben");

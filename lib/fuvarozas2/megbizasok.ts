@@ -77,6 +77,8 @@ export type MegbizasSor = {
   elokeszites_jarmu: string | null;
   idopont_nyitott: boolean;
   legkorabban: string | null;
+  /** Rugalmas saját fuvar határideje (047): eddig kell elvinni. */
+  legkesobb: string | null;
   /** Saját fuvarhoz párosított Számlázz.hu-s szállítólevél (S-WLLWR-…) — lib/fuvarozas2/szallitolevel.ts. */
   szallitolevel: string | null;
 };
