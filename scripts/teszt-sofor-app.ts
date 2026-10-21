@@ -7,7 +7,6 @@ import {
   elesseg,
   reszletKivagasok,
   STABIL_ELTERES,
-  legvonalKm,
   fogyasztasKep,
   kepMinoseg,
   kepkockaElteres,
@@ -22,11 +21,6 @@ const eq = (nev: string, kapott: unknown, vart: unknown) => {
   if (!ok) { hiba++; console.log(`✗ ${nev}\n  kapott: ${JSON.stringify(kapott)}\n  várt:   ${JSON.stringify(vart)}`); } else console.log(`✓ ${nev}`);
 };
 const igaz = (nev: string, f: boolean) => eq(nev, f, true);
-
-// --- légvonal (csak a „megállóban áll” döntéshez)
-const tata = { lat: 47.6526, lon: 18.3186 };
-igaz("200 m-en belül a megállóban", legvonalKm(tata, { lat: tata.lat + 0.0015, lon: tata.lon }) < 0.5);
-igaz("Tata–Tompaládony messze", legvonalKm(tata, { lat: 47.2378, lon: 16.8953 }) > 100);
 
 // --- papír
 eq("saját fuvar papírja", papirNeve(true), "aláírt szállítólevél");

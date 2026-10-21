@@ -10,15 +10,6 @@
 //  - a fotózás minőség-ellenőrzése (élesség, világosság, egész lap) és a
 //    kamera „stabil a kép” figyelése szürkeárnyalatos kis képkockákon.
 
-/** Légvonal km — csak annak eldöntésére, hogy a kocsi a megállóban áll-e (< 0,5 km); távolságnak a HU-GO útvonal számít. */
-export function legvonalKm(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
-  const r = (x: number) => (x * Math.PI) / 180;
-  const dLat = r(b.lat - a.lat);
-  const dLon = r(b.lon - a.lon);
-  const h = Math.sin(dLat / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dLon / 2) ** 2;
-  return 2 * 6371 * Math.asin(Math.sqrt(h));
-}
-
 /**
  * A lerakás után kért papír. Bérfuvarnál az aláírt fuvarlevél / CMR (enélkül
  * nem számlázunk), saját fuvarnál az átvevő által aláírt szállítólevél (ettől

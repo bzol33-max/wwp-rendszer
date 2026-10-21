@@ -468,7 +468,6 @@ function MaKepernyo({
   onFogyasztas: () => void;
   onSorUjra: () => void;
 }) {
-  const elo = nap.elo ?? null;
   const papirVarosok = papirok.map((p) => p.hova ?? p.honnan).filter(Boolean).slice(0, 3).join(", ");
 
   return (
@@ -489,27 +488,18 @@ function MaKepernyo({
 
       {aktivBlokk && aktiv ? (
         <>
-          <button type="button" onClick={() => onReszlet(aktivBlokk)} className="mt-1 flex flex-col items-center text-center">
-            <span className="text-base font-semibold text-[#4B5563]">
-              {aktiv.tipus === "lerako" ? "Lerakás" : "Felrakás"}: {aktiv.varos}
+          <section aria-label="Most" className="mt-1 flex flex-col items-center gap-1 text-center">
+            <span className="text-sm font-semibold text-[var(--sa-muted)]">{megrendeloCimke(aktivBlokk)} · {utvonal(aktivBlokk)}</span>
+            <span className="text-base font-bold text-[#4B5563]">
+              {[aktiv.tipus === "lerako" ? "Lerakás" : "Felrakás", megalloIdo(aktiv, maNap)].filter(Boolean).join(" · ")}
             </span>
-            {elo?.km != null ? (
-              <span className="text-[72px] font-extrabold leading-[1.05] tracking-[-0.04em]">{elo.km <= 1 ? "Ott vagy" : `${elo.km} km`}</span>
-            ) : (
-              <span className="text-[64px] font-extrabold leading-[1.05] tracking-[-0.04em]">{aktiv.ido ?? ido(aktiv.idopont)}</span>
-            )}
-            <span className="mt-1.5 max-w-full truncate rounded-full bg-[var(--sa-card)] px-3.5 py-1.5 text-[15px] font-bold">
-              {[
-                elo?.km != null ? megalloIdo(aktiv, maNap) : null,
-                elo?.perc ? `${elo.perc >= 60 ? `${Math.floor(elo.perc / 60)} ó ${elo.perc % 60} p` : `${elo.perc} p`} út` : null,
-                aktiv.ceg,
-              ]
-                .filter(Boolean)
-                .join(" · ") || megrendeloCimke(aktivBlokk)}
-            </span>
-          </button>
+            <span className="text-[44px] font-extrabold leading-[1.05] tracking-[-0.03em]">{aktiv.varos}</span>
+            {aktiv.ceg && <span className="text-lg font-bold">{aktiv.ceg}</span>}
+            <span className="text-[15px] text-[#4B5563]">{aktiv.cim}</span>
+          </section>
           <Gombsor blokk={aktivBlokk} aktiv={aktiv} mv={mv} papirDb={papirok.length} onPapir={onPapir} />
           <MegalloKiegeszitok blokk={aktivBlokk} aktiv={aktiv} mv={mv} />
+          <MegbizasInfo b={aktivBlokk} maNap={maNap} mv={mv} />
         </>
       ) : (
         <section className="mt-1 flex flex-col items-center gap-2 text-center">
@@ -742,38 +732,15 @@ function AdatSor({ cimke, ertek, mono }: { cimke: string; ertek: string | null |
   );
 }
 
-function ReszletKepernyo({
-  b,
-  aktiv,
-  maNap,
-  mv,
-  papirDb,
-  onPapir,
-  onVissza,
-}: {
-  b: SoforFuvarBlokk;
-  aktiv: SoforMegalloSor | null;
-  maNap: string;
-  mv: Muveletek;
-  papirDb: number;
-  onPapir: () => void;
-  onVissza: () => void;
-}) {
-  const fel = b.megallok.find((m) => m.tipus === "felrako");
+/** A megbízás minden adata — a Ma oldalon az aktuálisé, a részleteknél bármelyiké. */
+function MegbizasInfo({ b, maNap, mv }: { b: SoforFuvarBlokk; maNap: string; mv: Muveletek }) {
   const pdf = b.dokumentumok.find((d) => d.tipus === "megbizas") ?? b.dokumentumok.find((d) => d.tipus !== "fuvarlevel") ?? null;
   return (
     <>
-      <Fejlec cim={utvonal(b)} al={[megrendeloCimke(b), napCimke(fel?.nap, maNap)].filter(Boolean).join(" · ")} onVissza={onVissza} />
       {b.masRendszam && (
         <p className="flex items-center gap-1.5 rounded-xl bg-[var(--sa-red-soft)] px-3 py-2 text-sm font-semibold text-[var(--sa-red)]">
           <AlertTriangle className="h-4 w-4 shrink-0" />A megbízáson más rendszám áll: {b.masRendszam}
         </p>
-      )}
-      {aktiv && (
-        <>
-          <Gombsor blokk={b} aktiv={aktiv} mv={mv} papirDb={papirDb} onPapir={onPapir} />
-          <MegalloKiegeszitok blokk={b} aktiv={aktiv} mv={mv} />
-        </>
       )}
       <section aria-label="Megállók" className="rounded-3xl bg-[var(--sa-card)] px-[18px] py-0.5">
         {b.megallok.map((m, i) => (
@@ -809,6 +776,38 @@ function ReszletKepernyo({
           Gond van
         </button>
       </div>
+    </>
+  );
+}
+
+function ReszletKepernyo({
+  b,
+  aktiv,
+  maNap,
+  mv,
+  papirDb,
+  onPapir,
+  onVissza,
+}: {
+  b: SoforFuvarBlokk;
+  aktiv: SoforMegalloSor | null;
+  maNap: string;
+  mv: Muveletek;
+  papirDb: number;
+  onPapir: () => void;
+  onVissza: () => void;
+}) {
+  const fel = b.megallok.find((m) => m.tipus === "felrako");
+  return (
+    <>
+      <Fejlec cim={utvonal(b)} al={[megrendeloCimke(b), napCimke(fel?.nap, maNap)].filter(Boolean).join(" · ")} onVissza={onVissza} />
+      {aktiv && (
+        <>
+          <Gombsor blokk={b} aktiv={aktiv} mv={mv} papirDb={papirDb} onPapir={onPapir} />
+          <MegalloKiegeszitok blokk={b} aktiv={aktiv} mv={mv} />
+        </>
+      )}
+      <MegbizasInfo b={b} maNap={maNap} mv={mv} />
     </>
   );
 }

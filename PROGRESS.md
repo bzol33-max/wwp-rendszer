@@ -18,8 +18,9 @@ Terv: „Megbízások oldal – 5 terv” vászon, 1-es (Truckpedia-minta; a Qar
 
 Terv: „Sofőr-app újratervezés” vászon, 6. kör (Budaházi Zoltán: „9-est vidd tovább, átlagfogyasztást láthatják”,
 „heted: megbízások legyenek, amikre ha kattint látja a részleteket”, „fotózás … tökéletes legyen”, „építsd be”).
-- Sofőr szerepkörnél az /erkezes kezdőlapja maga a sofőr app (`components/erkezes/sofor-app/`): **Ma** (soros cél,
-  km és menetidő a kocsi GPS-pozíciójától a HU-GO útvonaltervező szerint (becslés nélkül), 4 kerek gomb: Megérkeztem → Lepakoltam/Felpakoltam, Navi, Papír, Hívás),
+- Sofőr szerepkörnél az /erkezes kezdőlapja maga a sofőr app (`components/erkezes/sofor-app/`): **Ma** (az aktuális megbízás:
+  soros megálló, idő, cég, cím, alatta minden megálló és adat, PDF, Gond van — km/útidő nincs, Budaházi Zoltán:
+  „nem kell ez az info nekik”; 4 kerek gomb: Megérkeztem → Lepakoltam/Felpakoltam, Navi, Papír, Hívás),
   átlagfogyasztás-csík, teendők; **Megbízások** (Előttem: ma + 14 nap kártyákon, Kész: utolsó 10) → **részletek**
   (megállók címmel, idővel, kóddal, Navi + hívás megállónként, PDF, Gond van); **Profil** változatlan.
 - **Papír vár** napokon át (`lib/fuvarozas/sofor-app.ts`): lezárt, fotó nélküli fuvarok — bér 14, saját 3 nap;

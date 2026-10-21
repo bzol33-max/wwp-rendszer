@@ -31,8 +31,6 @@ import { ellenorizAtmenet } from "@/lib/fuvarozas/allapot";
 import { fotoLezarasDontes, type LezarasMegallo, type MasikFuvar } from "@/lib/fuvarozas/fuvarlevel-lezaras";
 import { legutobbiTacho } from "@/lib/jarmu-telemetria/repo";
 import { tachoKijelzes } from "@/lib/fuvarozas2/tervezes-het-tacho";
-import { legvonalKm } from "@/lib/fuvarozas/sofor-app-alap";
-import { calculateToll } from "@/lib/fuvarozas/utdijkalkulacio";
 
 function budapestMaIso(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Budapest" });
@@ -424,14 +422,6 @@ export type SoforNap = {
   hiba: string | null;
   /** „Ma még vezethetsz: 2 ó 40 p · a héten: 26 ó 25 p” — csak mára és friss tachó-adatnál (Ecofleet). */
   tachoSor?: string | null;
-  /**
-   * Élő kép a soros megállóig — csak mára (sofőr app, 2026-10-21): a kocsi
-   * GPS-pozíciójától a megállóig a HU-GO útvonaltervező (kamion, 40 t)
-   * szerinti km és menetidő percben, és hogy a kocsi most áll-e. Becslés
-   * NINCS (Budaházi Zoltán: „hagyjuk már a becsléseket”): ha az útvonal nem
-   * számolható, km és perc null, és a felület a megbízás szerinti időt mutatja.
-   */
-  elo?: { km: number | null; perc: number | null; all: boolean } | null;
 };
 
 type FuvarExtraSor = {
@@ -695,36 +685,6 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
 
   const kovetkezoMegallo = fuvarok.flatMap((f) => f.megallok).find((m) => !m.kesz);
 
-  let elo: SoforNap["elo"] = null;
-  if (nap === budapestMaIso() && sajat?.eloPozicio) {
-    const p = sajat.eloPozicio;
-    const nyers = kovetkezoMegallo
-      ? blokkok.flatMap((b) => b.megallok).find((m) => m.fuvarId === kovetkezoMegallo.fuvarId && m.megalloIndex === kovetkezoMegallo.megalloIndex)
-      : undefined;
-    let km: number | null = null;
-    let perc: number | null = null;
-    if (nyers?.lat != null && nyers?.lon != null) {
-      const cel = { lat: nyers.lat, lon: nyers.lon };
-      if (legvonalKm(p, cel) < 0.5) {
-        km = 0;
-        perc = 0;
-      } else {
-        const ut = await Promise.race([
-          calculateToll({ points: [{ lat: p.lat, lon: p.lon }, cel], vehicleCategory: "J5", euroCategory: "EURO6", weight: 40 }),
-          new Promise<null>((ok) => setTimeout(() => ok(null), 6000)),
-        ]).catch((err) => {
-          console.error("[sofor] HU-GO útvonal a soros megállóig:", err instanceof Error ? err.message : err);
-          return null;
-        });
-        if (ut) {
-          km = Math.round(ut.distanceKm);
-          perc = Math.round(ut.durationMin);
-        }
-      }
-    }
-    elo = { km, perc, all: !(p.sebesseg > 3) };
-  }
-
   // A mai napról kiesett, 12 órán belül kézzel lezárt fuvarok (a GPS lap a
   // nap ELŐTT lezártat szándékosan kihagyja — szamitsIdovonalakat
   // napElottKesz). Csak a mai nézetben, és csak a még vissza nem lépett,
@@ -775,7 +735,6 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
       ? { fuvarId: kovetkezoMegallo.fuvarId, megalloIndex: kovetkezoMegallo.megalloIndex }
       : null,
     hiba: sajat?.hiba ?? null,
-    elo,
     tachoSor: nap === budapestMaIso() && jarmu.kod
       ? await legutobbiTacho().then((m) => tachoKijelzes(m.get(jarmu.kod!)?.tacho, new Date())?.soforSor ?? null).catch(() => null)
       : null,
