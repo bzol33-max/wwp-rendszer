@@ -1,5 +1,22 @@
 # PROGRESS
 
+## 2026-10-21 — Ma: metróvonalas kocsikártya, aktuális + következő megbízás, fogyasztás
+
+Terv: a „Ma oldal — 4 kocsi” vászon V11-es terve (Budaházi Zoltán: „09 vidd tovább, látnom kell az aktuális és
+következő megbízásait is … mehet”, telefonos külön terv nem kell).
+- A Ma lapon kocsinként egy teljes szélességű sor (a 2 oszlopos tükör-kártya helyett): fejléc (állapot, hely, ETA),
+  **metróvonal** a mai megállókkal (teli = kész, gyűrű = most, üres = hátravan; tömör = rakott, pontozott = üres;
+  a kocsi a következő megálló előtti szakaszon; a fuvar első megállóján a #hivatkozás), a nem tervezett állás a
+  helyén („Ez a hely” rögzítés megmaradt).
+- Alatta tachó-sor + **l/100 (CAN, 7 nap)** a flotta-átlaghoz mérve (±5 % felett jelölve), szerviz-km, napi km,
+  papír; és két kártya: **Aktuális** (útvonal, megbízó, fel/le tény-terv, díj, kapcsolattartó telefonnal) és
+  **Következő** (a mai sorrendben következő nyitott fuvar, különben a holnapi első; ha nincs: szabadság /
+  folytatódik / „keress fuvart”).
+- Felső sor: „Fogyasztás · 7 nap” flotta-átlag (Σ liter / Σ km).
+- Fájlok: `lib/fuvarozas2/ma-metro-alap.ts` (tiszta), `components/fuvarozas2/ma-metro.tsx`, `ma-vaszon.ts`
+  (fuvardíj a lekérdezésben, `fogyasztas`, `fuvarAdat`, `flottaL100`). A kocsi-lap továbbra is a régi `KocsiOszlop`-ot használja.
+- **Teszt:** teszt-ma-metro 30/0, teljes `npm run teszt`, tsc, eslint, next build.
+
 ## 2026-10-17 — Ajánlat Q2: merre keress fuvart a kiürülő kocsiknak
 
 Terv: `docs/ajanlat-q2-terv.md` (Budaházi Zoltán: „Q2”; az útdíj-kalkulátor marad).

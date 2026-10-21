@@ -43,7 +43,9 @@ import { berUtkozes, napiSorrend, tervIdoMegbizasbol } from "@/lib/fuvarozas2/na
 import { menetSorrendek } from "@/lib/menet/repo";
 import { alkalmazMenetSorrendet } from "@/lib/menet/menet-alap";
 import { hetNapjai, jarmuNev, kocsiHelykitolto, type HetFuvar } from "@/lib/fuvarozas2/ma-het";
-import { legutobbiTacho } from "@/lib/jarmu-telemetria/repo";
+import { canNapok, legutobbiTacho } from "@/lib/jarmu-telemetria/repo";
+import { jarmuTelemetriaOsszesit, type JarmuTelemetria } from "@/lib/jarmuvek/tipusok";
+import { dijSzoveg, flottaFogyasztas } from "@/lib/fuvarozas2/ma-metro-alap";
 import { maTachoSor, tachoKijelzes } from "@/lib/fuvarozas2/tervezes-het-tacho";
 import { getKihasznaltsag, type KihasznaltsagAdat } from "@/lib/fuvarozas2/kihasznaltsag";
 import { getBejegyzesSorok, getTavolletek } from "@/lib/fuvarozas2/bejegyzesek";
@@ -132,6 +134,15 @@ export type MaKocsi = {
   bejegyzesekHolnap?: Bejegyzes[];
   tavolletMa?: TavolletTipus | null;
   tavolletHolnap?: TavolletTipus | null;
+  /** CAN-fogyasztás az utolsó 7 napból (jarmu_can_nap); null: nincs adat. */
+  fogyasztas?: { l100: number | null; km: number; szervizHatraKm: number | null } | null;
+  /** A kocsi mai és holnapi fuvarjai a megbízás-kártyákhoz (Ma, metróvonal): útvonal, díj. */
+  fuvarAdat?: MaFuvarAdat[];
+};
+
+export type MaFuvarAdat = {
+  id: string; partner: string; hivatkozas: string | null; jelleg: "ber" | "sajat";
+  utvonal: string; dij: string | null; felrakasNap: string | null; lerakasNap: string | null;
 };
 
 export type MaVaszon = {
@@ -151,6 +162,8 @@ export type MaVaszon = {
   /** Az adat előállításának ideje, „10:42” — a felület kiírja, mikor frissült. */
   frissitve: string;
   kocsik: MaKocsi[];
+  /** Flotta-átlag l/100 az utolsó 7 napból (Σ liter / Σ km); null: nincs elég adat. */
+  flottaL100?: number | null;
   kocsiNelkul: { id: string; partner: string; utvonal: string; nap: string | null; allapot: Allapot }[];
   /** Rugalmas saját fuvarok (Elvinni való), határidő szerint — a sárga/piros jelzéshez (elvinniSurgosseg). */
   elvinni: { id: string; utvonal: string; legkorabban: string | null; legkesobb: string | null; surgosseg: ElvinniSurgosseg }[];
@@ -345,6 +358,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
     felrakas_nap: string | null; lerakas_nap: string | null; hianylista: unknown[]; felrako: string | null; lerako: string | null;
     megallo_reszletek: MegalloReszlet[] | null;
     felrakas_ablak_tol: string | null; idopont: string | null;
+    fuvardij: string | null; fuvardij_penznem: string | null;
   };
   const MEGBIZAS_OSZLOPOK = `m.id::text, m.allapot, m.jelleg, coalesce(p.nev, m.megrendelo) as partner,
        coalesce(m.hivatkozas_kanonikus, m.pozicioszam, m.reise_id) as hivatkozas,
@@ -352,7 +366,8 @@ export async function getMaVaszon(): Promise<MaVaszon> {
        to_char(m.datum, 'YYYY-MM-DD') as felrakas_nap,
        to_char(coalesce(m.lerakas_datum, m.datum), 'YYYY-MM-DD') as lerakas_nap,
        m.hianylista, m.felrako, m.lerako, m.megallo_reszletek,
-       m.felrakas_ablak_tol::text as felrakas_ablak_tol, m.idopont
+       m.felrakas_ablak_tol::text as felrakas_ablak_tol, m.idopont,
+       m.fuvardij::text as fuvardij, m.fuvardij_penznem
      from fuvar_megbizasok m
      left join fuvar_partnerek p on p.id = m.partner_id
      left join fuvar_jarmuvek j on j.id = m.jarmu_id
@@ -682,6 +697,14 @@ export async function getMaVaszon(): Promise<MaVaszon> {
   const hetiPerc = await hetiVezetesPercek(gpsJarmuvek, ma).catch(() => new Map<string, number>());
   // Tachó (Ecofleet tcoData, jarmu_telemetria): ha a tábla még nincs vagy üres, a GPS-becslés marad.
   const tachok = await legutobbiTacho().catch(() => new Map<string, never>());
+  // CAN-fogyasztás (utolsó 7 nap) kocsinként; hiba → a kocsi kimarad, a lap nem törik.
+  const canTol = (() => { const d = new Date(`${ma}T12:00:00Z`); d.setUTCDate(d.getUTCDate() - 6); return d.toISOString().slice(0, 10); })();
+  const canTelemetria = new Map<string, JarmuTelemetria>();
+  await Promise.all(osszesJarmu.map(async (j) => {
+    const t = await canNapok(j.id, canTol, ma).then(jarmuTelemetriaOsszesit).catch(() => null);
+    if (t) canTelemetria.set(j.id, t);
+  }));
+  const flottaL100 = flottaFogyasztas([...canTelemetria.values()]);
 
   const blokkKesz = (s: (typeof sorok)[number]): MaBlokk => {
     const gs = megalloMap.get(s.id) ?? [];
@@ -857,6 +880,11 @@ export async function getMaVaszon(): Promise<MaVaszon> {
       holnap: holnapiak.map(blokkKesz),
       holnapFolytatodik,
       papir: papirSorok,
+      fogyasztas: (() => { const t = canTelemetria.get(j.id); return t ? { l100: t.canL100, km: t.canKm, szervizHatraKm: t.szervizMegbizhato ? t.szervizHatraKm : null } : null; })(),
+      fuvarAdat: [...maiak, ...maiLezartak, ...holnapiak].map((s) => {
+        const b = blokkKesz(s);
+        return { id: s.id, partner: b.partner, hivatkozas: s.hivatkozas, jelleg: s.jelleg, utvonal: b.utvonal, dij: dijSzoveg(s.fuvardij, s.fuvardij_penznem), felrakasNap: s.felrakas_nap, lerakasNap: s.lerakas_nap };
+      }),
     };
   });
   while (kocsik.length < KOCSI_OSZLOP) {
@@ -907,6 +935,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
     frissitve: ORA(most),
     elteresek: elteresek.sort((a, b) => (a.szin === b.szin ? 0 : a.szin === "red" ? -1 : 1)),
     kocsik,
+    flottaL100,
     kocsiNelkul: sorok.filter((s) => !s.jarmu_kod && (aznap(s, ma) || aznap(s, holnap))).map((s) => ({
       id: s.id, partner: s.partner ?? "(nincs megbízó)",
       utvonal: `${varosNev(s.felrako ?? "") ?? s.felrako ?? "—"} → ${varosNev(s.lerako ?? "") ?? s.lerako ?? "—"}`,

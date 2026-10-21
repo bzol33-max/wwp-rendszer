@@ -12,6 +12,7 @@ import { tachoCsik } from "@/lib/fuvarozas2/ma-kartya-alap";
 import { bejegyzesIdo, tipusNev, TAVOLLET_NEV, type Bejegyzes, type TavolletTipus } from "@/lib/fuvarozas2/bejegyzes-alap";
 import { BejegyzesIkon } from "@/components/fuvarozas2/bejegyzes-ikon";
 import { KocsiSavLab } from "@/components/fuvarozas2/kocsi-savok";
+import { MetroKocsi } from "@/components/fuvarozas2/ma-metro";
 import type { KocsiSav } from "@/lib/fuvarozas2/kocsi-sav-alap";
 
 // A „Ma" képernyő (Budaházi Zoltán, 2026-09-28): négy kocsi-oszlop egymás
@@ -379,6 +380,11 @@ export function MaVaszonNezet({ adat, savok = [] }: { adat: MaVaszon; savok?: Ko
             <span className="text-muted-foreground">{h.cimke}</span> <b className={`tabular-nums ${SZIN_ERTEK[h.szin]}`}>{h.ertek}</b>
           </Link>
         ))}
+        {adat.flottaL100 != null ? (
+          <span className="rounded-full bg-card px-3 py-1 text-xs ring-1 ring-foreground/15" title="Ecofleet CAN, utolsó 7 nap, Σ liter / Σ km">
+            <span className="text-muted-foreground">Fogyasztás · 7 nap</span> <b className="tabular-nums">{adat.flottaL100.toLocaleString("hu-HU")} l/100</b>
+          </span>
+        ) : null}
         <span className="ml-auto"><AutoFrissites frissitve={adat.frissitve} /></span>
       </div>
 
@@ -399,8 +405,9 @@ export function MaVaszonNezet({ adat, savok = [] }: { adat: MaVaszon; savok?: Ko
       )}
 
 
-      <div className="grid items-stretch gap-3 md:grid-cols-2">
-        {aktiv.map((k, i) => <KocsiOszlop key={k.kod ?? `k-${i}`} k={k} holnapCimke={adat.holnapCimke} piheno={adat.maPihenonap ?? pihenoNapE(adat.ma)} sav={k.kod ? savSzerint.get(k.kod) ?? null : null} />)}
+      {/* 2026-10-21 (Budaházi Zoltán, V11): kocsinként egy sor — metróvonal + aktuális és következő megbízás. */}
+      <div className="flex flex-col gap-3">
+        {aktiv.map((k, i) => <MetroKocsi key={k.kod ?? `k-${i}`} k={k} ma={adat.ma} holnapCimke={adat.holnapCimke} piheno={adat.maPihenonap ?? pihenoNapE(adat.ma)} flottaL100={adat.flottaL100 ?? null} sav={k.kod ? savSzerint.get(k.kod) ?? null : null} />)}
       </div>
       {helyek.length ? (
         <div className="-mt-1 flex flex-wrap gap-2 text-sm text-muted-foreground">
