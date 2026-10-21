@@ -24,6 +24,7 @@ import {
   type AjanlatHely, type HetiFuvar, type HivandoPartner, type Illeszkedes, type MultFuvar, type NapCella, type Res,
 } from "@/lib/fuvarozas2/tervezes-het-alap";
 import { legutobbiTacho } from "@/lib/jarmu-telemetria/repo";
+import { getFleetLastPositions, parseEcofleetTimestamp } from "@/lib/fuvarozas/ecofleet";
 import { tachoKijelzes } from "@/lib/fuvarozas2/tervezes-het-tacho";
 import { szamoljUtemtervet, type UtemKocsiBemenet } from "@/lib/fuvarozas2/heti-utemterv";
 import type { KocsiUtemterv } from "@/lib/fuvarozas2/heti-utemterv-alap";
@@ -271,6 +272,24 @@ export async function getTervezesHet(resKulcs?: string, het?: string): Promise<T
   const tachoMost = new Date();
   const tachok = kezdet === alapKezdet ? await legutobbiTacho().catch(() => new Map<string, never>()) : new Map<string, never>();
 
+  // A kocsik mostani GPS-helye (csak a mai nézetben, friss jel ≤ 3 óra).
+  const mostHelyek = new Map<string, { pont: Pont; varos: string }>();
+  if (kezdet === alapKezdet) {
+    try {
+      const objok = await query<{ kod: string; obj: string | null }>(`select kod, ecofleet_object_id as obj from fuvar_jarmuvek where aktiv`);
+      const poz = await Promise.race([getFleetLastPositions(), new Promise<never[]>((r) => setTimeout(() => r([]), 4000))]);
+      for (const o of objok) {
+        const p = o.obj ? poz.find((x) => x.objectId === o.obj) : undefined;
+        const d = p ? parseEcofleetTimestamp(p.timestamp) : null;
+        if (p && d && Date.now() - d.getTime() <= 3 * 3600_000 && Number.isFinite(p.latitude) && Number.isFinite(p.longitude)) {
+          mostHelyek.set(o.kod, { pont: { lat: p.latitude, lon: p.longitude }, varos: "a mostani helye (GPS)" });
+        }
+      }
+    } catch (e) {
+      console.warn("[het] GPS-hely:", e instanceof Error ? e.message : e);
+    }
+  }
+
   const resek: Res[] = [];
   const utemBemenet: UtemKocsiBemenet[] = [];
   const kocsikAlap = jarmuvek.map((j) => {
@@ -278,7 +297,7 @@ export async function getTervezesHet(resKulcs?: string, het?: string): Promise<T
     const elozo = sajat.filter((s) => s.le_nap < napok[0] && s.le_lat != null).pop();
     const elozoVeg = elozo ? { pont: pont(elozo.le_lat, elozo.le_lon)!, varos: varos(elozo.lerako) } : null;
     const r = hetiReszek(
-      { kod: j.kod, sofor: j.sofor, fuvarok: sajat.map(hetiFuvar), elozoVeg },
+      { kod: j.kod, sofor: j.sofor, fuvarok: sajat.map(hetiFuvar), elozoVeg, most: mostHelyek.get(j.kod) ?? null },
       napok, telephely, kmKoltseg, ma
     );
     resek.push(...r.resek);

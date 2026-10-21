@@ -48,7 +48,15 @@ export type Res = {
   elott?: string;
 };
 
-export type HetiKocsi = { kod: string; sofor: string; fuvarok: HetiFuvar[]; elozoVeg: { pont: Pont; varos: string } | null };
+export type HetiKocsi = {
+  kod: string; sofor: string; fuvarok: HetiFuvar[]; elozoVeg: { pont: Pont; varos: string } | null;
+  /**
+   * A kocsi MOSTANI helye a GPS-ből (friss jel, csak a mai nézetben). A még el
+   * nem kezdett fuvarok előtti üres utat innen számoljuk, nem a terv szerinti
+   * előző lerakóból (2026-10-21: „ezt a kocsik GPS-ből simán lehet látni”).
+   */
+  most?: { pont: Pont; varos: string } | null;
+};
 
 export type NapCella = { nap: string; fuvarok: HetiFuvar[]; resek: Res[]; szabad: boolean };
 
@@ -108,8 +116,15 @@ export function hetiReszek(k: HetiKocsi, napok: string[], telephely: { pont: Pon
   // Ahol a kocsi áll; null, ha egy fuvar lerakójának nincs koordinátája (onnan nem becsülünk).
   let hol: { pont: Pont; varos: string } | null = k.elozoVeg ?? telephely;
   let holNap = elso;
+  let mostBeallitva = false;
   for (const f of heti) {
-    if (f.fel && hol) {
+    // Az első még el nem kezdett mai/jövőbeli fuvar előtt a kocsi ott van, ahol a GPS mutatja.
+    if (!mostBeallitva && k.most && !f.felIdo && (!ma || f.felNap >= ma)) {
+      hol = k.most;
+      mostBeallitva = true;
+    }
+    // A már megtörtént felrakás előtti út elmúlt — oda nem lehet fuvart tenni, nem rés.
+    if (f.fel && hol && !f.felIdo) {
       const km = utKm(hol.pont, f.fel);
       if (km >= RES_MIN_KM) {
         const nap = f.felNap < elso ? elso : f.felNap;

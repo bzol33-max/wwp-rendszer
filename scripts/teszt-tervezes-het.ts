@@ -194,5 +194,19 @@ if (P.nadudvar && P.szakoly) {
   eq("tényes előre, a tervezett utána", napBelulFuzve([c, b, a], P.bp).map((x) => x.id), ["sajat", "pantya", "terv"]);
 }
 
+// GPS-hely (2026-10-21): a kocsi már Tompaládonynál áll — a következő, onnan induló
+// fuvar előtt nincs üres rés, akkor sem, ha a terv szerinti előző lerakó Budapest.
+{
+  const nap = napok[2];
+  const kesz: HetiFuvar = { ...f("krajnik", "nyirbator", "bp", napok[1]), felIdo: `${napok[1]} 07:00` };
+  const kov: HetiFuvar = f("pantya", "tompa", "debrecen", nap);
+  const nincsGps = hetiReszek({ kod: "AOPU", sofor: "Gergő", elozoVeg: null, fuvarok: [kesz, kov] }, napok, tel, 300, nap).resek.filter((r) => r.elott === "pantya");
+  eq("GPS nélkül: a terv szerinti Budapest → Tompaládony rés", nincsGps.length, 1);
+  const gpsvel = hetiReszek({ kod: "AOPU", sofor: "Gergő", elozoVeg: null, fuvarok: [kesz, kov], most: { pont: P.tompa, varos: "GPS" } }, napok, tel, 300, nap).resek.filter((r) => r.elott === "pantya");
+  eq("GPS-szel: a kocsi ott áll, nincs rés", gpsvel.length, 0);
+  const marMegtortent: HetiFuvar = { ...kov, felIdo: `${nap} 10:36` };
+  eq("megtörtént felrakás előtt nincs rés", hetiReszek({ kod: "AOPU", sofor: "Gergő", elozoVeg: null, fuvarok: [kesz, marMegtortent] }, napok, tel, 300, nap).resek.filter((r) => r.elott === "pantya").length, 0);
+}
+
 console.log(`teszt-tervezes-het: ${ok} ok, ${bad} hiba`);
 if (bad) process.exit(1);
