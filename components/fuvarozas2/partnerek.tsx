@@ -102,9 +102,9 @@ export function PartnerekNezet({ partnerek, javaslatok, adatJavaslatok = [], sze
         <label className="ml-1 flex items-center gap-1.5 text-sm"><input type="checkbox" checked={csakHianyos} onChange={(e) => setCsakHianyos(e.target.checked)} />csak hiányos</label>
         <Input value={kereses} onChange={(e) => setKereses(e.target.value)} placeholder="Keresés: partner, kapcsolattartó, e-mail" className="h-8 w-full text-sm sm:w-64" />
         <span className="ml-auto text-sm text-muted-foreground">
-          {hianyosBer.length === 0 ? "Minden megbízó adata teljes" : <>Hiányos megbízó: <b className="text-[var(--f2-amb)]">{hianyosBer.length}</b> / {berPartnerek.length}</>}
+          {hianyosBer.length === 0 ? "Minden megbízó adata teljes" : <>Hiányos megbízó: <b className="text-[var(--f2-amb)]">{hianyosBer.length}</b> / {berPartnerek.length} <span className="text-xs">· a megbízásokból óránként magától pótlódik</span></>}
         </span>
-        {szerkeszthet ? <Button size="xs" disabled={pending} onClick={kitolt}>Hiányzók kitöltése</Button> : null}
+        {szerkeszthet ? <Button size="xs" variant="outline" disabled={pending} onClick={kitolt} title="Magától is lefut óránként, az új megbízások beérkezése után — ez csak azonnal elindítja.">Frissítés most</Button> : null}
       </div>
 
       {kor === "sajat" ? (

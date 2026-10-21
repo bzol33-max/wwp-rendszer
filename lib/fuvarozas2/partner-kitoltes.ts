@@ -11,12 +11,12 @@
 
 import { pool, query } from "@/lib/db";
 import { JAVASLAT_MEZOK } from "@/lib/fuvarozas2/partner-javaslat-alap";
-import { kitoltesTerv, type Kitoltes, type KitoltesJavaslat, type KitoltesPartner, type KitoltesSzamla } from "@/lib/fuvarozas2/partner-kitoltes-alap";
+import { kitoltesTerv, type Kitoltes, type KitoltesJavaslat, type KitoltesMegbizas, type KitoltesPartner, type KitoltesSzamla } from "@/lib/fuvarozas2/partner-kitoltes-alap";
 
 export type KitoltesEredmeny = { partner: number; mezo: number; reszletek: { partner: string; mezok: Kitoltes[] }[] };
 
 export async function futtatPartnerKitoltest(ki = "automatikus kitöltés"): Promise<KitoltesEredmeny> {
-  const [partnerek, szamlak, javaslatok] = await Promise.all([
+  const [partnerek, szamlak, javaslatok, megbizasok] = await Promise.all([
     query<KitoltesPartner>(
       `select id::text, nev, nevvaltozatok, adoszam, szamlazasi_cim, postazasi_cim, szamlazasi_email,
          fizetesi_hatarido_nap, papir_bekuldesi_hatarido_nap, posta_nem_kell, szamla_email_nem_kell
@@ -30,11 +30,18 @@ export async function futtatPartnerKitoltest(ki = "automatikus kitöltés"): Pro
     query<KitoltesJavaslat & { partner_id: string }>(
       `select partner_id::text, mezo, ertek, forras, forras_leiras from fuvar_partner_javaslat where allapot = 'nyitott'`
     ).catch(() => []),
+    // A bérmegbízásokon már kiolvasott postacím és fizetési határidő, a legújabb elöl.
+    query<KitoltesMegbizas & { partner_id: string }>(
+      `select partner_id::text, id::text, postazasi_cim, fizetesi_hatarido_nap from fuvar_megbizasok
+       where partner_id is not null and torolt_at is null and jelleg = 'ber'
+         and (postazasi_cim is not null or fizetesi_hatarido_nap is not null)
+       order by datum desc, id desc`
+    ).catch(() => []),
   ]);
 
   const eredmeny: KitoltesEredmeny = { partner: 0, mezo: 0, reszletek: [] };
   for (const p of partnerek) {
-    const terv = kitoltesTerv(p, szamlak, javaslatok.filter((j) => j.partner_id === p.id));
+    const terv = kitoltesTerv(p, szamlak, javaslatok.filter((j) => j.partner_id === p.id), megbizasok.filter((m) => m.partner_id === p.id));
     if (terv.length === 0) continue;
     const irt = await alkalmaz(p.id, terv, ki);
     if (irt.length === 0) continue;

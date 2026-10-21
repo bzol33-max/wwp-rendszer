@@ -63,6 +63,9 @@ export type KitoltesSzamla = {
   raw_xml: string | null;
 };
 
+/** A partner (bér)megbízásain már kiolvasott adatok — az import minden megbízásnál kiolvassa (2026-10-21). */
+export type KitoltesMegbizas = { id: string; postazasi_cim: string | null; fizetesi_hatarido_nap: number | null };
+
 export type KitoltesJavaslat = { mezo: string; ertek: string; forras: string; forras_leiras: string | null };
 
 export type Kitoltes = { mezo: KitolthetoMezo; ertek: string | number; forras: "szamla" | "megbizas_pdf"; leiras: string | null };
@@ -139,7 +142,14 @@ function egyertelmu(javaslatok: KitoltesJavaslat[], mezo: string, forras: string
 }
 
 /** Egy partner kitöltési terve: csak a hiányzó mezőkre, forrással. */
-export function kitoltesTerv(p: KitoltesPartner, osszesSzamla: KitoltesSzamla[], javaslatok: KitoltesJavaslat[]): Kitoltes[] {
+/** A legutóbbi megbízás értéke, ha a partner megbízásai erre a mezőre nem mondanak ellent egymásnak. */
+function megbizasErtek<T>(megbizasok: KitoltesMegbizas[], kiv: (m: KitoltesMegbizas) => T | null, kulcs: (v: T) => string): { ertek: T; id: string } | null {
+  const vannak = megbizasok.map((m) => ({ v: kiv(m), id: m.id })).filter((x): x is { v: T; id: string } => x.v != null && kulcs(x.v) !== "");
+  if (vannak.length === 0 || new Set(vannak.map((x) => kulcs(x.v))).size > 1) return null;
+  return { ertek: vannak[0].v, id: vannak[0].id };
+}
+
+export function kitoltesTerv(p: KitoltesPartner, osszesSzamla: KitoltesSzamla[], javaslatok: KitoltesJavaslat[], megbizasok: KitoltesMegbizas[] = []): Kitoltes[] {
   if (sajatCegunkE(p.nev)) return [];
   const hiany = new Set(hianyzoMezok(p));
   if (hiany.size === 0) return [];
@@ -161,7 +171,9 @@ export function kitoltesTerv(p: KitoltesPartner, osszesSzamla: KitoltesSzamla[],
   if (hiany.has("postazasi_cim")) {
     const pdf = egyertelmu(javaslatok, "postazasi_cim", "megbizas_pdf");
     const szamlaCim = legujabb ? vevoCimSzamlaXmlbol(legujabb.raw_xml) : null;
+    const mb = megbizasErtek(megbizasok, (m) => (m.postazasi_cim && hihetoCim(m.postazasi_cim) ? m.postazasi_cim : null), (c) => cimKulcs(c));
     if (pdf && hihetoCim(pdf.ertek)) ki.push({ mezo: "postazasi_cim", ertek: cimSzep(pdf.ertek), forras: "megbizas_pdf", leiras: pdf.forras_leiras });
+    else if (mb) ki.push({ mezo: "postazasi_cim", ertek: cimSzep(mb.ertek), forras: "megbizas_pdf", leiras: `#${mb.id} megbízás` });
     else if (szamlaCim) ki.push({ mezo: "postazasi_cim", ertek: cimSzep(szamlaCim), forras: "szamla", leiras: legujabb!.szamlaszam });
   }
   if (hiany.has("szamlazasi_email")) {
@@ -174,7 +186,9 @@ export function kitoltesTerv(p: KitoltesPartner, osszesSzamla: KitoltesSzamla[],
   if (hiany.has("fizetesi_hatarido_nap")) {
     const pdf = egyertelmu(javaslatok, "fizetesi_hatarido_nap", "megbizas_pdf");
     const szamlabol = fizetesiNapSzamlakbol(szamlak);
+    const mb = megbizasErtek(megbizasok, (m) => (m.fizetesi_hatarido_nap != null && m.fizetesi_hatarido_nap > 0 ? m.fizetesi_hatarido_nap : null), String);
     if (pdf && Number(pdf.ertek) > 0) ki.push({ mezo: "fizetesi_hatarido_nap", ertek: Number(pdf.ertek), forras: "megbizas_pdf", leiras: pdf.forras_leiras });
+    else if (mb) ki.push({ mezo: "fizetesi_hatarido_nap", ertek: mb.ertek, forras: "megbizas_pdf", leiras: `#${mb.id} megbízás` });
     else if (szamlabol != null) ki.push({ mezo: "fizetesi_hatarido_nap", ertek: szamlabol, forras: "szamla", leiras: `${Math.min(szamlak.length, 12)} számla alapján` });
   }
   if (hiany.has("papir_bekuldesi_hatarido_nap")) {

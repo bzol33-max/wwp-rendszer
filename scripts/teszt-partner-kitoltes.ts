@@ -77,6 +77,19 @@ eq("44/45 → 45", fizetesiNapSzamlakbol(napos([44, 45])), 45);
 eq("hiány: nem kér e-mailt", hianyzoMezok({ ...ures, szamla_email_nem_kell: true }).includes("szamlazasi_email"), false);
 eq("hiány: üres string is hiány", hianyzoMezok({ ...ures, adoszam: "  " }).includes("adoszam"), true);
 
+// A megbízáson már kiolvasott adatok (PÁNTYA #330, 2026-10-21): új partner, nincs számla, nincs javaslat.
+const pantya = { ...ures, nev: "PÁNTYA Teherfuvarozó és Szolgáltató Kft.", nevvaltozatok: [] };
+eq("megbízás-mezőből postacím és fizetés", kitoltesTerv(pantya, [], [], [{ id: "330", postazasi_cim: "4030 Debrecen, Olajfa u. 12.", fizetesi_hatarido_nap: 30 }]).map((k) => [k.mezo, k.ertek]),
+  [["postazasi_cim", "4030 Debrecen, Olajfa u. 12."], ["fizetesi_hatarido_nap", 30]]);
+eq("ellentmondó megbízások → semmi", kitoltesTerv(pantya, [], [], [
+  { id: "2", postazasi_cim: "4030 Debrecen, Olajfa u. 12.", fizetesi_hatarido_nap: 30 },
+  { id: "1", postazasi_cim: "1111 Budapest, Fő u. 1.", fizetesi_hatarido_nap: 60 }]), []);
+eq("írásmód-eltérés nem ellentmondás", kitoltesTerv(pantya, [], [], [
+  { id: "2", postazasi_cim: "4030 Debrecen, Olajfa utca 12.", fizetesi_hatarido_nap: null },
+  { id: "1", postazasi_cim: "H-4030 Debrecen, Olajfa u. 12.", fizetesi_hatarido_nap: null }]).length, 1);
+eq("a PDF-javaslat elsőbb", kitoltesTerv(pantya, [], [{ mezo: "fizetesi_hatarido_nap", ertek: "45", forras: "megbizas_pdf", forras_leiras: "a.pdf" }],
+  [{ id: "330", postazasi_cim: null, fizetesi_hatarido_nap: 30 }]).map((k) => k.ertek), [45]);
+
 // Címek egységes alakra
 eq("fordított cím", cimSzep("Újtelep utca 41 8445 Csehbánya"), "8445 Csehbánya, Újtelep utca 41");
 eq("csupa nagybetű", cimSzep("3300 EGER, KISTÁLYAI U.12."), "3300 Eger, Kistályai U.12.");

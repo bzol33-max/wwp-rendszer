@@ -37,13 +37,13 @@ Ha valamit nem látsz egyértelműen, null — ne találj ki adatot.`;
  * mindig a megbízásban álló utasítás szerint állítja ki).
  */
 async function wordSzovege(buffer: Buffer, mimeType: string | null): Promise<string> {
-  if (mimeType === "application/msword") {
-    const { default: WordExtractor } = await import("word-extractor");
-    const doc = await new WordExtractor().extract(buffer);
-    return [doc.getHeaders?.() ?? "", doc.getBody(), doc.getFooters?.() ?? ""].filter(Boolean).join("\n");
-  }
-  const mammoth = await import("mammoth");
-  return (await mammoth.extractRawText({ buffer })).value;
+  // A fejléc is kell: a megbízó cégneve sokszor csak a Word-fejlécben áll (PÁNTYA #330, 2026-10-21).
+  const { default: WordExtractor } = await import("word-extractor");
+  const doc = await new WordExtractor().extract(buffer).catch(() => null);
+  const fej = doc ? [doc.getHeaders({ includeFooters: false }), doc.getFooters()].map((t) => t.trim()).filter(Boolean).join("\n") : "";
+  let torzs = doc?.getBody() ?? "";
+  if (mimeType !== "application/msword") torzs = (await import("mammoth").then((m) => m.extractRawText({ buffer })).catch(() => null))?.value || torzs;
+  return fej ? `=== AZ IRAT FEJLÉCE (LEVÉLPAPÍR) ===\n${fej}\n=== AZ IRAT SZÖVEGE ===\n${torzs}` : torzs;
 }
 
 const WORD_MIME = new Set(["application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]);
@@ -149,15 +149,24 @@ export async function futtatPartnerJavaslatokat(korlat = 10): Promise<{ irat: nu
     }
   }
 
-  // 2. A megbízás-PDF-ek, képként is.
+  // 2. A megbízás-iratok (PDF képként is, Word fejléccel). A fájlnév nélküli
+  // dokumentum-sor és a csak a megbízáson álló Drive-azonosító is számít
+  // (2026-10-21, PÁNTYA #330: fajlnev = null miatt sosem olvastuk ki); a típust
+  // a letöltés mondja meg, a nem olvasható irat hibaként egyszer rögzül.
   const iratok = await query<{ partner_id: string; megbizas_id: string; drive_file_id: string; fajlnev: string | null }>(
-    `select distinct on (m.partner_id) m.partner_id::text, m.id::text as megbizas_id, d.drive_file_id, d.fajlnev
-     from fuvar_dokumentumok d
-     join fuvar_megbizasok m on m.id = d.fuvar_id
-     where d.tipus = 'megbizas' and m.partner_id = any($1::bigint[]) and m.torolt_at is null
-       and coalesce(d.fajlnev, '') ~* '\\.(pdf|docx?)$'
-       and not exists (select 1 from fuvar_partner_kiolvasas k where k.drive_file_id = d.drive_file_id)
-     order by m.partner_id, d.created_at desc`,
+    `select distinct on (x.partner_id) x.partner_id::text, x.megbizas_id::text, x.drive_file_id, x.fajlnev
+     from (
+       select m.partner_id, m.id as megbizas_id, d.drive_file_id, d.fajlnev
+       from fuvar_dokumentumok d join fuvar_megbizasok m on m.id = d.fuvar_id
+       where d.tipus = 'megbizas' and m.torolt_at is null and d.drive_file_id is not null
+         and (d.fajlnev is null or d.fajlnev ~* '\\.(pdf|docx?)$')
+       union all
+       select m.partner_id, m.id, m.drive_file_id, null
+       from fuvar_megbizasok m where m.torolt_at is null and m.drive_file_id is not null
+     ) x
+     where x.partner_id = any($1::bigint[])
+       and not exists (select 1 from fuvar_partner_kiolvasas k where k.drive_file_id = x.drive_file_id)
+     order by x.partner_id, x.megbizas_id desc, x.fajlnev nulls last`,
     [partnerek.map((p) => p.id)]
   );
   for (const irat of iratok.slice(0, korlat)) {
@@ -166,6 +175,7 @@ export async function futtatPartnerJavaslatokat(korlat = 10): Promise<{ irat: nu
     eredmeny.irat++;
     try {
       const fajl = await letoltDriveFajlt(irat.drive_file_id);
+      irat.fajlnev ??= fajl.nev;
       if (fajl.buffer.length > MAX_PDF_BAJT) throw new Error(`túl nagy irat (${fajl.buffer.length} bájt)`);
       let nyers: NyersKiolvasas | null;
       if (fajl.mimeType === "application/pdf") nyers = await kiolvasPdfbol(fajl.buffer, irat.fajlnev ?? "megbizas.pdf");

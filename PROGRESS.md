@@ -3933,3 +3933,9 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 - Javítás (`lib/fuvarozas/drive-sync-core.ts`): .doc/.docx fej- és lábléce (word-extractor) „=== AZ IRAT FEJLÉCE ===” blokként a szöveg elejére; a prompt: a fejléc cége a megbízó, aláíró személy soha. Egy fel-/lerakónál, ha a mező szám nélküli név, a megálló teljes címe kerül be. Részlet: a sofőr-mező nem ismétli a rendszámot.
 - A #330-at a javítás után az „Újraolvasás az iratból” gombbal kell újraolvasni.
 - Teszt: word-extractor próba-.docx fejléccel, teljes `npm run teszt`, tsc, eslint, build.
+
+## 2026-10-21 (2) — Új megbízó adatai magától, a megbízásból
+- Tünet: PÁNTYA Kft. (új megbízó, #330) postacíme, e-mailje, fizetési határideje egy óra után is üres maradt; a tulajdonos: „ezt tényleg nekem kell?”.
+- Ok: (1) a partner-kitöltés nem használta a megbízáson MÁR kiolvasott `postazasi_cim` / `fizetesi_hatarido_nap` mezőt; (2) a partner-irat kiolvasó csak a fájlnévvel rendelkező dokumentum-sort nézte — a #330 dokumentum-sora `fajlnev = null`; (3) a Word-irat fejlécét itt sem olvasta.
+- Javítás: `partner-kitoltes(-alap).ts` — forrás a partner bérmegbízásainak mezője is (ha nem mondanak ellent; PDF-javaslat > megbízás-mező > számla); `partner-javaslat.ts` — fájlnév nélküli dokumentum és a megbízás `drive_file_id`-ja is, Word-fejléc. Óránként magától fut (modell-szinkron kör, a partner bekötése után); a fülön a gomb „Frissítés most”.
+- Teszt: `teszt-partner-kitoltes.ts` 28/0, teljes `npm run teszt`, tsc, eslint, build.
