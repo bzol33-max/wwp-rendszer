@@ -106,6 +106,8 @@ type Sor = {
   felrako: string | null; lerako: string | null; fel_nap: string; le_nap: string;
   fuvardij: number | null; penznem: string;
   fel_lat: number | null; fel_lon: number | null; le_lat: number | null; le_lon: number | null;
+  /** A felrakó / lerakó tényleges ideje (GPS / sofőr), „YYYY-MM-DD HH:MI”, ha már megtörtént. */
+  fel_teny: string | null; le_teny: string | null;
 };
 
 const pont = (lat: number | null, lon: number | null): Pont | null => (lat != null && lon != null ? { lat: Number(lat), lon: Number(lon) } : null);
@@ -162,17 +164,24 @@ export async function getTervezesHet(resKulcs?: string, het?: string): Promise<T
        coalesce(fel.cim_nyers, m.felrako) as felrako, coalesce(le.cim_nyers, m.lerako) as lerako,
        to_char(m.datum, 'YYYY-MM-DD') as fel_nap, to_char(coalesce(m.lerakas_datum, m.datum), 'YYYY-MM-DD') as le_nap,
        m.fuvardij, coalesce(m.fuvardij_penznem, 'Ft') as penznem,
-       fel.lat as fel_lat, fel.lon as fel_lon, le.lat as le_lat, le.lon as le_lon
+       fel.lat as fel_lat, fel.lon as fel_lon, le.lat as le_lat, le.lon as le_lon, fel.teny as fel_teny, le.teny as le_teny
      from fuvar_megbizasok m
      left join fuvar_partnerek p on p.id = m.partner_id
      left join fuvar_jarmuvek j on j.id = m.jarmu_id
-     left join lateral (select g.cim_nyers, g.lat, g.lon from fuvar_megallok g where g.megbizas_id = m.id and g.tipus = 'felrako' order by g.sorszam limit 1) fel on true
-     left join lateral (select g.cim_nyers, g.lat, g.lon from fuvar_megallok g where g.megbizas_id = m.id and g.tipus = 'lerako' order by g.sorszam desc limit 1) le on true
+     left join lateral (select g.cim_nyers, g.lat, g.lon, to_char(coalesce(g.gps_erkezes, g.sofor_megerkezett_at, g.sofor_kesz_at, g.gps_tavozas) at time zone 'Europe/Budapest', 'YYYY-MM-DD HH24:MI') as teny from fuvar_megallok g where g.megbizas_id = m.id and g.tipus = 'felrako' order by g.sorszam limit 1) fel on true
+     left join lateral (select g.cim_nyers, g.lat, g.lon, to_char(coalesce(g.gps_erkezes, g.sofor_megerkezett_at, g.sofor_kesz_at, g.gps_tavozas) at time zone 'Europe/Budapest', 'YYYY-MM-DD HH24:MI') as teny from fuvar_megallok g where g.megbizas_id = m.id and g.tipus = 'lerako' order by g.sorszam desc limit 1) le on true
      where m.torolt_at is null and m.allapot is not null and m.datum is not null
        and coalesce(m.lerakas_datum, m.datum) >= $1::date - 180 and m.datum <= $2::date
      order by m.datum, m.id`,
     [vazlat[0], vazlat[vazlat.length - 1]]
   );
+  // Ami már megtörtént, annak a TÉNYLEGES napja számít, nem a tervezett
+  // (2026-10-21: a keddre írt Tata → Tompaládony szerdán ment).
+  for (const s of sorok) {
+    if (s.fel_teny) s.fel_nap = s.fel_teny.slice(0, 10);
+    if (s.le_teny) s.le_nap = s.le_teny.slice(0, 10);
+    if (s.le_nap < s.fel_nap) s.le_nap = s.fel_nap;
+  }
   // B1: a bejegyzések előre kellenek — a szombat / ünnep oszlop akkor is megjelenik, ha aznap bejegyzés van (QA #1).
   const bejegyzesElore = await getBejegyzesSorok(vazlat[0], vazlat[vazlat.length - 1]).catch((e) => { console.warn("[het] bejegyzések:", e instanceof Error ? e.message : e); return [] as Awaited<ReturnType<typeof getBejegyzesSorok>>; });
   // Szombat / ünnep oszlop csak akkor, ha aznap van felrakás, lerakás vagy bejegyzés.
@@ -243,7 +252,7 @@ export async function getTervezesHet(resKulcs?: string, het?: string): Promise<T
   const hetiFuvar = (s: Sor): HetiFuvar => ({
     id: s.id, cim: megbizoMegjelenites(s.jelleg, s.partner), felVaros: varos(s.felrako), leVaros: varos(s.lerako),
     fel: pont(s.fel_lat, s.fel_lon), le: pont(s.le_lat, s.le_lon), felNap: s.fel_nap, leNap: s.le_nap, sajat: s.jelleg === "sajat",
-    allapot: s.allapot,
+    allapot: s.allapot, felIdo: s.fel_teny,
   });
 
   // Tachó csak a mostani héten (élő állapot); a tábla hiánya / hiba → nincs chip.

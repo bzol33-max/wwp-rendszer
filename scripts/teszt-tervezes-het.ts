@@ -184,5 +184,15 @@ if (P.nadudvar && P.szakoly) {
   eq("lapozás vissza 5 munkanap", munkanapLepes("2026-10-26", -5), "2026-10-16");
 }
 
+// 2026-10-21 (#329 → saját → #330): ugyanazon a napon a már megtörtént felrakás
+// a TÉNYLEGES ideje szerint jön, akkor is, ha a legközelebbi szomszéd mást választana.
+{
+  const a: HetiFuvar = { ...f("sajat", "tata", "tompa", "2026-10-21", "2026-10-21", true), felIdo: "2026-10-21 06:03" };
+  const b: HetiFuvar = { ...f("pantya", "tompa", "debrecen", "2026-10-21"), felIdo: "2026-10-21 10:36" };
+  eq("tény szerinti sorrend", napBelulFuzve([b, a], P.debrecen).map((x) => x.id), ["sajat", "pantya"]);
+  const c: HetiFuvar = f("terv", "bp", "debrecen", "2026-10-21");
+  eq("tényes előre, a tervezett utána", napBelulFuzve([c, b, a], P.bp).map((x) => x.id), ["sajat", "pantya", "terv"]);
+}
+
 console.log(`teszt-tervezes-het: ${ok} ok, ${bad} hiba`);
 if (bad) process.exit(1);

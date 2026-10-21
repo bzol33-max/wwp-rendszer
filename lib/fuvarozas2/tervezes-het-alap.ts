@@ -23,6 +23,13 @@ export type HetiFuvar = {
   sajat: boolean;
   /** A megbízás állapota (allapotgep) — a kártya kész / úton jeléhez. */
   allapot?: string;
+  /**
+   * A felrakás TÉNYLEGES ideje („YYYY-MM-DD HH:MI”, GPS / sofőr), ha már
+   * megtörtént. A sorrendet ez dönti el a terv helyett (2026-10-21: a keddre
+   * tervezett Tata → Tompaládony szerdán reggel ment, a lánc mégis keddre tette,
+   * és Dunakesziből „200 km üresen Osliba” rést mutatott).
+   */
+  felIdo?: string | null;
 };
 
 export type Res = {
@@ -67,7 +74,10 @@ export function napBelulFuzve(rendezett: HetiFuvar[], kezdo: Pont | null): HetiF
     const maradek = rendezett.slice(i, j);
     while (maradek.length) {
       let leg = 0;
-      if (hol && maradek.length > 1) {
+      // Ami már megtörtént, az a tényleges sorrendjében jön (a legkorábbi felrakás előre).
+      const tenyes = maradek.map((f, n) => ({ n, ido: f.felIdo ?? null })).filter((x) => x.ido).sort((a, b) => a.ido!.localeCompare(b.ido!));
+      if (tenyes.length > 0) leg = tenyes[0].n;
+      else if (hol && maradek.length > 1) {
         let legKm = Infinity;
         maradek.forEach((f, n) => {
           const km = f.fel ? legvonalKm(hol!, f.fel) : Infinity;
@@ -91,7 +101,7 @@ export function napBelulFuzve(rendezett: HetiFuvar[], kezdo: Pont | null): HetiF
 export function hetiReszek(k: HetiKocsi, napok: string[], telephely: { pont: Pont; varos: string }, kmKoltseg: number, ma?: string): { cellak: NapCella[]; resek: Res[] } {
   const elso = napok[0], utolso = napok[napok.length - 1];
   const heti = napBelulFuzve(
-    k.fuvarok.filter((f) => f.felNap <= utolso && f.leNap >= elso).sort((x, y) => x.felNap.localeCompare(y.felNap) || x.leNap.localeCompare(y.leNap)),
+    k.fuvarok.filter((f) => f.felNap <= utolso && f.leNap >= elso).sort((x, y) => x.felNap.localeCompare(y.felNap) || (x.felIdo ?? "~").localeCompare(y.felIdo ?? "~") || x.leNap.localeCompare(y.leNap)),
     (k.elozoVeg ?? telephely).pont
   );
   const resek: Res[] = [];

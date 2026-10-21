@@ -3945,3 +3945,9 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 - Ok: a kézi javításkor (06:23) a felrakó „Florasca Tőzegüzem, Osli” lett; a geokód-tartalék a települést az első részből vette („Florasca Tőzegüzem”), az „Osli”-t sosem próbálta.
 - Javítás: a #330 felrakója „9354 Osli, 035/6 hrsz. (Florasca tőzegüzem)” (a Florasca Kft. osli telephelye, kormányhivatali építési engedély szerint); `tervezes-het.ts` `geo`: a további, településnévnek látszó címrészek is jelöltek.
 - Teszt: élőben a figyelmeztetés eltűnt; tsc, eslint, teljes `npm run teszt`.
+
+## 2026-10-21 (4) — Hét: a már megtörtént fuvar a tényleges napján és sorrendjében
+- Tünet: Gergő „ma: Dunakeszi … → Osli · 200 km üres ≈ 85 e Ft”, pedig közben ma reggel lement a Tata → Tompaládony saját fuvar (06:03–09:43), és Tompaládonyból Osli pár km.
+- Ok: a lánc a TERVEZETT napokból dolgozott: a saját fuvar keddre volt írva (szerdán ment), így kedden a Krajnik elé került, a Dunakeszi lerakó után pedig közvetlenül a PÁNTYA osli felrakója jött.
+- Javítás: `tervezes-het.ts` — a megállók tényleges ideje (GPS / sofőr) felülírja a fel-/lerakás napját; `tervezes-het-alap.ts` — `felIdo`: egy napon belül a megtörtént felrakások a tényleges sorrendjükben jönnek (a legközelebbi szomszéd csak a még nem teljesítetteknél dönt). A heti ütemterv ugyanezt az adatot kapja.
+- Teszt: `teszt-tervezes-het.ts` 79/0 (+2), teljes `npm run teszt`, tsc, eslint, build.
