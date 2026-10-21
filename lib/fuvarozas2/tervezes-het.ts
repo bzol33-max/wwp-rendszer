@@ -182,6 +182,18 @@ export async function getTervezesHet(resKulcs?: string, het?: string): Promise<T
     if (s.le_teny) s.le_nap = s.le_teny.slice(0, 10);
     if (s.le_nap < s.fel_nap) s.le_nap = s.fel_nap;
   }
+  // …ami pedig még NEM történt meg, az nem maradhat a múltban (ott kiesne a
+  // láncból): a csúszott fuvar a mai napra tolódik, a hossza megmarad
+  // (Budaházi Zoltán, 2026-10-21: „ha átcsúszik egy nappal, akkor sem tűnhet el”).
+  const napPlusz = (nap: string, d: number) => { const t = new Date(`${nap}T12:00:00Z`); t.setUTCDate(t.getUTCDate() + d); return t.toISOString().slice(0, 10); };
+  const napKul = (a: string, b: string) => Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 86400000);
+  for (const s of sorok) {
+    const nyitott = s.allapot === "ellenorzesre_var" || s.allapot === "tervezett" || s.allapot === "folyamatban";
+    if (!nyitott || s.le_teny || s.le_nap >= ma) continue;
+    if (s.fel_teny) s.le_nap = ma; // felrakva, a lerakás csúszik
+    else if (s.fel_nap < ma) { const hossz = napKul(s.fel_nap, s.le_nap); s.fel_nap = ma; s.le_nap = napPlusz(ma, Math.max(0, hossz)); }
+    else s.le_nap = ma;
+  }
   // B1: a bejegyzések előre kellenek — a szombat / ünnep oszlop akkor is megjelenik, ha aznap bejegyzés van (QA #1).
   const bejegyzesElore = await getBejegyzesSorok(vazlat[0], vazlat[vazlat.length - 1]).catch((e) => { console.warn("[het] bejegyzések:", e instanceof Error ? e.message : e); return [] as Awaited<ReturnType<typeof getBejegyzesSorok>>; });
   // Szombat / ünnep oszlop csak akkor, ha aznap van felrakás, lerakás vagy bejegyzés.

@@ -3951,3 +3951,4 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 - Ok: a lánc a TERVEZETT napokból dolgozott: a saját fuvar keddre volt írva (szerdán ment), így kedden a Krajnik elé került, a Dunakeszi lerakó után pedig közvetlenül a PÁNTYA osli felrakója jött.
 - Javítás: `tervezes-het.ts` — a megállók tényleges ideje (GPS / sofőr) felülírja a fel-/lerakás napját; `tervezes-het-alap.ts` — `felIdo`: egy napon belül a megtörtént felrakások a tényleges sorrendjükben jönnek (a legközelebbi szomszéd csak a még nem teljesítetteknél dönt). A heti ütemterv ugyanezt az adatot kapja.
 - Teszt: `teszt-tervezes-het.ts` 79/0 (+2), teljes `npm run teszt`, tsc, eslint, build.
+- (11:05) Szabály kiegészítve: ami még NEM történt meg (ellenőrzésre vár / tervezett / folyamatban, nincs lerakás-tény) és a terve a múltba esik, a mai napra tolódik (felrakva → csak a lerakás; különben az egész fuvar, a hossza megmarad) — így csúszás miatt egy fuvar sem esik ki a heti láncból.
