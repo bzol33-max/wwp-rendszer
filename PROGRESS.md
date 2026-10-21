@@ -15,7 +15,7 @@ következő megbízásait is … mehet”, telefonos külön terv nem kell).
 - Felső sor: „Fogyasztás · 7 nap” flotta-átlag (Σ liter / Σ km).
 - Fájlok: `lib/fuvarozas2/ma-metro-alap.ts` (tiszta), `components/fuvarozas2/ma-metro.tsx`, `ma-vaszon.ts`
   (fuvardíj a lekérdezésben, `fogyasztas`, `fuvarAdat`, `flottaL100`). A kocsi-lap továbbra is a régi `KocsiOszlop`-ot használja.
-- **Teszt:** teszt-ma-metro 30/0, teljes `npm run teszt`, tsc, eslint, next build.
+- **Teszt:** teszt-ma-metro 28/0, teljes `npm run teszt`, tsc, eslint, next build.
 
 ## 2026-10-17 — Ajánlat Q2: merre keress fuvart a kiürülő kocsiknak
 
