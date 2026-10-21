@@ -31,7 +31,8 @@ import { ellenorizAtmenet } from "@/lib/fuvarozas/allapot";
 import { fotoLezarasDontes, type LezarasMegallo, type MasikFuvar } from "@/lib/fuvarozas/fuvarlevel-lezaras";
 import { legutobbiTacho } from "@/lib/jarmu-telemetria/repo";
 import { tachoKijelzes } from "@/lib/fuvarozas2/tervezes-het-tacho";
-import { becsultUtKm } from "@/lib/fuvarozas/sofor-app-alap";
+import { legvonalKm } from "@/lib/fuvarozas/sofor-app-alap";
+import { calculateToll } from "@/lib/fuvarozas/utdijkalkulacio";
 
 function budapestMaIso(): string {
   return new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Budapest" });
@@ -424,11 +425,13 @@ export type SoforNap = {
   /** „Ma még vezethetsz: 2 ó 40 p · a héten: 26 ó 25 p” — csak mára és friss tachó-adatnál (Ecofleet). */
   tachoSor?: string | null;
   /**
-   * Élő kép a soros megállóig — csak mára (sofőr app, 2026-10-21): becsült
-   * közúti km a kocsi GPS-pozíciójától (légvonal × UT_SZORZO, lásd
-   * sofor-app-alap.ts), a GPS-alapú érkezési becslés, és hogy a kocsi most áll-e.
+   * Élő kép a soros megállóig — csak mára (sofőr app, 2026-10-21): a kocsi
+   * GPS-pozíciójától a megállóig a HU-GO útvonaltervező (kamion, 40 t)
+   * szerinti km és menetidő percben, és hogy a kocsi most áll-e. Becslés
+   * NINCS (Budaházi Zoltán: „hagyjuk már a becsléseket”): ha az útvonal nem
+   * számolható, km és perc null, és a felület a megbízás szerinti időt mutatja.
    */
-  elo?: { km: number | null; erkezes: Date | null; all: boolean } | null;
+  elo?: { km: number | null; perc: number | null; all: boolean } | null;
 };
 
 type FuvarExtraSor = {
@@ -698,11 +701,28 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
     const nyers = kovetkezoMegallo
       ? blokkok.flatMap((b) => b.megallok).find((m) => m.fuvarId === kovetkezoMegallo.fuvarId && m.megalloIndex === kovetkezoMegallo.megalloIndex)
       : undefined;
-    elo = {
-      km: nyers?.lat != null && nyers?.lon != null ? becsultUtKm(p, { lat: nyers.lat, lon: nyers.lon }) : null,
-      erkezes: sajat.eloEta && !sajat.eloEta.bizonytalan ? sajat.eloEta.erkezes : null,
-      all: !(p.sebesseg > 3),
-    };
+    let km: number | null = null;
+    let perc: number | null = null;
+    if (nyers?.lat != null && nyers?.lon != null) {
+      const cel = { lat: nyers.lat, lon: nyers.lon };
+      if (legvonalKm(p, cel) < 0.5) {
+        km = 0;
+        perc = 0;
+      } else {
+        const ut = await Promise.race([
+          calculateToll({ points: [{ lat: p.lat, lon: p.lon }, cel], vehicleCategory: "J5", euroCategory: "EURO6", weight: 40 }),
+          new Promise<null>((ok) => setTimeout(() => ok(null), 6000)),
+        ]).catch((err) => {
+          console.error("[sofor] HU-GO útvonal a soros megállóig:", err instanceof Error ? err.message : err);
+          return null;
+        });
+        if (ut) {
+          km = Math.round(ut.distanceKm);
+          perc = Math.round(ut.durationMin);
+        }
+      }
+    }
+    elo = { km, perc, all: !(p.sebesseg > 3) };
   }
 
   // A mai napról kiesett, 12 órán belül kézzel lezárt fuvarok (a GPS lap a

@@ -7,7 +7,7 @@ import {
   elesseg,
   reszletKivagasok,
   STABIL_ELTERES,
-  becsultUtKm,
+  legvonalKm,
   fogyasztasKep,
   kepMinoseg,
   kepkockaElteres,
@@ -23,12 +23,10 @@ const eq = (nev: string, kapott: unknown, vart: unknown) => {
 };
 const igaz = (nev: string, f: boolean) => eq(nev, f, true);
 
-// --- km: Tata → Tompaládony légvonalban ~117 km, közúton (M1/M85) ~150
+// --- légvonal (csak a „megállóban áll” döntéshez)
 const tata = { lat: 47.6526, lon: 18.3186 };
-const tompa = { lat: 47.2378, lon: 16.8953 };
-const km = becsultUtKm(tata, tompa);
-igaz(`Tata→Tompaládony becsült km 135–160 között (${km})`, km >= 135 && km <= 160);
-eq("ugyanott: 0 km", becsultUtKm(tata, { lat: tata.lat + 0.001, lon: tata.lon }), 0);
+igaz("200 m-en belül a megállóban", legvonalKm(tata, { lat: tata.lat + 0.0015, lon: tata.lon }) < 0.5);
+igaz("Tata–Tompaládony messze", legvonalKm(tata, { lat: 47.2378, lon: 16.8953 }) > 100);
 
 // --- papír
 eq("saját fuvar papírja", papirNeve(true), "aláírt szállítólevél");

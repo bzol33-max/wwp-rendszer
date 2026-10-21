@@ -501,7 +501,7 @@ function MaKepernyo({
             <span className="mt-1.5 max-w-full truncate rounded-full bg-[var(--sa-card)] px-3.5 py-1.5 text-[15px] font-bold">
               {[
                 elo?.km != null ? megalloIdo(aktiv, maNap) : null,
-                elo?.erkezes ? `érkezel kb. ${ido(elo.erkezes)}` : null,
+                elo?.perc ? `${elo.perc >= 60 ? `${Math.floor(elo.perc / 60)} ó ${elo.perc % 60} p` : `${elo.perc} p`} út` : null,
                 aktiv.ceg,
               ]
                 .filter(Boolean)

@@ -10,21 +10,13 @@
 //  - a fotózás minőség-ellenőrzése (élesség, világosság, egész lap) és a
 //    kamera „stabil a kép” figyelése szürkeárnyalatos kis képkockákon.
 
-/** Légvonal → közúti km. A magyar úthálózaton a valós út jellemzően 1,2–1,3-szoros. */
-export const UT_SZORZO = 1.25;
-
+/** Légvonal km — csak annak eldöntésére, hogy a kocsi a megállóban áll-e (< 0,5 km); távolságnak a HU-GO útvonal számít. */
 export function legvonalKm(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
   const r = (x: number) => (x * Math.PI) / 180;
   const dLat = r(b.lat - a.lat);
   const dLon = r(b.lon - a.lon);
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(dLon / 2) ** 2;
   return 2 * 6371 * Math.asin(Math.sqrt(h));
-}
-
-/** Becsült közúti km egész számra; 1 km alatt 0 (a kocsi gyakorlatilag ott van). */
-export function becsultUtKm(a: { lat: number; lon: number }, b: { lat: number; lon: number }): number {
-  const km = legvonalKm(a, b) * UT_SZORZO;
-  return km < 1 ? 0 : Math.round(km);
 }
 
 /**
