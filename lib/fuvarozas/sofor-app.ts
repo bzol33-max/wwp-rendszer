@@ -56,8 +56,8 @@ const PAPIR_VAR_NAPOK = 14;
 const PAPIR_VAR_NAPOK_SAJAT = 3;
 const KESZ_DARAB = 10;
 
+/** A dolgozó kocsija — a hívó exportált függvény ELŐTTE ellenőrzi a jogot (requireSajatVagyModulJog). */
 async function sajatJarmu(employeeId: string): Promise<{ jarmu: SajatJarmu; lista: SajatJarmu[] } | null> {
-  await requireSajatVagyModulJog({ employeeId, sajatModule: "fuvarozas_sajat", modul: "fuvarozas", kind: "view" });
   const emp = await query<{ name: string }>(`select name from alkalmazottak where id = $1`, [employeeId]);
   if (!emp[0]?.name) return null;
   const lista = await getJarmuvek();
@@ -127,16 +127,19 @@ async function lezartFuvarok(
 
 /** A kocsi lezárt, de még papír-fotó nélküli fuvarjai az utolsó 14 napból, a legfrissebb elöl. */
 export async function getSoforPapirVaro(employeeId: string): Promise<SoforLezartTetel[]> {
+  await requireSajatVagyModulJog({ employeeId, sajatModule: "fuvarozas_sajat", modul: "fuvarozas", kind: "view" });
   return lezartFuvarok(employeeId, "papir_var", 30);
 }
 
 /** A kocsi utolsó 10 lezárt fuvarja, papír-állapottal. */
 export async function getSoforKesz(employeeId: string): Promise<SoforLezartTetel[]> {
+  await requireSajatVagyModulJog({ employeeId, sajatModule: "fuvarozas_sajat", modul: "fuvarozas", kind: "view" });
   return lezartFuvarok(employeeId, "kesz", KESZ_DARAB);
 }
 
 /** A kocsi átlagfogyasztása a CAN-adatból: ma, 7 nap (az előzővel összevetve), 14 nap, napi oszlopok. */
 export async function getSoforFogyasztas(employeeId: string): Promise<SoforFogyasztas | null> {
+  await requireSajatVagyModulJog({ employeeId, sajatModule: "fuvarozas_sajat", modul: "fuvarozas", kind: "view" });
   const sj = await sajatJarmu(employeeId);
   if (!sj?.jarmu.id) return null;
   const ma = budapestNapISO();
