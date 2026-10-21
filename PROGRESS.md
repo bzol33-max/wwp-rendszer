@@ -1,5 +1,27 @@
 # PROGRESS
 
+## 2026-10-21 — Sofőr app: a 9-es (gyorsgombos) terv a sofőrök /erkezes nézetében
+
+Terv: „Sofőr-app újratervezés” vászon, 6. kör (Budaházi Zoltán: „9-est vidd tovább, átlagfogyasztást láthatják”,
+„heted: megbízások legyenek, amikre ha kattint látja a részleteket”, „fotózás … tökéletes legyen”, „építsd be”).
+- Sofőr szerepkörnél az /erkezes kezdőlapja maga a sofőr app (`components/erkezes/sofor-app/`): **Ma** (soros cél,
+  becsült km a kocsi GPS-pozíciójától, 4 kerek gomb: Megérkeztem → Lepakoltam/Felpakoltam, Navi, Papír, Hívás),
+  átlagfogyasztás-csík, teendők; **Megbízások** (Előttem: ma + 14 nap kártyákon, Kész: utolsó 10) → **részletek**
+  (megállók címmel, idővel, kóddal, Navi + hívás megállónként, PDF, Gond van); **Profil** változatlan.
+- **Papír vár** napokon át (`lib/fuvarozas/sofor-app.ts`): lezárt, fotó nélküli fuvarok — bér 14, saját 3 nap;
+  a sofőr lerakás után továbbmegy, pihenőkor fotóz. „Nem kaptam” saját fuvarnál marad (localStorage, mint eddig).
+- **Fotózás 4 lépés** (`fotozas.tsx`): élő kamera (getUserMedia) lap-kerettel, stabil + éles + egész lap ≈1 mp →
+  magától fotóz; vaku, Galéria, tartalék: a telefon kamera-appja. Jó lett? (élesség teljes felbontású részleten,
+  fény, egész lap) → Beküldés → Kész / következő. **Offline sor** (`papir-sor.ts`, IndexedDB): térerő nélkül a
+  telefonon vár, induláskor / hálózat visszatérésekor / percenként feltölti. Vágás + kiegyenesítés a szerveren (mint eddig).
+- **Átlagfogyasztás** (CAN, `jarmu_can_nap`): 7 nap az előzőhöz, ma, 14 nap, napi oszlopok — csak liter/km.
+- `getSoforNap` új `elo` mezője (km, ETA, áll-e); `PullToRefresh` opcionális `onRefresh` (kliens-adatos nézethez).
+- Színséma: saját (kék-világos, `tema.ts`) — szándékos kivétel a MOBIL_THEME alól (lásd AGENTS.md).
+- Pénz, raklapcsere, tachó nincs. A régi `sofor-fuvar-nap.tsx` megmaradt (nem sofőr, de fuvarozas_sajat jogú fióknak).
+- **Teszt:** teszt-sofor-app 33/0 (km, fogyasztás, dátum, élesség 12 MP-es szintetikus szállítólevélen), teljes
+  `npm run teszt`, tsc, eslint, next build; böngészős előnézet (Playwright, hamis kamerával: auto-fotó, offline sor);
+  éles adat: Gergő/Micó papír vár, kész, fogyasztás, élő km.
+
 ## 2026-10-21 — Ma: metróvonalas kocsikártya, aktuális + következő megbízás, fogyasztás
 
 Terv: a „Ma oldal — 4 kocsi” vászon V11-es terve (Budaházi Zoltán: „09 vidd tovább, látnom kell az aktuális és

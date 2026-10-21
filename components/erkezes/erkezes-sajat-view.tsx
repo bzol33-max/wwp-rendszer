@@ -69,6 +69,7 @@ import {
 } from "@/lib/dolgozok/actions";
 import { HU_MONTHS, ft } from "@/lib/dolgozok/shared";
 import { SoforFuvarNap } from "@/components/erkezes/sofor-fuvar-nap";
+import { SoforApp } from "@/components/erkezes/sofor-app/sofor-app";
 
 type Screen = "home" | "jelenlet" | "feladatok" | "keszlet" | "profil" | "fuvarok";
 type ModulePermission = { view: boolean; edit: boolean };
@@ -1013,6 +1014,18 @@ export function ErkezesSajatView({
         employeeName={employeeName}
         canEdit={keszletPermission.edit}
         onBack={() => setScreen("home")}
+      />
+    );
+  } else if (sofor && fuvarozasPermission.view && screen !== "profil") {
+    // Sofőr fiók: a kezdőlap maga a sofőr app (Ma / Megbízások / Profil) —
+    // Budaházi Zoltán 2026-10-21-i döntése, a 6. tervkör „9-es” terve. A
+    // Profil a meglévő képernyő marad, onnan a vissza ide hoz.
+    tartalom = (
+      <SoforApp
+        employeeId={employeeId}
+        employeeName={employeeName}
+        elolegSav={<ElolegSav />}
+        onProfil={() => setScreen("profil")}
       />
     );
   } else if (screen === "fuvarok" && fuvarozasPermission.view) {

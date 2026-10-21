@@ -35,3 +35,8 @@ antracitot, Budaházi Szabina Óceánturkizt lát), ezt a MOBIL_THEME nem írja
 felül. A `PullToRefresh`-t viszont ez is megkapta (2026-09-10,
 `app/attekintes/layout.tsx`), az `indicatorClassName` prop-pal a pörgő ikon
 az adott felhasználó `--at-muted` színét használja, nem a `--mob-muted`-et.
+
+A **sofőr app** (`/erkezes` sofőr szerepkörrel, `components/erkezes/sofor-app/`)
+szintén kivétel: Budaházi Zoltán 2026-10-21-én a kék-világos „9-es” tervet
+választotta (`components/erkezes/sofor-app/tema.ts`, `--sa-*` változók), a
+`PullToRefresh` itt is megvan (`onRefresh`-sel, mert kliens-oldalon tölt).

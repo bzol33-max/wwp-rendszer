@@ -17,11 +17,17 @@ export function PullToRefresh({
   children,
   className,
   indicatorClassName = "text-[var(--mob-muted)]",
+  onRefresh,
 }: {
   children: ReactNode;
   className?: string;
   /** A pörgő ikon színe — más --xx-muted tokent használó nézeten (pl. Áttekintés) felülírható. */
   indicatorClassName?: string;
+  /**
+   * Ha a nézet az adatait kliensen, szerver-akcióval tölti (pl. a sofőr app),
+   * a router.refresh() nem frissítené őket — ilyenkor ez fut le helyette.
+   */
+  onRefresh?: () => Promise<void>;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -45,7 +51,10 @@ export function PullToRefresh({
     if (startY.current === null) return;
     startY.current = null;
     if (pull >= PULL_THRESHOLD) {
-      startTransition(() => router.refresh());
+      startTransition(async () => {
+        if (onRefresh) await onRefresh().catch(() => undefined);
+        else router.refresh();
+      });
     }
     setPull(0);
   }
