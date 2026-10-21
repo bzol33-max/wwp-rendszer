@@ -128,7 +128,11 @@ async function geo(cim: string): Promise<Pont | null> {
   const telepules = varosNev(cim);
   const reszek = cim.split(",").map((r) => r.trim()).filter(Boolean);
   const tisztitott = [reszek[0], ...reszek.slice(1).filter((r) => /\d/.test(r))].join(", ");
-  const jeloltek = [...new Set([cim, tisztitott, telepules].filter((c) => c && c.trim().length >= 2))];
+  // Ha a település nem az első részben áll („Florasca Tőzegüzem, Osli”, #330,
+  // 2026-10-21), a többi, településnévnek látszó rész is jelölt (1–2 szó, szám
+  // és cégjelölés nélkül).
+  const telepulesSzeru = reszek.slice(1).filter((r) => !/\d/.test(r) && r.split(/\s+/).length <= 2 && !/(kft|zrt|bt|telep|üzem|uzem|raktár|raktar|áruház|aruhaz|kft\.)/i.test(r));
+  const jeloltek = [...new Set([cim, tisztitott, telepules, ...telepulesSzeru].filter((c) => c && c.trim().length >= 2))];
   for (const c of jeloltek) {
     const p = await geo1(c);
     if (p) return p;

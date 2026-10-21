@@ -3939,3 +3939,9 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 - Ok: (1) a partner-kitöltés nem használta a megbízáson MÁR kiolvasott `postazasi_cim` / `fizetesi_hatarido_nap` mezőt; (2) a partner-irat kiolvasó csak a fájlnévvel rendelkező dokumentum-sort nézte — a #330 dokumentum-sora `fajlnev = null`; (3) a Word-irat fejlécét itt sem olvasta.
 - Javítás: `partner-kitoltes(-alap).ts` — forrás a partner bérmegbízásainak mezője is (ha nem mondanak ellent; PDF-javaslat > megbízás-mező > számla); `partner-javaslat.ts` — fájlnév nélküli dokumentum és a megbízás `drive_file_id`-ja is, Word-fejléc. Óránként magától fut (modell-szinkron kör, a partner bekötése után); a fülön a gomb „Frissítés most”.
 - Teszt: `teszt-partner-kitoltes.ts` 28/0, teljes `npm run teszt`, tsc, eslint, build.
+
+## 2026-10-21 (3) — #330 felrakó helye ismeretlen a Hét nézetben
+- Tünet: „1 fuvar helye nem ismert … PÁNTYA (Florasca Tőzegüzem → Debrecen)”.
+- Ok: a kézi javításkor (06:23) a felrakó „Florasca Tőzegüzem, Osli” lett; a geokód-tartalék a települést az első részből vette („Florasca Tőzegüzem”), az „Osli”-t sosem próbálta.
+- Javítás: a #330 felrakója „9354 Osli, 035/6 hrsz. (Florasca tőzegüzem)” (a Florasca Kft. osli telephelye, kormányhivatali építési engedély szerint); `tervezes-het.ts` `geo`: a további, településnévnek látszó címrészek is jelöltek.
+- Teszt: élőben a figyelmeztetés eltűnt; tsc, eslint, teljes `npm run teszt`.
