@@ -19,7 +19,8 @@ import { query } from "@/lib/db";
 import { requireSajatVagyModulJog } from "@/lib/auth/require-permission";
 import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
 import { findJarmuForEmployee, jarmuMatch } from "@/lib/fuvarozas/sofor-jarmu";
-import { bontsMegallokra, varosNev } from "@/lib/fuvarozas/varos";
+import { bontsMegallokra } from "@/lib/fuvarozas/varos";
+import { megalloTelepules } from "@/lib/fuvarozas2/varos-pont-tar";
 import { budapestNapISO } from "@/lib/fuvarozas/idozona";
 import { canNapok } from "@/lib/jarmu-telemetria/repo";
 import { fogyasztasKep, type SoforFogyasztasKep } from "@/lib/fuvarozas/sofor-app-alap";
@@ -45,8 +46,14 @@ export type SoforFogyasztas = {
   kep: SoforFogyasztasKep;
 };
 
-/** A papírra váró fuvarokat ennyi napig tartjuk a listán. */
+/**
+ * A papírra váró fuvarokat ennyi napig tartjuk a listán. Bérfuvarnál 14 nap
+ * (a fuvarlevél nélkül nem számlázunk), saját fuvarnál csak 3: a
+ * szállítólevelet sokszor papíron adják le, és Gergőnél (2026-10-21) 8 régi
+ * saját fuvar állt volna a listán, ami a valóban sürgős papírt elnyomná.
+ */
 const PAPIR_VAR_NAPOK = 14;
+const PAPIR_VAR_NAPOK_SAJAT = 3;
 const KESZ_DARAB = 10;
 
 async function sajatJarmu(employeeId: string): Promise<{ jarmu: SajatJarmu; lista: SajatJarmu[] } | null> {
@@ -76,8 +83,8 @@ function tetelbe(s: LezartSor): SoforLezartTetel {
   return {
     fuvarId: s.id,
     megrendelo: s.megrendelo,
-    honnan: s.felrako ? varosNev(bontsMegallokra(s.felrako)[0] ?? s.felrako) : null,
-    hova: s.lerako ? varosNev(bontsMegallokra(s.lerako).at(-1) ?? s.lerako) : null,
+    honnan: s.felrako ? megalloTelepules(bontsMegallokra(s.felrako)[0] ?? s.felrako) : null,
+    hova: s.lerako ? megalloTelepules(bontsMegallokra(s.lerako).at(-1) ?? s.lerako) : null,
     nap: s.nap,
     lezarvaAt: s.teljesitve_at ? new Date(s.teljesitve_at).toISOString() : null,
     // tipus='ber' = "Saját fuvar" a felületen (fordított oszlopnév, lásd sofor.ts SoforFuvarBlokk.sajatFuvar).
@@ -104,11 +111,13 @@ async function lezartFuvarok(
         and (
           $2 = 'kesz'
           or (coalesce(f.szamla_szam, '') = ''
+              -- tipus='ber' = saját fuvar (fordított oszlopnév)
+              and (f.tipus is distinct from 'ber' or f.teljesitve_at > now() - make_interval(days => $3))
               and not exists (select 1 from fuvar_dokumentumok d where d.fuvar_id = f.id and d.tipus = 'fuvarlevel'))
         )
       order by f.teljesitve_at desc
       limit 400`,
-    [feltetel === "kesz" ? 60 : PAPIR_VAR_NAPOK, feltetel]
+    [feltetel === "kesz" ? 60 : PAPIR_VAR_NAPOK, feltetel, PAPIR_VAR_NAPOK_SAJAT]
   );
   return sorok
     .filter((s) => (sj.jarmu.id != null && s.jarmu_id === sj.jarmu.id) || jarmuMatch(sj.jarmu, s, sj.lista))

@@ -494,7 +494,7 @@ function MaKepernyo({
               {aktiv.tipus === "lerako" ? "Lerakás" : "Felrakás"}: {aktiv.varos}
             </span>
             {elo?.km != null ? (
-              <span className="text-[72px] font-extrabold leading-[1.05] tracking-[-0.04em]">{elo.km} km</span>
+              <span className="text-[72px] font-extrabold leading-[1.05] tracking-[-0.04em]">{elo.km <= 1 ? "Ott vagy" : `${elo.km} km`}</span>
             ) : (
               <span className="text-[64px] font-extrabold leading-[1.05] tracking-[-0.04em]">{aktiv.ido ?? ido(aktiv.idopont)}</span>
             )}
