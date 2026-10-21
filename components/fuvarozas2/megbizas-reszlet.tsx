@@ -101,7 +101,7 @@ export function MegbizasReszlet({
             </CardTitle>
           </CardHeader>
           <CardContent className={egyOszlop ? "grid gap-y-2 text-sm" : "grid gap-x-6 gap-y-2 text-sm sm:grid-cols-2"}>
-            <div><span className="text-muted-foreground">Kocsi:</span> {sor.jarmu_cimke ?? "kocsi nélkül"}{sor.sofor ? ` · ${sor.sofor}` : ""}</div>
+            <div><span className="text-muted-foreground">Kocsi:</span> {sor.jarmu_cimke ?? "kocsi nélkül"}{sor.sofor && !(sor.jarmu_cimke ?? "").replace(/\s/g, "").toUpperCase().includes(sor.sofor.split("/")[0].replace(/\s/g, "").toUpperCase()) ? ` · ${sor.sofor}` : ""}</div>
             <div><span className="text-muted-foreground">Díj:</span> {sor.jelleg === "ber" ? formatFt(sor.fuvardij, sor.fuvardij_penznem) : "saját fuvar"}
               {sor.jelleg === "sajat" ? (
                 <span className="text-muted-foreground">

@@ -225,17 +225,24 @@ async function fajlSzovege(
     return { szoveg: await excelSzovege(buffer), pdfBuffer: null };
   }
 
+  // Word: a FEJLÉC is kell (2026-10-21, PÁNTYA #330: a megbízó cégneve csak a
+  // Word-fejlécben állt, a törzsszövegben csak az aláíró „Pántya Gáborné” —
+  // a modell őt vette megbízónak). A fej- és lábléc a szöveg elejére kerül.
+  const { default: WordExtractor } = await import("word-extractor");
+  const wordDoc = await new WordExtractor().extract(buffer).catch(() => null);
+  const fejlec = wordDoc ? [wordDoc.getHeaders({ includeFooters: false }), wordDoc.getFooters()].map((t) => t.trim()).filter(Boolean).join("\n") : "";
+  const fejjel = (torzs: string) => (fejlec ? `=== AZ IRAT FEJLÉCE (LEVÉLPAPÍR) ===\n${fejlec}\n=== AZ IRAT SZÖVEGE ===\n${torzs}` : torzs);
+
   // Régi bináris Word (.doc) — a mammoth csak .docx-et olvas.
   if (file.mimeType === "application/msword") {
-    const { default: WordExtractor } = await import("word-extractor");
-    const doc = await new WordExtractor().extract(buffer);
-    return { szoveg: doc.getBody(), pdfBuffer: null };
+    if (!wordDoc) throw new Error("A .doc irat nem olvasható.");
+    return { szoveg: fejjel(wordDoc.getBody()), pdfBuffer: null };
   }
 
   // .docx
   const mammoth = await import("mammoth");
   const parsed = await mammoth.extractRawText({ buffer });
-  return { szoveg: parsed.value, pdfBuffer: null };
+  return { szoveg: fejjel(parsed.value), pdfBuffer: null };
 }
 
 /** Egy Drive-fájl bájtjai (a partner-adat kiolvasáshoz, lib/fuvarozas2/partner-javaslat.ts). */
@@ -334,7 +341,10 @@ HÁROM DOLOG, AMIT EZEK A SABLONOK RENDRE ELRONTANAK — figyelj rájuk:
    megrendelő: ők a rakodás helyszínei — a "Felrakóhely: … (Valami Kft.)"
    zárójeles cége a rakodóhely üzemeltetője, NEM a megbízó. A megbízó az a
    cég, amelyik az iratot kiadta: a fejlécben/levélpapíron álló név, az
-   e-mail-cím domainje, az "Ügyintéző" munkáltatója.
+   e-mail-cím domainje, az "Ügyintéző" munkáltatója. Ha a szöveg elején
+   "=== AZ IRAT FEJLÉCE (LEVÉLPAPÍR) ===" rész van, az ott álló cég a
+   megbízó. A megrendelő CÉG — soha ne az aláíró / üdvözlő személy nevét
+   add vissza (pl. "Üdvözlettel: Kiss Jánosné" NEM megrendelő).
 
 3. A FUVARDÍJ NEM KÖTBÉR. A dokumentumokban sok más pénzösszeg is szerepel:
    kötbér, meghiúsulási kötbér, állásdíj (pl. 210 EUR/nap), késedelmi díj
@@ -716,8 +726,16 @@ async function ujFajlokFeldolgozasa(
       // lerakó bekerül a lerako mezőbe — de csak ha a lerakót nem a partner
       // determinisztikus olvasója adta, mert az megbízhatóbb a modellnél.
       const soforAdatok = soforAdatokKivonatbol(llm, nyersSzoveg, elemek);
-      const lerakoMezo = (determinisztikus.lerako ? null : osszesLerakoCime(soforAdatok)) ?? kivont.lerako!;
-      const felrakoMezo = (determinisztikus.felrako ? null : osszesFelrakoCime(soforAdatok)) ?? kivont.felrako;
+      // Egy fel-/lerakónál, ha a modell a „felrako”/„lerako” mezőbe csak a
+      // rakodóhely NEVÉT tette (szám nélkül), a megálló teljes címét vesszük
+      // (#330: „Kurucz kertészeti Áruház” → „4030 Debrecen, Olajfa u. 1.”).
+      const egyetlenCim = (tipus: "felrako" | "lerako", mezo: string | null | undefined) => {
+        if (/\d/.test(mezo ?? "")) return null;
+        const m = soforAdatok.megallok.filter((x) => x.tipus === tipus);
+        return m.length === 1 && m[0].cim && /\d/.test(m[0].cim) ? m[0].cim : null;
+      };
+      const lerakoMezo = (determinisztikus.lerako ? null : osszesLerakoCime(soforAdatok) ?? egyetlenCim("lerako", kivont.lerako)) ?? kivont.lerako!;
+      const felrakoMezo = (determinisztikus.felrako ? null : osszesFelrakoCime(soforAdatok) ?? egyetlenCim("felrako", kivont.felrako)) ?? kivont.felrako;
 
       // A lerakás napja: "meg van adva (akár aznap)" vs. "nincs a megbízáson".
       // Az utóbbit eddig csendben aznapinak vettük (Endo-Star #300/#301,

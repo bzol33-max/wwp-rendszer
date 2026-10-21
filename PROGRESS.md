@@ -3926,3 +3926,10 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 - Tervezés hét, Elvinni való sor: a legjobb nap cellájában ★ kártya („Gergő · Dunakeszi után · +40 km”) és „Ide” gomb (`kocsihozAdom` — egy kattintással kocsin, a sofőr látja). Csillag csak „útba esőnél” (≤ 80 km, `UTBA_ESO_KM`), piros határidőnél kerülővel is. Számítás párhuzamosan, 6 mp-es korláttal.
 - Teszt: Postgres-teszt adatbázison ideiglenes elvinni fuvarral (Záhony → Szakoly, 10.20–10.24): Micó szabad napjai +109 km, Gergő +137 km, JANI kimarad; első futás 3,9 s, második 0,3 s (geokód-gyorsítótár). Tesztek, tsc, eslint, build OK.
 - Javítás (2026-10-19 este): a Ma oldalon Gergő holnapja továbbra is id-sorrendben állt — a „Dunakeszi, Solinwest Telep, Tőzegtavi út 9.” címből a `varosNev` nem vágta ki a települést, ezért a pont hiányzott és a régi szabály futott. `varos-pont-tar.ts` `megalloTelepules`: ilyenkor az első vessző előtti rész; a tár kulcsa és a lekérdezés is ezt használja. A teszt most az éles címmel fut (324 → 329 → 325).
+
+## 2026-10-21 — Word-megbízás: a fejlécben álló megbízó (PÁNTYA #330)
+- Tünet: #330 megbízója „Pántya Gáborné” (az aláíró), a megállóknál csak „Osli Tőzegüzem” / „Kurucz kertészeti Áruház” cím nélkül, a kocsi kétszer („AOPU-427/AOTY-474 · AOPU-427/AOTY-474”).
+- Ok: a .docx-ből a mammoth csak a törzsszöveget adja — a „PÁNTYA Teherfuvarozó és Szolgáltató Kft.” a Word-fejlécben állt, a modell nem látta; egy-egy rakodóhelynél a modell a `felrako`/`lerako` mezőbe a nevet tette, a megálló címét nem; a részlet a rendszámot sofőrként is kiírta.
+- Javítás (`lib/fuvarozas/drive-sync-core.ts`): .doc/.docx fej- és lábléce (word-extractor) „=== AZ IRAT FEJLÉCE ===” blokként a szöveg elejére; a prompt: a fejléc cége a megbízó, aláíró személy soha. Egy fel-/lerakónál, ha a mező szám nélküli név, a megálló teljes címe kerül be. Részlet: a sofőr-mező nem ismétli a rendszámot.
+- A #330-at a javítás után az „Újraolvasás az iratból” gombbal kell újraolvasni.
+- Teszt: word-extractor próba-.docx fejléccel, teljes `npm run teszt`, tsc, eslint, build.
