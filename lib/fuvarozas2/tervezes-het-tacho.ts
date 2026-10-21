@@ -57,3 +57,27 @@ export function tachoKijelzes(t: TachoAllapot | null | undefined, most: Date, ma
 
   return { hetiSor, chip, reszletek, soforSor, korPerc };
 }
+
+/**
+ * A Ma kocsi-kártya FŐ vezetési sora a tachóból (2026-10-21, Budaházi Zoltán:
+ * „ha már van konkrét tachó adat, miért nem látom”). A GPS-becslés csak akkor
+ * marad, ha nincs tachó. A 15 percnél régebbi adat is látszik (álló kocsinál a
+ * GPS sem küld jelet, a tachó utolsó állapota ilyenkor is igaz), de az idejével:
+ * „· adat 11:38”. 12 óránál régebbi → null.
+ */
+export function maTachoSor(t: TachoAllapot | null | undefined, most: Date): { sor: string; friss: boolean; korPerc: number } | null {
+  if (!t?.adatIdopont) return null;
+  const korPerc = Math.max(0, Math.round((most.getTime() - t.adatIdopont.getTime()) / 60000));
+  if (korPerc > 12 * 60) return null;
+  if (t.allapot == null && t.napiVezetesHatraPerc == null && t.hetiVezetesPerc == null && t.hetiVezetesHatraPerc == null) return null;
+  const ora = (d: Date) => new Intl.DateTimeFormat("hu-HU", { timeZone: "Europe/Budapest", hour: "2-digit", minute: "2-digit" }).format(d);
+  const friss = tachoFriss(t, most);
+  const sor = [
+    t.allapot ? `${t.allapot}${t.allapotKezdete ? ` ${ora(t.allapotKezdete)} óta` : ""}` : null,
+    t.napiVezetesHatraPerc != null ? `ma még ${percSzoveg(t.napiVezetesHatraPerc)} vezethet` : null,
+    t.muszakHatraPerc != null ? `műszak még ${percSzoveg(t.muszakHatraPerc)}` : null,
+    t.hetiVezetesPerc != null ? `hét ${Math.round(t.hetiVezetesPerc / 60)}/56 ó` : t.hetiVezetesHatraPerc != null ? `hét ${percSzoveg(t.hetiVezetesHatraPerc)} hátra` : null,
+    friss ? null : `adat ${ora(t.adatIdopont)}`,
+  ].filter(nemNull).join(" · ");
+  return { sor, friss, korPerc };
+}

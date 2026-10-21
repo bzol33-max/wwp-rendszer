@@ -268,13 +268,18 @@ export function KocsiOszlop({ k, holnapCimke, piheno, sav }: { k: MaKocsi; holna
           ) : null}
           {k.vezetesSor || k.hetiSor || k.napiKm != null ? (
             <div className="rounded-xl bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-              {k.hetiForras === "tacho" && k.hetiSor && csik == null ? (
+              {k.vezetesForras === "tacho" && k.vezetesSor ? (
+                <div className="font-medium text-foreground" title={k.tacho?.reszletek}>
+                  {k.vezetesSor} <ForrasJel forras="teny" cimke="tachó" title={`Ecofleet tachográf-adat${k.tacho?.reszletek ? `\n${k.tacho.reszletek}` : ""}`} />
+                </div>
+              ) : null}
+              {k.vezetesForras !== "tacho" && k.hetiForras === "tacho" && k.hetiSor && csik == null ? (
                 <div className="font-medium text-foreground" title={k.tacho?.reszletek}>
                   {k.hetiSor} <ForrasJel forras="teny" cimke="tachó" title={`Ecofleet tachográf-adat\n${k.tacho?.reszletek ?? ""}`} />
                 </div>
               ) : null}
               {(() => {
-                const gpsSorok = [k.vezetesSor, [k.hetiForras === "tacho" ? null : k.hetiSor].filter(Boolean).join(" · ")].filter(Boolean);
+                const gpsSorok = [k.vezetesForras === "tacho" ? null : k.vezetesSor, [k.hetiForras === "tacho" || k.vezetesForras === "tacho" ? null : k.hetiSor].filter(Boolean).join(" · ")].filter(Boolean);
                 return gpsSorok.map((sor, i) => (
                   <div key={i}>
                     {sor}

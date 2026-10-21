@@ -44,7 +44,7 @@ import { menetSorrendek } from "@/lib/menet/repo";
 import { alkalmazMenetSorrendet } from "@/lib/menet/menet-alap";
 import { hetNapjai, jarmuNev, kocsiHelykitolto, type HetFuvar } from "@/lib/fuvarozas2/ma-het";
 import { legutobbiTacho } from "@/lib/jarmu-telemetria/repo";
-import { tachoKijelzes } from "@/lib/fuvarozas2/tervezes-het-tacho";
+import { maTachoSor, tachoKijelzes } from "@/lib/fuvarozas2/tervezes-het-tacho";
 import { getKihasznaltsag, type KihasznaltsagAdat } from "@/lib/fuvarozas2/kihasznaltsag";
 import { getBejegyzesSorok, getTavolletek } from "@/lib/fuvarozas2/bejegyzesek";
 import { bejegyzesekNapokra, tavolletekNapokra, type Bejegyzes, type TavolletTipus } from "@/lib/fuvarozas2/bejegyzes-alap";
@@ -106,6 +106,8 @@ export type MaKocsi = {
   allapot: MaKocsiAllapot | null;
   /** „Vezetés ma 3:20 · szünet 1:10 múlva · szolgálat 05:41 óta" — becslés a GPS-ből. */
   vezetesSor: string | null;
+  /** A vezetesSor forrása: "tacho" (Ecofleet tcoData) vagy "gps" (útjelentésből becsült). */
+  vezetesForras?: "tacho" | "gps" | null;
   /** „Tachó: ma még 2 ó 40 p · hét 31/56 ó" (friss tachó), különben „Hét: 31 / 56 óra" GPS-becslés. */
   hetiSor: string | null;
   /** A hetiSor forrása: "tacho" (Ecofleet tcoData, friss) vagy "gps" (útjelentésből becsült). */
@@ -790,6 +792,10 @@ export async function getMaVaszon(): Promise<MaVaszon> {
     }
     const hp = hetiPerc.get(j.kod);
     const tk = tachoKijelzes(tachok.get(j.kod)?.tacho, most);
+    // Ha van tachó (friss, vagy álló kocsinál a korával), a fő sor abból jön — a GPS-becslés csak tartalék.
+    const tm = maTachoSor(tachok.get(j.kod)?.tacho, most);
+    const vezetesForras: "tacho" | "gps" | null = tm ? "tacho" : vezetesSor ? "gps" : null;
+    if (tm) vezetesSor = `Tachó: ${tm.sor}`;
     const etaSor = elo?.eloEta && !elo.eloEta.bizonytalan ? `ETA ${elo.eloEta.cel}: ${ORA(elo.eloEta.erkezes)}` : null;
     const pk = papirKocsinkent.find((x) => x.jarmu_id === j.id);
     const papirSorok: { szoveg: string; href: string }[] = [];
@@ -820,6 +826,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
       jelzesek, bejegyzesekMa: bejMa, bejegyzesekHolnap: bejHolnap, tavolletMa: tavMa, tavolletHolnap: tavHolnap,
       allapot: j.ecofleet_object_id ? kocsiAllapot(elo) : helykitolto ? null : { szoveg: "nincs GPS", szin: "amber", hely: null },
       vezetesSor,
+      vezetesForras,
       hetiSor: tk ? tk.hetiSor : hp != null ? `Hét: ${Math.round(hp / 60)} / 56 óra` : null,
       hetiForras: tk ? "tacho" : hp != null ? "gps" : null,
       tacho: tk ? { reszletek: tk.reszletek } : null,
