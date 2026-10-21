@@ -261,6 +261,8 @@ export async function getKetOszlop(szuro: { q?: string }): Promise<{
   sajat: MunkaasztalSor[];
   ma: string;
   kereso: KeresoIndex;
+  /** Keresésnélkül: a lezárt (archív) megbízások, a legújabb elöl — az életút-tábla kész / pénzügyi oszlopaihoz (2026-10-21). */
+  archiv: MunkaasztalSor[];
   /** Keresésnél a találatok száma (a levágás előtt), különben null. */
   talalat: number | null;
 }> {
@@ -283,6 +285,8 @@ export async function getKetOszlop(szuro: { q?: string }): Promise<{
     sajat: rendezett.filter((s) => s.jelleg === "sajat").slice(0, 300),
     ma,
     kereso: keresoIndex(osszes, jarmuvek, soforKod),
+    // Keresésnél az archív találatok már a két listában vannak.
+    archiv: q ? [] : osszes.filter((s) => s.szakasz === "archiv").slice(0, 800),
     talalat: q ? sorok.length : null,
   };
 }

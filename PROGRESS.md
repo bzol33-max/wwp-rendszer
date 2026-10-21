@@ -1,5 +1,19 @@
 # PROGRESS
 
+## 2026-10-21 — Megbízások: életút-tábla (1-es terv a 10 TMS összevetéséből)
+
+Terv: „Megbízások oldal – 5 terv” vászon, 1-es (Truckpedia-minta; a Qargo · AscendTMS · Truckpedia a top 3 az
+5 szakértői nézőpont pontozásán). Budaházi Zoltán: „1”.
+- Asztali Megbízások két sávja: **Bérfuvarok** 7 oszlop (Beérkezett · Úton · Lerakva·számlázásra ·
+  Számlázva·postára · **Kiküldve · fizetésre vár** · **Lejárt** (a legrégebben lejárt elöl) · **Fizetve · <hónap>**);
+  **Saját fuvarok** külön sávban (Saját fuvar rögzítő + elvinni valók · Előkészítés · Tervezett/úton ·
+  **Lerakva · fotóra vár** (60 napon belül) · **Kész · utolsó 7 nap**). A kész fuvar így nem csak kereséssel látszik.
+- Oszloponként legfeljebb 8 kártya; a többi a „+ további N” linkkel a pénz-szűrős listában (a tábla alatt).
+- Adat: `getKetOszlop` új `archiv` mezője (keresés nélkül), `getPenzLista` új `fizetes` mezője (számlás bérfuvar:
+  kiküldve / lejárt / fizetve a `szamla` táblából). Besorolás: `lib/fuvarozas2/eletut-tabla.ts`.
+- Mobil (lg alatt) nézet változatlan. Mind/Bér/Saját kapcsoló: a nem kért sáv elrejtve.
+- **Teszt:** új teszt-eletut-tabla 15/0, teszt-penz-lista, teszt-munkaasztal, teljes `npm run teszt`, tsc, eslint, next build.
+
 ## 2026-10-21 — Sofőr app: a 9-es (gyorsgombos) terv a sofőrök /erkezes nézetében
 
 Terv: „Sofőr-app újratervezés” vászon, 6. kör (Budaházi Zoltán: „9-est vidd tovább, átlagfogyasztást láthatják”,

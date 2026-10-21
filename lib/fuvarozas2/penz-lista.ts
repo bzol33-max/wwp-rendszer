@@ -10,6 +10,7 @@ import { SOR_SQL } from "@/lib/megbizasok/repo";
 import { varosNev } from "@/lib/fuvarozas/varos";
 import { megbizoMegjelenites } from "@/lib/fuvarozas/fuvar-constants";
 import type { MegbizasSor } from "@/lib/fuvarozas2/megbizasok";
+import type { Fizetes } from "@/lib/fuvarozas2/eletut-tabla";
 import { osszesit, penzAllapot, penzJel, szurobeEsik, type PenzAllapot, type PenzBemenet, type PenzJel, type PenzOsszesito, type PenzSzuro } from "@/lib/fuvarozas2/penz-lista-alap";
 
 export type PenzSor = PenzBemenet & {
@@ -26,6 +27,8 @@ export type PenzLista = {
   idk: string[];
   /** Megbízásonként a legsürgősebb pénz-jel (bér és saját is) — a munkafolyamat-kártyához. */
   jelek: Record<string, PenzJel>;
+  /** Számlás bérfuvaronként a számla állapota — az életút-tábla Kiküldve / Lejárt / Fizetve oszlopaihoz (2026-10-21). */
+  fizetes: Record<string, Fizetes>;
 };
 
 type SzamlaSor = { szamlaszam: string; brutto: string; fizetett_osszeg: string; penznem: string; kiallitas: string; hatarido: string | null; fizetve: boolean; fizetve_nap: string | null };
@@ -79,14 +82,19 @@ export async function getPenzLista(szuro: PenzSzuro, sajatIs: boolean): Promise<
     })
     .filter((s) => s.a.kesz);
   const jelek: Record<string, PenzJel> = {};
+  const fizetes: Record<string, Fizetes> = {};
   for (const s of osszesKesz) {
     const j = penzJel(s.a);
     if (j) jelek[s.id] = j;
+    if (s.jelleg === "ber" && s.szamla) {
+      const all = s.a.fizetve ? "fizetve" : s.a.lejart ? "lejart" : s.a.kikuldve ? "kikuldve" : null;
+      if (all) fizetes[s.id] = { all, fizetveNap: s.szamla.fizetveNap, lejartNap: s.a.lejartNap };
+    }
   }
   const mind = osszesKesz.filter((s) => sajatIs || s.jelleg === "ber");
 
   const szurt = mind.filter((s) => szurobeEsik(s.a, szuro));
   // Teendőnél a legrégebbi elöl (az a legsürgősebb), máshol a legújabb.
   if (szuro === "teendo" || szuro === "lejart") szurt.sort((x, y) => x.nap.localeCompare(y.nap));
-  return { ma, sorok: szurt.slice(0, 300), osszes: szurt.length, ossz: osszesit(mind, ma), folyamatbanDb, idk: szurt.map((s) => s.id), jelek };
+  return { ma, sorok: szurt.slice(0, 300), osszes: szurt.length, ossz: osszesit(mind, ma), folyamatbanDb, idk: szurt.map((s) => s.id), jelek, fizetes };
 }

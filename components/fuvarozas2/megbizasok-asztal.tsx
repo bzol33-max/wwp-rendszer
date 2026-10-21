@@ -21,7 +21,8 @@ import {
 import type { MunkaasztalSor } from "@/lib/fuvarozas2/megbizasok";
 import type { PenzJel } from "@/lib/fuvarozas2/penz-lista-alap";
 import type { ElvinniHet, ElvinniHetCella } from "@/lib/megbizasok/elvinni-het";
-import { beerkElokeszitesOszlopba, elvinniSurgosseg } from "@/lib/megbizasok/elvinni-szabalyok";
+import { elvinniSurgosseg } from "@/lib/megbizasok/elvinni-szabalyok";
+import { eletutOszlopok, type Fizetes } from "@/lib/fuvarozas2/eletut-tabla";
 
 const NAPNEV = ["Vas", "Hét", "Kedd", "Sze", "Csüt", "Pén", "Szo"];
 
@@ -39,6 +40,11 @@ type Oszlop = {
   kulcs: string;
   cim: string;
   sorok: MunkaasztalSor[];
+  /** Az oszlopba eső összes fuvar (ha több, mint ami látszik). */
+  osszes?: number;
+  /** A „további” link pénz-szűrője (a teljes lista a tábla alatt). */
+  penzSzuro?: string;
+  ures?: string;
 };
 
 function napRovid(nap: string) {
@@ -275,11 +281,11 @@ function SzakaszOszlop({
     <section className="min-w-0 rounded-2xl border border-foreground/10 bg-card" aria-label={oszlop.cim}>
       <header className="border-b border-foreground/10 px-3 py-3">
         <h2 className="text-sm font-semibold">
-          {oszlop.cim} <span className="text-xs font-normal text-muted-foreground">{oszlop.sorok.length}</span>
+          {oszlop.cim} <span className="text-xs font-normal text-muted-foreground">{oszlop.osszes ?? oszlop.sorok.length}</span>
         </h2>
       </header>
       {oszlop.sorok.length === 0 ? (
-        <p className="px-3 py-6 text-center text-sm text-muted-foreground">Nincs fuvar ebben a szakaszban.</p>
+        <p className="px-3 py-6 text-center text-sm text-muted-foreground">{oszlop.ures ?? "Nincs fuvar ebben a szakaszban."}</p>
       ) : (
         <ul className="space-y-2 p-2">
           {oszlop.sorok.map((sor) => (
@@ -303,6 +309,15 @@ function SzakaszOszlop({
           ))}
         </ul>
       )}
+      {oszlop.osszes != null && oszlop.osszes > oszlop.sorok.length ? (
+        oszlop.penzSzuro ? (
+          <Link href={munkaasztalLink(szuro, { penz: oszlop.penzSzuro, reszlet: undefined, elvinni: undefined })} className="block px-3 pb-3 text-xs font-semibold text-[var(--f2-blue)] hover:underline">
+            + további {oszlop.osszes - oszlop.sorok.length} · mind a listában
+          </Link>
+        ) : (
+          <p className="px-3 pb-3 text-xs text-muted-foreground">+ további {oszlop.osszes - oszlop.sorok.length} (kereséssel)</p>
+        )
+      ) : null}
     </section>
   );
 }
@@ -465,6 +480,8 @@ export function MegbizasokAsztal({
   penzIdk = null,
   penzJelek = {},
   szamlazhat = false,
+  archiv = [],
+  fizetes = {},
 }: {
   sorok: MunkaasztalSor[];
   nyitottak: MunkaasztalSor[];
@@ -479,6 +496,10 @@ export function MegbizasokAsztal({
   penzJelek?: Record<string, PenzJel>;
   /** Elszámolási jog (a Számlázási segéd írhat-e). */
   szamlazhat?: boolean;
+  /** A lezárt megbízások (életút-tábla, 2026-10-21). */
+  archiv?: MunkaasztalSor[];
+  /** Archív bérfuvarok számla-állapota (Kiküldve / Lejárt / Fizetve). */
+  fizetes?: Record<string, Fizetes>;
 }) {
   const router = useRouter();
   const [confirm, confirmDialog] = useConfirm();
@@ -487,12 +508,10 @@ export function MegbizasokAsztal({
   const elvinniSorok = nyitottak.filter((sor) => !szuro.jelleg || sor.jelleg === szuro.jelleg);
   const nyitva = szuro.elvinni ? elvinniSorok.find((sor) => sor.id === szuro.elvinni) : null;
 
-  const oszlopok: Oszlop[] = [
-    { kulcs: "beerkezett", cim: "Beérkezett / Előkészítés", sorok: szurtSorok.filter((sor) => beerkElokeszitesOszlopba(sor)) },
-    { kulcs: "folyamatban", cim: "Folyamatban", sorok: szurtSorok.filter((sor) => sor.szakasz === "folyamatban") },
-    { kulcs: "szamlazasra", cim: "Számlázásra", sorok: szurtSorok.filter((sor) => sor.szakasz === "szamlazasra") },
-    { kulcs: "postara", cim: "Postára", sorok: szurtSorok.filter((sor) => sor.szakasz === "postara") },
-  ];
+  // Életút-tábla (2026-10-21, 1-es terv): a bérfuvar a fizetésig a táblán
+  // marad, a saját fuvar külön sávban (lib/fuvarozas2/eletut-tabla.ts).
+  const szurtArchiv = archiv.filter((sor) => !penzSzurt || penzSzurt.has(sor.id));
+  const savok = eletutOszlopok({ sorok: szurtSorok, archiv: szurtArchiv, fizetes, ma });
 
   const bezarPanel = () => router.replace(munkaasztalLink(szuro, { elvinni: undefined, het: undefined }));
 
@@ -561,6 +580,22 @@ export function MegbizasokAsztal({
         </div>
       </div>
 
+      {szuro.jelleg !== "sajat" ? (
+        <div className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold">Bérfuvarok <span className="font-normal text-muted-foreground">· beérkezéstől a pénzig — a kész fuvar a fizetésig a táblán marad</span></h2>
+          <div className="overflow-x-auto pb-1">
+            <div className="grid min-w-[1180px] grid-cols-7 gap-3">
+              {savok.ber.map((oszlop) => (
+                <SzakaszOszlop key={oszlop.kulcs} oszlop={oszlop} ma={ma} szuro={szuro} jelek={penzJelek} szamlazhat={szamlazhat} />
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {szuro.jelleg !== "ber" ? (
+      <div className="flex flex-col gap-2">
+      <h2 className="text-sm font-semibold">Saját fuvarok <span className="font-normal text-muted-foreground">· nem számlázandó, a megbízó mindig a Well-Worn Pallet</span></h2>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 min-[1360px]:grid-cols-5!">
         <section className="min-w-0 rounded-2xl border border-foreground/10 bg-card" aria-label="Saját fuvar">
           <header className="border-b border-foreground/10 px-3 py-3">
@@ -582,10 +617,12 @@ export function MegbizasokAsztal({
             ))}
           </ul>
         </section>
-        {oszlopok.map((oszlop) => (
+        {savok.sajat.map((oszlop) => (
           <SzakaszOszlop key={oszlop.kulcs} oszlop={oszlop} ma={ma} szuro={szuro} jelek={penzJelek} szamlazhat={szamlazhat} />
         ))}
       </div>
+      </div>
+      ) : null}
 
       {szuro.q ? (
         <details className="rounded-2xl border border-foreground/10 bg-card">
