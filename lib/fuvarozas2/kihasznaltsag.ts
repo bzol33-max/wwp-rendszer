@@ -115,6 +115,7 @@ function isoHetSzam(nap: string): number {
 type FuvarSor = {
   id: string; jarmu_id: string; jelleg: "ber" | "sajat"; felrakas_nap: string; lerakas_nap: string;
   fuvardij: number | null; penznem: string; felrako: string | null; lerako: string | null; rakott_km: number | null;
+  teny_tol: string | null; teny_ig: string | null;
 };
 
 /** Az adat kiszámítása (gyorsítótár és időkorlát nélkül). Dobhat — a hívó kezeli. */
@@ -135,7 +136,11 @@ export async function szamoldKihasznaltsagot(ma: string): Promise<KihasznaltsagA
          to_char(m.datum, 'YYYY-MM-DD') as felrakas_nap,
          to_char(greatest(coalesce(m.lerakas_datum, m.datum), m.datum), 'YYYY-MM-DD') as lerakas_nap,
          m.fuvardij::float8 as fuvardij, coalesce(m.fuvardij_penznem, 'Ft') as penznem,
-         m.felrako, m.lerako, m.rakott_km::float8 as rakott_km
+         m.felrako, m.lerako, m.rakott_km::float8 as rakott_km,
+         (select to_char(min(coalesce(g.gps_erkezes, g.sofor_megerkezett_at, g.sofor_kesz_at, g.gps_tavozas)) at time zone 'Europe/Budapest', 'YYYY-MM-DD HH24:MI:SS')
+            from fuvar_megallok g where g.megbizas_id = m.id) as teny_tol,
+         (select to_char(max(coalesce(g.gps_tavozas, g.sofor_kesz_at, g.gps_erkezes, g.sofor_megerkezett_at)) at time zone 'Europe/Budapest', 'YYYY-MM-DD HH24:MI:SS')
+            from fuvar_megallok g where g.megbizas_id = m.id and g.tipus = 'lerako') as teny_ig
        from fuvar_megbizasok m
        where m.torolt_at is null and m.jarmu_id is not null
          and m.allapot is not null and m.allapot <> 'ellenorzesre_var'
@@ -192,6 +197,7 @@ export async function szamoldKihasznaltsagot(ma: string): Promise<KihasznaltsagA
       sajat.map((f) => ({
         id: f.id, jelleg: f.jelleg, felrakasNap: f.felrakas_nap, lerakasNap: f.lerakas_nap,
         felrako: f.felrako, lerako: f.lerako, rakottKm: f.rakott_km != null ? Number(f.rakott_km) : null,
+        tenyTol: f.teny_tol, tenyIg: f.teny_ig,
       })),
       kezdoHely,
       tav

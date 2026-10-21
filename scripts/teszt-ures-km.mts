@@ -17,7 +17,7 @@ const TAV: Record<string, number> = {
   "Szakoly|Tata": 310, "Tata|Tata": 0, "Tata|Tompaládony": 125, "Tompaládony|Sárvár": 15,
   "Sárvár|Székesfehérvár": 140, "Székesfehérvár|Debrecen": 300,
   "Nyíregyháza|Téglás": 30, "Nyíregyháza|Szigetszentmiklós": 250, "Budapest|Szigetszentmiklós": 20,
-  "Téglás|Budapest": 220, "Szigetszentmiklós|Tompaládony": 220, "Tompaládony|Téglás": 400,
+  "Téglás|Budapest": 220, "Budapest|Tata": 60, "Budapest|Sárvár": 200, "Szigetszentmiklós|Tompaládony": 220, "Tompaládony|Téglás": 400,
 };
 const varos = (c: string) => ["Szakoly", "Tata", "Tompaládony", "Sárvár", "Székesfehérvár", "Debrecen", "Nyíregyháza", "Téglás", "Szigetszentmiklós", "Budapest"].find((v) => c.includes(v)) ?? c;
 const tav: Tavolsag = async (a, b) => (varos(a) === varos(b) ? 0 : TAV[`${varos(a)}|${varos(b)}`] ?? null);
@@ -43,6 +43,17 @@ const nap29 = (id: string, fel: string, le: string): LancFuvar => ({ id, jelleg:
 const l29 = await lancKm([nap29("275", "Szigetszentmiklós", "Tompaládony"), nap29("284", "Téglás", "Budapest X"), ], "Nyíregyháza", tav);
 eq("egy napon belül a legközelebbi felrakó jön", l29.map((x) => x.id), ["284", "275"]);
 eq("így az üres km 30 + 20, nem 250 + 400", l29.reduce((a, x) => a + x.ures, 0), 50);
+
+// 2026-10-21: a keddre (10-20) írt saját fuvar szerdán ment — a tény szerinti
+// nap és idő dönt, nem a terv (Krajnik → Tata–Tompaládony → Sárvár).
+{
+  const krajnik: LancFuvar = { id: "329", jelleg: "ber", felrakasNap: "2026-10-20", lerakasNap: "2026-10-21", felrako: "Nyíregyháza", lerako: "Budapest", rakottKm: 250, tenyTol: "2026-10-20 08:00:00", tenyIg: "2026-10-20 18:00:00" };
+  const sajat: LancFuvar = { id: "s", jelleg: "sajat", felrakasNap: "2026-10-20", lerakasNap: "2026-10-20", felrako: "2890 Tata", lerako: "9662 Tompaládony", rakottKm: 125, tenyTol: "2026-10-21 06:03:00", tenyIg: "2026-10-21 09:43:00" };
+  const kov: LancFuvar = { id: "330", jelleg: "ber", felrakasNap: "2026-10-21", lerakasNap: "2026-10-21", felrako: "Sárvár", lerako: "Debrecen", rakottKm: 400, tenyTol: "2026-10-21 10:36:00" };
+  const t = await lancKm([kov, sajat, krajnik], "Nyíregyháza", tav);
+  eq("tény szerinti sorrend", t.map((x) => x.id), ["329", "s", "330"]);
+  eq("a saját fuvar a tényleges napjára kerül", t.find((x) => x.id === "s")?.nap, "2026-10-21");
+}
 
 console.log(`üres km: ${ok} ok, ${bad} hiba`);
 if (bad) process.exit(1);

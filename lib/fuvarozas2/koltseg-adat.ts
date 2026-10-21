@@ -267,6 +267,7 @@ export async function koltsegIdoszakra(kezdet: string, veg: string): Promise<Ido
       sajatMegb.map((m) => ({
         id: m.id, jelleg: m.jelleg, felrakasNap: m.felrakas_nap, lerakasNap: m.nap,
         felrako: m.felrako, lerako: m.lerako, rakottKm: m.rakott_km != null ? Number(m.rakott_km) : null,
+        tenyTol: m.teny_tol, tenyIg: m.teny_ig,
       })),
       elozoLerako.find((e) => e.jarmu_id === j.id)?.lerako ?? (await getJarmuIndulasiTelephely(j.kod)).cim,
       tav

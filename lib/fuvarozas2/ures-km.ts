@@ -23,6 +23,13 @@ export type LancFuvar = {
   lerako: string | null;
   /** A HU-GO-s rakott km (csak bérfuvarnál számoljuk), ha van. */
   rakottKm: number | null;
+  /**
+   * A TÉNYLEGES első érkezés / utolsó távozás a megállókon (GPS / sofőr),
+   * „YYYY-MM-DD HH:MI(:SS)”, ha már megtörtént. A nap és a sorrend ebből jön,
+   * nem a tervből (2026-10-21: a keddre írt, szerdán teljesített saját fuvar).
+   */
+  tenyTol?: string | null;
+  tenyIg?: string | null;
 };
 
 export type LancKm = { id: string; jelleg: "ber" | "sajat"; nap: string; rakott: number; ures: number };
@@ -44,13 +51,26 @@ export async function lancKm(fuvarok: LancFuvar[], kezdoHely: string | null, tav
   // fölösleges, ~250 és ~400 km-es üres szakaszt adott). Egyezésnél a
   // napi-sorrend dönt.
   await melegitVarosPontokat(fuvarok.flatMap((f) => [f.felrako, f.lerako]));
-  const rendezett = napiSorrend(fuvarok, (x) => x);
+  const tenyNapos = fuvarok.map((f) => {
+    const fel = f.tenyTol ? f.tenyTol.slice(0, 10) : f.felrakasNap;
+    let le = f.tenyIg ? f.tenyIg.slice(0, 10) : f.lerakasNap;
+    if (fel && le && le < fel) le = fel;
+    return f.tenyTol || f.tenyIg ? { ...f, felrakasNap: fel, lerakasNap: le } : f;
+  });
+  const rendezett = napiSorrend(tenyNapos, (x) => x);
   const ki: LancKm[] = [];
   let hol = kezdoHely;
   while (rendezett.length > 0) {
     const nap = rendezett[0].lerakasNap ?? rendezett[0].felrakasNap ?? "";
     let legjobb = 0;
-    if (hol) {
+    // Ami már megtörtént, az a tényleges sorrendjében jön (a legkorábbi elöl).
+    let tenyes = -1;
+    for (let i = 0; i < rendezett.length && (rendezett[i].lerakasNap ?? rendezett[i].felrakasNap ?? "") === nap; i++) {
+      const t = rendezett[i].tenyTol;
+      if (t && (tenyes < 0 || t < rendezett[tenyes].tenyTol!)) tenyes = i;
+    }
+    if (tenyes >= 0) legjobb = tenyes;
+    else if (hol) {
       let legjobbKm = Infinity;
       for (let i = 0; i < rendezett.length && (rendezett[i].lerakasNap ?? rendezett[i].felrakasNap ?? "") === nap; i++) {
         const elso = megallok(rendezett[i]).fel[0];
