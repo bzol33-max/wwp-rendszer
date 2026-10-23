@@ -12,8 +12,6 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
-    // A sofőr Android-héja (Capacitor): generált natív projekt, saját csomaggal.
-    "android-app/**",
     // Külső, minifikált könyvtár (OpenCV.js).
     "public/vendor/**",
   ]),

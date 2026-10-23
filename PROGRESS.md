@@ -1,5 +1,17 @@
 # PROGRESS
 
+## 2026-10-23 (késő este) — Sofőr papír-fotó: külön app helyett a meglévő rendszerben, iPhone-on is
+
+Budaházi Zoltán: „abban oldd meg, amit használunk, plusz az új sofőröknek lehet iPhone-ja lesz”.
+- A WWP Sofőr Android app (`android-app/`, `nativ-szkenner.ts`, APK-letöltés, `@capacitor/core`) **kivéve**.
+- A menet mindenkinek ugyanaz, böngészőben (iPhone + Android): telefon saját kamerája → automatikus
+  lapkivágás + színes fehérítés → Beküldöm; igazítás csak opció. A bírálati javítások (memória, sebesség,
+  sor, UX) megmaradtak.
+- iPhone-biztosítás: a fotó dekódolása tartalékkal (`dekodol`: createImageBitmap opcióval → nélküle →
+  `<img>`), a rejtett kamera-mező `sr-only` (nem `display:none`).
+- Az OpenCV (lapkereső) a sofőr app megnyitása után 4 mp-cel előtöltődik — az első fotónál nem kell várni.
+- **Teszt:** tsc, eslint, teljes `npm run teszt`, next build.
+
 ## 2026-10-23 (éjjel) — Sofőr app: Google szkenner (WWP Sofőr Android app) + automatikus böngészős szkennelés
 
 Budaházi Zoltán: „nem jó … végezz kutatást, hogy a hasonló appok hogy oldják meg, az 5 legjobb megoldásból

@@ -60,15 +60,6 @@ const nextConfig: NextConfig = {
         headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
       },
       {
-        // A WWP Sofőr Android app (android-app/) — Androidon így telepíthetőként töltődik le.
-        source: "/letoltes/:file*.apk",
-        headers: [
-          { key: "Content-Type", value: "application/vnd.android.package-archive" },
-          { key: "Content-Disposition", value: "attachment; filename=wwp-sofor.apk" },
-          { key: "Cache-Control", value: "no-cache" },
-        ],
-      },
-      {
         source: "/:path*",
         headers: [
           { key: "Strict-Transport-Security", value: "max-age=31536000" },

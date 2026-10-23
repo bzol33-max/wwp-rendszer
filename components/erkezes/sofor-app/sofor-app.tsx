@@ -65,12 +65,8 @@ import { kontaktNev, kontaktTelefon } from "@/lib/fuvarozas/sofor-adatok";
 import { SOFOR_THEME } from "./tema";
 import { Fotozas, type FotoFuvar } from "./fotozas";
 import { sorAllapot, sorFeldolgoz } from "./papir-sor";
-import { androidBongeszo, figyelVisszaGomb, nativSzkenneles, szkennerModulElokeszit, vanNativSzkenner } from "./nativ-szkenner";
+import { betoltOpenCv } from "./lap-kereso";
 
-/** Jelzés, hogy szkennelés folyik — ha az app újraindul és ez még itt van, a telefon közben kilőtte (az eredmény elveszett). */
-const FUGGO_SZKEN = "sofor-fuggo-szkenneles";
-/** A WWP Sofőr Android app (android-app/) — a böngészős sofőrnek felkínáljuk. */
-const APP_LETOLTES = "/letoltes/wwp-sofor.apk";
 
 // ------------------------------------------------------------- segédek
 
@@ -970,8 +966,6 @@ export function SoforApp({
   const [ful, setFul] = useState<"ma" | "megbizasok">("ma");
   const [mbFul, setMbFul] = useState<"elottem" | "kesz">("elottem");
   const [reteg, setReteg] = useState<Reteg | null>(null);
-  // A WWP Sofőr appban fut-e (Google szkenner), ill. Androidos böngészőben — csak kliensen derül ki.
-  const [kornyezet, setKornyezet] = useState<{ nativ: boolean; android: boolean }>({ nativ: false, android: false });
   const kamera = useRef<HTMLInputElement>(null);
   const kameraFuvarok = useRef<FotoFuvar[]>([]);
 
@@ -1029,45 +1023,12 @@ export function SoforApp({
     };
   }, [load, employeeId]);
 
-  // Környezet + a Google szkenner-modul előre letöltése (első indításkor ~ pár MB),
-  // és a szkennelés közben kilőtt app eredményének visszavétele.
+  // A lapkereső (OpenCV, ≈10 MB, 1 évig a telefonon marad) előtöltése, amikor a telefon ráér —
+  // így az első papír fotózásakor már nem kell rá várni (iPhone-on és Androidon is).
   useEffect(() => {
-    const nativ = vanNativSzkenner();
-    void Promise.resolve().then(() => setKornyezet({ nativ, android: androidBongeszo() }));
-    if (!nativ) return;
-    let jelzes: string | number | undefined;
-    void szkennerModulElokeszit((szoveg) => {
-      jelzes = toast.loading(szoveg, { id: jelzes });
-    }).then((ok) => {
-      if (jelzes === undefined) return;
-      if (ok) toast.success("A szkenner kész.", { id: jelzes });
-      else toast.error("A szkenner letöltése nem sikerült. Wi-Fin próbáld újra.", { id: jelzes });
-    });
-    // A Google szkenner pluginja a kilőtt app eredményét nem adja vissza (Capacitor-bírálat) — legalább szólunk.
-    try {
-      if (localStorage.getItem(FUGGO_SZKEN)) {
-        localStorage.removeItem(FUGGO_SZKEN);
-        toast.warning("A legutóbbi papír szkennelése megszakadt. Szkenneld be újra.");
-      }
-    } catch {
-      // privát mód
-    }
+    const t = setTimeout(() => void betoltOpenCv().catch(() => undefined), 4000);
+    return () => clearTimeout(t);
   }, []);
-
-  // Android „Vissza” az appban: a nyitott réteg bezárása, a kezdőlapon az app háttérbe.
-  const retegRef = useRef<Reteg | null>(null);
-  useEffect(() => {
-    retegRef.current = reteg;
-  }, [reteg]);
-  useEffect(
-    () =>
-      figyelVisszaGomb(() => {
-        if (!retegRef.current) return false;
-        setReteg(null);
-        return true;
-      }),
-    []
-  );
 
   // A telefonon várakozó papír-oldalak: induláskor, a hálózat visszatérésekor
   // és percenként újrapróbáljuk (papir-sor.ts).
@@ -1211,36 +1172,12 @@ export function SoforApp({
     nemKaptamIr(uj);
   };
 
-  // A „Fotó”: a WWP Sofőr appban a Google szkenner (az oldalak készen jönnek
-  // vissza, a Fotozas azonnal beküldi), böngészőben a telefon saját kamerája —
-  // ezt ugyanabban a koppintásban kell megnyitni, különben a böngésző tiltja.
+  // A „Fotó”: a telefon saját kamerája (iPhone-on és Androidon is a legélesebb
+  // kép) — ugyanabban a koppintásban kell megnyitni, különben a böngésző tiltja.
   const fotoNyit = (lista: PapirTetel[]) => {
     if (!lista.length) return;
-    const fuvarok = lista.map(fotoFuvar);
-    if (kornyezet.nativ) {
-      void nativSzkennelesFuvarra(fuvarok).then(
-        (fajlok) => fajlok.length && setReteg({ t: "foto", fuvarok, fajlok }),
-        () => toast.error("A szkenner nem indult el. Ha most telepítetted az appot, Wi-Fin nyisd meg újra, és várd meg: „A szkenner kész”.")
-      );
-      return;
-    }
-    kameraFuvarok.current = fuvarok;
+    kameraFuvarok.current = lista.map(fotoFuvar);
     kamera.current?.click();
-  };
-  /** A szkennelés idejére jelzés (az első fuvar az aktuális) — ha a telefon közben kilövi az appot, induláskor szólunk. */
-  const nativSzkennelesFuvarra = (fuvarok: FotoFuvar[]) => {
-    try {
-      localStorage.setItem(FUGGO_SZKEN, JSON.stringify(fuvarok.slice(0, 1)));
-    } catch {
-      // privát mód
-    }
-    return nativSzkenneles().finally(() => {
-      try {
-        localStorage.removeItem(FUGGO_SZKEN);
-      } catch {
-        // privát mód
-      }
-    });
   };
   const kamerabol = (e: React.ChangeEvent<HTMLInputElement>) => {
     const fajlok = Array.from(e.target.files ?? []);
@@ -1275,8 +1212,6 @@ export function SoforApp({
         <Fotozas
           fuvarok={reteg.fuvarok}
           elsoFajlok={reteg.fajlok}
-          nativ={kornyezet.nativ}
-          onNativSzkenneles={nativSzkennelesFuvarra}
           onBezar={() => setReteg(null)}
           onNemKaptam={papirNemKaptam}
           onBekuldve={(fuvarId, e) => {
@@ -1384,16 +1319,7 @@ export function SoforApp({
 
   return (
     <Keret onVissza={reteg ? vissza : undefined} onFrissit={frissit} alul={reteg ? null : menu}>
-      <input ref={kamera} type="file" accept="image/*" capture="environment" className="hidden" onChange={kamerabol} />
-      {kornyezet.android && !kornyezet.nativ && !reteg && ful === "ma" && (
-        <a href={APP_LETOLTES} download className="flex items-center justify-between gap-3 rounded-[18px] bg-[var(--sa-blue-soft)] px-4 py-3 text-[var(--sa-blue)]">
-          <span className="min-w-0">
-            <span className="block font-bold">Töltsd le a WWP Sofőr appot</span>
-            <span className="block text-sm">Az appból sokkal jobb a papír fotója.</span>
-          </span>
-          <span className="shrink-0 rounded-full bg-[var(--sa-blue)] px-3 py-1.5 text-sm font-bold text-white">Letöltés</span>
-        </a>
-      )}
+      <input ref={kamera} type="file" accept="image/*" capture="environment" className="sr-only" tabIndex={-1} aria-hidden onChange={kamerabol} />
       {ful === "megbizasok" && !reteg ? elolegSav : null}
       {tartalom}
       {confirmDialog}

@@ -1,21 +1,14 @@
 "use client";
 
 // A papír lefotózása (sofőr app) — 2026-10-23, kutatás + 5 szakértői bírálat
-// után (Budaházi Zoltán: „végezz kutatást, hogy a hasonló appok hogy oldják
-// meg … az 5 legjobb megoldásból rakd össze a mienket”). Az appban 3 koppintás: Papír → (szkenner) Kész → Kész.
+// után. Budaházi Zoltán: külön app nem kell, a meglévő rendszerben működjön,
+// és iPhone-on is (az új sofőröknek lehet iPhone-ja).
 //
-// KÉT ÚT, ugyanaz a végeredmény (színes, „szkennelt” lap, a telefonos sorba):
-//
-//  1. A WWP Sofőr Android appban (android-app/, Capacitor): a Google ML Kit
-//     dokumentum-szkenner — ugyanaz, mint a Google Drive-ban. Élő lapkeresés,
-//     magától fotóz, kivág, kiegyenesít, fehérít, több oldal; sarkot húzni nem
-//     kell. A beolvasott oldalak AZONNAL a feltöltési sorba mennek, a sofőr
-//     egy nagy zöld visszajelzést lát (UX-bírálat: „Papír → Kész”, 2 koppintás).
-//  2. Sima böngészőben (tartalék): a telefon saját kamerája (a hívó nyitja a
-//     koppintásban) → a lap automatikus megkeresése és kiegyenesítése, ha
-//     biztos (OpenCV, lap-kereso.ts) → színes fehérítés (feherites) → az
-//     oldalak listája, Beküldöm. A sarok-igazítás csak opció (koppintás a
-//     képre), nem kötelező lépés.
+// Menet (iPhone és Android, böngészőben): a telefon SAJÁT kamerája (a hívó
+// nyitja a koppintásban — ez adja a legélesebb, teljes felbontású fotót) → a
+// lap automatikus megkeresése és kiegyenesítése, ha biztos (OpenCV,
+// lap-kereso.ts) → színes fehérítés (feherites, „szkennelt” kinézet) → az
+// oldalak listája, Beküldöm. A sarok-igazítás csak opció (gomb a képen).
 
 import { useEffect, useRef, useState } from "react";
 import { Camera, Check, CloudUpload, Plus, RotateCcw, X } from "lucide-react";
@@ -61,7 +54,39 @@ const KIMENET_MAX_PX = 2400;
 
 const teljesKep = (s: Sarkok) => s.every((p, i) => Math.abs(p.x - TELJES_KEP[i].x) < 0.005 && Math.abs(p.y - TELJES_KEP[i].y) < 0.005);
 
-function rajzol(kep: ImageBitmap, max: number): { c: HTMLCanvasElement; ctx: CanvasRenderingContext2D } | null {
+type Kep = { forras: CanvasImageSource; width: number; height: number; close(): void };
+
+/**
+ * A fotó dekódolása a telefon helyes állása szerint. Régebbi iPhone-on
+ * (Safari) a createImageBitmap opciói vagy maga a függvény hiányozhat — akkor
+ * sima <img>, ami az EXIF-forgatást magától alkalmazza.
+ */
+async function dekodol(b: Blob): Promise<Kep> {
+  if (typeof createImageBitmap === "function") {
+    try {
+      const k = await createImageBitmap(b, { imageOrientation: "from-image" });
+      return { forras: k, width: k.width, height: k.height, close: () => k.close() };
+    } catch {
+      try {
+        const k = await createImageBitmap(b);
+        return { forras: k, width: k.width, height: k.height, close: () => k.close() };
+      } catch {
+        // tovább az <img>-re
+      }
+    }
+  }
+  const u = URL.createObjectURL(b);
+  try {
+    const img = new Image();
+    img.src = u;
+    await img.decode();
+    return { forras: img, width: img.naturalWidth, height: img.naturalHeight, close: () => img.removeAttribute("src") };
+  } finally {
+    URL.revokeObjectURL(u);
+  }
+}
+
+function rajzol(kep: { forras: CanvasImageSource; width: number; height: number }, max: number): { c: HTMLCanvasElement; ctx: CanvasRenderingContext2D } | null {
   const arany = Math.min(1, max / Math.max(kep.width, kep.height));
   const c = document.createElement("canvas");
   c.width = Math.round(kep.width * arany);
@@ -69,13 +94,13 @@ function rajzol(kep: ImageBitmap, max: number): { c: HTMLCanvasElement; ctx: Can
   const ctx = c.getContext("2d", { willReadFrequently: true });
   if (!ctx) return null;
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(kep, 0, 0, c.width, c.height);
+  ctx.drawImage(kep.forras, 0, 0, c.width, c.height);
   return { c, ctx };
 }
 
 async function kepMeret(fajl: Blob): Promise<{ w: number; h: number }> {
   try {
-    const k = await createImageBitmap(fajl, { imageOrientation: "from-image" });
+    const k = await dekodol(fajl);
     const m = { w: k.width, h: k.height };
     k.close();
     return m;
@@ -93,7 +118,7 @@ async function feldolgozBelso(fajl: File, adott: Sarkok | null): Promise<{ kep: 
   const { cv } = await betoltOpenCv();
   // A teljes felbontású dekódolt kép (12–48 MP = 50–190 MB) csak addig él, amíg
   // a ≤ 2400 px-es vászonra rajzoljuk — utána minden ebből dolgozik (bírálat: OOM).
-  const bm = await createImageBitmap(fajl, { imageOrientation: "from-image" });
+  const bm = await dekodol(fajl);
   let r: ReturnType<typeof rajzol>;
   try {
     r = rajzol(bm, KIMENET_MAX_PX);
@@ -104,9 +129,7 @@ async function feldolgozBelso(fajl: File, adott: Sarkok | null): Promise<{ kep: 
   try {
     let sarkok = adott;
     if (!sarkok) {
-      const kicsi = await createImageBitmap(r.c);
-      const kis = rajzol(kicsi, ELEMZES_PX);
-      kicsi.close();
+      const kis = rajzol({ forras: r.c, width: r.c.width, height: r.c.height }, ELEMZES_PX);
       const t = kis ? keressLapot(cv, kis.ctx.getImageData(0, 0, kis.c.width, kis.c.height)) : null;
       if (kis) kis.c.width = 0;
       sarkok = t && sarkokTerulete(t) >= AJANLOTT_MIN_TERULET ? t : TELJES_KEP;
@@ -143,20 +166,14 @@ function feldolgoz(fajl: File, adott: Sarkok | null): Promise<{ kep: Blob; sarko
 export function Fotozas({
   fuvarok,
   elsoFajlok,
-  nativ,
-  onNativSzkenneles,
   onBezar,
   onBekuldve,
   onNemKaptam,
 }: {
   /** A lefotózandó fuvarok sorban — „Mind sorban” esetén több, egyébként egy. */
   fuvarok: FotoFuvar[];
-  /** Az első fuvar oldalai: a natív szkennerből (nativ), vagy a telefon kamerájából. */
+  /** Az első fuvar oldalai a telefon kamerájából (a hívó nyitotta). */
   elsoFajlok: File[];
-  /** A WWP Sofőr appban fut-e (Google szkenner) — ilyenkor az oldalak azonnal beküldődnek. */
-  nativ: boolean;
-  /** Natív módban a szkenner megnyitása; a lista az épp szkennelt és a még hátralévő fuvarok (visszaállításhoz). */
-  onNativSzkenneles: (fuvarok: FotoFuvar[]) => Promise<File[]>;
   onBezar: () => void;
   onBekuldve: (fuvarId: string, e: SorEredmeny & { hibas: number }) => void;
   onNemKaptam: (fuvarId: string) => void;
@@ -168,8 +185,6 @@ export function Fotozas({
   const [kuldes, setKuldes] = useState<{ kesz: number; osszes: number } | null>(null);
   const [eredmeny, setEredmeny] = useState<(SorEredmeny & { hibas: number }) | null>(null);
   const [hiba, setHiba] = useState<string | null>(null);
-  // Natív úton az első oldalak már megvannak — a listaképernyő ne villanjon fel a küldés előtt.
-  const [elokeszit, setElokeszit] = useState(nativ && elsoFajlok.length > 0);
   const kamera = useRef<HTMLInputElement>(null);
   const csere = useRef<string | null>(null);
   const urlek = useRef<string[]>([]);
@@ -210,15 +225,6 @@ export function Fotozas({
     onBekuldve(fuvarId, e);
   }
 
-  /** Natív út: a szkenner oldalai készen jönnek — azonnal a sorba. */
-  async function nativOldalak(fuvarId: string, fajlok: File[]) {
-    const lapok = await Promise.all(fajlok.map((f) => oldalLesz(f, true)));
-    setOldalak(lapok);
-    setElokeszit(false);
-    setNagy(lapok[0]?.id ?? null);
-    await bekuldom(fuvarId, fajlok);
-  }
-
   /** Böngészős út: az oldal azonnal látszik, a kivágás és a fehérítés a háttérben készül. */
   async function bongeszoOldalak(fajlok: File[], helyette: string | null) {
     for (const f of fajlok) {
@@ -250,11 +256,8 @@ export function Fotozas({
   useEffect(() => {
     if (indult.current) return;
     indult.current = true;
-    if (!nativ) void betoltOpenCv().catch(() => undefined);
-    const elso = fuvarok[0];
-    void Promise.resolve().then(() =>
-      !elsoFajlok.length || !elso ? undefined : nativ ? nativOldalak(elso.fuvarId, elsoFajlok) : bongeszoOldalak(elsoFajlok, null)
-    );
+    void betoltOpenCv().catch(() => undefined);
+    void Promise.resolve().then(() => (elsoFajlok.length ? bongeszoOldalak(elsoFajlok, null) : undefined));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -277,23 +280,12 @@ export function Fotozas({
     if (fajlok.length) void bongeszoOldalak(fajlok, helyette);
   };
 
-  async function nativUjra(i: number) {
-    setHiba(null);
-    try {
-      const f = await onNativSzkenneles(fuvarok.slice(i));
-      if (f.length) await nativOldalak(fuvarok[i].fuvarId, f);
-    } catch {
-      setHiba("A szkenner nem indult el. Próbáld újra.");
-    }
-  }
-
   function ujFoto(helyette: string | null) {
-    if (nativ) return void nativUjra(index);
     csere.current = helyette;
     kamera.current?.click();
   }
 
-  async function kovetkezoFuvar() {
+  function kovetkezoFuvar() {
     const kov = fuvarok[index + 1];
     if (!kov) return;
     setIndex((i) => i + 1);
@@ -302,15 +294,11 @@ export function Fotozas({
     setEredmeny(null);
     setHiba(null);
     csere.current = null;
-    if (nativ) {
-      await nativUjra(index + 1);
-    } else {
-      // Ugyanabban a koppintásban nyílik a kamera — különben a böngésző nem engedi.
-      kamera.current?.click();
-    }
+    // Ugyanabban a koppintásban nyílik a kamera — különben a böngésző nem engedi.
+    kamera.current?.click();
   }
 
-  const inputok = <input ref={kamera} type="file" accept="image/*" capture="environment" className="hidden" onChange={kamerabol} />;
+  const inputok = <input ref={kamera} type="file" accept="image/*" capture="environment" className="sr-only" tabIndex={-1} aria-hidden onChange={kamerabol} />;
   const keret = "fixed inset-0 z-50 mx-auto flex max-w-md flex-col gap-4 bg-[var(--sa-bg)] px-[18px] pb-6 pt-5 text-[var(--sa-ink)]";
 
   const igazitando = igazit ? oldalak.find((o) => o.id === igazit) : null;
@@ -331,14 +319,14 @@ export function Fotozas({
   }
 
   // ---- kész (natív úton rögtön a szkennelés után)
-  if (eredmeny || kuldes || elokeszit) {
+  if (eredmeny || kuldes) {
     const hatra = fuvarok.slice(index + 1);
     const varakozik = (eredmeny?.varakozik ?? 0) > 0;
     const elveszett = (eredmeny?.hibas ?? 0) > 0;
     // A szerver figyelmeztetése (pl. a fuvar még nem zárult le) ne bújjon zöld pipa alá (UX-bírálat).
     const figyelj = Boolean(eredmeny?.figyelmeztetes) && !varakozik && !elveszett;
     const sarga = varakozik || elveszett || figyelj;
-    const folyik = Boolean(kuldes) || (elokeszit && !eredmeny);
+    const folyik = Boolean(kuldes);
     return (
       <div style={SOFOR_THEME} className={keret}>
         {inputok}
@@ -390,7 +378,7 @@ export function Fotozas({
                   <span className="block truncate text-sm text-[var(--sa-amber)]">következő: {hatra[0].cim} · {hatra[0].papirNev}</span>
                 </span>
               </div>
-              <button type="button" onClick={() => void kovetkezoFuvar()} className="flex h-[60px] items-center justify-center gap-2.5 rounded-[18px] bg-[var(--sa-blue)] text-lg font-bold text-white">
+              <button type="button" onClick={kovetkezoFuvar} className="flex h-[60px] items-center justify-center gap-2.5 rounded-[18px] bg-[var(--sa-blue)] text-lg font-bold text-white">
                 <Camera className="h-[22px] w-[22px]" />
                 Következő papír
               </button>
@@ -447,8 +435,8 @@ export function Fotozas({
           className="flex flex-1 flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed border-[#C3CAD8] bg-[var(--sa-card)] text-lg font-bold text-[var(--sa-blue)]"
         >
           <Camera className="h-12 w-12" />
-          {nativ ? "Szkenneld be a papírt" : "Fotózd le a papírt"}
-          <span className="text-sm font-semibold text-[var(--sa-muted)]">{nativ ? "Minden oldalt, a végén Kész" : "Minden oldalt külön"}</span>
+          Fotózd le a papírt
+          <span className="text-sm font-semibold text-[var(--sa-muted)]">Minden oldalt külön</span>
         </button>
       )}
 
