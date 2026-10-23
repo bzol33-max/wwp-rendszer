@@ -77,7 +77,7 @@ async function feltoltEgyet(fuvarId: string, blob: Blob, kulcs: string): Promise
   form.append("foto", blob, blob.type === "image/png" ? "fuvarlevel.png" : "fuvarlevel.jpg");
   const v = await fetch("/api/fuvarozas/fuvarlevel-feltoltes", { method: "POST", body: form, credentials: "same-origin" });
   const e = (await v.json().catch(() => null)) as { figyelmeztetes?: string | null; hiba?: string } | null;
-  if (!v.ok) throw new Error(e?.hiba ?? `Feltöltési hiba (${v.status})`);
+  if (!v.ok) throw Object.assign(new Error(e?.hiba ?? `Feltöltési hiba (${v.status})`), { status: v.status });
   return e?.figyelmeztetes ?? null;
 }
 
@@ -115,7 +115,15 @@ export function sorFeldolgoz(haladas?: (kesz: number, osszes: number) => void): 
           await keres(db, "readwrite", (s) => s.delete(t.id));
           sikeres++;
           haladas?.(sikeres, tetelek.length);
-        } catch {
+        } catch (err) {
+          // Amit a szerver végleg elutasít (rossz fuvar, túl nagy / nem kép), az ne torlaszolja el
+          // a sort örökre (bírálat). A 401 (kijelentkezett), 408, 429 és 5xx újrapróbálható.
+          const st = (err as { status?: number }).status ?? 0;
+          if (st >= 400 && st < 500 && ![401, 408, 429].includes(st)) {
+            await keres(db, "readwrite", (s) => s.delete(t.id)).catch(() => undefined);
+            figyelmeztetes = "Egy oldalt a szerver nem fogadott el — fotózd le újra.";
+            continue;
+          }
           await keres(db, "readwrite", (s) => s.put({ ...t, probak: t.probak + 1 })).catch(() => undefined);
           break;
         }
@@ -171,6 +179,10 @@ export async function bekuld(
   } finally {
     db.close();
   }
+  // Ha épp fut egy háttér-kör (percenkénti újrapróba), az a most betett oldalakat nem látja —
+  // megvárjuk, és utána indul egy saját kör. A „vár még” csak EZT a fuvart számolja (UX-bírálat).
+  if (fut) await fut.catch(() => undefined);
   const e = await sorFeldolgoz(haladas);
-  return { ...e, hibas: 0 };
+  const maradt = (await sorAllapot())[fuvarId] ?? 0;
+  return { ...e, varakozik: maradt, hibas: 0 };
 }

@@ -843,7 +843,7 @@ export async function feltoltFuvarlevelFoto(fuvarId: string, form: FormData): Pr
   const kulcsNyers = form.get("kulcs");
   const kulcs = typeof kulcsNyers === "string" && /^[A-Za-z0-9_-]{8,100}$/.test(kulcsNyers) ? kulcsNyers : null;
   if (kulcs) {
-    const [mar] = await query<{ id: string }>(`select id::text from fuvar_dokumentumok where kliens_kulcs = $1`, [kulcs]);
+    const [mar] = await query<{ id: string }>(`select id::text from fuvar_dokumentumok where kliens_kulcs = $1 and fuvar_id = $2`, [kulcs, fuvarId]);
     if (mar) return { dokId: mar.id, figyelmeztetes: null };
   }
   if (fajl.size > FOTO_MAX_BAJT) throw new Error("A kép túl nagy.");

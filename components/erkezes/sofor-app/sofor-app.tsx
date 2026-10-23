@@ -65,9 +65,9 @@ import { kontaktNev, kontaktTelefon } from "@/lib/fuvarozas/sofor-adatok";
 import { SOFOR_THEME } from "./tema";
 import { Fotozas, type FotoFuvar } from "./fotozas";
 import { sorAllapot, sorFeldolgoz } from "./papir-sor";
-import { androidBongeszo, figyelVisszaallitott, nativSzkenneles, szkennerModulElokeszit, vanNativSzkenner } from "./nativ-szkenner";
+import { androidBongeszo, figyelVisszaGomb, nativSzkenneles, szkennerModulElokeszit, vanNativSzkenner } from "./nativ-szkenner";
 
-/** A natív szkenner alatt kilőtt app után ebből tudjuk, melyik fuvar papírja jött vissza. */
+/** Jelzés, hogy szkennelés folyik — ha az app újraindul és ez még itt van, a telefon közben kilőtte (az eredmény elveszett). */
 const FUGGO_SZKEN = "sofor-fuggo-szkenneles";
 /** A WWP Sofőr Android app (android-app/) — a böngészős sofőrnek felkínáljuk. */
 const APP_LETOLTES = "/letoltes/wwp-sofor.apk";
@@ -862,7 +862,7 @@ function PapirKepernyo({
       {fotozhato.length > 1 && (
         <button type="button" onClick={onMind} className="flex h-[60px] items-center justify-center gap-2.5 rounded-[18px] bg-[var(--sa-blue)] text-lg font-bold text-white">
           <Camera className="h-[22px] w-[22px]" />
-          Mind a {fotozhato.length} sorban
+          Mind a {fotozhato.length}, egymás után
         </button>
       )}
     </>
@@ -1043,16 +1043,31 @@ export function SoforApp({
       if (ok) toast.success("A szkenner kész.", { id: jelzes });
       else toast.error("A szkenner letöltése nem sikerült. Wi-Fin próbáld újra.", { id: jelzes });
     });
-    return figyelVisszaallitott((fajlok) => {
-      let fuvarok: FotoFuvar[] = [];
-      try {
-        fuvarok = JSON.parse(localStorage.getItem(FUGGO_SZKEN) ?? "[]") as FotoFuvar[];
-      } catch {
-        fuvarok = [];
+    // A Google szkenner pluginja a kilőtt app eredményét nem adja vissza (Capacitor-bírálat) — legalább szólunk.
+    try {
+      if (localStorage.getItem(FUGGO_SZKEN)) {
+        localStorage.removeItem(FUGGO_SZKEN);
+        toast.warning("A legutóbbi papír szkennelése megszakadt. Szkenneld be újra.");
       }
-      if (fuvarok.length) setReteg({ t: "foto", fuvarok, fajlok });
-    });
+    } catch {
+      // privát mód
+    }
   }, []);
+
+  // Android „Vissza” az appban: a nyitott réteg bezárása, a kezdőlapon az app háttérbe.
+  const retegRef = useRef<Reteg | null>(null);
+  useEffect(() => {
+    retegRef.current = reteg;
+  }, [reteg]);
+  useEffect(
+    () =>
+      figyelVisszaGomb(() => {
+        if (!retegRef.current) return false;
+        setReteg(null);
+        return true;
+      }),
+    []
+  );
 
   // A telefonon várakozó papír-oldalak: induláskor, a hálózat visszatérésekor
   // és percenként újrapróbáljuk (papir-sor.ts).
@@ -1203,19 +1218,29 @@ export function SoforApp({
     if (!lista.length) return;
     const fuvarok = lista.map(fotoFuvar);
     if (kornyezet.nativ) {
-      try {
-        localStorage.setItem(FUGGO_SZKEN, JSON.stringify(fuvarok));
-      } catch {
-        // privát mód — visszaállítás nélkül is megy
-      }
-      void nativSzkenneles().then(
+      void nativSzkennelesFuvarra(fuvarok).then(
         (fajlok) => fajlok.length && setReteg({ t: "foto", fuvarok, fajlok }),
-        () => toast.error("A szkenner nem indult el. Próbáld újra.")
+        () => toast.error("A szkenner nem indult el. Ha most telepítetted az appot, Wi-Fin nyisd meg újra, és várd meg: „A szkenner kész”.")
       );
       return;
     }
     kameraFuvarok.current = fuvarok;
     kamera.current?.click();
+  };
+  /** A szkennelés idejére jelzés (az első fuvar az aktuális) — ha a telefon közben kilövi az appot, induláskor szólunk. */
+  const nativSzkennelesFuvarra = (fuvarok: FotoFuvar[]) => {
+    try {
+      localStorage.setItem(FUGGO_SZKEN, JSON.stringify(fuvarok.slice(0, 1)));
+    } catch {
+      // privát mód
+    }
+    return nativSzkenneles().finally(() => {
+      try {
+        localStorage.removeItem(FUGGO_SZKEN);
+      } catch {
+        // privát mód
+      }
+    });
   };
   const kamerabol = (e: React.ChangeEvent<HTMLInputElement>) => {
     const fajlok = Array.from(e.target.files ?? []);
@@ -1251,7 +1276,7 @@ export function SoforApp({
           fuvarok={reteg.fuvarok}
           elsoFajlok={reteg.fajlok}
           nativ={kornyezet.nativ}
-          onNativSzkenneles={nativSzkenneles}
+          onNativSzkenneles={nativSzkennelesFuvarra}
           onBezar={() => setReteg(null)}
           onNemKaptam={papirNemKaptam}
           onBekuldve={(fuvarId, e) => {

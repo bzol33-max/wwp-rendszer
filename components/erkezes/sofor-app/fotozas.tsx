@@ -2,7 +2,7 @@
 
 // A papír lefotózása (sofőr app) — 2026-10-23, kutatás + 5 szakértői bírálat
 // után (Budaházi Zoltán: „végezz kutatást, hogy a hasonló appok hogy oldják
-// meg … az 5 legjobb megoldásból rakd össze a mienket”).
+// meg … az 5 legjobb megoldásból rakd össze a mienket”). Az appban 3 koppintás: Papír → (szkenner) Kész → Kész.
 //
 // KÉT ÚT, ugyanaz a végeredmény (színes, „szkennelt” lap, a telefonos sorba):
 //
@@ -68,13 +68,14 @@ function rajzol(kep: ImageBitmap, max: number): { c: HTMLCanvasElement; ctx: Can
   c.height = Math.round(kep.height * arany);
   const ctx = c.getContext("2d", { willReadFrequently: true });
   if (!ctx) return null;
+  ctx.imageSmoothingQuality = "high";
   ctx.drawImage(kep, 0, 0, c.width, c.height);
   return { c, ctx };
 }
 
 async function kepMeret(fajl: Blob): Promise<{ w: number; h: number }> {
   try {
-    const k = await createImageBitmap(fajl);
+    const k = await createImageBitmap(fajl, { imageOrientation: "from-image" });
     const m = { w: k.width, h: k.height };
     k.close();
     return m;
@@ -88,33 +89,55 @@ async function kepMeret(fajl: Blob): Promise<{ w: number; h: number }> {
  * biztos, ≥ 40%-os találatot fogad el, különben a teljes kép), majd
  * kiegyenesítés és színes fehérítés. OpenCV nélkül az eredeti megy.
  */
-async function feldolgoz(fajl: File, adott: Sarkok | null): Promise<{ kep: Blob; sarkok: Sarkok }> {
+async function feldolgozBelso(fajl: File, adott: Sarkok | null): Promise<{ kep: Blob; sarkok: Sarkok }> {
+  const { cv } = await betoltOpenCv();
+  // A teljes felbontású dekódolt kép (12–48 MP = 50–190 MB) csak addig él, amíg
+  // a ≤ 2400 px-es vászonra rajzoljuk — utána minden ebből dolgozik (bírálat: OOM).
+  const bm = await createImageBitmap(fajl, { imageOrientation: "from-image" });
+  let r: ReturnType<typeof rajzol>;
   try {
-    const [{ cv }, bm] = await Promise.all([betoltOpenCv(), createImageBitmap(fajl)]);
-    try {
-      let sarkok = adott;
-      if (!sarkok) {
-        const kis = rajzol(bm, ELEMZES_PX);
-        const t = kis ? keressLapot(cv, kis.ctx.getImageData(0, 0, kis.c.width, kis.c.height)) : null;
-        sarkok = t && sarkokTerulete(t) >= AJANLOTT_MIN_TERULET ? t : TELJES_KEP;
-      }
-      const r = rajzol(bm, KIMENET_MAX_PX);
-      if (!r) return { kep: fajl, sarkok };
-      let kep = r.ctx.getImageData(0, 0, r.c.width, r.c.height);
-      if (!teljesKep(sarkok)) kep = egyenesitsd(cv, kep, sarkok);
-      kep = feherites(cv, kep);
-      const ki = document.createElement("canvas");
-      ki.width = kep.width;
-      ki.height = kep.height;
-      ki.getContext("2d")?.putImageData(kep, 0, 0);
-      const b = await new Promise<Blob | null>((ok) => ki.toBlob(ok, "image/jpeg", 0.85));
-      return { kep: b ?? fajl, sarkok };
-    } finally {
-      bm.close();
-    }
-  } catch {
-    return { kep: fajl, sarkok: adott ?? TELJES_KEP };
+    r = rajzol(bm, KIMENET_MAX_PX);
+  } finally {
+    bm.close();
   }
+  if (!r) return { kep: fajl, sarkok: adott ?? TELJES_KEP };
+  try {
+    let sarkok = adott;
+    if (!sarkok) {
+      const kicsi = await createImageBitmap(r.c);
+      const kis = rajzol(kicsi, ELEMZES_PX);
+      kicsi.close();
+      const t = kis ? keressLapot(cv, kis.ctx.getImageData(0, 0, kis.c.width, kis.c.height)) : null;
+      if (kis) kis.c.width = 0;
+      sarkok = t && sarkokTerulete(t) >= AJANLOTT_MIN_TERULET ? t : TELJES_KEP;
+    }
+    let kep = r.ctx.getImageData(0, 0, r.c.width, r.c.height);
+    if (!teljesKep(sarkok)) kep = egyenesitsd(cv, kep, sarkok);
+    kep = feherites(cv, kep);
+    const ki = document.createElement("canvas");
+    ki.width = kep.width;
+    ki.height = kep.height;
+    ki.getContext("2d")?.putImageData(kep, 0, 0);
+    const b = await new Promise<Blob | null>((ok) => ki.toBlob(ok, "image/jpeg", 0.9));
+    ki.width = 0;
+    return { kep: b ?? fajl, sarkok };
+  } finally {
+    r.c.width = 0;
+  }
+}
+
+/** Egyszerre egy oldal készül (memória), és legfeljebb 25 mp — utána az eredeti fotó megy (bírálat). */
+let feldolgozoSor: Promise<unknown> = Promise.resolve();
+function feldolgoz(fajl: File, adott: Sarkok | null): Promise<{ kep: Blob; sarkok: Sarkok }> {
+  const tartalek = { kep: fajl as Blob, sarkok: adott ?? TELJES_KEP };
+  const munka = feldolgozoSor.then(() =>
+    Promise.race([
+      feldolgozBelso(fajl, adott).catch(() => tartalek),
+      new Promise<typeof tartalek>((ok) => setTimeout(() => ok(tartalek), 25_000)),
+    ])
+  );
+  feldolgozoSor = munka.catch(() => undefined);
+  return munka;
 }
 
 export function Fotozas({
@@ -132,8 +155,8 @@ export function Fotozas({
   elsoFajlok: File[];
   /** A WWP Sofőr appban fut-e (Google szkenner) — ilyenkor az oldalak azonnal beküldődnek. */
   nativ: boolean;
-  /** Natív módban a következő fuvar szkennelése. */
-  onNativSzkenneles: () => Promise<File[]>;
+  /** Natív módban a szkenner megnyitása; a lista az épp szkennelt és a még hátralévő fuvarok (visszaállításhoz). */
+  onNativSzkenneles: (fuvarok: FotoFuvar[]) => Promise<File[]>;
   onBezar: () => void;
   onBekuldve: (fuvarId: string, e: SorEredmeny & { hibas: number }) => void;
   onNemKaptam: (fuvarId: string) => void;
@@ -145,10 +168,13 @@ export function Fotozas({
   const [kuldes, setKuldes] = useState<{ kesz: number; osszes: number } | null>(null);
   const [eredmeny, setEredmeny] = useState<(SorEredmeny & { hibas: number }) | null>(null);
   const [hiba, setHiba] = useState<string | null>(null);
+  // Natív úton az első oldalak már megvannak — a listaképernyő ne villanjon fel a küldés előtt.
+  const [elokeszit, setElokeszit] = useState(nativ && elsoFajlok.length > 0);
   const kamera = useRef<HTMLInputElement>(null);
   const csere = useRef<string | null>(null);
   const urlek = useRef<string[]>([]);
   const indult = useRef(false);
+  const el = useRef(true);
 
   const fuvar = fuvarok[index];
 
@@ -164,9 +190,16 @@ export function Fotozas({
   }
 
   async function bekuldom(fuvarId: string, lapok: Blob[]) {
-    if (!lapok.length) return;
+    if (!lapok.length || kuldes) return;
     setKuldes({ kesz: 0, osszes: lapok.length });
-    const e = await bekuld(fuvarId, lapok, (kesz, osszes) => setKuldes({ kesz, osszes }));
+    let e: SorEredmeny & { hibas: number };
+    try {
+      e = await bekuld(fuvarId, lapok, (kesz, osszes) => setKuldes({ kesz, osszes }));
+    } catch {
+      setKuldes(null);
+      setHiba("Nem sikerült elmenteni a papírt a telefonra. Próbáld újra.");
+      return;
+    }
     setKuldes(null);
     setEredmeny(e);
     try {
@@ -181,6 +214,7 @@ export function Fotozas({
   async function nativOldalak(fuvarId: string, fajlok: File[]) {
     const lapok = await Promise.all(fajlok.map((f) => oldalLesz(f, true)));
     setOldalak(lapok);
+    setElokeszit(false);
     setNagy(lapok[0]?.id ?? null);
     await bekuldom(fuvarId, fajlok);
   }
@@ -190,10 +224,12 @@ export function Fotozas({
     for (const f of fajlok) {
       const o = await oldalLesz(f, false);
       const id = helyette ?? o.id;
+      if (!el.current) return;
       setOldalak((t) => (helyette && t.some((x) => x.id === helyette) ? t.map((x) => (x.id === helyette ? { ...o, id } : x)) : [...t, { ...o, id }]));
       setNagy(id);
       helyette = null;
       const { kep, sarkok } = await feldolgoz(f, null);
+      if (!el.current) return;
       const kepUrl = kep === f ? o.eredetiUrl : url(kep);
       setOldalak((t) => t.map((x) => (x.id === id ? { ...x, kep, kepUrl, sarkok, kesz: true } : x)));
     }
@@ -205,6 +241,7 @@ export function Fotozas({
     if (!o) return;
     setOldalak((t) => t.map((x) => (x.id === id ? { ...x, kesz: false } : x)));
     const { kep } = await feldolgoz(o.eredeti, s);
+    if (!el.current) return;
     const kepUrl = kep === o.eredeti ? o.eredetiUrl : url(kep);
     setOldalak((t) => t.map((x) => (x.id === id ? { ...x, kep, kepUrl, sarkok: s, kesz: true } : x)));
   }
@@ -221,12 +258,14 @@ export function Fotozas({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(
-    () => () => {
-      urlek.current.forEach((u) => URL.revokeObjectURL(u));
-    },
-    []
-  );
+  useEffect(() => {
+    el.current = true;
+    const lista = urlek.current;
+    return () => {
+      el.current = false;
+      lista.forEach((u) => URL.revokeObjectURL(u));
+    };
+  }, []);
 
   if (!fuvar) return null;
 
@@ -238,7 +277,18 @@ export function Fotozas({
     if (fajlok.length) void bongeszoOldalak(fajlok, helyette);
   };
 
+  async function nativUjra(i: number) {
+    setHiba(null);
+    try {
+      const f = await onNativSzkenneles(fuvarok.slice(i));
+      if (f.length) await nativOldalak(fuvarok[i].fuvarId, f);
+    } catch {
+      setHiba("A szkenner nem indult el. Próbáld újra.");
+    }
+  }
+
   function ujFoto(helyette: string | null) {
+    if (nativ) return void nativUjra(index);
     csere.current = helyette;
     kamera.current?.click();
   }
@@ -251,13 +301,9 @@ export function Fotozas({
     setNagy(null);
     setEredmeny(null);
     setHiba(null);
+    csere.current = null;
     if (nativ) {
-      try {
-        const f = await onNativSzkenneles();
-        if (f.length) await nativOldalak(kov.fuvarId, f);
-      } catch {
-        setHiba("A szkenner nem indult el. Próbáld újra.");
-      }
+      await nativUjra(index + 1);
     } else {
       // Ugyanabban a koppintásban nyílik a kamera — különben a böngésző nem engedi.
       kamera.current?.click();
@@ -285,38 +331,42 @@ export function Fotozas({
   }
 
   // ---- kész (natív úton rögtön a szkennelés után)
-  if (eredmeny || kuldes) {
+  if (eredmeny || kuldes || elokeszit) {
     const hatra = fuvarok.slice(index + 1);
     const varakozik = (eredmeny?.varakozik ?? 0) > 0;
     const elveszett = (eredmeny?.hibas ?? 0) > 0;
+    // A szerver figyelmeztetése (pl. a fuvar még nem zárult le) ne bújjon zöld pipa alá (UX-bírálat).
+    const figyelj = Boolean(eredmeny?.figyelmeztetes) && !varakozik && !elveszett;
+    const sarga = varakozik || elveszett || figyelj;
+    const folyik = Boolean(kuldes) || (elokeszit && !eredmeny);
     return (
       <div style={SOFOR_THEME} className={keret}>
         {inputok}
         <div className="flex flex-1 flex-col items-center justify-center gap-3.5 text-center">
-          {kuldes ? (
+          {folyik ? (
             <span className="flex h-24 w-24 items-center justify-center rounded-full bg-[var(--sa-blue-soft)] text-[var(--sa-blue)]">
               <CloudUpload className="h-12 w-12 animate-pulse" />
             </span>
           ) : (
             <span
-              className={`flex h-24 w-24 items-center justify-center rounded-full ${varakozik || elveszett ? "bg-[var(--sa-amber-soft)] text-[var(--sa-amber)]" : "bg-[#DCFCE7] text-[var(--sa-green)] shadow-[0_0_0_14px_#EEFBF2]"}`}
+              className={`flex h-24 w-24 items-center justify-center rounded-full ${sarga ? "bg-[var(--sa-amber-soft)] text-[var(--sa-amber)]" : "bg-[#DCFCE7] text-[var(--sa-green)] shadow-[0_0_0_14px_#EEFBF2]"}`}
             >
               {varakozik ? <CloudUpload className="h-12 w-12" /> : <Check className="h-12 w-12" strokeWidth={3} />}
             </span>
           )}
           <h2 className="mt-4 text-3xl font-extrabold tracking-tight">
-            {kuldes ? `Küldés ${Math.min(kuldes.kesz + 1, kuldes.osszes)}/${kuldes.osszes}…` : elveszett ? "Nem ment fel" : varakozik ? "Elmentve" : "Elküldve"}
+            {kuldes ? `Küldés ${Math.min(kuldes.kesz + 1, kuldes.osszes)}/${kuldes.osszes}…` : folyik ? "Egy pillanat…" : elveszett ? "Nem ment fel" : varakozik ? "Még nem ment el" : figyelj ? "Elküldve — nézd meg" : "Elküldve"}
           </h2>
           <p className="max-w-[300px] text-base font-semibold leading-snug">
             {oldalak.length} oldal · {fuvar.cim}
           </p>
-          {!kuldes && (
-            <p className="max-w-[300px] text-base leading-snug text-[#4B5563]">
+          {!folyik && (
+            <p className={`max-w-[300px] text-base leading-snug ${figyelj ? "font-semibold text-[var(--sa-amber)]" : "text-[#4B5563]"}`}>
               {elveszett
                 ? "Néhány oldal nem ment fel. Fotózd le újra, ha lesz térerő."
                 : varakozik
                   ? "Most nincs térerő. A papír a telefonon van, és magától elküldjük, amint lesz."
-                  : eredmeny?.figyelmeztetes ?? "A papír beérkezett az irodába."}
+                  : (eredmeny?.figyelmeztetes?.replace(/\s*\(#\d+\)/g, "") ?? "A papír beérkezett az irodába.")}
             </p>
           )}
           {oldalak.length > 0 && (
@@ -328,7 +378,7 @@ export function Fotozas({
             </div>
           )}
         </div>
-        {!kuldes &&
+        {!folyik &&
           (hatra.length > 0 ? (
             <>
               <div className="flex items-center gap-3.5 rounded-[22px] bg-[var(--sa-amber-soft)] px-[18px] py-4">
@@ -383,10 +433,10 @@ export function Fotozas({
           <span className="absolute inset-x-0 bottom-4 flex justify-center gap-2 px-3">
             {fo.kesz ? (
               <button type="button" onClick={() => setIgazit(fo.id)} className="rounded-full bg-white/90 px-3.5 py-1.5 text-sm font-bold text-[var(--sa-ink)] shadow">
-                {teljesKep(fo.sarkok) ? "Vágás" : "Igazítás"}
+                Igazítás
               </button>
             ) : (
-              <span className="rounded-full bg-white px-3.5 py-1.5 text-sm font-bold">Szkennelés…</span>
+              <span className="rounded-full bg-white px-3.5 py-1.5 text-sm font-bold">Egy pillanat…</span>
             )}
           </span>
         </div>
@@ -397,8 +447,8 @@ export function Fotozas({
           className="flex flex-1 flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed border-[#C3CAD8] bg-[var(--sa-card)] text-lg font-bold text-[var(--sa-blue)]"
         >
           <Camera className="h-12 w-12" />
-          Fotózd le a papírt
-          <span className="text-sm font-semibold text-[var(--sa-muted)]">Minden oldalt külön</span>
+          {nativ ? "Szkenneld be a papírt" : "Fotózd le a papírt"}
+          <span className="text-sm font-semibold text-[var(--sa-muted)]">{nativ ? "Minden oldalt, a végén Kész" : "Minden oldalt külön"}</span>
         </button>
       )}
 
@@ -414,7 +464,7 @@ export function Fotozas({
                 type="button"
                 aria-label={`${i + 1}. oldal törlése`}
                 onClick={() => setOldalak((t) => t.filter((x) => x.id !== o.id))}
-                className="absolute -right-1.5 -top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-[var(--sa-ink)] text-white"
+                className="absolute -right-2.5 -top-2.5 flex h-8 w-8 items-center justify-center rounded-full bg-[var(--sa-ink)] text-white"
               >
                 <X className="h-3 w-3" strokeWidth={3} />
               </button>
@@ -428,7 +478,7 @@ export function Fotozas({
           <div className="grid grid-cols-2 gap-2.5">
             <button type="button" onClick={() => ujFoto(fo?.id ?? null)} className="flex h-14 items-center justify-center gap-2 rounded-2xl bg-[var(--sa-card)] text-base font-bold">
               <RotateCcw className="h-5 w-5" />
-              Újra
+              Újrafotózom
             </button>
             <button type="button" onClick={() => ujFoto(null)} className="flex h-14 items-center justify-center gap-2 rounded-2xl bg-[var(--sa-blue-soft)] text-base font-bold text-[var(--sa-blue)]">
               <Plus className="h-5 w-5" strokeWidth={2.6} />
@@ -441,7 +491,7 @@ export function Fotozas({
             onClick={() => void bekuldom(fuvar.fuvarId, oldalak.map((o) => o.kep))}
             className="h-[60px] rounded-[18px] bg-[var(--sa-blue)] text-lg font-bold text-white disabled:opacity-50"
           >
-            {dolgozik ? "Szkennelés…" : `Beküldöm · ${oldalak.length} oldal`}
+            {dolgozik ? "Egy pillanat…" : `Beküldöm · ${oldalak.length} oldal`}
           </button>
         </>
       ) : (

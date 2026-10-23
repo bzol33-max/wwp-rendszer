@@ -18,6 +18,11 @@ natív szkenner-motort használnak; ingyenes és appon belüli: **Google ML Kit 
   Sofőr appot” sáv.
 - **Teszt:** `teszt-lap-kereso` + fehérítés-eset (árnyékos papír ≥225, szöveg ≤90, kék pecsét kék), teljes
   `npm run teszt`, tsc, eslint (a módosított fájlokban 0 hiba), next build; APK aláírás ellenőrizve.
+- **5 szakértői bírálat után javítva:** fehérítés gyorsítva (OpenCV `.data` egyszer), fekete pont ≤60 (halvány
+  toll marad), egyszerre egy oldal készül + 25 mp időkorlát, a nagy kép memóriája azonnal felszabadul, éles
+  kicsinyítés, JPEG 0,9; beküldési hiba nem akad be; a sor nem dugul el végleg elutasított oldaltól; „még vár”
+  csak az adott fuvart számolja; szerver-figyelmeztetés sárgán; dupla koppintás-védelem; Android Vissza gomb;
+  hálózat-állapot jogosultság, allowBackup ki (APK 1.1 / versionCode 2); az idempotencia-kulcs fuvarhoz kötve.
 
 ## 2026-10-23 (este 2) — Sofőr app: kamera kerettel
 

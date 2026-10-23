@@ -191,7 +191,9 @@ export function egyenesitsd(
   s: Sarkok
 ): ImageData {
   const { width: w, height: h } = rgba;
+  s = rendezd(s.map((q) => ({ ...q })) as Sarkok);
   const m = kimenetMeret(s, w, h);
+  if (m.w < 100 || m.h < 100) throw new Error("Túl kicsi a kijelölt terület.");
   const src = cv.matFromImageData(rgba);
   const ki = new cv.Mat();
   const forras = cv.matFromArray(4, 1, cv.CV_32FC2, s.flatMap((q) => [q.x * w, q.y * h]));
@@ -246,11 +248,14 @@ export function feherites(cv: any, kep: ImageData): ImageData {
     const cs = [csat.get(0), csat.get(1), csat.get(2)];
     const hs = [hcsat.get(0), hcsat.get(1), hcsat.get(2)];
     // 2. osztás csatornánként + fényesség-hisztogram a fekete ponthoz
+    // A .data getter minden hívásra új nézetet ad — egyszer kérjük le (képfeldolgozási bírálat).
+    const cd: Uint8Array[] = cs.map((m) => m.data);
+    const hd: Uint8Array[] = hs.map((m) => m.data);
     const hiszt = new Uint32Array(256);
     for (let i = 0; i < n; i++) {
       let l = 0;
       for (let c = 0; c < 3; c++) {
-        const v = Math.min(255, (cs[c].data[i] / Math.max(hs[c].data[i], 40)) * 255);
+        const v = Math.min(255, (cd[c][i] / Math.max(hd[c][i], 40)) * 255);
         ki[i * 4 + c] = v;
         l += c === 0 ? v * 0.299 : c === 1 ? v * 0.587 : v * 0.114;
       }
@@ -265,7 +270,8 @@ export function feherites(cv: any, kep: ImageData): ImageData {
         break;
       }
     }
-    fekete = Math.min(fekete, 120);
+    // Legfeljebb 60: a halvány kék toll és a pecsét széle ne vesszen el (bírálat).
+    fekete = Math.min(fekete, 60);
     const feher = 240;
     const tabla = new Uint8ClampedArray(256);
     for (let v = 0; v < 256; v++) {

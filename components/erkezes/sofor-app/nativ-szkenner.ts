@@ -18,7 +18,8 @@ type DocumentScannerPlugin = {
   addListener(e: "googleDocumentScannerModuleInstallProgress", f: (x: { state: number; progress?: number }) => void): Promise<PluginListenerHandle>;
 };
 type AppPlugin = {
-  addListener(e: "appRestoredResult", f: (x: { pluginId: string; methodName: string; success: boolean; data?: ScanResult }) => void): Promise<PluginListenerHandle>;
+  addListener(e: "backButton", f: (x: { canGoBack: boolean }) => void): Promise<PluginListenerHandle>;
+  minimizeApp(): Promise<void>;
 };
 
 const DocumentScanner = registerPlugin<DocumentScannerPlugin>("DocumentScanner");
@@ -45,15 +46,27 @@ export async function szkennerModulElokeszit(allapot?: (szoveg: string) => void)
   try {
     if ((await DocumentScanner.isGoogleDocumentScannerModuleAvailable()).available) return true;
     allapot?.("A szkenner letöltése…");
+    let figyelo: PluginListenerHandle | null = null;
     const kesz = new Promise<boolean>((ok) => {
       void DocumentScanner.addListener("googleDocumentScannerModuleInstallProgress", (e) => {
         if (e.state === 4) ok(true); // COMPLETED
         else if (e.state === 3 || e.state === 5) ok(false); // CANCELED / FAILED
         else if (e.progress != null) allapot?.(`A szkenner letöltése… ${Math.round(e.progress)}%`);
-      });
+      }).then((h) => (figyelo = h));
+      // Szüneteltetett letöltés (nincs Wi-Fi) ne lógjon örökké — a következő indításkor újra próbáljuk.
+      setTimeout(() => ok(false), 5 * 60_000);
     });
-    await DocumentScanner.installGoogleDocumentScannerModule();
-    return await kesz;
+    try {
+      await DocumentScanner.installGoogleDocumentScannerModule();
+    } catch (err) {
+      if (/already/i.test(err instanceof Error ? err.message : String(err))) return true;
+      throw err;
+    }
+    try {
+      return await kesz;
+    } finally {
+      (figyelo as PluginListenerHandle | null)?.remove();
+    }
   } catch {
     return false;
   }
@@ -83,7 +96,9 @@ async function oldalakBeolvas(eredmeny: ScanResult): Promise<File[]> {
   const ki: File[] = [];
   for (const [i, uri] of (eredmeny.scannedImages ?? []).entries()) {
     const v = await fetch(Capacitor.convertFileSrc(uri));
-    const b = await meretez(await v.blob());
+    const nyers = await v.blob();
+    if (!v.ok || !nyers.type.startsWith("image/")) throw new Error("A szkennelt oldal nem olvasható.");
+    const b = await meretez(nyers);
     ki.push(new File([b], `oldal-${i + 1}.jpg`, { type: "image/jpeg" }));
   }
   return ki;
@@ -94,27 +109,42 @@ async function oldalakBeolvas(eredmeny: ScanResult): Promise<File[]> {
  * üres listát, ha a sofőr kilépett. Galéria-import szándékosan nincs (a
  * sofőr ne csatolhasson rossz képet — UX-bírálat).
  */
-export async function nativSzkenneles(): Promise<File[]> {
-  try {
-    const e = await DocumentScanner.scanDocument({ scannerMode: "FULL", resultFormats: "JPEG", pageLimit: 10, galleryImportAllowed: false });
-    return await oldalakBeolvas(e);
-  } catch (err) {
-    const u = err instanceof Error ? err.message : String(err);
-    if (/cancel/i.test(u)) return [];
-    throw err;
-  }
+let szkennelesFolyik: Promise<File[]> | null = null;
+export function nativSzkenneles(): Promise<File[]> {
+  // Dupla koppintás: a plugin a második hívással felülírná az elsőt, ami sosem térne vissza (bírálat).
+  if (szkennelesFolyik) return szkennelesFolyik;
+  szkennelesFolyik = (async () => {
+    try {
+      const e = await DocumentScanner.scanDocument({ scannerMode: "FULL", resultFormats: "JPEG", pageLimit: 10, galleryImportAllowed: false });
+      return await oldalakBeolvas(e);
+    } catch (err) {
+      const u = err instanceof Error ? err.message : String(err);
+      if (/cancel/i.test(u)) return [];
+      throw err;
+    }
+  })().finally(() => {
+    szkennelesFolyik = null;
+  });
+  return szkennelesFolyik;
 }
 
 /**
- * Ha a telefon a szkennelés alatt kilőtte az appot (kevés memória), az
- * eredmény az újraindulás után ezen az eseményen jön meg (Capacitor
- * appRestoredResult). A hívó a függőben lévő fuvart a localStorage-ből veszi.
+ * Az Android „Vissza” gomb az appban: a hívó bezárja a nyitott réteget; ha
+ * nincs mit bezárni (false), az app a háttérbe megy (különben semmi sem
+ * történne — Capacitor alapértelmezés). Böngészőben nem csinál semmit.
  */
-export function figyelVisszaallitott(cb: (oldalak: File[]) => void): () => void {
+export function figyelVisszaGomb(bezar: () => boolean): () => void {
   if (!vanNativSzkenner()) return () => {};
   let h: PluginListenerHandle | null = null;
-  void App.addListener("appRestoredResult", (e) => {
-    if (e.pluginId === "DocumentScanner" && e.success && e.data) void oldalakBeolvas(e.data).then((o) => o.length && cb(o));
-  }).then((x) => (h = x));
-  return () => void h?.remove();
+  let le = false;
+  void App.addListener("backButton", () => {
+    if (!bezar()) void App.minimizeApp();
+  }).then((x) => {
+    h = x;
+    if (le) void x.remove();
+  });
+  return () => {
+    le = true;
+    void h?.remove();
+  };
 }
