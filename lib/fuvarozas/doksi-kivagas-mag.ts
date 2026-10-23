@@ -22,8 +22,8 @@ const ELEMZES_SZELESSEG = 500;
  * háttérhez; ezeket az erózió elvágja, a lap maga alig fogy tőle.
  */
 const EROZIO_SUGAR = 3;
-/** 2 elemzési pixellel befelé tolja a sarkokat (≈0,4% képszélesség), hogy az erózióból maradó sötét szegély lemaradjon. */
-const SZEGELY_VISSZA = -2;
+/** 1 elemzési pixellel kifelé tolja a sarkokat: az erózió (3 px) után ≈2 px-nyi biztonsági sáv marad a lap szélén belül, de a szélén lévő írás (aláírás, pecsét) nem vész el. */
+const SZEGELY_VISSZA = 1;
 /** A lapnak legalább ennyi részét kell elfoglalnia a képből, különben nem hisszük el. */
 const MIN_LAP_ARANY = 0.25;
 /** Ennél nagyobb folt már maga a kép (nincs látható háttér) — nincs mit kivágni. */
@@ -169,7 +169,13 @@ function keressLapot(szurke: Buffer, w: number, h: number): [Pont, Pont, Pont, P
   const vilagos = new Uint8Array(w * h);
   for (let i = 0; i < w * h; i++) vilagos[i] = szurke[i] > kuszob ? 1 : 0;
 
-  const folt = legnagyobbFolt(erodald(vilagos, w, h, EROZIO_SUGAR), w, h);
+  // A lapon lévő SZÖVEG is sötét: sűrűn írt fuvarlevélen (CMR-rácsok, 40 sor
+  // szöveg) a világos maszk csíkokra esett szét, és az erózió után nem maradt
+  // lap-méretű folt (2026-10-23, Budaházi Zoltán: „nem vágja ki a lapot”).
+  // Ezért a lap = minden, ami NEM a kép széléről elérhető sötét háttér: a
+  // betűk, táblázatvonalak, pecsétek a lap belsejében „lyukak”, ezek
+  // betöltődnek, a lap egy tömör folt lesz.
+  const folt = legnagyobbFolt(erodald(lyukakatTolt(vilagos, w, h), w, h, EROZIO_SUGAR), w, h);
   if (!folt) return null;
   const arany = folt.meret / (w * h);
   if (arany < MIN_LAP_ARANY || arany > MAX_LAP_ARANY) return null;
@@ -194,6 +200,36 @@ function keressLapot(szurke: Buffer, w: number, h: number): [Pont, Pont, Pont, P
   ];
   if (Math.min(...oldalak) < Math.min(w, h) * 0.2) return null;
   return sarkok;
+}
+
+/**
+ * A világos maszk „lyukainak” kitöltése: a kép széléről elárasztjuk a sötét
+ * képpontokat (ez a háttér); ami ebből kimarad, az a lap — a rajta lévő
+ * sötét írással együtt.
+ */
+function lyukakatTolt(vilagos: Uint8Array, w: number, h: number): Uint8Array {
+  const hatter = new Uint8Array(w * h);
+  const sor = new Int32Array(w * h);
+  let vege = 0;
+  const mag = (p: number) => {
+    if (!vilagos[p] && !hatter[p]) {
+      hatter[p] = 1;
+      sor[vege++] = p;
+    }
+  };
+  for (let x = 0; x < w; x++) { mag(x); mag((h - 1) * w + x); }
+  for (let y = 0; y < h; y++) { mag(y * w); mag(y * w + w - 1); }
+  for (let eleje = 0; eleje < vege; eleje++) {
+    const p = sor[eleje];
+    const x = p % w;
+    if (x > 0) mag(p - 1);
+    if (x < w - 1) mag(p + 1);
+    if (p >= w) mag(p - w);
+    if (p < w * (h - 1)) mag(p + w);
+  }
+  const ki = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) ki[i] = hatter[i] ? 0 : 1;
+  return ki;
 }
 
 /**

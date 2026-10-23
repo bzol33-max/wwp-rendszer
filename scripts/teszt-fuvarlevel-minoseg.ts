@@ -45,5 +45,21 @@ assert.equal(pdfOldalMeret(800, 1200), "allo");
   let sotet = 0;
   for (let i = 0; i < k2.data.length; i++) if (k2.data[i] < 128) sotet++;
   assert.ok(sotet < k2.data.length * 0.01, `csíkos az üres lap (${sotet} sötét pixel a ${k2.data.length}-ből)`);
-  console.log("Fuvarlevél-minőség tesztek rendben (a szkennelés csatorna-elcsúszás nélkül, álló fotón is).");
+  // Regresszió (2026-10-23, Budaházi Zoltán: „nem vágja ki a lapot”): sűrűn
+  // írt, ferdén fotózott lap sötét és világos háttéren. A szöveg-sorok a
+  // világos maszkot csíkokra bontották, és a lap felismeretlen maradt.
+  const sorok = Array.from({ length: 40 }, (_, i) => `<text x="80" y="${220 + i * 46}" font-size="30" font-family="DejaVu Sans" fill="#222">Szállítólevél ${i} Fabrika 2000 Kft. Tompaládony EUR raklap</text>`).join("");
+  const racs = Array.from({ length: 12 }, (_, i) => `<rect x="60" y="${100 + i * 135}" width="1120" height="135" fill="none" stroke="#333" stroke-width="4"/>`).join("");
+  const suruLap = await sharp(Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="1754"><rect width="1240" height="1754" fill="#f7f5ef"/>${racs}${sorok}</svg>`))
+    .resize(2000).rotate(9, { background: { r: 0, g: 0, b: 0, alpha: 0 } }).png().toBuffer();
+  for (const [nev, szin] of [["sötét", 70], ["világos", 185]] as const) {
+    const foto = await sharp({ create: { width: 3024, height: 4032, channels: 3, background: { r: szin, g: szin, b: szin - 5 } } })
+      .composite([{ input: suruLap, left: 300, top: 400 }]).jpeg({ quality: 90 }).toBuffer();
+    const e3 = await szkennelj(foto);
+    assert.ok(e3.kivagva, `sűrűn írt lap ${nev} háttéren: nem vágta ki (${e3.ok})`);
+    const m3 = await sharp(e3.tartalom).metadata();
+    assert.ok(Math.abs(m3.width! / m3.height! - 1240 / 1754) < 0.02, `${nev} háttéren rossz a lap aránya (${m3.width}×${m3.height})`);
+    assert.ok(m3.width! >= 1900, `${nev} háttéren túl sokat vágott le a lapból (${m3.width} px a 2000-ből)`);
+  }
+  console.log("Fuvarlevél-minőség tesztek rendben (a szkennelés csatorna-elcsúszás nélkül, álló fotón is, sűrűn írt ferde lapon is).");
 })().catch((e) => { console.error(e); process.exit(1); });

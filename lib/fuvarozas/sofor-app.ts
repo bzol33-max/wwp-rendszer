@@ -16,7 +16,10 @@
 // joggal, bárkié a teljes Fuvarozás joggal.
 
 import { query } from "@/lib/db";
+import sharp from "sharp";
 import { requireSajatVagyModulJog } from "@/lib/auth/require-permission";
+import { requireSession } from "@/lib/auth/dal";
+import { szkennelj } from "@/lib/fuvarozas/doksi-kivagas";
 import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
 import { findJarmuForEmployee, jarmuMatch } from "@/lib/fuvarozas/sofor-jarmu";
 import { bontsMegallokra } from "@/lib/fuvarozas/varos";
@@ -161,4 +164,22 @@ export async function getSoforFogyasztas(employeeId: string): Promise<SoforFogya
     merve: kep.ketHet.km > 0,
     kep,
   };
+}
+
+/**
+ * A fotó szkennelt előnézete a telefonnak (2026-10-23, Budaházi Zoltán: „a
+ * szkennelő nem jó … jobb megoldás kell” → a telefon saját kamerája + azonnal
+ * a kivágott, kiegyenesített lap). Ugyanaz a szkenner fut, mint a feltöltéskor
+ * (doksi-kivagas.ts), de semmit nem ment: a sofőr látja, mi lesz a papírból,
+ * mielőtt beküldi. A telefon kicsinyített képet küld, a válasz ~1400 px-es JPEG.
+ */
+export async function szkennelElonezet(form: FormData): Promise<{ kep: string; kivagva: boolean }> {
+  const session = await requireSession();
+  if (!session.can("fuvarozas_sajat").view && !session.can("fuvarozas").view) throw new Error("Nincs jogosultság.");
+  const fajl = form.get("foto");
+  if (!(fajl instanceof File) || fajl.size === 0) throw new Error("Nincs kép.");
+  if (fajl.size > 8 * 1024 * 1024) throw new Error("A kép túl nagy.");
+  const szken = await szkennelj(Buffer.from(await fajl.arrayBuffer()));
+  const kicsi = await sharp(szken.tartalom).rotate().resize({ width: 1400, height: 1400, fit: "inside", withoutEnlargement: true }).jpeg({ quality: 80 }).toBuffer();
+  return { kep: `data:image/jpeg;base64,${kicsi.toString("base64")}`, kivagva: szken.kivagva };
 }

@@ -1,5 +1,21 @@
 # PROGRESS
 
+## 2026-10-23 — Sofőr app: új fotózás (a telefon saját kamerája) + a szkenner kivágja a sűrűn írt lapot is
+
+Budaházi Zoltán: „a szkennelő nem jó az appban, jobb megoldás kell” (homályos, nem fotóz magától, nem vágja ki,
+lassú/bonyolult) → választása: a telefon saját kamerája.
+- A „Fotó” koppintás azonnal a telefon kamera-appját nyitja (éles, vaku, fókusz); az élő böngészős kamera, az
+  automatikus fotó és a telefonos minőség-becslés kikerült (`fotozas.tsx` újraírva, `sofor-app-alap.ts` rövidült).
+- Egy képernyő: nagyban a **kivágott, kiegyenesített lap** (új `szkennelElonezet` szerver-akció — ugyanaz a
+  szkenner, mint a beküldéskor, nem ment semmit), alatta az oldalak, Újra / + Oldal / Beküldöm. Térerő nélkül az
+  eredeti kép látszik, a beküldés a telefonos sorba megy, mint eddig.
+- **Szkenner-javítás** (`doksi-kivagas-mag.ts`): a lapon lévő sűrű szöveg/CMR-rács a világos maszkot csíkokra
+  bontotta → „nincs felismert lap”. Most a lap = minden, ami nem a kép széléről elérhető háttér (a szöveg
+  „lyukai” kitöltődnek); a lap széléből a korábbinál kevesebbet vág le. Ez az irodai feltöltésre is érvényes.
+- **Teszt:** teszt-fuvarlevel-minoseg új esete (sűrűn írt, 9°-ban ferde lap sötét és világos háttéren — a régi
+  kóddal elbukik, az újjal átmegy), teljes `npm run teszt`, tsc, eslint, next build; böngészős próba
+  (fotó → előnézet → + oldal → beküldés térerő nélkül → „Elmentve”).
+
 ## 2026-10-21 — Megbízások: életút-tábla (1-es terv a 10 TMS összevetéséből)
 
 Terv: „Megbízások oldal – 5 terv” vászon, 1-es (Truckpedia-minta; a Qargo · AscendTMS · Truckpedia a top 3 az

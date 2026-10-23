@@ -19,7 +19,7 @@
 // utasításai. A sorrend és a kész/nem kész állapot a GPS lapról jön, ahogy
 // eddig (lib/fuvarozas/sofor.ts getSoforNap).
 
-import { useCallback, useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition, type ReactNode } from "react";
 import { toast } from "sonner";
 import {
   AlertTriangle,
@@ -931,7 +931,7 @@ function FogyasztasKepernyo({ f, onVissza }: { f: SoforFogyasztas | null; onViss
 
 type Reteg =
   | { t: "papir" }
-  | { t: "foto"; fuvarok: FotoFuvar[] }
+  | { t: "foto"; fuvarok: FotoFuvar[]; fajlok: File[] }
   | { t: "reszlet"; fuvarId: string; tartalek: SoforFuvarBlokk }
   | { t: "fogyasztas" };
 
@@ -1161,7 +1161,21 @@ export function SoforApp({
     nemKaptamIr(uj);
   };
 
-  const fotoNyit = (lista: PapirTetel[]) => setReteg({ t: "foto", fuvarok: lista.map(fotoFuvar) });
+  // A „Fotó” koppintás AZONNAL a telefon saját kameráját nyitja (2026-10-23):
+  // a böngésző csak a koppintáson belül engedi megnyitni, ezért a rejtett
+  // kamera-mező itt van, nem a Fotozas-ban; a kész kép(ek)kel nyílik a réteg.
+  const kameraMezo = useRef<HTMLInputElement>(null);
+  const varoFoto = useRef<PapirTetel[]>([]);
+  const fotoNyit = (lista: PapirTetel[]) => {
+    if (!lista.length) return;
+    varoFoto.current = lista;
+    kameraMezo.current?.click();
+  };
+  const kameraKep = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fajlok = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (fajlok.length && varoFoto.current.length) setReteg({ t: "foto", fuvarok: varoFoto.current.map(fotoFuvar), fajlok });
+  };
   const papirLista = () => (papirok.length === 1 && !sor[papirok[0].fuvarId] ? fotoNyit(papirok) : setReteg({ t: "papir" }));
 
   // ---- megjelenítés
@@ -1189,6 +1203,7 @@ export function SoforApp({
       <div style={SOFOR_THEME}>
         <Fotozas
           fuvarok={reteg.fuvarok}
+          elsoFajlok={reteg.fajlok}
           onBezar={() => setReteg(null)}
           onNemKaptam={papirNemKaptam}
           onBekuldve={(fuvarId, e) => {
@@ -1298,6 +1313,7 @@ export function SoforApp({
     <Keret onVissza={reteg ? vissza : undefined} onFrissit={frissit} alul={reteg ? null : menu}>
       {ful === "megbizasok" && !reteg ? elolegSav : null}
       {tartalom}
+      <input ref={kameraMezo} type="file" accept="image/*" capture="environment" className="hidden" onChange={kameraKep} />
       {confirmDialog}
       {pending && <span className="sr-only" role="status">Mentés…</span>}
     </Keret>
