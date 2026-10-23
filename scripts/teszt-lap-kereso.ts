@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import sharp from "sharp";
-import { AJANLOTT_MIN_TERULET, TELJES_KEP, egyenesitsd, keressLapot, kimenetMeret, lapnakLatszik, rendezd, sarkokTerulete, type Sarkok } from "../components/erkezes/sofor-app/lap-kereso";
+import { AJANLOTT_MIN_TERULET, TELJES_KEP, egyenesitsd, feherites, keressLapot, kimenetMeret, lapnakLatszik, rendezd, sarkokTerulete, type Sarkok } from "../components/erkezes/sofor-app/lap-kereso";
 
 // Node-ban nincs ImageData — az egyenesitsd ezt adja vissza.
 (globalThis as unknown as { ImageData: unknown }).ImageData = class {
@@ -57,6 +57,23 @@ async function foto(deg: number, hatter: number, belsoTabla = false): Promise<{ 
   const f = await foto(8, 60);
   const lap = egyenesitsd(cv, f, ferde!);
   assert.ok(Math.abs(lap.width / lap.height - 1240 / 1754) < 0.05, `rossz arány: ${lap.width}×${lap.height}`);
-  console.log("Lap-kereső teszt rendben (egyenes, ferde, belső keretes lap, üres kép, kiegyenesítés).");
+  // fehérítés: árnyékos (balról sötétedő) lap, fekete szöveg, kék pecsét
+  const W2 = 800, H2 = 1100;
+  const svg2 = `<svg xmlns="http://www.w3.org/2000/svg" width="${W2}" height="${H2}">
+    <defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#6e6a60"/><stop offset="1" stop-color="#e8e4da"/></linearGradient></defs>
+    <rect width="${W2}" height="${H2}" fill="url(#g)"/>
+    ${Array.from({ length: 20 }, (_, i) => `<rect x="60" y="${80 + i * 40}" width="600" height="6" fill="#222"/>`).join("")}
+    <circle cx="560" cy="900" r="90" fill="none" stroke="#1f3fbf" stroke-width="10"/></svg>`;
+  const r2 = await sharp(Buffer.from(svg2)).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const be2 = { data: new Uint8ClampedArray(r2.data), width: W2, height: H2 };
+  const ki2 = feherites(cv, be2 as unknown as ImageData) as unknown as { data: Uint8ClampedArray; width: number };
+  const px = (d: Uint8ClampedArray, w: number, x: number, y: number) => [d[(y * w + x) * 4], d[(y * w + x) * 4 + 1], d[(y * w + x) * 4 + 2]];
+  const arnyekPapir = px(ki2.data, W2, 30, 1050); // a legsötétebb sarokban, üres papír
+  assert.ok(arnyekPapir.every((v) => v >= 225), `az árnyékos papír nem lett fehér: ${arnyekPapir}`);
+  const szoveg = px(ki2.data, W2, 200, 83);
+  assert.ok(szoveg.every((v) => v <= 90), `a szöveg nem maradt sötét: ${szoveg}`);
+  const pecset = px(ki2.data, W2, 650, 900);
+  assert.ok(pecset[2] > pecset[0] + 40, `a kék pecsét elvesztette a színét: ${pecset}`);
+  console.log("Lap-kereső teszt rendben (egyenes, ferde, belső keretes lap, üres kép, kiegyenesítés, színes fehérítés).");
   process.exit(0);
 })().catch((e) => { console.error(e); process.exit(1); });

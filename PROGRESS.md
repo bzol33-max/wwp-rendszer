@@ -1,5 +1,24 @@
 # PROGRESS
 
+## 2026-10-23 (éjjel) — Sofőr app: Google szkenner (WWP Sofőr Android app) + automatikus böngészős szkennelés
+
+Budaházi Zoltán: „nem jó … végezz kutatást, hogy a hasonló appok hogy oldják meg, az 5 legjobb megoldásból
+rakd össze a mienket, mindent 5 hozzáértő nézzen át”; panaszok: homályos, bonyolult a sarokhúzás, nem néz ki
+szkenneltnek, lassú. Kutatás: a fuvarozói appok (Samsara, Motive/Scanbot, Transflo, Genius Scan SDK) mind
+natív szkenner-motort használnak; ingyenes és appon belüli: **Google ML Kit Document Scanner**.
+- **`android-app/`** (új): Capacitor 8 héj, az éles `/erkezes`-t tölti (webről frissül), + ML Kit szkenner
+  plugin. Aláírt APK: `public/letoltes/wwp-sofor.apk` (bejelentkezés mögött), a kulcs a repón KÍVÜL
+  (`android-app/README.md`).
+- **`nativ-szkenner.ts`**: az appban a „Papír” a Google szkennert nyitja (auto-fotó, kivágás, fehérítés,
+  több oldal); az oldalak azonnal a feltöltési sorba mennek → nagy „Elküldve” képernyő. Modul-előtöltés
+  indításkor; a szkennelés alatt kilőtt app eredménye visszaáll (`appRestoredResult`).
+- **Böngészőben** (tartalék): telefon kamerája → automatikus lapkivágás (OpenCV, ha biztos) + új színes
+  **fehérítés** (`feherites`: háttér-normalizálás, árnyék el, pecsét kék marad) → Beküldöm. A sarok-igazítás
+  csak opció. A keretes app-kamera (`keretes-kamera.tsx`) megszűnt. Androidos böngészőben „Töltsd le a WWP
+  Sofőr appot” sáv.
+- **Teszt:** `teszt-lap-kereso` + fehérítés-eset (árnyékos papír ≥225, szöveg ≤90, kék pecsét kék), teljes
+  `npm run teszt`, tsc, eslint (a módosított fájlokban 0 hiba), next build; APK aláírás ellenőrizve.
+
 ## 2026-10-23 (este 2) — Sofőr app: kamera kerettel
 
 Budaházi Zoltán: „most egész jó, tedd vissza a keretet, amibe igazítsák be a papírt”.

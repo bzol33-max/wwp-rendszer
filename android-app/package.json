@@ -1,0 +1,19 @@
+{
+  "name": "wwp-sofor-android",
+  "private": true,
+  "version": "1.0.0",
+  "description": "WWP Sofőr — Android héj a sofőr apphoz (Capacitor + Google ML Kit dokumentum-szkenner). Lásd README.md.",
+  "scripts": {
+    "sync": "cap sync android",
+    "apk": "cap sync android && cd android && ./gradlew assembleRelease"
+  },
+  "dependencies": {
+    "@capacitor-mlkit/document-scanner": "8.2.1",
+    "@capacitor/android": "8.5.3",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/core": "8.5.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.3"
+  }
+}

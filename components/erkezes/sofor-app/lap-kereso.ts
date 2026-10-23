@@ -209,3 +209,84 @@ export function egyenesitsd(
   }
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
+
+/* eslint-disable @typescript-eslint/no-explicit-any -- az OpenCV.js típus nélküli */
+/**
+ * „Szkennelt” kinézet SZÍNESEN (2026-10-23, képfeldolgozási bírálat): a
+ * megvilágítás kiegyenlítése csatornánként, binarizálás nélkül — a kék toll
+ * és a kék pecsét megmarad (a megbízó éppen ezt nézi), a papír fehér lesz,
+ * az árnyék és a hajtás eltűnik.
+ *
+ *  1. háttér-becslés ¼-es méreten: dilatáció 7×7 (≈28 px teljes méreten,
+ *     szélesebb a legvastagabb tollvonásnál), medián 9, vissza nagyítva;
+ *  2. csatornánként: ki = be / max(háttér, 40) × 255 (a 40-es padló a mély
+ *     árnyékban nem engedi felrobbanni a zajt);
+ *  3. szintek: fekete pont a fényesség 1. percentilise, fehér pont 240
+ *     (nem lejjebb — a halvány indigós szöveg megmarad), gamma 1,2.
+ */
+export function feherites(cv: any, kep: ImageData): ImageData {
+  const src = cv.matFromImageData(kep);
+  const rgb = new cv.Mat();
+  const kicsi = new cv.Mat();
+  const hatter = new cv.Mat();
+  const csat = new cv.MatVector();
+  const hcsat = new cv.MatVector();
+  try {
+    cv.cvtColor(src, rgb, cv.COLOR_RGBA2RGB);
+    cv.resize(rgb, kicsi, new cv.Size(Math.max(1, Math.round(rgb.cols / 4)), Math.max(1, Math.round(rgb.rows / 4))), 0, 0, cv.INTER_AREA);
+    const mag = cv.getStructuringElement(cv.MORPH_RECT, new cv.Size(7, 7));
+    cv.dilate(kicsi, kicsi, mag);
+    mag.delete();
+    cv.medianBlur(kicsi, kicsi, 9);
+    cv.resize(kicsi, hatter, new cv.Size(rgb.cols, rgb.rows), 0, 0, cv.INTER_LINEAR);
+    cv.split(rgb, csat);
+    cv.split(hatter, hcsat);
+    const n = rgb.cols * rgb.rows;
+    const ki = new Uint8ClampedArray(n * 4);
+    const cs = [csat.get(0), csat.get(1), csat.get(2)];
+    const hs = [hcsat.get(0), hcsat.get(1), hcsat.get(2)];
+    // 2. osztás csatornánként + fényesség-hisztogram a fekete ponthoz
+    const hiszt = new Uint32Array(256);
+    for (let i = 0; i < n; i++) {
+      let l = 0;
+      for (let c = 0; c < 3; c++) {
+        const v = Math.min(255, (cs[c].data[i] / Math.max(hs[c].data[i], 40)) * 255);
+        ki[i * 4 + c] = v;
+        l += c === 0 ? v * 0.299 : c === 1 ? v * 0.587 : v * 0.114;
+      }
+      ki[i * 4 + 3] = 255;
+      hiszt[Math.round(l)]++;
+    }
+    let fekete = 0;
+    for (let s = 0, v = 0; v < 256; v++) {
+      s += hiszt[v];
+      if (s >= n * 0.01) {
+        fekete = v;
+        break;
+      }
+    }
+    fekete = Math.min(fekete, 120);
+    const feher = 240;
+    const tabla = new Uint8ClampedArray(256);
+    for (let v = 0; v < 256; v++) {
+      const t = Math.min(1, Math.max(0, (v - fekete) / (feher - fekete)));
+      tabla[v] = Math.round(Math.pow(t, 1.2) * 255);
+    }
+    for (let i = 0; i < n; i++) {
+      ki[i * 4] = tabla[ki[i * 4]];
+      ki[i * 4 + 1] = tabla[ki[i * 4 + 1]];
+      ki[i * 4 + 2] = tabla[ki[i * 4 + 2]];
+    }
+    cs.forEach((m) => m.delete());
+    hs.forEach((m) => m.delete());
+    return new ImageData(ki, rgb.cols, rgb.rows);
+  } finally {
+    src.delete();
+    rgb.delete();
+    kicsi.delete();
+    hatter.delete();
+    csat.delete();
+    hcsat.delete();
+  }
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
