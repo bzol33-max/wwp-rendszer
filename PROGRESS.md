@@ -1,5 +1,24 @@
 # PROGRESS
 
+## 2026-10-23 (este) — Sofőr app: papír-szkenner a telefonon (OpenCV + kézi sarok-igazítás), a szerver nem vág többé
+
+Budaházi Zoltán: „nem jó, próbáltuk, keresd meg a legjobb módszert … appon belül kell, ingyenesen”; „mikor
+lefotózzák egész jó, utána elromlik”. A sofőrök valódi fotóin (#1238, #1239, #1248) a szerveroldali vágó a lap
+felét / a lapon belüli táblázatot / a mögötte lévő papírt vágta ki, a „tisztítás” kifakította a lapot.
+- **Szerver:** `feltoltFuvarlevelFoto` nem szkennel/tisztít többé — a telefonról jött kép megy be (csak az
+  EXIF-forgatás beégetve). Az irodai „újraszkennelés” (`ujraszkenneldFuvarlevelOldalt`) változatlan.
+- **Telefon:** a CamScanner-szerű ingyenes menet: telefon saját kamerája → **Igazítás** képernyő: OpenCV.js
+  (4.10, Apache-2.0, `public/vendor/opencv-4.10.0.js`, saját szerverről, 1 év cache) Canny-élkeresés →
+  legnagyobb négyszög a javaslat (csak ha ≥ 40% — különben a teljes kép, mert a kisebb jellemzően a lapon belüli
+  táblázat); a sofőr ujjal húzza a 4 sarkot, **nagyítóval**; „Teljes kép” gomb → Kész → perspektíva-
+  kiegyenesítés színesen, tisztítás nélkül. Az oldal rákoppintva újraigazítható. OpenCV nélkül (térerő) a
+  teljes kép megy. Fájlok: `lap-kereso.ts`, `igazito.tsx`, `fotozas.tsx`; a `szkennelElonezet` megszűnt.
+- CSP (report-only): `'wasm-unsafe-eval'` a `script-src`-ben az OpenCV wasm-ja miatt; `/vendor/*` immutable cache.
+- **Teszt:** új `teszt-lap-kereso` (igazi OpenCV.js Node-ban: egyenes/ferde lap, belső keretes lap, üres kép,
+  kiegyenesítés aránya), teljes `npm run teszt`, tsc, eslint, next build; böngészős próba (fotó → javasolt sarkok →
+  sarok húzása nagyítóval → kiegyenesített színes lap → beküldés). Valódi fotókon (Mac, OpenCV): a kilógó lapnál
+  nincs javaslat (teljes kép), a kapujegynél a belső táblázatot találta — ezért a 40%-os küszöb és a kézi igazítás.
+
 ## 2026-10-23 — Sofőr app: új fotózás (a telefon saját kamerája) + a szkenner kivágja a sűrűn írt lapot is
 
 Budaházi Zoltán: „a szkennelő nem jó az appban, jobb megoldás kell” (homályos, nem fotóz magától, nem vágja ki,

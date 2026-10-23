@@ -25,7 +25,6 @@ import { getFleetLastPositions, parseEcofleetTimestamp } from "@/lib/fuvarozas/e
 import { mozogE, toroljGeokodCachet } from "@/lib/fuvarozas/erintes-felismeres";
 import { ceglNevKanonikusan, normalizaltCegKulcs } from "@/lib/fuvarozas/fuvar-constants";
 import { megalloReszlete, type MegalloReszlet } from "@/lib/fuvarozas/sofor-adatok";
-import { szkennelj } from "@/lib/fuvarozas/doksi-kivagas";
 import { sajatFuvarE } from "@/lib/fuvarozas/irat-jog";
 import { ellenorizAtmenet } from "@/lib/fuvarozas/allapot";
 import { fotoLezarasDontes, type LezarasMegallo, type MasikFuvar } from "@/lib/fuvarozas/fuvarlevel-lezaras";
@@ -876,20 +875,19 @@ export async function feltoltFuvarlevelFoto(fuvarId: string, form: FormData): Pr
 
   const hivatkozas = (fuvar.reise_id ?? fuvar.pozicioszam ?? `fuvar${fuvarId}`).replace(/[^A-Za-z0-9_-]+/g, "_");
   const rendszam = (fuvar.jarmu ?? "").replace(/[^A-Za-z0-9]+/g, "").toUpperCase() || "kocsi";
-  // A fotóból szkennelt oldal lesz: a papír kivágva, egyenesbe hozva,
-  // tisztítva (lib/fuvarozas/doksi-kivagas.ts). A kimenet mindig JPEG, ezért
-  // a fájlnév is az. Ha a lap nem ismerhető fel, a kép tisztítva, de vágatlanul
-  // megy tovább; a telefonon kicsinyített bemenet külön is megmarad eredetiként.
+  // 2026-10-23 óta a szerver NEM vágja és nem „tisztítja” a sofőr fotóját
+  // (Budaházi Zoltán: „mikor lefotózzák egész jó, utána elromlik”): a
+  // valódi fotókon az automatikus vágó rossz részt vágott ki, a tisztítás
+  // kifakította a lapot. A lapot a telefon egyenesíti ki, a sofőr által
+  // jóváhagyott sarkokkal (components/erkezes/sofor-app/lap-kereso.ts);
+  // ide az a kép jön, és csak az EXIF-forgatást égetjük be.
   const nev = `${fuvar.datum}_${rendszam}_${hivatkozas}_${Date.now()}.jpg`;
   const eredeti = Buffer.from(await fajl.arrayBuffer());
-  const szken = await szkennelj(eredeti);
-  const tartalom = szken.tartalom;
-  // Az eredeti is álló helyzetben tárolódjon: ha a telefon a forgatást csak
-  // EXIF-ben jelzi (pl. sikertelen böngészős tömörítésnél), beégetjük — de
-  // csak ilyenkor, hogy a már egyenes fotó ne veszítsen az újrakódolással.
   const exif = await sharp(eredeti).metadata().then((m) => m.orientation ?? 1).catch(() => 1);
   const eredetiAllo = exif > 1 ? await sharp(eredeti).rotate().jpeg({ quality: 92 }).toBuffer().catch(() => eredeti) : eredeti;
   const eredetiMime = exif > 1 ? "image/jpeg" : fajl.type || "image/jpeg";
+  const tartalom = eredetiAllo;
+  const szken = { mimeType: eredetiMime };
 
   const beszurt = await query<{ id: string }>(
     `insert into fuvar_dokumentumok (fuvar_id, tipus, fajlnev, tarolas, tartalom, mime_type, meret_byte, feltoltotte, eredeti, eredeti_mime_type)
@@ -906,8 +904,7 @@ export async function feltoltFuvarlevelFoto(fuvarId: string, form: FormData): Pr
   // fotó a fenti lezárás-döntés szerint csak óvatosan.
   console.log(
     `[sofor] fuvarlevél-fotó feltöltve: fuvar #${fuvarId}, ${nev}, ` +
-      `${Math.round(eredeti.length / 1024)} KB → ${Math.round(tartalom.length / 1024)} KB, ` +
-      `${szken.kivagva ? "lap kivágva" : `vágatlan (${szken.ok ?? "?"})`} (${session.name})`
+      `${Math.round(tartalom.length / 1024)} KB (${session.name})`
   );
   revalidatePath("/erkezes");
   revalidatePath("/fuvarozas2");

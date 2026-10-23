@@ -1,26 +1,34 @@
 "use client";
 
-// A papír lefotózása (sofőr app) — 2026-10-23-i újragondolás. Budaházi
-// Zoltán: „a szkennelő nem jó az appban, jobb megoldás kell” — az élő,
-// böngészős kamera homályos volt, nem fotózott magától, nem vágta ki a lapot,
-// és sok lépés volt. Helyette (az ő választása):
+// A papír lefotózása (sofőr app). 2026-10-23, Budaházi Zoltán: „nem jó,
+// próbáltuk, keresd meg a legjobb módszert … appon belül kell, ingyenesen”.
+// A sofőrök valódi fotóin a szerveroldali automatikus vágó rossz részt vágott
+// ki, a „tisztítás” pedig kifakította a lapot. Az új menet — ugyanaz, mint a
+// CamScanner-szerű appoké, ingyenes eszközökkel:
 //
-//  1. A „Fotó” gomb a TELEFON SAJÁT KAMERÁJÁT nyitja (éles, vaku, fókusz,
-//     amit a sofőr megszokott) — ezt a hívó a koppintásban nyitja meg, így
-//     a Fotozas már a kész képpel indul.
-//  2. A kép azonnal a szerverre megy előnézetre (szkennelElonezet — ugyanaz a
-//     szkenner, mint a beküldéskor): a sofőr a KIVÁGOTT, KIEGYENESÍTETT lapot
-//     látja. Ha nincs térerő, az eredeti kép látszik, a vágás beküldéskor lesz.
-//  3. Egy képernyő: nagyban a lap, alatta az oldalak, és három gomb: Újra,
-//     + Oldal, Beküldöm. A beküldés a telefon sorába tesz (papir-sor.ts):
-//     térerő nélkül ott vár, és magától felmegy.
-//  4. Kész — ha van még papírra váró fuvar, egy gombbal jön a következő.
+//  1. a „Fotó” a TELEFON SAJÁT KAMERÁJÁT nyitja (a hívó a koppintásban);
+//  2. Igazítás: a fotón négy sarok — a telefon OpenCV-vel megkeresi a lapot
+//     (lap-kereso.ts), a sofőr ujjal a lap sarkaira húzza őket (nagyítóval);
+//     ha a gép nem biztos, a teljes kép a kiinduló állapot;
+//  3. Kész → a lap kiegyenesítve, SZÍNESEN, utólagos tisztítás nélkül; a
+//     szerver már nem nyúl hozzá (sofor.ts feltoltFuvarlevelFoto);
+//  4. oldalak listája: Újra / + Oldal / Beküldöm; a beküldés a telefon
+//     sorába tesz (papir-sor.ts), térerő nélkül ott vár, és magától felmegy.
 
 import { useEffect, useRef, useState } from "react";
 import { Camera, Check, CloudUpload, ImageIcon, Plus, RotateCcw, X } from "lucide-react";
-import { szkennelElonezet } from "@/lib/fuvarozas/sofor-app";
 import { bekuld, type SorEredmeny } from "./papir-sor";
 import { SOFOR_THEME } from "./tema";
+import { Igazito } from "./igazito";
+import {
+  AJANLOTT_MIN_TERULET,
+  TELJES_KEP,
+  betoltOpenCv,
+  egyenesitsd,
+  keressLapot,
+  sarkokTerulete,
+  type Sarkok,
+} from "./lap-kereso";
 
 export type FotoFuvar = {
   fuvarId: string;
@@ -34,29 +42,90 @@ export type FotoFuvar = {
 
 type Oldal = {
   id: string;
-  fajl: File;
-  /** A kivágott lap (szerver), vagy amíg / ha az nincs, az eredeti fotó helyi URL-je. */
-  kep: string;
-  allapot: "keszul" | "kivagva" | "nincs_lap" | "offline";
+  eredeti: File;
+  eredetiUrl: string;
+  meret: { w: number; h: number };
+  sarkok: Sarkok;
+  /** Ami beküldésre kerül: a kiegyenesített lap, vagy (teljes képnél) az eredeti. */
+  kep: Blob;
+  kepUrl: string;
 };
 
-/** Az előnézethez elég egy ~1600 px-es kép (gyenge térerőn is gyorsan felmegy); beküldéskor a teljes megy. */
-async function elonezetKep(fajl: File): Promise<Blob> {
+type Igazitas = {
+  /** Meglévő oldal újraigazítása (vagy cseréje), különben új oldal. */
+  helyette: string | null;
+  eredeti: File;
+  eredetiUrl: string;
+  meret: { w: number; h: number };
+  javaslat: Sarkok;
+  keres: boolean;
+};
+
+const ELEMZES_PX = 900;
+/** A kiegyenesítés legfeljebb ekkora képen fut — olvasható marad, és a gyengébb telefon memóriája is bírja. */
+const KIMENET_MAX_PX = 2400;
+
+const teljesKep = (s: Sarkok) => s.every((p, i) => Math.abs(p.x - TELJES_KEP[i].x) < 0.005 && Math.abs(p.y - TELJES_KEP[i].y) < 0.005);
+
+function rajzol(kep: ImageBitmap, max: number): { c: HTMLCanvasElement; ctx: CanvasRenderingContext2D } | null {
+  const arany = Math.min(1, max / Math.max(kep.width, kep.height));
+  const c = document.createElement("canvas");
+  c.width = Math.round(kep.width * arany);
+  c.height = Math.round(kep.height * arany);
+  const ctx = c.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return null;
+  ctx.drawImage(kep, 0, 0, c.width, c.height);
+  return { c, ctx };
+}
+
+/** A javasolt sarkok: a megtalált lap, ha elég nagy és biztos; különben a teljes kép. */
+async function javasol(fajl: File): Promise<Sarkok> {
   try {
-    const kep = await createImageBitmap(fajl);
+    const [{ cv }, kep] = await Promise.all([betoltOpenCv(), createImageBitmap(fajl)]);
     try {
-      const arany = Math.min(1, 1600 / Math.max(kep.width, kep.height));
-      const c = document.createElement("canvas");
-      c.width = Math.round(kep.width * arany);
-      c.height = Math.round(kep.height * arany);
-      c.getContext("2d")?.drawImage(kep, 0, 0, c.width, c.height);
-      const b = await new Promise<Blob | null>((ok) => c.toBlob(ok, "image/jpeg", 0.85));
+      const r = rajzol(kep, ELEMZES_PX);
+      if (!r) return TELJES_KEP;
+      const s = keressLapot(cv, r.ctx.getImageData(0, 0, r.c.width, r.c.height));
+      return s && sarkokTerulete(s) >= AJANLOTT_MIN_TERULET ? s : TELJES_KEP;
+    } finally {
+      kep.close();
+    }
+  } catch {
+    return TELJES_KEP;
+  }
+}
+
+/** A lap kiegyenesítése a jóváhagyott sarkokkal; teljes képnél (vagy ha nincs OpenCV) az eredeti marad. */
+async function kiegyenesit(fajl: File, s: Sarkok): Promise<Blob> {
+  if (teljesKep(s)) return fajl;
+  try {
+    const [{ cv }, kep] = await Promise.all([betoltOpenCv(), createImageBitmap(fajl)]);
+    try {
+      const r = rajzol(kep, KIMENET_MAX_PX);
+      if (!r) return fajl;
+      const lap = egyenesitsd(cv, r.ctx.getImageData(0, 0, r.c.width, r.c.height), s);
+      const ki = document.createElement("canvas");
+      ki.width = lap.width;
+      ki.height = lap.height;
+      ki.getContext("2d")?.putImageData(lap, 0, 0);
+      const b = await new Promise<Blob | null>((ok) => ki.toBlob(ok, "image/jpeg", 0.9));
       return b ?? fajl;
     } finally {
       kep.close();
     }
   } catch {
     return fajl;
+  }
+}
+
+async function kepMeret(fajl: File): Promise<{ w: number; h: number }> {
+  try {
+    const k = await createImageBitmap(fajl);
+    const m = { w: k.width, h: k.height };
+    k.close();
+    return m;
+  } catch {
+    return { w: 3, h: 4 };
   }
 }
 
@@ -78,6 +147,8 @@ export function Fotozas({
   const [index, setIndex] = useState(0);
   const [oldalak, setOldalak] = useState<Oldal[]>([]);
   const [nagy, setNagy] = useState<string | null>(null);
+  const [igazitas, setIgazitas] = useState<Igazitas | null>(null);
+  const [dolgozik, setDolgozik] = useState(false);
   const [kuldes, setKuldes] = useState<{ kesz: number; osszes: number } | null>(null);
   const [eredmeny, setEredmeny] = useState<(SorEredmeny & { hibas: number }) | null>(null);
   const kamera = useRef<HTMLInputElement>(null);
@@ -88,35 +159,59 @@ export function Fotozas({
 
   const fuvar = fuvarok[index];
 
-  async function hozzaad(fajlok: File[], helyette: string | null) {
-    const ujak: Oldal[] = fajlok.map((fajl) => {
-      const url = URL.createObjectURL(fajl);
-      urlek.current.push(url);
-      return { id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, fajl, kep: url, allapot: "keszul" };
-    });
-    setOldalak((t) => {
-      if (!helyette) return [...t, ...ujak];
-      const i = t.findIndex((o) => o.id === helyette);
-      return i < 0 ? [...t, ...ujak] : [...t.slice(0, i), ...ujak, ...t.slice(i + 1)];
-    });
-    setNagy(ujak.at(-1)?.id ?? null);
-    for (const o of ujak) {
-      try {
-        const form = new FormData();
-        form.append("foto", await elonezetKep(o.fajl), "elonezet.jpg");
-        const e = await szkennelElonezet(form);
-        setOldalak((t) => t.map((x) => (x.id === o.id ? { ...x, kep: e.kep, allapot: e.kivagva ? "kivagva" : "nincs_lap" } : x)));
-      } catch {
-        setOldalak((t) => t.map((x) => (x.id === o.id ? { ...x, allapot: "offline" } : x)));
-      }
-    }
+  const url = (b: Blob) => {
+    const u = URL.createObjectURL(b);
+    urlek.current.push(u);
+    return u;
+  };
+
+  /** Egy kép a kamerából: igazítás-képernyő, a javaslat a háttérben készül. */
+  async function igazitasra(fajl: File, helyette: string | null) {
+    const meret = await kepMeret(fajl);
+    const eredetiUrl = url(fajl);
+    setIgazitas({ helyette, eredeti: fajl, eredetiUrl, meret, javaslat: TELJES_KEP, keres: true });
+    const javaslat = await javasol(fajl);
+    setIgazitas((g) => (g && g.eredeti === fajl ? { ...g, javaslat, keres: false } : g));
   }
 
-  // Az első kép(ek) a hívótól — egyszer, a megjelenéskor; a setState az async hozzaad-ban, await után fut.
+  /** Több kép a galériából: vágás nélkül kerülnek be, rákoppintva igazíthatók. */
+  async function galeriabol(fajlok: File[]) {
+    const ujak: Oldal[] = [];
+    for (const f of fajlok) {
+      const u = url(f);
+      ujak.push({ id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, eredeti: f, eredetiUrl: u, meret: await kepMeret(f), sarkok: TELJES_KEP, kep: f, kepUrl: u });
+    }
+    setOldalak((t) => [...t, ...ujak]);
+    setNagy(ujak.at(-1)?.id ?? null);
+  }
+
+  async function igazitasKesz(s: Sarkok) {
+    const g = igazitas;
+    if (!g) return;
+    setDolgozik(true);
+    const kep = await kiegyenesit(g.eredeti, s);
+    const o: Oldal = {
+      id: g.helyette ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      eredeti: g.eredeti,
+      eredetiUrl: g.eredetiUrl,
+      meret: g.meret,
+      sarkok: s,
+      kep,
+      kepUrl: kep === g.eredeti ? g.eredetiUrl : url(kep),
+    };
+    setOldalak((t) => (g.helyette && t.some((x) => x.id === g.helyette) ? t.map((x) => (x.id === g.helyette ? o : x)) : [...t, o]));
+    setNagy(o.id);
+    setIgazitas(null);
+    setDolgozik(false);
+  }
+
+  // Az első kép a hívótól — egyszer; a setState az async függvényben, await után fut.
   useEffect(() => {
     if (indult.current) return;
     indult.current = true;
-    if (elsoFajlok.length) void hozzaad(elsoFajlok, null);
+    // Az OpenCV már most töltődjön, mire a sofőr a Kész-re nyom.
+    void betoltOpenCv().catch(() => undefined);
+    void Promise.resolve().then(() => (elsoFajlok.length === 1 ? igazitasra(elsoFajlok[0], null) : elsoFajlok.length > 1 ? galeriabol(elsoFajlok) : undefined));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -129,12 +224,17 @@ export function Fotozas({
 
   if (!fuvar) return null;
 
-  const fajlValaszt = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const kamerabol = (e: React.ChangeEvent<HTMLInputElement>) => {
     const fajlok = Array.from(e.target.files ?? []);
     e.target.value = "";
     const helyette = csere.current;
     csere.current = null;
-    if (fajlok.length) void hozzaad(fajlok, helyette);
+    if (fajlok[0]) void igazitasra(fajlok[0], helyette);
+  };
+  const galeriaValaszt = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const fajlok = Array.from(e.target.files ?? []);
+    e.target.value = "";
+    if (fajlok.length) void galeriabol(fajlok);
   };
 
   function ujFoto(helyette: string | null) {
@@ -147,7 +247,7 @@ export function Fotozas({
     setKuldes({ kesz: 0, osszes: oldalak.length });
     const e = await bekuld(
       fuvar.fuvarId,
-      oldalak.map((o) => o.fajl),
+      oldalak.map((o) => o.kep),
       (kesz, osszes) => setKuldes({ kesz, osszes })
     );
     setKuldes(null);
@@ -166,11 +266,28 @@ export function Fotozas({
 
   const inputok = (
     <>
-      <input ref={kamera} type="file" accept="image/*" capture="environment" className="hidden" onChange={fajlValaszt} />
-      <input ref={galeria} type="file" accept="image/*" multiple className="hidden" onChange={fajlValaszt} />
+      <input ref={kamera} type="file" accept="image/*" capture="environment" className="hidden" onChange={kamerabol} />
+      <input ref={galeria} type="file" accept="image/*" multiple className="hidden" onChange={galeriaValaszt} />
     </>
   );
   const keret = "fixed inset-0 z-50 mx-auto flex max-w-md flex-col gap-4 bg-[var(--sa-bg)] px-[18px] pb-6 pt-5 text-[var(--sa-ink)]";
+
+  if (igazitas) {
+    return (
+      <div style={SOFOR_THEME}>
+        {inputok}
+        <Igazito
+          key={igazitas.eredetiUrl}
+          kepUrl={igazitas.eredetiUrl}
+          kepMeret={igazitas.meret}
+          kezdo={igazitas.javaslat}
+          keres={igazitas.keres || dolgozik}
+          onKesz={(s) => void igazitasKesz(s)}
+          onMegse={() => setIgazitas(null)}
+        />
+      </div>
+    );
+  }
 
   // ---- kész
   if (eredmeny) {
@@ -225,8 +342,6 @@ export function Fotozas({
 
   // ---- az oldalak (egy képernyő)
   const fo = oldalak.find((o) => o.id === nagy) ?? oldalak.at(-1) ?? null;
-  const keszul = oldalak.some((o) => o.allapot === "keszul");
-  const nincsLap = oldalak.filter((o) => o.allapot === "nincs_lap").length;
 
   return (
     <div style={SOFOR_THEME} className={keret}>
@@ -247,24 +362,22 @@ export function Fotozas({
       </header>
 
       {fo ? (
-        <div className="relative flex min-h-0 flex-1 items-center justify-center rounded-3xl bg-[#E4E7EE] p-3">
-          {/* eslint-disable-next-line @next/next/no-img-element -- szerverről jött data-URL vagy helyi blob-URL */}
-          <img src={fo.kep} alt="A lefotózott lap" className={`max-h-full max-w-full rounded-md object-contain shadow ${fo.allapot === "keszul" ? "opacity-60" : ""}`} />
+        <button
+          type="button"
+          onClick={() => setIgazitas({ helyette: fo.id, eredeti: fo.eredeti, eredetiUrl: fo.eredetiUrl, meret: fo.meret, javaslat: fo.sarkok, keres: false })}
+          className="relative flex min-h-0 flex-1 items-center justify-center rounded-3xl bg-[#E4E7EE] p-3"
+          aria-label="Sarkok igazítása"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element -- helyi blob-URL */}
+          <img src={fo.kepUrl} alt="A lefotózott lap" className="max-h-full max-w-full rounded-md object-contain shadow" />
           <span className="absolute inset-x-0 bottom-4 flex justify-center px-3">
             <span
-              role="status"
-              className={`rounded-full px-3.5 py-1.5 text-sm font-bold ${fo.allapot === "kivagva" ? "bg-[var(--sa-green-soft)] text-[var(--sa-green)]" : fo.allapot === "keszul" ? "bg-white text-[var(--sa-ink)]" : "bg-[var(--sa-amber-soft)] text-[var(--sa-amber)]"}`}
+              className={`rounded-full px-3.5 py-1.5 text-sm font-bold ${teljesKep(fo.sarkok) ? "bg-white text-[var(--sa-ink)]" : "bg-[var(--sa-green-soft)] text-[var(--sa-green)]"}`}
             >
-              {fo.allapot === "kivagva"
-                ? "✓ Kivágva, kiegyenesítve"
-                : fo.allapot === "keszul"
-                  ? "Kivágás…"
-                  : fo.allapot === "offline"
-                    ? "Nincs térerő — a kivágás beküldéskor lesz"
-                    : "Nem találtam a lap szélét — fotózd sötétebb alapon"}
+              {teljesKep(fo.sarkok) ? "Teljes kép · koppints a vágáshoz" : "✓ Kiegyenesítve · koppints az igazításhoz"}
             </span>
           </span>
-        </div>
+        </button>
       ) : (
         <button
           type="button"
@@ -287,7 +400,7 @@ export function Fotozas({
                 className={`block overflow-hidden rounded-lg ${o.id === fo?.id ? "ring-[3px] ring-[var(--sa-blue)]" : ""}`}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element -- helyi / data-URL */}
-                <img src={o.kep} alt={`${i + 1}. oldal`} className="h-[74px] w-[54px] bg-white object-cover" />
+                <img src={o.kepUrl} alt={`${i + 1}. oldal`} className="h-[74px] w-[54px] bg-white object-cover" />
               </button>
               <button
                 type="button"
@@ -308,12 +421,6 @@ export function Fotozas({
             Galéria
           </button>
         </div>
-      )}
-
-      {nincsLap > 0 && (
-        <p className="-mt-1 px-1 text-[13px] leading-snug text-[var(--sa-muted)]">
-          Ha a lap szélét nem találta, a kép vágatlanul megy be — ez is jó, ha olvasható.
-        </p>
       )}
 
       {oldalak.length > 0 ? (
@@ -342,11 +449,7 @@ export function Fotozas({
             onClick={bekuldom}
             className="h-[60px] rounded-[18px] bg-[var(--sa-blue)] text-lg font-bold text-white disabled:opacity-50"
           >
-            {kuldes
-              ? `Küldés ${Math.min(kuldes.kesz + 1, kuldes.osszes)}/${kuldes.osszes}…`
-              : keszul
-                ? `Beküldöm (${oldalak.length} oldal)`
-                : `Beküldöm · ${oldalak.length} oldal`}
+            {kuldes ? `Küldés ${Math.min(kuldes.kesz + 1, kuldes.osszes)}/${kuldes.osszes}…` : `Beküldöm · ${oldalak.length} oldal`}
           </button>
         </>
       ) : (

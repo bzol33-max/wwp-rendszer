@@ -55,6 +55,11 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        // A nagy, verziózott nevű külső könyvtárak (OpenCV.js ≈10 MB) egyszer töltődjenek le a telefonra.
+        source: "/vendor/:file*",
+        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+      },
+      {
         source: "/:path*",
         headers: [
           { key: "Strict-Transport-Security", value: "max-age=31536000" },
@@ -70,7 +75,8 @@ const nextConfig: NextConfig = {
             key: "Content-Security-Policy-Report-Only",
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline'",
+              // 'wasm-unsafe-eval': a sofőr app OpenCV.js-e (public/vendor) WebAssemblyt fordít.
+              "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval'",
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: blob: https://*.tile.openstreetmap.org",
               "font-src 'self' data:",
