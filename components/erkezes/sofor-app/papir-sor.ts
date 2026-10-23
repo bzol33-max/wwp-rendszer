@@ -10,7 +10,6 @@
 // Ha a böngésző nem ad IndexedDB-t (privát mód), az oldalak azonnal, a régi
 // módon mennek fel (feltoltOldalakat).
 
-import { feltoltFuvarlevelFoto } from "@/lib/fuvarozas/sofor";
 import { kicsinyitFotot } from "@/lib/fuvarozas/fuvarlevel-feltoltes";
 
 const DB_NEV = "sofor-papir-sor";
@@ -65,11 +64,29 @@ export async function sorAllapot(): Promise<Record<string, number>> {
   }
 }
 
-async function feltoltEgyet(fuvarId: string, blob: Blob): Promise<string | null> {
+/**
+ * Egy oldal feltöltése a STABIL végpontra (app/api/fuvarozas/fuvarlevel-
+ * feltoltes), nem szerver-akcióval: az akció azonosítója élesítésenként
+ * változik, és a napokig sorban álló oldal utána nem menne fel. A `kulcs`
+ * idempotens: ha a válasz útközben elveszett, az újrapróba nem duplikál.
+ */
+async function feltoltEgyet(fuvarId: string, blob: Blob, kulcs: string): Promise<string | null> {
   const form = new FormData();
+  form.append("fuvarId", fuvarId);
+  form.append("kulcs", kulcs);
   form.append("foto", blob, blob.type === "image/png" ? "fuvarlevel.png" : "fuvarlevel.jpg");
-  const e = await feltoltFuvarlevelFoto(fuvarId, form);
+  const v = await fetch("/api/fuvarozas/fuvarlevel-feltoltes", { method: "POST", body: form, credentials: "same-origin" });
+  const e = (await v.json().catch(() => null)) as { figyelmeztetes?: string | null; hiba?: string } | null;
+  if (!v.ok) throw new Error(e?.hiba ?? `Feltöltési hiba (${v.status})`);
   return e?.figyelmeztetes ?? null;
+}
+
+function ujKulcs(): string {
+  try {
+    return crypto.randomUUID().replace(/-/g, "");
+  } catch {
+    return `${Date.now()}${Math.random().toString(36).slice(2, 12)}`;
+  }
 }
 
 export type SorEredmeny = { sikeres: number; varakozik: number; figyelmeztetes: string | null };
@@ -93,7 +110,7 @@ export function sorFeldolgoz(haladas?: (kesz: number, osszes: number) => void): 
       haladas?.(0, tetelek.length);
       for (const t of tetelek) {
         try {
-          const f = await feltoltEgyet(t.fuvarId, t.blob);
+          const f = await feltoltEgyet(t.fuvarId, t.blob, t.id);
           if (f) figyelmeztetes = f;
           await keres(db, "readwrite", (s) => s.delete(t.id));
           sikeres++;
@@ -135,7 +152,7 @@ export async function bekuld(
     let figyelmeztetes: string | null = null;
     for (const b of kicsik) {
       try {
-        const f = await feltoltEgyet(fuvarId, b);
+        const f = await feltoltEgyet(fuvarId, b, ujKulcs());
         if (f) figyelmeztetes = f;
         sikeres++;
       } catch {
@@ -148,7 +165,7 @@ export async function bekuld(
   try {
     const most = Date.now();
     for (let i = 0; i < kicsik.length; i++) {
-      const tetel: SorTetel = { id: `${fuvarId}-${most}-${i}`, fuvarId, blob: kicsik[i], letrehozva: most + i, probak: 0 };
+      const tetel: SorTetel = { id: ujKulcs(), fuvarId, blob: kicsik[i], letrehozva: most + i, probak: 0 };
       await keres(db, "readwrite", (s) => s.put(tetel));
     }
   } finally {

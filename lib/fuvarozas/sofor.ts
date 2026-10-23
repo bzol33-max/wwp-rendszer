@@ -838,6 +838,14 @@ export async function feltoltFuvarlevelFoto(fuvarId: string, form: FormData): Pr
   const session = await requireSession();
   const fajl = form.get("foto");
   if (!(fajl instanceof File) || fajl.size === 0) throw new Error("Nincs kép.");
+  // Idempotencia (2026-10-23): a telefonos sor ugyanazzal a kulccsal próbál
+  // újra; ha ez az oldal már bent van, nem lesz belőle második példány.
+  const kulcsNyers = form.get("kulcs");
+  const kulcs = typeof kulcsNyers === "string" && /^[A-Za-z0-9_-]{8,100}$/.test(kulcsNyers) ? kulcsNyers : null;
+  if (kulcs) {
+    const [mar] = await query<{ id: string }>(`select id::text from fuvar_dokumentumok where kliens_kulcs = $1`, [kulcs]);
+    if (mar) return { dokId: mar.id, figyelmeztetes: null };
+  }
   if (fajl.size > FOTO_MAX_BAJT) throw new Error("A kép túl nagy.");
   if (!fajl.type.startsWith("image/")) throw new Error("Csak kép tölthető fel.");
 
@@ -890,10 +898,11 @@ export async function feltoltFuvarlevelFoto(fuvarId: string, form: FormData): Pr
   const szken = { mimeType: eredetiMime };
 
   const beszurt = await query<{ id: string }>(
-    `insert into fuvar_dokumentumok (fuvar_id, tipus, fajlnev, tarolas, tartalom, mime_type, meret_byte, feltoltotte, eredeti, eredeti_mime_type)
-     values ($1, 'fuvarlevel', $2, 'db', $3, $4, $5, $6, $7, $8)
+    `insert into fuvar_dokumentumok (fuvar_id, tipus, fajlnev, tarolas, tartalom, mime_type, meret_byte, feltoltotte, eredeti, eredeti_mime_type, kliens_kulcs)
+     values ($1, 'fuvarlevel', $2, 'db', $3, $4, $5, $6, $7, $8, $9)
+     on conflict (kliens_kulcs) where kliens_kulcs is not null do update set kliens_kulcs = excluded.kliens_kulcs
      returning id::text`,
-    [fuvarId, nev, tartalom, szken.mimeType, tartalom.length, session.name ?? session.username, eredetiAllo, eredetiMime]
+    [fuvarId, nev, tartalom, szken.mimeType, tartalom.length, session.name ?? session.username, eredetiAllo, eredetiMime, kulcs]
   );
   // A részletek-lista a dokumentum_url-t linkeli — a saját kiszolgálónkra mutat.
   await query(`update fuvar_dokumentumok set dokumentum_url = $2 where id = $1`, [beszurt[0].id, `/api/fuvarozas/dokumentum/${beszurt[0].id}`]);
