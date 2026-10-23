@@ -20,6 +20,7 @@ import { Camera, Check, CloudUpload, ImageIcon, Plus, RotateCcw, X } from "lucid
 import { bekuld, type SorEredmeny } from "./papir-sor";
 import { SOFOR_THEME } from "./tema";
 import { Igazito } from "./igazito";
+import { KeretesKamera } from "./keretes-kamera";
 import {
   AJANLOTT_MIN_TERULET,
   TELJES_KEP,
@@ -78,20 +79,20 @@ function rajzol(kep: ImageBitmap, max: number): { c: HTMLCanvasElement; ctx: Can
   return { c, ctx };
 }
 
-/** A javasolt sarkok: a megtalált lap, ha elég nagy és biztos; különben a teljes kép. */
-async function javasol(fajl: File): Promise<Sarkok> {
+/** A megtalált lap sarkai, ha elég nagy és biztos; különben null. */
+async function javasol(fajl: File): Promise<Sarkok | null> {
   try {
     const [{ cv }, kep] = await Promise.all([betoltOpenCv(), createImageBitmap(fajl)]);
     try {
       const r = rajzol(kep, ELEMZES_PX);
-      if (!r) return TELJES_KEP;
+      if (!r) return null;
       const s = keressLapot(cv, r.ctx.getImageData(0, 0, r.c.width, r.c.height));
-      return s && sarkokTerulete(s) >= AJANLOTT_MIN_TERULET ? s : TELJES_KEP;
+      return s && sarkokTerulete(s) >= AJANLOTT_MIN_TERULET ? s : null;
     } finally {
       kep.close();
     }
   } catch {
-    return TELJES_KEP;
+    return null;
   }
 }
 
@@ -148,6 +149,8 @@ export function Fotozas({
   const [oldalak, setOldalak] = useState<Oldal[]>([]);
   const [nagy, setNagy] = useState<string | null>(null);
   const [igazitas, setIgazitas] = useState<Igazitas | null>(null);
+  /** Nyitva-e a keretes kamera, és melyik oldal helyett fotóz (Újra). */
+  const [kameraNyitva, setKameraNyitva] = useState<{ helyette: string | null } | null>(() => (elsoFajlok.length ? null : { helyette: null }));
   const [dolgozik, setDolgozik] = useState(false);
   const [kuldes, setKuldes] = useState<{ kesz: number; osszes: number } | null>(null);
   const [eredmeny, setEredmeny] = useState<(SorEredmeny & { hibas: number }) | null>(null);
@@ -165,13 +168,18 @@ export function Fotozas({
     return u;
   };
 
-  /** Egy kép a kamerából: igazítás-képernyő, a javaslat a háttérben készül. */
-  async function igazitasra(fajl: File, helyette: string | null) {
+  /**
+   * Egy kép a kamerából: igazítás-képernyő. Kiinduló sarkok: a kamera kerete
+   * (ha a keretes kamerából jött), különben a teljes kép; ha a lap-kereső
+   * biztos lapot talál, az lép a helyére.
+   */
+  async function igazitasra(fajl: File, helyette: string | null, keret: Sarkok | null = null) {
     const meret = await kepMeret(fajl);
     const eredetiUrl = url(fajl);
-    setIgazitas({ helyette, eredeti: fajl, eredetiUrl, meret, javaslat: TELJES_KEP, keres: true });
-    const javaslat = await javasol(fajl);
-    setIgazitas((g) => (g && g.eredeti === fajl ? { ...g, javaslat, keres: false } : g));
+    const alap = keret ?? TELJES_KEP;
+    setIgazitas({ helyette, eredeti: fajl, eredetiUrl, meret, javaslat: alap, keres: true });
+    const talalt = await javasol(fajl);
+    setIgazitas((g) => (g && g.eredeti === fajl ? { ...g, javaslat: talalt ?? alap, keres: false } : g));
   }
 
   /** Több kép a galériából: vágás nélkül kerülnek be, rákoppintva igazíthatók. */
@@ -238,8 +246,7 @@ export function Fotozas({
   };
 
   function ujFoto(helyette: string | null) {
-    csere.current = helyette;
-    kamera.current?.click();
+    setKameraNyitva({ helyette });
   }
 
   async function bekuldom() {
@@ -260,8 +267,7 @@ export function Fotozas({
     setOldalak([]);
     setNagy(null);
     setEredmeny(null);
-    // Ugyanabban a koppintásban nyílik a kamera — különben a böngésző nem engedi.
-    kamera.current?.click();
+    setKameraNyitva({ helyette: null });
   }
 
   const inputok = (
@@ -271,6 +277,37 @@ export function Fotozas({
     </>
   );
   const keret = "fixed inset-0 z-50 mx-auto flex max-w-md flex-col gap-4 bg-[var(--sa-bg)] px-[18px] pb-6 pt-5 text-[var(--sa-ink)]";
+
+  if (kameraNyitva && !igazitas) {
+    return (
+      <div style={SOFOR_THEME}>
+        {inputok}
+        <KeretesKamera
+          cim={fuvar.cim}
+          alcim={fuvar.alcim}
+          oldalDb={oldalak.length}
+          onFoto={(fajl, keret) => {
+            const helyette = kameraNyitva.helyette;
+            setKameraNyitva(null);
+            void igazitasra(fajl, helyette, keret);
+          }}
+          onTelefonKamera={() => {
+            csere.current = kameraNyitva.helyette;
+            setKameraNyitva(null);
+            kamera.current?.click();
+          }}
+          onGaleria={() => {
+            setKameraNyitva(null);
+            galeria.current?.click();
+          }}
+          onMegse={() => {
+            setKameraNyitva(null);
+            if (!oldalak.length) onBezar();
+          }}
+        />
+      </div>
+    );
+  }
 
   if (igazitas) {
     return (
@@ -381,7 +418,7 @@ export function Fotozas({
       ) : (
         <button
           type="button"
-          onClick={() => ujFoto(null)}
+          onClick={() => setKameraNyitva({ helyette: null })}
           className="flex flex-1 flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed border-[#C3CAD8] bg-[var(--sa-card)] text-lg font-bold text-[var(--sa-blue)]"
         >
           <Camera className="h-12 w-12" />

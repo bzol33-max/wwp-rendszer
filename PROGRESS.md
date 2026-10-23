@@ -1,5 +1,17 @@
 # PROGRESS
 
+## 2026-10-23 (este 2) — Sofőr app: kamera kerettel
+
+Budaházi Zoltán: „most egész jó, tedd vissza a keretet, amibe igazítsák be a papírt”.
+- `keretes-kamera.tsx`: élő kép a hátsó kamerából, rajta A4-es álló keret (kívül sötétítve, zöld sarokjelek),
+  „Igazítsd a papírt a keretbe”. A fotót `ImageCapture.takePhoto()` készíti (Android Chrome: teljes felbontás,
+  fókusz, vaku), csak ha az nincs, akkor a videókocka; folyamatos fókusz kérve. Vaku-gomb, Galéria; ha az élő
+  kamera nem indul, „Telefon kamerája” (a régi menet).
+- Az igazító kiinduló sarkai = a keret a fotóra vetítve (cover-kivágás és 4:3 / 16:9 látószög-különbség
+  figyelembevételével); ha az OpenCV biztos lapot talál, az lép a helyére. Utána ugyanúgy: Kész → kiegyenesítés.
+- **Teszt:** teljes `npm run teszt`, tsc, eslint, next build; böngészős próba hamis kamerával (keret → fotó →
+  sarkok a keretben/lapon → kiegyenesített lap).
+
 ## 2026-10-23 (este) — Sofőr app: papír-szkenner a telefonon (OpenCV + kézi sarok-igazítás), a szerver nem vág többé
 
 Budaházi Zoltán: „nem jó, próbáltuk, keresd meg a legjobb módszert … appon belül kell, ingyenesen”; „mikor
