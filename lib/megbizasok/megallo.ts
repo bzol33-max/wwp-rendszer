@@ -53,8 +53,20 @@ export async function varakozasTx(tx: Querier, fuvarId: string, index: number, m
 }
 
 // Az érkezés felülíródik, a már ismert távozást viszont egy későbbi,
-// távozás nélküli érintés nem törli.
+// távozás nélküli érintés nem törli. Ha semmi nem változik, nem ír: a GPS-
+// figyelő 5 percenként ugyanazokat az érintéseket küldi, és eddig mindegyik
+// egy (indexelt oszlopot érintő, ezért nem-HOT) UPDATE volt (audit P7). A
+// trigger (elso_erintes) csak üres → kitöltött váltásra lép, így ez nem
+// változtat a viselkedésén.
 export async function gpsErintesTx(tx: Querier, fuvarId: string, index: number, erkezes: Date, tavozas: Date | null) {
   const id = await megalloIdTx(tx, fuvarId, index);
-  if (id) await tx(`update fuvar_megallok set gps_erkezes = $2, gps_tavozas = coalesce($3, gps_tavozas) where id = $1`, [id, erkezes.toISOString(), tavozas?.toISOString() ?? null]);
+  if (id) {
+    await tx(
+      `update fuvar_megallok set gps_erkezes = $2, gps_tavozas = coalesce($3, gps_tavozas)
+        where id = $1
+          and (gps_erkezes is distinct from $2::timestamptz
+               or ($3::timestamptz is not null and gps_tavozas is distinct from $3::timestamptz))`,
+      [id, erkezes.toISOString(), tavozas?.toISOString() ?? null]
+    );
+  }
 }
