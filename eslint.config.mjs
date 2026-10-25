@@ -14,6 +14,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Külső, minifikált könyvtár (OpenCV.js).
     "public/vendor/**",
+    // Kivezetett, megőrzött fájlok (archive/README.md).
+    "archive/**",
   ]),
 ]);
 
