@@ -109,7 +109,10 @@ function driveClient() {
     // nem. A service account a Fuvarmegbizások mappán Szerkesztő.
     scopes: ["https://www.googleapis.com/auth/drive"],
   });
-  return googleDrive({ version: "v3", auth });
+  // Időkorlát minden Drive-hívásra (audit A7): egy beakadt kérés eddig
+  // újraindításig fogta a driveSync zárat, és a szinkron nem futott többé.
+  // 90 s, mint az OpenRouter-hívásé — egy nagy PDF letöltése is belefér.
+  return googleDrive({ version: "v3", auth, timeout: 90_000 });
 }
 
 type DriveFile = {
