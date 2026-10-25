@@ -831,7 +831,8 @@ export async function rogzitMegalloHelyet(
   toroljGeokodCachet();
   toroljIdovonalCachet();
   revalidatePath("/erkezes");
-  console.log(`[sofor] helyszín rögzítve: "${cim}" → ${pos.latitude.toFixed(5)}, ${pos.longitude.toFixed(5)} (${session.name})`);
+  // A pontos koordináta nem kerül a naplóba (személyhez köthető helyadat — audit CFG-6); a DB-ben megvan.
+  console.log(`[sofor] helyszín rögzítve: "${cim}" (${session.name})`);
   return { cim, lat: pos.latitude, lon: pos.longitude };
 }
 

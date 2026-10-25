@@ -1025,7 +1025,8 @@ export async function rogzitAllasMegalloHelyekent(
   toroljGeokodCachet();
   toroljIdovonalCachet();
   revalidatePath("/fuvarozas2");
-  console.log(`[ma] megálló helye rögzítve a GPS-állásból: "${g.cim_nyers}" → ${lat.toFixed(5)}, ${lon.toFixed(5)} (${session.name})`);
+  // A pontos koordináta nem kerül a naplóba (személyhez köthető helyadat — audit CFG-6); a DB-ben megvan.
+  console.log(`[ma] megálló helye rögzítve a GPS-állásból: "${g.cim_nyers}" (${session.name})`);
   return { ok: true, cim: g.cim_nyers };
 }
 
