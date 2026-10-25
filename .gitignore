@@ -5,3 +5,8 @@ node_modules
 *.log
 shot-*.png
 tsconfig.tsbuildinfo
+
+# Playwright
+/e2e/.auth/
+/test-results/
+/playwright-report/
