@@ -535,12 +535,20 @@ export async function getSoforNap(employeeId: string, napISO?: string): Promise<
   // csak a véletlenül kétszer feltöltött iratoknál jelent meg (Micó ÁB Speed
   // megbízásánál igen, Gergőnél nem — 2026-09-23). Idempotens: ha az irat
   // már csatolva van, nem történik semmi; egy TÖRÖLT sorról átkerül ide.
+  // A „not exists” előszűrő miatt a szokásos esetben (minden irat a helyén)
+  // nincs írás: eddig minden appnyitás minden napjára lefutott egy
+  // insert … on conflict (sorzár, elégetett sorszám — audit P4). Az
+  // on conflict ág a párhuzamos hívások miatt marad.
   if (fuvarIds.length) {
     await query(
       `insert into fuvar_dokumentumok (fuvar_id, drive_file_id, dokumentum_url, tipus, fajlnev)
        select f.id, f.drive_file_id, f.dokumentum_url, 'megbizas', null
          from fuvar_megbizasok f
         where f.id = any($1::bigint[]) and f.drive_file_id is not null
+          and not exists (
+            select 1 from fuvar_dokumentumok d
+             where d.drive_file_id = f.drive_file_id
+               and (select m.statusz from fuvar_megbizasok m where m.id = d.fuvar_id) is distinct from 'torolt')
        on conflict (drive_file_id) do update set fuvar_id = excluded.fuvar_id
         where (select m.statusz from fuvar_megbizasok m where m.id = fuvar_dokumentumok.fuvar_id) = 'torolt'`,
       [fuvarIds]
