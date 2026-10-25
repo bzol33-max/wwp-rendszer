@@ -1,4 +1,4 @@
-"use server";
+import "server-only";
 
 // GPS-alapú érintés-napló: megőrzi, mikor ért a kamion ténylegesen egy fuvar
 // fel-/lerakó állomására, és mikor indult tovább onnan.
@@ -41,9 +41,11 @@ export type GpsErintes = {
  * ablakú, rosszabb újraszámolás, ami felülírhatná. A sofőr kézi jelölését
  * (kesz/kesz_at/kesz_by) nem érinti.
  *
- * Megfigyelés-naplózás, nem felhasználói művelet — de mivel "use server"
- * fájlban van, kívülről is hívható akció: a jogosultság-ellenőrzés ezért kell
- * (audit 2026-10-04). Az ütemező rendszerjogon (futtatRendszerkent) átmegy.
+ * Megfigyelés-naplózás, nem felhasználói művelet. 2026-10-25 óta nem
+ * "use server" (audit SEC-5): korábban kívülről hívható akció volt, amivel
+ * fuvarozás-szerkesztési joggal a GPS-idő hamisítható volt — most csak a
+ * szerveroldali teljesítés-figyelő hívja. A jogosultság-ellenőrzés marad
+ * (mélységi védelem); az ütemező rendszerjogon (futtatRendszerkent) átmegy.
  */
 export async function rogzitGpsErinteseket(erintesek: GpsErintes[]): Promise<void> {
   await requireEditPermission("fuvarozas");
