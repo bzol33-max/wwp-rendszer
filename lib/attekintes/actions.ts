@@ -13,12 +13,14 @@ import { getIdovonalak } from "@/lib/fuvarozas/actions";
 import { fuvarHelyAllapotbol } from "@/lib/megbizasok/fuvar-hely-allapotbol";
 import { budapestNapISO } from "@/lib/fuvarozas/idozona";
 import { getFuvarok } from "@/lib/fuvarozas/megbizasok";
-import { resolveJarmu, jarmuLabel, type SajatJarmu } from "@/lib/fuvarozas/vehicles";
+import { jarmuLabel, type SajatJarmu } from "@/lib/fuvarozas/vehicles";
 import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
 import { getSzamlaLista } from "@/lib/szamlak/actions";
 import type { SzamlaRow } from "@/lib/szamlak/szamla-constants";
 import type { FuvardijPenznem, FuvarRow } from "@/lib/fuvarozas/fuvar-constants";
 import { bontsMegallokra, varosNev } from "@/lib/fuvarozas/varos";
+// A sofőr-nézettel közös egyeztetés (audit D4: korábban itt egy másolata volt).
+import { jarmuMatch } from "@/lib/fuvarozas/sofor-jarmu";
 
 // ---------------------------------------------------------------------------
 // Nyíregyháza fül
@@ -217,11 +219,6 @@ export type JarmuPoziciSor = {
   motorFut: boolean | null;
 };
 
-function jarmuMatch(jarmu: SajatJarmu, row: FuvarRow, lista: SajatJarmu[]): boolean {
-  if (row.jarmu && resolveJarmu(row.jarmu, lista) === jarmu) return true;
-  if (row.sofor && row.sofor.trim().toLowerCase() === jarmu.sofor.toLowerCase()) return true;
-  return false;
-}
 
 export type JarmuMegbizasMegallo = { tipus: "felrako" | "lerako"; varos: string };
 
