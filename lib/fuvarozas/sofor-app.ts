@@ -73,7 +73,7 @@ type LezartSor = {
   jarmu: string | null;
   jarmu_id: string | null;
   sofor: string | null;
-  tipus: string | null;
+  jelleg: "ber" | "sajat" | null;
   nap: string | null;
   teljesitve_at: Date | null;
   foto_van: boolean;
@@ -87,8 +87,9 @@ function tetelbe(s: LezartSor): SoforLezartTetel {
     hova: s.lerako ? megalloTelepules(bontsMegallokra(s.lerako).at(-1) ?? s.lerako) : null,
     nap: s.nap,
     lezarvaAt: s.teljesitve_at ? new Date(s.teljesitve_at).toISOString() : null,
-    // tipus='ber' = "Saját fuvar" a felületen (fordított oszlopnév, lásd sofor.ts SoforFuvarBlokk.sajatFuvar).
-    sajatFuvar: s.tipus === "ber",
+    // A jelleg oszlop nem fordított (jelleg='sajat' = saját fuvar); a régi tipus
+    // fordított volt, a kettőt trigger tartja szinkronban (audit D4/BIZ-3).
+    sajatFuvar: s.jelleg === "sajat",
     papirMegvan: s.foto_van,
   };
 }
@@ -101,7 +102,7 @@ async function lezartFuvarok(
   const sj = await sajatJarmu(employeeId);
   if (!sj) return [];
   const sorok = await query<LezartSor>(
-    `select f.id::text, f.megrendelo, f.felrako, f.lerako, f.jarmu, f.jarmu_id::text, f.sofor, f.tipus,
+    `select f.id::text, f.megrendelo, f.felrako, f.lerako, f.jarmu, f.jarmu_id::text, f.sofor, f.jelleg,
             to_char(coalesce(f.lerakas_datum, f.datum), 'YYYY-MM-DD') as nap, f.teljesitve_at,
             exists (select 1 from fuvar_dokumentumok d where d.fuvar_id = f.id and d.tipus = 'fuvarlevel') as foto_van
        from fuvar_megbizasok f
@@ -111,8 +112,7 @@ async function lezartFuvarok(
         and (
           $2 = 'kesz'
           or (coalesce(f.szamla_szam, '') = ''
-              -- tipus='ber' = saját fuvar (fordított oszlopnév)
-              and (f.tipus is distinct from 'ber' or f.teljesitve_at > now() - make_interval(days => $3))
+              and (f.jelleg is distinct from 'sajat' or f.teljesitve_at > now() - make_interval(days => $3))
               and not exists (select 1 from fuvar_dokumentumok d where d.fuvar_id = f.id and d.tipus = 'fuvarlevel'))
         )
       order by f.teljesitve_at desc
