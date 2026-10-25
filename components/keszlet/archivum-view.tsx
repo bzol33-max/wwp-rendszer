@@ -30,8 +30,8 @@ import {
   type ArchivumSnapshot,
 } from "@/lib/keszlet/actions";
 import { ArchivumEv } from "@/components/keszlet/archivum-ev";
+import { TELEP_SORREND } from "@/lib/keszlet/telepek";
 
-const SITE_ORDER = ["Nyíregyháza", "Balkány", "Szakoly"];
 
 function ft(n: number | null) {
   return n === null ? "—" : `${n.toLocaleString("hu-HU")} Ft`;
@@ -228,7 +228,7 @@ export function ArchivumView() {
             </CardContent>
           </Card>
 
-          {SITE_ORDER.filter((site) => snap.keszlet.some((r) => r.site === site)).map((site) => (
+          {TELEP_SORREND.filter((site) => snap.keszlet.some((r) => r.site === site)).map((site) => (
             <Card key={site}>
               <CardHeader>
                 <CardTitle className="text-sm">Készlet — {site}</CardTitle>

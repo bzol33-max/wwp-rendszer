@@ -24,8 +24,9 @@ ezután készülő hasonló oldal) az alábbi két dolgot kapja meg alapból:
    tetejéről" gesztussal (`router.refresh()`-t hív).
 
 Lásd `components/felvasarlas/felvasarlas-mobil-view.tsx` mint referencia-
-megvalósítás. A meglévő önálló mobil nézetek (`/mobil`, `/posta`, `/erkezes`)
-is át lettek állítva erre a sémára (2026-09-10) — a MovementForm/
+megvalósítás. A meglévő önálló mobil nézetek (akkor: `/mobil`, `/posta`,
+`/erkezes`) is át lettek állítva erre a sémára (2026-09-10; a `/mobil` azóta
+megszűnt, a `/posta` átirányítás az `/attekintes/posta`-ra) — a MovementForm/
 InventoryDialog kivétel, mert azok a desktop Készlet modullal közösek, azokat
 nem szabad átszínezni.
 
@@ -35,6 +36,11 @@ antracitot, Budaházi Szabina Óceánturkizt lát), ezt a MOBIL_THEME nem írja
 felül. A `PullToRefresh`-t viszont ez is megkapta (2026-09-10,
 `app/attekintes/layout.tsx`), az `indicatorClassName` prop-pal a pörgő ikon
 az adott felhasználó `--at-muted` színét használja, nem a `--mob-muted`-et.
+
+Az **`/m`** mobil nézet (2026-10, `app/m/layout.tsx`, `components/m/`) szintén
+kivétel: saját `--m-*` palettája van, és nincs benne `PullToRefresh` (audit
+E7, 2026-10-25 — a tényállás rögzítése, nem döntés; ha egységesíteni kell,
+az külön feladat).
 
 A **sofőr app** (`/erkezes` sofőr szerepkörrel, `components/erkezes/sofor-app/`)
 szintén kivétel: Budaházi Zoltán 2026-10-21-én a kék-világos „9-es” tervet

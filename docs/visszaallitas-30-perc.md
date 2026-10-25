@@ -1,19 +1,29 @@
-# Visszaállítás 30 perc alatt — Fuvarozás 2 átállás
+# Visszaállítás 30 perc alatt — adatbázis-mentés és -visszatöltés
 
-Kipróbálva: 2026-09-19 (helyi Postgres 16, E4b). Élesben a cutover előtt és a cutover reggelén (E10) ugyanez fut.
+Kipróbálva: 2026-09-19 (helyi Postgres 16, E4b), a Fuvarozás 2 átálláshoz írva.
+**Frissítve 2026-10-25 (audit E1):** a régi felület 2026-10-04-én törölve lett,
+a `FUVAROZAS_REGI` kapcsolót semmi nem olvassa — a régi 1. lépés („feature flag
+vissza”) ezért kikerült. A 2–5. lépés (mentés, visszatöltés, átkötés) általános
+DB-helyreállításként érvényes. Üres adatbázisra a `migrate.mjs` 2026-10-25 óta
+újra felépíti a sémát (audit A1/A2; előtte 2026-10-01 óta elhasalt).
 
 ## 0. Mikor kell
-- A cutover-napon a `fuvar_migracio_hiba` ≠ 0, vagy a régi CASE ≠ új `allapot` egyezés ≠ 0 → **stop**.
-- Az első 4 hétben bármilyen adat-hiba, amit a feature flag nem old meg.
+- Adatvesztés vagy -sérülés élesben, amit kézi javítás nem old meg.
+- Nagyobb, visszafordíthatatlan migráció előtt: a 2. lépés (mentés) mindig.
 
-## 1. Feature flag vissza (5 perc) — a felület
-Railway → `web` → Variables → `FUVAROZAS_REGI=on` → redeploy. A régi fülek visszajönnek, az új eltűnik. **Az adat érintetlen**, mert a régi oszlopok élnek (a trigger a `jelleg`/`torolt_at`-ot tölti tovább).
+## 1. (Megszűnt) Feature flag vissza
+A régi Fuvarozás felület és a `FUVAROZAS_REGI` kapcsoló 2026-10-04 óta nem
+létezik; a felület visszaállítása csak git-revert + deploy útján lehetséges.
 
 ## 2. Mentés készítése (a cutover ELŐTT, 5 perc)
 ```
 pg_dump "$DATABASE_URL" -Fc > wwp-cutover-$(date +%F).dump
 ```
-(Railway → Postgres → Connect → `DATABASE_PUBLIC_URL`; a `pg_dump` 16-os legyen.)
+(A `pg_dump` 16-os legyen. Az éles Postgresnek 2026-10-25-én **nincs nyilvános
+TCP-proxyja** (`DATABASE_PUBLIC_URL`) — kívülről csak egy ideiglenesen
+bekapcsolt proxyn át érhető el: Railway → Postgres → Settings → Networking →
+TCP Proxy, a mentés után kikapcsolni. Alternatíva: `railway run` a projekt
+környezetében.)
 
 ## 3. Visszatöltés külön adatbázisba (10 perc) — próba vagy éles
 ```

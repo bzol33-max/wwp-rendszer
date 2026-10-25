@@ -70,12 +70,13 @@ import {
 import { HU_MONTHS, ft } from "@/lib/dolgozok/shared";
 import { SoforFuvarNap } from "@/components/erkezes/sofor-fuvar-nap";
 import { SoforApp } from "@/components/erkezes/sofor-app/sofor-app";
+import { SAJAT_KESZLET_TELEPEK, type SajatKeszletTelep } from "@/lib/keszlet/telepek";
 
 type Screen = "home" | "jelenlet" | "feladatok" | "keszlet" | "profil" | "fuvarok";
 type ModulePermission = { view: boolean; edit: boolean };
 
-const KESZLET_SITES = ["Szakoly", "Balkány"] as const;
-type KeszletSite = (typeof KESZLET_SITES)[number];
+const KESZLET_SITES = SAJAT_KESZLET_TELEPEK;
+type KeszletSite = SajatKeszletTelep;
 
 // Az elfogadásra váró előleg sávja MINDEN képernyő tetején ott van, amíg rá
 // nem nyomnak — Budaházi Zoltán kérése: értesítés nem kell, de "mindig

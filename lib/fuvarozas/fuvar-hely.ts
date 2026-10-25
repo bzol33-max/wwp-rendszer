@@ -68,7 +68,7 @@ export const FUVAR_SZAMLAS_SQL = `(coalesce(szamla_szam, '') <> '')`;
  * postazva_at-ot "régen archivált"-nak vesszük. Enélkül a NULL továbbterjedne a <=
  * összehasonlításon (`true and NULL` = NULL), és a sor minden fül where-
  * feltételén elbukna — vagyis sehol nem látszana. Ilyen sor a
- * setFuvarPostazva-n keresztül nem keletkezik (az együtt írja a két mezőt),
+ * postázási állapotváltáson (valtAllapot) keresztül nem keletkezik,
  * de importból vagy kézi DB-javításból igen.
  */
 export const FUVAR_EFFEKTIVE_ARCHIVALT_SQL = `(${FUVAR_SZAMLAS_SQL} and postazva and coalesce(postazva_at, '-infinity'::timestamptz) <= now() - interval '${ARCHIVALAS_ABLAK_PERC} minutes')`;

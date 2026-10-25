@@ -1,5 +1,7 @@
 # Fuvarozás 2.0 — 1. hullám + takarítás (2026-10-16)
 
+> **Állapot (2026-10-25, audit E10):** megvalósult; a D5 utolsó maradéka (`getFuvarokIdoszakban`) 2026-10-25-én törölve (audit D1). A fájl-tulajdon táblák már nem érvényesek.
+
 Jóváhagyva (Budaházi Zoltán, 15:33): B-felépítés (kocsi-központú) a 2. körben; most az 1. hullám és a teljes takarítás.
 Döntési lap: https://claude.ai/artifact/4NuCBTm96S29Cq7MgoUBcm · Előzmény: `docs/ecofleet-telemetria-terv.md`.
 Fő mérőszám: **fedezet / kocsi / munkanap**. Kiinduló: ~83 e Ft bérbevétel / kocsi / munkanap (2026-10-01–16).

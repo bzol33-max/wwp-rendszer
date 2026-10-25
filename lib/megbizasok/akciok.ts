@@ -17,7 +17,6 @@ import { kanonikusMegrendeloNev } from "@/lib/fuvarozas/megrendelo-nev";
 import { berFuvarHiba, berSzam, valtozottMezok, type BerFuvarAdat } from "@/lib/fuvarozas2/berfuvar";
 import type { AddFuvarInput, FuvardijPenznem } from "@/lib/fuvarozas/fuvar-constants";
 import { toroljIdovonalCachet } from "@/lib/fuvarozas/idovonal-cache";
-import { fuvarSzamlaTukor } from "@/lib/fuvarozas/szamla-parositas";
 import { normalizaltCegKulcs } from "@/lib/fuvarozas/fuvar-constants";
 import type { SajatFuvarAdat, Eredmeny } from "@/lib/fuvarozas2/sajat-fuvar";
 import { ALLAPOT_CIMKE } from "@/lib/megbizasok/allapotgep";
@@ -496,18 +495,6 @@ export async function setFuvarFizetesiHatarido(id: string, nap: number | null) {
   await query(`update fuvar_megbizasok set fizetesi_hatarido_nap = $2 where id = $1`, [id, nap]);
 }
 
-export async function setFuvarPostazva(id: string, postazva: boolean) {
-  // A "posta" jog is elég — ld. setFuvarPostazasiCim. Korábban csak a
-  // Fuvarozás szerkesztési jogát fogadta el, ezért a /posta nézetben a
-  // "Postázva" pipa hibával ("Nem sikerült menteni") visszapattant annál,
-  // akinek csak a Posta modulja van engedélyezve.
-  await requireAnyEditPermission(["fuvarozas", "posta"]);
-  await query(
-    `update fuvar_megbizasok set postazva = $2, postazva_at = case when $2 then now() else null end where id = $1`,
-    [id, postazva]
-  );
-}
-
 /** A párosított számla és elszámolási tükör egy tranzakcióban rögzítése. */
 export async function rogzitParositottSzamlat(fuvarId: string, szamla: { szamlaSzam: string | null; szamlaId: string | null; szamlaKelte: string | null }, reszletek: Record<string, unknown>): Promise<{ regi: string | null } | null> {
   await requireEditPermission("fuvarozas");
@@ -523,19 +510,6 @@ export async function rogzitParositottSzamlat(fuvarId: string, szamla: { szamlaS
     await elszamolasUpsert(tx, fuvarId, szamla);
     await irEsemenyt(tx, { megbizasId: fuvarId, esemeny: "szamla_parositva", forras: "szamla_szinkron", reszletek: { ...reszletek, ...(rows[0].regi ? { sztornozott_elozo: rows[0].regi } : {}) } });
     return { regi: rows[0].regi };
-  });
-}
-
-export async function setFuvarSzamlaSzam(id: string, szamlaSzam: string | null) {
-  await requireEditPermission("fuvarozas");
-  const szam = szamlaSzam?.trim() || null;
-  const [sz] = szam ? await query<{ id: string; kelt: string | null }>(
-    `select id::text, to_char(kiallitas_datum, 'YYYY-MM-DD') as kelt from szamla where szamlaszam = $1`, [szam]
-  ) : [undefined];
-  const tukor = fuvarSzamlaTukor(szam, sz);
-  await withTransaction(async (tx) => {
-    const sor = await tx<{ jelleg: string }>(`update fuvar_megbizasok set szamla_szam = $2 where id = $1 returning jelleg`, [id, szam]);
-    if (sor[0]?.jelleg === "ber") await elszamolasUpsert(tx, id, tukor);
   });
 }
 
@@ -844,14 +818,22 @@ export async function kocsiraAdom(id: string): Promise<Eredmeny> {
   if (sor.datum! < budapestNapISO()) return { ok: false, hiba: MULT_NAP_HIBA };
   const jarmu = findJarmuByPlate(sor.elokeszites_jarmu!, await getJarmuvek());
   if (!jarmu) return { ok: false, hiba: "Ismeretlen kocsi." };
-  await query(
-    `update fuvar_megbizasok set jarmu = $2, jarmu_id = (select id from fuvar_jarmuvek where kod = $3), elokeszites = false, idopont_nyitott = false, kocsira_adva_at = now(), ellenorzott = true
-     where id = $1`,
-    [id, jarmuLabel(jarmu), jarmu.kod]
-  );
-  // Az előkészítés alatt a háttér-szinkron már felépíthette a megállókat a
-  // korábbi címekből; a sofőr még nem látta őket, ezért a mostaniakból újra.
-  await query(`delete from fuvar_megallok where megbizas_id = $1`, [id]);
+  // Egy tranzakcióban, és csak ha még előkészítés: dupla kattintásnál a második
+  // hívás nem törli a közben felépült megállókat (audit A3).
+  const atadva = await withTransaction(async (tx) => {
+    const sorok = await tx<{ id: string }>(
+      `update fuvar_megbizasok set jarmu = $2, jarmu_id = (select id from fuvar_jarmuvek where kod = $3), elokeszites = false, idopont_nyitott = false, kocsira_adva_at = now(), ellenorzott = true
+       where id = $1 and elokeszites
+       returning id::text`,
+      [id, jarmuLabel(jarmu), jarmu.kod]
+    );
+    if (sorok.length === 0) return false;
+    // Az előkészítés alatt a háttér-szinkron már felépíthette a megállókat a
+    // korábbi címekből; a sofőr még nem látta őket, ezért a mostaniakból újra.
+    await tx(`delete from fuvar_megallok where megbizas_id = $1`, [id]);
+    return true;
+  });
+  if (!atadva) return { ok: false, hiba: "Ez a fuvar már kocsin van." };
   await frissitsdFuvarozas2Modellt(id);
   await naplo(id, "hozzarendeles", { kocsira_adva: jarmuLabel(jarmu) });
   return { ok: true, id };
@@ -859,25 +841,30 @@ export async function kocsiraAdom(id: string): Promise<Eredmeny> {
 
 export async function visszaveszem(id: string): Promise<Eredmeny> {
   await requireEditPermission("fuvarozas");
-  const [erintett] = await query<{ n: number }>(
-    `select (
-       (select count(*) from fuvar_megallok g where g.megbizas_id = $1 and
-         (g.sofor_kesz_at is not null or g.sofor_megerkezett_at is not null or g.gps_erkezes is not null))
-     )::int as n`,
-    [id]
-  );
-  if ((erintett?.n ?? 0) > 0) return { ok: false, hiba: "A sofőr már elindult ezzel a fuvarral — nem vehető vissza." };
-  const [sor] = await query<{ id: string }>(
-    `update fuvar_megbizasok m set elokeszites = true,
-       elokeszites_jarmu = coalesce(elokeszites_jarmu, (select j.kod from fuvar_jarmuvek j where j.id = m.jarmu_id)),
-       jarmu = null, jarmu_id = null, kocsira_adva_at = null
-     where id = $1 and jelleg = 'sajat' and not elokeszites and torolt_at is null and not coalesce(teljesitve, false)
-     returning id::text`,
-    [id]
-  );
-  if (!sor) return { ok: false, hiba: "Ez a fuvar nem vehető vissza." };
-  // A megállók a „Kocsira adom”-nál újra felépülnek a (módosított) címekből.
-  await query(`delete from fuvar_megallok where megbizas_id = $1`, [id]);
+  // Egy tranzakcióban, a megálló-sorokat zárolva: ha a sofőr épp most nyomja
+  // meg a „Megérkeztem”-et, az ellenőrzés és a törlés között nem veszhet el
+  // a rögzített ténye (audit A3).
+  const hiba = await withTransaction(async (tx) => {
+    const megallok = await tx<{ aktiv: boolean }>(
+      `select (g.sofor_kesz_at is not null or g.sofor_megerkezett_at is not null or g.gps_erkezes is not null) as aktiv
+       from fuvar_megallok g where g.megbizas_id = $1 for update`,
+      [id]
+    );
+    if (megallok.some((g) => g.aktiv)) return "A sofőr már elindult ezzel a fuvarral — nem vehető vissza.";
+    const sorok = await tx<{ id: string }>(
+      `update fuvar_megbizasok m set elokeszites = true,
+         elokeszites_jarmu = coalesce(elokeszites_jarmu, (select j.kod from fuvar_jarmuvek j where j.id = m.jarmu_id)),
+         jarmu = null, jarmu_id = null, kocsira_adva_at = null
+       where id = $1 and jelleg = 'sajat' and not elokeszites and torolt_at is null and not coalesce(teljesitve, false)
+       returning id::text`,
+      [id]
+    );
+    if (sorok.length === 0) return "Ez a fuvar nem vehető vissza.";
+    // A megállók a „Kocsira adom”-nál újra felépülnek a (módosított) címekből.
+    await tx(`delete from fuvar_megallok where megbizas_id = $1`, [id]);
+    return null;
+  });
+  if (hiba) return { ok: false, hiba };
   await naplo(id, "visszaallitas", { elokeszitesbe: true });
   return { ok: true, id };
 }

@@ -13,12 +13,15 @@ import { getIdovonalak } from "@/lib/fuvarozas/actions";
 import { fuvarHelyAllapotbol } from "@/lib/megbizasok/fuvar-hely-allapotbol";
 import { budapestNapISO } from "@/lib/fuvarozas/idozona";
 import { getFuvarok } from "@/lib/fuvarozas/megbizasok";
-import { resolveJarmu, jarmuLabel, type SajatJarmu } from "@/lib/fuvarozas/vehicles";
+import { jarmuLabel, type SajatJarmu } from "@/lib/fuvarozas/vehicles";
 import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
 import { getSzamlaLista } from "@/lib/szamlak/actions";
 import type { SzamlaRow } from "@/lib/szamlak/szamla-constants";
 import type { FuvardijPenznem, FuvarRow } from "@/lib/fuvarozas/fuvar-constants";
 import { bontsMegallokra, varosNev } from "@/lib/fuvarozas/varos";
+// A sofőr-nézettel közös egyeztetés (audit D4: korábban itt egy másolata volt).
+import { jarmuMatch } from "@/lib/fuvarozas/sofor-jarmu";
+import { TELEP_SORREND } from "@/lib/keszlet/telepek";
 
 // ---------------------------------------------------------------------------
 // Nyíregyháza fül
@@ -217,19 +220,17 @@ export type JarmuPoziciSor = {
   motorFut: boolean | null;
 };
 
-function jarmuMatch(jarmu: SajatJarmu, row: FuvarRow, lista: SajatJarmu[]): boolean {
-  if (row.jarmu && resolveJarmu(row.jarmu, lista) === jarmu) return true;
-  if (row.sofor && row.sofor.trim().toLowerCase() === jarmu.sofor.toLowerCase()) return true;
-  return false;
-}
 
 export type JarmuMegbizasMegallo = { tipus: "felrako" | "lerako"; varos: string };
 
 export type JarmuMegbizasSor = {
   id: string;
-  // A UI-n megszokott (a DB "tipus" mezőjéhez képest fordított) címkézés —
-  // lásd lib/dashboard/actions.ts megjegyzését: DB tipus='ber' -> "Saját",
-  // DB tipus='sajat' -> "Bér".
+  // A UI-n megszokott (a DB "tipus" mezőjéhez képest FORDÍTOTT) címkézés:
+  // DB tipus='ber' -> "Saját", DB tipus='sajat' -> "Bér". Ez szándékos és
+  // történeti: a régi fülek a tipus mezőt a mi szemszögünkből fordítva
+  // nevezték el. Ne „javítsd” — az új kód a jelleg oszlopot használja
+  // (jelleg='ber' = bérfuvar, jelleg='sajat' = saját fuvar), ami nem fordított.
+  // (A korábbi magyarázat a 2026-10-ben törölt lib/dashboard/actions.ts-ben volt.)
   cimke: "Saját" | "Bér";
   date: string;
   /** YYYY-MM-DD — a "Ma"/"Holnap" címkéhez a kártyán. */
@@ -542,8 +543,7 @@ export type KeszletFulAdatok = {
   uton: KeszletUtonSor[];
 };
 
-// A telepek sorrendje a Készlet fülön — ugyanaz, mint a Készlet modulban.
-const KESZLET_TELEP_SORREND = ["Nyíregyháza", "Balkány", "Szakoly"];
+// A telepek sorrendje a Készlet fülön — ugyanaz, mint a Készlet modulban (TELEP_SORREND).
 
 /**
  * A "Készlet" fül: az összes telephely aktuális készlete típusonként, plusz
@@ -599,8 +599,8 @@ export async function getKeszletFulAdatok(): Promise<KeszletFulAdatok> {
   }
 
   const rang = (nev: string) => {
-    const i = KESZLET_TELEP_SORREND.indexOf(nev);
-    return i === -1 ? KESZLET_TELEP_SORREND.length : i;
+    const i = TELEP_SORREND.indexOf(nev);
+    return i === -1 ? TELEP_SORREND.length : i;
   };
   const telepek = Array.from(telepOsszes, ([nev, osszes]) => ({ nev, osszes })).sort(
     (a, b) => rang(a.nev) - rang(b.nev) || a.nev.localeCompare(b.nev, "hu")

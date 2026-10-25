@@ -189,7 +189,12 @@ export type ElakadtFuvar = {
   javasoltSofor: string | null;
 };
 
-/** A GPS lap egy napjának teljes adata: járművenkénti idővonalak + a hozzá nem rendelt fuvarok. */
+/**
+ * Egy nap teljes idővonal-adata: járművenkénti idővonalak + a hozzá nem rendelt fuvarok.
+ * A kódban sok helyen szereplő „GPS lap” ennek az adatnak az egykori önálló
+ * oldala volt (2026-10-12 óta megszűnt); a getIdovonalak ma a Ma oldalt, a
+ * sofőr appot és az Áttekintést táplálja (audit E8).
+ */
 export type IdovonalNap = {
   jarmuvek: JarmuIdovonalEredmeny[];
   elakadtak: ElakadtFuvar[];

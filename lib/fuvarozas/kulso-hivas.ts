@@ -136,14 +136,48 @@ export async function cachelveHiv<T>(
 /** Folyamatban lévő cachelveHiv-hívások (a kulcs már tartalmazza a szolgáltatót). */
 const folyamatban = new Map<string, Promise<unknown>>();
 
+/** Még ki nem írt cache-találatok kulcsonként; percenként egy UPDATE viszi ki. */
+const kiirandoTalalat = new Map<string, number>();
+let kiirasIdozito: ReturnType<typeof setTimeout> | null = null;
+
+function talalatJegyez(kulcs: string) {
+  kiirandoTalalat.set(kulcs, (kiirandoTalalat.get(kulcs) ?? 0) + 1);
+  if (!kiirasIdozito) {
+    kiirasIdozito = setTimeout(() => void talalatKiiras(), 60_000);
+    kiirasIdozito.unref?.();
+  }
+}
+
+async function talalatKiiras() {
+  kiirasIdozito = null;
+  if (kiirandoTalalat.size === 0) return;
+  const tetelek = [...kiirandoTalalat];
+  kiirandoTalalat.clear();
+  try {
+    await query(
+      `update kulso_valasz_cache c set talalat = c.talalat + u.db
+         from unnest($1::text[], $2::int[]) as u(kulcs, db)
+        where c.kulcs = u.kulcs`,
+      [tetelek.map(([k]) => k), tetelek.map(([, db]) => db)]
+    );
+  } catch {
+    // a számláló csak tájékoztató — elmaradása nem hiba
+  }
+}
+
 async function cachelveHivEgyszer<T>(szolgaltato: string, kulcs: string, ttlPerc: number, fn: () => Promise<T>): Promise<T> {
   try {
+    // Sima olvasás: a találat-számláló a memóriában gyűlik, és percenként egy
+    // írással kerül ki (talalatKiiras) — eddig minden találat egy UPDATE volt
+    // a nagy jsonb-s soron (audit P6).
     const sor = await query<{ valasz: T }>(
-      `update kulso_valasz_cache set talalat = talalat + 1
-       where kulcs = $1 and lejar_at > now() returning valasz`,
+      `select valasz from kulso_valasz_cache where kulcs = $1 and lejar_at > now()`,
       [kulcs]
     );
-    if (sor.length > 0) return sor[0].valasz;
+    if (sor.length > 0) {
+      talalatJegyez(kulcs);
+      return sor[0].valasz;
+    }
   } catch {
     // nincs tábla / nincs adatbázis — megyünk tovább a valódi híváshoz
   }

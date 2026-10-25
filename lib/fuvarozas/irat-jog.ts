@@ -26,7 +26,7 @@ import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
  * se maradjon papír nélkül.
  *
  * Visszatérési értéke a hibaválasz, vagy null, ha a kérés mehet tovább —
- * ugyanaz a szokás, mint a lib/auth/api-guard.ts őreinél.
+ * ugyanaz a szokás, mint a (2026-10-25 óta archivált) archive/lib/auth/api-guard.ts őreinél.
  */
 export async function fuvarIratGuard(
   fuvarId: string,

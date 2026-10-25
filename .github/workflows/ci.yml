@@ -1,0 +1,65 @@
+# Minőségkapu (audit Q1, 2026-10-25): minden PR-on és a main-re pusholáskor.
+# Typecheck, lint, build, a smoke tesztek (Playwright), végül a teszt-lánc. A smoke egy
+# eldobható Postgres 16-on, üres adatbázisból felépítve (ez az A1/A2 javítás
+# folyamatos ellenőrzése is). Node: ugyanaz, mint a Railway-en (24).
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ellenorzes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: wwp_ci
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:ci@localhost:5432/wwp_ci
+      SESSION_SECRET: ci-session-secret-csak-teszthez-0123456789abcdef
+      SEED_ADMIN_PASSWORD: ci-admin-jelszo
+      SMOKE_USER: admin
+      SMOKE_PASSWORD: ci-admin-jelszo
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Séma üres adatbázisra
+        run: node scripts/migrate.mjs
+      - name: Build
+        run: npm run build
+      - name: Playwright böngésző
+        run: npx playwright install --with-deps chromium
+      - name: Smoke tesztek (buildelt app)
+        run: npm run smoke:build
+      # A teszt-lánc a végén: egy hibája ne takarja el a build és a smoke eredményét.
+      - name: Teszt-lánc
+        run: npm run teszt
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-nyomok
+          path: test-results/
+          retention-days: 7

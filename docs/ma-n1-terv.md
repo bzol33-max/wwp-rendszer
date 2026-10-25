@@ -1,5 +1,7 @@
 # Ma oldal · N1 kocsikártya (ma + holnap)
 
+> **Állapot (2026-10-25, audit E10):** megvalósult (a409049), majd 2026-10-21-én felülírta a metró-vonalas kártya (`components/fuvarozas2/ma-metro.tsx`, `lib/fuvarozas2/ma-metro-alap.ts`); a `ma-kartya-alap.ts` még használatban van.
+
 Döntés: Budaházi Zoltán, 2026-10-17 („N1”), a terv-vászon „M2 tovább” oldaláról.
 Oldal: `/fuvarozas2` (Kocsik → Ma).
 

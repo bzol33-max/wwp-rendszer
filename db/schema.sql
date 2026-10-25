@@ -92,7 +92,7 @@ create table if not exists keszlet_movements (
   id             bigserial primary key,
   site_id        smallint not null references sites(id),
   type_id        smallint not null references pallet_types(id),
-  direction      text not null check (direction in ('be', 'ki', 'mozgatas')),
+  direction      text not null check (direction in ('be', 'ki', 'mozgatas', 'mozgatas_be')),
   qty            integer not null check (qty > 0),
   partner        text,
   target_site_id smallint references sites(id),
@@ -110,6 +110,9 @@ create index if not exists idx_keszlet_movements_site on keszlet_movements (site
 -- másik telepre mutat.
 -- Csak ha még nincs: a minden induláskor lefutó drop+add a teljes táblát
 -- zárolta és végigolvasta (audit DB-2). A szabály módosítása migrációba való.
+-- Üres adatbázison a fenti create table CHECK-je kapja ezt a nevet, ezért ott
+-- már eleve a 4 értékes szabály kell, különben ez a blokk sosem bővítene
+-- (audit A2, 2026-10-25).
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'keszlet_movements_direction_check') then
     alter table keszlet_movements add constraint keszlet_movements_direction_check
@@ -1097,34 +1100,9 @@ create table if not exists fuvar_elteres_nyugta (
   primary key (nap, kulcs)
 );
 
--- Partner-adat javaslatok (lib/fuvarozas2/partner-javaslat.ts): a megbízás
--- PDF-jéből (a fejlécet képként is olvasva) és a korábbi számlák vevőcíméből
--- a partner HIÁNYZÓ adataira. Nem írja felül a partnert — ember fogadja el.
-create table if not exists fuvar_partner_javaslat (
-  id            bigserial primary key,
-  partner_id    bigint not null references fuvar_partnerek(id) on delete cascade,
-  mezo          text not null check (mezo in ('postazasi_cim', 'szamlazasi_email', 'papir_bekuldesi_hatarido_nap', 'fizetesi_hatarido_nap')),
-  ertek         text not null,
-  forras        text not null,           -- 'megbizas_pdf' | 'szamla'
-  forras_leiras text,                    -- „Megbízás (poz 4173).pdf”, „WLLWR-2026-120”
-  megbizas_id   bigint references fuvar_megbizasok(id) on delete set null,
-  allapot       text not null default 'nyitott' check (allapot in ('nyitott', 'elfogadva', 'elvetve')),
-  letrehozva_at timestamptz not null default now(),
-  dontes_at     timestamptz,
-  dontes_by     text,
-  unique (partner_id, mezo, ertek)
-);
-create index if not exists idx_fuvar_partner_javaslat_nyitott on fuvar_partner_javaslat (partner_id) where allapot = 'nyitott';
-
--- Melyik megbízás-PDF-et olvastuk már ki partner-adatért (egyszer fut le iratonként).
-create table if not exists fuvar_partner_kiolvasas (
-  drive_file_id text primary key,
-  partner_id    bigint references fuvar_partnerek(id) on delete cascade,
-  megbizas_id   bigint references fuvar_megbizasok(id) on delete set null,
-  eredmeny      jsonb,
-  hiba          text,
-  futott_at     timestamptz not null default now()
-);
+-- A partner-adat javaslat táblák (fuvar_partner_javaslat, fuvar_partner_kiolvasas)
+-- a db/migrations/049_partner_javaslat_tablak.sql-ben vannak: a fuvar_partnerek
+-- táblára hivatkoznak, ami csak a 001-es migrációban jön létre (audit A1).
 
 -- Szabadság-igénylés (2026-10-03). A dolgozó a telefonján beadja, mikor
 -- szeretne szabadságra menni, az admin a Jelenléti oldalon jóváhagyja vagy

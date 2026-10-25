@@ -3,12 +3,10 @@
 import * as actions from "@/lib/megbizasok/akciok";
 
 import { query, withTransaction } from "@/lib/db";
-import { megalloKeszTx } from "@/lib/megbizasok/megallo";
 import { requireAnyViewPermission, requireEditPermission, requireViewPermission } from "@/lib/auth/require-permission";
 import { FUVAR_MA_SQL } from "@/lib/fuvarozas/fuvar-hely";
 import { fuvarHelyAllapotbol } from "@/lib/megbizasok/fuvar-hely-allapotbol";
 import { toroljIdovonalCachet } from "@/lib/fuvarozas/idovonal-cache";
-import { bontsMegallokra } from "@/lib/fuvarozas/varos";
 import { resolveJarmu } from "@/lib/fuvarozas/vehicles";
 import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
 import { parositasiSorrend } from "@/lib/fuvarozas2/napi-sorrend";
@@ -16,11 +14,9 @@ import { alkalmazMenetSorrendeket } from "@/lib/menet/menet-alap";
 import { kocsiSorrendjei, menetSorrendek } from "@/lib/menet/repo";
 import { budapestNapISO } from "@/lib/fuvarozas/idozona";
 import { fuvarSzamlaTukor, kiegAlap, parositKiegSzamlakat, parositSzamlakat } from "@/lib/fuvarozas/szamla-parositas";
-import { requireSession } from "@/lib/auth/dal";
 import type {
   FuvarTipus,
   FuvarRow,
-  MaiFuvarSor,
   AddFuvarInput,
   FuvarErintesSor,
   FuvardijPenznem } from "@/lib/fuvarozas/fuvar-constants";
@@ -149,35 +145,6 @@ export async function getSajatFuvarokErinteshez(kezdetNapISO: string): Promise<F
 }
 
 /**
- * A [kezdetNapISO, vegNapISO] (mindkét vég zárt) intervallumba eső fuvarok
- * (Bér fuvarok ÉS Saját fuvarok fül egyaránt, lásd getMaiSajatFuvarok fenti
- * megjegyzését a fordított UI-címkézésről), a felrakás dátuma szerint — a
- * GPS lap "következő napok" előnézetéhez, ahol csak a napi bontás és a
- * városnév kell, geokódolás/útvonalszámítás nélkül.
- */
-export async function getFuvarokIdoszakban(kezdetNapISO: string, vegNapISO: string): Promise<(MaiFuvarSor & { tipus: FuvarTipus; jelleg: "ber" | "sajat"; allapot: import("@/lib/megbizasok/allapotgep").Allapot })[]> {
-  await requireViewPermission("fuvarozas");
-  return query<MaiFuvarSor & { tipus: FuvarTipus; jelleg: "ber" | "sajat"; allapot: import("@/lib/megbizasok/allapotgep").Allapot }>(
-    `select
-       id::text, case when jelleg = 'ber' then 'sajat' else 'ber' end as tipus, jelleg, allapot, megrendelo, felrako, lerako, idopont,
-       to_char(datum, 'YYYY-MM-DD') as datum,
-       to_char(lerakas_datum, 'YYYY-MM-DD') as lerakas_datum,
-       jarmu, sofor, pozicioszam,
-       aru, mennyiseg, suly, fuvardij, fuvardij_penznem,
-       (select count(*) from fuvar_dokumentumok d where d.fuvar_id = fuvar_megbizasok.id and d.tipus = 'fuvarlevel')::int as fuvarlevel_foto_db,
-       to_char(felrakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as felrakas_ablak_tol,
-       to_char(lerakas_ablak_tol at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS"Z"') as lerakas_ablak_tol,
-       teljesitve
-     from fuvar_megbizasok
-     where torolt_at is null
-       and datum between $1::date and $2::date
-     order by datum asc, idopont nulls last, id asc
-     limit 200`,
-    [kezdetNapISO, vegNapISO]
-  );
-}
-
-/**
  * A "dokumentum_url"-en lévő egyedi index (lásd db/schema.sql) miatt egy már
  * ismert Drive-dokumentum ismételt beküldése (pl. ha a drive-allapot
  * dedup-listája valamiért mégis hiányosan látná) csendben nem hoz létre új
@@ -191,7 +158,6 @@ export async function getFuvarokIdoszakban(kezdetNapISO: string, vegNapISO: stri
  * VALÓBAN új fuvar lett-e — korábban a duplikátumot is új sornak számolta.
  */
 export async function letrehoz(input: AddFuvarInput): Promise<string | null> { return actions.letrehoz(input); }
-export async function addFuvar(input: AddFuvarInput): Promise<string | null> { return actions.letrehoz(input); }
 
 /**
  * Egy Drive-ból importált megbízás ÚJRAOLVASÁSRA felszabadítása: a sor
@@ -207,9 +173,9 @@ export async function felszabaditFuvarDokumentumot(id: string): Promise<{ ok: tr
 
 /**
  * A Számla/Posta nézet soron belüli, azonnali javítása: postázási cím kitöltése.
- * A "posta" jog önmagában is feljogosít rá — a /posta nézet felhasználója
+ * A "posta" jog önmagában is feljogosít rá — a posta nézet felhasználója
  * (Budaházi Szabina) a teljes Fuvarozás modulhoz nem fér hozzá, a lista
- * viszont neki készült (lásd app/posta/page.tsx).
+ * viszont neki készült (ma: app/attekintes/posta, app/m/posta).
  */
 export async function setFuvarPostazasiCim(id: string, postazasiCim: string | null) { return actions.setFuvarPostazasiCim(id, postazasiCim); }
 
@@ -229,45 +195,6 @@ export async function setFuvarFuvardij(id: string, fuvardij: number | null, penz
  * pótolható, jóváhagyó űrlap újranyitása nélkül.
  */
 export async function setFuvarFizetesiHatarido(id: string, nap: number | null) { return actions.setFuvarFizetesiHatarido(id, nap); }
-
-/**
- * A Számla/Posta nézet jelölője: postára lett-e adva a fuvar dokumentációja
- * (számla + megbízás). A "postazva_at" időbélyeg indítja/törli az 5 perces
- * visszavonási ablakot — ennek leteltével a sor automatikusan (időalapon)
- * archiváltnak számít, lásd getSzamlaPostaFuvarok / getArchivFuvarok.
- */
-export async function setFuvarPostazva(id: string, postazva: boolean) { return actions.setFuvarPostazva(id, postazva); }
-
-/**
- * A GPS lap pipája egy lerakó soron: a MEGÁLLÓT jelöli készre (ugyanabba a
- * sorba, ahová a sofőr mobilos megerősítése ír), és ha ez a fuvar UTOLSÓ
- * lerakója, a fuvart is Teljesítve-re állítja. Korábban a pipa bármelyik
- * lerakónál az egész fuvart lezárta, és a lezárás a listán nem is látszott
- * (a zöld jelölés kizárólag a GPS-felismerésből jött).
- */
-export async function setMegalloKesz(fuvarId: string, megalloIndex: number): Promise<{ fuvarLezarva: boolean }> {
-  await requireEditPermission("fuvarozas");
-  const session = await requireSession();
-  const sorok = await query<{ felrako: string | null; lerako: string; teljesitve: boolean }>(
-    `select felrako, lerako, teljesitve from fuvar_megbizasok where id = $1 and torolt_at is null`,
-    [fuvarId]
-  );
-  const sor = sorok[0];
-  if (!sor) throw new Error("A fuvar nem található.");
-  const utolsoIndex = bontsMegallokra(sor.felrako).length + bontsMegallokra(sor.lerako).length - 1;
-  let fuvarLezarva = false;
-  // Az eddigi két külön írás most a megálló kettős írásával együtt atomikus.
-  fuvarLezarva = await withTransaction(async (tx) => {
-    await megalloKeszTx(tx, fuvarId, megalloIndex, session.name);
-    if (megalloIndex === utolsoIndex && !sor.teljesitve) {
-      await tx(`update fuvar_megbizasok set teljesitve = true, teljesitve_at = now() where id = $1`, [fuvarId]);
-      return true;
-    }
-    return false;
-  });
-  toroljIdovonalCachet();
-  return { fuvarLezarva };
-}
 
 /**
  * A "Bér fuvarok — folyamatban" fül kézi "Teljesítve" gombja: a fuvart a
@@ -352,7 +279,7 @@ export async function szinkronizalSzamlaSzamokat(): Promise<number> {
          or exists (select 1 from fuvar_elszamolas e where e.szamla_szam = sz.szamlaszam) as hasznalt
      from szamla sz
      where sz.kategoria = 'fuvar' and not sz.sztorno and not sz.sztornozva
-       and not exists (select 1 from fuvar_megbizasok m where sz.szamlaszam = any(m.kieg_szamla_szamok))`
+       and not exists (select 1 from fuvar_megbizasok m where m.kieg_szamla_szamok @> array[sz.szamlaszam])`
   );
   if (szamlaSorok.length === 0) return kieg;
 
@@ -403,7 +330,8 @@ async function szinkronizalKiegSzamlakat(): Promise<number> {
      where sz.kategoria = 'fuvar' and not sz.sztorno and not sz.sztornozva
        and sz.kiallitas_datum >= current_date - 180
        and sz.rendelesszam ~* '(kieg|p[oó]tl[aá]s|p[oó]td[ií]j)'
-       and not exists (select 1 from fuvar_megbizasok m where m.szamla_szam = sz.szamlaszam or sz.szamlaszam = any(m.kieg_szamla_szamok))
+       and not exists (select 1 from fuvar_megbizasok m where m.szamla_szam = sz.szamlaszam)
+       and not exists (select 1 from fuvar_megbizasok m where m.kieg_szamla_szamok @> array[sz.szamlaszam])
        and not exists (select 1 from fuvar_elszamolas e where e.szamla_szam = sz.szamlaszam)`
   );
   if (szamlak.length === 0) return 0;
@@ -453,12 +381,10 @@ export async function getParositatlanFuvarszamlak(napok = 60): Promise<{
      from szamla sz
      where sz.kategoria = 'fuvar' and not sz.sztorno and not sz.sztornozva
        and sz.kiallitas_datum >= current_date - $1::int
-       and not exists (select 1 from fuvar_megbizasok m where m.szamla_szam = sz.szamlaszam or sz.szamlaszam = any(m.kieg_szamla_szamok))
+       and not exists (select 1 from fuvar_megbizasok m where m.szamla_szam = sz.szamlaszam)
+       and not exists (select 1 from fuvar_megbizasok m where m.kieg_szamla_szamok @> array[sz.szamlaszam])
        and not exists (select 1 from fuvar_elszamolas e where e.szamla_szam = sz.szamlaszam)
      order by sz.kiallitas_datum desc, sz.szamlaszam desc`,
     [napok]
   );
 }
-
-/** A Számla/Posta nézet soron belüli, azonnali javítása: a kiállított számla sorszámának kitöltése. */
-export async function setFuvarSzamlaSzam(id: string, szamlaSzam: string | null) { return actions.setFuvarSzamlaSzam(id, szamlaSzam); }

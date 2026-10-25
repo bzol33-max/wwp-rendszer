@@ -6,7 +6,7 @@ import { OldalNaplo } from "@/components/oldal-naplo";
 
 // Mobil nézet három szerepre, ugyanazzal a kerettel (terv: „Mobil" vászon):
 //   • sofőr (fuvarozas_sajat + alkalmazott): Ma · Holnap · Profil
-//   • vezető (teljes Fuvarozás-jog): Ma · Fuvar · Cég · Rendszer
+//   • vezető (teljes Fuvarozás-jog): Ma (a Fuvar · Cég · Rendszer fül 2026-10-16 óta nincs)
 //   • iroda (elszamolas, Szabina): Posta · Profil — csak a kiszámlázott fuvarok
 // A sorrend fontos: aki sofőr, annak a terepen használt nézet jár akkor is,
 // ha egyébként több joga van; a vezetői nézet a teljes Fuvarozás-joghoz

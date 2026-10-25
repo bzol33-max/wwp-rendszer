@@ -1,4 +1,5 @@
-// Rövid élettartamú, folyamat-szintű gyorsítótár a GPS lap idővonalához.
+// Rövid élettartamú, folyamat-szintű gyorsítótár a getIdovonalak idővonalához
+// (régen a GPS lap; ma a Ma oldal, a sofőr app és az Áttekintés használja).
 //
 // Miért: a getIdovonalak minden hívása külső hívások sorozata (Ecofleet
 // trip-előzmény és élő pozíció, HU-GO geokódolás, útvonalszámítás minden

@@ -43,7 +43,7 @@ import { berUtkozes, napiSorrend, tervIdoMegbizasbol } from "@/lib/fuvarozas2/na
 import { menetSorrendek } from "@/lib/menet/repo";
 import { alkalmazMenetSorrendet } from "@/lib/menet/menet-alap";
 import { hetNapjai, jarmuNev, kocsiHelykitolto, type HetFuvar } from "@/lib/fuvarozas2/ma-het";
-import { canNapok, legutobbiTacho } from "@/lib/jarmu-telemetria/repo";
+import { canNapokTobb, legutobbiTacho } from "@/lib/jarmu-telemetria/repo";
 import { jarmuTelemetriaOsszesit, type JarmuTelemetria } from "@/lib/jarmuvek/tipusok";
 import { dijSzoveg, flottaFogyasztas } from "@/lib/fuvarozas2/ma-metro-alap";
 import { maTachoSor, tachoKijelzes } from "@/lib/fuvarozas2/tervezes-het-tacho";
@@ -700,10 +700,13 @@ export async function getMaVaszon(): Promise<MaVaszon> {
   // CAN-fogyasztás (utolsó 7 nap) kocsinként; hiba → a kocsi kimarad, a lap nem törik.
   const canTol = (() => { const d = new Date(`${ma}T12:00:00Z`); d.setUTCDate(d.getUTCDate() - 6); return d.toISOString().slice(0, 10); })();
   const canTelemetria = new Map<string, JarmuTelemetria>();
-  await Promise.all(osszesJarmu.map(async (j) => {
-    const t = await canNapok(j.id, canTol, ma).then(jarmuTelemetriaOsszesit).catch(() => null);
+  // Egy lekérdezés az összes kocsira, nem kocsinként (audit P3).
+  const canSorok = await canNapokTobb(osszesJarmu.map((j) => j.id), canTol, ma).catch(() => null);
+  for (const j of osszesJarmu) {
+    const sorok = canSorok?.get(String(j.id));
+    const t = sorok ? jarmuTelemetriaOsszesit(sorok) : null;
     if (t) canTelemetria.set(j.id, t);
-  }));
+  }
   const flottaL100 = flottaFogyasztas([...canTelemetria.values()]);
 
   const blokkKesz = (s: (typeof sorok)[number]): MaBlokk => {
@@ -1022,7 +1025,8 @@ export async function rogzitAllasMegalloHelyekent(
   toroljGeokodCachet();
   toroljIdovonalCachet();
   revalidatePath("/fuvarozas2");
-  console.log(`[ma] megálló helye rögzítve a GPS-állásból: "${g.cim_nyers}" → ${lat.toFixed(5)}, ${lon.toFixed(5)} (${session.name})`);
+  // A pontos koordináta nem kerül a naplóba (személyhez köthető helyadat — audit CFG-6); a DB-ben megvan.
+  console.log(`[ma] megálló helye rögzítve a GPS-állásból: "${g.cim_nyers}" (${session.name})`);
   return { ok: true, cim: g.cim_nyers };
 }
 

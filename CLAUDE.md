@@ -25,22 +25,25 @@ emlékeztető, nem feltétlenül naprakész a legutóbbi commitokhoz képest.
 - Architektúra-szabály: a Számlázz.hu API-t (Számla Agent) kizárólag a
   Számlák modul (`lib/szamlak/`) kérdezi le — más modul a `szamla`
   Postgres-táblából olvasson, ne indítson saját lekérdezést.
-- Ecofleet GPS-integráció (`lib/fuvarozas/ecofleet.ts`): jelenleg csak
-  pillanatnyi pozíció (`Vehicles/getLastData`) van bekötve. Bővítési
-  lehetőség: `Vehicles/getTrips` (útvonal-előzmény) + geofence.
-- Mobil UX — ismert, még nyitott hibák minden modulban:
-  1. `app/globals.css`-ben `--font-sans: var(--font-sans);` önmagára
-     hivatkozó CSS-változó — soha nem oldódik fel, ezért Times New
-     Romanra esik vissza a betűtípus. Javítás:
-     `--font-sans: var(--font-geist-sans);`.
-  2. A narancssárga márkaszín sehol nem jelenik meg —
-     `--primary`/`--accent`/`--ring` továbbra is kék-lila
-     (`oklch(0.546 0.215 262.1)` körüli).
-  3. Táblázatok mobilon csak vízszintes görgetéssel olvashatók (nincs
-     kártyanézet-váltás).
+- Ecofleet GPS-integráció (frissítve 2026-10-25, audit E3): a pillanatnyi
+  pozíció (`Vehicles/getLastData`) mellett be van kötve az útvonal-előzmény
+  (`Vehicles/getTrips`), a nyers adat (`Vehicles/getRawData`) és a riport
+  (`Reports/getReport`) is — `lib/fuvarozas/ecofleet.ts`, `lib/ecofleet/`
+  (kliens, számítás), `lib/jarmu-telemetria/` (tachó/CAN gyűjtő, webhook,
+  `app/api/ecofleet/webhook`, `ECOFLEET_WEBHOOK_TOKEN`). Terv és döntések:
+  `docs/ecofleet-telemetria-terv.md`. Új Ecofleet-hívás előtt ezeket nézd
+  meg, ne építs párhuzamos integrációt.
+- Mobil UX (frissítve 2026-10-25, audit E2):
+  - A betűtípus (`--font-sans: var(--font-geist-sans);`) és a narancssárga
+    márkaszín (`--primary`/`--ring`: `oklch(0.53 0.14 42)`) **már javítva
+    van** az `app/globals.css`-ben — ne „javítsd” vissza.
+  - Még nyitott: a Készlet, a Számlák és a Dolgozók táblázatai mobilon csak
+    vízszintes görgetéssel olvashatók (nincs kártyanézet). A Fuvarozás 2
+    (`app/fuvarozas2/megbizasok/page.tsx`, kimutatás, költségek) és a
+    Járművek (`jarmuvek-nezet.tsx`) már kapott kártyanézetet — azokat lehet
+    mintának venni.
 
-  Ha ezek közül bármelyiket javítod, az az egész rendszert érinti (közös
-  CSS/komponens), tehát koordinálj, nehogy két session egyszerre nyúljon
-  ugyanahhoz a fájlhoz.
+  Ha ezt javítod, az közös CSS/komponens is lehet, tehát koordinálj, nehogy
+  két session egyszerre nyúljon ugyanahhoz a fájlhoz.
 - Már megvan és jól működik: alsó mobil tab-navigáció (`app-shell.tsx`),
   44px érintési célpontok globálisan (`button.tsx`, `input.tsx`).
