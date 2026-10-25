@@ -21,6 +21,7 @@ import type { FuvardijPenznem, FuvarRow } from "@/lib/fuvarozas/fuvar-constants"
 import { bontsMegallokra, varosNev } from "@/lib/fuvarozas/varos";
 // A sofőr-nézettel közös egyeztetés (audit D4: korábban itt egy másolata volt).
 import { jarmuMatch } from "@/lib/fuvarozas/sofor-jarmu";
+import { TELEP_SORREND } from "@/lib/keszlet/telepek";
 
 // ---------------------------------------------------------------------------
 // Nyíregyháza fül
@@ -542,8 +543,7 @@ export type KeszletFulAdatok = {
   uton: KeszletUtonSor[];
 };
 
-// A telepek sorrendje a Készlet fülön — ugyanaz, mint a Készlet modulban.
-const KESZLET_TELEP_SORREND = ["Nyíregyháza", "Balkány", "Szakoly"];
+// A telepek sorrendje a Készlet fülön — ugyanaz, mint a Készlet modulban (TELEP_SORREND).
 
 /**
  * A "Készlet" fül: az összes telephely aktuális készlete típusonként, plusz
@@ -599,8 +599,8 @@ export async function getKeszletFulAdatok(): Promise<KeszletFulAdatok> {
   }
 
   const rang = (nev: string) => {
-    const i = KESZLET_TELEP_SORREND.indexOf(nev);
-    return i === -1 ? KESZLET_TELEP_SORREND.length : i;
+    const i = TELEP_SORREND.indexOf(nev);
+    return i === -1 ? TELEP_SORREND.length : i;
   };
   const telepek = Array.from(telepOsszes, ([nev, osszes]) => ({ nev, osszes })).sort(
     (a, b) => rang(a.nev) - rang(b.nev) || a.nev.localeCompare(b.nev, "hu")

@@ -36,6 +36,7 @@ import {
   type OsszkeszletHaviRow,
 } from "@/lib/keszlet/actions";
 import { useCanEdit } from "@/components/auth/edit-permission-context";
+import { TELEP_SORREND } from "@/lib/keszlet/telepek";
 
 type SiteKey = "Nyíregyháza" | "Balkány" | "Szakoly" | "Összkészlet";
 
@@ -74,11 +75,10 @@ function Tile({ name, qty }: { name: string; qty: number }) {
 // SZETVALOGATAS_FORRASOK. A "Vegyes EUR"-ból EUR-válogatás lesz, a
 // "Vegyes"-ből bármi, ami a telepen aktív (színes, egyutas, …).
 
-const SITE_ORDER = ["Nyíregyháza", "Balkány", "Szakoly"];
 const SITE_OPACITY_CLASS = ["bg-foreground/55", "bg-foreground/30", "bg-foreground/15"];
 
 function siteShares(bySite: Record<string, number>, total: number) {
-  return SITE_ORDER.filter((s) => s in bySite).map((site, i) => ({
+  return TELEP_SORREND.filter((s) => s in bySite).map((site, i) => ({
     site,
     qty: bySite[site],
     pct: total > 0 ? (bySite[site] / total) * 100 : 0,

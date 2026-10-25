@@ -12,6 +12,7 @@ import {
   requireEditPermission,
   requireViewPermission,
 } from "@/lib/auth/require-permission";
+import { SAJAT_KESZLET_TELEPEK, TELEP_SORREND } from "@/lib/keszlet/telepek";
 
 const TIME_FMT = "mon. DD HH24:MI";
 
@@ -48,7 +49,7 @@ export type MovementRow = {
 // components/erkezes/erkezes-sajat-view.tsx-ben. A teljes "keszlet" modul
 // birtokosát ez nem korlátozza. A telephelyet a kliens küldi, ezért itt is
 // ellenőrizni kell, nem elég a felületen elrejteni.
-const SAJAT_KESZLET_SITES = ["Szakoly", "Balkány"];
+const SAJAT_KESZLET_SITES: readonly string[] = SAJAT_KESZLET_TELEPEK;
 
 function ellenorizdSajatKeszletHatokor(jog: ModuleKey, ...sites: (string | undefined)[]) {
   if (jog !== "keszlet_sajat") return;
@@ -77,7 +78,7 @@ function ellenorizdMozgatasCel(site: unknown, forras: string) {
 // Szerver oldali bemenet-ellenőrzés. A kliens is ellenőriz, de a szerver-akció
 // közvetlenül is hívható, és egy hibás érték (pl. tört darabszám) különben
 // csak a DB-nél, félig lefutott mentés közben derülne ki.
-const TELEPHELYEK = ["Nyíregyháza", "Szakoly", "Balkány"];
+const TELEPHELYEK: readonly string[] = TELEP_SORREND;
 
 function ellenorizdDarabszam(qty: unknown, mihez: string, nullaIsLehet = false): number {
   const min = nullaIsLehet ? 0 : 1;
