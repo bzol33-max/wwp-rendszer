@@ -313,6 +313,7 @@ Minden commit után lefutott: migrate (helyi DB), `typecheck`, a teszt-lánc min
 | Q1 | ✅ GitHub Actions CI | 68f0b59 |
 | D4 | ✅ részben: `jelleg` a sofőr appban, közös `jarmuMatch`, közös telephely-lista | fcfb468, d23c4ab, 2bfbb04 |
 | A9 | ✅ részben: SEC-5, CFG-6 | 572c375, f8d8a37 |
+| Q5 (új) | ✅ a HU-GO xlsx-olvasó tartalékútja | lásd lent |
 
 **Kihagyva, és miért:**
 - **P1 SOR_SQL mélyebb átírása** (a két hívás összevonása, a postai cím CTE-be): a mai adatmérettel 6 ms, az átírás viszont a Megbízások lista sorainak tartalmát érintő, nehezen összevethető változás. Az indexek a négyzetes növekedést már megfogják.
@@ -323,11 +324,12 @@ Minden commit után lefutott: migrate (helyi DB), `typecheck`, a teszt-lánc min
 
 **Új lelet a végrehajtás közben:**
 
-### Q5 — A HU-GO / költség xlsx-olvasó a saját tesztjén elbukik (Node 24-en) — FONTOS
-- **Hol:** `lib/fuvarozas2/koltseg-xlsx.ts:53` (`tablazatSorai`, exceljs streamelő olvasó), teszt: `scripts/teszt-koltseg.ts:385`.
-- **Tünet:** `Az .xlsx nem olvasható: Cannot read properties of undefined (reading 'sheets')`. A main-en is így van (nem ennek az ágnak a hibája). A `teszt` lánc `&&`-tel van összefűzve, ezért **az utána következő ~25 teszt-szkript eddig le sem futott** (külön futtatva mind zöld).
-- **Ok (valószínű):** az exceljs által írt xlsx-ben a `xl/workbook.xml` a zip VÉGÉN van; a streamelő olvasó a munkalapot ideiglenes fájlba teszi, és a végén a még be nem olvasott workbook-modellre hivatkozik. Az éles Railway is Node 24.21.0-n fut, mint ez a gép — ha egy valódi export is ilyen sorrendű, a feltöltés élesben is elbukik.
-- **Javaslat:** a fájl kipróbálása egy valódi HU-GO exporttal; ha elbukik, a streamelő olvasó helyett a már meglévő kibontott-méret-korláttal (`xlsxKorlatHiba`) védett `wb.xlsx.load`, vagy az olvasó `entries` sorrendjének kezelése. **Viselkedés: javítás, nem változás.** A CI ezen a lépésen piros lesz, amíg ez nincs javítva.
+### Q5 — A HU-GO / költség xlsx-olvasó véletlenszerűen elbukik (Node 24-en) — JAVÍTVA
+- **Hol:** `lib/fuvarozas2/koltseg-xlsx.ts` (`tablazatSorai`, exceljs streamelő olvasó, alatta `unzipper@0.10.14`).
+- **Tünet:** `Az .xlsx nem olvasható: Cannot read properties of undefined (reading 'sheets')`. **Időzítésfüggő:** ugyanarra a fájlra 30 olvasásból 17-szer elbukott, 13-szor átment. A Railway is Node 24.21.0-n fut, így élesben a költség-feltöltés időnként, véletlenszerűen hibát adott (a 2026-10-25-i próba-feltöltés épp átment). A `teszt` lánc `&&` miatt eddig a hiba után megállt — az utána következő ~25 szkript le sem futott.
+- **Ok:** a zip-bejárás idő előtt véget érhet, és a munkalap a munkafüzet-adat (`xl/workbook.xml`) előtt kerül feldolgozásra.
+- **Javítás:** a stream maradt az elsődleges út; ha elbukik (vagy munkalap nélkül ér véget), a teljes betöltés (`xlsx.load`) olvas, ugyanazzal a sor-korláttal, a meglévő 40 MB-os kibontott-méret korlát mögött. Mérve: ahol a stream sikerül, a kettő cellára azonos. teszt-koltseg 10/10 zöld, a teljes lánc zöld.
+- **Később érdemes:** az exceljs / unzipper frissítése vagy cseréje, külön, mert az az import minden útját érinti.
 
 ### E14 — megjegyzés
 A main checkout `.env.teszt.local` fájlja a Railway `Postgres-teszt` szolgáltatásra mutat (2026-10-07-i állapot, 028-as migráció), és a `.claude/launch.json` `dev-teszt-db` konfigurációja `next dev`-et futtat ellene — a háttér-ütemezők is elindulnak, és írnak bele. Nem az éles DB, de a nevéből nem derül ki, hogy távoli. Átnevezése más sessionök indító-konfigurációját törné, ezért nem nyúltam hozzá.
