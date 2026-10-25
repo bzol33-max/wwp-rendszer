@@ -73,24 +73,36 @@ function hetNapjai(hetKezdete: string) {
   return napok;
 }
 
+/**
+ * Egy kérésen belüli, hetenként közös adat (aktív kocsik, a hét munkái): a
+ * Tervezés lap sok fuvar legjobb helyét keresi ugyanazokra a hetekre, és
+ * eddig mindegyik újra lekérdezte ugyanezt (audit P2). Csak szerveren,
+ * egy hívásláncon belül élhet — ne tedd modul-szintűvé.
+ */
+export type ElvinniKozos = Map<string, Promise<{ jarmuvek: { kod: string; cimke: string }[]; munkak: HetiMegbizas[] }>>;
+
+export function ujElvinniKozos(): ElvinniKozos {
+  return new Map();
+}
+
 export async function getElvinniHet(
   id: string,
-  hetKezdete?: string
+  hetKezdete?: string,
+  kozos?: ElvinniKozos
 ): Promise<ElvinniHet> {
   await requireAnyViewPermission(["fuvarozas", "elszamolas"]);
 
-  const [elvinni] = await query<{ legkorabban: string | null; legkesobb: string | null }>(
-    `select to_char(legkorabban, 'YYYY-MM-DD') as legkorabban, to_char(legkesobb, 'YYYY-MM-DD') as legkesobb
+  // A fuvar ablaka, felrakója és a mai nap egy lekérdezésben (eddig három volt — audit P2).
+  const [elvinni] = await query<{ legkorabban: string | null; legkesobb: string | null; felrako: string | null; ma: string }>(
+    `select to_char(legkorabban, 'YYYY-MM-DD') as legkorabban, to_char(legkesobb, 'YYYY-MM-DD') as legkesobb,
+            felrako, (now() at time zone 'Europe/Budapest')::date::text as ma
      from fuvar_megbizasok
      where id = $1 and idopont_nyitott and torolt_at is null`,
     [id]
   );
   if (!elvinni) throw new Error("Ez a saját fuvar már nem elérhető.");
 
-  const [ma] = await query<{ ma: string }>(
-    `select (now() at time zone 'Europe/Budapest')::date::text as ma`
-  );
-  let hetKezdet = hetKezdeteElvinni(elvinni.legkorabban, ma.ma);
+  let hetKezdet = hetKezdeteElvinni(elvinni.legkorabban, elvinni.ma);
   if (hetKezdete) {
     const [kivalasztott] = await query<{ het: string }>(
       `select date_trunc('week', $1::date)::date::text as het`,
@@ -101,40 +113,18 @@ export async function getElvinniHet(
 
   const napok = hetNapjai(hetKezdet);
   const hetVege = napok[6];
-  const jarmuvek = await query<{ kod: string; cimke: string }>(
-    `select kod, cimke from fuvar_jarmuvek where aktiv order by id`
-  );
-  const munkak = await query<HetiMegbizas>(
-    `select m.id::text,
-       coalesce(j.kod, m.elokeszites_jarmu) as jarmu,
-       m.jelleg,
-       coalesce(p.nev, m.megrendelo) as partner,
-       m.kitol,
-       m.megrendelo as kinek,
-       m.felrako,
-       m.lerako,
-       to_char(m.datum, 'YYYY-MM-DD') as kezdet,
-       to_char(coalesce(m.lerakas_datum, m.datum), 'YYYY-MM-DD') as veg,
-       (m.elokeszites and m.elokeszites_jarmu is not null) as utemezett,
-       m.felrakas_ablak_tol::text as felrakas_ablak_tol, m.idopont,
-       (m.allapot in ('teljesitve','szamlazhato','szamlazva','email_elment','postazva','lezart')) as lezart
-     from fuvar_megbizasok m
-     left join fuvar_jarmuvek j on j.id = m.jarmu_id
-     left join fuvar_partnerek p on p.id = m.partner_id
-     where m.torolt_at is null
-       and m.allapot is not null
-       and coalesce(j.kod, m.elokeszites_jarmu) is not null
-       and coalesce(m.lerakas_datum, m.datum) >= $1::date - 30
-       and m.datum <= $2::date
-     order by m.datum, m.id`,
-    [hetKezdet, hetVege]
-  );
-  await melegitVarosPontokat(munkak.flatMap((m) => [m.felrako, m.lerako]));
+  const hetAdat = async () => {
+    const jarmuvek = await query<{ kod: string; cimke: string }>(
+      `select kod, cimke from fuvar_jarmuvek where aktiv order by id`
+    );
+    const munkak = await hetMunkai(hetKezdet, hetVege);
+    await melegitVarosPontokat(munkak.flatMap((m) => [m.felrako, m.lerako]));
+    return { jarmuvek, munkak };
+  };
+  const kulcs = `${hetKezdet}|${hetVege}`;
+  if (kozos && !kozos.has(kulcs)) kozos.set(kulcs, hetAdat());
+  const { jarmuvek, munkak } = await (kozos?.get(kulcs) ?? hetAdat());
 
-  const [felrako] = await query<{ cim: string }>(
-    `select felrako as cim from fuvar_megbizasok where id = $1`,
-    [id]
-  );
   const pontCache = new Map<string, Promise<Pont | null>>();
   async function pont(cim: string | null): Promise<Pont | null> {
     const kulcs = cim?.trim() ?? "";
@@ -150,7 +140,7 @@ export async function getElvinniHet(
     return (await pontCache.get(kulcs)) ?? null;
   }
 
-  const celPont = await pont(felrako?.cim ?? null);
+  const celPont = await pont(elvinni.felrako);
   const telephely = (await getIndulasiTelephely()).cim;
   const jarmuLista = await getJarmuvek();
   const sorok = await Promise.all(jarmuvek.map(async (jarmu) => {
@@ -229,6 +219,35 @@ export async function getElvinniHet(
   return { hetKezdet, napok, sorok, legkorabban: elvinni.legkorabban, legkesobb: elvinni.legkesobb };
 }
 
+/** A hét munkái (kocsira adott vagy kocsira ütemezett fuvarok) — a hét eleje előtt 30 nappal kezdődőek is. */
+function hetMunkai(hetKezdet: string, hetVege: string): Promise<HetiMegbizas[]> {
+  return query<HetiMegbizas>(
+    `select m.id::text,
+       coalesce(j.kod, m.elokeszites_jarmu) as jarmu,
+       m.jelleg,
+       coalesce(p.nev, m.megrendelo) as partner,
+       m.kitol,
+       m.megrendelo as kinek,
+       m.felrako,
+       m.lerako,
+       to_char(m.datum, 'YYYY-MM-DD') as kezdet,
+       to_char(coalesce(m.lerakas_datum, m.datum), 'YYYY-MM-DD') as veg,
+       (m.elokeszites and m.elokeszites_jarmu is not null) as utemezett,
+       m.felrakas_ablak_tol::text as felrakas_ablak_tol, m.idopont,
+       (m.allapot in ('teljesitve','szamlazhato','szamlazva','email_elment','postazva','lezart')) as lezart
+     from fuvar_megbizasok m
+     left join fuvar_jarmuvek j on j.id = m.jarmu_id
+     left join fuvar_partnerek p on p.id = m.partner_id
+     where m.torolt_at is null
+       and m.allapot is not null
+       and coalesce(j.kod, m.elokeszites_jarmu) is not null
+       and coalesce(m.lerakas_datum, m.datum) >= $1::date - 30
+       and m.datum <= $2::date
+     order by m.datum, m.id`,
+    [hetKezdet, hetVege]
+  );
+}
+
 export type ElvinniHely = { jarmuKod: string; cimke: string; nap: string; km: number; utan: string | null };
 
 /** Útba esőnek számít, ha ennyi üres km-en belül elérhető a felrakó (piros határidőnél nincs korlát). */
@@ -241,7 +260,7 @@ export const UTBA_ESO_KM = 80;
  * szabad napon a kocsi állóhelyétől (getElvinniHet cellái). A legkevesebb km
  * nyer, egyezésnél a korábbi nap. Legfeljebb 3 hetet néz előre.
  */
-export async function legjobbElvinniHelyek(id: string, db = 3): Promise<ElvinniHely[]> {
+export async function legjobbElvinniHelyek(id: string, db = 3, kozos?: ElvinniKozos): Promise<ElvinniHely[]> {
   const [sor] = await query<{ legkorabban: string | null; legkesobb: string | null; ma: string }>(
     `select to_char(legkorabban, 'YYYY-MM-DD') as legkorabban, to_char(legkesobb, 'YYYY-MM-DD') as legkesobb,
             (now() at time zone 'Europe/Budapest')::date::text as ma
@@ -267,7 +286,7 @@ export async function legjobbElvinniHelyek(id: string, db = 3): Promise<ElvinniH
   const jarmuLista = await getJarmuvek();
   const uzemel = (kod: string) => (findJarmuByKod(kod, jarmuLista)?.rendszamok.length ?? 0) > 0;
   const jeloltek: ElvinniHely[] = [];
-  const hetAdatok = await Promise.all(hetek.map((het) => getElvinniHet(id, het)));
+  const hetAdatok = await Promise.all(hetek.map((het) => getElvinniHet(id, het, kozos)));
   for (const h of hetAdatok) {
     for (const s of h.sorok) {
       if (!uzemel(s.kod)) continue;
