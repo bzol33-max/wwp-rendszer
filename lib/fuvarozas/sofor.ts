@@ -11,7 +11,7 @@
 
 import { revalidatePath } from "next/cache";
 import sharp from "sharp";
-import { query, withTransaction } from "@/lib/db";
+import { query, withTransaction, type Querier } from "@/lib/db";
 import { megalloKeszTx, megalloKeszVisszavonTx, megerkezettTx, varakozasTx } from "@/lib/megbizasok/megallo";
 import { requireAnyEditPermission, requireSajatVagyModulJog } from "@/lib/auth/require-permission";
 import { requireSession } from "@/lib/auth/dal";
@@ -101,24 +101,32 @@ async function megalloKeszLezarassal(fuvarId: string, megalloIndex: number, valo
   // iroda zárta le, így a sofőr hiába jelezte, a fuvar "folyamatban" maradt
   // (Budaházi Zoltán, 2026-09-24).
   // A megálló kettős írása és az ebből következő teljesítésjelölő együtt atomikus.
-  const fuvarLezarva = await withTransaction(async (tx) => {
-    await megalloKeszTx(tx, fuvarId, megalloIndex, soforNev);
-    const [sor] = await tx<{ felrako: string | null; lerako: string; teljesitve: boolean }>(`select felrako, lerako, teljesitve from fuvar_megbizasok where id = $1 and statusz <> 'torolt'`, [fuvarId]);
-    let lezarva = false;
-    if (sor && !sor.teljesitve) {
+  const fuvarLezarva = await withTransaction((tx) => megalloKeszLezarasTx(tx, fuvarId, megalloIndex, valodiUtolso, soforNev));
+  megalloKeszUtan(fuvarId, fuvarLezarva, soforNev);
+  return { fuvarLezarva };
+}
+
+/** A megalloKeszLezarassal tranzakción belüli része — a fotó-feltöltés a saját tranzakciójában hívja. */
+async function megalloKeszLezarasTx(tx: Querier, fuvarId: string, megalloIndex: number, valodiUtolso: boolean, soforNev: string | null): Promise<boolean> {
+  await megalloKeszTx(tx, fuvarId, megalloIndex, soforNev);
+  const [sor] = await tx<{ felrako: string | null; lerako: string; teljesitve: boolean }>(`select felrako, lerako, teljesitve from fuvar_megbizasok where id = $1 and statusz <> 'torolt'`, [fuvarId]);
+  let lezarva = false;
+  if (sor && !sor.teljesitve) {
     const utolsoIndex = bontsMegallokra(sor.felrako).length + bontsMegallokra(sor.lerako).length - 1;
     if (valodiUtolso || megalloIndex === utolsoIndex) {
       await tx(`update fuvar_megbizasok set teljesitve = true, teljesitve_at = now() where id = $1`, [fuvarId]);
       lezarva = true;
     }
-    }
-    return lezarva;
-  });
+  }
+  return lezarva;
+}
+
+/** A lezárás utáni (commit utáni) teendők: napló, idővonal-cache, oldalfrissítés. */
+function megalloKeszUtan(fuvarId: string, fuvarLezarva: boolean, soforNev: string | null) {
   if (fuvarLezarva) console.log(`[sofor] fuvar #${fuvarId} lezárva a sofőr utolsó "Indulok" jelölésével (${soforNev}).`);
   // A GPS lap is ezt a jelölést mutatja (kézi kész) — a gyorsítótárazott idővonal frissüljön.
   toroljIdovonalCachet();
   revalidatePath("/erkezes");
-  return { fuvarLezarva };
 }
 
 /** Ennyi óráig vonhatja vissza a sofőr a saját kézi „Kész” jelölését (az iroda bármikor). */
@@ -874,13 +882,6 @@ export async function feltoltFuvarlevelFoto(fuvarId: string, form: FormData): Pr
     await kocsiMasikNyitottFuvarjai(fuvarId, fuvar),
     await fuvarElsoTenye(fuvarId)
   );
-  if (dontes.megalloIndex != null) {
-    await megalloKeszLezarassal(fuvarId, dontes.megalloIndex, true);
-    console.log(`[sofor] fuvar #${fuvarId}: a fuvarlevél-fotó lezárta az utolsó megállót (${dontes.megalloIndex}).`);
-  } else if (dontes.figyelmeztetes) {
-    console.log(`[sofor] fuvar #${fuvarId}: a fuvarlevél-fotó NEM zárt — ${dontes.figyelmeztetes}`);
-  }
-
   const hivatkozas = (fuvar.reise_id ?? fuvar.pozicioszam ?? `fuvar${fuvarId}`).replace(/[^A-Za-z0-9_-]+/g, "_");
   const rendszam = (fuvar.jarmu ?? "").replace(/[^A-Za-z0-9]+/g, "").toUpperCase() || "kocsi";
   // 2026-10-23 óta a szerver NEM vágja és nem „tisztítja” a sofőr fotóját
@@ -897,15 +898,30 @@ export async function feltoltFuvarlevelFoto(fuvarId: string, form: FormData): Pr
   const tartalom = eredetiAllo;
   const szken = { mimeType: eredetiMime };
 
-  const beszurt = await query<{ id: string }>(
-    `insert into fuvar_dokumentumok (fuvar_id, tipus, fajlnev, tarolas, tartalom, mime_type, meret_byte, feltoltotte, eredeti, eredeti_mime_type, kliens_kulcs)
-     values ($1, 'fuvarlevel', $2, 'db', $3, $4, $5, $6, $7, $8, $9)
-     on conflict (kliens_kulcs) where kliens_kulcs is not null do update set kliens_kulcs = excluded.kliens_kulcs
-     returning id::text`,
-    [fuvarId, nev, tartalom, szken.mimeType, tartalom.length, session.name ?? session.username, eredetiAllo, eredetiMime, kulcs]
-  );
-  // A részletek-lista a dokumentum_url-t linkeli — a saját kiszolgálónkra mutat.
-  await query(`update fuvar_dokumentumok set dokumentum_url = $2 where id = $1`, [beszurt[0].id, `/api/fuvarozas/dokumentum/${beszurt[0].id}`]);
+  // A lezárás (ha a döntés szerint kell) és a fotó egy tranzakcióban: ha a
+  // fotó beszúrása elbukik, a megálló sem marad „kész” fotó nélkül, és a
+  // telefonos sor újrapróbája ugyanígy dönt újra (audit A5). A sorrend a
+  // tranzakción belül is ugyanaz: előbb a lezárás, aztán a fotó (fotó-trigger).
+  const { beszurt, fuvarLezarva } = await withTransaction(async (tx) => {
+    const lezarva =
+      dontes.megalloIndex != null ? await megalloKeszLezarasTx(tx, fuvarId, dontes.megalloIndex, true, session.name) : false;
+    const sor = await tx<{ id: string }>(
+      `insert into fuvar_dokumentumok (fuvar_id, tipus, fajlnev, tarolas, tartalom, mime_type, meret_byte, feltoltotte, eredeti, eredeti_mime_type, kliens_kulcs)
+       values ($1, 'fuvarlevel', $2, 'db', $3, $4, $5, $6, $7, $8, $9)
+       on conflict (kliens_kulcs) where kliens_kulcs is not null do update set kliens_kulcs = excluded.kliens_kulcs
+       returning id::text`,
+      [fuvarId, nev, tartalom, szken.mimeType, tartalom.length, session.name ?? session.username, eredetiAllo, eredetiMime, kulcs]
+    );
+    // A részletek-lista a dokumentum_url-t linkeli — a saját kiszolgálónkra mutat.
+    await tx(`update fuvar_dokumentumok set dokumentum_url = $2 where id = $1`, [sor[0].id, `/api/fuvarozas/dokumentum/${sor[0].id}`]);
+    return { beszurt: sor, fuvarLezarva: lezarva };
+  });
+  if (dontes.megalloIndex != null) {
+    megalloKeszUtan(fuvarId, fuvarLezarva, session.name);
+    console.log(`[sofor] fuvar #${fuvarId}: a fuvarlevél-fotó lezárta az utolsó megállót (${dontes.megalloIndex}).`);
+  } else if (dontes.figyelmeztetes) {
+    console.log(`[sofor] fuvar #${fuvarId}: a fuvarlevél-fotó NEM zárt — ${dontes.figyelmeztetes}`);
+  }
   // Saját fuvarnál ez a BEFELÉ kapott szállítólevél fotója (a kifelé menőt a
   // Számlázz.hu állítja ki) — ugyanaz a 'fuvarlevel' irat-típus, mert a
   // fuvar_dokumentumok CHECK-je csak ezt ismeri. A fotó a saját fuvart is
