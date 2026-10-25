@@ -283,3 +283,51 @@ Egy tétel = egy commit. Minden commit után: `npm run typecheck`, `npm run tesz
 8. **D4, A9:** konszolidáció, maradékok (a ⚠ jelöltek csak külön igennel)
 
 A B1–B3 és minden ⚠ tétel csak külön döntés után kerül sorra.
+
+---
+
+## 10. Végrehajtás állapota (2026-10-25, jóváhagyás után)
+
+Minden commit után lefutott: migrate (helyi DB), `typecheck`, a teszt-lánc mind a 74 szkriptje (külön-külön), `next build`, smoke tesztek a buildelt appon (7/7). Viselkedést érintő lekérdezés-átírásnál a régi és az új változatot valós adaton (a Railway teszt-másolatról, read-only olvasva) vagy oldal-szöveg összevetéssel hasonlítottam össze — részletek a commit-üzenetekben.
+
+| Tétel | Állapot | Commit |
+|---|---|---|
+| A1, A2 | ✅ üres DB-ről felépül (kétszer egymás után is) | 3c290d5, 3b79f1a |
+| A3 | ✅ | 5d066d3 |
+| A4 | ✅ (kipróbálva: 401 azonnal; 200 MB-os CSP-POST-ból 2 KB-ot olvas) | 6b16cd3 |
+| A5 | ✅ (kipróbálva feltöltéssel + idempotens újraküldéssel) | 96470de |
+| A6 | ✅ (050-es migráció) | 0d30776 |
+| A7 | ✅ | acfdc57 |
+| A8 | ✅ (új segéd: `egyetlenPeldanybanVarva`, kipróbálva) | 141499c |
+| D1, D2 | ✅ | e24b734, 3a45aaf |
+| P5 (+P1 részben) | ✅ indexek (051) + indexelhető NOT EXISTS (valós adaton azonos eredmény) | 30d300d, 44624e3 |
+| P2 | ✅ Tervezés: ~178 → ~88 lekérdezés oldalanként (8 Elvinni valóval mérve) | 18496e6 |
+| P4 | ✅ részben: az olvasás közbeni írás megszűnt | fd43c81 |
+| P3 | ✅ részben: CAN-telemetria egy lekérdezéssel | 47f6add |
+| P6 | ✅ | e3f87e2 |
+| P7 | ✅ GPS-érintés (a telemetria többsoros insertje kimaradt, elhanyagolható) | 3b24b9a |
+| P8 | ✅ tranzakció (400 valós számlán azonos eredmény) | 9c2ad8a |
+| E1–E10 | ✅ (E12 kimaradt: döntés) | 75eceb2 … d310707 |
+| E13 | ✅ a helyi, nem verziózott `helyi/modul-inditok.md`-ben (az eredeti mentve) | — |
+| Q2 | ⚠ eltérés: a 19 lint-hiba **nem átírva**, a szabály figyelmeztetésre állítva (lásd lent) | 797b2df |
+| Q1 | ✅ GitHub Actions CI | 68f0b59 |
+| D4 | ✅ részben: `jelleg` a sofőr appban, közös `jarmuMatch`, közös telephely-lista | fcfb468, d23c4ab, 2bfbb04 |
+| A9 | ✅ részben: SEC-5, CFG-6 | 572c375, f8d8a37 |
+
+**Kihagyva, és miért:**
+- **P1 SOR_SQL mélyebb átírása** (a két hívás összevonása, a postai cím CTE-be): a mai adatmérettel 6 ms, az átírás viszont a Megbízások lista sorainak tartalmát érintő, nehezen összevethető változás. Az indexek a négyzetes növekedést már megfogják.
+- **P3 cache, P4 14 napos összevonás**: a Ma lap és a sofőr app napi idővonal-számítására épül; az átírás kockázata nagyobb, mint a mai nyereség.
+- **Q2 tényleges átírás**: a `set-state-in-effect` minták (betöltés, dialógus-reset) átírása a betöltés/villanás viselkedését változtatná, a desktop Készlettel közös MovementForm/InventoryDialog-ot is érintve. Komponensenként, kipróbálva érdemes.
+- **E11 (PROGRESS.md átrendezése)**: több párhuzamos session folyamatosan ír bele — a teljes átrendezés szinte biztosan merge-konfliktust okozna.
+- **E12, E14, B1–B3, és a ⚠ tételek** (pénzformázók egységesítése, jelszóhossz, `?token=`, kijelentkezéskor süti-érvénytelenítés, `addAdvance` idempotencia, `bejelentkezes_hiba` takarítás, a BudahaziZoltan seed `mobil` → `attekintes` jogkulcsa): döntés kell.
+
+**Új lelet a végrehajtás közben:**
+
+### Q5 — A HU-GO / költség xlsx-olvasó a saját tesztjén elbukik (Node 24-en) — FONTOS
+- **Hol:** `lib/fuvarozas2/koltseg-xlsx.ts:53` (`tablazatSorai`, exceljs streamelő olvasó), teszt: `scripts/teszt-koltseg.ts:385`.
+- **Tünet:** `Az .xlsx nem olvasható: Cannot read properties of undefined (reading 'sheets')`. A main-en is így van (nem ennek az ágnak a hibája). A `teszt` lánc `&&`-tel van összefűzve, ezért **az utána következő ~25 teszt-szkript eddig le sem futott** (külön futtatva mind zöld).
+- **Ok (valószínű):** az exceljs által írt xlsx-ben a `xl/workbook.xml` a zip VÉGÉN van; a streamelő olvasó a munkalapot ideiglenes fájlba teszi, és a végén a még be nem olvasott workbook-modellre hivatkozik. Az éles Railway is Node 24.21.0-n fut, mint ez a gép — ha egy valódi export is ilyen sorrendű, a feltöltés élesben is elbukik.
+- **Javaslat:** a fájl kipróbálása egy valódi HU-GO exporttal; ha elbukik, a streamelő olvasó helyett a már meglévő kibontott-méret-korláttal (`xlsxKorlatHiba`) védett `wb.xlsx.load`, vagy az olvasó `entries` sorrendjének kezelése. **Viselkedés: javítás, nem változás.** A CI ezen a lépésen piros lesz, amíg ez nincs javítva.
+
+### E14 — megjegyzés
+A main checkout `.env.teszt.local` fájlja a Railway `Postgres-teszt` szolgáltatásra mutat (2026-10-07-i állapot, 028-as migráció), és a `.claude/launch.json` `dev-teszt-db` konfigurációja `next dev`-et futtat ellene — a háttér-ütemezők is elindulnak, és írnak bele. Nem az éles DB, de a nevéből nem derül ki, hogy távoli. Átnevezése más sessionök indító-konfigurációját törné, ezért nem nyúltam hozzá.
