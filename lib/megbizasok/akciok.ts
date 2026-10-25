@@ -17,7 +17,6 @@ import { kanonikusMegrendeloNev } from "@/lib/fuvarozas/megrendelo-nev";
 import { berFuvarHiba, berSzam, valtozottMezok, type BerFuvarAdat } from "@/lib/fuvarozas2/berfuvar";
 import type { AddFuvarInput, FuvardijPenznem } from "@/lib/fuvarozas/fuvar-constants";
 import { toroljIdovonalCachet } from "@/lib/fuvarozas/idovonal-cache";
-import { fuvarSzamlaTukor } from "@/lib/fuvarozas/szamla-parositas";
 import { normalizaltCegKulcs } from "@/lib/fuvarozas/fuvar-constants";
 import type { SajatFuvarAdat, Eredmeny } from "@/lib/fuvarozas2/sajat-fuvar";
 import { ALLAPOT_CIMKE } from "@/lib/megbizasok/allapotgep";
@@ -496,18 +495,6 @@ export async function setFuvarFizetesiHatarido(id: string, nap: number | null) {
   await query(`update fuvar_megbizasok set fizetesi_hatarido_nap = $2 where id = $1`, [id, nap]);
 }
 
-export async function setFuvarPostazva(id: string, postazva: boolean) {
-  // A "posta" jog is elég — ld. setFuvarPostazasiCim. Korábban csak a
-  // Fuvarozás szerkesztési jogát fogadta el, ezért a /posta nézetben a
-  // "Postázva" pipa hibával ("Nem sikerült menteni") visszapattant annál,
-  // akinek csak a Posta modulja van engedélyezve.
-  await requireAnyEditPermission(["fuvarozas", "posta"]);
-  await query(
-    `update fuvar_megbizasok set postazva = $2, postazva_at = case when $2 then now() else null end where id = $1`,
-    [id, postazva]
-  );
-}
-
 /** A párosított számla és elszámolási tükör egy tranzakcióban rögzítése. */
 export async function rogzitParositottSzamlat(fuvarId: string, szamla: { szamlaSzam: string | null; szamlaId: string | null; szamlaKelte: string | null }, reszletek: Record<string, unknown>): Promise<{ regi: string | null } | null> {
   await requireEditPermission("fuvarozas");
@@ -523,19 +510,6 @@ export async function rogzitParositottSzamlat(fuvarId: string, szamla: { szamlaS
     await elszamolasUpsert(tx, fuvarId, szamla);
     await irEsemenyt(tx, { megbizasId: fuvarId, esemeny: "szamla_parositva", forras: "szamla_szinkron", reszletek: { ...reszletek, ...(rows[0].regi ? { sztornozott_elozo: rows[0].regi } : {}) } });
     return { regi: rows[0].regi };
-  });
-}
-
-export async function setFuvarSzamlaSzam(id: string, szamlaSzam: string | null) {
-  await requireEditPermission("fuvarozas");
-  const szam = szamlaSzam?.trim() || null;
-  const [sz] = szam ? await query<{ id: string; kelt: string | null }>(
-    `select id::text, to_char(kiallitas_datum, 'YYYY-MM-DD') as kelt from szamla where szamlaszam = $1`, [szam]
-  ) : [undefined];
-  const tukor = fuvarSzamlaTukor(szam, sz);
-  await withTransaction(async (tx) => {
-    const sor = await tx<{ jelleg: string }>(`update fuvar_megbizasok set szamla_szam = $2 where id = $1 returning jelleg`, [id, szam]);
-    if (sor[0]?.jelleg === "ber") await elszamolasUpsert(tx, id, tukor);
   });
 }
 
