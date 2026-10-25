@@ -908,7 +908,7 @@ export async function feltoltFuvarlevelFoto(fuvarId: string, form: FormData): Pr
     const sor = await tx<{ id: string }>(
       `insert into fuvar_dokumentumok (fuvar_id, tipus, fajlnev, tarolas, tartalom, mime_type, meret_byte, feltoltotte, eredeti, eredeti_mime_type, kliens_kulcs)
        values ($1, 'fuvarlevel', $2, 'db', $3, $4, $5, $6, $7, $8, $9)
-       on conflict (kliens_kulcs) where kliens_kulcs is not null do update set kliens_kulcs = excluded.kliens_kulcs
+       on conflict (fuvar_id, kliens_kulcs) where kliens_kulcs is not null do update set kliens_kulcs = excluded.kliens_kulcs
        returning id::text`,
       [fuvarId, nev, tartalom, szken.mimeType, tartalom.length, session.name ?? session.username, eredetiAllo, eredetiMime, kulcs]
     );
