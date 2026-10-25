@@ -279,7 +279,7 @@ export async function szinkronizalSzamlaSzamokat(): Promise<number> {
          or exists (select 1 from fuvar_elszamolas e where e.szamla_szam = sz.szamlaszam) as hasznalt
      from szamla sz
      where sz.kategoria = 'fuvar' and not sz.sztorno and not sz.sztornozva
-       and not exists (select 1 from fuvar_megbizasok m where sz.szamlaszam = any(m.kieg_szamla_szamok))`
+       and not exists (select 1 from fuvar_megbizasok m where m.kieg_szamla_szamok @> array[sz.szamlaszam])`
   );
   if (szamlaSorok.length === 0) return kieg;
 
@@ -330,7 +330,8 @@ async function szinkronizalKiegSzamlakat(): Promise<number> {
      where sz.kategoria = 'fuvar' and not sz.sztorno and not sz.sztornozva
        and sz.kiallitas_datum >= current_date - 180
        and sz.rendelesszam ~* '(kieg|p[oó]tl[aá]s|p[oó]td[ií]j)'
-       and not exists (select 1 from fuvar_megbizasok m where m.szamla_szam = sz.szamlaszam or sz.szamlaszam = any(m.kieg_szamla_szamok))
+       and not exists (select 1 from fuvar_megbizasok m where m.szamla_szam = sz.szamlaszam)
+       and not exists (select 1 from fuvar_megbizasok m where m.kieg_szamla_szamok @> array[sz.szamlaszam])
        and not exists (select 1 from fuvar_elszamolas e where e.szamla_szam = sz.szamlaszam)`
   );
   if (szamlak.length === 0) return 0;
@@ -380,7 +381,8 @@ export async function getParositatlanFuvarszamlak(napok = 60): Promise<{
      from szamla sz
      where sz.kategoria = 'fuvar' and not sz.sztorno and not sz.sztornozva
        and sz.kiallitas_datum >= current_date - $1::int
-       and not exists (select 1 from fuvar_megbizasok m where m.szamla_szam = sz.szamlaszam or sz.szamlaszam = any(m.kieg_szamla_szamok))
+       and not exists (select 1 from fuvar_megbizasok m where m.szamla_szam = sz.szamlaszam)
+       and not exists (select 1 from fuvar_megbizasok m where m.kieg_szamla_szamok @> array[sz.szamlaszam])
        and not exists (select 1 from fuvar_elszamolas e where e.szamla_szam = sz.szamlaszam)
      order by sz.kiallitas_datum desc, sz.szamlaszam desc`,
     [napok]
