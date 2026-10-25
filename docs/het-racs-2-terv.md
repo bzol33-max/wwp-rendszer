@@ -1,5 +1,7 @@
 # Hét nézet · Rács 2.0 — terv és fájl-tulajdon
 
+> **Állapot (2026-10-25, audit E10):** megvalósult (`lib/fuvarozas2/heti-utemterv*.ts`). A fájl-tulajdon táblák már nem érvényesek.
+
 Jóváhagyva: Budaházi Zoltán, 2026-10-17 („mehet”): az R1 kártya + R4 napi mérleg + R7 tartalék-jelző kombinációja
 („Hét nézet – 10 terv” vászon, Rács 2.0 oldal). Telefonra külön terv nem kell (a rács görgethető marad).
 Kiegészítés (11:15): **a hétvégéket és ünnepnapokat keskeny sávval jelölni** a rácsban.

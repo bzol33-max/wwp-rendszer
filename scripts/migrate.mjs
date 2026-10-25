@@ -248,7 +248,7 @@ async function main() {
   await fogadjaElRegiLevonasokatOnce(pool);
   // 2026-09-17: a két sofőr fiók a 09-13-i seed után törlődött (a lépés
   // rögzítve maradt, ezért a seed nem hozta újra létre). A dolgozói mobil
-  // sofőr nézetéhez (lásd docs/sofor-mobil-terv.md) kell a fiók ÉS az
+  // sofőr nézetéhez (lásd docs/archive/sofor-mobil-terv.md) kell a fiók ÉS az
   // alkalmazott-hozzárendelés — a Felhasználók oldal az utóbbit nem tudja
   // beállítani, ezért itt, a seeddel. A jelszó a SEED_* env változóból jön.
   await seedUserOnce(pool, {

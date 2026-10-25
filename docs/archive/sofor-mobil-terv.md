@@ -1,5 +1,7 @@
 # Sofőr mobil nézet — terv (2026-09-17)
 
+> **Archivált (2026-10-25, audit E10):** mind a négy fázis megvalósult (f816b02, 1f24151, a7362ea, 47c6373); azóta a sofőr app (`components/erkezes/sofor-app/`, 2026-10-21, „9-es” terv) és az `/m` sofőr nézet váltotta fel. A „GPS oldal” cél már nem létezik.
+
 Cél: Gergő és Micó a telefonján lássa a megbízások RÁ tartozó részét, és a
 nézet egyben adatot is adjon vissza a GPS és a Megbízások oldalnak. A
 Duvenbeck-megbízások kapják a legnagyobb figyelmet, mert azok a

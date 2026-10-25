@@ -1,5 +1,7 @@
 # Ecofleet telemetria — 0. hét javítások + tény-réteg (2026-10-16)
 
+> **Állapot (2026-10-25, audit E10):** megvalósult (`lib/ecofleet/`, `lib/jarmu-telemetria/`, `app/api/ecofleet/webhook`); a „nincs párhuzamos fuvarozási rész” döntés ma is érvényes.
+
 Döntés (Five Minds, 5/5): NINCS új párhuzamos fuvarozási rész. A meglévő `/fuvarozas2`
 felületek bővülnek; az új Ecofleet-adat egy új, elszigetelt, csak hozzáadó rétegen jön be.
 A GPS-becslés marad tartaléknak; a tachó-adat forrás-címkével („tachó” / „GPS-becslés”) jelenik meg.

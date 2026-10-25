@@ -1,5 +1,7 @@
 # Fuvarozás 2. kör — kocsi-központú felépítés (B) — terv és fájl-tulajdon
 
+> **Állapot (2026-10-25, audit E10):** megvalósult (`lib/fuvarozas2/kocsi-sav*.ts`, `/fuvarozas2/kocsi/[kod]`, fülek: Kocsik · Megbízások · Pénz). A fájl-tulajdon táblák már nem érvényesek.
+
 Jóváhagyva: Budaházi Zoltán, 2026-10-16 („ok, mehet minden”: B változat) és 2026-10-17 („haladjunk a fejlesztéssel tovább”).
 Döntési anyag: „Fuvarozás 2.0 terv” artifact, 1. döntés / B.
 

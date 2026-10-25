@@ -1,5 +1,7 @@
 # Hét nézet B1 — kocsiszín, nem-fuvar bejegyzés, szabadnap a Jelenlétből
 
+> **Állapot (2026-10-25, audit E10):** megvalósult (fb1c5c9, e78a0c8, a13d10a).
+
 Döntés: Budaházi Zoltán, 2026-10-17 („B1, B3 bevitelével”), a terv-vászon
 „A2 tovább” oldaláról. Az oldal: `/fuvarozas2/tervezes` (Hét).
 

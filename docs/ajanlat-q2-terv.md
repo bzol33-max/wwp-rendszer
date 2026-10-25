@@ -1,5 +1,7 @@
 # Ajánlat oldal · Q2 — keresési javaslat a felszabaduló kocsikra
 
+> **Állapot (2026-10-25, audit E10):** megvalósult (ab05d80; `lib/fuvarozas2/kereses-javaslat*.ts`, `components/fuvarozas2/kereses-javaslat.tsx`).
+
 Budaházi Zoltán, 2026-10-17: „ha Gergő kedden délelőtt végez Kisvárdán, a vezetési
 időkből legyen ajánlás ~3 viszonylatra, mit érdemes keresni. Cél: 2–3 kocsiba
 alvás egy héten, a hét utolsó munkanapján üresen itthon (Szakoly). A bevétel
