@@ -19,7 +19,7 @@
 // a hiányzó sorszámokat minden körben újra megvizsgáljuk, függetlenül
 // attól, hogy a fő kereső időközben már jóval előrébb jár.
 
-import { query } from "@/lib/db";
+import { query, egyetlenPeldanybanVarva, ZAR_KULCS } from "@/lib/db";
 import { decodeEntities, lekerdezSzamla, SzamlazzHuError, type SzamlazzHuSzamla } from "./szamlazzhu-client";
 import { kategorizalSzamla, alkategorizalRaklap } from "./categorize";
 import { frissitSztornoJelolest } from "./sztorno";
@@ -351,6 +351,18 @@ export function futtatSzamlaSzinkron(): Promise<PollEredmeny> {
     });
   }
   return tarolo[FUTAS_KULCS];
+}
+
+/**
+ * A „Frissítés most” gomb köre. Ha ebben a folyamatban már fut egy kör (az
+ * ütemezőé), arra vár, mint eddig. Különben a példányok közti záron át
+ * indul: Railway deploy-átfedésnél a másik példány ütemezője és ez a gomb
+ * nem kérdezi le párhuzamosan ugyanazokat a sorszámokat (audit A8).
+ */
+export function futtatSzamlaSzinkronKezzel(): Promise<PollEredmeny> {
+  const futo = (globalThis as FutasTarolo)[FUTAS_KULCS];
+  if (futo) return futo;
+  return egyetlenPeldanybanVarva(ZAR_KULCS.szamlaSzinkron, futtatSzamlaSzinkron, 120_000);
 }
 
 /** 0) a fő kereső helyreállítása, 1) a pending sorszámok újrapróbálása, 2) a fő kereső előrehaladása, ... */

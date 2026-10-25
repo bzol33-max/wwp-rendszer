@@ -84,6 +84,21 @@ export async function egyetlenPeldanyban<T>(
   }
 }
 
+/**
+ * Mint az egyetlenPeldanyban, de ha a zárat épp más tartja, megvárja (legfeljebb
+ * `maxVarMs`-ig), és utána fut — kézi indításhoz (gomb), ahol a felhasználó a
+ * kör eredményét várja, nem egy „kihagyva” választ.
+ */
+export async function egyetlenPeldanybanVarva<T>(kulcs: number, fn: () => Promise<T>, maxVarMs: number): Promise<T> {
+  const hatarido = Date.now() + maxVarMs;
+  for (;;) {
+    const zar = await egyetlenPeldanyban(kulcs, fn);
+    if (zar.futott) return zar.eredmeny;
+    if (Date.now() >= hatarido) throw new Error("Egy másik szinkron még fut — próbáld újra pár perc múlva.");
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+}
+
 /** Az egyetlenPeldanyban kulcsai — egy helyen, hogy ne ütközzenek. */
 export const ZAR_KULCS = {
   teljesitesFigyeles: 72_001,

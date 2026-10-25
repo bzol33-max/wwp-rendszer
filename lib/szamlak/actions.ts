@@ -5,7 +5,7 @@
 
 import { query } from "@/lib/db";
 import { requireAnyViewPermission, requireEditPermission, requireViewPermission } from "@/lib/auth/require-permission";
-import { futtatSzamlaSzinkron, type PollEredmeny } from "./poll";
+import { futtatSzamlaSzinkronKezzel, type PollEredmeny } from "./poll";
 import type {
   KeresesJavaslatok,
   SzamlaAlkategoria,
@@ -350,7 +350,7 @@ export async function visszavonFizetve(id: string) {
 /** A "Frissítés most" gomb: azonnal lefuttat egy szinkron kört, a napszaktól függetlenül. */
 export async function frissitesMost(): Promise<PollEredmeny> {
   await requireEditPermission("szamlak");
-  return futtatSzamlaSzinkron();
+  return futtatSzamlaSzinkronKezzel();
 }
 
 export type SzamlaElotagAllapot = {
