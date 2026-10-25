@@ -92,7 +92,7 @@ create table if not exists keszlet_movements (
   id             bigserial primary key,
   site_id        smallint not null references sites(id),
   type_id        smallint not null references pallet_types(id),
-  direction      text not null check (direction in ('be', 'ki', 'mozgatas')),
+  direction      text not null check (direction in ('be', 'ki', 'mozgatas', 'mozgatas_be')),
   qty            integer not null check (qty > 0),
   partner        text,
   target_site_id smallint references sites(id),
@@ -110,6 +110,9 @@ create index if not exists idx_keszlet_movements_site on keszlet_movements (site
 -- másik telepre mutat.
 -- Csak ha még nincs: a minden induláskor lefutó drop+add a teljes táblát
 -- zárolta és végigolvasta (audit DB-2). A szabály módosítása migrációba való.
+-- Üres adatbázison a fenti create table CHECK-je kapja ezt a nevet, ezért ott
+-- már eleve a 4 értékes szabály kell, különben ez a blokk sosem bővítene
+-- (audit A2, 2026-10-25).
 do $$ begin
   if not exists (select 1 from pg_constraint where conname = 'keszlet_movements_direction_check') then
     alter table keszlet_movements add constraint keszlet_movements_direction_check
