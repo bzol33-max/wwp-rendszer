@@ -155,6 +155,17 @@ export type CanNapSor = {
 
 /** Egy jármű CAN-napjai `tolNap`..`igNap` között (mindkettő "YYYY-MM-DD", zárt intervallum), nap szerint növekvően. */
 export async function canNapok(jarmuId: number | string, tolNap: string, igNap: string): Promise<CanNapSor[]> {
+  return (await canNapokTobb([jarmuId], tolNap, igNap)).get(String(jarmuId)) ?? [];
+}
+
+/**
+ * Több jármű napi CAN-sorai EGY lekérdezéssel (audit P3): a Kocsik és a
+ * Járművek lap eddig járművenként külön kérdezett. Minden kért járműnek van
+ * bejegyzése (adat nélkül üres tömb), mint a canNapok-nál.
+ */
+export async function canNapokTobb(jarmuIdk: (number | string)[], tolNap: string, igNap: string): Promise<Map<string, CanNapSor[]>> {
+  const ki = new Map<string, CanNapSor[]>(jarmuIdk.map((id) => [String(id), []]));
+  if (jarmuIdk.length === 0) return ki;
   const sorok = await query<{
     jarmu_id: string;
     nap: string;
@@ -171,23 +182,26 @@ export async function canNapok(jarmuId: number | string, tolNap: string, igNap: 
     `select jarmu_id::text, nap::text, liter_can, km_can, l100, tankolasok, szerviz_hatra_km,
             szerviz_megbizhato, tengely_terheles, minta_db, frissitve
        from jarmu_can_nap
-      where jarmu_id = $1 and nap between $2::date and $3::date
-      order by nap`,
-    [jarmuId, tolNap, igNap]
+      where jarmu_id = any($1::bigint[]) and nap between $2::date and $3::date
+      order by jarmu_id, nap`,
+    [jarmuIdk.map(String), tolNap, igNap]
   );
-  return sorok.map((s) => ({
-    jarmuId: s.jarmu_id,
-    nap: s.nap,
-    literCan: s.liter_can,
-    kmCan: s.km_can,
-    l100: s.l100,
-    tankolasok: Array.isArray(s.tankolasok) ? s.tankolasok : [],
-    szervizHatraKm: s.szerviz_hatra_km,
-    szervizMegbizhato: s.szerviz_megbizhato,
-    tengelyTerhelesKg: s.tengely_terheles,
-    mintaDb: s.minta_db,
-    frissitve: s.frissitve,
-  }));
+  for (const s of sorok) {
+    ki.get(s.jarmu_id)?.push({
+      jarmuId: s.jarmu_id,
+      nap: s.nap,
+      literCan: s.liter_can,
+      kmCan: s.km_can,
+      l100: s.l100,
+      tankolasok: Array.isArray(s.tankolasok) ? s.tankolasok : [],
+      szervizHatraKm: s.szerviz_hatra_km,
+      szervizMegbizhato: s.szerviz_megbizhato,
+      tengelyTerhelesKg: s.tengely_terheles,
+      mintaDb: s.minta_db,
+      frissitve: s.frissitve,
+    });
+  }
+  return ki;
 }
 
 /** Webhook-esemény mentése idempotensen: "uj", ha most került be; "ismetelt", ha a kulcs már ismert. */

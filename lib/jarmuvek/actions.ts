@@ -15,7 +15,7 @@ import { requireEditPermission, requireViewPermission } from "@/lib/auth/require
 import { jarmuCacheTorles } from "@/lib/fuvarozas/jarmuvek-db";
 import { jarmuSzinE } from "@/lib/fuvarozas/vehicles";
 import { getFuvarBeallitasok } from "@/lib/beallitasok/fuvar";
-import { canNapok } from "@/lib/jarmu-telemetria/repo";
+import { canNapokTobb } from "@/lib/jarmu-telemetria/repo";
 import {
   normalRendszam,
   tisztitJarmu,
@@ -181,11 +181,13 @@ async function jarmuTelemetriak(ids: string[], ma: string): Promise<Record<strin
   d.setUTCDate(d.getUTCDate() - 6);
   const tol = d.toISOString().slice(0, 10);
   const ki: Record<string, JarmuTelemetria> = {};
-  await Promise.all(ids.map(async (id) => {
-    const sorok = await canNapok(Number(id), tol, ma).catch(() => null);
+  // Egy lekérdezés az összes járműre, nem járművenként (audit P3).
+  const canSorok = await canNapokTobb(ids, tol, ma).catch(() => null);
+  for (const id of ids) {
+    const sorok = canSorok?.get(String(id));
     const t = sorok ? jarmuTelemetriaOsszesit(sorok) : null;
     if (t) ki[id] = t;
-  }));
+  }
   return ki;
 }
 
