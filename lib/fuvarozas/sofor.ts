@@ -97,7 +97,7 @@ export async function markMegalloKesz(fuvarId: string, megalloIndex: number): Pr
 async function megalloKeszLezarassal(fuvarId: string, megalloIndex: number, valodiUtolso: boolean): Promise<{ fuvarLezarva: boolean }> {
   const soforNev = (await requireSession()).name;
   // Az UTOLSÓ megálló "Indulok"-ja a fuvart is lezárja — ugyanúgy, mint a
-  // GPS lap pipája (megbizasok.ts setMegalloKesz). Eddig csak a GPS vagy az
+  // egykori GPS lap pipája (2026-10-12 óta nincs). Eddig csak a GPS vagy az
   // iroda zárta le, így a sofőr hiába jelezte, a fuvar "folyamatban" maradt
   // (Budaházi Zoltán, 2026-09-24).
   // A megálló kettős írása és az ebből következő teljesítésjelölő együtt atomikus.
@@ -133,8 +133,8 @@ function megalloKeszUtan(fuvarId: string, fuvarLezarva: boolean, soforNev: strin
 const VISSZAVONAS_ORA = 12;
 
 /**
- * A fuvar lezárását EZ a kézi jelölés okozta-e: a markMegalloKesz (és a GPS
- * lap pipája, megbizasok.ts setMegalloKesz) ugyanabban a hívásban írja a
+ * A fuvar lezárását EZ a kézi jelölés okozta-e: a markMegalloKesz (és régen a GPS
+ * lap pipája) ugyanabban a hívásban írja a
  * megálló kesz_at-ját és a fuvar teljesitve_at-ját, egymás után. A GPS-figyelő
  * vagy az iroda „Teljesítve” gombja más időpontban zár — azt ez nem nyitja újra.
  */

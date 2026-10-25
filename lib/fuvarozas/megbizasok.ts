@@ -173,9 +173,9 @@ export async function felszabaditFuvarDokumentumot(id: string): Promise<{ ok: tr
 
 /**
  * A Számla/Posta nézet soron belüli, azonnali javítása: postázási cím kitöltése.
- * A "posta" jog önmagában is feljogosít rá — a /posta nézet felhasználója
+ * A "posta" jog önmagában is feljogosít rá — a posta nézet felhasználója
  * (Budaházi Szabina) a teljes Fuvarozás modulhoz nem fér hozzá, a lista
- * viszont neki készült (lásd app/posta/page.tsx).
+ * viszont neki készült (ma: app/attekintes/posta, app/m/posta).
  */
 export async function setFuvarPostazasiCim(id: string, postazasiCim: string | null) { return actions.setFuvarPostazasiCim(id, postazasiCim); }
 

@@ -227,9 +227,12 @@ export type JarmuMegbizasMegallo = { tipus: "felrako" | "lerako"; varos: string 
 
 export type JarmuMegbizasSor = {
   id: string;
-  // A UI-n megszokott (a DB "tipus" mezőjéhez képest fordított) címkézés —
-  // lásd lib/dashboard/actions.ts megjegyzését: DB tipus='ber' -> "Saját",
-  // DB tipus='sajat' -> "Bér".
+  // A UI-n megszokott (a DB "tipus" mezőjéhez képest FORDÍTOTT) címkézés:
+  // DB tipus='ber' -> "Saját", DB tipus='sajat' -> "Bér". Ez szándékos és
+  // történeti: a régi fülek a tipus mezőt a mi szemszögünkből fordítva
+  // nevezték el. Ne „javítsd” — az új kód a jelleg oszlopot használja
+  // (jelleg='ber' = bérfuvar, jelleg='sajat' = saját fuvar), ami nem fordított.
+  // (A korábbi magyarázat a 2026-10-ben törölt lib/dashboard/actions.ts-ben volt.)
   cimke: "Saját" | "Bér";
   date: string;
   /** YYYY-MM-DD — a "Ma"/"Holnap" címkéhez a kártyán. */

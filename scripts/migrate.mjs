@@ -53,12 +53,12 @@ async function main() {
     name: "Admin",
     role: "admin",
   });
-  // Csak a mobil összefoglaló nézetet látja — minden más modul (Info,
+  // Csak a mobil összefoglaló nézetet látta — minden más modul (Info,
   // Fuvarozás, Készlet, Számlák, Dolgozók, Jelenléti/üzenőfal, Járművek,
-  // Beállítások) le van tiltva neki (view+edit is false), a "mobil" modul
-  // pedig önmagában feljogosít a /mobil oldal mindkét kártyájának
-  // megtekintésére, a teljes Készlet/Fuvarozás modul jogosultsága nélkül
-  // is. Lásd app/mobil/page.tsx.
+  // Beállítások) le van tiltva neki (view+edit is false). A "mobil" modul és
+  // a /mobil oldal azóta megszűnt (utódja az /attekintes, "attekintes"
+  // modul) — a seed csak egy üres adatbázison fut le, élesben a fiók már
+  // létezik, a jogait a Beállításokban kell kezelni (audit E6, 2026-10-25).
   await seedUserOnce(pool, {
     code: "user-budahazizoltan-2026-09-07",
     username: "BudahaziZoltan",
@@ -81,7 +81,8 @@ async function main() {
   // csempénként, mobilra optimalizálva) — minden más modul le van tiltva
   // neki, a "posta" modul pedig önmagában feljogosít a /posta oldal
   // megtekintésére és a "Postázva" jelölésre, a teljes Fuvarozás modul
-  // jogosultsága nélkül is. Lásd app/posta/page.tsx.
+  // jogosultsága nélkül is. A /posta oldal azóta átirányítás: a nézet ma az
+  // /attekintes/posta és az /m/posta (audit E6, 2026-10-25).
   await seedUserOnce(pool, {
     code: "user-budahaziszabina-2026-09-07",
     username: "BudahaziSzabina",
