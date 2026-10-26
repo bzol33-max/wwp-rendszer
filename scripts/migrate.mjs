@@ -55,10 +55,11 @@ async function main() {
   });
   // Csak a mobil összefoglaló nézetet látta — minden más modul (Info,
   // Fuvarozás, Készlet, Számlák, Dolgozók, Jelenléti/üzenőfal, Járművek,
-  // Beállítások) le van tiltva neki (view+edit is false). A "mobil" modul és
-  // a /mobil oldal azóta megszűnt (utódja az /attekintes, "attekintes"
-  // modul) — a seed csak egy üres adatbázison fut le, élesben a fiók már
-  // létezik, a jogait a Beállításokban kell kezelni (audit E6, 2026-10-25).
+  // Beállítások) le van tiltva neki (view+edit is false). A régi "mobil"
+  // modul és a /mobil oldal megszűnt, utódja az /attekintes ("attekintes"
+  // modul), ezért a seed ezt a jogot adja. A seed csak egy üres adatbázison
+  // fut le, élesben a fiók már létezik, a jogait a Beállításokban kell
+  // kezelni (audit E6, 2026-10-25).
   await seedUserOnce(pool, {
     code: "user-budahazizoltan-2026-09-07",
     username: "BudahaziZoltan",
@@ -74,7 +75,7 @@ async function main() {
       jelenlet: { view: false, edit: false },
       jarmuvek: { view: false, edit: false },
       beallitasok: { view: false, edit: false },
-      mobil: { view: true, edit: false },
+      attekintes: { view: true, edit: false },
     },
   });
   // Csak a Posta nézetet látja (a Bér fuvarok Számla/Posta listáját,
