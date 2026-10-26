@@ -16,6 +16,7 @@
 // Hajdúspedíció (helyszíni kontakt).
 
 import {
+  cimkesIdopontokIratbol,
   kontaktNev,
   kontaktTelefon,
   megalloReszlete,
@@ -185,6 +186,27 @@ eq("06-os marad", kontaktTelefon("06 30 123 4567"), "06301234567");
   eq("fordított szöveg, pozíció nélkül: nem talál rossz párt", csakSzoveg.megallok[0].ido, "12:00 -");
   const cimkeNelkul = soforAdatokKivonatbol(modell, "Felrakás: Nyírbátor");
   eq("címke nélkül marad a modell tippje", cimkeNelkul.megallok[0].ido, "12:00 -");
+}
+
+// Flott-Trans #2026/01428 (2026-10-26): eltérő napú felrakás/lerakás — a
+// címkés dátum a megbízás fő dátumaihoz is kell (drive-sync-core.ts).
+{
+  const elemek = [
+    { oldal: 1, x: 30, y: 711, str: "Felrakodás dátuma és időpontja:" },
+    { oldal: 1, x: 30, y: 694, str: "Kiszolgáltatás dátuma és időpontja:" },
+    { oldal: 1, x: 198, y: 694, str: "2026.10.27 08:00 -" },
+    { oldal: 1, x: 178, y: 711, str: "2026.10.26 15:00" },
+  ];
+  const forditott = "Felrakodás dátuma és időpontja:\nKiszolgáltatás dátuma és időpontja:\n2026.10.27 08:00 -\n2026.10.26 15:00";
+  const c = cimkesIdopontokIratbol(forditott, elemek);
+  eq("01428 felrakás napja (pozícióból)", c.felrako?.nap, "2026-10-26");
+  eq("01428 felrakás ideje", c.felrako?.ido, "15:00");
+  eq("01428 lerakás napja (pozícióból)", c.lerako?.nap, "2026-10-27");
+  const csakSzoveg = cimkesIdopontokIratbol("Felrakodás dátuma és időpontja: 2026.10.26 15:00\nKiszolgáltatás dátuma és időpontja: 2026.10.27 08:00 -", null);
+  eq("01428 szövegből: felrakás", csakSzoveg.felrako?.nap, "2026-10-26");
+  eq("01428 szövegből: lerakás", csakSzoveg.lerako?.nap, "2026-10-27");
+  const nincs = cimkesIdopontokIratbol("Felrakás: Nyírbátor", null);
+  eq("címke nélkül nincs felülírás", nincs.felrako ?? nincs.lerako, null);
 }
 
 console.log(`\n${ok} rendben, ${bad} hiba`);

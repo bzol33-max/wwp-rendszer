@@ -113,14 +113,20 @@ export function cimkesIdopontokElemekbol(elemek: Elem[]): ReturnType<typeof cimk
   };
 }
 
+/**
+ * A címkés felrakási/kiszolgáltatási időpont az iratból — a pozíció az
+ * erősebb, mert a szöveg sorrendje hasábos iraton felcserélődhet.
+ */
+export function cimkesIdopontokIratbol(nyersSzoveg?: string | null, elemek?: Elem[] | null): ReturnType<typeof cimkesIdopontok> {
+  const szovegbol = nyersSzoveg ? cimkesIdopontok(nyersSzoveg) : { felrako: null, lerako: null };
+  const pozicioBol = elemek?.length ? cimkesIdopontokElemekbol(elemek) : { felrako: null, lerako: null };
+  return { felrako: pozicioBol.felrako ?? szovegbol.felrako, lerako: pozicioBol.lerako ?? szovegbol.lerako };
+}
+
 export function soforAdatokKivonatbol(nyers: unknown, nyersSzoveg?: string | null, elemek?: Elem[] | null): SoforAdatok {
   const adatok = soforAdatokModellbol(nyers);
   if (!nyersSzoveg && !elemek?.length) return adatok;
-  const szovegbol = nyersSzoveg ? cimkesIdopontok(nyersSzoveg) : { felrako: null, lerako: null };
-  const pozicioBol = elemek?.length ? cimkesIdopontokElemekbol(elemek) : { felrako: null, lerako: null };
-  // A pozíció az erősebb: a szöveg sorrendje hasábos iraton felcserélődhet.
-  const felrako = pozicioBol.felrako ?? szovegbol.felrako;
-  const lerako = pozicioBol.lerako ?? szovegbol.lerako;
+  const { felrako, lerako } = cimkesIdopontokIratbol(nyersSzoveg, elemek);
   const elsoFel = adatok.megallok.find((m) => m.tipus === "felrako");
   const utolsoLe = [...adatok.megallok].reverse().find((m) => m.tipus === "lerako");
   if (felrako && elsoFel) { elsoFel.nap = felrako.nap; elsoFel.ido = felrako.ido ?? elsoFel.ido; }

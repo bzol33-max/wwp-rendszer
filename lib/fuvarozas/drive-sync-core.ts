@@ -52,7 +52,7 @@ import { frissitsdFuvarozas2Modellt } from "@/lib/fuvarozas2/modell-szinkron";
 import { ellenorizKivontFuvart, type KivontFuvar } from "@/lib/fuvarozas/import/ellenorzes";
 import { dontsLerakasNapot, type LerakasNapDontes } from "@/lib/fuvarozas/import/lerakas-nap";
 import { becsultTavolsag } from "@/lib/fuvarozas2/ures-km";
-import { osszesFelrakoCime, osszesLerakoCime, soforAdatokKivonatbol, vanSoforAdat, type SoforAdatok } from "@/lib/fuvarozas/sofor-adatok";
+import { cimkesIdopontokIratbol, osszesFelrakoCime, osszesLerakoCime, soforAdatokKivonatbol, vanSoforAdat, type SoforAdatok } from "@/lib/fuvarozas/sofor-adatok";
 import {
   rogzitNaplot,
   nyersSzoveggelNaplozottFileIdk,
@@ -703,6 +703,19 @@ async function ujFajlokFeldolgozasa(
         postazasiCim: (llm.postazasiCim && !/^\S+@\S+$/.test(llm.postazasiCim.trim()) ? llm.postazasiCim : null) || partner?.postazasiCim || null,
         fizetesiHataridoNap: llm.fizetesiHataridoNap ?? partner?.fizetesiHataridoNap ?? null,
       };
+
+      // Az iratban CÍMKÉVEL megadott felrakási/kiszolgáltatási nap felülírja a
+      // modell tippjét a megbízás fő dátumain is — eddig csak a sofőr-adatok
+      // megállóin (sofor-adatok.ts). Flott-Trans #2026/01428 (2026-10-26): az
+      // irat szerint felrakás 10.26., lerakás 10.27., a modell felcserélte, és
+      // a fuvar a sofőr telefonjáról is eltűnt. A partner determinisztikus
+      // olvasója (ha van) továbbra is elsőbbséget élvez.
+      const cimkes = cimkesIdopontokIratbol(nyersSzoveg, elemek);
+      if (cimkes.felrako && !determinisztikus.felrakasDatum) kivont.felrakasDatum = cimkes.felrako.nap;
+      if (cimkes.lerako && !("lerakasDatum" in nyersDeterminisztikus)) {
+        kivont.lerakasDatum = cimkes.lerako.nap;
+        llm.lerakasDatumMegadva = true;
+      }
 
       // A pénznemet MÁR az ellenőrzés előtt normalizáljuk: az LLM "HUF"-ot is
       // adhat, és a fuvardíj-sáv táblában (ellenorzes.ts) csak "Ft"/"EUR" van —
