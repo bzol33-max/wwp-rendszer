@@ -209,5 +209,26 @@ eq("06-os marad", kontaktTelefon("06 30 123 4567"), "06301234567");
   eq("címke nélkül nincs felülírás", nincs.felrako ?? nincs.lerako, null);
 }
 
+// 2026-10-27, Logo Trek: a „Kontakt:” rovat üres volt, a modell a MEGBÍZOTT
+// blokk (a mi) ügyintézőnket írta a lerakó kontaktjának — a sofőr „Hívás”
+// gombja Budaházi Zoltánt hívta. Se írás, se olvasás közben nem maradhat.
+{
+  const nyers = { megallok: [
+    { tipus: "felrako", cim: "2330 Dunaharaszti, Némedi út 104.", kontakt: null },
+    { tipus: "lerako", cim: "Győr", ceg: "Valami Kft.", kontakt: "Budaházi Zoltán 70/613-8761" },
+    { tipus: "lerako", cim: "Veszprém", kontakt: "70/613-8761" },
+    { tipus: "lerako", cim: "Sopron", kontakt: "Kiss Béla 30/123-4567" },
+  ] };
+  const a = soforAdatokKivonatbol(nyers);
+  eq("írás: a mi nevünk nem lesz kontakt", a.megallok[1].kontakt, null);
+  eq("írás: a mi számunk (név nélkül) sem", a.megallok[2].kontakt, null);
+  eq("írás: valódi helyszíni kontakt megmarad", a.megallok[3].kontakt, "Kiss Béla 30/123-4567");
+  // Régi, már elmentett sor (a szűrő előtt tárolt): olvasáskor is kiesik.
+  const regi = [{ tipus: "lerako" as const, cim: "Győr", ceg: null, nap: null, ido: null, kontakt: "Budaházi Zoltán 70/613-8761", rakomany: null, kod: null }];
+  const r = megalloReszlete(regi, "lerako", 0, 1, "Győr");
+  eq("olvasás: a mentett régi sorból is kiesik", r?.kontakt, null);
+  eq("olvasás: a hívható szám is null", kontaktTelefon(r?.kontakt), null);
+}
+
 console.log(`\n${ok} rendben, ${bad} hiba`);
 process.exit(bad ? 1 : 0);

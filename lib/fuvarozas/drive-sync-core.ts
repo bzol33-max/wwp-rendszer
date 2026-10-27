@@ -306,11 +306,11 @@ const KIVONATOLASI_UTASITAS = `Egy fuvarmegbízás-dokumentum szövege következ
   "megallok": [ // MINDEN felrakó és lerakó, útvonal-sorrendben (több lerakónál MIND, nem csak az utolsó)
     {
       "tipus": "felrako"|"lerako",
-      "ceg": string|null, // a rakodóhely cégneve (pl. "Huncargo Raktár", "SZERIP Zrt.") — NEM a megbízó, és NEM mi
+      "ceg": string|null, // a rakodóhely cégneve (pl. "Huncargo Raktár", "SZERIP Zrt.") — NEM a megbízó, és NEM mi. A KISZOLGÁLTATÓ / árukiszolgáltatás helye a FELRAKÓ cége, az ÁTVEVŐ / áruátvétel helye a LERAKÓ cége — ne cseréld fel; ha az átvevő csak „Száll.szerint” (szállítólevél szerint), a lerakó ceg null
       "cim": string|null, // irányítószám, város, utca házszám — cégnév NÉLKÜL (pl. "3527 Miskolc, Besenyői u. 8.")
       "nap": string|null, // ISO dátum ÉÉÉÉ-HH-NN, ha erre a megállóra meg van adva
       "ido": string|null, // időpont vagy időablak röviden, szó szerint (pl. "8:00-20:00", "15:00-ig", "15 órás időkapu")
-      "kontakt": string|null, // a HELYSZÍNEN hívható személy neve és telefonszáma, ha meg van adva — NEM a megbízó ügyintézője
+      "kontakt": string|null, // a HELYSZÍNEN hívható személy neve és telefonszáma, CSAK ha a megállónál (a „Kontakt:” rovatban) kifejezetten meg van adva — NEM a megbízó ügyintézője, és SOHA nem a MI (Well-Worn Pallet, Budaházi Zoltán) ügyintézőnk a MEGBÍZOTT blokkból; üres „Kontakt:” rovatnál null
       "rakomany": string|null, // ezen a megállón fel- vagy lerakandó áru és mennyiség röviden (pl. "2 t 1.fok Titus", "33 raklap"), ha megállónként meg van adva
       "kod": string|null // az EZEN a megállón kért bejelentkezési / lerakodási / foglalási kód vagy időkapu-szám szó szerint (pl. "Lerakodási kód: HEJ-061026361" -> "HEJ-061026361", "Booking 4471"), egyébként null
     }

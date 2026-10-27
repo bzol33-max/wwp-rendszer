@@ -20,6 +20,7 @@
 // (scripts/teszt-sofor-adatok.mts) közvetlenül hívja.
 
 import { cimKulcs, varosNev } from "./varos";
+import { sajatKontaktE } from "./fuvar-constants";
 
 export type MegalloReszlet = {
   tipus: "felrako" | "lerako";
@@ -134,6 +135,11 @@ export function soforAdatokKivonatbol(nyers: unknown, nyersSzoveg?: string | nul
   return adatok;
 }
 
+/** A helyszíni kontakt nem lehet a mi nevünk/számunk (fuvar-constants.ts sajatKontaktE) — akkor nincs kontakt. */
+function idegenKontakt(kontakt: string | null): string | null {
+  return sajatKontaktE(kontakt) ? null : kontakt;
+}
+
 function soforAdatokModellbol(nyers: unknown): SoforAdatok {
   const o = (nyers && typeof nyers === "object" ? nyers : {}) as Record<string, unknown>;
   const megallok = (Array.isArray(o.megallok) ? o.megallok : [])
@@ -148,7 +154,7 @@ function soforAdatokModellbol(nyers: unknown): SoforAdatok {
         ceg: szoveg(r.ceg, 80),
         nap: isoNap(r.nap),
         ido: szoveg(r.ido, 60),
-        kontakt: szoveg(r.kontakt, 80),
+        kontakt: idegenKontakt(szoveg(r.kontakt, 80)),
         rakomany: szoveg(r.rakomany, 80),
         kod: szoveg(r.kod, 60),
       };
@@ -207,7 +213,7 @@ function varosKulcs(cim: string | null | undefined): string {
  * egylerakós sorhoz is a helyes (a városával egyező) lerakó részlete jön,
  * akkor is, ha a modell közben három lerakót talált.
  */
-export function megalloReszlete(
+function megalloReszleteNyers(
   reszletek: readonly MegalloReszlet[] | null | undefined,
   tipus: "felrako" | "lerako",
   tipusonBeluliIndex: number,
@@ -235,6 +241,22 @@ export function megalloReszlete(
   // közöttük, ha a darabszám ott is egyezik.
   if (azonosVarosuak.length > 1) return azonosVarosuak[Math.min(tipusonBeluliIndex, azonosVarosuak.length - 1)];
   return null;
+}
+
+/**
+ * Mint a megalloReszleteNyers, de a MÁR MENTETT (régi) sorokban is kiszűri a
+ * mi nevünket/számunkat a kontaktból — így a javítás azonnal hat, adatbázis-
+ * módosítás nélkül.
+ */
+export function megalloReszlete(
+  reszletek: readonly MegalloReszlet[] | null | undefined,
+  tipus: "felrako" | "lerako",
+  tipusonBeluliIndex: number,
+  tipusonBeluliDarab: number,
+  cim: string
+): MegalloReszlet | null {
+  const r = megalloReszleteNyers(reszletek, tipus, tipusonBeluliIndex, tipusonBeluliDarab, cim);
+  return r && sajatKontaktE(r.kontakt) ? { ...r, kontakt: null } : r;
 }
 
 /** A kontakt szövegből a hívható szám ("06 20 935 3201" → "06209353201"), ha van. */

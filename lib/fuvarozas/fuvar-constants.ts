@@ -103,6 +103,23 @@ export function megbizoMegjelenites(jelleg: string | null | undefined, partner: 
   return p ?? "(nincs megbízó)";
 }
 
+/**
+ * A MI telefonszámaink utolsó 9 számjegye (a megbízások MEGBÍZOTT blokkjában
+ * állnak; a cég nyilvános elérhetőségei). A helyszíni kontakt sosem lehet a mi
+ * számunk — 2026-10-27, Logo Trek: a sofőr „Hívás” gombja Budaházi Zoltánt
+ * hívta a lerakónál, mert a „Kontakt:” rovat üres volt, és a modell a
+ * legközelebbi ügyintézőt (a miénket) írta be.
+ */
+const SAJAT_TELEFON_VEGEK = ["706138761", "203558797"];
+
+/** Igaz, ha a szövegben a mi nevünk vagy a mi telefonszámunk szerepel (nem lehet helyszíni kontakt). */
+export function sajatKontaktE(szoveg: string | null | undefined): boolean {
+  if (!szoveg?.trim()) return false;
+  if (/budah[aá]zi|well\s*-?\s*worn/i.test(szoveg)) return true;
+  const szamjegy = szoveg.replace(/\D/g, "");
+  return SAJAT_TELEFON_VEGEK.some((v) => szamjegy.includes(v));
+}
+
 /** Igaz, ha a cégnév a MI cégünk (bármilyen írásmóddal). */
 export function sajatCegunkE(nev: string | null | undefined): boolean {
   if (!nev?.trim()) return false;

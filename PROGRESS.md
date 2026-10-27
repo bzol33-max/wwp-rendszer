@@ -4106,3 +4106,8 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 ## 2026-10-27 (2) — Szerkesztés: a megálló címe is követi a javítást
 - Hiba: a Logo Trek sor lerakóját kézzel GYŐR-re javítva a fuvar mezője megváltozott, a megálló (`fuvar_megallok.cim_nyers`) és a lista „→ Szakoly” maradt (a `modell-szinkron.ts` csak a hiányzó ablakot/napot pótolta).
 - Javítás: ugyanannyi megállónál a `cim_nyers` is frissül, de csak ha a megállót még nem érintette GPS-érkezés / sofőr-jelölés. Teszt: `teszt-modell-szinkron.ts` 23/0, eslint, tsc (csak a korábbi `app/layout.tsx` LayoutProps hiba).
+
+## 2026-10-27 (3) — Sofőr „Hívás”: a mi saját számunk volt a lerakó kontaktja
+- Hiba: Logo Trek lerakónál a sofőr appban a Hívás gomb „Budaházi Zoltán” volt. Ok: a „Kontakt:” rovat üres volt, a modell a legközelebbi ügyintézőt (a MEGBÍZOTT blokk — a miénk) írta a megálló kontaktjának; semmi nem szűrte.
+- Javítás: `sajatKontaktE` (fuvar-constants.ts: név + saját számok végei); a `sofor-adatok.ts` ír- és olvasáskor is kiszűri (a már mentett sorok azonnal javulnak, DB-módosítás nélkül); a modell-utasítás pontosítva (kontakt csak a megálló „Kontakt:” rovatából; KISZOLGÁLTATÓ = felrakó cég, ÁTVEVŐ = lerakó cég, „Száll.szerint” → ceg null). Teszt: teszt-sofor-adatok 63/0.
+- Nyitott: a mentett lerakó cég (Coca-Cola HBC) a Logo Trek soron még a régi — az utasítás csak új beolvasásra hat; a bevitt számú (saját) telefonvégek a fuvar-constants.ts-ben vannak, új saját szám esetén bővítendő.
