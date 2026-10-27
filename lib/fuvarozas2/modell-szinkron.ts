@@ -157,6 +157,19 @@ export async function frissitsdFuvarozas2Modellt(fuvarId: string): Promise<Model
            where megbizas_id = $1 and sorszam = $2`,
           [sor.id, i + 1, m.nap, m.tol, m.ig]
         );
+        // A kézzel javított cím (Szerkesztés) is átmegy a megállóra — de csak
+        // ha a megállót még nem érintette a GPS és a sofőr sem jelölte késznek
+        // (2026-10-27, Logo Trek: a lerakó a fuvaron GYŐR lett, a megálló és a
+        // lista Szakoly maradt). Ami már megtörtént, ahhoz nem nyúlunk.
+        if (m.cim) {
+          await query(
+            `update fuvar_megallok set cim_nyers = $3
+             where megbizas_id = $1 and sorszam = $2
+               and cim_nyers is distinct from $3
+               and gps_erkezes is null and sofor_kesz_at is null and sofor_megerkezett_at is null`,
+            [sor.id, i + 1, m.cim]
+          );
+        }
       }
     }
     return eredmeny;

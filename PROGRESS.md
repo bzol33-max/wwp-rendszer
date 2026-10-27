@@ -4102,3 +4102,7 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 - Hiba: a Logo Trek „Fuvarmegbízás” (Dunaharaszti–Győr) lerakója Szakolyra olvasódott. Ok: a PDF-ben a lerakónál csak „GYŐR” áll (utca nélkül), a teljes címes Szakoly a MEGBÍZOTT blokkunk; a pdf-parse a címkéket/értékeket szétszórja, a modell a rossz címet párosította.
 - Javítás: új `lib/fuvarozas/import/logotrek.ts` (felrakó/lerakó/fuvardíj a pdfjs koordinátából), `partnerek.ts` új „Logo Trek Kft.” bejegyzés (45 nap, postacím Győr, Iktatószám), új `scripts/teszt-logotrek.mts` (4/0, `npm run teszt` láncban).
 - Nyitott: általános védelem (saját cím lerakóként ➜ „ellenőrizendő”) nincs — csak a sablonos olvasók védenek; már beolvasott (hibás) soron a lerakót kézzel kell javítani vagy újraolvastatni.
+
+## 2026-10-27 (2) — Szerkesztés: a megálló címe is követi a javítást
+- Hiba: a Logo Trek sor lerakóját kézzel GYŐR-re javítva a fuvar mezője megváltozott, a megálló (`fuvar_megallok.cim_nyers`) és a lista „→ Szakoly” maradt (a `modell-szinkron.ts` csak a hiányzó ablakot/napot pótolta).
+- Javítás: ugyanannyi megállónál a `cim_nyers` is frissül, de csak ha a megállót még nem érintette GPS-érkezés / sofőr-jelölés. Teszt: `teszt-modell-szinkron.ts` 23/0, eslint, tsc (csak a korábbi `app/layout.tsx` LayoutProps hiba).
