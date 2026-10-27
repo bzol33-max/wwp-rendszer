@@ -46,6 +46,7 @@ import type { SzovegElem } from "./pdf-elemek";
 import { kivonSpediTransMezoket } from "./speditrans";
 import { kivonGhibliMezoket } from "./ghibli";
 import { kivonKuehneNagelMezoket } from "./kuehne-nagel";
+import { kivonLogoTrekMezoket } from "./logotrek";
 
 export type Partner = {
   /** Belső azonosító (napló, mintafájlok neve). */
@@ -330,6 +331,21 @@ export const PARTNEREK: readonly Partner[] = [
     // A rakodóhely cégét a modell cím helyett a felrakó/lerakó mezőbe írta
     // (36998, 2026-10-01) — a címeket a sablonból olvassuk (kuehne-nagel.ts).
     kivon: (nyersSzoveg) => kivonKuehneNagelMezoket(nyersSzoveg),
+  },
+  {
+    kod: "logotrek",
+    nev: "Logo Trek Kft.",
+    ujjlenyomat: [/logotrek\.hu/i, /\bLogo\s*Trek\s+Kft/i],
+    torzsVege: [],
+    // „A számla pontos beérkezését követő 45. naptári napon” — de a papírok
+    // beérkezésétől számítva (a levélben is kérik az eredetiket postán).
+    fizetesiHataridoNap: 45,
+    postazasiCim: "9028 Győr, Fehérvári út 75/H",
+    hivatkozasNeve: "Iktatószám",
+    // A lerakónál csak a város áll („GYŐR”), a teljes cím a mi MEGBÍZOTT
+    // blokkunkban — a modell Szakolyt írt lerakónak (2026-10-27). A mezőket
+    // oldalkoordinátából olvassuk (logotrek.ts).
+    kivon: kivonLogoTrekMezoket,
   },
 ] as const;
 

@@ -4097,3 +4097,8 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 - Állapot: a tachót (Ecofleet `getLastData` → `tcoData`) 2 percenként gyűjtjük (`jarmu_tacho_pillanat`), de a Ma kártyán csak egy kis csík és súgó használta; a fő sor („Vezetés ma 6:36 / 9:00 · szünet esedékes”) GPS-útjelentésből becsült, és ellentmondott a tachónak (Gergő 12:22: tachó szerint ma még 5:49). A 15 percnél régebbi tachó eldobódott — álló kocsinál (Micó, 11:38 óta nincs jel) így semmi nem látszott.
 - Javítás: `tervezes-het-tacho.ts` `maTachoSor` — „Tachó: <állapot> HH:MM óta · ma még X vezethet · műszak még Y · hét Z/56 ó”, 15 perc fölött „· adat HH:MM”, 12 óra fölött nincs; `ma-vaszon.ts` / `.tsx`: ha van tachó, ez a fő sor „tachó” jellel, a GPS-becslés csak tartalék (`vezetesForras`).
 - Teszt: új `teszt-ma-tacho.ts` 5/0, teljes `npm run teszt`, tsc, eslint, build.
+
+## 2026-10-27 — Logo Trek megbízás: a lerakó Szakoly volt Győr helyett
+- Hiba: a Logo Trek „Fuvarmegbízás” (Dunaharaszti–Győr) lerakója Szakolyra olvasódott. Ok: a PDF-ben a lerakónál csak „GYŐR” áll (utca nélkül), a teljes címes Szakoly a MEGBÍZOTT blokkunk; a pdf-parse a címkéket/értékeket szétszórja, a modell a rossz címet párosította.
+- Javítás: új `lib/fuvarozas/import/logotrek.ts` (felrakó/lerakó/fuvardíj a pdfjs koordinátából), `partnerek.ts` új „Logo Trek Kft.” bejegyzés (45 nap, postacím Győr, Iktatószám), új `scripts/teszt-logotrek.mts` (4/0, `npm run teszt` láncban).
+- Nyitott: általános védelem (saját cím lerakóként ➜ „ellenőrizendő”) nincs — csak a sablonos olvasók védenek; már beolvasott (hibás) soron a lerakót kézzel kell javítani vagy újraolvastatni.
