@@ -24,6 +24,9 @@ A felügyelő (Claude) vezeti; a redesign végén ezt nézzük át a felhasznál
 
 - Készlet (3): a „Ma +N be · −N ki” fejléc-összegző Nyíregyházán kimarad (ott nincs mozgás-lista, csak szöveges esemény), Szakolyon/Balkányon a szerver dátum-szövegéből számolódik; a hét napjai sáv a hónap adataiból (napi átlag) készül.
 - Készlet (3): a fejléc-összegzők (havi + telep) xl-től a fülek sorába húzva, alatta saját sorban — böngészős ellenőrzés kell; a „Mozgások — típusonként” kártyák az Összkészlet fülön vannak, azt a terv nem érintette.
+- Fuvarozás (4): a `.fuvarozas2` téma alap-tokenjei (háttér, primary, card, border, muted, accent, ring) törölve → a többi Fuvarozás oldal (Ma, Kocsi, Tervezés, Kimutatás, Költségek, Partnerek, Eredmény, Levelek, Rendszer, TIMOCOM) már a kék sémát kapja, de a `--f2-mint` / `--f2-blue` segédváltozók (menta / acélkék) továbbra is élnek a komponenseikben (kb. 30 fájl); beégetett menta: `timocom.tsx` (1), `eredmeny-nezet.tsx` (2) → az 5. lépésben.
+- Fuvarozás (4): a Megbízások kártyáján az „esedékes nov. 15.” sor nincs (a kártya nem kapja a számla esedékességét, csak az „N napja lejárt” jelzést); a közös `MegbizasKartya` (mobil, Ma, kimutatás), a megbízás-részlet lap és a Kocsi-hét panel belseje nem lett átszínezve (a panel gombjai/kiemelései viszont tokenre váltottak).
+- Fuvarozás (4): a gyors saját fuvar rögzítő „Legkorábban / Legkésőbb” mezője a „+ részletek” alá került (a 300 px-es oszlopba így fér); az oldal fölötti magyarázó sor („beérkezéstől a pénzig…”) elmaradt, a szakasz-alcím mondja ugyanezt. Böngészős ellenőrzés a felügyelőre vár.
 
 ## Kinézet
 - Betűskála: van még `text-[11px]`/`text-[10px]` a repóban (12 px alatt semmi szabály) — modulonként.

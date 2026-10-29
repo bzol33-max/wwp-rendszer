@@ -206,8 +206,12 @@
    kapta — döntés: 2026-09-25 (Budaházi Zoltán). FONTOS: a dialógusok portálba
    renderelnek, a lap wrapper-én kívül, ezért a modul dialógusai külön megkapják
    a .szamlak osztályt (kontókivonat-párosítás) — enélkül a felugró ablak a régi
-   témában maradna. */
-.fuvarozas2,
+   témában maradna.
+
+   Redesign 4 (2026-10-29): a Fuvarozás 2 az app közös sémáját (:root: #EEF3FB
+   háttér, #0A84FF primary) kapja — a .fuvarozas2 alább már csak a nem
+   alap-token segédváltozókat tartalmazza. A .szamlak a saját modul-lépéséig
+   (redesign 2/1) marad menta. */
 .szamlak {
   --background: #f3f4f1;
   --foreground: #1e2325;
@@ -237,6 +241,18 @@
   --f2-blue: #2f6fa8; --f2-blue-l: #dce9f5;
   --f2-dark: #1e2325;
   background: var(--background);
+  color: var(--foreground);
+}
+
+/* A jelzőszín-segédváltozók (--f2-*) a Fuvarozás 2 komponenseié; a háttér
+   átlátszó, hogy az asztali body-gradiens (0c) látsszon. */
+.fuvarozas2 {
+  --radius: 0.75rem;
+  --f2-mint: #1f8f6e; --f2-mint-l: #ddf2ea;
+  --f2-amb: #a8690f;  --f2-amb-l: #fbebcf;
+  --f2-red: #b93a2f;  --f2-red-l: #f9deda;
+  --f2-blue: #2f6fa8; --f2-blue-l: #dce9f5;
+  --f2-dark: #1e2325;
   color: var(--foreground);
 }
 

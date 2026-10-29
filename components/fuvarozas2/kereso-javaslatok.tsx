@@ -100,7 +100,7 @@ export function KeresoJavaslatok({ index, kezdo, jelleg }: { index: KeresoIndex;
         aria-expanded={lathato}
         aria-controls="munkaasztal-javaslatok"
         aria-label="Keresés: cég, város, rendszám, sofőr, hivatkozás, számlaszám, hónap"
-        className="w-full rounded-lg border border-foreground/15 bg-background px-3 py-2 text-sm"
+        className="w-full rounded-lg border border-input bg-card px-3 py-2 text-sm focus-visible:outline-2 focus-visible:outline-ring"
       />
       {jelleg ? <input type="hidden" name="jelleg" value={jelleg} /> : null}
       <span className="px-1 text-[11px] text-muted-foreground">cég · város · rendszám · sofőr · hivatkozás · számlaszám · hónap</span>

@@ -16,55 +16,66 @@ function Csempe({ cim, ertek, al, szin, href }: { cim: string; ertek: string; al
   const tartalom = (
     <>
       <div className="text-xs text-muted-foreground">{cim}</div>
-      <div className={cn("text-xl font-semibold tabular-nums", szin)}>{ertek}</div>
+      <div className={cn("truncate text-2xl font-bold tabular-nums", szin)}>{ertek}</div>
       {al ? <div className="text-xs text-muted-foreground">{al}</div> : null}
     </>
   );
+  const kozos = "min-w-0 rounded-xl bg-card px-4 py-3 shadow-[var(--shadow-card)]";
   return href
-    ? <Link href={href} className="rounded-xl bg-card px-4 py-3 ring-1 ring-foreground/10 hover:ring-foreground/25">{tartalom}</Link>
-    : <div className="rounded-xl bg-card px-4 py-3 ring-1 ring-foreground/10">{tartalom}</div>;
+    ? <Link href={href} className={cn(kozos, "lift")}>{tartalom}</Link>
+    : <div className={kozos}>{tartalom}</div>;
 }
 
 /**
- * A pénz-sáv a szakasz-oszlopok fölött (2026-10-12, Budaházi Zoltán: a
- * Megbízások egyetlen asztali nézete a munkafolyamat): összesítő csempék és a
- * pénz-szűrők. Szűrő nélkül minden nyitott megbízás látszik; szűrővel az
- * oszlopok csak a találatokat mutatják, a postázott / lezárt találatok pedig
- * alul, a PenzTabla-ban.
+ * A szám-csempék a szakasz-oszlopok fölött (2026-10-12, Budaházi Zoltán: a
+ * Megbízások egyetlen asztali nézete a munkafolyamat; redesign 4: egy sorban
+ * a figyelmeztetés-kártyával). Kattintásra a megfelelő pénz-szűrő nyílik.
  */
-export function PenzSav({ adat, szuro }: { adat: PenzLista; szuro: MunkaasztalSzuro }) {
+export function PenzCsempek({ adat, szuro, figyelmeztetes }: { adat: PenzLista; szuro: MunkaasztalSzuro; figyelmeztetes?: React.ReactNode }) {
   const o = adat.ossz;
-  const penz = szuro.penz as PenzSzuro | undefined;
   const link = (v: Partial<MunkaasztalSzuro>) => munkaasztalLink(szuro, { reszlet: undefined, elvinni: undefined, ...v });
   const kintSavok = o.kintlevo.savok.map(osszegSzoveg);
   return (
-    <div className="flex flex-col gap-3">
-      <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-5">
-        <Csempe cim="Számlázatlan" ertek={String(o.szamlazatlan.db)} al={o.szamlazatlan.db ? osszegSzoveg(o.szamlazatlan.osszeg) : "minden kész fuvar számlázva"} szin={o.szamlazatlan.db ? "text-[var(--f2-amb)]" : "text-[var(--f2-mint)]"} href={link({ penz: "szamlazatlan" })} />
-        <Csempe cim="Papír hiányzik" ertek={String(o.papir.db)} al={o.papir.db ? `a legrégebbi ${o.papir.legregebbi} napos` : "minden papír megvan"} szin={o.papir.db ? "text-[var(--f2-amb)]" : "text-[var(--f2-mint)]"} href={link({ penz: "papir" })} />
-        <Csempe cim="Kintlévőség" ertek={osszegSzoveg(o.kintlevo.osszeg)} al={`0–30 nap: ${kintSavok[0]} · 31–60: ${kintSavok[1]} · 60+: ${kintSavok[2]}`} href={link({ penz: "kikuldve" })} />
-        <Csempe cim="Lejárt" ertek={osszegSzoveg(o.lejart.osszeg)} al={`${o.lejart.db} számla`} szin={o.lejart.db ? "text-[var(--f2-red)]" : undefined} href={link({ penz: "lejart" })} />
-        <Csempe cim={`Befolyt · ${HONAPOK[+adat.ma.slice(5, 7) - 1]}`} ertek={osszegSzoveg(o.befolyt.osszeg)} al={`${o.befolyt.db} számla`} szin="text-[var(--f2-mint)]" href={link({ penz: "fizetve" })} />
-      </div>
+    <div className={cn("grid gap-3 sm:grid-cols-3", figyelmeztetes ? "xl:grid-cols-[repeat(5,minmax(0,1fr))_minmax(0,1.4fr)]" : "xl:grid-cols-5")}>
+      <Csempe cim="Számlázatlan" ertek={String(o.szamlazatlan.db)} al={o.szamlazatlan.db ? osszegSzoveg(o.szamlazatlan.osszeg) : "minden kész fuvar számlázva"} szin={o.szamlazatlan.db ? "text-warning" : "text-success"} href={link({ penz: "szamlazatlan" })} />
+      <Csempe cim="Papír hiányzik" ertek={String(o.papir.db)} al={o.papir.db ? `a legrégebbi ${o.papir.legregebbi} napos` : "minden papír megvan"} szin={o.papir.db ? "text-warning" : "text-success"} href={link({ penz: "papir" })} />
+      <Csempe cim="Kintlévőség" ertek={osszegSzoveg(o.kintlevo.osszeg)} al={`0–30 nap: ${kintSavok[0]} · 31–60: ${kintSavok[1]} · 60+: ${kintSavok[2]}`} href={link({ penz: "kikuldve" })} />
+      <Csempe cim="Lejárt" ertek={osszegSzoveg(o.lejart.osszeg)} al={`${o.lejart.db} számla`} szin={o.lejart.db ? "text-destructive" : undefined} href={link({ penz: "lejart" })} />
+      <Csempe cim={`Befolyt · ${HONAPOK[+adat.ma.slice(5, 7) - 1]}`} ertek={osszegSzoveg(o.befolyt.osszeg)} al={`${o.befolyt.db} számla`} szin="text-success" href={link({ penz: "fizetve" })} />
+      {figyelmeztetes}
+    </div>
+  );
+}
 
-      <div className="flex flex-wrap items-center gap-1">
-        <Link href={link({ penz: undefined })} scroll={false}
-          className={cn("rounded-full px-3 py-1 text-sm", !penz ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted hover:text-foreground")}>
+/**
+ * A pénz-szűrők szegmentált sávja (eszközsor). Szűrő nélkül minden nyitott
+ * megbízás látszik; szűrővel az oszlopok csak a találatokat mutatják, a
+ * postázott / lezárt találatok pedig alul, a PenzTabla-ban.
+ */
+export function PenzSzuroSav({ adat, szuro }: { adat: PenzLista; szuro: MunkaasztalSzuro }) {
+  const o = adat.ossz;
+  const penz = szuro.penz as PenzSzuro | undefined;
+  const link = (v: Partial<MunkaasztalSzuro>) => munkaasztalLink(szuro, { reszlet: undefined, elvinni: undefined, ...v });
+  const pirula = (aktiv: boolean) =>
+    cn("whitespace-nowrap rounded-md px-3 py-1.5 text-sm font-medium", aktiv ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground");
+  return (
+    <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-0.5 rounded-lg bg-black/[0.06] p-0.5">
+        <Link href={link({ penz: undefined })} scroll={false} className={pirula(!penz)}>
           Minden nyitott
         </Link>
         {PENZ_SZUROK.map((f) => (
-          <Link key={f.k} href={link({ penz: f.k })} scroll={false}
-            className={cn("rounded-full px-3 py-1 text-sm", penz === f.k ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted hover:text-foreground")}>
+          <Link key={f.k} href={link({ penz: f.k })} scroll={false} className={pirula(penz === f.k)}>
             {f.c}{f.k !== "mind" && f.k !== "fizetve" && o.szamok[f.k] ? ` · ${o.szamok[f.k]}` : ""}
           </Link>
         ))}
-        {penz ? (
-          <Link href={link({ sajatIs: !szuro.sajatIs })} scroll={false} className="ml-auto flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-            <span className={cn("inline-block size-4 rounded border", szuro.sajatIs && "border-foreground bg-foreground")} aria-hidden />
-            Saját áru is (nincs számlája)
-          </Link>
-        ) : null}
       </div>
+      {penz ? (
+        <Link href={link({ sajatIs: !szuro.sajatIs })} scroll={false} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+          <span className={cn("inline-block size-4 rounded border", szuro.sajatIs && "border-foreground bg-foreground")} aria-hidden />
+          Saját áru is (nincs számlája)
+        </Link>
+      ) : null}
     </div>
   );
 }

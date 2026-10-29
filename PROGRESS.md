@@ -4158,3 +4158,6 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 
 ## 2026-10-29 — Redesign 3c: Korábbi napok felugró ablakban
 - `nyiregyhaza-havi.tsx` asztali ág: a Korábbi napok kártya kompakt (utolsó 3 nap + „Összes korábbi nap megnyitása”), a teljes lista (chipek, átutalás, × törlés, useCanEdit, megerősítés) Dialogban; a „naponta” kártya kitölti a felszabadult helyet. Mobil ág érintetlen. Nyitott: böngészős ellenőrzés a felügyelőre vár.
+
+## 2026-10-29 — Redesign 4: Fuvarozás színtéma + Megbízások (R1)
+- `.fuvarozas2` csak segédváltozókat tart (alap-tokenek törölve → közös kék séma); Megbízások asztali nézet: csempesor + figyelmeztetés-kártya egy sorban, egysoros eszközsor (kereső, szegmentált szűrők, Mind/Bér/Saját), színcsíkos 7+5 oszlop, új `asztal-kartya.tsx`. Mobil ág érintetlen. Nyitott: böngészős ellenőrzés a felügyelőre vár.

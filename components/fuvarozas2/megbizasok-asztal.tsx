@@ -9,6 +9,7 @@ import { formatNap } from "@/components/fuvarozas2/kozos";
 import { DriveFrissitesGomb } from "@/components/fuvarozas2/berfuvar";
 import { utolsoVaros, varos } from "@/lib/megbizasok/megjelenites";
 import { MegbizasKartya } from "@/components/fuvarozas2/megbizas-kartya";
+import { AsztalKartya } from "@/components/fuvarozas2/asztal-kartya";
 import { SzamlazasiSegedGomb } from "@/components/fuvarozas2/szamlazasi-seged";
 import { munkaasztalLink, type MunkaasztalSzuro } from "@/components/fuvarozas2/munkaasztal";
 import {
@@ -86,7 +87,7 @@ function Rögzítő({
             value={adat[kulcs] ?? ""}
             list={gyors ? "sajat-fuvar-helyek" : undefined}
             onChange={(e) => setAdat({ ...adat, [kulcs]: e.target.value })}
-            className="min-h-10 min-w-0 rounded-lg border border-foreground/15 bg-background px-2.5 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-[var(--f2-blue)]"
+            className="min-h-10 min-w-0 rounded-lg border border-input bg-background px-2.5 text-sm text-foreground focus-visible:outline-2 focus-visible:outline-ring"
           />
         </label>
         {gyors && telephelyek.length > 0 ? (
@@ -125,7 +126,7 @@ function Rögzítő({
   }
 
   return (
-    <div className="space-y-2 border-b border-foreground/10 p-3">
+    <div className="space-y-2 rounded-xl bg-card p-3 shadow-[var(--shadow-card)]">
       <datalist id="sajat-fuvar-helyek">
         {helyek.map((hely) => (
           <option key={hely.cim} value={hely.cim}>{hely.nev ?? undefined}</option>
@@ -133,18 +134,18 @@ function Rögzítő({
       </datalist>
       {mezo("honnan", "Honnan *", "text", true)}
       {mezo("hova", "Hová *", "text", true)}
-      {mezo("legkorabban", "Legkorábban", "date")}
-      {mezo("legkesobb", "Legkésőbb (üresen: +7 nap)", "date")}
       <button
         type="button"
         onClick={() => setReszletek(!reszletek)}
-        className="min-h-9 text-xs font-semibold text-[var(--f2-blue)]"
+        className="min-h-9 text-xs font-semibold text-primary"
         aria-expanded={reszletek}
       >
         {reszletek ? "− kevesebb" : "+ részletek"}
       </button>
       {reszletek ? (
         <div className="space-y-2">
+          {mezo("legkorabban", "Legkorábban", "date")}
+          {mezo("legkesobb", "Legkésőbb (üresen: +7 nap)", "date")}
           {mezo("kitol", "Kitől")}
           {mezo("kinek", "Kinek")}
           {mezo("megjegyzes", "Megjegyzés")}
@@ -206,8 +207,8 @@ function ElvinniKartya({
   }
 
   return (
-    <div className={`rounded-2xl border border-foreground/10 p-3 text-sm ${kijelolt ? "bg-[var(--f2-blue-l)]" : "bg-card"}`}>
-      <strong className="block">{varos(sor.felrako)} → {utolsoVaros(sor.lerako)}</strong>
+    <div className={`rounded-xl p-3 text-sm shadow-[var(--shadow-card)] ${kijelolt ? "bg-secondary" : "bg-card"}`}>
+      <strong className="block font-semibold">{varos(sor.felrako)} → {utolsoVaros(sor.lerako)}</strong>
       <span className="mt-1 block text-xs text-muted-foreground">
         {sor.legkorabban ? `legkorábban: ${napRovid(sor.legkorabban)}` : "bármikor"} · {napokOta} napja vár
       </span>
@@ -246,7 +247,7 @@ function ElvinniKartya({
           </button>
         </div>
       ) : null}
-      <Link href={href} scroll={false} className="mt-2 inline-block text-xs font-semibold text-[var(--f2-blue)]">
+      <Link href={href} scroll={false} className="mt-2 inline-block text-xs font-semibold text-primary">
         Kocsik hete · szerkesztés ›
       </Link>
     </div>
@@ -264,36 +265,64 @@ function HataridoCimke({ legkesobb, ma }: { legkesobb: string; ma: string }) {
   );
 }
 
+// Az életút-tábla oszlopainak színe: felül 3 px-es csík, a fejléc szövege a
+// csíkkal egyező, de olvashatóbb (sötétebb) árnyalat.
+const OSZLOP_SZIN: Record<string, { csik: string; szoveg: string }> = {
+  beerkezett: { csik: "#8E8E93", szoveg: "#5B5B60" },
+  folyamatban: { csik: "#0A84FF", szoveg: "#0060DF" },
+  szamlazasra: { csik: "#F59E0B", szoveg: "#B45309" },
+  postara: { csik: "#8B5CF6", szoveg: "#6D28D9" },
+  kikuldve: { csik: "#38BDF8", szoveg: "#0369A1" },
+  lejart: { csik: "#E5172F", szoveg: "#C4122A" },
+  fizetve: { csik: "#28A745", szoveg: "#1E7E34" },
+  "s-sajat": { csik: "#28A745", szoveg: "#1E7E34" },
+  "s-elokeszites": { csik: "#8E8E93", szoveg: "#5B5B60" },
+  "s-folyamatban": { csik: "#0A84FF", szoveg: "#0060DF" },
+  "s-fotora": { csik: "#F59E0B", szoveg: "#B45309" },
+  "s-kesz": { csik: "#28A745", szoveg: "#1E7E34" },
+};
+
+/** Egy oszlop kerete: színes csík, fejléc névvel és darabszámmal, belül görgethető tartalom. */
+function OszlopKeret({ kulcs, cim, db, magas, children }: { kulcs: string; cim: string; db: number; magas: string; children: React.ReactNode }) {
+  const szin = OSZLOP_SZIN[kulcs] ?? OSZLOP_SZIN.beerkezett;
+  return (
+    <section className={`flex min-w-0 flex-col overflow-hidden rounded-xl bg-[#F2F5FA] ring-1 ring-foreground/5 ${magas}`} aria-label={cim}>
+      <div className="h-[3px] shrink-0" style={{ background: szin.csik }} />
+      <header className="flex items-baseline justify-between gap-2 px-3 py-2.5" style={{ color: szin.szoveg }}>
+        <h3 className="truncate text-sm font-semibold">{cim}</h3>
+        <span className="text-sm font-semibold tabular-nums">{db}</span>
+      </header>
+      <div className="min-h-0 flex-1 overflow-y-auto px-2 pb-2 pt-1">{children}</div>
+    </section>
+  );
+}
+
 function SzakaszOszlop({
   oszlop,
   ma,
   szuro,
   jelek,
   szamlazhat,
+  magas,
 }: {
   oszlop: Oszlop;
   ma: string;
   szuro: MunkaasztalSzuro;
   jelek: Record<string, PenzJel>;
   szamlazhat: boolean;
+  magas: string;
 }) {
   return (
-    <section className="min-w-0 rounded-2xl border border-foreground/10 bg-card" aria-label={oszlop.cim}>
-      <header className="border-b border-foreground/10 px-3 py-3">
-        <h2 className="text-sm font-semibold">
-          {oszlop.cim} <span className="text-xs font-normal text-muted-foreground">{oszlop.osszes ?? oszlop.sorok.length}</span>
-        </h2>
-      </header>
+    <OszlopKeret kulcs={oszlop.kulcs} cim={oszlop.cim} db={oszlop.osszes ?? oszlop.sorok.length} magas={magas}>
       {oszlop.sorok.length === 0 ? (
-        <p className="px-3 py-6 text-center text-sm text-muted-foreground">{oszlop.ures ?? "Nincs fuvar ebben a szakaszban."}</p>
+        <p className="px-1 py-6 text-center text-sm text-muted-foreground">{oszlop.ures ?? "Nincs fuvar ebben a szakaszban."}</p>
       ) : (
-        <ul className="space-y-2 p-2">
+        <ul className="space-y-2">
           {oszlop.sorok.map((sor) => (
             <li key={sor.id}>
-              <MegbizasKartya
+              <AsztalKartya
                 sor={sor}
                 ma={ma}
-                tipus={!szuro.jelleg}
                 penzJel={jelek[sor.id] ?? null}
                 href={munkaasztalLink(szuro, { reszlet: sor.id, elvinni: undefined, uj: false, ujBer: false, szerk: false })}
               />
@@ -311,14 +340,14 @@ function SzakaszOszlop({
       )}
       {oszlop.osszes != null && oszlop.osszes > oszlop.sorok.length ? (
         oszlop.penzSzuro ? (
-          <Link href={munkaasztalLink(szuro, { penz: oszlop.penzSzuro, reszlet: undefined, elvinni: undefined })} className="block px-3 pb-3 text-xs font-semibold text-[var(--f2-blue)] hover:underline">
+          <Link href={munkaasztalLink(szuro, { penz: oszlop.penzSzuro, reszlet: undefined, elvinni: undefined })} className="block px-1 pt-2 text-xs font-semibold text-primary hover:underline">
             + további {oszlop.osszes - oszlop.sorok.length} · mind a listában
           </Link>
         ) : (
-          <p className="px-3 pb-3 text-xs text-muted-foreground">+ további {oszlop.osszes - oszlop.sorok.length} (kereséssel)</p>
+          <p className="px-1 pt-2 text-xs text-muted-foreground">+ további {oszlop.osszes - oszlop.sorok.length} (kereséssel)</p>
         )
       ) : null}
-    </section>
+    </OszlopKeret>
   );
 }
 
@@ -338,12 +367,12 @@ function HetiCella({
   utemez: (cimke: string, kod: string, nap: string) => void;
 }) {
   return (
-    <td className={`w-[13%] p-1 align-top ${cella.nap === ma ? "ring-2 ring-inset ring-[var(--f2-blue)]" : ""} ${[0, 6].includes(new Date(`${cella.nap}T12:00:00Z`).getUTCDay()) ? "bg-muted/40" : ""}`}>
+    <td className={`w-[13%] p-1 align-top ${cella.nap === ma ? "ring-2 ring-inset ring-primary" : ""} ${[0, 6].includes(new Date(`${cella.nap}T12:00:00Z`).getUTCDay()) ? "bg-muted/40" : ""}`}>
       <button
         type="button"
         disabled={!utemezheto || cella.megNemViheto}
         onClick={() => utemez(jarmuCimke, jarmuKod, cella.nap)}
-        className={`min-h-20 w-full rounded-lg border p-2 text-left disabled:cursor-not-allowed ${cella.megNemViheto ? "opacity-40" : "hover:border-[var(--f2-blue)]"}`}
+        className={`min-h-20 w-full rounded-lg border p-2 text-left disabled:cursor-not-allowed ${cella.megNemViheto ? "opacity-40" : "hover:border-primary"}`}
       >
         {cella.megNemViheto ? <span className="block text-[10px]">Még nem vihető</span> : null}
         {cella.megbizasok.map((megbizas) => (
@@ -434,7 +463,7 @@ function KocsiHetPanel({
               </label>
             ))}
             <div className="flex items-end gap-2">
-              <button type="button" onClick={() => void mentes(szerkesztes)} className="min-h-11 rounded-lg bg-[var(--f2-blue)] px-4 font-semibold text-white">Mentés</button>
+              <button type="button" onClick={() => void mentes(szerkesztes)} className="min-h-11 rounded-lg bg-primary px-4 font-semibold text-primary-foreground">Mentés</button>
               <button type="button" onClick={async () => { if (await confirm("Törlöd ezt a saját fuvart?", { title: "Fuvar törlése", confirmLabel: "Törlés" })) await torles(); }} className="min-h-11 rounded-lg border border-[var(--f2-red)] px-4 font-semibold text-[var(--f2-red)]">Törlés</button>
             </div>
           </div>
@@ -446,7 +475,7 @@ function KocsiHetPanel({
               <tr>
                 <th className="w-32 p-2 text-left">Kocsi</th>
                 {adat.napok.map((nap) => (
-                  <th key={nap} className={`p-2 text-left ${nap === ma ? "rounded bg-[var(--f2-blue-l)]" : ""}`}>{napFejlec(nap)}</th>
+                  <th key={nap} className={`p-2 text-left ${nap === ma ? "rounded bg-secondary" : ""}`}>{napFejlec(nap)}</th>
                 ))}
               </tr>
             </thead>
@@ -482,7 +511,13 @@ export function MegbizasokAsztal({
   szamlazhat = false,
   archiv = [],
   fizetes = {},
+  kereso,
+  szurok,
 }: {
+  /** Az eszközsor bal oldali kereső-mezője (szerver oldalon összerakva). */
+  kereso?: React.ReactNode;
+  /** A pénz-szűrők szegmentált sávja (PenzSzuroSav). */
+  szurok?: React.ReactNode;
   sorok: MunkaasztalSor[];
   nyitottak: MunkaasztalSor[];
   szuro: MunkaasztalSzuro;
@@ -556,25 +591,27 @@ export function MegbizasokAsztal({
 
   return (
     <div className="hidden flex-col gap-4 lg:flex">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex gap-1">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="w-full min-w-64 max-w-md flex-1 basis-1/3">{kereso}</div>
+        {szurok}
+        <div className="flex gap-0.5 rounded-lg bg-black/[0.06] p-0.5">
           {([[undefined, "Mind"], ["ber", "Bér"], ["sajat", "Saját"]] as const).map(([jelleg, cimke]) => (
             <Link
               key={cimke}
               href={munkaasztalLink(szuro, { jelleg })}
-              className={`min-h-11 rounded-lg px-4 py-2 text-sm font-semibold ${szuro.jelleg === jelleg ? "bg-[var(--f2-blue-l)]" : "border border-foreground/10 bg-card"}`}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium ${szuro.jelleg === jelleg ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
             >
               {cimke}
             </Link>
           ))}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-2">
           {/* Drive-ból az új megbízások (2026-10-07: az asztali nézetből kimaradt). */}
           {szerkesztheto ? <DriveFrissitesGomb /> : null}
           {szerkesztheto ? (
             <>
-              <Link href={munkaasztalLink(szuro, { ujBer: true, reszlet: undefined, elvinni: undefined })} className="flex min-h-11 items-center rounded-lg bg-[var(--f2-blue)] px-4 text-sm font-bold text-white">+ Új bérfuvar</Link>
-              <Link href={munkaasztalLink(szuro, { uj: true, reszlet: undefined, elvinni: undefined })} className="flex min-h-11 items-center rounded-lg bg-[var(--f2-mint)] px-4 text-sm font-bold text-white">+ Új saját fuvar</Link>
+              <Link href={munkaasztalLink(szuro, { ujBer: true, reszlet: undefined, elvinni: undefined })} className="flex min-h-11 items-center rounded-lg bg-primary px-4 text-sm font-bold text-primary-foreground shadow-[var(--glow-primary)] [background-image:var(--grad-primary)]">+ Új bérfuvar</Link>
+              <Link href={munkaasztalLink(szuro, { uj: true, reszlet: undefined, elvinni: undefined })} className="flex min-h-11 items-center rounded-lg bg-success px-4 text-sm font-bold text-success-foreground">+ Új saját fuvar</Link>
             </>
           ) : null}
         </div>
@@ -582,11 +619,11 @@ export function MegbizasokAsztal({
 
       {szuro.jelleg !== "sajat" ? (
         <div className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold">Bérfuvarok <span className="font-normal text-muted-foreground">· beérkezéstől a pénzig — a kész fuvar a fizetésig a táblán marad</span></h2>
+          <h2 className="flex items-baseline gap-2 text-lg font-semibold">Bérfuvarok <span className="text-sm font-normal text-muted-foreground">beérkezéstől a pénzig — a kész fuvar a fizetésig a táblán marad</span></h2>
           <div className="overflow-x-auto pb-1">
             <div className="grid min-w-[1180px] grid-cols-7 gap-3">
               {savok.ber.map((oszlop) => (
-                <SzakaszOszlop key={oszlop.kulcs} oszlop={oszlop} ma={ma} szuro={szuro} jelek={penzJelek} szamlazhat={szamlazhat} />
+                <SzakaszOszlop key={oszlop.kulcs} oszlop={oszlop} ma={ma} szuro={szuro} jelek={penzJelek} szamlazhat={szamlazhat} magas="h-[380px]" />
               ))}
             </div>
           </div>
@@ -595,31 +632,32 @@ export function MegbizasokAsztal({
 
       {szuro.jelleg !== "ber" ? (
       <div className="flex flex-col gap-2">
-      <h2 className="text-sm font-semibold">Saját fuvarok <span className="font-normal text-muted-foreground">· nem számlázandó, a megbízó mindig a Well-Worn Pallet</span></h2>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 min-[1360px]:grid-cols-5!">
-        <section className="min-w-0 rounded-2xl border border-foreground/10 bg-card" aria-label="Saját fuvar">
-          <header className="border-b border-foreground/10 px-3 py-3">
-            <h2 className="font-semibold">Saját fuvar <span className="text-xs font-normal text-muted-foreground">{elvinniSorok.length}</span></h2>
-          </header>
-          {szerkesztheto ? <Rögzítő helyek={helyek} /> : null}
-          <ul className="space-y-2 p-2">
-            {elvinniSorok.map((sor) => (
-              <li key={sor.id}>
-                <ElvinniKartya
-                  sor={sor}
-                  ma={ma}
-                  kijelolt={nyitva?.id === sor.id}
-                  href={munkaasztalLink(szuro, { elvinni: sor.id, het: undefined, reszlet: undefined })}
-                  jarmuvek={jarmuvek}
-                  szerkesztheto={szerkesztheto}
-                />
-              </li>
-            ))}
-          </ul>
-        </section>
+      <h2 className="flex items-baseline gap-2 text-lg font-semibold">Saját fuvarok <span className="text-sm font-normal text-muted-foreground">nem számlázandó, a megbízó mindig a Well-Worn Pallet</span></h2>
+      <div className="overflow-x-auto pb-1">
+      <div className="grid min-w-[1000px] grid-cols-5 gap-3">
+        <OszlopKeret kulcs="s-sajat" cim="Saját fuvar" db={elvinniSorok.length} magas="h-[300px]">
+          <div className="space-y-2">
+            {szerkesztheto ? <Rögzítő helyek={helyek} /> : null}
+            <ul className="space-y-2">
+              {elvinniSorok.map((sor) => (
+                <li key={sor.id}>
+                  <ElvinniKartya
+                    sor={sor}
+                    ma={ma}
+                    kijelolt={nyitva?.id === sor.id}
+                    href={munkaasztalLink(szuro, { elvinni: sor.id, het: undefined, reszlet: undefined })}
+                    jarmuvek={jarmuvek}
+                    szerkesztheto={szerkesztheto}
+                  />
+                </li>
+              ))}
+            </ul>
+          </div>
+        </OszlopKeret>
         {savok.sajat.map((oszlop) => (
-          <SzakaszOszlop key={oszlop.kulcs} oszlop={oszlop} ma={ma} szuro={szuro} jelek={penzJelek} szamlazhat={szamlazhat} />
+          <SzakaszOszlop key={oszlop.kulcs} oszlop={oszlop} ma={ma} szuro={szuro} jelek={penzJelek} szamlazhat={szamlazhat} magas="h-[300px]" />
         ))}
+      </div>
       </div>
       </div>
       ) : null}
@@ -689,7 +727,7 @@ export function VisszaElvinniGomb({ id }: { id: string }) {
         router.replace("/fuvarozas2/megbizasok");
         router.refresh();
       }}
-      className="mb-3 min-h-11 rounded-lg border border-[var(--f2-blue)] px-4 font-semibold text-[var(--f2-blue)]"
+      className="mb-3 min-h-11 rounded-lg border border-primary px-4 font-semibold text-primary"
     >
       Vissza a Saját fuvar oszlopba (még nincs nap és kocsi)
     </button>
