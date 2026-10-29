@@ -5,7 +5,7 @@ import { CheckIcon, ChevronRightIcon, InfoIcon, SearchIcon } from "lucide-react"
 import { useCanEdit } from "@/components/auth/edit-permission-context";
 import { PageHeader } from "@/components/layout/page-header";
 import { KontokivonatDialog } from "@/components/szamlak/kontokivonat-dialog";
-import { SzamlaBevetelDiagram } from "@/components/szamlak/szamla-bevetel-diagram";
+import { SzamlaBevetelNezet } from "@/components/szamlak/szamla-bevetel-nezet";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -1078,7 +1078,7 @@ export function SzamlakView() {
         />
       )}
 
-      {nezet === "bevetel" && <SzamlaBevetelDiagram havi={havi} statisztika={statisztika} />}
+      {nezet === "bevetel" && <SzamlaBevetelNezet refreshKey={refreshKey} />}
     </div>
   );
 }

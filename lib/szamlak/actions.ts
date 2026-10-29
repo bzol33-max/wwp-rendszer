@@ -9,6 +9,10 @@ import { futtatSzamlaSzinkronKezzel, type PollEredmeny } from "./poll";
 import type {
   KeresesJavaslatok,
   SzamlaAlkategoria,
+  SzamlaBevetelAttekintes,
+  SzamlaBevetelHonap,
+  SzamlaBevetelMappa,
+  SzamlaBevetelVevo,
   SzamlaHaviBevetelSor,
   SzamlaKategoria,
   SzamlaKiemeltStatisztika,
@@ -266,6 +270,112 @@ export async function getSzamlaHaviBevetel(): Promise<SzamlaHaviBevetelSor[]> {
     sor.osszes = sor.fuvar + sor.raklap;
   }
   return [...map.values()];
+}
+
+/** A mappa kulcsa: Fuvar, a Raklap alkategóriái (az alkategória nélküli raklap: Egyéb). */
+const MAPPA_SQL = `case when kategoria = 'fuvar' then 'fuvar' when alkategoria in ('fabrika', 'keter') then alkategoria else 'egyeb' end`;
+
+/**
+ * A Számlák · Bevétel fül adatai (csak olvasás): a folyó év havi számlázása
+ * mappánként (HUF), havi befolyt összeg (fizetve_datum szerint), az EUR-os
+ * számlák külön, valamint az új és az elmaradó vevők.
+ */
+export async function getSzamlaBevetelAttekintes(): Promise<SzamlaBevetelAttekintes> {
+  await requireViewPermission("szamlak");
+  const EV_SQL = `extract(year from ${MA_SQL})`;
+  const VEVO_ALAP = `select vevo_nev,
+            to_char(min(kiallitas_datum), '${TIME_FMT}') as elso_datum,
+            to_char(max(kiallitas_datum), '${TIME_FMT}') as utolso_datum,
+            sum(${BRUTTO_SQL})::float8 as osszeg,
+            count(*)::int as darab
+     from szamla
+     where ${HUF_SQL} and not sztorno and not sztornozva and kiallitas_datum <= ${MA_SQL}
+     group by vevo_nev`;
+
+  const [szamlazott, befolyt, eur, datumNelkuli, ujVevok, elmaradoVevok] = await Promise.all([
+    query<{ honap: number; mappa: SzamlaBevetelMappa; osszeg: number }>(
+      `select extract(month from kiallitas_datum)::int as honap,
+              ${MAPPA_SQL} as mappa,
+              sum(${BRUTTO_SQL})::float8 as osszeg
+       from szamla
+       where ${HUF_SQL} and not sztorno and not sztornozva
+         and extract(year from kiallitas_datum) = ${EV_SQL}
+         and kiallitas_datum <= ${MA_SQL}
+       group by 1, 2`
+    ),
+    query<{ honap: number; osszeg: number }>(
+      `select extract(month from fizetve_datum at time zone 'Europe/Budapest')::int as honap,
+              sum(${BRUTTO_SQL})::float8 as osszeg
+       from szamla
+       where ${HUF_SQL} and fizetve and fizetve_datum is not null
+         and not sztorno and not sztornozva
+         and extract(year from fizetve_datum at time zone 'Europe/Budapest') = ${EV_SQL}
+       group by 1`
+    ),
+    query<{ mappa: SzamlaBevetelMappa; osszeg: number; darab: number }>(
+      `select ${MAPPA_SQL} as mappa, sum(${BRUTTO_SQL})::float8 as osszeg, count(*)::int as darab
+       from szamla
+       where penznem = 'EUR' and not sztorno and not sztornozva
+         and extract(year from kiallitas_datum) = ${EV_SQL}
+         and kiallitas_datum <= ${MA_SQL}
+       group by 1`
+    ),
+    query<{ n: number }>(
+      `select count(*)::int as n from szamla
+       where fizetve and fizetve_datum is null and not sztorno and not sztornozva`
+    ),
+    query<SzamlaBevetelVevo>(
+      `select * from (${VEVO_ALAP}) v
+       where elso_datum::date > make_date(${EV_SQL}::int, 3, 31)
+       order by osszeg desc limit 6`
+    ),
+    query<SzamlaBevetelVevo>(
+      `select * from (${VEVO_ALAP}) v
+       where utolso_datum::date <= ${MA_SQL} - 90 and darab >= 2
+       order by osszeg desc limit 6`
+    ),
+  ]);
+
+  const nulla = (): Record<SzamlaBevetelMappa, number> => ({ fuvar: 0, fabrika: 0, keter: 0, egyeb: 0 });
+  const jelenlegiHonap = budapestHonap();
+  const ev = Number(
+    new Intl.DateTimeFormat("hu-HU", { timeZone: "Europe/Budapest", year: "numeric" }).format(new Date())
+  );
+  const map = new Map<number, SzamlaBevetelHonap>();
+  for (let h = 1; h <= jelenlegiHonap; h++) {
+    map.set(h, { honap: h, mappak: nulla(), osszes: 0, befolyt: 0 });
+  }
+  const ytdMappak = nulla();
+  for (const s of szamlazott) {
+    const sor = map.get(s.honap);
+    if (!sor) continue;
+    sor.mappak[s.mappa] += s.osszeg;
+    sor.osszes += s.osszeg;
+    ytdMappak[s.mappa] += s.osszeg;
+  }
+  let ytdBefolyt = 0;
+  for (const b of befolyt) {
+    const sor = map.get(b.honap);
+    if (!sor) continue;
+    sor.befolyt += b.osszeg;
+    ytdBefolyt += b.osszeg;
+  }
+
+  const ytdOsszes = ytdMappak.fuvar + ytdMappak.fabrika + ytdMappak.keter + ytdMappak.egyeb;
+  return {
+    ev,
+    honapok: [...map.values()],
+    ytdOsszes,
+    ytdFuvar: ytdMappak.fuvar,
+    ytdRaklap: ytdMappak.fabrika + ytdMappak.keter + ytdMappak.egyeb,
+    ytdMappak,
+    ytdBefolyt,
+    fabrikaKeterSzazalek: ytdOsszes > 0 ? ((ytdMappak.fabrika + ytdMappak.keter) / ytdOsszes) * 100 : null,
+    eur,
+    datumNelkuliKifizetett: datumNelkuli[0]?.n ?? 0,
+    ujVevok,
+    elmaradoVevok,
+  };
 }
 
 /** A diagram alatti statisztika-sorhoz és a Nyitott csempe "legnagyobb vevő" sorához — csak HUF adatok. */

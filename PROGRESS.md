@@ -4143,3 +4143,6 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 
 ## 2026-10-29 — Redesign 0c: C színséma + térhatás
 - Tokenek (#EEF3FB alap, #0A84FF primary, árnyék/gradiens tokenek), kártya/gomb/fül/jelvény/oldalsáv térhatással; mobil érintetlen. Nyitott: beégetett színű modulok (Fuvarozás 2, Számlák, Jelenlét saját témái) a saját lépésükben.
+
+## 2026-10-29 — Redesign 1: Számlák · Bevétel fül (X4)
+- Új `getSzamlaBevetelAttekintes()` (csak select) + `szamla-bevetel-nezet.tsx` (4 csempe, havi összetétel, mappa-kártyák, új/elmaradó vevők); a szamlak-view.tsx-ben csak a bekötés változott. Nyitott: a view-ban a `havi`/`statisztika` betöltés már nem használt (lint-figyelmeztetés), böngészős ellenőrzés a felügyelőre vár.

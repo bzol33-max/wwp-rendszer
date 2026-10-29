@@ -74,6 +74,56 @@ export type SzamlaHaviBevetelSor = {
   osszes: number;
 };
 
+/** A Bevétel fül mappái: Fuvar, és a Raklap alkategóriái. */
+export type SzamlaBevetelMappa = "fuvar" | "fabrika" | "keter" | "egyeb";
+
+export const SZAMLA_BEVETEL_MAPPAK: SzamlaBevetelMappa[] = ["fuvar", "fabrika", "keter", "egyeb"];
+
+export type SzamlaBevetelHonap = {
+  /** 1-12. */
+  honap: number;
+  /** Számlázott HUF mappánként (kiállítás dátuma szerint). */
+  mappak: Record<SzamlaBevetelMappa, number>;
+  osszes: number;
+  /** A hónapban kifizetett (fizetve_datum szerint) HUF számlák összege. */
+  befolyt: number;
+};
+
+export type SzamlaBevetelEur = {
+  mappa: SzamlaBevetelMappa;
+  osszeg: number;
+  darab: number;
+};
+
+export type SzamlaBevetelVevo = {
+  vevo_nev: string;
+  elso_datum: string;
+  utolso_datum: string;
+  /** Az eddigi (HUF) számlák összege. */
+  osszeg: number;
+  /** Az eddigi (HUF) számlák darabszáma. */
+  darab: number;
+};
+
+/** A Számlák · Bevétel fül adatai — a folyó évre, csak HUF (az EUR külön). */
+export type SzamlaBevetelAttekintes = {
+  ev: number;
+  /** Az 1..folyó hónap sorai. */
+  honapok: SzamlaBevetelHonap[];
+  ytdOsszes: number;
+  ytdFuvar: number;
+  ytdRaklap: number;
+  ytdMappak: Record<SzamlaBevetelMappa, number>;
+  ytdBefolyt: number;
+  /** Fabrika+Keter a számlázott YTD %-ában; null, ha nincs számlázott összeg. */
+  fabrikaKeterSzazalek: number | null;
+  eur: SzamlaBevetelEur[];
+  /** Kifizetettnek jelölt, de fizetési dátum nélküli számlák (a befolyt hónapokba nem kerülnek). */
+  datumNelkuliKifizetett: number;
+  ujVevok: SzamlaBevetelVevo[];
+  elmaradoVevok: SzamlaBevetelVevo[];
+};
+
 /** A diagram alatti statisztika-sorhoz — csak HUF, a folyó évre. */
 export type SzamlaKiemeltStatisztika = {
   evesYtdHuf: number;
