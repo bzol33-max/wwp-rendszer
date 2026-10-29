@@ -24,8 +24,10 @@ const MOBILE_PRIMARY_TAB_COUNT = 4;
 // pedig a mobil alsó tab-sáv is használja, amit ez a modul nem érint.
 const SIDEBAR_ITEM =
   "flex flex-col items-center justify-center gap-1 rounded-[12px] px-1 py-2 text-center text-[12px] leading-[1.15] break-words transition-colors";
-const SIDEBAR_ITEM_ACTIVE = "bg-[rgba(0,122,255,0.10)] text-[#007AFF] font-medium";
-const SIDEBAR_ITEM_IDLE = "text-[#48484A] hover:bg-[rgba(0,0,0,0.04)]";
+const SIDEBAR_ITEM_ACTIVE =
+  "bg-(image:--grad-primary) text-white font-medium shadow-[var(--glow-primary),var(--hi)]";
+const SIDEBAR_ITEM_IDLE =
+  "text-[#48484A] hover:bg-[rgba(0,0,0,0.04)] [&_svg]:text-[#0A84FF]";
 const SIDEBAR_LINE = "border-[rgba(0,0,0,0.08)]";
 
 export function AppShell({
@@ -79,12 +81,12 @@ export function AppShell({
     <div className="flex min-h-screen bg-background">
       <aside
         className={cn(
-          "hidden w-[88px] shrink-0 flex-col border-r bg-white md:flex",
+          "hidden w-[88px] shrink-0 flex-col border-r bg-white/75 shadow-[4px_0_24px_-16px_rgba(16,24,40,.25)] backdrop-blur-[20px] md:flex",
           SIDEBAR_LINE
         )}
       >
         <div className="flex justify-center py-4">
-          <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-[#1D1D1F] text-[18px] leading-none font-semibold text-white">
+          <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-[linear-gradient(180deg,#3A3A3C,#1D1D1F)] text-[18px] leading-none font-semibold text-white shadow-[0_4px_10px_-4px_rgba(0,0,0,.5)]">
             W
             <span className="sr-only">
               Well-Worn Pallet — Vállalatirányítás

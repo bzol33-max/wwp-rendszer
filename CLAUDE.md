@@ -36,8 +36,9 @@ emlékeztető, nem feltétlenül naprakész a legutóbbi commitokhoz képest.
 - Mobil UX (frissítve 2026-10-25, audit E2):
   - Betű és márkaszín: az asztali séma 2026-10-29 óta Apple HIG — Inter
     betű (`--font-sans: var(--font-geist-sans);`, a változónév maradt, de
-    Inter van benne) és `--primary`/`--ring`: #007AFF az
-    `app/globals.css`-ben (lásd `docs/redesign/`). Ezt **ne állítsd vissza**
+    Inter van benne) és `--primary`/`--ring`: #0A84FF (0c óta; előtte #007AFF) az
+    `app/globals.css`-ben, halványkék #EEF3FB háttérrel, `--shadow-card`/
+    `--grad-primary`/`--glow-primary` térhatás-tokenekkel (lásd `docs/redesign/`). Ezt **ne állítsd vissza**
     (sem a korábbi Geistre, sem a narancssárgára). A mobil nézetek saját
     sémája — `--mob-*`, `--at-*`, `--m-*`, `--sa-*`, és a `--sidebar-*` a
     mobil alsó tab-sávon — érintetlen.

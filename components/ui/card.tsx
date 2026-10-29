@@ -12,12 +12,13 @@ function Card({
       data-slot="card"
       data-size={size}
       className={cn(
-        // Redesign 0: 16 px sarok és lágy árnyék keret (ring) helyett. A
+        // Redesign 0/0c: 16 px sarok, lebegő árnyék (--shadow-card) és halvány
+        // gradiens háttér; emelés csak kattintható kártyán. A
         // radius itt, a komponensben van megadva, nem a globális --radius-on
         // keresztül — az minden más komponenst (input, gomb, menü) is
         // átméretezne, és a modul-témák (.fuvarozas2, .szamlak, .jelenlet)
         // felül is írják.
-        "group/card flex flex-col gap-(--card-spacing) overflow-hidden rounded-[16px] bg-card py-(--card-spacing) text-sm text-card-foreground shadow-[0_0_0_1px_rgba(0,0,0,.08),0_6px_18px_-10px_rgba(0,0,0,.18)] [--card-spacing:--spacing(4)] has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(3)] data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-[16px] *:[img:last-child]:rounded-b-[16px]",
+        "group/card flex flex-col gap-(--card-spacing) overflow-hidden rounded-[16px] bg-card py-(--card-spacing) text-sm text-card-foreground bg-[linear-gradient(180deg,var(--card),color-mix(in_oklab,var(--card)_97%,var(--background)))] shadow-[var(--shadow-card),var(--hi)] transition-[transform,box-shadow] duration-200 ease-out [a&]:hover:-translate-y-0.5 [a&]:hover:shadow-[var(--shadow-lift),var(--hi)] [button&]:hover:-translate-y-0.5 [button&]:hover:shadow-[var(--shadow-lift),var(--hi)] data-interactive:hover:-translate-y-0.5 data-interactive:hover:shadow-[var(--shadow-lift),var(--hi)] [--card-spacing:--spacing(4)] has-data-[slot=card-footer]:pb-0 has-[>img:first-child]:pt-0 data-[size=sm]:[--card-spacing:--spacing(3)] data-[size=sm]:has-data-[slot=card-footer]:pb-0 *:[img:first-child]:rounded-t-[16px] *:[img:last-child]:rounded-b-[16px]",
         className
       )}
       {...props}
