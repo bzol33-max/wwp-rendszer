@@ -53,11 +53,11 @@ const SZIN_ERTEK: Record<string, string> = {
   red: "text-[var(--f2-red)]",
 };
 
-const PIRULA_OSZTALY: Record<Pirula["szin"], string> = {
-  kek: "bg-primary/10 text-primary",
-  piros: "bg-[var(--f2-red-l)] text-[var(--f2-red)]",
-  narancs: "bg-[var(--f2-amb-l)] text-[var(--f2-amb)]",
-  szurke: "bg-muted text-[#6E6E73]",
+const PONT_SZIN: Record<Pirula["szin"], string> = {
+  kek: "text-primary",
+  piros: "text-[var(--f2-red)]",
+  narancs: "text-[var(--f2-amb)]",
+  szurke: "text-[#6E6E73]",
 };
 
 /** Nem munkanap-e (hétvége / munkaszüneti nap, ledolgozós szombat nélkül). */
@@ -485,10 +485,6 @@ export function MaHetKocsi({ k, adat, het, sav, hetSor, szerk }: {
   const gps = gpsGond(k);
   const csik = tachoCsik(k.tachoNapiHatraPerc);
   const piheno = adat.maPihenonap ?? pihenoNapE(adat.ma);
-  const kovetkezo = k.sorok.find((r): r is Extract<TukorSor, { tipus: "megallo" }> => r.tipus === "megallo" && (r.allapot === "most" || r.allapot === "kovetkezo"));
-  const kovetkezoSzoveg = kovetkezo
-    ? `${kovetkezo.felLe === "felrako" ? "Felrakó" : "Lerakó"}: ${kovetkezo.varos}${kovetkezo.terv ? ` · TERV ${kovetkezo.terv}` : ""}`
-    : k.holnap[0] && !k.sorok.length ? `${adat.holnapCimke}: ${k.holnap[0].partner} · ${k.holnap[0].utvonal}` : null;
   const jelzesek = k.jelzesek ?? [];
   // „Üresen indul”: a ma és a következő munkanap üres útjai — csak a mai ablakban értelmes.
   const sajatRiasztasok = het?.ezAHet ? het.riasztasok.filter((r) => r.res.kocsi === kod) : [];
@@ -506,59 +502,58 @@ export function MaHetKocsi({ k, adat, het, sav, hetSor, szerk }: {
       aria-label={k.sofor ?? k.cimke}
     >
       <div className="h-[3px] shrink-0 bg-[var(--kc)]" aria-hidden />
-      <header className="@container flex shrink-0 flex-col gap-2 bg-white px-4 py-3">
-        <div className="flex items-baseline justify-between gap-2">
-          {k.kod ? (
-            <Link href={kocsiLapHref(k.kod)} className="min-w-0 truncate text-lg font-bold hover:underline" title={k.cimke}>{k.kod}</Link>
-          ) : <span className="min-w-0 truncate text-lg font-bold">{k.cimke}</span>}
-          <span className={cn("shrink-0 truncate text-xs", MEDDO)}>{k.sofor ?? "nincs sofőr"}</span>
-        </div>
-        <div className="flex items-center gap-3.5">
-          <SebessegOra sebesseg={k.sebesseg} />
-          <div className="flex min-w-0 flex-col">
-            <span className={cn("text-xs", MEDDO)}>ma megtett</span>
-            <div className="flex items-baseline gap-1 tabular-nums">
-              <span className="text-[28px] font-bold leading-none tracking-[-0.02em] @[280px]:text-[34px]">{k.napiKm != null ? k.napiKm.toLocaleString("hu-HU") : "—"}</span>
-              {k.napiKm != null ? <span className={cn("text-[15px] font-semibold", MEDDO)}>km</span> : null}
-            </div>
-            {l100 != null ? (
-              <span className="mt-1 text-[13px] tabular-nums text-[#48484A]">{l100.toLocaleString("hu-HU")} l/100 · 7 nap</span>
-            ) : null}
-          </div>
-        </div>
-        {pirula ? (
-          <span className={cn("inline-flex min-w-0 max-w-full items-center gap-1 self-start rounded-full px-2.5 py-px text-[13px] font-semibold", PIRULA_OSZTALY[pirula.szin])}>
-            <span aria-hidden>●</span>
-            <span className="truncate">{pirula.szoveg}{pirula.felkialto ? " !" : ""}{k.allapot?.hely ? ` · ${k.allapot.hely}` : ""}</span>
-          </span>
-        ) : k.allapot?.hely ? <div className="truncate text-sm">{k.allapot.hely}</div> : null}
-        {kovetkezoSzoveg ? <div className="truncate text-[13px]" title={kovetkezoSzoveg}>{kovetkezoSzoveg}</div> : null}
-        {csik != null ? (
-          <div className="flex flex-col gap-1" title={k.tacho?.reszletek}>
-            <div className="flex items-baseline justify-between gap-2">
-              <span className={cn("text-xs", MEDDO)}>Tachó{hetiTacho ? ` · ${hetiTacho}` : ""}</span>
-              <span className="flex items-center gap-1.5">
-                <b className="text-[13px] font-semibold tabular-nums">{oraPerc(k.tachoNapiHatraPerc ?? 0)}</b>
-                {k.vezetesForras === "tacho" ? <ForrasJel forras="teny" cimke="tachó" title={`Ecofleet tachográf-adat${k.tacho?.reszletek ? `\n${k.tacho.reszletek}` : ""}`} /> : null}
-              </span>
-            </div>
-            <span className="h-1 rounded-full bg-foreground/10" role="meter" aria-label="Napi vezetési idő hátra" aria-valuemin={0} aria-valuemax={100} aria-valuenow={csik}>
-              <span className={cn("block h-1 rounded-full", bajban && (k.tachoNapiHatraPerc ?? 999) < KEVES_TACHO_PERC ? "bg-[var(--f2-red)]" : "bg-[var(--kc)]")} style={{ width: `${csik}%` }} />
+      <header className="flex shrink-0 items-center gap-3 bg-white px-3 py-2.5">
+        <SebessegOra sebesseg={k.sebesseg} meret={58} />
+        <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
+          <div className="flex items-baseline justify-between gap-2">
+            {k.kod ? (
+              <Link href={kocsiLapHref(k.kod)} className="min-w-0 truncate text-[17px] font-bold hover:underline" title={k.cimke}>{k.kod}</Link>
+            ) : <span className="min-w-0 truncate text-[17px] font-bold">{k.cimke}</span>}
+            <span className="flex shrink-0 items-baseline gap-1 tabular-nums" title="ma megtett">
+              <span className="text-2xl font-bold leading-none tracking-[-0.02em]">{k.napiKm != null ? k.napiKm.toLocaleString("hu-HU") : "—"}</span>
+              {k.napiKm != null ? <span className={cn("text-xs", MEDDO)}>km</span> : null}
             </span>
           </div>
-        ) : k.vezetesSor ? (
-          <div className={cn("text-xs", MEDDO)} title={k.tacho?.reszletek}>
-            {k.vezetesSor}{k.hetiSor ? ` · ${k.hetiSor}` : ""}{" "}
-            <ForrasJel forras="becsles" cimke="GPS-becslés" title="GPS-ből számolt becslés, nem tachográf" />
+          <div className="flex items-baseline justify-between gap-2 text-[13px]">
+            {pirula ? (
+              <span className="flex min-w-0 items-baseline gap-1 font-semibold">
+                <span className={cn("shrink-0", PONT_SZIN[pirula.szin])} aria-hidden>●</span>
+                <span className="truncate">{pirula.szoveg}{pirula.felkialto ? " !" : ""}{k.allapot?.hely ? ` · ${k.allapot.hely}` : ""}</span>
+              </span>
+            ) : k.allapot?.hely ? <span className="min-w-0 truncate">{k.allapot.hely}</span> : <span />}
+            <span className="flex shrink-0 items-baseline gap-2 text-xs">
+              {gps ? <span className="text-[var(--f2-amb)]">{gps}</span> : null}
+              {l100 != null ? (
+                <span className={cn("tabular-nums", MEDDO)} title="átlag l/100 az utolsó 7 napból">{l100.toLocaleString("hu-HU")} l</span>
+              ) : null}
+            </span>
           </div>
-        ) : null}
-        {gps ? <div className="text-xs text-[var(--f2-amb)]">{gps}</div> : null}
+          <div className={cn("flex items-center gap-2 text-xs", MEDDO)}>
+            {csik != null ? (
+              <>
+                <span className="flex shrink-0 items-center gap-1 tabular-nums" title={[hetiTacho, k.tacho?.reszletek].filter(Boolean).join("\n") || undefined}>
+                  Tachó {oraPerc(k.tachoNapiHatraPerc ?? 0)}
+                  {k.vezetesForras === "tacho" ? <ForrasJel forras="teny" cimke="tachó" title={`Ecofleet tachográf-adat${k.tacho?.reszletek ? `\n${k.tacho.reszletek}` : ""}`} /> : null}
+                </span>
+                <span className="h-1 min-w-0 flex-1 rounded-full bg-foreground/10" role="meter" aria-label="Napi vezetési idő hátra" aria-valuemin={0} aria-valuemax={100} aria-valuenow={csik}>
+                  <span className={cn("block h-1 rounded-full", bajban && (k.tachoNapiHatraPerc ?? 999) < KEVES_TACHO_PERC ? "bg-[var(--f2-red)]" : "bg-[var(--kc)]")} style={{ width: `${csik}%` }} />
+                </span>
+              </>
+            ) : k.vezetesSor ? (
+              <span className="min-w-0 flex-1 truncate" title={k.tacho?.reszletek}>
+                {k.vezetesSor}{k.hetiSor ? ` · ${k.hetiSor}` : ""}{" "}
+                <ForrasJel forras="becsles" cimke="GPS-becslés" title="GPS-ből számolt becslés, nem tachográf" />
+              </span>
+            ) : <span className="flex-1" />}
+            <span className="max-w-[45%] shrink-0 truncate">{k.sofor ?? "nincs sofőr"}</span>
+          </div>
+        </div>
       </header>
 
       {jelzesek.length || sajatRiasztasok.length ? (
         <div className="flex shrink-0 flex-col" role="status" aria-label="Figyelmeztetések">
           {jelzesek.map((j, i) => (
-            <div key={i} className={cn("px-4 py-1 text-[13px] font-semibold", j.szin === "red" ? "bg-[var(--f2-red-l)] text-[var(--f2-red)]" : "bg-[var(--f2-amb-l)] text-[var(--f2-amb)]")}>
+            <div key={i} className={cn("px-3 py-1 text-[13px] font-semibold", j.szin === "red" ? "bg-[var(--f2-red-l)] text-[var(--f2-red)]" : "bg-[var(--f2-amb-l)] text-[var(--f2-amb)]")}>
               <span aria-hidden>⚠ </span>{j.szoveg}
             </div>
           ))}
@@ -567,7 +562,7 @@ export function MaHetKocsi({ k, adat, het, sav, hetSor, szerk }: {
               key={r.res.kulcs}
               href={hetLink(null, r.res.kulcs, ALAP)}
               scroll={false}
-              className="bg-[var(--f2-amb-l)] px-4 py-1 text-[13px] font-semibold text-[var(--f2-amb)] hover:underline"
+              className="bg-[var(--f2-amb-l)] px-3 py-1 text-[13px] font-semibold text-[var(--f2-amb)] hover:underline"
             >
               <span aria-hidden>⚠ </span>Üresen indul — {km(r.res.km)} km rés ({r.res.honnan} → {r.res.hova})
             </Link>

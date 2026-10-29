@@ -4181,3 +4181,6 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 ## 2026-10-29 — Redesign 5e: kocsi-fejléc „Műszerfal”
 - `components/fuvarozas2/ma-het.tsx` (`MaHetKocsi` fejléc) + új `components/fuvarozas2/sebesseg-ora.tsx`: 270°-os sebességmutató (0–90 km/h, „áll”, „nincs GPS”, 600 ms kitöltés-animáció `prefers-reduced-motion` nélkül), nagy „ma megtett km” + l/100 · 7 nap, állapot-pirula a hellyel, „Lerakó: város · TERV hh:mm”, tachó címke + érték + 4 px sáv; az 5d külön sora törölve. < 280 px oszlopban 76 px mutató / 28 px km (container query). Adat, jogosultság, mobil ág változatlan.
 - Nyitott: böngészős ellenőrzés a felügyelőre vár.
+
+## 2026-10-29 — Redesign 5f: kocsi-fejléc két sorban
+- `components/fuvarozas2/ma-het.tsx` (`MaHetKocsi` fejléc) + `sebesseg-ora.tsx` (`meret` prop): 58 px sebességmutató balra, jobbra 3 sor (rendszám + nagy km · állapot + hely + l · Tachó + sáv + sofőr); a következő feladat sora kikerült, figyelmeztető szalag 12 px oldalpadding, GPS-jelzés a 2. sor végén. Adat, jogosultság, mobil ág változatlan. Nyitott: böngészős ellenőrzés a felügyelőre vár.
