@@ -4149,3 +4149,6 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 
 ## 2026-10-29 — Redesign 2: Számlák · Teendők fül (W1)
 - Új `getSzamlaTeendoOsszesito()` (csak select, HUF, Fuvar/Raklap) + oszloponként 3 szám-csempe és lejárt-korosítás (1–30 / 31–60 / 60+ nap) a `szamlak-view.tsx` Teendők blokkjában; a Fizetve gomb, részfizetés, adatmodell változatlan. Nyitott: böngészős ellenőrzés a felügyelőre vár.
+
+## 2026-10-29 — Redesign 3a: Készlet · havi fül (P2)
+- `nyiregyhaza-havi.tsx`: md fölött új elrendezés (gyors rögzítés mátrix + kifizetés-panel, napi diagram + hét napjai, Korábbi napok chipek, 3 oszlopos alsó sor, fejléc-összegző), alatta a régi mobil sorrend; adat/akció/kbNav/jogosultság/megerősítések változatlanok. Nyitott: böngészős ellenőrzés a felügyelőre vár.

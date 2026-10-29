@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -86,6 +86,49 @@ const PAST_TILE_COLOR = {
   text: "text-muted-foreground",
 };
 
+// Redesign 3 (P2): az új asztali elrendezés md (768 px) fölött él, alatta a
+// régi, egymás alatti mobil sorrend marad. Csak az egyik ágat rendereljük
+// (nem CSS-sel rejtjük), hogy a kbNav ne találjon rejtett, duplikált mezőt.
+function useAsztali() {
+  return useSyncExternalStore(
+    (cb) => {
+      const mq = window.matchMedia("(min-width: 768px)");
+      mq.addEventListener("change", cb);
+      return () => mq.removeEventListener("change", cb);
+    },
+    () => window.matchMedia("(min-width: 768px)").matches,
+    () => false
+  );
+}
+
+// Típuscsoport a név alapján (nincs csoport mező az adatban).
+type Csoport = "EUR" | "Egyutas" | "Egyéb";
+function csoportOf(name: string): Csoport {
+  const n = name.toLowerCase();
+  if (n.startsWith("eur") || n.startsWith("vegyes eur") || n.startsWith("csere")) return "EUR";
+  if (n.startsWith("egyutas")) return "Egyutas";
+  return "Egyéb";
+}
+const CSOPORT_SZIN: Record<Csoport, string> = {
+  EUR: "#0A84FF",
+  Egyutas: "#28A745",
+  Egyéb: "#AF52DE",
+};
+
+const HET_NAPJAI = ["H", "K", "Sze", "Cs", "P", "Szo", "V"];
+
+function ftFormat(n: number) {
+  return `${n.toLocaleString("hu-HU")} Ft`;
+}
+
+function rovidNapLabel(dayKey: string) {
+  return new Date(`${dayKey}T00:00:00`).toLocaleDateString("hu-HU", {
+    month: "short",
+    day: "numeric",
+    weekday: "long",
+  });
+}
+
 function dayGroupLabel(dayKey: string) {
   return new Date(`${dayKey}T00:00:00`).toLocaleDateString("hu-HU", {
     year: "numeric",
@@ -132,6 +175,7 @@ export function NyiregyhazaHaviTab() {
   const [pendingEditQty, setPendingEditQty] = useState("");
   const [pendingEditDate, setPendingEditDate] = useState("");
   const { datePart, weekdayPart } = todayLabel();
+  const asztali = useAsztali();
 
   const load = useCallback(async () => {
     const snap = await getHaviSnapshot();
@@ -492,6 +536,39 @@ export function NyiregyhazaHaviTab() {
     g.entries.sort((a, b) => a.day_key.localeCompare(b.day_key));
   }
 
+  // Az új asztali nézet számai — mind a már betöltött adatból, kliensen.
+  const tipusok = Object.keys(prices);
+  const counterOf = (t: string) => typeCounters.find((c) => c.type === t);
+  const havKulcs = todayKey.slice(0, 7);
+  const honapNev = new Date().toLocaleDateString("hu-HU", { month: "long" });
+  const honapRovid = new Date().toLocaleDateString("hu-HU", { month: "short" });
+  const monthPurchases = purchases.filter((p) => p.day_key.startsWith(havKulcs));
+  const monthQty = typeCounters.reduce((s, c) => s + c.monthlyQty, 0);
+  const todayQtyTotal = typeCounters.reduce((s, c) => s + c.dailyQty, 0);
+  const monthFt = monthPurchases.reduce((s, p) => s + p.total, 0);
+  const todayFt = todayPurchases.reduce((s, p) => s + p.total, 0);
+  const pendingTotalFt = pendingGroups.reduce((s, g) => s + g.total, 0);
+
+  const napiDb: Record<string, number> = {};
+  for (const p of monthPurchases) napiDb[p.day_key] = (napiDb[p.day_key] ?? 0) + p.qty;
+  const hetNapokDb = HET_NAPJAI.map(() => ({ sum: 0, days: 0 }));
+  for (const [k, v] of Object.entries(napiDb)) {
+    const wd = (new Date(`${k}T00:00:00`).getDay() + 6) % 7;
+    hetNapokDb[wd].sum += v;
+    hetNapokDb[wd].days += 1;
+  }
+  const hetAtlagok = hetNapokDb.map((h) => (h.days ? Math.round(h.sum / h.days) : 0));
+  const napokSzama = todayKey
+    ? new Date(Number(todayKey.slice(0, 4)), Number(todayKey.slice(5, 7)), 0).getDate()
+    : 0;
+  const diagramNapok = Array.from({ length: napokSzama }, (_, i) => {
+    const key = `${havKulcs}-${String(i + 1).padStart(2, "0")}`;
+    return { nap: i + 1, key, db: napiDb[key] ?? 0 };
+  });
+  const aktivNapok = diagramNapok.filter((d) => d.db > 0).length;
+  const atlagDb = aktivNapok ? Math.round(monthQty / aktivNapok) : 0;
+  const maxNapiDb = Math.max(1, ...diagramNapok.map((d) => d.db));
+
   if (loading) {
     return <p className="text-sm text-muted-foreground">Betöltés…</p>;
   }
@@ -504,7 +581,469 @@ export function NyiregyhazaHaviTab() {
           Csak megtekintési jogosultságod van ehhez a modulhoz.
         </p>
       )}
-      {typeCounters.length > 0 && (
+      {asztali && (
+        <>
+          {/* Fejléc-összegző: a fülek sorába húzva (xl-től), alatta saját sorban. */}
+          <div className="flex flex-wrap items-baseline justify-end gap-x-6 gap-y-1 text-xs text-[#6E6E73] xl:-mt-[4.25rem] xl:h-10 xl:items-center">
+            <span>
+              <span className="capitalize">{honapNev}</span>{" "}
+              <b className="text-sm tabular-nums text-[#1D1D1F]">{monthQty.toLocaleString("hu-HU")} db</b>
+              {" · "}
+              <span className="tabular-nums">{ftFormat(monthFt)}</span>
+            </span>
+            <span>
+              Ma <b className="text-sm tabular-nums text-[#1D1D1F]">{todayQtyTotal.toLocaleString("hu-HU")} db</b>
+              {" · "}
+              {weekdayPart}
+            </span>
+          </div>
+
+          <Card>
+            <CardContent className="grid gap-5 xl:grid-cols-[1fr_280px]">
+              <div data-kbnav-group>
+                <div className="mb-2 flex items-baseline justify-between gap-3">
+                  <h3 className="text-sm font-semibold text-[#1D1D1F]">
+                    Ma, {weekdayPart} — gyors rögzítés
+                    <span className="ml-2 text-xs font-normal text-[#6E6E73]">{datePart}</span>
+                  </h3>
+                  <span className="text-xs text-[#6E6E73]">Enter: következő típus</span>
+                </div>
+                <div
+                  className="grid items-center gap-x-1.5 gap-y-1.5 text-xs"
+                  style={{ gridTemplateColumns: `96px repeat(${tipusok.length}, minmax(0,1fr))` }}
+                >
+                  <div />
+                  {tipusok.map((t) => (
+                    <div
+                      key={`h-${t}`}
+                      className="min-w-0 border-b-[3px] pb-1 text-center font-semibold leading-tight text-[#1D1D1F]"
+                      style={{ borderColor: CSOPORT_SZIN[csoportOf(t)] }}
+                    >
+                      {t}
+                    </div>
+                  ))}
+
+                  <div className="font-medium text-[#6E6E73]">FT/DB</div>
+                  {tipusok.map((t) => (
+                    <div key={`p-${t}`} className="text-center tabular-nums text-[#48484A]">
+                      {prices[t] ? prices[t].toLocaleString("hu-HU") : "—"}
+                    </div>
+                  ))}
+
+                  <div className="font-medium text-[#6E6E73]">DB</div>
+                  {tipusok.map((t) => (
+                    <Input
+                      key={`q-${t}`}
+                      type="number"
+                      placeholder="db"
+                      className="px-1.5 text-center tabular-nums"
+                      value={todayQty[t] ?? ""}
+                      onChange={(e) => setTodayQty((prev) => ({ ...prev, [t]: e.target.value }))}
+                      data-kbnav-item
+                      onKeyDown={kbNav}
+                    />
+                  ))}
+
+                  <div className="font-medium text-[#6E6E73]">ÖSSZEG</div>
+                  {tipusok.map((t) => {
+                    const ossz = (Number(todayQty[t]) || 0) * (prices[t] ?? 0);
+                    return (
+                      <div
+                        key={`o-${t}`}
+                        className={`text-center tabular-nums ${ossz ? "font-medium text-[#1D1D1F]" : "text-[#6E6E73]"}`}
+                      >
+                        {ossz ? ossz.toLocaleString("hu-HU") : "—"}
+                      </div>
+                    );
+                  })}
+
+                  <div className="font-medium text-primary">HAVI</div>
+                  {tipusok.map((t) => (
+                    <div key={`m-${t}`} className="text-center text-sm font-semibold tabular-nums text-primary">
+                      {counterOf(t)?.monthlyQty ?? 0}
+                    </div>
+                  ))}
+
+                  <div className="font-medium text-[#28A745]">MAI</div>
+                  {tipusok.map((t) => {
+                    const mai = counterOf(t)?.dailyQty ?? 0;
+                    return (
+                      <div
+                        key={`d-${t}`}
+                        className={`text-center text-sm font-semibold tabular-nums ${mai ? "text-[#28A745]" : "text-[#6E6E73]"}`}
+                      >
+                        {mai}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2 rounded-xl bg-[#EEF3FB] p-4">
+                <div className="text-xs font-medium text-[#6E6E73]">Aktuális kifizetés</div>
+                <div className="mb-1 text-[32px] leading-tight font-bold tabular-nums text-[#1D1D1F]">
+                  {ftFormat(currentEntryTotal)}
+                </div>
+                <Button
+                  onClick={() => recordDay("keszpenz")}
+                  disabled={submitting}
+                  size="lg"
+                  className="w-full"
+                  data-kbnav-submit
+                >
+                  {submitting ? "Mentés…" : "Vétel — készpénzből fizetve"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => recordDay("atutalas")}
+                  disabled={submitting}
+                  size="lg"
+                  className="w-full"
+                >
+                  Vétel — átutalással
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={openCustomPrice}
+                  disabled={submitting}
+                  size="lg"
+                  className="w-full"
+                >
+                  Vétel — egyedi áron
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="grid grid-cols-1 gap-5 xl:h-[clamp(520px,calc(100vh-440px),900px)] xl:grid-cols-[1fr_1.15fr_0.95fr]">
+            {/* Bal oszlop: napi diagram + Korábbi napok */}
+            <div className="flex min-h-0 flex-col gap-5">
+              <Card className="shrink-0">
+                <CardContent className="space-y-3">
+                  <h3 className="text-sm font-semibold text-[#1D1D1F]">
+                    <span className="capitalize">{honapNev}</span> naponta
+                  </h3>
+                  <div className="relative flex h-[170px] items-end gap-[3px] border-b border-border">
+                    {atlagDb > 0 && (
+                      <div
+                        className="pointer-events-none absolute inset-x-0 border-t border-dashed border-[#6E6E73]"
+                        style={{ bottom: `${(atlagDb / maxNapiDb) * 100}%` }}
+                      >
+                        <span className="absolute -top-5 right-0 bg-card pl-1 text-xs text-[#6E6E73]">
+                          átlag {atlagDb} db/nap
+                        </span>
+                      </div>
+                    )}
+                    {diagramNapok.map((d) => (
+                      <div
+                        key={d.key}
+                        title={`${honapRovid} ${d.nap}. — ${d.db} db`}
+                        className={`min-w-0 flex-1 rounded-t-sm ${d.key === todayKey ? "bg-primary" : "bg-primary/25"}`}
+                        style={{ height: `${(d.db / maxNapiDb) * 100}%` }}
+                      />
+                    ))}
+                  </div>
+                  <div className="flex justify-between text-xs tabular-nums text-[#6E6E73]">
+                    <span>1.</span>
+                    <span>{napokSzama}.</span>
+                  </div>
+                  <div className="space-y-1 pt-1">
+                    <div className="text-xs font-medium text-[#6E6E73]">A hét napjai (átlag db)</div>
+                    {HET_NAPJAI.map((n, i) => (
+                      <div key={n} className="flex items-center gap-2 text-xs">
+                        <span className="w-8 text-[#6E6E73]">{n}</span>
+                        <div className="h-2 flex-1 rounded-full bg-primary/10">
+                          <div
+                            className="h-2 rounded-full bg-primary/60"
+                            style={{ width: `${(hetAtlagok[i] / Math.max(1, ...hetAtlagok)) * 100}%` }}
+                          />
+                        </div>
+                        <span className="w-10 text-right tabular-nums text-[#48484A]">{hetAtlagok[i]}</span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="min-h-0 flex-1">
+                <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
+                  <h3 className="text-sm font-semibold text-[#1D1D1F]">Korábbi napok</h3>
+                  <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
+                    {pastGroups.length === 0 && (
+                      <p className="text-xs text-[#6E6E73]">Nincs korábbi nap.</p>
+                    )}
+                    {pastGroups.map((g) => (
+                      <div key={g.dayKey} className="space-y-1.5">
+                        <div className="flex flex-wrap items-baseline justify-between gap-2">
+                          <span className="text-sm font-semibold text-[#1D1D1F]">
+                            {rovidNapLabel(g.dayKey)} ·{" "}
+                            <span className="tabular-nums">{g.lines.reduce((s, l) => s + l.qty, 0)} db</span>
+                          </span>
+                          {g.atutalasFt > 0 && (
+                            <span className="text-xs font-medium text-primary">
+                              ebből átutalással {ftFormat(g.atutalasFt)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {g.lines.map((l) => (
+                            <span
+                              key={l.type}
+                              className="inline-flex items-center gap-1.5 rounded-full bg-[#EEF3FB] py-1 pr-1.5 pl-2.5 text-xs text-[#48484A]"
+                            >
+                              <span
+                                className="size-1.5 rounded-full"
+                                style={{ background: CSOPORT_SZIN[csoportOf(l.type)] }}
+                              />
+                              {l.type} <b className="tabular-nums text-[#1D1D1F]">{l.qty}</b>
+                              {l.atutalasQty > 0 && (
+                                <span className="font-medium text-primary">
+                                  {l.atutalasQty === l.qty ? "átutalással" : `ebből ${l.atutalasQty} átutalással`}
+                                </span>
+                              )}
+                              {canEdit && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteGroup(g.dayKey, l)}
+                                  title="Törlés (hibás rögzítés)"
+                                  className="rounded-full p-0.5 text-destructive/60 hover:text-destructive"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              )}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Középső oszlop: Havi felvásárlások */}
+            <Card className="min-h-0 max-xl:max-h-[480px]">
+              <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <h3 className="text-sm font-semibold text-[#1D1D1F]">Havi felvásárlások</h3>
+                  <span className="text-xs tabular-nums text-[#6E6E73]">
+                    ma · {todayPurchases.length} tétel · {ftFormat(todayFt)}
+                  </span>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                  <Table>
+                    <TableHeader className="sticky top-0 z-10 bg-card">
+                      <TableRow>
+                        <TableHead>Dátum/idő</TableHead>
+                        <TableHead>Típus</TableHead>
+                        <TableHead className="text-right">DB</TableHead>
+                        <TableHead className="text-right">Egységár</TableHead>
+                        <TableHead className="text-right">Összeg</TableHead>
+                        <TableHead></TableHead>
+                        <TableHead>Ki</TableHead>
+                        <TableHead className="w-8"></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {todayPurchases.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={8} className="text-center text-muted-foreground">
+                            Ma még nincs rögzített vétel.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      {todayPurchases.map((p) => (
+                        <TableRow key={p.id}>
+                          <TableCell className="text-[#6E6E73]">{p.date}</TableCell>
+                          <TableCell>
+                            <span className="inline-flex items-center gap-1.5">
+                              <span
+                                className="size-1.5 rounded-full"
+                                style={{ background: CSOPORT_SZIN[csoportOf(p.type)] }}
+                              />
+                              {p.type}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">{p.qty}</TableCell>
+                          <TableCell className="text-right tabular-nums">{p.unit_price} Ft</TableCell>
+                          <TableCell className="text-right font-medium tabular-nums">
+                            {ftFormat(p.total)}
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {p.pending && (
+                                <Badge className="bg-warning/15 text-warning hover:bg-warning/15">
+                                  Kifizetésre vár
+                                </Badge>
+                              )}
+                              {p.payment_method === "atutalas" && (
+                                <Badge className="bg-blue-100 text-blue-700 hover:bg-blue-100">
+                                  Átutalással
+                                </Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-[#6E6E73]">{p.created_by ?? "—"}</TableCell>
+                          <TableCell>
+                            <button
+                              type="button"
+                              onClick={() => handleDelete(p)}
+                              title="Törlés (hibás rögzítés)"
+                              className="text-destructive/70 hover:text-destructive"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Jobb oszlop: kassza, kifizetésre váró tételek, egyéb kassza-mozgás */}
+            <div className="flex min-h-0 flex-col gap-5">
+              <Card className="shrink-0">
+                <CardContent className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-xs font-semibold text-warning">Kassza egyenleg</div>
+                    <div className="text-2xl font-bold tabular-nums text-[#1D1D1F]">{ftFormat(kassza)}</div>
+                    <button
+                      type="button"
+                      onClick={openKasszaDetail}
+                      className="text-xs text-primary hover:underline"
+                    >
+                      Tételes bevétel/kifizetés lista
+                    </button>
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold text-primary">Mai kiadás</div>
+                    <div className="text-2xl font-bold tabular-nums text-[#1D1D1F]">{ftFormat(todayExpense)}</div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="min-h-0 flex-1">
+                <div className="flex flex-wrap items-center justify-between gap-2 px-4">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-[#1D1D1F]">Kifizetésre váró tételek</h3>
+                    {pendingTotalFt > 0 && (
+                      <span className="rounded-full bg-warning/15 px-2 py-0.5 text-xs font-semibold tabular-nums text-warning">
+                        {ftFormat(pendingTotalFt)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {pendingGroups.length > 0 && (
+                      <Button size="sm" variant="outline" onClick={() => setPendingListOpen((v) => !v)}>
+                        Lista ({pendingGroups.length})
+                      </Button>
+                    )}
+                    <Button size="sm" variant="outline" onClick={openPendingAdd}>
+                      + Új tétel
+                    </Button>
+                  </div>
+                </div>
+                <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4">
+                  {pendingGroups.length === 0 && (
+                    <p className="text-xs text-[#6E6E73]">Nincs kifizetésre váró tétel.</p>
+                  )}
+                  {pendingListOpen &&
+                    pendingGroups.map((g) => (
+                      <div key={g.seller} className="space-y-2 rounded-xl border px-3 py-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-medium">{g.seller}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold tabular-nums">{ftFormat(g.total)}</span>
+                            <button
+                              type="button"
+                              onClick={() => openPendingAddForSeller(g.seller)}
+                              title="Új dátumra felvétel"
+                              className="rounded-md border p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                            </button>
+                            <Button
+                              size="sm"
+                              disabled={pendingSubmitting}
+                              onClick={() => handlePaySeller(g.seller, g.total)}
+                            >
+                              Kifizetés
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          {g.entries.map((e) => (
+                            <div
+                              key={e.id}
+                              className="flex items-center justify-between gap-2 rounded-md bg-[#EEF3FB] px-2.5 py-1.5 text-xs"
+                            >
+                              <span className="text-[#6E6E73]">
+                                {dayGroupLabel(e.day_key)} · {e.type} ·{" "}
+                                <span className="font-medium text-[#1D1D1F]">{e.qty} db</span>
+                                {e.created_by && <> · {e.created_by}</>}
+                              </span>
+                              <div className="flex shrink-0 items-center gap-2">
+                                <span className="font-medium tabular-nums">{ftFormat(e.total)}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => openPendingEdit(e)}
+                                  title="Módosítás"
+                                  className="text-muted-foreground hover:text-foreground"
+                                >
+                                  ✎
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDelete(e)}
+                                  title="Törlés"
+                                  className="text-destructive/70 hover:text-destructive"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+                <p className="shrink-0 px-4 text-xs text-[#6E6E73]">
+                  ⓘ Nyitvatartáson túl/hétvégén leadott tétel — a darabszám azonnal a készletben van, a kassza
+                  csak a „Kifizetés” gombra kattintva, a tényleges kifizetéskor csökken.
+                </p>
+              </Card>
+
+              <Card className="shrink-0">
+                <CardContent className="space-y-2">
+                  <h3 className="text-sm font-semibold text-[#1D1D1F]">Egyéb kassza-mozgás</h3>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Leírás (pl. számla kifizetése)"
+                      value={kasszaDesc}
+                      onChange={(e) => setKasszaDesc(e.target.value)}
+                    />
+                    <Input
+                      type="number"
+                      className="w-32 shrink-0"
+                      placeholder="Összeg (Ft)"
+                      title="Összeg (Ft), negatív ha kiadás"
+                      value={kasszaAmount}
+                      onChange={(e) => setKasszaAmount(e.target.value)}
+                    />
+                    <Button variant="outline" disabled={kasszaSubmitting} onClick={recordKassza}>
+                      {kasszaSubmitting ? "Mentés…" : "Rögzítés"}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </>
+      )}
+
+      {!asztali && typeCounters.length > 0 && (
         <div className="space-y-2">
           <div>
             <div className={`mb-1 text-xs font-semibold ${MONTHLY_TILE_COLOR.text}`}>Havi</div>
@@ -549,6 +1088,7 @@ export function NyiregyhazaHaviTab() {
         </div>
       )}
 
+      {!asztali && (
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.5fr_1fr]">
       <Card>
         <CardHeader>
@@ -876,6 +1416,8 @@ export function NyiregyhazaHaviTab() {
           </CardContent>
         </Card>
       </div>
+      </div>
+      )}
 
       <Dialog open={kasszaDetailOpen} onOpenChange={setKasszaDetailOpen}>
         <DialogContent className="sm:max-w-3xl">
@@ -1131,7 +1673,6 @@ export function NyiregyhazaHaviTab() {
         </DialogContent>
       </Dialog>
       {confirmDialog}
-      </div>
     </div>
     </fieldset>
   );
