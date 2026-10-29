@@ -19,6 +19,8 @@ import { MovementForm } from "@/components/keszlet/movement-form";
 import { VegyesSplitRow, type SzetvalogatasTetel } from "@/components/keszlet/vegyes-split-row";
 import { BejovoSzallitmanyok } from "@/components/keszlet/bejovo-szallitmanyok";
 import { MozgasOszlopok } from "@/components/keszlet/mozgas-oszlopok";
+import { useAsztali } from "@/components/keszlet/use-asztali";
+import { CSOPORT_SZIN, csoportOf } from "@/components/keszlet/tipus-csoport";
 import { Package, X } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -38,7 +40,10 @@ import {
 import { useCanEdit } from "@/components/auth/edit-permission-context";
 import { TELEP_SORREND } from "@/lib/keszlet/telepek";
 
-type SiteKey = "Nyíregyháza" | "Balkány" | "Szakoly" | "Összkészlet";
+// A szerver `to_char(..., 'mon. DD HH24:MI')` kisbetűs, angol hónapnevet ad.
+const ANGOL_HO = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+
+type SiteKey ="Nyíregyháza" | "Balkány" | "Szakoly" | "Összkészlet";
 
 const OTHER_SITES: Record<string, string[]> = {
   "Nyíregyháza": ["Szakoly", "Balkány"],
@@ -129,6 +134,7 @@ export function TelephelyekView({ site: active }: { site: SiteKey }) {
   const [incoming, setIncoming] = useState<IncomingRow[]>([]);
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [confirm, confirmDialog] = useConfirm();
+  const asztali = useAsztali();
 
   const load = useCallback(async () => {
     if (active === "Összkészlet") {
@@ -201,6 +207,27 @@ export function TelephelyekView({ site: active }: { site: SiteKey }) {
   const isNyiregyhaza = active === "Nyíregyháza";
   // A vegyes tételek nem csempeként, hanem szétválogatható sorként jelennek meg.
   const tileEntries = Object.entries(stock).filter(([t]) => !SZETVALOGATAS_FORRASOK.includes(t));
+  const teljesKeszlet = Object.values(stock).reduce((s, q) => s + q, 0);
+  // "Ma +N be · −N ki" a betöltött mozgás-listából (Szakoly/Balkány). A
+  // dátum a szerver által formázott "oct. 29 14:05" szöveg, ezért a mai nap
+  // előtagjával (budapesti idő) hasonlítjuk. Nyíregyházán nincs mozgás-lista
+  // (események vannak, szöveges hatással) — ott nem számolható, kimarad.
+  const maiMozgas = isNyiregyhaza
+    ? null
+    : (() => {
+        const [, ho, nap] = new Date()
+          .toLocaleDateString("en-CA", { timeZone: "Europe/Budapest" })
+          .split("-");
+        const elotag = `${ANGOL_HO[Number(ho) - 1]}. ${nap}`;
+        let be = 0;
+        let ki = 0;
+        for (const m of movements) {
+          if (!m.date.toLowerCase().startsWith(elotag)) continue;
+          if (m.direction === "be" || (m.direction === "mozgatas_be" && m.accepted)) be += m.qty;
+          else if (m.direction === "ki" || m.direction === "mozgatas") ki += m.qty;
+        }
+        return { be, ki };
+      })();
 
   return (
     <div className="space-y-4">
@@ -317,6 +344,197 @@ export function TelephelyekView({ site: active }: { site: SiteKey }) {
               )}
             </CardContent>
           </Card>
+        </div>
+      ) : asztali ? (
+        <div className="space-y-5">
+          {/* Fejléc-összegző: a fülek sorába húzva (xl-től), alatta saját sorban. */}
+          <div className="flex flex-wrap items-baseline justify-end gap-x-6 gap-y-1 text-xs text-[#6E6E73] xl:-mt-[4.25rem] xl:h-10 xl:items-center">
+            <span>
+              {active} készlet{" "}
+              <b className="text-sm tabular-nums text-[#1D1D1F]">{teljesKeszlet.toLocaleString("hu-HU")} db</b>
+            </span>
+            {maiMozgas && (
+              <span>
+                Ma <b className="text-sm tabular-nums text-success">+{maiMozgas.be}</b> be ·{" "}
+                <b className="text-sm tabular-nums text-destructive">−{maiMozgas.ki}</b> ki
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-[2fr_1fr]">
+            <Card>
+              <CardHeader>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <CardTitle className="text-sm font-semibold text-[#1D1D1F]">
+                    Jelenlegi készlet — {active}
+                  </CardTitle>
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-[#6E6E73]">
+                    {(["EUR", "Egyutas", "Egyéb"] as const).map((cs) => (
+                      <span key={cs} className="inline-flex items-center gap-1.5">
+                        <span className="size-2 rounded-full" style={{ background: CSOPORT_SZIN[cs] }} />
+                        {cs}
+                      </span>
+                    ))}
+                    {canEdit && (
+                      <Button size="sm" variant="outline" onClick={() => setInventoryOpen(true)}>
+                        Leltár indítása
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <p className="text-xs text-[#6E6E73]">
+                  a sáv: arány a telep teljes készletéből ({teljesKeszlet.toLocaleString("hu-HU")} db)
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-6">
+                  {tileEntries.map(([type, qty]) => {
+                    const szin = CSOPORT_SZIN[csoportOf(type)];
+                    const szazalek = teljesKeszlet > 0 ? (qty / teljesKeszlet) * 100 : 0;
+                    return (
+                      <div
+                        key={type}
+                        className={`min-w-0 rounded-xl bg-[#EEF3FB] py-3 pr-3 pl-4 ${qty === 0 ? "opacity-50" : ""}`}
+                        style={{ borderLeft: `3px solid ${szin}` }}
+                      >
+                        <div className="truncate text-sm font-medium text-[#48484A]">{type}</div>
+                        <div className="text-[38px] leading-tight font-bold tabular-nums text-[#1D1D1F]">
+                          {qty.toLocaleString("hu-HU")}
+                          <span className="ml-1 text-sm font-normal text-[#6E6E73]">db</span>
+                        </div>
+                        <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white">
+                          <div
+                            className="h-full rounded-full"
+                            style={{ width: `${szazalek}%`, background: szin }}
+                          />
+                        </div>
+                        <div className="mt-1 text-xs tabular-nums text-[#6E6E73]">
+                          {Math.round(szazalek)}% a készletből
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm font-semibold text-[#1D1D1F]">Szétválogatás</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {SZETVALOGATAS_FORRASOK.filter((forras) => forras in stock).length === 0 && (
+                  <p className="text-xs text-[#6E6E73]">Nincs szétválogatható készlet.</p>
+                )}
+                {SZETVALOGATAS_FORRASOK.filter((forras) => forras in stock).map((forras) => {
+                  const celok = types.filter(
+                    (t) =>
+                      !SZETVALOGATAS_FORRASOK.includes(t) &&
+                      (forras === "Vegyes" || VEGYES_EUR_CELOK.includes(t))
+                  );
+                  return canEdit && celok.length > 0 ? (
+                    <VegyesSplitRow
+                      key={forras}
+                      source={forras}
+                      qty={stock[forras]}
+                      celok={celok}
+                      onSubmit={(tetelek) => handleVegyesSplit(forras, tetelek)}
+                    />
+                  ) : (
+                    <div
+                      key={forras}
+                      className="flex items-center justify-between rounded-md border bg-muted/30 px-3 py-2 text-sm"
+                    >
+                      <span>{forras}</span>
+                      <span className="font-semibold tabular-nums">{stock[forras]}</span>
+                    </div>
+                  );
+                })}
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1fr_2fr]">
+            <MovementForm
+              site={active}
+              types={types}
+              otherSites={OTHER_SITES[active]}
+              onRecorded={load}
+              allowSale={isNyiregyhaza}
+              panel
+            />
+
+            <div className="min-w-0 space-y-5">
+              <BejovoSzallitmanyok rows={incoming} onAccepted={load} sav />
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm font-semibold text-[#1D1D1F]">Legutóbbi mozgások</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {isNyiregyhaza ? (
+                    <div className="max-h-[28rem] overflow-y-auto">
+                      <Table>
+                        <TableHeader className="sticky top-0 z-10 bg-card">
+                          <TableRow>
+                            <TableHead>Dátum/idő</TableHead>
+                            <TableHead>Esemény</TableHead>
+                            <TableHead>Részletek</TableHead>
+                            <TableHead>Hatás</TableHead>
+                            <TableHead>Ki</TableHead>
+                            {canEdit && <TableHead className="w-8" />}
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {events.map((e) => (
+                            <TableRow key={e.id}>
+                              <TableCell className="text-muted-foreground">{e.date}</TableCell>
+                              <TableCell>
+                                <Badge className={KIND_CLASS[e.kind]}>{KIND_LABEL[e.kind]}</Badge>
+                              </TableCell>
+                              <TableCell>{e.details}</TableCell>
+                              <TableCell className="text-muted-foreground">{e.effect}</TableCell>
+                              <TableCell className="text-muted-foreground">{e.created_by ?? "—"}</TableCell>
+                              {canEdit && (
+                                <TableCell>
+                                  {e.kind !== "csere" && e.kind !== "havi-zaras" && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteEvent(e)}
+                                      title="Törlés (hibás rögzítés)"
+                                      className="text-destructive/70 hover:text-destructive"
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
+                                </TableCell>
+                              )}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ) : (
+                    <MozgasOszlopok
+                      site={active}
+                      movements={movements}
+                      canEdit={canEdit}
+                      onDelete={handleDeleteMovement}
+                      harmasOszlop
+                    />
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+
+          <InventoryDialog
+            site={active}
+            types={types}
+            currentStock={stock}
+            open={inventoryOpen}
+            onOpenChange={setInventoryOpen}
+            onRecorded={load}
+          />
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.4fr_1fr]">

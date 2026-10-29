@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useAsztali } from "@/components/keszlet/use-asztali";
+import { CSOPORT_SZIN, csoportOf } from "@/components/keszlet/tipus-csoport";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -84,35 +86,6 @@ const PAST_TILE_COLOR = {
   border: "border-border",
   bg: "bg-muted/40",
   text: "text-muted-foreground",
-};
-
-// Redesign 3 (P2): az új asztali elrendezés md (768 px) fölött él, alatta a
-// régi, egymás alatti mobil sorrend marad. Csak az egyik ágat rendereljük
-// (nem CSS-sel rejtjük), hogy a kbNav ne találjon rejtett, duplikált mezőt.
-function useAsztali() {
-  return useSyncExternalStore(
-    (cb) => {
-      const mq = window.matchMedia("(min-width: 768px)");
-      mq.addEventListener("change", cb);
-      return () => mq.removeEventListener("change", cb);
-    },
-    () => window.matchMedia("(min-width: 768px)").matches,
-    () => false
-  );
-}
-
-// Típuscsoport a név alapján (nincs csoport mező az adatban).
-type Csoport = "EUR" | "Egyutas" | "Egyéb";
-function csoportOf(name: string): Csoport {
-  const n = name.toLowerCase();
-  if (n.startsWith("eur") || n.startsWith("vegyes eur") || n.startsWith("csere")) return "EUR";
-  if (n.startsWith("egyutas")) return "Egyutas";
-  return "Egyéb";
-}
-const CSOPORT_SZIN: Record<Csoport, string> = {
-  EUR: "#0A84FF",
-  Egyutas: "#28A745",
-  Egyéb: "#AF52DE",
 };
 
 const HET_NAPJAI = ["H", "K", "Sze", "Cs", "P", "Szo", "V"];

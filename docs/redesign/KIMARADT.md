@@ -22,6 +22,9 @@ A felügyelő (Claude) vezeti; a redesign végén ezt nézzük át a felhasznál
 - Számlák · Bevétel: a részfizetések nem kerülnek havonta a „befolyt”-ba (csak a teljesen kifizetett számlák).
 - Régi, már nem használt komponens: `components/szamlak/szamla-bevetel-diagram.tsx` — törölhető, ha más nem hivatkozik rá.
 
+- Készlet (3): a „Ma +N be · −N ki” fejléc-összegző Nyíregyházán kimarad (ott nincs mozgás-lista, csak szöveges esemény), Szakolyon/Balkányon a szerver dátum-szövegéből számolódik; a hét napjai sáv a hónap adataiból (napi átlag) készül.
+- Készlet (3): a fejléc-összegzők (havi + telep) xl-től a fülek sorába húzva, alatta saját sorban — böngészős ellenőrzés kell; a „Mozgások — típusonként” kártyák az Összkészlet fülön vannak, azt a terv nem érintette.
+
 ## Kinézet
 - Betűskála: van még `text-[11px]`/`text-[10px]` a repóban (12 px alatt semmi szabály) — modulonként.
 - Mobil (768 px alatt): szándékosan érintetlen (a felhasználó döntése), az alsó tab-sáv barna maradt.

@@ -22,9 +22,12 @@ import { useCanEdit } from "@/components/auth/edit-permission-context";
 export function BejovoSzallitmanyok({
   rows,
   onAccepted,
+  sav = false,
 }: {
   rows: IncomingRow[];
   onAccepted: () => void | Promise<void>;
+  /** Asztali redesign (Q1): halvány narancs sáv, a tételek két oszlopban. */
+  sav?: boolean;
 }) {
   const canEdit = useCanEdit();
   const [folyamatban, setFolyamatban] = useState<string | null>(null);
@@ -45,7 +48,7 @@ export function BejovoSzallitmanyok({
   }
 
   return (
-    <Card className="border-warning/40 bg-warning/5 lg:col-span-2">
+    <Card className={sav ? "border-warning/30 bg-warning/10" : "border-warning/40 bg-warning/5 lg:col-span-2"}>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-sm">
           <Truck className="h-4 w-4 text-warning" />
@@ -55,7 +58,7 @@ export function BejovoSzallitmanyok({
           Úton lévő tételek másik telephelyről. A készletbe az átvétel után kerülnek.
         </p>
       </CardHeader>
-      <CardContent className="space-y-2">
+      <CardContent className={sav ? "grid gap-2 xl:grid-cols-2" : "space-y-2"}>
         {rows.map((row) => (
           <div
             key={row.id}

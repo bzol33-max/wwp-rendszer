@@ -12,6 +12,8 @@ type Props = {
   movements: MovementRow[];
   canEdit: boolean;
   onDelete: (m: MovementRow) => void;
+  /** Asztali redesign (Q1): Be / Ki / Telephelyek közti egymás mellett, görgethető listákkal. */
+  harmasOszlop?: boolean;
 };
 
 function DeleteButton({ onClick }: { onClick: () => void }) {
@@ -69,6 +71,7 @@ function Column({
   total,
   children,
   empty,
+  scroll = false,
 }: {
   title: string;
   icon: React.ReactNode;
@@ -76,9 +79,10 @@ function Column({
   total: string;
   children: React.ReactNode;
   empty: boolean;
+  scroll?: boolean;
 }) {
   return (
-    <div className={`min-w-0 rounded-lg border border-t-2 bg-background px-3 py-2 ${accent}`}>
+    <div className={`min-w-0 rounded-lg border ${scroll ? "border-t-[3px]" : "border-t-2"} bg-background px-3 py-2 ${accent}`}>
       <div className="mb-1 flex items-center gap-1.5 text-sm font-semibold">
         {icon}
         {title}
@@ -87,13 +91,13 @@ function Column({
       {empty ? (
         <p className="py-3 text-center text-xs text-muted-foreground">Nincs mozgás</p>
       ) : (
-        <ul>{children}</ul>
+        <ul className={scroll ? "max-h-[22rem] overflow-y-auto pr-1" : undefined}>{children}</ul>
       )}
     </div>
   );
 }
 
-export function MozgasOszlopok({ site, movements, canEdit, onDelete }: Props) {
+export function MozgasOszlopok({ site, movements, canEdit, onDelete, harmasOszlop = false }: Props) {
   const be = movements.filter((m) => m.direction === "be");
   const ki = movements.filter((m) => m.direction === "ki");
   const kozti = movements.filter((m) => m.direction === "mozgatas" || m.direction === "mozgatas_be");
@@ -101,14 +105,15 @@ export function MozgasOszlopok({ site, movements, canEdit, onDelete }: Props) {
   const sum = (rows: MovementRow[]) => rows.reduce((s, m) => s + m.qty, 0);
 
   return (
-    <div className="space-y-3">
-      <div className="grid gap-3 md:grid-cols-2">
+    <div className={harmasOszlop ? "grid gap-3 xl:grid-cols-3" : "space-y-3"}>
+      <div className={harmasOszlop ? "contents" : "grid gap-3 md:grid-cols-2"}>
         <Column
           title="Be"
           icon={<ArrowDownLeft className="h-4 w-4 text-success" />}
           accent="border-t-success"
           total={`+${sum(be)} db`}
           empty={be.length === 0}
+          scroll={harmasOszlop}
         >
           {be.map((m) => (
             <Row
@@ -129,6 +134,7 @@ export function MozgasOszlopok({ site, movements, canEdit, onDelete }: Props) {
           accent="border-t-destructive"
           total={`−${sum(ki)} db`}
           empty={ki.length === 0}
+          scroll={harmasOszlop}
         >
           {ki.map((m) => (
             <Row
@@ -150,6 +156,7 @@ export function MozgasOszlopok({ site, movements, canEdit, onDelete }: Props) {
         accent="border-t-primary"
         total={`${kozti.length} mozgás`}
         empty={kozti.length === 0}
+        scroll={harmasOszlop}
       >
         {kozti.map((m) => {
           const kimeno = m.direction === "mozgatas";
@@ -167,7 +174,7 @@ export function MozgasOszlopok({ site, movements, canEdit, onDelete }: Props) {
               badge={
                 varakozik ? (
                   // Még nem vették át: a mennyiség nincs benne a készletben.
-                  <span className="rounded bg-warning/15 px-1.5 py-0.5 text-[11px] text-warning">
+                  <span className="rounded bg-warning/15 px-1.5 py-0.5 text-xs text-warning">
                     Átvételre vár
                   </span>
                 ) : undefined

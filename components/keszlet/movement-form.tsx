@@ -28,6 +28,13 @@ const DIRECTION_OPTIONS: readonly [Direction, string][] = [
 
 const AFA_KULCS = 0.27;
 
+// Az összegző sáv mondatához: "a szakolyi készletbe".
+const SITE_MELLEKNEV: Record<string, string> = {
+  Szakoly: "szakolyi",
+  Balkány: "balkányi",
+  Nyíregyháza: "nyíregyházi",
+};
+
 // Gyorsgomb a Partner mezőhöz: a névtelen, alkalmi vétel/kiadás mindig
 // ugyanazzal a megnevezéssel kerüljön be, hogy később összeszámolható legyen.
 const ESETI_PARTNER = "Eseti felvásárlás";
@@ -54,6 +61,7 @@ export function MovementForm({
   allowTransfer = true,
   allowSale = false,
   fixedDirection,
+  panel = false,
 }: {
   site: string;
   types: string[];
@@ -74,6 +82,11 @@ export function MovementForm({
    * Nyíregyházán van bekapcsolva — kassza is csak ott van.
    */
   allowSale?: boolean;
+  /**
+   * Asztali redesign (Q1): szegmentált irányválasztó, összegző sáv a mentés
+   * fölött és nagy Mentés gomb. A mezők és a mentési logika ugyanaz.
+   */
+  panel?: boolean;
 }) {
   const canEdit = useCanEdit();
   const [direction, setDirection] = useState<Direction>(fixedDirection ?? "be");
@@ -112,6 +125,16 @@ export function MovementForm({
     ? sorok.reduce((sum, s) => sum + (Number(s.qty) || 0) * (Number(s.unitPrice) || 0), 0)
     : 0;
   const brutto = afa ? Math.round(netto * (1 + AFA_KULCS)) : netto;
+
+  // Összegző sáv (panel): a most beírt darabszámok összege és az irány.
+  const osszDb = sorok.reduce((s, sor) => s + (Number(sor.qty) > 0 ? Number(sor.qty) : 0), 0);
+  const telepMelleknev = SITE_MELLEKNEV[site] ?? site;
+  const osszegzo =
+    direction === "be"
+      ? `Beérkezés · ${osszDb} db kerül a ${telepMelleknev} készletbe`
+      : direction === "ki"
+        ? `Kiszállítás · ${osszDb} db kerül ki a ${telepMelleknev} készletből`
+        : `Telephelyek közti mozgatás · ${osszDb} db kerül ki a ${telepMelleknev} készletből`;
 
   useEffect(() => {
     let mounted = true;
@@ -240,7 +263,13 @@ export function MovementForm({
       </CardHeader>
       <CardContent className="space-y-4">
         {!fixedDirection && (
-        <div className={cn("grid gap-2", allowTransfer ? "grid-cols-3" : "grid-cols-2")}>
+        <div
+          className={cn(
+            "grid gap-2",
+            allowTransfer ? "grid-cols-3" : "grid-cols-2",
+            panel && "gap-1 rounded-xl bg-[#EEF3FB] p-1"
+          )}
+        >
           {DIRECTION_OPTIONS.filter(([value]) => allowTransfer || value !== "mozgatas").map(
             ([value, label]) => (
               <button
@@ -249,9 +278,14 @@ export function MovementForm({
                 onClick={() => setDirection(value)}
                 className={cn(
                   "rounded-md border px-2 py-2 text-xs font-medium transition-colors max-md:min-h-11",
+                  panel && "rounded-lg border-transparent",
                   direction === value
-                    ? "border-primary bg-accent text-accent-foreground"
-                    : "border-border text-muted-foreground hover:bg-muted"
+                    ? panel
+                      ? "bg-white text-primary shadow-[var(--shadow-card)]"
+                      : "border-primary bg-accent text-accent-foreground"
+                    : panel
+                      ? "text-[#6E6E73] hover:text-[#1D1D1F]"
+                      : "border-border text-muted-foreground hover:bg-muted"
                 )}
               >
                 {allowSale && value === "ki" ? "Kiszállítás / Eladás" : label}
@@ -471,10 +505,16 @@ export function MovementForm({
             Csak megtekintési jogosultságod van ehhez a modulhoz.
           </p>
         )}
+        {panel && (
+          <div className="rounded-xl bg-[#EEF3FB] px-3 py-2 text-xs font-medium text-[#48484A]">
+            {osszegzo}
+          </div>
+        )}
         <Button
           onClick={submit}
           disabled={submitting || !canEdit}
-          className="w-full sm:w-auto"
+          size={panel ? "lg" : "default"}
+          className={panel ? "h-11 w-full text-base" : "w-full sm:w-auto"}
         >
           {submitting ? "Mentés…" : "Mentés"}
         </Button>
