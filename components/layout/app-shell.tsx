@@ -18,6 +18,16 @@ import {
 
 const MOBILE_PRIMARY_TAB_COUNT = 4;
 
+// Asztali oldalsáv (redesign 0, 2026-10-29): 88 px keskeny sáv, menüpontonként
+// ikon felül / felirat alatta. A színek szándékosan beégetettek: az Apple-séma
+// oldalsáv-értékei nem esnek egybe a shadcn --sidebar-* tokenekkel, azokat
+// pedig a mobil alsó tab-sáv is használja, amit ez a modul nem érint.
+const SIDEBAR_ITEM =
+  "flex flex-col items-center justify-center gap-1 rounded-[12px] px-1 py-2 text-center text-[12px] leading-[1.15] break-words transition-colors";
+const SIDEBAR_ITEM_ACTIVE = "bg-[rgba(0,122,255,0.10)] text-[#007AFF] font-medium";
+const SIDEBAR_ITEM_IDLE = "text-[#48484A] hover:bg-[rgba(0,0,0,0.04)]";
+const SIDEBAR_LINE = "border-[rgba(0,0,0,0.08)]";
+
 export function AppShell({
   children,
   isAdmin,
@@ -66,17 +76,22 @@ export function AppShell({
   }
 
   return (
-    <div className="flex min-h-screen bg-muted/40">
-      <aside className="hidden w-56 shrink-0 flex-col bg-sidebar text-sidebar-foreground md:flex">
-        <div className="border-b border-sidebar-border px-5 py-5">
-          <div className="text-sm font-semibold text-white">
-            Well-Worn Pallet
-          </div>
-          <div className="text-xs text-sidebar-foreground/60">
-            Vállalatirányítás
+    <div className="flex min-h-screen bg-background">
+      <aside
+        className={cn(
+          "hidden w-[88px] shrink-0 flex-col border-r bg-white md:flex",
+          SIDEBAR_LINE
+        )}
+      >
+        <div className="flex justify-center py-4">
+          <div className="flex h-9 w-9 items-center justify-center rounded-[10px] bg-[#1D1D1F] text-[18px] leading-none font-semibold text-white">
+            W
+            <span className="sr-only">
+              Well-Worn Pallet — Vállalatirányítás
+            </span>
           </div>
         </div>
-        <nav className="flex flex-col gap-0.5 px-2 py-3">
+        <nav className="flex flex-col gap-1 px-2 pb-2">
           {navItems.map((item) => {
             const active = isActive(item.href);
             const Icon = item.icon;
@@ -85,60 +100,71 @@ export function AppShell({
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors",
-                  active
-                    ? "bg-sidebar-accent text-white font-medium"
-                    : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-white"
+                  SIDEBAR_ITEM,
+                  active ? SIDEBAR_ITEM_ACTIVE : SIDEBAR_ITEM_IDLE
                 )}
               >
-                <Icon className="h-4 w-4" />
+                <Icon className="h-[22px] w-[22px]" />
                 {item.label}
               </Link>
             );
           })}
         </nav>
-        <div className="mt-auto flex flex-col gap-2 border-t border-sidebar-border px-2 py-3">
+        <div
+          className={cn(
+            "mt-auto flex flex-col gap-1 border-t px-2 py-2",
+            SIDEBAR_LINE
+          )}
+        >
           {isAdmin && (
             <Link
               href="/beallitasok/felhasznalok"
               className={cn(
-                "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors",
+                SIDEBAR_ITEM,
                 pathname.startsWith("/beallitasok/felhasznalok")
-                  ? "bg-sidebar-accent text-white font-medium"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-white"
+                  ? SIDEBAR_ITEM_ACTIVE
+                  : SIDEBAR_ITEM_IDLE
               )}
             >
-              <UsersRound className="h-4 w-4" />
+              <UsersRound className="h-[22px] w-[22px]" />
               Felhasználók
             </Link>
           )}
           <Link
             href="/beallitasok/tipusok"
             className={cn(
-              "flex items-center gap-2.5 rounded-md px-3 py-2 text-sm transition-colors",
+              SIDEBAR_ITEM,
               pathname.startsWith("/beallitasok/tipusok")
-                ? "bg-sidebar-accent text-white font-medium"
-                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/60 hover:text-white"
+                ? SIDEBAR_ITEM_ACTIVE
+                : SIDEBAR_ITEM_IDLE
             )}
           >
-            <Settings className="h-4 w-4" />
+            <Settings className="h-[22px] w-[22px]" />
             Típusok és árak
           </Link>
-          <div className="px-3 pb-1 text-xs text-sidebar-foreground/40">
+          <div className="px-1 pt-1 text-center text-[12px] leading-[1.2] text-[#6E6E73]">
             Szakoly · Balkány · Nyíregyháza
           </div>
           {userName && (
-            <div className="flex items-center justify-between gap-2 border-t border-sidebar-border px-3 pt-2">
-              <span className="truncate text-xs text-sidebar-foreground/70">
+            <div
+              className={cn(
+                "flex flex-col items-center gap-1 border-t pt-2",
+                SIDEBAR_LINE
+              )}
+            >
+              <span
+                title={userName}
+                className="w-full truncate text-center text-[12px] text-[#6E6E73]"
+              >
                 {userName}
               </span>
               <form action={logout}>
                 <button
                   type="submit"
                   title="Kijelentkezés"
-                  className="flex items-center justify-center rounded p-1 text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent/60 hover:text-white"
+                  className="flex h-11 w-11 items-center justify-center rounded-[12px] text-[#48484A] transition-colors hover:bg-[rgba(0,0,0,0.04)]"
                 >
-                  <LogOut className="h-3.5 w-3.5" />
+                  <LogOut className="h-[18px] w-[18px]" />
                 </button>
               </form>
             </div>
@@ -158,8 +184,9 @@ export function AppShell({
       </main>
 
       {/* Mobil alsó navigáció — a bal oldali sáv 768px alatt elrejtve, mert
-          keskeny (pl. 390px-es) képernyőn a fix 224px-es sáv a viewport
-          több mint felét elfoglalná. A megjelenő modulokból max. 4 kerül
+          keskeny (pl. 390px-es) képernyőn az oldalsáv (korábban 224, a
+          redesign 0 óta 88 px) elvenné a viewport szélességét. A megjelenő
+          modulokból max. 4 kerül
           közvetlen fülre, a többi (és a Beállítások/kijelentkezés, ami itt
           nincs máshol elérhető) a "Több" fülre kerül. */}
       <nav

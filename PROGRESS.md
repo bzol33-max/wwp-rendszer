@@ -1,5 +1,31 @@
 # PROGRESS
 
+## 2026-10-29 — Redesign 0. modul: vizuális alap + 88 px-es oldalsáv (Apple HIG stílus)
+
+A `redesign/0-alap` branchen (nincs pusholva/deployolva), a `docs/redesign/0-alap.md` terv szerint.
+**Csak megjelenés** — logika, adatmodell, API, útvonalak, jogosultságok, menüpontok nem változtak, a
+mobil nézetek (`app/m`, `components/m`, `components/mobil`, `/attekintes`, `/erkezes`) érintetlenek.
+- **Betű:** Geist → **Inter** (`latin` + `latin-ext` a magyar ékezetek miatt). A CSS-változó neve
+  szándékosan maradt `--font-geist-sans`, így a `globals.css` kötése és minden hivatkozás változatlan.
+- **Színek** (`:root`, shadcn token-nevek maradtak): háttér `#F5F5F7`, kártya `#FFFFFF`, szöveg
+  `#1D1D1F`, másodlagos `#6E6E73`, elsődleges és ring `#007AFF`, hiba `#D70015`, figyelmeztetés
+  `#B25000`, siker `#248A3D`, vonal `rgba(0,0,0,.08)`. A `.dark` blokk megmaradt (nem lett átszínezve).
+  Új `.tnum` utility (`font-variant-numeric: tabular-nums`).
+- **Kártya:** 16 px sarok + lágy árnyék keret helyett. A radius a **Card komponensben** van, nem a
+  globális `--radius`-ban — az minden gombot/inputot is átméretezne, a modul-témák pedig felülírják.
+- **Oldalsáv:** 224 → **88 px**, fehér, ikon felül (22 px) / felirat alatta (12 px, középre); aktív elem
+  `rgba(0,122,255,.10)` háttérrel és `#007AFF` színnel, 12 px radius; felül `#1D1D1F` „W” négyzet
+  (36×36, radius 10). A menüpontok listája/sorrendje/szűrése változatlan.
+- **Teszt:** eslint a repó saját kódján 0 hiba (19 ismert, dokumentált warning); `tsc` az `app`/
+  `components`/`lib`/`scripts` fán tiszta; `next build` **fordítása zöld** (az Inter woff2-k, a `.tnum`,
+  a 16 px radius és az új tokenek ellenőrizve a generált CSS-ben).
+- **Nyitott / kockázat** (részletesen: `docs/redesign/0-alap-eredmeny.md`): a `node_modules` telepítése
+  hiányos ebben a környezetben (`word-extractor`, `@playwright/test` nincs meg), ezért a build
+  típusellenőrzése nem fut végig — `rm -rf node_modules/word-extractor && npm install` kell hozzá.
+  Továbbá: a CLAUDE.md audit-E2 bejegyzése még a narancs márkaszínt írja (frissíteni kell); a
+  `.fuvarozas2`/`.szamlak`/`.jelenlet` modul-témák felülírják az új palettát; a mobil alsó tab-sáv
+  (`--sidebar-*`) szándékosan maradt a régi barna; böngészős vizuális ellenőrzés még nem volt.
+
 ## 2026-10-23 (késő este) — Sofőr papír-fotó: külön app helyett a meglévő rendszerben, iPhone-on is
 
 Budaházi Zoltán: „abban oldd meg, amit használunk, plusz az új sofőröknek lehet iPhone-ja lesz”.

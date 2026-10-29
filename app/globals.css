@@ -52,40 +52,46 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-/* "Rozsda-krém" — a fő (asztali) alkalmazás megosztott design tokenjei.
-   A korábbi kék séma helyett: meleg krémszín háttér, közel-fekete,
-   barnás-meleg oldalsáv, rozsda/terrakotta elsődleges szín — a
-   felhasználó által mutatott referencia-terv (raklap-leltár irányítópult
-   mockup) színvilága alapján. Ez a globals.css-ben él, tehát minden
-   modulra (Info, Fuvarozás, Készlet, Számlák, Dolgozók, Jelenléti,
-   Járművek, Beállítások) automatikusan érvényes — a különálló, korlátozott
-   mobil nézetek (mobil/posta/erkezes/felvasarlas/attekintes) SZÁNDÉKOSAN
-   nem ide tartoznak, azok saját "--mob-"/"--at-" előtagú, felhasználónkénti
-   sémákat használnak (lásd lib/mobil-theme.ts, lib/attekintes/theme.ts) —
-   ezt itt nem érintjük. */
+/* Apple HIG-közeli világos séma (redesign 0. modul, 2026-10-29) — a korábbi
+   "rozsda-krém" (meleg krém háttér, terrakotta elsődleges) helyett: semleges
+   #F5F5F7 háttér, fehér kártyák, #1D1D1F szöveg, iOS-kék (#007AFF) elsődleges.
+   A shadcn token-nevek változatlanok, tehát minden komponens automatikusan
+   átveszi. Ez a globals.css-ben él, tehát minden modulra (Info, Fuvarozás,
+   Készlet, Számlák, Dolgozók, Jelenléti, Járművek, Beállítások) érvényes — a
+   különálló, korlátozott mobil nézetek (mobil/posta/erkezes/felvasarlas/
+   attekintes) SZÁNDÉKOSAN nem ide tartoznak, azok saját "--mob-"/"--at-"
+   előtagú, felhasználónkénti sémákat használnak (lásd lib/mobil-theme.ts,
+   lib/attekintes/theme.ts) — ezt itt nem érintjük.
+
+   Tipográfiai és rács-konvenció ehhez a sémához: 8 px-es rács (a Tailwind
+   2/4/6/8/… lépcsője), betűméretek 24 / 18 / 14 / 13 / 12 px — 12 px alatt
+   semmi. A másodlagos szöveg #6E6E73 (--muted-foreground), a még halványabb
+   #8E8E93 szövegre NEM használható (kontraszt). */
 :root {
-  --background: oklch(0.97 0.014 75);
-  --foreground: oklch(0.24 0.025 55);
-  --card: oklch(0.995 0.006 80);
-  --card-foreground: oklch(0.24 0.025 55);
-  --popover: oklch(0.995 0.006 80);
-  --popover-foreground: oklch(0.24 0.025 55);
-  --primary: oklch(0.53 0.14 42);
-  --primary-foreground: oklch(0.99 0.005 80);
-  --secondary: oklch(0.93 0.02 65);
-  --secondary-foreground: oklch(0.28 0.03 50);
-  --muted: oklch(0.94 0.016 70);
-  --muted-foreground: oklch(0.52 0.02 55);
-  --accent: oklch(0.91 0.035 50);
-  --accent-foreground: oklch(0.38 0.09 42);
-  --success: oklch(0.6 0.15 150);
-  --success-foreground: oklch(0.985 0 0);
-  --warning: oklch(0.68 0.15 60);
-  --warning-foreground: oklch(0.99 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.87 0.018 65);
-  --input: oklch(0.87 0.018 65);
-  --ring: oklch(0.53 0.14 42);
+  --background: #f5f5f7;
+  --foreground: #1d1d1f;
+  --card: #ffffff;
+  --card-foreground: #1d1d1f;
+  --popover: #ffffff;
+  --popover-foreground: #1d1d1f;
+  --primary: #007aff;
+  --primary-foreground: #ffffff;
+  --secondary: #e8e8ed;
+  --secondary-foreground: #1d1d1f;
+  --muted: #efeff4;
+  --muted-foreground: #6e6e73;
+  --accent: #ebebf0;
+  --accent-foreground: #1d1d1f;
+  --success: #248a3d;
+  --success-foreground: #ffffff;
+  --warning: #b25000;
+  --warning-foreground: #ffffff;
+  --destructive: #d70015;
+  --border: rgba(0, 0, 0, 0.08);
+  /* Az űrlapmező-keret a 8%-os vonalnál sötétebb, hogy az input a fehér
+     kártyán is látható maradjon (a terv erre nem adott értéket). */
+  --input: rgba(0, 0, 0, 0.16);
+  --ring: #007aff;
   --chart-1: oklch(0.87 0 0);
   --chart-2: oklch(0.556 0 0);
   --chart-3: oklch(0.439 0 0);
@@ -146,6 +152,12 @@
   html {
     @apply font-sans;
   }
+}
+
+/* Táblázatos számjegyek — a számoszlopok (mennyiség, összeg, km) ne
+   "ugráljanak" soronként. Használat: class="tnum". */
+@utility tnum {
+  font-variant-numeric: tabular-nums;
 }
 /* Fuvarozás 2 — a terv (Claude Design vászon, „Asztali” oldal) színei:
    világos zöldes-szürke háttér, fehér kártyák, menta elsődleges, borostyán

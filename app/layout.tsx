@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist_Mono, Inter } from "next/font/google";
 import { AppShell } from "@/components/layout/app-shell";
 import { Toaster } from "@/components/ui/sonner";
 import { verifySession } from "@/lib/auth/dal";
@@ -17,9 +17,13 @@ const MODULES_FOR_NAV: ModuleKey[] = [
   "elszamolas",
 ];
 
-const geistSans = Geist({
+// Redesign 0 (2026-10-29): a törzsbetű Geist helyett Inter (Apple HIG-közeli
+// karakter, jó magyar ékezetes lefedettséggel — ezért a `latin-ext` subset is).
+// A CSS-változó neve szándékosan marad `--font-geist-sans`: így a globals.css
+// `--font-sans` kötése és minden rá hivatkozó modul változatlan maradhat.
+const interSans = Inter({
   variable: "--font-geist-sans",
-  subsets: ["latin"],
+  subsets: ["latin", "latin-ext"],
 });
 
 const geistMono = Geist_Mono({
@@ -43,7 +47,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="hu"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${interSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full">
         <AppShell isAdmin={isAdmin} visibleModuleKeys={visibleModuleKeys} hiddenHrefs={hiddenHrefs}>
