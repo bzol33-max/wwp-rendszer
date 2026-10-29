@@ -4174,3 +4174,6 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 ## 2026-10-29 — Redesign 5c: Ma + hét tömörítés (lezárt fuvar egy sorban, múlt napok ki)
 - `components/fuvarozas2/ma-het.tsx`: a lezárt mai fuvar egy sorba csukva (`<details>`, kattintásra kinyílik), megálló egy sorban (FEL/LE · város · TERV → TÉNY), állás-sor és kontakt csak a „most/következő” megállónál, napok-lista a mai naptól (múltbeli hétre lapozva minden nap), csúszó fuvar „csúszik · {eredeti nap}” jelölése a mai blokk tetején, szűkebb fejléc (rendszám + pirula egy sorban, tachó-sáv 4 px). Új tiszta segédek: `lib/fuvarozas2/ma-het-alap.ts`, teszt: `scripts/teszt-ma-het-lap.ts`. Adat, jogosultság, mobil ág változatlan.
 - Nyitott: a `scripts/teszt-ma-het*.ts` futtatása és a böngészős ellenőrzés a felügyelőre vár.
+
+## 2026-10-29 — Redesign 5d: kocsi-fejléc sebesség/fogyasztás/km, tachó-küszöb 90 perc
+- `components/fuvarozas2/ma-het.tsx`: a rendszám alatt tömör sor (`sebesség · l/100 · ma N km`, 13 px, #48484A; a lábléc km/l100 ide költözött); `MaKocsi.sebesseg` (új, opcionális) a `ma-vaszon.ts`-ben a már lekért `eloPozicio.sebesseg`-ből (30 percnél régebbi → kimarad, új Ecofleet-hívás nincs); `KEVES_TACHO_PERC` 60 → 90 (a tachó-sáv piros küszöbe is ezt használja), teszt igazítva.

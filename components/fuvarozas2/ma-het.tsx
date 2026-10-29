@@ -14,7 +14,7 @@ import { kocsiSzin } from "@/lib/fuvarozas2/kocsi-szin";
 import { tachoCsik } from "@/lib/fuvarozas2/ma-kartya-alap";
 import {
   allapotPirula, csuszikNap, csuszoFuvarok, fejlecIdo, ftSzoveg, fuvarCsoportok, gpsGond, kocsiBajban, kocsiElteresei, lezartCsoport, lezartOsszegzes,
-  megjelenitettNapok, napNevHosszu, napSzakaszCim, nemNulla, oraPerc,
+  KEVES_TACHO_PERC, megjelenitettNapok, napNevHosszu, napSzakaszCim, nemNulla, oraPerc,
   type Pirula,
 } from "@/lib/fuvarozas2/ma-het-alap";
 import { fuvarJel } from "@/lib/fuvarozas2/tervezes-het-alap";
@@ -494,6 +494,12 @@ export function MaHetKocsi({ k, adat, het, sav, hetSor, szerk }: {
   const heti = adat.kihasznaltsag?.kocsik.find((x) => x.kod === kod)?.het ?? hetSor;
   const l100 = k.fogyasztas?.l100 ?? null;
   const hetiTacho = k.hetiSor?.split(" · ").find((x) => x.startsWith("hét"));
+  // Rendszám alatti tömör sor: sebesség · átlagfogyasztás · km (nincs adat → kimarad).
+  const fejlecAdatok: { szoveg: string; title?: string }[] = [
+    ...(k.sebesseg != null ? [{ szoveg: k.sebesseg === 0 ? "áll" : `${k.sebesseg} km/h` }] : []),
+    ...(l100 != null ? [{ szoveg: `${l100.toLocaleString("hu-HU")} l/100`, title: "átlag az utolsó 7 napból" }] : []),
+    ...(k.napiKm != null ? [{ szoveg: `ma ${k.napiKm.toLocaleString("hu-HU")} km` }] : []),
+  ];
 
   const napok = het && kocsi ? megjelenitettNapok(het.napok, adat.ma, het.ezAHet) : null;
   const cellak = new Map((kocsi?.cellak ?? []).map((c) => [c.nap, c]));
@@ -519,13 +525,20 @@ export function MaHetKocsi({ k, adat, het, sav, hetSor, szerk }: {
           </div>
           <span className={cn("shrink-0 truncate text-xs", MEDDO)}>{k.sofor ?? "nincs sofőr"}</span>
         </div>
+        {fejlecAdatok.length ? (
+          <div className="truncate text-[13px] tabular-nums text-[#48484A]">
+            {fejlecAdatok.map((x, i) => (
+              <span key={i} title={x.title}>{i > 0 ? " · " : ""}{x.szoveg}</span>
+            ))}
+          </div>
+        ) : null}
         {k.allapot?.hely ? <div className="truncate text-sm">{k.allapot.hely}</div> : null}
         {kovetkezoSzoveg ? <div className={cn("truncate text-[13px]", MEDDO)} title={kovetkezoSzoveg}>Következő: {kovetkezoSzoveg}</div> : null}
         {csik != null ? (
           <div className="flex items-center gap-2 text-xs" title={k.tacho?.reszletek}>
             <span className={MEDDO}>tachó</span>
             <span className="h-1 flex-1 rounded-full bg-foreground/10" role="meter" aria-label="Napi vezetési idő hátra" aria-valuemin={0} aria-valuemax={100} aria-valuenow={csik}>
-              <span className={cn("block h-1 rounded-full", bajban && (k.tachoNapiHatraPerc ?? 999) < 60 ? "bg-[var(--f2-red)]" : "bg-[var(--kc)]")} style={{ width: `${csik}%` }} />
+              <span className={cn("block h-1 rounded-full", bajban && (k.tachoNapiHatraPerc ?? 999) < KEVES_TACHO_PERC ? "bg-[var(--f2-red)]" : "bg-[var(--kc)]")} style={{ width: `${csik}%` }} />
             </span>
             <b className="tabular-nums">{oraPerc(k.tachoNapiHatraPerc ?? 0)}</b>
             <span className={MEDDO}>ma hátra{hetiTacho ? ` · ${hetiTacho}` : ""}</span>
@@ -616,10 +629,8 @@ export function MaHetKocsi({ k, adat, het, sav, hetSor, szerk }: {
             </Link>
           </div>
         ) : null}
-        {l100 != null || k.napiKm != null || k.papir.length || (k.fogyasztas?.szervizHatraKm != null && k.fogyasztas.szervizHatraKm < 10000) ? (
+        {k.papir.length || (k.fogyasztas?.szervizHatraKm != null && k.fogyasztas.szervizHatraKm < 10000) ? (
           <div className={cn("flex flex-wrap items-baseline gap-x-3 gap-y-0.5 text-xs", MEDDO)}>
-            {k.napiKm != null ? <span>ma <b className="text-foreground">{k.napiKm} km</b></span> : null}
-            {l100 != null ? <span title="Ecofleet CAN, utolsó 7 nap"><b className="tabular-nums text-foreground">{l100.toLocaleString("hu-HU")}</b> l/100</span> : null}
             {k.fogyasztas?.szervizHatraKm != null && k.fogyasztas.szervizHatraKm < 10000 ? (
               <span className={k.fogyasztas.szervizHatraKm < 3000 ? "font-semibold text-[var(--f2-amb)]" : ""}>szervizig {Math.round(k.fogyasztas.szervizHatraKm).toLocaleString("hu-HU")} km</span>
             ) : null}

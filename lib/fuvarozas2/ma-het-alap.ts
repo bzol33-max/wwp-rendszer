@@ -7,7 +7,7 @@ import type { Elteres, MaKocsi, TukorSor } from "@/lib/fuvarozas2/ma-vaszon";
 import { TAVOLLET_NEV } from "@/lib/fuvarozas2/bejegyzes-alap";
 
 /** Ennyi perc napi vezetési idő alatt a kocsi „kevés tachóval” van (az oszlop piros keretet kap). */
-export const KEVES_TACHO_PERC = 60;
+export const KEVES_TACHO_PERC = 90;
 
 /** Az iroda-sor címkéje csak nem nulla számlálóval jelenik meg („0”, „—”, „0 Ft” kimarad). */
 export const nemNulla = (ertek: string): boolean => /[1-9]/.test(ertek);

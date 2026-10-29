@@ -41,6 +41,8 @@ eq("gpsGond: nem tervezett állás (amber, nem GPS-gond)", gpsGond({ allapot: { 
 eq("bajban: piros eltérés", kocsiBajban({ tachoNapiHatraPerc: 300 }, [elt("késés 20 p", "red")]), true);
 eq("bajban: csak narancs", kocsiBajban({ tachoNapiHatraPerc: 300 }, [elt("+10 p", "amber")]), false);
 eq("bajban: kevés tachó", kocsiBajban({ tachoNapiHatraPerc: 45 }, []), true);
+eq("bajban: 89 p tachó (küszöb 90)", kocsiBajban({ tachoNapiHatraPerc: 89 }, []), true);
+eq("bajban: 90 p tachó már nem", kocsiBajban({ tachoNapiHatraPerc: 90 }, []), false);
 eq("bajban: nincs tachó-adat", kocsiBajban({ tachoNapiHatraPerc: null }, []), false);
 
 eq("oraPerc", oraPerc(160), "2:40");
