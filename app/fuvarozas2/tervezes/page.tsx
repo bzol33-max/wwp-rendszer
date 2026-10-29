@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireSession } from "@/lib/auth/dal";
 import { getTervezo } from "@/lib/fuvarozas2/tervezo";
 import { Fuvarozas2Fulek } from "@/components/fuvarozas2/fulek";
@@ -5,7 +6,8 @@ import { BejovoLista, DontesOszlop, HetOszlop } from "@/components/fuvarozas2/te
 import { DontesSav } from "@/components/fuvarozas2/tervezo-dontes";
 import { varosNev } from "@/lib/fuvarozas/varos";
 import { getTervezesHet } from "@/lib/fuvarozas2/tervezes-het";
-import { TervezesHetNezet } from "@/components/fuvarozas2/tervezes-het";
+import { hetLink, TervezesHetNezet } from "@/components/fuvarozas2/tervezes-het";
+import { AsztaliAtiranyitas } from "@/components/fuvarozas2/asztali-atiranyitas";
 
 export const dynamic = "force-dynamic";
 
@@ -14,19 +16,33 @@ export const dynamic = "force-dynamic";
 // a kocsi hete a fuvarral együtt, alul a döntés.
 // 2026-10-12 (navigáció: minden funkció egy helyen): sorrend: a hét (rések +
 // ajánlatok, kocsira váró fuvarok) → bejövő megbízások döntése.
+// 2026-10-29 (redesign 5, U2c): a Ma és a Hét egy lap (/fuvarozas2). Ez az oldal
+// asztali nézetben már csak a Bejövő megbízások döntése; a „Most dönts” panel
+// Határidős tételei ide nyílnak (?m=<id>). Telefonon (768 px alatt) a régi Hét
+// nézet is itt marad — a mobil Ma lap „A hét” linkje ide visz.
 
 export default async function Page({ searchParams }: { searchParams: Promise<{ m?: string; kocsi?: string; res?: string; het?: string }> }) {
   const sp = await searchParams;
   const session = await requireSession();
   const szerkeszthet = session.can("fuvarozas").edit;
-  const hetAdat = await getTervezesHet(sp.res, sp.het);
+  // A régi (mobil) Hét nézet adatát csak akkor számoljuk, ha nem egy konkrét megbízás döntésére jöttünk (?m=).
+  const hetAdat = sp.m ? null : await getTervezesHet(sp.res, sp.het);
   const t = await getTervezo({ m: sp.m && /^\d+$/.test(sp.m) ? sp.m : undefined, kocsi: sp.kocsi });
   const k = t.kivalasztott;
+  // Az asztali nézetben a het / res paraméter az új lapra irányít.
+  const asztaliCel = sp.het || sp.res ? hetLink(sp.het && /^\d{4}-\d{2}-\d{2}$/.test(sp.het) ? sp.het : null, sp.res, "/fuvarozas2") : null;
   return (
     <div className="flex flex-col gap-4">
-      <Fuvarozas2Fulek aktiv="/fuvarozas2/tervezes" cim="Hét" />
-      {/* Az új terv 2. oldala (2026-10-11): a hét a résekkel, ajánlatok, kiket hívj. */}
-      <TervezesHetNezet adat={hetAdat} szerkeszthet={szerkeszthet} />
+      <Fuvarozas2Fulek aktiv="/fuvarozas2/tervezes" cim="Bejövő megbízások" />
+      {asztaliCel ? <AsztaliAtiranyitas cel={asztaliCel} /> : null}
+      <Link href="/fuvarozas2" className="w-fit text-sm font-semibold text-primary hover:underline">‹ vissza a Ma + héthez</Link>
+
+      {/* A régi Hét nézet — csak telefonon; asztalon az új Ma + hét lap váltotta. */}
+      {hetAdat ? (
+        <div className="md:hidden">
+          <TervezesHetNezet adat={hetAdat} szerkeszthet={szerkeszthet} />
+        </div>
+      ) : null}
 
       <div className="mt-2 border-t pt-4">
         <h2 className="text-lg font-semibold">Bejövő megbízások — döntés</h2>

@@ -26,12 +26,14 @@ const ft = (x: number) => `${Math.round(x).toLocaleString("hu-HU")} Ft`;
 const ezer = (x: number) => `${Math.round(x / 1000).toLocaleString("hu-HU")} e`;
 const eur = (x: number) => Math.round(x).toLocaleString("hu-HU");
 const ido = (perc: number) => `${Math.floor(perc / 60)} ó ${String(perc % 60).padStart(2, "0")} p`;
-const hetLink = (het: string | null, res?: string) => {
+/** A hét / rés linkje. `alap`: a régi (mobil) Hét lap, vagy az új Ma + hét lap (`/fuvarozas2`). */
+export const HET_ALAP_MOBIL = "/fuvarozas2/tervezes";
+export const hetLink = (het: string | null, res?: string, alap: string = HET_ALAP_MOBIL) => {
   const p = new URLSearchParams();
   if (het) p.set("het", het);
   if (res) p.set("res", res);
   const q = p.toString();
-  return `/fuvarozas2/tervezes${q ? `?${q}` : ""}${res ? "#res" : ""}`;
+  return `${alap}${q ? `?${q}` : ""}${res ? "#res" : ""}`;
 };
 
 // --- Rács 2.0 (R1 kártya · R4 napi mérleg · R7 tartalék) — idők helyi „YYYY-MM-DDTHH:MM” szövegként ---
@@ -223,7 +225,6 @@ function ResChip({ r, aktiv, het }: { r: Res; aktiv: boolean; het: string | null
 export function TervezesHetNezet({ adat, szerkeszthet }: { adat: TervezesHet; szerkeszthet: boolean }) {
   const k = adat.kijelolt;
   const het = adat.ezAHet ? null : adat.hetKezdet;
-  const ehhez = adat.ajanlatok.filter((a) => a.ehhez).sort((a, b) => a.ehhez!.tobbletFt - b.ehhez!.tobbletFt);
   const friss = adat.ajanlatok.filter((a) => a.allapot !== "ajanlva" && !a.regi);
   const regi = adat.ajanlatok.filter((a) => a.allapot !== "ajanlva" && a.regi);
   const kiment = adat.ajanlatok.filter((a) => a.allapot === "ajanlva");
@@ -490,7 +491,20 @@ export function TervezesHetNezet({ adat, szerkeszthet }: { adat: TervezesHet; sz
         </aside>
       </div>
 
-      {k ? (
+      <ResReszlet adat={adat} szerkeszthet={szerkeszthet} />
+    </div>
+  );
+}
+
+/**
+ * A kijelölt rés részletei: illő ajánlatok árlétrával, „kiket hívj”, kalkulátor-link.
+ * A régi Hét lap és az új Ma + hét lap jobb panelje is ezt használja.
+ */
+export function ResReszlet({ adat, szerkeszthet }: { adat: TervezesHet; szerkeszthet: boolean }) {
+  const k = adat.kijelolt;
+  const ehhez = adat.ajanlatok.filter((a) => a.ehhez).sort((a, b) => a.ehhez!.tobbletFt - b.ehhez!.tobbletFt);
+  if (!k) return null;
+  return (
         <section id="res" className="scroll-mt-4 rounded-2xl bg-card ring-1 ring-foreground/10">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 px-5 pt-4">
             <h2 className="text-lg font-semibold">{k.sofor} · {rovidNap(k.nap)} · {k.honnan} → {k.haza ? "haza" : k.hova}</h2>
@@ -550,12 +564,10 @@ export function TervezesHetNezet({ adat, szerkeszthet }: { adat: TervezesHet; sz
             </div>
           </div>
         </section>
-      ) : null}
-    </div>
   );
 }
 
-function AjanlatLista({ lista, het }: { lista: HetAjanlat[]; het: string | null }) {
+export function AjanlatLista({ lista, het, alap = HET_ALAP_MOBIL }: { lista: HetAjanlat[]; het: string | null; alap?: string }) {
   return (
     <ul className="divide-y">
       {lista.map((a) => (
@@ -567,7 +579,7 @@ function AjanlatLista({ lista, het }: { lista: HetAjanlat[]; het: string | null 
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <span className={cn("text-xs", a.illik ? (a.illik.draga ? "text-[var(--f2-amb)]" : "text-[var(--f2-mint)]") : "text-muted-foreground")}>
               {a.illik
-                ? <>illik: <Link className="underline" href={hetLink(het, a.illik.res.kulcs)} scroll={false}>{a.illik.res.sofor} {rovidNap(a.illik.res.nap)} rés</Link> · +{ft(a.illik.tobbletFt)}{a.illik.draga ? " · drága" : ""}</>
+                ? <>illik: <Link className="underline" href={hetLink(het, a.illik.res.kulcs, alap)} scroll={false}>{a.illik.res.sofor} {rovidNap(a.illik.res.nap)} rés</Link> · +{ft(a.illik.tobbletFt)}{a.illik.draga ? " · drága" : ""}</>
                 : a.nincsHely ? "a helyet nem sikerült térképre tenni" : "egyik résbe sem illik"}
             </span>
             <span className="ml-auto"><AjanlatGombok id={a.id} allapot={a.allapot} /></span>

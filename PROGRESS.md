@@ -4161,3 +4161,12 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 
 ## 2026-10-29 — Redesign 4: Fuvarozás színtéma + Megbízások (R1)
 - `.fuvarozas2` csak segédváltozókat tart (alap-tokenek törölve → közös kék séma); Megbízások asztali nézet: csempesor + figyelmeztetés-kártya egy sorban, egysoros eszközsor (kereső, szegmentált szűrők, Mind/Bér/Saját), színcsíkos 7+5 oszlop, új `asztal-kartya.tsx`. Mobil ág érintetlen. Nyitott: böngészős ellenőrzés a felügyelőre vár.
+
+## 2026-10-29 — Redesign 5a: Fuvarozás · Ma + hét egy lapon (U2c)
+- `/fuvarozas2` 768 px-től: kocsi-oszlopok (fehér élő fejléc a Ma-vászonból, szürke napok-lista a `getTervezesHet`-ből, kék keretes mai TERV·TÉNY blokk, rés-kártya, heti sor) + jobbra 390 px-es panel (Most dönts · Ajánlatok · Rés), fölötte fejléc-sor (‹ Ma › lapozó, + Bejegyzés) és Iroda-sor (csak nem nulla számlálók). Új: `components/fuvarozas2/ma-het*.tsx`, `lib/fuvarozas2/ma-het-alap.ts` (tiszta segédek, teszt: `scripts/teszt-ma-het-lap.ts`), `asztali-atiranyitas.tsx`.
+- Fül: „Ma” + „Hét” → „Ma + hét” (`fulek-szerkezet.ts`, teszt frissítve). `/fuvarozas2/tervezes` fül nélkül, asztalon csak a Bejövő megbízások döntése („‹ vissza a Ma + héthez”); a `het`/`res` paraméteres régi linkek asztalon kliens-oldalon az új lapra mennek. Telefonon (768 px alatt) a régi Ma nézet marad, fölötte „A hét” link a régi Hét nézetre (a `/tervezes` mobil ága).
+- Jogosultság: fuvarozás-jog nélkül (elszámolás) a heti részek (napok, rések, ajánlatok, bejövő-döntés, kocsira adás) nem jelennek meg, csak a mai Ma-lap tartalma. `tervezes-het.tsx`-ből kiemelve/exportálva: `ResReszlet`, `AjanlatLista`, `hetLink(…, alap)`.
+- Nyitott: böngészős ellenőrzés a felügyelőre vár (build/böngésző nem futott); „Hívom a sofőrt” nincs (nincs sofőr-telefonszám a Ma/Hét adatban).
+
+## 2026-10-29 — Redesign 5b: Fuvarozás maradék színei
+- A `--f2-mint` / `--f2-blue` (és beégetett acélkék/menta) elsődleges/kiemelő szerepben (fő gombok, kijelölés, linkek, kiemelt keretek, „folyamatban/úton” lépés) → `--primary` token (`bg-primary`, `text-primary`, `bg-primary/10`); szemantikus szerepben (kész/zöld, hiba/piros, figyelem/narancs, megvan/megjött, nyert) a jelentésnek megfelelő szín maradt. Csak szín, logika nem. Az eredmény-grafikon kocsi-sorozat színei közül az acélkék #0A84FF lett.

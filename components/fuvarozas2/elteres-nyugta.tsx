@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { nyugtazElterest, visszavonNyugtat } from "@/lib/fuvarozas2/ma-vaszon";
 
 /** „OK” — az eltérés nyugtázása a Ma oldalon (aznap eltűnik a sávból, amíg nem súlyosbodik). */
-export function NyugtaGomb({ kulcs, szin }: { kulcs: string; szin: "red" | "amber" }) {
+export function NyugtaGomb({ kulcs, szin, cimke = "OK", className }: { kulcs: string; szin: "red" | "amber"; cimke?: string; className?: string }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   return (
@@ -25,9 +25,9 @@ export function NyugtaGomb({ kulcs, szin }: { kulcs: string; szin: "red" | "ambe
           }
         })
       }
-      className="shrink-0 rounded-full border border-foreground/20 bg-card px-2.5 py-0.5 text-[11px] font-semibold hover:bg-foreground/5 disabled:opacity-50"
+      className={className ?? "shrink-0 rounded-full border border-foreground/20 bg-card px-2.5 py-0.5 text-[11px] font-semibold hover:bg-foreground/5 disabled:opacity-50"}
     >
-      {pending ? "…" : "OK"}
+      {pending ? "…" : cimke}
     </button>
   );
 }
@@ -51,7 +51,7 @@ export function VisszavonGomb({ kulcs }: { kulcs: string }) {
           }
         })
       }
-      className="shrink-0 text-[11px] font-semibold text-[var(--f2-blue)] hover:underline disabled:opacity-50"
+      className="shrink-0 text-xs font-semibold text-primary hover:underline disabled:opacity-50"
     >
       vissza
     </button>

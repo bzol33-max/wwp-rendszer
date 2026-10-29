@@ -27,10 +27,13 @@ export const FOFULEK: Fofül[] = [
     kulcs: "kocsik",
     label: "Kocsik",
     alfulek: [
-      // A Ma: kocsi-sávok + a megállók nézete. A /fuvarozas2/kocsi/[kod] lap is
-      // ehhez a főfülhöz tartozik (aktiv="/fuvarozas2").
-      { href: "/fuvarozas2", label: "Ma" },
-      { href: "/fuvarozas2/tervezes", label: "Hét", csakFuvarozas: true },
+      // 2026-10-29 (redesign 5, U2c): a Ma és a Hét egy lap — kocsi-oszlopok a mai
+      // blokkal és a napokkal, jobbra a döntések. A /fuvarozas2/kocsi/[kod] lap is
+      // ehhez a főfülhöz tartozik (aktiv="/fuvarozas2"). Az elszámolás hatókör
+      // (fuvarozás-jog nélkül) is látja, de csak a mai részeket (lásd az oldalt).
+      // A /fuvarozas2/tervezes már csak a Bejövő megbízások döntése — nincs fül,
+      // az új lapról nyílik (aktivFofulKulcs a Kocsik alá sorolja).
+      { href: "/fuvarozas2", label: "Ma + hét" },
       // Ajánlat: Timocom → WWP (a böngésző „→ WWP” gombja ide küld) + kézi kalkulátor.
       // A cím szándékosan /timocom marad.
       { href: "/fuvarozas2/timocom", label: "Ajánlat", csakFuvarozas: true },
@@ -60,12 +63,12 @@ export const FOFULEK: Fofül[] = [
 ];
 
 /** A fülsor számára: melyik főfülhöz tartozik egy aktív útvonal. A kocsi lapja
- * (/fuvarozas2/kocsi/…) a Kocsik alá tartozik akkor is, ha a hívó a saját
- * útvonalát adja át. */
+ * (/fuvarozas2/kocsi/…) és a bejövő megbízások döntése (/fuvarozas2/tervezes)
+ * a Kocsik alá tartozik akkor is, ha a hívó a saját útvonalát adja át. */
 export function aktivFofulKulcs(fulek: Fofül[], aktiv: string): string | null {
   const talalat = fulek.find((f) => f.alfulek.some((a) => a.href === aktiv));
   if (talalat) return talalat.kulcs;
-  if (aktiv.startsWith("/fuvarozas2/kocsi/") || aktiv === "/fuvarozas2/kocsi") {
+  if (aktiv.startsWith("/fuvarozas2/kocsi/") || aktiv === "/fuvarozas2/kocsi" || aktiv === "/fuvarozas2/tervezes") {
     return fulek.some((f) => f.kulcs === "kocsik") ? "kocsik" : null;
   }
   return null;

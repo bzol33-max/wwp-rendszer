@@ -10,7 +10,7 @@ import { FOFULEK, aktivFofulKulcs, type Alful } from "@/lib/fuvarozas2/fulek-sze
 
 const RENDSZER = "/fuvarozas2/rendszer";
 
-export async function Fuvarozas2Fulek({ aktiv, cim }: { aktiv: string; cim?: string }) {
+export async function Fuvarozas2Fulek({ aktiv, cim, cimNagy = false }: { aktiv: string; cim?: string; cimNagy?: boolean }) {
   const session = await requireSession();
   const fuvarozas = session.can("fuvarozas").view;
   const rendszer = session.can("rendszer").view || fuvarozas;
@@ -24,7 +24,7 @@ export async function Fuvarozas2Fulek({ aktiv, cim }: { aktiv: string; cim?: str
   return (
     <div className="flex flex-col gap-1 border-b pb-2">
       <nav className="flex flex-wrap items-center gap-1" aria-label="Fuvarozás">
-        {cim ? <h1 className="mr-4 text-lg font-semibold tracking-tight">{cim}</h1> : null}
+        {cim ? <h1 className={cn("mr-4 tracking-tight", cimNagy ? "text-2xl font-bold" : "text-lg font-semibold")}>{cim}</h1> : null}
         {fulek.map((f) => {
           const elso = f.alfulek[0];
           const aktivE = aktivFofül?.kulcs === f.kulcs;
