@@ -134,7 +134,7 @@ export function SzamlazasiSegedGomb({ megbizasId, elszamolasJog }: { megbizasId:
 
   return (
     <>
-      <Button size="sm" onClick={megnyit} className="bg-[var(--f2-mint)] text-white hover:bg-[var(--f2-mint)]/90">Számlázok</Button>
+      <Button size="sm" onClick={megnyit}>Számlázok</Button>
       <Dialog open={nyitva} onOpenChange={setNyitva}>
         <DialogContent className="fuvarozas2 max-h-[92vh] overflow-y-auto sm:max-w-5xl">
           <DialogHeader>

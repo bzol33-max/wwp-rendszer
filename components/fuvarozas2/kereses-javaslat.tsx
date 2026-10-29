@@ -15,7 +15,7 @@ import type { KeresesJavaslatAdat } from "@/lib/fuvarozas2/kereses-javaslat";
 type Kocsi = KeresesJavaslatAdat["kocsik"][number];
 
 const CIMKE: Record<IranyCimke, { szoveg: string; szin: string }> = {
-  "tobb-penz": { szoveg: "több pénz", szin: "var(--f2-blue)" },
+  "tobb-penz": { szoveg: "több pénz", szin: "var(--primary)" },
   gyakori: { szoveg: "gyakori", szin: "var(--f2-mint)" },
   hazafele: { szoveg: "hazafelé", szin: "var(--f2-amb)" },
   "ures-haza": { szoveg: "üresen haza", szin: "var(--f2-amb)" },

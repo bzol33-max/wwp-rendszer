@@ -53,7 +53,7 @@ export function BejovoLista({ sorok, valasztott }: { sorok: BejovoSor[]; valaszt
           return (
             <li key={s.id}>
               <Link href={tervezoLink({ m: s.id })} scroll={false}
-                className={cn("block border-b border-foreground/5 px-4 py-2.5 hover:bg-muted/50", valasztott === s.id && "bg-[var(--f2-blue-l)]")}>
+                className={cn("block border-b border-foreground/5 px-4 py-2.5 hover:bg-muted/50", valasztott === s.id && "bg-primary/10")}>
                 <div className="flex items-baseline justify-between gap-2">
                   <b className="truncate text-sm">{s.partner ?? "(nincs megbízó)"}</b>
                   <span className="shrink-0 font-mono text-xs tabular-nums">{s.fuvardij ? formatFt(s.fuvardij, s.penznem) : "nincs díj"}{s.arfolyamNelkul ? <span className="block text-[10px] text-[var(--f2-amb)]">EUR, árfolyam nélkül</span> : null}</span>
@@ -153,7 +153,7 @@ export function HetOszlop({ k }: { k: NonNullable<Tervezo["kivalasztott"]> }) {
       <div className="flex flex-wrap gap-1.5">
         {k.kocsik.map((j: KocsiHet) => (
           <Link key={j.kod} href={tervezoLink({ m: k.sor.id, kocsi: j.kod })} scroll={false}
-            className={cn("flex-1 rounded-xl border px-2.5 py-1.5 text-center text-sm", v?.kod === j.kod ? "border-[var(--f2-blue)] bg-[var(--f2-blue-l)]" : "border-foreground/10 hover:bg-muted")}>
+            className={cn("flex-1 rounded-xl border px-2.5 py-1.5 text-center text-sm", v?.kod === j.kod ? "border-primary bg-primary/10" : "border-foreground/10 hover:bg-muted")}>
             <b>{j.sofor}</b>
             <span className={cn("block font-mono text-[11px]", j.utkozik ? "text-[var(--f2-amb)]" : j.hatas >= 0 ? "text-[var(--f2-mint)]" : "text-[var(--f2-red)]")}>
               {j.utkozik ? "ütközik" : `hét ${elojel(j.hatas)}`}
@@ -180,7 +180,7 @@ export function HetOszlop({ k }: { k: NonNullable<Tervezo["kivalasztott"]> }) {
                   ) : null}
                   {n.fuvarok.map((f) => (
                     <span key={f.id} className={cn("flex items-baseline justify-between gap-2 rounded-lg border border-l-4 px-2.5 py-1.5 text-xs",
-                      f.uj ? "border-dashed border-[#f97316] bg-[#fff7ed]" : f.sajat ? "border-foreground/10 border-l-[var(--f2-mint)]" : "border-foreground/10 border-l-[var(--f2-blue)]")}>
+                      f.uj ? "border-dashed border-[#f97316] bg-[#fff7ed]" : f.sajat ? "border-foreground/10 border-l-foreground/30" : "border-foreground/10 border-l-primary")}>
                       <span className="min-w-0 truncate"><b>{f.ut}</b> <span className="text-muted-foreground">· {f.cim}{f.uj ? " · ÚJ" : ""}</span></span>
                       <span className="shrink-0 font-mono">{f.dij ? szam(f.dij) : f.arfolyamNelkul ? "EUR, árfolyam nélkül" : "—"}</span>
                     </span>

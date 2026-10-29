@@ -28,7 +28,7 @@ export function AllasRogzitesGomb({ megbizasId, sorszam, lat, lon, varos }: { me
             router.refresh();
           });
         }}
-        className="font-semibold text-[var(--f2-blue)] hover:underline disabled:opacity-50"
+        className="font-semibold text-primary hover:underline disabled:opacity-50"
       >
         Ez a hely
       </button>

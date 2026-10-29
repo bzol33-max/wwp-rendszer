@@ -239,7 +239,7 @@ export function MegbizasReszlet({
                 </div>
               ) : null}
               <div className="flex items-center justify-between gap-2"><span>Fizetési határidő</span><span className="text-muted-foreground">{sor.fizetesi_hatarido_nap != null ? `${sor.fizetesi_hatarido_nap} nap` : "—"}</span></div>
-              {sor.partner_id ? <a href={`/fuvarozas2/partnerek?nyit=${sor.partner_id}#p-${sor.partner_id}`} className="text-xs font-semibold text-[var(--f2-blue)] hover:underline">A partner adatainak szerkesztése →</a> : null}
+              {sor.partner_id ? <a href={`/fuvarozas2/partnerek?nyit=${sor.partner_id}#p-${sor.partner_id}`} className="text-xs font-semibold text-primary hover:underline">A partner adatainak szerkesztése →</a> : null}
             </CardContent>
           </Card>
         ) : null}
@@ -253,7 +253,7 @@ export function MegbizasReszlet({
                 href={`/api/fuvarozas/fuvarlevel-pdf/${sor.id}`}
                 target="_blank"
                 rel="noreferrer"
-                className="mb-1 w-fit rounded-lg border border-[var(--f2-mint)] px-3 py-1.5 text-sm font-semibold text-[var(--f2-mint)] hover:bg-[var(--f2-mint-l)]"
+                className="mb-1 w-fit rounded-lg border border-primary px-3 py-1.5 text-sm font-semibold text-primary hover:bg-primary/10"
               >
                 Fuvarlevél PDF ({fuvarlevelDb} oldal)
               </a>

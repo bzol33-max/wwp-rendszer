@@ -110,7 +110,7 @@ function Sor({ s, reszlet, elszamolasJog }: { s: PenzSor; reszlet: string; elsza
     <tr className="border-t border-foreground/5">
       <td className="px-4 py-2 tabular-nums">{datum(s.nap)}</td>
       <td className="px-2 py-2 tabular-nums"><Link href={reszlet} scroll={false} className="underline-offset-2 hover:underline">{s.id}</Link></td>
-      <td className="px-2 py-2"><Link href={reszlet} scroll={false} className="font-medium hover:underline">{s.megbizo}</Link>{s.jelleg === "sajat" ? <span className="ml-1.5 rounded-full bg-[var(--f2-blue-l)] px-1.5 text-[11px] text-[var(--f2-blue)]">saját</span> : null}</td>
+      <td className="px-2 py-2"><Link href={reszlet} scroll={false} className="font-medium hover:underline">{s.megbizo}</Link>{s.jelleg === "sajat" ? <span className="ml-1.5 rounded-full bg-primary/10 px-1.5 text-[11px] text-primary">saját</span> : null}</td>
       <td className="max-w-[16rem] truncate px-2 py-2">{s.relacio}</td>
       <td className="px-2 py-2 text-right tabular-nums">{s.km ?? "—"}</td>
       <td className="px-2 py-2 text-right tabular-nums">{s.jelleg === "ber" && s.fuvardij ? `${Math.round(s.fuvardij).toLocaleString("hu-HU")} ${s.penznem === "HUF" ? "Ft" : s.penznem}` : "—"}</td>

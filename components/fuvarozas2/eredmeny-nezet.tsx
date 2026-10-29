@@ -6,7 +6,7 @@ import type { EredmenyAdat, EredmenyKocsi } from "@/lib/fuvarozas2/eredmeny";
 // Eredmény oldal (az új terv 4. oldala): három kérdés, kocsinként vízesés,
 // havi fedezet, megbízók fedezet szerint. Szerver-komponens, csak megjelenít.
 
-const KOCSI_SZIN = ["#2f6fa8", "#1f8f6e", "#7a4b9a", "#a8690f"];
+const KOCSI_SZIN = ["#0A84FF", "#1f8f6e", "#7a4b9a", "#a8690f"];
 const ftSzam = (ft: number) => `${ft > 0 ? "+" : ft < 0 ? "−" : ""}${Math.abs(Math.round(ft)).toLocaleString("hu-HU")} Ft`;
 const nev = (k: { sofor: string | null; kod: string }) => k.sofor ?? k.kod;
 const pozSzin = (ft: number) => (ft < 0 ? "text-[var(--f2-red)]" : "text-[var(--f2-mint)]");
@@ -155,7 +155,7 @@ export function EredmenyNezet({ adat }: { adat: EredmenyAdat }) {
         </nav>
       </div>
 
-      <div className="rounded-xl bg-[var(--f2-blue-l)] px-4 py-2 text-sm text-[var(--f2-blue)]">
+      <div className="rounded-xl bg-primary/10 px-4 py-2 text-sm text-primary">
         <b>Mi tény, mi becslés:</b> {becslesSzoveg}.{adat.gpsHiba ? ` GPS: ${adat.gpsHiba}` : ""}
       </div>
       {adat.atvaltatlanKezi.db > 0 ? (
@@ -186,7 +186,7 @@ export function EredmenyNezet({ adat }: { adat: EredmenyAdat }) {
         <Kerdes
           kerdes="Mennyibe kerül a saját áru fuvarja?"
           ertek={`${ezerFt(adat.sajatOssz, false)} Ft`}
-          szin="text-[var(--f2-blue)]"
+          szin="text-primary"
           sor1={<>{adat.sajatDb} saját fuvar · {adat.kocsik.filter((k) => k.sajatBelsoFt > 0).map((k) => `${nev(k)} ${ezerFt(k.sajatBelsoFt, false)}`).join(", ") || "—"}</>}
           sor2="ezt a raklap-üzlet viseli, nem fuvarozási veszteség"
         />

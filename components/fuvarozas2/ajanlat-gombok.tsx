@@ -72,7 +72,7 @@ export function EredmenyGombok({ id, allapot, kicsi, nyitva, setNyitva }: {
   return (
     <>
       <button type="button" disabled={fut} aria-expanded={nyitva}
-        className={`${gomb} border-[var(--f2-mint,#0f766e)] text-[var(--f2-mint,#0f766e)]`} onClick={() => setNyitva(!nyitva)}>
+        className={`${gomb} border-primary text-primary`} onClick={() => setNyitva(!nyitva)}>
         Megnyertük
       </button>
       {allapot !== "vesztett" ? <button type="button" disabled={fut} className={gomb} onClick={elveszt}>Nem nyertük</button> : null}

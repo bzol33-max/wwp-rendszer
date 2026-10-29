@@ -112,7 +112,7 @@ export default async function Page({ searchParams }: {
     <Link
       href={munkaasztalLink(szuro, { uj: true, reszlet: undefined })}
       scroll={false}
-      className="flex items-center justify-between gap-2 rounded-xl bg-[var(--f2-mint)] px-4 py-2.5 text-sm font-bold text-white hover:opacity-90"
+      className="flex items-center justify-between gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-bold text-primary-foreground hover:opacity-90"
     >
       + Új saját fuvar
       <span className="text-xs font-normal opacity-85">itt nyílik ki</span>
@@ -185,7 +185,7 @@ export default async function Page({ searchParams }: {
               <Link
                 href={munkaasztalLink(szuro, { ujBer: true, reszlet: undefined, uj: false, szerk: false })}
                 scroll={false}
-                className="rounded-lg bg-[var(--f2-blue)] px-2.5 py-1 text-xs font-bold text-white hover:opacity-90"
+                className="rounded-lg bg-primary px-2.5 py-1 text-xs font-bold text-primary-foreground hover:opacity-90"
               >
                 + Új bérfuvar
               </Link>
@@ -213,7 +213,7 @@ export default async function Page({ searchParams }: {
               <Link
                 href={munkaasztalLink(szuro, { reszlet: lapon.sor.id, szerk: true })}
                 scroll={false}
-                className="rounded-lg bg-[var(--f2-blue)] px-3 py-1.5 text-xs font-bold text-white hover:opacity-90"
+                className="rounded-lg bg-primary px-3 py-1.5 text-xs font-bold text-primary-foreground hover:opacity-90"
               >
                 ✎ Szerkesztés (minden mező)
               </Link>

@@ -155,7 +155,7 @@ export function BerFuvarUrlap({ id, kezdo, megseHref, reszletHref, kocsiLista }:
   return (
     <form
       onSubmit={(e) => { e.preventDefault(); ment(); }}
-      className="flex flex-col gap-3 rounded-2xl border border-[var(--f2-blue)] bg-card p-4"
+      className="flex flex-col gap-3 rounded-2xl border border-primary bg-card p-4"
     >
       <h3 className="text-base font-bold">{id ? "Bérfuvar szerkesztése" : "Új bérfuvar (kézi felvétel)"}</h3>
       <div className="grid grid-cols-2 gap-2.5">
@@ -200,7 +200,7 @@ export function BerFuvarUrlap({ id, kezdo, megseHref, reszletHref, kocsiLista }:
         <label className={`${cimke} col-span-2`}>Megjegyzés<textarea rows={2} className={mezo} value={a.megjegyzes} onChange={allit("megjegyzes")} /></label>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <button type="submit" disabled={pending || !!hiba || (!!id && !valtozott)} className="rounded-lg bg-[var(--f2-blue)] px-4 py-2 text-sm font-bold text-white disabled:opacity-45">
+        <button type="submit" disabled={pending || !!hiba || (!!id && !valtozott)} className="rounded-lg bg-primary px-4 py-2 text-sm font-bold text-primary-foreground disabled:opacity-45">
           {pending ? "Mentés…" : id ? "Mentés" : "Bérfuvar rögzítése"}
         </button>
         <Link href={megseHref} scroll={false} className="rounded-lg border border-foreground/15 px-3 py-2 text-sm font-semibold hover:bg-muted">Mégse</Link>

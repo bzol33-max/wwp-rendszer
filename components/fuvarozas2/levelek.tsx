@@ -12,11 +12,11 @@ import { formatIdo } from "@/components/fuvarozas2/kozos";
 import { cn } from "@/lib/utils";
 
 const SZIN: Partial<Record<LevelOsztaly, string>> = {
-  megbizas: "bg-[var(--f2-mint)] text-white",
+  megbizas: "bg-primary text-primary-foreground",
   modositas: "bg-[var(--f2-red-l)] text-[var(--f2-red)]",
   adatkeres: "bg-[var(--f2-amb-l)] text-[var(--f2-amb)]",
   okmanykeres: "bg-[var(--f2-amb)] text-white",
-  papirok: "bg-[var(--f2-blue-l)] text-[var(--f2-blue)]",
+  papirok: "bg-primary/10 text-primary",
   fizetes: "bg-[var(--f2-mint-l)] text-[var(--f2-mint)]",
 };
 

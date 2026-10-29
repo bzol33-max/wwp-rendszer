@@ -146,7 +146,7 @@ function Reszletek({ e, jarmuCimke }: { e: KozosEredmeny; jarmuCimke: string | n
         {e.megbizoiAjanlat ? (() => {
           const s = e.megbizoiAjanlat;
           return (
-            <div className="mt-1.5 grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-lg border-2 border-[var(--f2-blue)] px-3 py-2">
+            <div className="mt-1.5 grid grid-cols-[1fr_auto_auto] items-center gap-3 rounded-lg border-2 border-primary px-3 py-2">
               <span><b>A megbízó ajánlata</b> <span className="block text-[11px] text-muted-foreground">{szam(s.ftKm)} Ft/km · eredmény {ft(s.eredmenyFt)} (önköltség {s.marginSzazalek >= 0 ? "+" : ""}{s.marginSzazalek}%)</span></span>
               <span className="font-mono font-bold tabular-nums">{ft(s.dijFt)}</span>
               <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-bold", MINOSITES_SZIN[s.minosites])}>{MINOSITES_NEV[s.minosites]}</span>
@@ -292,7 +292,7 @@ export function KozosKalkulator({ jarmuvek, kezdoMegallok }: { jarmuvek: { kod: 
               Van visszfuvar (a hazautat nem erre terheljük)
             </label>
           ) : null}
-          <button type="submit" disabled={szamol} className="ml-auto rounded-lg bg-[var(--f2-mint)] px-5 py-2 text-sm font-bold text-white disabled:opacity-60">
+          <button type="submit" disabled={szamol} className="ml-auto rounded-lg bg-primary px-5 py-2 text-sm font-bold text-primary-foreground disabled:opacity-60">
             {szamol ? "Számítás…" : "Számítás"}
           </button>
         </div>
@@ -325,7 +325,7 @@ export function KozosKalkulator({ jarmuvek, kezdoMegallok }: { jarmuvek: { kod: 
                 style={{ borderLeftColor: szin(c.id) }}
                 className={cn(
                   "relative w-[270px] cursor-pointer rounded-xl border border-l-4 border-foreground/10 bg-card p-3 pr-7 text-xs",
-                  c.id === kijelolt?.id && "ring-2 ring-[var(--f2-blue)]"
+                  c.id === kijelolt?.id && "ring-2 ring-primary"
                 )}
               >
                 <button type="button" aria-label="Eredmény eltávolítása" className="absolute right-2 top-2 rounded px-1 text-muted-foreground hover:bg-muted"

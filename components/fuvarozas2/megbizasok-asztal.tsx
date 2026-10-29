@@ -156,7 +156,7 @@ function Rögzítő({
         type="button"
         disabled={mentes || !adat.honnan.trim() || !adat.hova.trim()}
         onClick={rogzit}
-        className="min-h-11 w-full rounded-lg bg-[var(--f2-mint)] px-3 font-bold text-white disabled:opacity-50"
+        className="min-h-11 w-full rounded-lg bg-primary px-3 font-bold text-primary-foreground disabled:opacity-50"
       >
         {mentes ? "Mentés…" : "Rögzítem"}
       </button>
@@ -241,7 +241,7 @@ function ElvinniKartya({
             type="button"
             disabled={kuldes || !jarmuKod || !nap}
             onClick={kocsira}
-            className="min-h-11 rounded-lg bg-[var(--f2-mint)] px-3 font-bold text-white disabled:opacity-50"
+            className="min-h-11 rounded-lg bg-primary px-3 font-bold text-primary-foreground disabled:opacity-50"
           >
             {kuldes ? "Mentés…" : "Kocsira adom"}
           </button>

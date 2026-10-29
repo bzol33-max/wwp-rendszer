@@ -6,11 +6,11 @@ import { ALLAPOT_CIMKE, LEPESEK, lepesAllapotbol, type Allapot, type Lepes } fro
 // innen csak továbbadjuk, hogy a meglévő importok ne változzanak.
 export { ALLAPOT_CIMKE };
 
-// A terv jelzőszínei: menta = rendben/pénz, borostyán = figyelem, vörös =
-// gond, kék = információ/terv, sötét = lezárt.
+// A terv jelzőszínei: kék (--primary) = információ/terv/úton, zöld = kész/pénz,
+// borostyán = figyelem, vörös = gond, szürke = lezárt.
 const LEPES_SZIN: Record<Lepes, string> = {
-  beerkezett: "bg-[var(--f2-blue-l)] text-[var(--f2-blue)]",
-  uton: "bg-[var(--f2-blue)] text-white",
+  beerkezett: "bg-primary/10 text-primary",
+  uton: "bg-primary text-primary-foreground",
   szamlazando: "bg-[var(--f2-amb-l)] text-[var(--f2-amb)]",
   postara: "bg-[var(--f2-mint)] text-white",
   kesz: "bg-[var(--secondary)] text-[var(--muted-foreground)]",

@@ -136,7 +136,7 @@ function NapSor({ c, ma }: { c: NapCella; ma: string }) {
               href={`/fuvarozas2/megbizasok?reszlet=${f.id}`}
               className={cn(
                 "block rounded-lg px-2 py-1 text-xs",
-                f.sajat ? "bg-[var(--f2-blue-l)] text-[var(--f2-blue)]" : "bg-[var(--f2-mint-l)] text-[#0f5240]",
+                f.sajat ? "bg-muted text-foreground/80" : "bg-primary/10 text-primary",
                 fuvarJel(f.allapot) === "kesz" && "opacity-55"
               )}
             >
@@ -160,7 +160,7 @@ function HetBlokk({ adat }: { adat: KocsiLap }) {
   const h = adat.het;
   return (
     <Doboz className="flex flex-col gap-2 p-4">
-      <SzakaszCim jobbra={<Link href="/fuvarozas2/tervezes" className="text-xs font-semibold text-[var(--f2-blue)] hover:underline">Teljes hét →</Link>}>
+      <SzakaszCim jobbra={<Link href="/fuvarozas2/tervezes" className="text-xs font-semibold text-primary hover:underline">Teljes hét →</Link>}>
         A hét
       </SzakaszCim>
       {!h ? (

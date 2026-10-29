@@ -36,7 +36,7 @@ export function HetOsszegzes({ adat }: { adat: KihasznaltsagAdat }) {
         <span className="ml-auto truncate text-xs text-muted-foreground">{cim}</span>
       </div>
       <div className="mt-3 text-xs text-muted-foreground">Bérfuvar bevétel</div>
-      <div className="text-[26px] font-bold leading-tight tracking-tight text-[var(--f2-mint)] tabular-nums">
+      <div className="text-[26px] font-bold leading-tight tracking-tight text-primary tabular-nums">
         {ezerFt(berFt)} Ft{eur > 0 ? <span className="text-base"> + {Math.round(eur).toLocaleString("hu-HU")} €</span> : null}
       </div>
       {eur > 0 ? <div className="text-[11px] text-muted-foreground">az € rész árfolyam nélkül, nincs a Ft-ban</div> : null}

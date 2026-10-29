@@ -26,7 +26,7 @@ export function ElvinniIdeGomb({ id, jarmuKod, nap, cimke }: { id: string; jarmu
           setFut(false);
         }
       }}
-      className="mt-1 min-h-8 w-full rounded-md bg-[var(--f2-mint)] px-2 text-xs font-bold text-white disabled:opacity-50"
+      className="mt-1 min-h-8 w-full rounded-md bg-primary px-2 text-xs font-bold text-primary-foreground disabled:opacity-50"
     >
       {fut ? "…" : "Ide"}
     </button>

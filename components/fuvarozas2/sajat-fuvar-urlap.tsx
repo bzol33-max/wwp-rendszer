@@ -92,7 +92,7 @@ export function SajatFuvarUrlap({
   }
 
   return (
-    <div className="flex flex-col gap-3 rounded-2xl border border-[var(--f2-mint)] bg-card p-4">
+    <div className="flex flex-col gap-3 rounded-2xl border border-primary bg-card p-4">
       <div className="flex items-baseline justify-between gap-2">
         <h2 className="text-base font-bold">{id ? "Előkészített saját fuvar" : "Új saját fuvar"}</h2>
         <span className="ml-auto text-xs text-muted-foreground">a sofőr még nem látja</span>
@@ -129,7 +129,7 @@ export function SajatFuvarUrlap({
           type="button"
           disabled={pending || hiany.length > 0}
           onClick={() => ment("kocsira")}
-          className="rounded-lg bg-[var(--f2-mint)] px-3 py-2 text-sm font-bold text-white disabled:opacity-45"
+          className="rounded-lg bg-primary px-3 py-2 text-sm font-bold text-primary-foreground disabled:opacity-45"
         >
           Kocsira adom
         </button>

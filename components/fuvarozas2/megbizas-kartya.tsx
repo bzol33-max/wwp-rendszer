@@ -37,7 +37,7 @@ export function MegbizasKartya({
     <Link
       href={href}
       scroll={false}
-      className="block min-h-11 rounded-2xl border border-foreground/10 bg-card p-3 hover:bg-muted/40 focus-visible:outline-2 focus-visible:outline-[var(--f2-blue)]"
+      className="block min-h-11 rounded-2xl border border-foreground/10 bg-card p-3 hover:bg-muted/40 focus-visible:outline-2 focus-visible:outline-ring"
     >
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm">
         {tipus ? <Badge variant="secondary" className="text-[10px]">{sor.jelleg === "ber" ? "Bér" : "Saját"}</Badge> : null}
@@ -70,7 +70,7 @@ export function MegbizasKartya({
               i < szakaszIndex || sor.szakasz === "archiv"
                 ? "bg-[var(--f2-mint)]"
                 : i === szakaszIndex
-                  ? "bg-[var(--f2-blue)]"
+                  ? "bg-primary"
                   : "bg-foreground/10"
             )}
           />

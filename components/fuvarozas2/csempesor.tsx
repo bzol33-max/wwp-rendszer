@@ -24,7 +24,7 @@ function BerCsempe({ b, onClick, nyitva }: { b: BerOsszesito; onClick?: () => vo
   const max = Math.max(...b.kocsik.map((k) => k.ft), 1);
   const belso = (
     <>
-      <div className="flex flex-col bg-[var(--f2-mint)] px-2.5 py-1 text-white">
+      <div className="flex flex-col bg-primary px-2.5 py-1 text-primary-foreground">
         <span className="truncate text-[10px] leading-tight opacity-90">Bérfuvar · {b.cim}</span>
         <span className="flex flex-wrap items-baseline gap-x-1.5 leading-tight">
           <b className="text-base font-bold tabular-nums">{rovidFt(b.ft)} Ft</b>
@@ -51,7 +51,7 @@ function BerCsempe({ b, onClick, nyitva }: { b: BerOsszesito; onClick?: () => vo
   );
   const oszt = `${CSEMPE_OSZT} overflow-hidden border bg-card text-left`;
   return onClick ? (
-    <button type="button" onClick={onClick} aria-expanded={nyitva} className={`${oszt} ${nyitva ? "border-[var(--f2-mint)] ring-1 ring-[var(--f2-mint)]" : "border-foreground/10 hover:border-[var(--f2-mint)]"}`}>
+    <button type="button" onClick={onClick} aria-expanded={nyitva} className={`${oszt} ${nyitva ? "border-primary ring-1 ring-primary" : "border-foreground/10 hover:border-primary"}`}>
       {belso}
     </button>
   ) : (
@@ -69,7 +69,7 @@ function KmDijCsempe({ b }: { b: BerOsszesito }) {
   const max = Math.max(...b.kocsik.map((k) => ftKm(k.km) ?? 0), 1);
   return (
     <div className={`${CSEMPE_OSZT} overflow-hidden border border-foreground/10 bg-card`}>
-      <div className="flex flex-col bg-[var(--f2-mint)] px-2.5 py-1 text-white">
+      <div className="flex flex-col bg-primary px-2.5 py-1 text-primary-foreground">
         <span className="truncate text-[10px] leading-tight opacity-90">Km-díj · {b.cim}</span>
         <span className="flex flex-wrap items-baseline gap-x-1.5 leading-tight">
           <b className="text-base font-bold tabular-nums">{flotta != null ? `${flotta} Ft/km` : "—"}</b>
@@ -171,7 +171,7 @@ function KihasznaltsagSav({ k }: { k: KihasznaltsagAdat }) {
               type="button"
               aria-pressed={idoszak === kulcs}
               onClick={() => setIdoszak(kulcs)}
-              className={`min-h-8 rounded-md px-3 ${idoszak === kulcs ? "bg-[var(--f2-mint)] font-semibold text-white" : "text-muted-foreground hover:bg-muted"}`}
+              className={`min-h-8 rounded-md px-3 ${idoszak === kulcs ? "bg-primary font-semibold text-primary-foreground" : "text-muted-foreground hover:bg-muted"}`}
             >
               {felirat}
             </button>

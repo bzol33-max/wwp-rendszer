@@ -131,7 +131,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ i
           alcim="bérfuvar-eredmény − nem hozzárendelt költség; a saját fuvarok belső költségét nem vonja le — az a mellette lévő kártyán, külön"
           szin={k.ossz.eredmenyFt < 0 ? "text-[var(--f2-red)]" : "text-[var(--f2-mint)]"} />
         <Mezo cim="Saját fuvar belső költsége" jel="becsles" ertek={formatFt(k.ossz.sajatBelsoKoltsegFt)}
-          alcim={`külön, nem része az eredménynek · elkerült (tájékoztató): ${formatFt(k.ossz.elkerultKoltsegFt)}`} szin="text-[var(--f2-blue)]" />
+          alcim={`külön, nem része az eredménynek · elkerült (tájékoztató): ${formatFt(k.ossz.elkerultKoltsegFt)}`} szin="text-primary" />
       </div>
 
       <Card>
@@ -180,7 +180,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ i
                     {j.eredmenyFtKm != null ? <div className="text-[10px] font-normal text-muted-foreground">{j.eredmenyFtKm} Ft/km</div> : null}
                   </td>
                   <td className="px-3 py-2 text-right tabular-nums">
-                    <span className="text-[var(--f2-blue)]">{formatFt(j.sajatBelsoKoltsegFt)}</span>
+                    <span className="text-primary">{formatFt(j.sajatBelsoKoltsegFt)}</span>
                     {j.elkerultKoltsegFt > 0 ? <div className="text-[10px] text-muted-foreground" title="Tájékoztató: saját rakott km × km-díj — nem része az eredménynek.">elkerült: {formatFt(j.elkerultKoltsegFt)}</div> : null}
                   </td>
                 </tr>
@@ -205,7 +205,7 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ i
               <div key={n.nap} className="flex min-w-10 flex-1 flex-col items-center gap-1">
                 <div className="flex h-28 w-full flex-col justify-end gap-0.5">
                   {n.uresKm > 0 ? <div className="w-full rounded-t bg-muted-foreground/30" style={{ height: `${(n.uresKm / maxKm) * 100}%` }} /> : null}
-                  {n.sajatKm > 0 ? <div className="w-full bg-[var(--f2-blue)]" style={{ height: `${(n.sajatKm / maxKm) * 100}%` }} /> : null}
+                  {n.sajatKm > 0 ? <div className="w-full bg-primary" style={{ height: `${(n.sajatKm / maxKm) * 100}%` }} /> : null}
                   {n.berKm > 0 ? <div className="w-full bg-[var(--f2-mint)]" style={{ height: `${(n.berKm / maxKm) * 100}%` }} /> : null}
                 </div>
                 <div className="text-[10px] tabular-nums text-muted-foreground">{formatNap(n.nap)}</div>

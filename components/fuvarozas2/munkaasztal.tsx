@@ -39,7 +39,7 @@ export function munkaasztalLink(alap: MunkaasztalSzuro, valtozas: Partial<Munkaa
 const SZAKASZ_SZIN: Record<Szakasz, string> = {
   beerkezett: "text-[var(--f2-amb)]",
   elokeszites: "text-muted-foreground",
-  folyamatban: "text-[var(--f2-blue)]",
+  folyamatban: "text-primary",
   szamlazasra: "text-[var(--f2-mint)]",
   postara: "text-[var(--f2-mint)]",
   archiv: "text-muted-foreground",
@@ -56,7 +56,7 @@ function Csik({ s }: { s: MunkaasztalSor }) {
           key={sz}
           className={cn(
             "h-1.5 w-5 rounded-full",
-            i < hol || s.szakasz === "archiv" ? "bg-[var(--f2-mint)]" : i === hol ? "bg-[var(--f2-blue)]" : "bg-foreground/10"
+            i < hol || s.szakasz === "archiv" ? "bg-[var(--f2-mint)]" : i === hol ? "bg-primary" : "bg-foreground/10"
           )}
         />
       ))}
@@ -80,7 +80,7 @@ function Sor({ s, ma, szuro }: { s: MunkaasztalSor; ma: string; szuro: Munkaaszt
         scroll={false}
         className={cn(
           "grid grid-cols-[minmax(0,1.1fr)_minmax(0,1.5fr)_auto] items-start gap-3 border-b border-foreground/5 px-3 py-2.5 text-sm hover:bg-muted/50",
-          kijelolt && "bg-[var(--f2-blue-l)]"
+          kijelolt && "bg-primary/10"
         )}
       >
         <span className="min-w-0">

@@ -147,7 +147,7 @@ export function KimutatasMegbizasok({ megbizasok, kezdoJelleg = "mind", sajatKmD
                 <td className="px-3 py-2 text-right tabular-nums">
                   {m.jelleg === "sajat" ? (
                     <>
-                      <span className="font-semibold text-[var(--f2-blue)]">{formatFt(m.belsoKoltsegFt)}</span>
+                      <span className="font-semibold text-primary">{formatFt(m.belsoKoltsegFt)}</span>
                       {m.ftPerRaklap != null ? <div className="text-[10px] text-muted-foreground">{formatFt(m.ftPerRaklap)}/raklap ({m.raklapDb} db)</div> : null}
                       {m.elkerultKoltsegFt ? (
                         <div className="text-[10px] text-muted-foreground" title="Tájékoztató: ennyibe került volna bérbe kiadva (rakott km × km-díj) — semmilyen eredménybe nem számít bele.">
@@ -186,7 +186,7 @@ function SajatUtnaplo({ sorok, sajatKmDij, forras }: { sorok: KimutatasMegbizas[
         <span><b>{sorok.length}</b> út</span>
         <span><b>{ossz.km.toLocaleString("hu-HU")}</b> rakott km</span>
         <span>költségünk <b>{formatFt(ossz.koltseg)}</b></span>
-        <span>díja lett volna <b className="text-[var(--f2-blue)]">{formatFt(ossz.dij)}</b></span>
+        <span>díja lett volna <b className="text-primary">{formatFt(ossz.dij)}</b></span>
         {sajatKmDij ? <span className="text-xs text-muted-foreground">(rakott km × {sajatKmDij.toLocaleString("hu-HU")} Ft{forras === "berfuvar_atlag" ? " — a bérfuvarjaink 90 napos átlaga" : ""})</span> : null}
       </div>
       <div className="overflow-x-auto">
@@ -216,7 +216,7 @@ function SajatUtnaplo({ sorok, sajatKmDij, forras }: { sorok: KimutatasMegbizas[
                   {formatFt(m.belsoKoltsegFt ?? m.koltsegFt)}
                   {m.ftPerRaklap != null ? <div className="text-[10px] text-muted-foreground">{formatFt(m.ftPerRaklap)}/raklap</div> : null}
                 </td>
-                <td className="whitespace-nowrap px-3 py-2 text-right font-semibold tabular-nums text-[var(--f2-blue)]">{m.elkerultKoltsegFt ? formatFt(m.elkerultKoltsegFt) : "—"}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-right font-semibold tabular-nums text-primary">{m.elkerultKoltsegFt ? formatFt(m.elkerultKoltsegFt) : "—"}</td>
               </tr>
             ))}
           </tbody>
@@ -271,7 +271,7 @@ function MegbizasKartya({ m }: { m: KimutatasMegbizas }) {
       ) : (
         <>
           <Sor cim="Belső költség (saját)">
-            <span className="font-semibold text-[var(--f2-blue)]">{formatFt(m.belsoKoltsegFt)}</span>
+            <span className="font-semibold text-primary">{formatFt(m.belsoKoltsegFt)}</span>
             {m.ftPerRaklap != null ? <span className="text-xs text-muted-foreground"> · {formatFt(m.ftPerRaklap)}/raklap</span> : null}
           </Sor>
           {m.elkerultKoltsegFt ? <Sor cim="Elkerült (tájékoztató)"><span className="text-muted-foreground">{formatFt(m.elkerultKoltsegFt)}</span></Sor> : null}
