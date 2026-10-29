@@ -13,7 +13,8 @@ import { ledolgozosSzombat, munkaszunetiNap } from "@/lib/jelenlet/shared";
 import { kocsiSzin } from "@/lib/fuvarozas2/kocsi-szin";
 import { tachoCsik } from "@/lib/fuvarozas2/ma-kartya-alap";
 import {
-  allapotPirula, fejlecIdo, ftSzoveg, gpsGond, kocsiBajban, kocsiElteresei, napNevHosszu, napSzakaszCim, nemNulla, oraPerc,
+  allapotPirula, csuszikNap, csuszoFuvarok, fejlecIdo, ftSzoveg, fuvarCsoportok, gpsGond, kocsiBajban, kocsiElteresei, lezartCsoport, lezartOsszegzes,
+  megjelenitettNapok, napNevHosszu, napSzakaszCim, nemNulla, oraPerc,
   type Pirula,
 } from "@/lib/fuvarozas2/ma-het-alap";
 import { fuvarJel } from "@/lib/fuvarozas2/tervezes-het-alap";
@@ -177,42 +178,79 @@ function AllasSor({ a, varos }: { a: TukorAllas; varos: string | null }) {
   );
 }
 
+/** Egy megálló egy sorban: FEL/LE · város · TERV → TÉNY. Állás-sor és kontakt csak az aktuális megállónál. */
+function MegalloSor({ r }: { r: Extract<TukorSor, { tipus: "megallo" }> }) {
+  const kiemelt = r.allapot === "most" || r.allapot === "kovetkezo";
+  const kesik = r.kiemelt === "kesik" || r.elteres?.startsWith("késik");
+  const tenySzin = r.allapot === "kesz" ? "text-[var(--f2-mint)]" : kesik || r.kiemelt === "varakozik" ? "text-[var(--f2-red)]" : "text-foreground";
+  const eltSzoveg = r.elteres && r.elteres !== "ablakban" ? r.elteres : null;
+  return (
+    <div className={cn("flex flex-col gap-0.5", r.allapot === "hatra" && "opacity-80")}>
+      <Link href={reszlet(r.fuvarId)} className="flex items-baseline gap-2 hover:underline">
+        <span className={cn("w-7 shrink-0 text-xs font-bold", MEDDO)}>{r.felLe === "felrako" ? "FEL" : "LE"}</span>
+        <span className={cn("min-w-0 flex-1 truncate text-sm", kiemelt ? "font-bold" : "font-semibold")}>{r.varos}</span>
+        <span className="flex shrink-0 items-baseline gap-1 text-[13px] tabular-nums">
+          <span className={MEDDO}>{r.terv ?? "—"}</span>
+          {r.teny ? (
+            <>
+              <span className={MEDDO} aria-hidden>→</span>
+              <span className={tenySzin}>{r.teny}{r.allapot === "kesz" ? " ✓" : ""}</span>
+            </>
+          ) : null}
+          {eltSzoveg ? <span className={cn("font-semibold", tenySzin)}>{eltSzoveg}</span> : null}
+        </span>
+      </Link>
+      {kiemelt && r.allas ? <div className="pl-9"><AllasSor a={r.allas} varos={r.varos} /></div> : null}
+      {kiemelt && (r.ceg || r.telefon) ? (
+        <div className="flex flex-wrap gap-x-3 pl-9 text-[13px]">
+          {r.ceg ? <span className={cn("truncate", MEDDO)}>{r.ceg}</span> : null}
+          {r.telefon ? <a href={`tel:${r.telefon}`} className="font-semibold underline">📞 {[r.kontaktNev, r.telefon].filter(Boolean).join(" · ")}</a> : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function CsoportSorok({ sorok }: { sorok: TukorSor[] }) {
+  return (
+    <>
+      {sorok.map((r, i) => r.tipus === "allas"
+        ? <AllasSor key={`a${i}`} a={r.allas} varos={null} />
+        : r.tipus === "megallo" ? <MegalloSor key={`m${i}`} r={r} /> : null)}
+    </>
+  );
+}
+
 function MaMegallok({ sorok }: { sorok: TukorSor[] }) {
   return (
     <div className="flex flex-col gap-2">
-      {sorok.map((r, i) => {
-        if (r.tipus === "fuvar") {
+      {fuvarCsoportok(sorok).map((cs, i) => {
+        const f = cs.fuvar;
+        if (!f) return <CsoportSorok key={`g${i}`} sorok={cs.sorok} />;
+        const jel = f.jelleg === "sajat" ? "SAJÁT" : "BÉR";
+        if (lezartCsoport(cs)) {
+          const o = lezartOsszegzes(cs);
           return (
-            <Link key={`f${r.fuvarId}`} href={reszlet(r.fuvarId)} className="mt-1 flex items-baseline gap-1.5 text-[13px] font-semibold hover:underline">
-              <span className={cn("text-xs font-bold tracking-wide", MEDDO)}>{r.jelleg === "sajat" ? "SAJÁT" : "BÉR"}</span>
-              <span className="truncate">{r.partner}{r.hivatkozas ? ` · ${r.hivatkozas}` : ""}</span>
-            </Link>
+            <details key={`f${f.fuvarId}`} className="text-[13px] opacity-65 open:opacity-100">
+              <summary className="flex cursor-pointer list-none items-baseline gap-1.5 [&::-webkit-details-marker]:hidden">
+                <span className="text-[var(--f2-mint)]" aria-hidden>✓</span>
+                <span className={cn("text-xs font-bold tracking-wide", MEDDO)}>{jel}</span>
+                <Link href={reszlet(f.fuvarId)} className="shrink-0 font-semibold hover:underline">{f.partner}</Link>
+                <span className="min-w-0 truncate">· {o.elso} → {o.utolso}{o.lerakva ? ` · lerakva ${o.lerakva}` : ""}</span>
+              </summary>
+              <div className="mt-1.5 flex flex-col gap-2 border-l-2 border-foreground/10 pl-2">
+                <CsoportSorok sorok={cs.sorok} />
+              </div>
+            </details>
           );
         }
-        if (r.tipus === "allas") return <AllasSor key={`a${i}`} a={r.allas} varos={null} />;
-        const kiemelt = r.allapot === "most" || r.allapot === "kovetkezo";
-        const kesik = r.kiemelt === "kesik" || r.elteres?.startsWith("késik");
-        const tenySzin = r.allapot === "kesz" ? "text-[var(--f2-mint)]" : kesik || r.kiemelt === "varakozik" ? "text-[var(--f2-red)]" : "text-foreground";
         return (
-          <div key={`m${i}`} className={cn("flex flex-col gap-0.5", r.allapot === "hatra" && "opacity-80")}>
-            <Link href={reszlet(r.fuvarId)} className="flex items-baseline gap-2 hover:underline">
-              <span className={cn("w-7 shrink-0 text-xs font-bold", MEDDO)}>{r.felLe === "felrako" ? "FEL" : "LE"}</span>
-              <span className={cn("min-w-0 truncate text-sm", kiemelt ? "font-bold" : "font-semibold")}>{r.varos}</span>
+          <div key={`f${f.fuvarId}`} className="flex flex-col gap-2">
+            <Link href={reszlet(f.fuvarId)} className="mt-1 flex items-baseline gap-1.5 text-[13px] font-semibold hover:underline">
+              <span className={cn("text-xs font-bold tracking-wide", MEDDO)}>{jel}</span>
+              <span className="truncate">{f.partner}{f.hivatkozas ? ` · ${f.hivatkozas}` : ""}</span>
             </Link>
-            <div className="flex items-baseline justify-between gap-2 pl-9 text-[13px] tabular-nums">
-              <span className={MEDDO}>{r.terv ?? "—"}</span>
-              <span className={cn("text-right", tenySzin)}>
-                {r.teny ?? "—"}{r.allapot === "kesz" ? " ✓" : ""}
-                {r.elteres && r.elteres !== "ablakban" ? <span className="ml-1 font-semibold">{r.elteres}</span> : null}
-              </span>
-            </div>
-            {r.allas ? <div className="pl-9"><AllasSor a={r.allas} varos={r.varos} /></div> : null}
-            {kiemelt && (r.ceg || r.telefon) ? (
-              <div className="flex flex-wrap gap-x-3 pl-9 text-[13px]">
-                {r.ceg ? <span className={cn("truncate", MEDDO)}>{r.ceg}</span> : null}
-                {r.telefon ? <a href={`tel:${r.telefon}`} className="font-semibold underline">📞 {[r.kontaktNev, r.telefon].filter(Boolean).join(" · ")}</a> : null}
-              </div>
-            ) : null}
+            <CsoportSorok sorok={cs.sorok} />
           </div>
         );
       })}
@@ -379,12 +417,19 @@ function MaBlokk({ k, kocsi, adat, piheno, szerk }: { k: MaKocsi; kocsi: HetKocs
   // Ha a Ma-vászonnak nincs mai megállója, de a hét cellájában van mai fuvar, az látszik (kártyaként).
   const cella = kocsi?.cellak.find((x) => x.nap === adat.ma);
   const cellaFuvar = k.sorok.length === 0 && cella && cella.fuvarok.length > 0;
+  // A korábbi napról csúszó, még nyitott fuvarok már a mai sorokban vannak; itt külön jelölést kapnak.
+  const csuszok = csuszoFuvarok(fuvarCsoportok(k.sorok), k.fuvarAdat ?? [], adat.ma);
   return (
     <section className="flex flex-col gap-2 rounded-xl bg-white p-3 shadow-[var(--shadow-card)] ring-2 ring-primary" aria-label="Ma">
       <div className="flex items-baseline justify-between gap-2">
         <h3 className="text-sm font-semibold text-primary">Ma · {napNevHosszu(adat.ma).toLowerCase()}</h3>
         <span className={cn("text-xs font-bold tracking-wide", MEDDO)}>TERV · TÉNY</span>
       </div>
+      {csuszok.map((c) => (
+        <Link key={c.fuvarId} href={reszlet(c.fuvarId)} className="text-[13px] font-semibold text-[var(--f2-amb)] hover:underline">
+          csúszik · {csuszikNap(c.eredetiNap)} <span className="font-normal">· {c.partner}</span>
+        </Link>
+      ))}
       {tav ? <TavolletBlokk t={tav} utkozik={k.sorok.length > 0} /> : null}
       {bej
         ? bej.map((b) => <BejegyzesSor key={`${b.id}-${b.alkalom}`} b={b} szerk={szerk} e={eredmeny.get(bejegyzesFuvarId(b))} />)
@@ -450,7 +495,7 @@ export function MaHetKocsi({ k, adat, het, sav, hetSor, szerk }: {
   const l100 = k.fogyasztas?.l100 ?? null;
   const hetiTacho = k.hetiSor?.split(" · ").find((x) => x.startsWith("hét"));
 
-  const napok = het && kocsi ? het.napok : null;
+  const napok = het && kocsi ? megjelenitettNapok(het.napok, adat.ma, het.ezAHet) : null;
   const cellak = new Map((kocsi?.cellak ?? []).map((c) => [c.nap, c]));
 
   return (
@@ -460,25 +505,27 @@ export function MaHetKocsi({ k, adat, het, sav, hetSor, szerk }: {
       aria-label={k.sofor ?? k.cimke}
     >
       <div className="h-[3px] shrink-0 bg-[var(--kc)]" aria-hidden />
-      <header className="flex shrink-0 flex-col gap-1.5 bg-white px-4 pb-3 pt-3">
+      <header className="flex shrink-0 flex-col gap-1 bg-white px-4 py-3">
         <div className="flex items-baseline justify-between gap-2">
-          {k.kod ? (
-            <Link href={kocsiLapHref(k.kod)} className="truncate text-lg font-bold hover:underline" title={k.cimke}>{k.kod}</Link>
-          ) : <span className="truncate text-lg font-bold">{k.cimke}</span>}
+          <div className="flex min-w-0 items-baseline gap-2">
+            {k.kod ? (
+              <Link href={kocsiLapHref(k.kod)} className="truncate text-lg font-bold hover:underline" title={k.cimke}>{k.kod}</Link>
+            ) : <span className="truncate text-lg font-bold">{k.cimke}</span>}
+            {pirula ? (
+              <span className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-px text-[13px] font-semibold", PIRULA_OSZTALY[pirula.szin])}>
+                {pirula.szoveg}{pirula.felkialto ? " !" : ""}
+              </span>
+            ) : null}
+          </div>
           <span className={cn("shrink-0 truncate text-xs", MEDDO)}>{k.sofor ?? "nincs sofőr"}</span>
         </div>
-        {pirula ? (
-          <span className={cn("inline-flex w-fit items-center gap-1 rounded-full px-3 py-0.5 text-sm font-semibold", PIRULA_OSZTALY[pirula.szin])}>
-            {pirula.szoveg}{pirula.felkialto ? " !" : ""}
-          </span>
-        ) : null}
         {k.allapot?.hely ? <div className="truncate text-sm">{k.allapot.hely}</div> : null}
         {kovetkezoSzoveg ? <div className={cn("truncate text-[13px]", MEDDO)} title={kovetkezoSzoveg}>Következő: {kovetkezoSzoveg}</div> : null}
         {csik != null ? (
           <div className="flex items-center gap-2 text-xs" title={k.tacho?.reszletek}>
             <span className={MEDDO}>tachó</span>
-            <span className="h-1.5 flex-1 rounded-full bg-foreground/10" role="meter" aria-label="Napi vezetési idő hátra" aria-valuemin={0} aria-valuemax={100} aria-valuenow={csik}>
-              <span className={cn("block h-1.5 rounded-full", bajban && (k.tachoNapiHatraPerc ?? 999) < 60 ? "bg-[var(--f2-red)]" : "bg-[var(--kc)]")} style={{ width: `${csik}%` }} />
+            <span className="h-1 flex-1 rounded-full bg-foreground/10" role="meter" aria-label="Napi vezetési idő hátra" aria-valuemin={0} aria-valuemax={100} aria-valuenow={csik}>
+              <span className={cn("block h-1 rounded-full", bajban && (k.tachoNapiHatraPerc ?? 999) < 60 ? "bg-[var(--f2-red)]" : "bg-[var(--kc)]")} style={{ width: `${csik}%` }} />
             </span>
             <b className="tabular-nums">{oraPerc(k.tachoNapiHatraPerc ?? 0)}</b>
             <span className={MEDDO}>ma hátra{hetiTacho ? ` · ${hetiTacho}` : ""}</span>

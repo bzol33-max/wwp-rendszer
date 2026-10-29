@@ -4170,3 +4170,7 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 
 ## 2026-10-29 — Redesign 5b: Fuvarozás maradék színei
 - A `--f2-mint` / `--f2-blue` (és beégetett acélkék/menta) elsődleges/kiemelő szerepben (fő gombok, kijelölés, linkek, kiemelt keretek, „folyamatban/úton” lépés) → `--primary` token (`bg-primary`, `text-primary`, `bg-primary/10`); szemantikus szerepben (kész/zöld, hiba/piros, figyelem/narancs, megvan/megjött, nyert) a jelentésnek megfelelő szín maradt. Csak szín, logika nem. Az eredmény-grafikon kocsi-sorozat színei közül az acélkék #0A84FF lett.
+
+## 2026-10-29 — Redesign 5c: Ma + hét tömörítés (lezárt fuvar egy sorban, múlt napok ki)
+- `components/fuvarozas2/ma-het.tsx`: a lezárt mai fuvar egy sorba csukva (`<details>`, kattintásra kinyílik), megálló egy sorban (FEL/LE · város · TERV → TÉNY), állás-sor és kontakt csak a „most/következő” megállónál, napok-lista a mai naptól (múltbeli hétre lapozva minden nap), csúszó fuvar „csúszik · {eredeti nap}” jelölése a mai blokk tetején, szűkebb fejléc (rendszám + pirula egy sorban, tachó-sáv 4 px). Új tiszta segédek: `lib/fuvarozas2/ma-het-alap.ts`, teszt: `scripts/teszt-ma-het-lap.ts`. Adat, jogosultság, mobil ág változatlan.
+- Nyitott: a `scripts/teszt-ma-het*.ts` futtatása és a böngészős ellenőrzés a felügyelőre vár.
