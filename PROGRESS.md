@@ -4155,3 +4155,6 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 
 ## 2026-10-29 — Redesign 3b: Készlet · telephely fülek (Q1)
 - `telephelyek-view.tsx` új asztali ága (nagy csoportszínű csempék, Szétválogatás kártya, Mozgás rögzítése panel, Be/Ki/Közti oszlopok, beérkező sáv, fejléc-összegző) + opcionális `panel`/`harmasOszlop`/`sav` propok a `movement-form`/`mozgas-oszlopok`/`bejovo-szallitmanyok` komponenseken (a mobil nézetek alapértelmezése változatlan); közös `use-asztali.ts`, `tipus-csoport.ts`. Nyitott: Nyíregyházán nincs „Ma be/ki”, böngészős ellenőrzés a felügyelőre vár.
+
+## 2026-10-29 — Redesign 3c: Korábbi napok felugró ablakban
+- `nyiregyhaza-havi.tsx` asztali ág: a Korábbi napok kártya kompakt (utolsó 3 nap + „Összes korábbi nap megnyitása”), a teljes lista (chipek, átutalás, × törlés, useCanEdit, megerősítés) Dialogban; a „naponta” kártya kitölti a felszabadult helyet. Mobil ág érintetlen. Nyitott: böngészős ellenőrzés a felügyelőre vár.

@@ -129,6 +129,7 @@ export function NyiregyhazaHaviTab() {
   const [kasszaAmount, setKasszaAmount] = useState("");
   const [kasszaSubmitting, setKasszaSubmitting] = useState(false);
   const [kasszaDetailOpen, setKasszaDetailOpen] = useState(false);
+  const [korabbiOpen, setKorabbiOpen] = useState(false);
   const [kasszaDetailLoading, setKasszaDetailLoading] = useState(false);
   const [kasszaMovements, setKasszaMovements] = useState<KasszaMovementRow[]>([]);
   const [customPriceOpen, setCustomPriceOpen] = useState(false);
@@ -691,8 +692,8 @@ export function NyiregyhazaHaviTab() {
           <div className="grid grid-cols-1 gap-5 xl:h-[clamp(520px,calc(100vh-440px),900px)] xl:grid-cols-[1fr_1.15fr_0.95fr]">
             {/* Bal oszlop: napi diagram + Korábbi napok */}
             <div className="flex min-h-0 flex-col gap-5">
-              <Card className="shrink-0">
-                <CardContent className="space-y-3">
+              <Card className="min-h-0 flex-1">
+                <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
                   <h3 className="text-sm font-semibold text-[#1D1D1F]">
                     <span className="capitalize">{honapNev}</span> naponta
                   </h3>
@@ -720,7 +721,7 @@ export function NyiregyhazaHaviTab() {
                     <span>1.</span>
                     <span>{napokSzama}.</span>
                   </div>
-                  <div className="space-y-1 pt-1">
+                  <div className="flex flex-1 flex-col justify-between gap-1.5 pt-2">
                     <div className="text-xs font-medium text-[#6E6E73]">A hét napjai (átlag db)</div>
                     {HET_NAPJAI.map((n, i) => (
                       <div key={n} className="flex items-center gap-2 text-xs">
@@ -738,10 +739,47 @@ export function NyiregyhazaHaviTab() {
                 </CardContent>
               </Card>
 
-              <Card className="min-h-0 flex-1">
-                <CardContent className="flex min-h-0 flex-1 flex-col gap-3">
+              <Card className="shrink-0">
+                <CardContent className="space-y-3">
                   <h3 className="text-sm font-semibold text-[#1D1D1F]">Korábbi napok</h3>
-                  <div className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
+                  <div className="space-y-1.5">
+                    {pastGroups.length === 0 && (
+                      <p className="text-xs text-[#6E6E73]">Nincs korábbi nap.</p>
+                    )}
+                    {pastGroups.slice(0, 3).map((g) => (
+                      <div
+                        key={g.dayKey}
+                        className="flex flex-wrap items-baseline justify-between gap-2 text-sm"
+                      >
+                        <span className="font-medium text-[#1D1D1F]">
+                          {rovidNapLabel(g.dayKey)} ·{" "}
+                          <span className="tabular-nums">{g.lines.reduce((s, l) => s + l.qty, 0)} db</span>
+                        </span>
+                        {g.atutalasFt > 0 && (
+                          <span className="text-xs font-medium text-primary">
+                            ebből átutalással {ftFormat(g.atutalasFt)}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    disabled={pastGroups.length === 0}
+                    onClick={() => setKorabbiOpen(true)}
+                  >
+                    Összes korábbi nap megnyitása
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Dialog open={korabbiOpen} onOpenChange={setKorabbiOpen}>
+                <DialogContent className="max-h-[80vh] overflow-hidden sm:max-w-[720px]">
+                  <DialogHeader>
+                    <DialogTitle>Korábbi napok</DialogTitle>
+                  </DialogHeader>
+                  <div className="max-h-[calc(80vh-6rem)] space-y-4 overflow-y-auto pr-1">
                     {pastGroups.length === 0 && (
                       <p className="text-xs text-[#6E6E73]">Nincs korábbi nap.</p>
                     )}
@@ -790,8 +828,8 @@ export function NyiregyhazaHaviTab() {
                       </div>
                     ))}
                   </div>
-                </CardContent>
-              </Card>
+                </DialogContent>
+              </Dialog>
             </div>
 
             {/* Középső oszlop: Havi felvásárlások */}
