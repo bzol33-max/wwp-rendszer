@@ -142,8 +142,18 @@ export function AppShell({
             <Settings className="h-[22px] w-[22px]" />
             Típusok és árak
           </Link>
-          <div className="px-1 pt-1 text-center text-[12px] leading-[1.2] text-[#6E6E73]">
-            Szakoly · Balkány · Nyíregyháza
+          {/* A „Szakoly · Balkány · Nyíregyháza” sor 88 px-en 3 sorba törik,
+              a szeparátorok a sorok végén lógnak. Ezért soronként egy
+              telephely, a leghosszabb rövidítve; a teljes felsorolás a
+              title-ben marad. A telephelyek maguk (lib/nav.ts SITES) nem
+              változnak, ez csak felirat. */}
+          <div
+            title="Szakoly · Balkány · Nyíregyháza"
+            className="px-1 pt-1 text-center text-[12px] leading-[1.3] text-[#6E6E73]"
+          >
+            <div>Szakoly</div>
+            <div>Balkány</div>
+            <div>Nyíregy.</div>
           </div>
           {userName && (
             <div

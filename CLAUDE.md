@@ -34,9 +34,13 @@ emlékeztető, nem feltétlenül naprakész a legutóbbi commitokhoz képest.
   `docs/ecofleet-telemetria-terv.md`. Új Ecofleet-hívás előtt ezeket nézd
   meg, ne építs párhuzamos integrációt.
 - Mobil UX (frissítve 2026-10-25, audit E2):
-  - A betűtípus (`--font-sans: var(--font-geist-sans);`) és a narancssárga
-    márkaszín (`--primary`/`--ring`: `oklch(0.53 0.14 42)`) **már javítva
-    van** az `app/globals.css`-ben — ne „javítsd” vissza.
+  - Betű és márkaszín: az asztali séma 2026-10-29 óta Apple HIG — Inter
+    betű (`--font-sans: var(--font-geist-sans);`, a változónév maradt, de
+    Inter van benne) és `--primary`/`--ring`: #007AFF az
+    `app/globals.css`-ben (lásd `docs/redesign/`). Ezt **ne állítsd vissza**
+    (sem a korábbi Geistre, sem a narancssárgára). A mobil nézetek saját
+    sémája — `--mob-*`, `--at-*`, `--m-*`, `--sa-*`, és a `--sidebar-*` a
+    mobil alsó tab-sávon — érintetlen.
   - Még nyitott: a Készlet, a Számlák és a Dolgozók táblázatai mobilon csak
     vízszintes görgetéssel olvashatók (nincs kártyanézet). A Fuvarozás 2
     (`app/fuvarozas2/megbizasok/page.tsx`, kimutatás, költségek) és a
@@ -47,3 +51,7 @@ emlékeztető, nem feltétlenül naprakész a legutóbbi commitokhoz képest.
   két session egyszerre nyúljon ugyanahhoz a fájlhoz.
 - Már megvan és jól működik: alsó mobil tab-navigáció (`app-shell.tsx`),
   44px érintési célpontok globálisan (`button.tsx`, `input.tsx`).
+- Redesign (2026-10-29-től): modulonként haladunk, a feladatleírások a
+  `docs/redesign/*.md`-ben vannak (a 0. lépés az alap: betű, színek, kártya,
+  88 px-es oldalsáv). A Fuvarozás 2, a Számlák és a Jelenlét saját témái a
+  saját modul-lépésükben cserélődnek — ne előre, és ne egyszerre.

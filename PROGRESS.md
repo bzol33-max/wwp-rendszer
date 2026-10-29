@@ -1,5 +1,8 @@
 # PROGRESS
 
+## 2026-10-29 (2) — Redesign 0b: CLAUDE.md frissítés, rövidebb oldalsáv-feliratok
+- A `CLAUDE.md` „Mobil UX” pontjában az elavult Geist/narancs sor átírva (asztali séma: Inter + #007AFF, ne legyen visszaállítva; a mobil `--mob-`/`--at-`/`--m-`/`--sa-`/`--sidebar-*` érintetlen) + új „Redesign” pont (modulonként, `docs/redesign/*.md`). `lib/nav.ts`: a megjelenített felirat „Jelenléti/üzenőfal” → „Jelenlét” (kulcs/útvonal és `lib/modules.ts` változatlan); `app-shell.tsx`: a telephely-sor 88 px-en soronként egy telephely, „Nyíregy.” rövidítve, teljes felsorolás a `title`-ben. 768 px alatt semmi nem változott.
+
 ## 2026-10-29 — Redesign 0. modul: vizuális alap + 88 px-es oldalsáv (Apple HIG stílus)
 
 A `redesign/0-alap` branchen (nincs pusholva/deployolva), a `docs/redesign/0-alap.md` terv szerint.
