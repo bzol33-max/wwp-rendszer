@@ -4177,3 +4177,7 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 
 ## 2026-10-29 — Redesign 5d: kocsi-fejléc sebesség/fogyasztás/km, tachó-küszöb 90 perc
 - `components/fuvarozas2/ma-het.tsx`: a rendszám alatt tömör sor (`sebesség · l/100 · ma N km`, 13 px, #48484A; a lábléc km/l100 ide költözött); `MaKocsi.sebesseg` (új, opcionális) a `ma-vaszon.ts`-ben a már lekért `eloPozicio.sebesseg`-ből (30 percnél régebbi → kimarad, új Ecofleet-hívás nincs); `KEVES_TACHO_PERC` 60 → 90 (a tachó-sáv piros küszöbe is ezt használja), teszt igazítva.
+
+## 2026-10-29 — Redesign 5e: kocsi-fejléc „Műszerfal”
+- `components/fuvarozas2/ma-het.tsx` (`MaHetKocsi` fejléc) + új `components/fuvarozas2/sebesseg-ora.tsx`: 270°-os sebességmutató (0–90 km/h, „áll”, „nincs GPS”, 600 ms kitöltés-animáció `prefers-reduced-motion` nélkül), nagy „ma megtett km” + l/100 · 7 nap, állapot-pirula a hellyel, „Lerakó: város · TERV hh:mm”, tachó címke + érték + 4 px sáv; az 5d külön sora törölve. < 280 px oszlopban 76 px mutató / 28 px km (container query). Adat, jogosultság, mobil ág változatlan.
+- Nyitott: böngészős ellenőrzés a felügyelőre vár.
