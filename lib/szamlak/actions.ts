@@ -215,6 +215,97 @@ export async function getSzamlaTeendok(kategoria: SzamlaKategoria): Promise<Szam
   return { kovetkezo, lejart };
 }
 
+export type SzamlaKorosSav = { osszeg: number; darab: number };
+
+export type SzamlaTeendoOsszesito = {
+  /** Nyitott HUF számlák hátraléka (a részfizetésekkel csökkentve). */
+  nyitott_osszeg: number;
+  nyitott_darab: number;
+  lejart_osszeg: number;
+  lejart_darab: number;
+  /** A ma és ma+7 nap között esedékes, nyitott számlák (mint a getSzamlaFejlec). */
+  het_osszeg: number;
+  het_darab: number;
+  /** A lejárt számlák korosítása a lejárat óta eltelt napok szerint. */
+  koros: { nap1_30: SzamlaKorosSav; nap31_60: SzamlaKorosSav; nap61_felett: SzamlaKorosSav };
+  /** A nyitott, nem HUF számlák hátraléka pénznemenként (a csempék csak HUF-ot összegeznek). */
+  nem_huf: { penznem: string; osszeg: number; darab: number }[];
+};
+
+/**
+ * A Teendők két oszlopának (Fuvar / Raklap) fejlécéhez: nyitott / lejárt / 7
+ * napon belüli összeg + a lejárt számlák korosítása, HUF-ban. Csak olvas.
+ */
+export async function getSzamlaTeendoOsszesito(): Promise<Record<SzamlaKategoria, SzamlaTeendoOsszesito>> {
+  await requireViewPermission("szamlak");
+  const NAPOK_SQL = `(${MA_SQL} - fizetesi_hatarido)`;
+  const sav = (nev: string, feltetel: string) =>
+    `coalesce(sum(${HATRALEK_SQL}) filter (where ${feltetel}), 0)::float8 as ${nev}_osszeg,
+       count(*) filter (where ${feltetel})::int as ${nev}_darab`;
+  const [huf, nemHuf] = await Promise.all([
+    query<Record<string, number | SzamlaKategoria>>(
+      `select
+         kategoria,
+         coalesce(sum(${HATRALEK_SQL}), 0)::float8 as nyitott_osszeg,
+         count(*)::int as nyitott_darab,
+         ${sav("lejart", `fizetesi_hatarido < ${MA_SQL}`)},
+         ${sav("het", `fizetesi_hatarido between ${MA_SQL} and ${MA_SQL} + 7`)},
+         ${sav("k1", `${NAPOK_SQL} between 1 and 30`)},
+         ${sav("k2", `${NAPOK_SQL} between 31 and 60`)},
+         ${sav("k3", `${NAPOK_SQL} > 60`)}
+       from szamla
+       where not fizetve and not sztorno and not sztornozva
+         and kategoria in ('fuvar', 'raklap') and ${HUF_SQL}
+       group by kategoria`
+    ),
+    query<{ kategoria: SzamlaKategoria; penznem: string; osszeg: number; darab: number }>(
+      `select kategoria, penznem, coalesce(sum(${HATRALEK_SQL}), 0)::float8 as osszeg, count(*)::int as darab
+       from szamla
+       where not fizetve and not sztorno and not sztornozva
+         and kategoria in ('fuvar', 'raklap') and not (${HUF_SQL})
+       group by kategoria, penznem
+       order by penznem`
+    ),
+  ]);
+
+  const ures = (): SzamlaTeendoOsszesito => ({
+    nyitott_osszeg: 0,
+    nyitott_darab: 0,
+    lejart_osszeg: 0,
+    lejart_darab: 0,
+    het_osszeg: 0,
+    het_darab: 0,
+    koros: {
+      nap1_30: { osszeg: 0, darab: 0 },
+      nap31_60: { osszeg: 0, darab: 0 },
+      nap61_felett: { osszeg: 0, darab: 0 },
+    },
+    nem_huf: [],
+  });
+  const eredmeny: Record<SzamlaKategoria, SzamlaTeendoOsszesito> = { fuvar: ures(), raklap: ures() };
+  for (const sor of huf) {
+    const n = (k: string) => Number(sor[k]);
+    eredmeny[sor.kategoria as SzamlaKategoria] = {
+      nyitott_osszeg: n("nyitott_osszeg"),
+      nyitott_darab: n("nyitott_darab"),
+      lejart_osszeg: n("lejart_osszeg"),
+      lejart_darab: n("lejart_darab"),
+      het_osszeg: n("het_osszeg"),
+      het_darab: n("het_darab"),
+      koros: {
+        nap1_30: { osszeg: n("k1_osszeg"), darab: n("k1_darab") },
+        nap31_60: { osszeg: n("k2_osszeg"), darab: n("k2_darab") },
+        nap61_felett: { osszeg: n("k3_osszeg"), darab: n("k3_darab") },
+      },
+      nem_huf: [],
+    };
+  }
+  for (const sor of nemHuf) {
+    eredmeny[sor.kategoria].nem_huf.push({ penznem: sor.penznem, osszeg: Number(sor.osszeg), darab: Number(sor.darab) });
+  }
+  return eredmeny;
+}
+
 /** Kategóriánkénti (Raklapnál alkategóriánkénti) kintlévőség-összesítő, pénznemenként külön — a sztornó-párok nélkül. */
 export async function getSzamlaOsszesito(): Promise<SzamlaOsszesitoSor[]> {
   await requireViewPermission("szamlak");

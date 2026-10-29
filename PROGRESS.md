@@ -4146,3 +4146,6 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 
 ## 2026-10-29 — Redesign 1: Számlák · Bevétel fül (X4)
 - Új `getSzamlaBevetelAttekintes()` (csak select) + `szamla-bevetel-nezet.tsx` (4 csempe, havi összetétel, mappa-kártyák, új/elmaradó vevők); a szamlak-view.tsx-ben csak a bekötés változott. Nyitott: a view-ban a `havi`/`statisztika` betöltés már nem használt (lint-figyelmeztetés), böngészős ellenőrzés a felügyelőre vár.
+
+## 2026-10-29 — Redesign 2: Számlák · Teendők fül (W1)
+- Új `getSzamlaTeendoOsszesito()` (csak select, HUF, Fuvar/Raklap) + oszloponként 3 szám-csempe és lejárt-korosítás (1–30 / 31–60 / 60+ nap) a `szamlak-view.tsx` Teendők blokkjában; a Fizetve gomb, részfizetés, adatmodell változatlan. Nyitott: böngészős ellenőrzés a felügyelőre vár.

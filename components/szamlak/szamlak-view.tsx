@@ -26,6 +26,7 @@ import {
   getSzamlaLista,
   getSzamlaOsszesito,
   getSzamlaSzinkronAllapot,
+  getSzamlaTeendoOsszesito,
   getSzamlaTeendok,
   jeloltFizetve,
   visszavonFizetve,
@@ -33,6 +34,7 @@ import {
   type SzamlaFejlecSor,
   type SzamlaKifizetettOsszesitoSor,
   type SzamlaListaSzuro,
+  type SzamlaTeendoOsszesito,
   type SzamlaTeendok,
 } from "@/lib/szamlak/actions";
 import {
@@ -680,6 +682,7 @@ function Kereso({ onTalalat }: { onTalalat: (szuro: SzamlaListaSzuro, cim: strin
 function TeendoTabla({
   cim,
   sorok,
+  osszeg,
   lejartStilus,
   ures,
   alkategoriaval,
@@ -688,6 +691,8 @@ function TeendoTabla({
 }: {
   cim: string;
   sorok: SzamlaRow[];
+  /** A szakaszcím jobb oldalán megjelenő (HUF) összeg. */
+  osszeg: number;
   lejartStilus: boolean;
   ures: string;
   alkategoriaval: boolean;
@@ -696,7 +701,7 @@ function TeendoTabla({
 }) {
   return (
     <div className="flex flex-col gap-1">
-      <div className={`text-xs font-semibold ${lejartStilus ? "text-destructive" : "text-muted-foreground"}`}>{cim}</div>
+      <TeendoSzakaszCim cim={cim} osszeg={osszeg} piros={lejartStilus} />
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>
@@ -757,18 +762,132 @@ function TeendoTabla({
   );
 }
 
+const TEENDO_PIROS = "#E5172F";
+const TEENDO_NARANCS = "#D97706";
+const TEENDO_SOTETPIROS = "#A0001C";
+
+function huf(n: number) {
+  return formatOsszeg(n, "Ft");
+}
+
+/** A felsorolt nyitott számlák forintos hátraléka (a szakaszcím mellé). */
+function hufOsszeg(sorok: SzamlaRow[]): number {
+  return sorok.filter((r) => !r.fizetve && (r.penznem === "Ft" || r.penznem === "HUF")).reduce((s, r) => s + sorOsszeg(r), 0);
+}
+
+function SzamCsempe({ cim, osszeg, szin }: { cim: string; osszeg: number; szin: string }) {
+  return (
+    <div className="flex min-w-0 flex-col gap-0.5 rounded-xl bg-[#F2F5FA] px-3 py-2">
+      <div className="truncate text-xs text-[#6E6E73]">{cim}</div>
+      <div className="truncate text-lg font-semibold tabular-nums" style={{ color: szin }}>
+        {huf(osszeg)}
+      </div>
+    </div>
+  );
+}
+
+/** Egy oszlop teteje: fejléc, 3 szám-csempe és a lejárt számlák korosítása (görgetéskor fent marad). */
+function TeendoOsszesitoFejlec({
+  cim,
+  osszesito,
+}: {
+  cim: string;
+  osszesito: SzamlaTeendoOsszesito | null;
+}) {
+  const o = osszesito;
+  const nemHufDarab = o?.nem_huf.reduce((s, x) => s + x.darab, 0) ?? 0;
+  const savok = [
+    { cim: "1–30 nap", szin: TEENDO_NARANCS, sav: o?.koros.nap1_30 },
+    { cim: "31–60 nap", szin: TEENDO_PIROS, sav: o?.koros.nap31_60 },
+    { cim: "60+ nap", szin: TEENDO_SOTETPIROS, sav: o?.koros.nap61_felett },
+  ].map((s) => ({ ...s, osszeg: s.sav?.osszeg ?? 0, darab: s.sav?.darab ?? 0 }));
+  const korosOsszeg = savok.reduce((s, x) => s + x.osszeg, 0);
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-baseline justify-between gap-2">
+        <div className="text-[18px] font-semibold text-[#1D1D1F]">{cim}</div>
+        <div className="text-xs tabular-nums text-[#6E6E73]">
+          {o ? `${o.nyitott_darab + nemHufDarab} nyitott` : "…"}
+        </div>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <SzamCsempe cim="Kint" osszeg={o?.nyitott_osszeg ?? 0} szin="#1D1D1F" />
+        <SzamCsempe cim={`Lejárt · ${o?.lejart_darab ?? 0} db`} osszeg={o?.lejart_osszeg ?? 0} szin={TEENDO_PIROS} />
+        <SzamCsempe
+          cim={`7 napon belül · ${o?.het_darab ?? 0} db`}
+          osszeg={o?.het_osszeg ?? 0}
+          szin={TEENDO_NARANCS}
+        />
+      </div>
+      {o && o.nem_huf.length > 0 && (
+        <div className="text-xs tabular-nums text-[#6E6E73]">
+          {o.nem_huf.map((x) => `+ ${formatOsszeg(x.osszeg, x.penznem)} külön`).join(" · ")}
+        </div>
+      )}
+      {o && o.lejart_darab === 0 ? (
+        <div className="text-xs text-[#6E6E73]">Nincs lejárt számla</div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <div className="flex h-2 w-full overflow-hidden rounded-full bg-[#F2F5FA]">
+            {korosOsszeg > 0 &&
+              savok.map((s) => (
+                <div
+                  key={s.cim}
+                  style={{ width: `${(s.osszeg / korosOsszeg) * 100}%`, backgroundColor: s.szin }}
+                  title={`${s.cim} · ${huf(s.osszeg)}`}
+                />
+              ))}
+          </div>
+          <div className="flex flex-col gap-0.5">
+            {savok.map((s) => (
+              <div key={s.cim} className="flex items-center gap-2 text-xs tabular-nums text-[#48484A]">
+                <span className="size-2 shrink-0 rounded-full" style={{ backgroundColor: s.szin }} />
+                {s.cim} · {huf(s.osszeg)} ({s.darab} db)
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Szakasz-cím a Teendők oszlopában: bal oldalt a név, jobb oldalt (opcionálisan) az összeg. */
+function TeendoSzakaszCim({ cim, osszeg, piros }: { cim: string; osszeg?: number; piros?: boolean }) {
+  return (
+    <div className="flex items-baseline justify-between gap-2">
+      <div className={`text-sm font-semibold ${piros ? "" : "text-[#48484A]"}`} style={piros ? { color: TEENDO_PIROS } : undefined}>
+        {cim}
+      </div>
+      {osszeg !== undefined && (
+        <div className="text-xs font-semibold tabular-nums" style={piros ? { color: TEENDO_PIROS } : undefined}>
+          {huf(osszeg)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /**
  * Kétoszlopos Teendők blokk: bal oldalt Fuvar, jobb oldalt Raklap (minden más
- * kimenő számla) — mindkettőben felül a következő 10 lejárat, alatta az összes lejárt.
+ * kimenő számla) — mindkettőben felül az összesítő (3 csempe + korosítás),
+ * alatta a lejárt számlák, majd a következő 10 lejárat.
  */
 function TeendokLista({ refreshKey, onChanged }: { refreshKey: number; onChanged: () => void }) {
   const [fuvar, setFuvar] = useState<SzamlaTeendok | null>(null);
   const [raklap, setRaklap] = useState<SzamlaTeendok | null>(null);
+  const [osszesito, setOsszesito] = useState<Record<SzamlaKategoria, SzamlaTeendoOsszesito> | null>(null);
 
   const load = useCallback(async () => {
-    const [f, r] = await Promise.all([getSzamlaTeendok("fuvar"), getSzamlaTeendok("raklap")]);
+    const [f, r, o] = await Promise.all([
+      getSzamlaTeendok("fuvar"),
+      getSzamlaTeendok("raklap"),
+      getSzamlaTeendoOsszesito(),
+    ]);
     setFuvar(f);
     setRaklap(r);
+    setOsszesito(o);
   }, []);
 
   useEffect(() => {
@@ -798,26 +917,36 @@ function TeendokLista({ refreshKey, onChanged }: { refreshKey: number; onChanged
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       {oszlopok.map(({ kategoria, adat }) => (
-        <div key={kategoria} className="flex min-w-0 flex-col gap-4 rounded-lg border p-4">
-          <div className="text-sm font-semibold">{KATEGORIA_LABEL[kategoria]}</div>
-          <TeendoTabla
-            cim="Következő 10 lejárat"
-            sorok={adat?.kovetkezo ?? []}
-            lejartStilus={false}
-            ures="Nincs közelgő esedékesség."
-            alkategoriaval={kategoria === "raklap"}
-            onFizetve={fizetve}
-            onVisszavon={visszavon}
-          />
-          <TeendoTabla
-            cim={`Lejárt (${adat?.lejart.length ?? 0})`}
-            sorok={adat?.lejart ?? []}
-            lejartStilus
-            ures="Nincs lejárt számla."
-            alkategoriaval={kategoria === "raklap"}
-            onFizetve={fizetve}
-            onVisszavon={visszavon}
-          />
+        <div
+          key={kategoria}
+          className="flex min-w-0 flex-col overflow-y-auto rounded-2xl bg-card lg:max-h-[calc(100vh-13rem)]"
+          style={{ boxShadow: "var(--shadow-card), var(--hi)" }}
+        >
+          <div className="sticky top-0 z-10 bg-card p-4 pb-3">
+            <TeendoOsszesitoFejlec cim={KATEGORIA_LABEL[kategoria]} osszesito={osszesito?.[kategoria] ?? null} />
+          </div>
+          <div className="flex flex-col gap-4 p-4 pt-1">
+            <TeendoTabla
+              cim={`Lejárt · ${adat?.lejart.length ?? 0}`}
+              sorok={adat?.lejart ?? []}
+              osszeg={osszesito?.[kategoria].lejart_osszeg ?? 0}
+              lejartStilus
+              ures="Nincs lejárt számla."
+              alkategoriaval={kategoria === "raklap"}
+              onFizetve={fizetve}
+              onVisszavon={visszavon}
+            />
+            <TeendoTabla
+              cim="Következő 10 lejárat"
+              sorok={adat?.kovetkezo ?? []}
+              osszeg={hufOsszeg(adat?.kovetkezo ?? [])}
+              lejartStilus={false}
+              ures="Nincs közelgő esedékesség."
+              alkategoriaval={kategoria === "raklap"}
+              onFizetve={fizetve}
+              onVisszavon={visszavon}
+            />
+          </div>
         </div>
       ))}
     </div>
