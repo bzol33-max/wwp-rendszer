@@ -33,6 +33,7 @@ import {
 import { toast } from "sonner";
 import {
   addKasszaMovement,
+  deleteKasszaMovement,
   addPendingPurchases,
   addPurchases,
   deletePurchase,
@@ -431,6 +432,24 @@ export function NyiregyhazaHaviTab() {
       setKasszaMovements(await getKasszaMovements());
     } finally {
       setKasszaDetailLoading(false);
+    }
+  }
+
+  async function handleDeleteKassza(m: KasszaMovementRow) {
+    if (
+      !(await confirm(
+        `Biztosan törlöd a kassza-tételt? ${m.date} · ${m.description} · ${m.amount.toLocaleString("hu-HU")} Ft`
+      ))
+    ) {
+      return;
+    }
+    try {
+      await deleteKasszaMovement(m.id);
+      setKasszaMovements(await getKasszaMovements());
+      await load();
+      toast.success("Kassza-tétel törölve.");
+    } catch {
+      toast.error("Nem sikerült törölni.");
     }
   }
 
@@ -1456,8 +1475,20 @@ export function NyiregyhazaHaviTab() {
                           {m.date} · {m.description}
                           {m.created_by && <> · {m.created_by}</>}
                         </span>
-                        <span className="shrink-0 font-medium tabular-nums text-success">
-                          +{m.amount.toLocaleString("hu-HU")} Ft
+                        <span className="shrink-0 flex items-center gap-2">
+                          <span className="font-medium tabular-nums text-success">
+                            +{m.amount.toLocaleString("hu-HU")} Ft
+                          </span>
+                          {m.deletable && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteKassza(m)}
+                              title="Törlés (hibás rögzítés)"
+                              className="text-destructive/70 hover:text-destructive"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                         </span>
                       </div>
                     ))}
@@ -1480,8 +1511,20 @@ export function NyiregyhazaHaviTab() {
                           {m.date} · {m.description}
                           {m.created_by && <> · {m.created_by}</>}
                         </span>
-                        <span className="shrink-0 font-medium tabular-nums text-destructive">
-                          {m.amount.toLocaleString("hu-HU")} Ft
+                        <span className="shrink-0 flex items-center gap-2">
+                          <span className="font-medium tabular-nums text-destructive">
+                            {m.amount.toLocaleString("hu-HU")} Ft
+                          </span>
+                          {m.deletable && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteKassza(m)}
+                              title="Törlés (hibás rögzítés)"
+                              className="text-destructive/70 hover:text-destructive"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                         </span>
                       </div>
                     ))}

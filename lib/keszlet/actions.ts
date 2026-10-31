@@ -1212,12 +1212,31 @@ export async function addKasszaMovement(description: string, amount: number) {
   ]);
 }
 
+// Hibásan felvitt KÉZI kassza-tétel törlése. Csak olyan sort töröl, ami nincs
+// felvásárláshoz vagy készletmozgáshoz kötve (azokat a saját törlésük kezeli,
+// különben a kassza és a készlet szétcsúszna). Nem vonható vissza.
+export async function deleteKasszaMovement(id: string) {
+  await requireEditPermission("keszlet");
+  ellenorizdAzonosito(id);
+  const rows = await query<{ id: string }>(
+    `delete from kassza_movements
+     where id = $1 and purchase_id is null and movement_group is null and category = 'egyeb'
+     returning id::text`,
+    [id]
+  );
+  if (rows.length === 0) {
+    throw new Error("Ez a tétel nem törölhető (felvásárláshoz vagy mozgáshoz kötött).");
+  }
+}
+
 export type KasszaMovementRow = {
   id: string;
   date: string;
   description: string;
   amount: number;
   created_by: string | null;
+  /** Kézzel felvitt tétel (nincs felvásárláshoz/mozgáshoz kötve) — törölhető. */
+  deletable?: boolean;
 };
 
 export async function getKasszaMovements(): Promise<KasszaMovementRow[]> {
@@ -1244,7 +1263,8 @@ export async function getKasszaMovements(): Promise<KasszaMovementRow[]> {
   );
 
   const otherRows = await query<KasszaMovementRow>(
-    `select id::text, to_char(created_at at time zone 'Europe/Budapest', '${TIME_FMT}') as date, description, amount, created_by
+    `select id::text, to_char(created_at at time zone 'Europe/Budapest', '${TIME_FMT}') as date, description, amount, created_by,
+            (purchase_id is null and movement_group is null and category = 'egyeb') as deletable
      from kassza_movements
      where category <> 'felvasarlas'
      order by created_at desc

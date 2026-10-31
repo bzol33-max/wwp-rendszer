@@ -4184,3 +4184,8 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 
 ## 2026-10-29 — Redesign 5f: kocsi-fejléc két sorban
 - `components/fuvarozas2/ma-het.tsx` (`MaHetKocsi` fejléc) + `sebesseg-ora.tsx` (`meret` prop): 58 px sebességmutató balra, jobbra 3 sor (rendszám + nagy km · állapot + hely + l · Tachó + sáv + sofőr); a következő feladat sora kikerült, figyelmeztető szalag 12 px oldalpadding, GPS-jelzés a 2. sor végén. Adat, jogosultság, mobil ág változatlan. Nyitott: böngészős ellenőrzés a felügyelőre vár.
+
+## 2026-10-31 — Kassza: hibásan felvitt kézi tétel törlése
+- `lib/keszlet/actions.ts`: új `deleteKasszaMovement(id)` (`requireEditPermission("keszlet")`), csak olyan sort töröl, ahol `purchase_id` és `movement_group` üres és `category = 'egyeb'` (a felvásárláshoz/mozgáshoz kötött sorokat a saját törlésük kezeli). `KasszaMovementRow.deletable` (új, opcionális) a `getKasszaMovements` kézi soraihoz.
+- `components/keszlet/nyiregyhaza-havi.tsx`: a „Kassza mozgások” ablakban a törölhető sorokon X gomb, megerősítéssel, törlés után a lista és az egyenleg frissül. Adatmodell, jogosultság, design változatlan.
+- Ellenőrzés: eslint (0 hiba), `tsc --noEmit` (az érintett fájlokban 0 hiba; egy régi, független hiba a `helyi/nevegyezes.mts`-ben). Nyitott: böngészős ellenőrzés + commit/push a felügyelőre vár.
