@@ -4,9 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const LAPOK = [
-  { href: "/proto", cimke: "Ma" },
+  { href: "/proto", cimke: "Döntés" },
+  { href: "/proto/ma", cimke: "Ma" },
   { href: "/proto/kereso", cimke: "Keresés" },
-  { href: "/proto/beerkezo", cimke: "Beérkező" },
   { href: "/proto/terv", cimke: "Terv" },
   { href: "/proto/penz", cimke: "Pénz" },
 ];

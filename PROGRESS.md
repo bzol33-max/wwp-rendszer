@@ -4201,3 +4201,8 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 - `NyitottNapokSav` külön fájlba (`nyitott-napok-sav.tsx`), mindkét ág használja. `RogzitoSor`, `KeretDialog`, `datumCimke`, `szakaszCimke` exportálva a `szabadsag-view.tsx`-ből; a `/jelenlet/szabadsag` oldal változatlan, csak egy „‹ Csapat” link került rá.
 - `.jelenlet` téma: szín-alaptokenek törölve → közös kék séma (csak `--radius` maradt).
 - Csak meglévő szerver-akciók, adatbázis/séma nem változott. Nyitott: böngészős ellenőrzés a felügyelőre vár (a futtatás/ellenőrző parancsok ebben a munkamenetben nem futhattak, lásd a záró jelentést).
+
+## 2026-11-02 — Prototípus 2: Döntés lap (/proto)
+- Kutatás a saját adatból és a korábbi döntésekből: a Ma lap többszöri átrajzolása nem oldotta meg a gondot, a napi kérdés a „ki ürül ki hol, mit keressek rá, mennyiért”. Teszt-másolat (okt. 8-ig): 46% ismételt viszonylat, medián 539 Ft/km, 15/15 levél legfeljebb másnapra szól, 0 megerősített együttrakás, 8 azonos számlaszámú pár (1,245 M Ft).
+- Új első lap: bejövő megbízás árítélettel és valódi Elfogadom/Elutasítom gombbal (a meglévő `setFuvarJarmu`, `valtAllapot`, `torolMegbizast`), kocsinként a kiürülés, kereső-irány, kérhető díj, kit hívj (meglévő `getKeresesJavaslatok`), saját áru Kocsira gombbal (`kocsihozAdom`), ártár-ellenőrző telefonhoz (`lib/proto/artar-alap.ts`), partnerenkénti kintlévőség, duplikátum-jelzés. A régi Ma lap: `/proto/ma`.
+- Nincs migráció, nincs új írási művelet. Nyitott: valódi adaton böngészős ellenőrzés a felhasználónál; a duplikátumokról ember dönt.

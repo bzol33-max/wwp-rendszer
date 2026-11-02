@@ -11,6 +11,11 @@ import { getJarmuIndulasiTelephely, getSajatTelephelyek } from "@/lib/fuvarozas/
 import { becsultTavolsag } from "@/lib/fuvarozas2/ures-km";
 import type { MegbizasSor } from "@/lib/fuvarozas2/megbizasok";
 import { SOR_SQL } from "@/lib/megbizasok/repo";
+import { arLetra, type ArLetra } from "@/lib/fuvarozas2/ar-letra";
+import { budapestNapISO } from "@/lib/fuvarozas/idozona";
+import { varosNev } from "@/lib/fuvarozas/varos";
+import { arCsekk, type ArCsekk } from "@/lib/proto/artar-alap";
+import { getArMintak } from "@/lib/proto/dontes";
 
 // Prototípus: a húzás előnézete. Semmit nem ment, a kiosztás marad a régi felületen.
 
@@ -107,6 +112,27 @@ export async function protoElonezet(fuvarId: string, nap: string): Promise<Elone
     kocsik,
     legkozelebbiTelep,
   };
+}
+
+export type ArValasz = {
+  km: number | null;
+  dijFt: number | null;
+  csekk: ArCsekk;
+  letra: ArLetra | null;
+};
+
+/** Telefonos alkuhoz: honnan, hová, mennyiért. Semmit nem ment. */
+export async function protoArCsekk(a: { honnan: string; hova: string; partner: string; dij: number | null; penznem: "Ft" | "EUR" }): Promise<ArValasz> {
+  await requireAdmin();
+  const ma = budapestNapISO();
+  const arf = (await getEurArfolyamok([ma]).catch(() => new Map<string, { ft: number }>())).get(ma)?.ft ?? null;
+  const minta = await getArMintak(arf);
+  const km = await becsultTavolsag()(a.honnan, a.hova);
+  const dijFt = a.dij == null ? null : a.penznem === "EUR" ? (arf ? a.dij * arf : null) : a.dij;
+  const csekk = arCsekk(minta, { partner: a.partner.trim() || null, fel: varosNev(a.honnan) || a.honnan, le: varosNev(a.hova) || a.hova, dijFt, km });
+  const ar = await gazolajArKedvezmennyel();
+  const letra = km != null ? arLetra(km * ((FOGYASZTAS_L100 / 100) * ar.ar + UTDIJ_TARTALEK_FT_KM), arf) : null;
+  return { km, dijFt, csekk, letra };
 }
 
 export type LancPont = { cimke: string; tipus: "felrako" | "lerako"; lat: number; lon: number };
