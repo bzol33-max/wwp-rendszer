@@ -4196,3 +4196,8 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 - A Terv húzása csak előnézet (`lib/proto/akciok.ts`).
 - Ellenőrzés: tsc, eslint, `teszt-akcio-jogok`, `next build`, a két nyers SQL a Postgres-teszten. Nyitott: böngészős ellenőrzés élesben, a teszt adatbázis régi sémájú (okt. 8-ig), ezért a lapok valódi adattal csak deploy után próbálhatók.
 - A régi segéd kivételének oka és a kocsi fix költség a felhasználó döntésére vár; a terv: https://claude.ai/artifact/CZhvit8oPLHnQZXZuJAJDY
+## 2026-11-02 — Redesign 6: Jelenlét + Szabadság egy lapon (K2)
+- `/jelenlet` 768 px-től „Csapat” lap (`components/jelenlet/csapat-lap.tsx`, `csapat-racs.tsx`, `csapat-uzenofal.tsx`, új tiszta segédek: `lib/jelenlet/csapat-lap.ts`, teszt: `scripts/teszt-csapat-lap.ts`): fejléc („N bent · N távol”, „Csapat · 4 hét”, 2/4 hét kapcsoló, hetenkénti lapozás, „Szabadság rögzítése” dialógus, Havi napló / Éves nézet › / Archívum), kérelmek sáv helyi jóváhagyással, dolgozók × napok rács (ledolgozott idő, Sz / k / B / Ü, „Marad” oszlop), alatta a telephelyi üzenőfal. 768 px alatt a régi nézet marad (`JelenletMobilView`).
+- `NyitottNapokSav` külön fájlba (`nyitott-napok-sav.tsx`), mindkét ág használja. `RogzitoSor`, `KeretDialog`, `datumCimke`, `szakaszCimke` exportálva a `szabadsag-view.tsx`-ből; a `/jelenlet/szabadsag` oldal változatlan, csak egy „‹ Csapat” link került rá.
+- `.jelenlet` téma: szín-alaptokenek törölve → közös kék séma (csak `--radius` maradt).
+- Csak meglévő szerver-akciók, adatbázis/séma nem változott. Nyitott: böngészős ellenőrzés a felügyelőre vár (a futtatás/ellenőrző parancsok ebben a munkamenetben nem futhattak, lásd a záró jelentést).

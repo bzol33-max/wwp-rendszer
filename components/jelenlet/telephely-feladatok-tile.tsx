@@ -61,7 +61,10 @@ export function TelephelyFeladatokTile({
   canEdit,
   onSelect,
   onChanged,
+  nagyBetu = false,
 }: {
+  /** Az asztali Csapat lapon 12 px a legkisebb betű; a régi (mobil) nézet a kisebbet tartja. */
+  nagyBetu?: boolean;
   siteId: number;
   siteName: string;
   feladatok: Feladat[];
@@ -89,7 +92,12 @@ export function TelephelyFeladatokTile({
     <div className="overflow-hidden rounded-xl border bg-card">
       <div className="flex items-center justify-between border-b bg-muted/40 px-3 py-2">
         <span className="text-sm font-semibold">{siteName}</span>
-        <span className="rounded-full border bg-card px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">
+        <span
+          className={cn(
+            "rounded-full border bg-card px-2 py-0.5 font-semibold text-muted-foreground",
+            nagyBetu ? "text-xs" : "text-[11px]"
+          )}
+        >
           {feladatok.length === 0 ? "nincs nyitott" : `${feladatok.length} nyitott`}
         </span>
       </div>
@@ -132,11 +140,21 @@ export function TelephelyFeladatokTile({
                 />
                 <span className="min-w-0 flex-1 truncate">{f.description}</span>
                 {f.repeat_freq !== "egyszeri" && (
-                  <span className="shrink-0 rounded-full border border-violet-300 bg-violet-100 px-1.5 text-[10px] font-semibold text-violet-700">
+                  <span
+                    className={cn(
+                      "shrink-0 rounded-full border border-violet-300 bg-violet-100 px-1.5 font-semibold text-violet-700",
+                      nagyBetu ? "text-xs" : "text-[10px]"
+                    )}
+                  >
                     {REPEAT_LABELS[f.repeat_freq]}
                   </span>
                 )}
-                <span className="shrink-0 text-[10px] text-muted-foreground tabular-nums">
+                <span
+                  className={cn(
+                    "shrink-0 text-muted-foreground tabular-nums",
+                    nagyBetu ? "text-xs" : "text-[10px]"
+                  )}
+                >
                   {rovidDatum(f.task_date)}
                 </span>
               </button>
@@ -147,7 +165,12 @@ export function TelephelyFeladatokTile({
 
       {keszFeladatok.length > 0 && (
         <>
-          <div className="flex items-center justify-between border-y border-success/30 bg-success/10 px-3 py-1 text-[10.5px] font-bold tracking-wide text-success uppercase">
+          <div
+            className={cn(
+              "flex items-center justify-between border-y border-success/30 bg-success/10 px-3 py-1 font-bold tracking-wide text-success uppercase",
+              nagyBetu ? "text-xs" : "text-[10.5px]"
+            )}
+          >
             <span>Elvégezve</span>
             <span>{keszFeladatok.length}</span>
           </div>
@@ -173,7 +196,7 @@ export function TelephelyFeladatokTile({
                 <span className="min-w-0 flex-1 truncate line-through decoration-success/40">
                   {f.description}
                 </span>
-                <span className="shrink-0 text-[10px] tabular-nums">
+                <span className={cn("shrink-0 tabular-nums", nagyBetu ? "text-xs" : "text-[10px]")}>
                   {keszFelirat(f, maIso)}
                   {f.elvegezte ? ` · ${f.elvegezte}` : ""}
                 </span>

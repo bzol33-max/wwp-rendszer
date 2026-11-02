@@ -264,41 +264,13 @@
   background: var(--m-bg); color: var(--m-txt); min-height: 100dvh;
 }
 
-/* Jelenléti/üzenőfal — a terv színei: világosszürke háttér, fehér kártyák,
-   semleges szürke szövegek, sötét acél elsődleges gomb, és a jelzőszínek
-   (zöld plusz, piros mínusz, borostyán figyelmeztetés) tisztán. Csak a
-   /jelenlet útvonalakon (app/jelenlet/layout.tsx), a többi modul érintetlen.
-   Döntés: 2026-09-20 (Budaházi Zoltán) — a modul nem alkalmazkodik a régi
-   bézs témához, ugyanaz az elv, mint a Fuvarozás 2-nél.
-
-   FONTOS: a dialógusok portálba renderelnek, tehát a lap wrapper-én KÍVÜL
-   keletkeznek. Ezért a modul dialógusai külön megkapják ezt az osztályt
-   (havi napló, új feladat, feladat-megjegyzések) — enélkül a felugró ablak
-   visszaesne a bézs témára. */
+/* Jelenléti/üzenőfal — redesign 6: a szín-alaptokenek (háttér, primary, card,
+   border, muted, accent, ring, jelzőszínek) törölve, így a modul a közös kék
+   sémát kapja (ugyanúgy, mint a Fuvarozás 2 a 4. lépésben); itt csak a
+   lekerekítés marad. A háttér átlátszó, hogy az asztali body-gradiens (0c)
+   látsszon. A dialógusok portálba renderelnek, a wrapper-en kívül — a modul
+   dialógusai még megkapják ezt az osztályt (a lekerekítés miatt). */
 .jelenlet {
-  --background: #f5f6f8;
-  --foreground: #18181b;
-  --card: #ffffff;
-  --card-foreground: #18181b;
-  --popover: #ffffff;
-  --popover-foreground: #18181b;
-  --primary: #0f172a;
-  --primary-foreground: #ffffff;
-  --secondary: #eceef1;
-  --secondary-foreground: #18181b;
-  --muted: #eef0f2;
-  --muted-foreground: #71717a;
-  --accent: #e8eaee;
-  --accent-foreground: #18181b;
-  --success: #16a34a;
-  --success-foreground: #ffffff;
-  --warning: #d97706;
-  --warning-foreground: #ffffff;
-  --destructive: #dc2626;
-  --border: #e5e7eb;
-  --input: #e5e7eb;
-  --ring: #0f172a;
   --radius: 0.75rem;
-  background: var(--background);
   color: var(--foreground);
 }

@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { ModuleGate } from "@/components/auth/module-gate";
+import { buttonVariants } from "@/components/ui/button";
 import { PageHeader } from "@/components/layout/page-header";
 import { SzabadsagView } from "@/components/jelenlet/szabadsag-view";
 import {
@@ -26,6 +28,11 @@ export default async function SzabadsagPage({
         <PageHeader
           title="Szabadság"
           subtitle="Kinek mennyi kerete van, ki mikor van távol, és mi vár jóváhagyásra."
+          actions={
+            <Link href="/jelenlet" className={buttonVariants({ variant: "outline", size: "sm" })}>
+              ‹ Csapat
+            </Link>
+          }
         />
         <SzabadsagAdat ev={ev} />
       </div>

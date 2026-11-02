@@ -61,12 +61,12 @@ function iso(ev: number, honap: number, nap: number): string {
   return `${ev}-${String(honap).padStart(2, "0")}-${String(nap).padStart(2, "0")}`;
 }
 
-function datumCimke(isoNap: string): string {
+export function datumCimke(isoNap: string): string {
   const [, ho, nap] = isoNap.split("-").map(Number);
   return `${HO_ROVID[ho - 1]}. ${nap}.`;
 }
 
-function szakaszCimke(tol: string, ig: string): string {
+export function szakaszCimke(tol: string, ig: string): string {
   return tol === ig ? datumCimke(tol) : `${datumCimke(tol)} – ${datumCimke(ig)}`;
 }
 
@@ -695,13 +695,16 @@ function KozelgoSor({
 
 // --- Rögzítés bárkinek, egy sorban a hőtérkép alatt ---
 
-function RogzitoSor({
+export function RogzitoSor({
   merlegek,
   pending,
   onRogzit,
+  dialogban = false,
 }: {
   merlegek: SzabadsagMerleg[];
   pending: boolean;
+  /** A Csapat lap dialógusában a cím és a felső vonal a dialógusé. */
+  dialogban?: boolean;
   onRogzit: (
     adat: {
       employeeId: string;
@@ -754,9 +757,9 @@ function RogzitoSor({
   const mezo = "h-8 rounded-lg border bg-card px-2 text-xs";
 
   return (
-    <div className="flex flex-col gap-1.5 border-t pt-3">
+    <div className={cn("flex flex-col gap-1.5", !dialogban && "border-t pt-3")}>
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[13px] font-bold">Szabadság rögzítése:</span>
+        {!dialogban && <span className="text-[13px] font-bold">Szabadság rögzítése:</span>}
         <select
           aria-label="Dolgozó"
           value={employeeId}
@@ -827,7 +830,7 @@ function RogzitoSor({
 
 // --- Keret beállítása ---
 
-function KeretDialog({
+export function KeretDialog({
   merleg,
   pending,
   onClose,
