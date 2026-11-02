@@ -4189,3 +4189,10 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 - `lib/keszlet/actions.ts`: új `deleteKasszaMovement(id)` (`requireEditPermission("keszlet")`), csak olyan sort töröl, ahol `purchase_id` és `movement_group` üres és `category = 'egyeb'` (a felvásárláshoz/mozgáshoz kötött sorokat a saját törlésük kezeli). `KasszaMovementRow.deletable` (új, opcionális) a `getKasszaMovements` kézi soraihoz.
 - `components/keszlet/nyiregyhaza-havi.tsx`: a „Kassza mozgások” ablakban a törölhető sorokon X gomb, megerősítéssel, törlés után a lista és az egyenleg frissül. Adatmodell, jogosultság, design változatlan.
 - Ellenőrzés: eslint (0 hiba), `tsc --noEmit` (az érintett fájlokban 0 hiba; egy régi, független hiba a `helyi/nevegyezes.mts`-ben). Nyitott: böngészős ellenőrzés + commit/push a felügyelőre vár.
+
+## 2026-11-02 — Új fuvarszervező rendszer: prototípus (/proto)
+- Csak admin, csak nézet: `app/proto/` (Ma, Keresés, Beérkező, Terv, Pénz + Excel-export), `components/proto/`, `lib/proto/`. Fuvart nem módosít, migráció nincs; az `app-shell.tsx`-ben egy sor kivétel, hogy a prototípus az oldalsáv nélkül jelenjen meg.
+- A Pénz az új képlettel számol (`lib/proto/penz-alap.ts`): fedezet = bevétel − üzemanyag − útdíj − egyéb − üres út; nettó = fedezet − sofőr (850 000 Ft/hó, munkanapra osztva) − kocsi fix (egyelőre 0). Az álló napok sofőrköltsége kocsiszinten külön sor. A jövőbeli fuvarok a mai nappal levágva. Az üres km továbbra is légvonal × 1,3 becslés.
+- A Terv húzása csak előnézet (`lib/proto/akciok.ts`).
+- Ellenőrzés: tsc, eslint, `teszt-akcio-jogok`, `next build`, a két nyers SQL a Postgres-teszten. Nyitott: böngészős ellenőrzés élesben, a teszt adatbázis régi sémájú (okt. 8-ig), ezért a lapok valódi adattal csak deploy után próbálhatók.
+- A régi segéd kivételének oka és a kocsi fix költség a felhasználó döntésére vár; a terv: https://claude.ai/artifact/CZhvit8oPLHnQZXZuJAJDY

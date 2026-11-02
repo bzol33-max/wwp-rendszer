@@ -58,7 +58,8 @@ export function AppShell({
     pathname.startsWith("/m/") ||
     pathname === "/m" ||
     pathname === "/felvasarlas" ||
-    pathname.startsWith("/attekintes")
+    pathname.startsWith("/attekintes") ||
+    pathname.startsWith("/proto")
   ) {
     return <>{children}</>;
   }
