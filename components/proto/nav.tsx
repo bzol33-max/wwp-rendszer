@@ -4,11 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const LAPOK = [
-  { href: "/proto", cimke: "Döntés" },
-  { href: "/proto/ma", cimke: "Ma" },
-  { href: "/proto/kereso", cimke: "Keresés" },
-  { href: "/proto/terv", cimke: "Terv" },
+  { href: "/proto", cimke: "Áttekintés" },
+  { href: "/proto/kereso", cimke: "Fuvarok" },
   { href: "/proto/penz", cimke: "Pénz" },
+  { href: "/proto/terv", cimke: "Terv" },
 ];
 
 export function ProtoNav() {
@@ -25,7 +24,7 @@ export function ProtoNav() {
         ))}
         <Link href="/fuvarozas2" className="ml-auto text-sm text-muted-foreground hover:underline">Vissza a mostani apphoz</Link>
       </nav>
-      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t bg-card pb-[env(safe-area-inset-bottom)] md:hidden" aria-label="Prototípus">
+      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-4 border-t bg-card pb-[env(safe-area-inset-bottom)] md:hidden" aria-label="Prototípus">
         {LAPOK.map((l) => (
           <Link key={l.href} href={l.href} className={`py-3 text-center text-xs ${aktiv(l.href) ? "font-semibold text-primary" : "text-muted-foreground"}`}>
             {l.cimke}

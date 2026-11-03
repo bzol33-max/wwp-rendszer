@@ -1,128 +1,308 @@
 import Link from "next/link";
-import { BejovoGombok, KocsiraGomb } from "@/components/fuvarozas2/ma-het-gombok";
-import { timocomKeresSzoveg } from "@/lib/fuvarozas2/kereses-javaslat-alap";
+import { Suspense, type ReactNode } from "react";
 import { varosNev } from "@/lib/fuvarozas/varos";
-import { getDontes } from "@/lib/proto/dontes";
-import { ArCsekkUrlap } from "@/components/proto/ar-csekk";
 import { ArPirula } from "@/components/proto/ar-pirula";
-import { MasolGomb } from "@/components/proto/masol-gomb";
+import { BejovoSor } from "@/components/proto/bejovo-gombok";
+import { DashTerkep } from "@/components/proto/dash-terkep";
 import { eur, ft, napCimke, szam } from "@/components/proto/format";
+import { MasolGomb } from "@/components/proto/masol-gomb";
+import { timocomKeresSzoveg } from "@/lib/fuvarozas2/kereses-javaslat-alap";
+import type { MaKocsi } from "@/lib/fuvarozas2/ma-vaszon";
+import { getDont, getEletut, getFlotta, getHet, getMa, getPenz, getTerkep } from "@/lib/proto/dashboard";
+import { idoszakBol, type IdoszakParam } from "./penz/idoszak";
+import "./dashboard.css";
 
-const IRANY_CIMKE: Record<string, string> = {
-  "tobb-penz": "Több pénz",
-  gyakori: "Gyakori",
-  hazafele: "Hazafelé",
-  "ures-haza": "Üresen haza",
-  tovabbi: "További",
-};
+const M = (n: number) => `${(n / 1_000_000).toFixed(2).replace(".", ",")} M`;
+const PLUSZ = (n: number) => `${n > 0 ? "+" : n < 0 ? "−" : ""}${M(Math.abs(n))}`;
+const percOra = (p: number) => `${Math.floor(p / 60)} ó ${String(Math.round(p % 60)).padStart(2, "0")} p`;
 
-export default async function ProtoDontes() {
-  const d = await getDontes();
-  const kocsik = d.javaslat?.kocsik ?? [];
-  const lejartFt = d.kintlevoseg.reduce((s, k) => s + k.lejartFt, 0);
-  const lejartEur = d.kintlevoseg.reduce((s, k) => s + k.lejartEur, 0);
-  const dupla = d.duplak.reduce((s, x) => s + x.tobbletFt, 0);
+/** Terv szerinti kocsiszám: a megrendelt kamionok helye is látszik, amíg nincs a törzsben. */
+const TERVEZETT_KOCSI = 4;
+const SZINEK = ["#0B6E85", "#A3147F", "#475569", "#6A2FC4"];
+
+function Doboz({ cim, children, jobb }: { cim: string; children: ReactNode; jobb?: ReactNode }) {
+  return <div className="p"><h2 className="h">{cim}{jobb}</h2>{children}</div>;
+}
+
+function Toltes({ cim }: { cim: string }) {
+  return <div className="p"><span className="h">{cim}</span><span className="m" role="status">Töltöm…</span></div>;
+}
+
+function megrendeltE(k: MaKocsi): boolean {
+  return !!k.helykitolto;
+}
+
+function Kocsikartya({ k, i, nov }: { k: MaKocsi; i: number; nov: ReactNode }) {
+  if (megrendeltE(k)) return <Megrendelt nev={k.kod ?? k.cimke} i={i} />;
+  const megallok = k.sorok.flatMap((s) => (s.tipus === "megallo" ? [s] : []));
+  const most = megallok.find((m) => m.allapot === "most") ?? megallok.find((m) => m.allapot === "kovetkezo") ?? megallok[megallok.length - 1] ?? null;
+  const fuvar = k.fuvarAdat?.find((f) => f.id === most?.fuvarId) ?? k.fuvarAdat?.[0] ?? null;
+  const kesik = megallok.some((m) => m.kiemelt === "kesik");
+  const szin = k.allapot?.szin;
+  const piros = kesik || szin === "red";
+  const holnap = k.holnap[0] ?? null;
+  const tachoForras = k.tachoNapiHatraPerc != null;
   return (
-    <>
-      <div>
-        <h1 className="text-xl font-semibold">Mit döntsek most?</h1>
-        <p className="text-sm text-muted-foreground">{d.bejovo.length} megbízás vár rád · {kocsik.filter((k) => k.szabad).length} kocsira keress fuvart · {ft(lejartFt)}{lejartEur ? ` + ${eur(lejartEur)}` : ""} lejárt. Az árak {szam(d.mintaDb)} saját fuvarodból számolódnak.</p>
+    <article className="p">
+      <div className="r">
+        <h2 className="tn"><i className="dot" style={{ background: SZINEK[i % 4] }} />{k.kod ?? k.cimke}</h2>
+        <span className={`pill ${piros ? "pwa" : szin === "amber" ? "pwa" : "pac"}`}>{k.allapot?.szoveg ?? "Nincs adat"}{k.sebesseg ? ` · ${Math.round(k.sebesseg)} km/h` : ""}</span>
       </div>
+      <span className="m">{k.sofor ?? "Nincs sofőr"}{k.allapot?.hely ? ` · ${k.allapot.hely}` : ""}</span>
+      {fuvar
+        ? <div className="r"><span>{fuvar.partner} · {fuvar.utvonal}</span></div>
+        : <div className="r"><span>Ma nincs fuvar</span><Link href="/fuvarozas2/timocom" aria-label={`Keress rá: fuvar erre: ${k.kod}`}>Keress rá</Link></div>}
+      {most && (
+        <div className="r"><b className="n">{most.felLe === "felrako" ? "Fel" : "Le"}: {most.varos}</b><span className="m n" style={most.kiemelt === "kesik" ? { color: "var(--wa)", fontWeight: 600 } : undefined}>{most.elteres ?? most.teny ?? most.terv ?? ""}</span></div>
+      )}
+      <div className="r m">
+        <span className="n">
+          {tachoForras ? <>Tachó: ma még {percOra(k.tachoNapiHatraPerc!)}<span className="tacho" aria-hidden="true"><i style={{ width: `${Math.min(100, (k.tachoNapiHatraPerc! / 540) * 100)}%` }} /></span></> : "Tachó: nincs friss adat"}
+        </span>
+        {k.etaSor && <span>{k.etaSor}</span>}
+      </div>
+      <div className="r m">
+        {holnap
+          ? <span>{k.holnapFolytatodik ? "Holnap is folytatódik" : `Következő nap: ${holnap.partner ?? "fuvar"}`}</span>
+          : <span style={{ color: "var(--wa)", fontWeight: 600 }}>Következő napra nincs fuvar</span>}
+        {nov}
+      </div>
+    </article>
+  );
+}
 
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <div className="grid min-w-0 gap-4">
-          <section className="grid gap-2" aria-label="Bejövő megbízások">
-            <div className="flex flex-wrap items-baseline justify-between gap-2"><h2 className="font-semibold">1. Vállald el? · {d.bejovo.length}</h2><Link href="/proto/beerkezo" className="text-xs font-medium text-primary underline">Kiolvasott adatok mezőnként</Link></div>
-            {d.bejovo.length === 0 && <p className="rounded-xl border bg-card p-3 text-sm text-muted-foreground">Nincs döntésre váró megbízás.</p>}
-            {d.bejovo.map((b) => (
-              <article key={b.id} className="grid gap-2 rounded-xl border bg-card p-3">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <Link href={`/fuvarozas2/megbizasok/${b.id}`} className="font-semibold hover:underline">{varosNev(b.felrako) || "?"} → {varosNev(b.lerako) || "?"}</Link>
-                    <div className="text-xs text-muted-foreground">{b.partner ?? "Ismeretlen partner"} · {napCimke(b.felrakasNap)}{b.hivatkozas ? ` · ${b.hivatkozas}` : ""}</div>
-                  </div>
-                  <div className="text-right"><div className="font-semibold tabular-nums">{b.fuvardij != null ? `${szam(b.fuvardij)} ${b.penznem === "EUR" ? "€" : "Ft"}` : "Nincs díj"}</div><ArPirula itelet={b.csekk.itelet} /></div>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {b.csekk.ftKm != null && b.csekk.alapFtKm != null ? `${szam(b.csekk.ftKm)} Ft/km, ${b.csekk.alap}: ${szam(b.csekk.alapFtKm)} Ft/km. ` : ""}
-                  {b.csekk.viszonylat.utolso ? `Szokásos díj ezen az úton ${ft(b.csekk.viszonylat.medianDij)} (${b.csekk.viszonylat.db} fuvar). ` : "Ezen az úton még nem volt fuvarod. "}
-                  {b.magaban?.eredmenyFt != null ? `Számolt eredmény: ${ft(b.magaban.eredmenyFt)}. ` : ""}
-                  {b.legjobb ? `Legjobb kocsi: ${b.legjobb.kod}, ${b.legjobb.sofor}.` : "Nincs szabad kocsi javaslat."}
-                </p>
-                <div className="flex flex-wrap gap-2"><BejovoGombok id={b.id} allapot={b.allapot} kocsiKod={b.legjobb?.kod ?? null} cimke={b.legjobb ? `${b.legjobb.sofor}` : ""} /></div>
-              </article>
-            ))}
-          </section>
+function Megrendelt({ nev, i }: { nev: string; i: number }) {
+  return (
+    <article className="p" style={{ borderStyle: "dashed" }}>
+      <div className="r"><h2 className="tn"><i className="dot" style={{ background: SZINEK[i % 4] }} />{nev}</h2><span className="pill pmu">Megrendelve</span></div>
+      <span className="m">Új kamion, még nem üzemel</span>
+    </article>
+  );
+}
 
-          <section className="grid gap-2" aria-label="Mit keressek">
-            <h2 className="font-semibold">2. Mit keress a kocsikra?</h2>
-            {!d.javaslat && <p className="rounded-xl border bg-card p-3 text-sm text-amber-800">A javaslatok most nem töltöttek be. Frissíts rá.</p>}
-            {kocsik.map((k) => (
-              <article key={k.kod} className="grid gap-2 rounded-xl border bg-card p-3">
-                <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <span className="font-semibold">{k.kod} · {k.sofor}</span>
-                  {k.szabad
-                    ? <span className="text-sm">Kiürül: <b>{k.szabad.hely.varos}</b>, {napCimke(k.szabad.nap)}{k.szabad.ido ? ` ${k.szabad.ido}` : ""}{k.szabad.becsult ? " (becslés)" : ""}</span>
-                    : <span className="text-sm text-muted-foreground">{k.tavolletben ? "Távollét" : k.nincsAdat ? "Nincs adat" : "Foglalt"}</span>}
-                </div>
-                {k.hazaNap && <div className="text-xs text-muted-foreground">Szakolyra haza: {napCimke(k.hazaNap)}{k.csakHaza ? ", csak hazafelé keress" : ""}</div>}
-                {k.iranyok.slice(0, 3).map((i) => (
-                  <div key={i.kulcs} className="grid gap-1 rounded-lg bg-muted/40 p-2 text-sm">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="font-medium">{i.nev} <span className="ml-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">{IRANY_CIMKE[i.cimke] ?? i.cimke}</span></span>
-                      {k.szabad && <MasolGomb szoveg={timocomKeresSzoveg(k.szabad.hely.varos, i)} cimke="TIMOCOM-keresés másolása" />}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {i.dijFt != null ? `Kérj kb. ${ft(i.dijFt)}${i.ftKm != null ? `, ${szam(i.ftKm)} Ft/km` : ""}. ` : ""}Üresen {szam(i.raallasKm)} km, rakottan {szam(i.rakottKm)} km{i.ejszakaKint ? `, ${i.ejszakaKint} éjszaka kint` : ""}{i.hazaer ? ", hazaér" : ""}. {i.timocomDb > 0 ? `${i.timocomDb} nyitott ajánlat. ` : ""}
-                    </div>
-                    {i.partnerek.length > 0 && <div className="text-xs">Hívd: {i.partnerek.slice(0, 3).map((p) => `${p.partner} (${p.db} fuvar${p.utolsoDijFt != null ? `, utoljára ${ft(p.utolsoDijFt)}` : ""})`).join(" · ")}</div>}
-                  </div>
-                ))}
-              </article>
-            ))}
-          </section>
+async function KocsiEredmeny({ kod, kezdet, veg }: { kod: string | null; kezdet: string; veg: string }) {
+  const p = await getPenz(kezdet, veg);
+  const k = p.kocsik.find((x) => x.kulcs === kod);
+  if (!k) return null;
+  const e = k.nettoFt - k.alloSoforFt;
+  return <span className="n" style={e < 0 ? { color: "var(--ba)" } : undefined}>{PLUSZ(e)}</span>;
+}
 
-          {d.elvinni.length > 0 && (
-            <section className="grid gap-2" aria-label="Saját áru">
-              <h2 className="font-semibold">3. Saját áru, ami útba eshet · {d.elvinni.length}</h2>
-              {d.elvinni.map((e) => (
-                <div key={e.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-card p-3 text-sm">
-                  <span className="min-w-0"><Link className="font-medium hover:underline" href={`/fuvarozas2/megbizasok/${e.id}`}>{e.utvonal}</Link><span className={`block text-xs ${e.surgosseg === "piros" ? "font-medium text-red-700" : e.surgosseg === "sarga" ? "text-amber-800" : "text-muted-foreground"}`}>Legkésőbb: {napCimke(e.legkesobb)}{e.hely?.utbaEso ? ", útba esik" : ""}</span></span>
-                  {e.hely && <KocsiraGomb id={e.id} jarmuKod={e.hely.kocsi} nap={e.hely.nap} cimke={`${e.hely.kocsi}`} />}
-                </div>
-              ))}
-            </section>
-          )}
+async function Kocsik({ kezdet, veg }: { kezdet: string; veg: string }) {
+  const v = await getMa();
+  const hiany = Math.max(0, TERVEZETT_KOCSI - v.kocsik.length);
+  return (
+    <section className="trucks" aria-label="Kocsik most">
+      {v.kocsik.map((k, i) => (
+        <Kocsikartya key={k.kod ?? k.cimke} k={k} i={i} nov={<Suspense fallback={null}><KocsiEredmeny kod={k.kod} kezdet={kezdet} veg={veg} /></Suspense>} />
+      ))}
+      {Array.from({ length: hiany }, (_, j) => <Megrendelt key={j} nev={`${v.kocsik.length + j + 1}. kocsi`} i={v.kocsik.length + j} />)}
+    </section>
+  );
+}
+
+async function Szamok({ kezdet, veg, cim }: { kezdet: string; veg: string; cim: string }) {
+  const p = await getPenz(kezdet, veg);
+  const allo = p.kocsik.reduce((s, k) => s + k.alloSoforFt, 0);
+  const eredmeny = p.ossz.nettoFt - allo;
+  const osszKm = p.ossz.km + p.ossz.uresKm;
+  const becs = p.ossz.becslesDb;
+  const d = await getDont();
+  const lejart = d.kintlevoseg.reduce((s, k) => s + k.lejartFt, 0);
+  const lejartEur = d.kintlevoseg.reduce((s, k) => s + k.lejartEur, 0);
+  const lejartDb = d.kintlevoseg.reduce((s, k) => s + k.lejartDb, 0);
+  const nyitott = d.kintlevoseg.reduce((s, k) => s + k.nyitottFt, 0);
+  return (
+    <section className="kpi" aria-label={`Számok, ${cim}`}>
+      <Doboz cim={`Bevétel · nettó, ${cim}`}><b className="big n">{M(p.ossz.bevetelFt)} Ft</b><span className="m">{p.ossz.eur ? `benne ${eur(p.ossz.eur)}` : "Ft-ban számolva"}{p.ossz.kimaradtDb ? ` · ${p.ossz.kimaradtDb} kimaradt` : ""}</span></Doboz>
+      <Doboz cim="Fedezet"><b className="big n">{M(p.ossz.fedezetFt)} Ft</b><span className="m">{p.ossz.bevetelFt ? `${Math.round((p.ossz.fedezetFt / p.ossz.bevetelFt) * 100)}%` : "—"} · {becs} fuvar nem teljesen tény</span></Doboz>
+      <Doboz cim="Kocsik eredménye"><b className="big n" style={{ color: eredmeny < 0 ? "var(--ba)" : "var(--ok)" }}>{PLUSZ(eredmeny)} Ft</b><span className="m">rezsi és adó előtt · kocsi fix nincs megadva</span></Doboz>
+      <div className="p opt"><h2 className="h">Üres km</h2><b className="big n">{osszKm ? `${((p.ossz.uresKm / osszKm) * 100).toFixed(1).replace(".", ",")}%` : "—"}</b><span className="m n">{szam(p.ossz.uresKm)} / {szam(osszKm)} km · becslés</span></div>
+      <div className="p opt"><h2 className="h">Ft/km</h2><b className="big n">{osszKm ? szam(p.ossz.bevetelFt / osszKm) : "—"}</b><span className="m n">önköltség: {osszKm ? szam((p.ossz.bevetelFt - eredmeny) / osszKm) : "—"} Ft/km</span></div>
+      <div className="gap" aria-hidden="true" />
+      <div className="p" style={{ borderColor: "var(--ba)" }}><h2 className="h">Lejárt · bruttó, mai állapot</h2><b className="big n" style={{ color: "var(--ba)" }}>{M(lejart)} Ft</b><span className="m n">{lejartDb} számla{lejartEur ? ` · + ${eur(lejartEur)}` : ""} · nyitott: {M(nyitott)} Ft</span></div>
+    </section>
+  );
+}
+
+async function Teendok() {
+  const [v, d, f] = await Promise.all([getMa(), getDont(), getFlotta()]);
+  const tetelek: { kulcs: string; szint: "Most" | "Ma" | "Hét"; szoveg: string; href: string; gomb: string }[] = [];
+  for (const e of v.elteresek) tetelek.push({ kulcs: e.kulcs, szint: e.szin === "red" ? "Most" : "Ma", szoveg: e.cim, href: e.href ?? "/fuvarozas2", gomb: "Nyit" });
+  if (d.bejovo.length) tetelek.push({ kulcs: "bej", szint: "Ma", szoveg: `${d.bejovo.length} új megbízás vár`, href: "#bejovo", gomb: "Dönts" });
+  for (const k of d.javaslat?.kocsik ?? []) if (k.szabad && k.iranyok.length) tetelek.push({ kulcs: `k-${k.kod}`, szint: "Ma", szoveg: `${k.kod}: keress fuvart`, href: "#keress", gomb: "Keress" });
+  for (const t of v.teendok) tetelek.push({ kulcs: `t-${t.cimke}`, szint: "Ma", szoveg: `${t.cimke}: ${t.ertek}`, href: t.href, gomb: "Nyit" });
+  for (const l of f.lejaro.filter((x) => x.nap <= 30)) tetelek.push({ kulcs: `o-${l.cim}`, szint: l.lejart ? "Most" : "Hét", szoveg: `${l.cim}: ${l.lejart ? `lejárt ${-l.nap} napja` : `${l.nap} nap`}`, href: "/jarmuvek", gomb: "Nyit" });
+  if (d.duplak.length) tetelek.push({ kulcs: "dup", szint: "Hét", szoveg: `${d.duplak.length} azonos számlaszámú fuvarpár`, href: "/proto/dontes", gomb: "Nézd" });
+  const sor = { Most: 0, Ma: 1, "Hét": 2 } as const;
+  tetelek.sort((a, b) => sor[a.szint] - sor[b.szint]);
+  const OSZTALY = { Most: "pba", Ma: "pwa", "Hét": "pac" } as const;
+  return (
+    <div className="col teendo">
+      <div className="p" style={{ flex: 1, overflow: "auto" }}>
+        <h2 className="h">Teendő · {tetelek.length}</h2>
+        {tetelek.length === 0 && <span className="m">Most nincs teendő.</span>}
+        {tetelek.map((t, i) => (
+          <div key={t.kulcs} className={`td ${i >= 3 ? "xmob" : ""}`}><span className={`pill ${OSZTALY[t.szint]}`}>{t.szint}</span><span>{t.szoveg}</span><Link href={t.href} aria-label={`${t.gomb}: ${t.szoveg}`}>{t.gomb}</Link></div>
+        ))}
+        {tetelek.length > 3 && <Link className="mmore" href="/proto/dontes">Mind a {tetelek.length} teendő</Link>}
+      </div>
+    </div>
+  );
+}
+
+async function Terkep() {
+  const a = await getTerkep();
+  return (
+    <div className="col ter">
+      <div className="p" style={{ padding: 0, overflow: "hidden", position: "relative", flex: 1, minHeight: 170, isolation: "isolate" }}>
+        <DashTerkep adat={a} />
+        <div className="m" style={{ position: "absolute", left: 8, bottom: 6, background: "var(--card)", border: "1px solid var(--line)", borderRadius: 6, padding: "2px 7px", zIndex: 500 }}>Vonal: légvonal a megállók közt{a.kimaradt ? ` · ${a.kimaradt} cím nincs a térképen` : ""}</div>
+      </div>
+    </div>
+  );
+}
+
+async function Bejovo() {
+  const d = await getDont();
+  return (
+    <div className="col dont" style={{ overflow: "auto" }} id="bejovo">
+      <div className="p">
+        <h2 className="h">Bejövő · {d.bejovo.length} <Link href="/fuvarozas2/tervezes" aria-label="Összes: bejövő megbízás">Összes</Link></h2>
+        {d.bejovo.length === 0 && <span className="m">Nincs döntésre váró megbízás.</span>}
+        {d.bejovo.slice(0, 3).map((b, i) => {
+          const ut = `${varosNev(b.felrako) || "?"} → ${varosNev(b.lerako) || "?"}`;
+          return (
+            <div key={b.id} style={{ display: "contents" }}>
+              <div className="r" style={i ? { borderTop: "1px solid var(--line)", paddingTop: 4 } : undefined}><b>{ut}</b><ArPirula itelet={b.csekk.itelet} /></div>
+              <div className="r m n"><span>{b.partner ?? "Ismeretlen"} · {napCimke(b.felrakasNap)}</span><span>{b.fuvardij != null ? `${szam(b.fuvardij)} ${b.penznem === "EUR" ? "€" : "Ft"}` : "Nincs díj"}{b.csekk.ftKm != null ? ` · ${szam(b.csekk.ftKm)} Ft/km` : ""}</span></div>
+              <div className="r m n"><span>{b.legjobb ? `${b.legjobb.kod} · ${b.legjobb.sofor}` : "Nincs szabad kocsi"}</span><span>{b.magaban?.eredmenyFt != null ? `Eredmény kb. ${ft(b.magaban.eredmenyFt)}` : ""}</span></div>
+              <div className="r"><span /><BejovoSor id={b.id} nev={`${b.partner ?? ""} ${ut}`} kiemelt={b.csekk.itelet !== "alacsony"} /></div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+async function Het() {
+  const [h, d] = await Promise.all([getHet(), getDont()]);
+  const keres = (d.javaslat?.kocsik ?? []).find((k) => k.szabad && k.iranyok.length > 0);
+  const irany = keres?.iranyok[0];
+  const hiany = h ? Math.max(0, TERVEZETT_KOCSI - h.sorok.length) : 0;
+  return (
+    <div className="p" id="keress">
+      <h2 className="h">A hét · esti hely <span className="m" style={{ textTransform: "none", letterSpacing: 0 }}>◆ saját · szaggatott: nincs fuvar</span></h2>
+      {!h && <span className="m">A heti terv most nem töltött be.</span>}
+      {h && (
+        <div className="wk">
+          <span />
+          {h.napok.map((n) => <span key={n} className="m ctr">{["Hé", "Ke", "Sze", "Csü", "Pé"][h.napok.indexOf(n)]}</span>)}
+          <span className="m nap">kint · pé. haza</span>
+          {h.sorok.map((s) => (
+            <div key={s.kod} style={{ display: "contents" }}>
+              <b>{s.kod.split("-")[0]}</b>
+              {s.cellak.map((c) => <span key={c.nap} className={`c ${c.hely ? (c.sajat ? "cs" : "cb") : "ce"} ${c.ma ? "cm" : ""}`}>{c.hely ?? "Nincs"}</span>)}
+              <span className="m nap n" style={s.kintAlvas > 3 || !s.hazaer ? { color: "var(--wa)" } : undefined}>{s.kintAlvas}{s.kintAlvas > 3 ? " (sok)" : ""} · {s.hazaer ? "igen" : "nem"}</span>
+            </div>
+          ))}
+          {Array.from({ length: hiany }, (_, j) => <div key={j} style={{ display: "contents" }}><b>{h.sorok.length + j + 1}.</b><span className="m" style={{ gridColumn: "2/-1" }}>Megrendelve, még nem üzemel</span></div>)}
         </div>
+      )}
+      {keres && irany && (
+        <>
+          <div className="r" style={{ borderTop: "1px solid var(--line)", paddingTop: 4 }}><b>{keres.kod}: mit keress</b><MasolGomb szoveg={timocomKeresSzoveg(keres.szabad!.hely.varos, irany)} cimke="TIMOCOM-keresés" /></div>
+          <div className="m n">{keres.szabad!.hely.varos} → {irany.nev}{irany.dijFt != null ? ` · kérj kb. ${ft(irany.dijFt)}` : ""} · {irany.partnerek.length} korábbi partner</div>
+        </>
+      )}
+    </div>
+  );
+}
 
-        <aside className="grid min-w-0 gap-4">
-          <ArCsekkUrlap />
+async function KocsiTabla({ kezdet, veg, cim }: { kezdet: string; veg: string; cim: string }) {
+  const [p, v] = await Promise.all([getPenz(kezdet, veg), getMa()]);
+  return (
+    <Doboz cim={`Kocsik eredménye · ${cim}`} jobb={<Link href={`/proto/penz?tol=${kezdet}&ig=${veg}&nezet=kocsi`} aria-label="Részletek: kocsik eredménye">Részletek</Link>}>
+      <table><thead><tr><th>Kocsi</th><th>Bevétel</th><th className="xt">Fedezet</th><th className="xt">Sofőr</th><th>Eredmény</th><th>Üres</th></tr></thead>
+        <tbody>
+          {v.kocsik.map((k) => {
+            if (megrendeltE(k)) return <tr key={k.kod ?? k.cimke}><td><b>{k.kod ?? k.cimke}</b></td><td colSpan={5} className="m" style={{ textAlign: "right" }}>Megrendelve</td></tr>;
+            const s = p.kocsik.find((x) => x.kulcs === k.kod);
+            if (!s) return null;
+            const e = s.nettoFt - s.alloSoforFt;
+            const km = s.km + s.uresKm;
+            return (
+              <tr key={s.kulcs}>
+                <td><b>{s.kulcs}</b>{s.becslesDb ? <> <span className="pill pwa">{s.becslesDb} becs.</span></> : null}</td>
+                <td>{M(s.bevetelFt)}</td><td className="xt">{M(s.fedezetFt)}</td><td className="xt">{M(s.soforFt + s.alloSoforFt)}</td>
+                <td style={{ color: e < 0 ? "var(--ba)" : "var(--ok)", fontWeight: 600 }}>{PLUSZ(e)}</td>
+                <td>{km ? `${((s.uresKm / km) * 100).toFixed(1).replace(".", ",")}%` : "—"}</td>
+              </tr>
+            );
+          })}
+        </tbody></table>
+      <span className="m">A sofőr az álló napokkal együtt számol · kocsi fix még nincs benne, ezért a valósnál jobb.</span>
+    </Doboz>
+  );
+}
 
-          <section className="grid gap-2 rounded-xl border bg-card p-3" aria-label="Kintlévőség">
-            <h2 className="font-semibold">Kit hívj pénzért?</h2>
-            {d.kintlevoseg.length === 0 && <p className="text-sm text-muted-foreground">Nincs nyitott fuvarszámla.</p>}
-            {d.kintlevoseg.slice(0, 8).map((k) => (
-              <div key={k.vevo} className="flex items-start justify-between gap-2 border-t pt-2 text-sm first:border-t-0 first:pt-0">
-                <span className="min-w-0"><span className="block font-medium">{k.vevo}</span><span className="block text-xs text-muted-foreground">{k.fizetesNap != null ? `Általában ${Math.round(k.fizetesNap)} nap alatt fizet` : "Nincs fizetési előzmény"}{k.legregebbiLejart ? ` · lejárt ${napCimke(k.legregebbiLejart)} óta` : ""}</span></span>
-                <span className="shrink-0 text-right tabular-nums"><span className={`block font-semibold ${k.lejartDb ? "text-red-700" : ""}`}>{k.lejartDb ? `${szam(k.lejartFt)} Ft${k.lejartEur ? ` + ${szam(k.lejartEur)} €` : ""}` : "Nem lejárt"}</span><span className="block text-xs text-muted-foreground">Nyitott: {szam(k.nyitottFt)} Ft{k.nyitottEur ? ` + ${szam(k.nyitottEur)} €` : ""}</span></span>
-              </div>
-            ))}
-            <Link href="/szamlak" className="text-xs font-medium text-primary underline">Számlák megnyitása</Link>
-          </section>
+async function Eletut() {
+  const [e, d] = await Promise.all([getEletut(), getDont()]);
+  const kiemelt = d.kintlevoseg.filter((k) => k.lejartDb > 0).slice(0, 2);
+  return (
+    <Doboz cim="Életút és pénz">
+      <div className="r"><span>Számlára vár</span><b className="n">{e.szamlara}</b></div>
+      <div className="r"><span>Hiányzó papír</span><b className="n" style={e.papir ? { color: "var(--wa)" } : undefined}>{e.papir}</b></div>
+      <div className="r"><span>Postára vár</span><b className="n">{e.postara}</b></div>
+      {kiemelt.map((k, i) => <div key={k.vevo} className="r" style={i === 0 ? { borderTop: "1px solid var(--line)", paddingTop: 4 } : undefined}><span>{k.vevo}</span><b className="n" style={{ color: "var(--ba)" }}>{M(k.lejartFt)}</b></div>)}
+      {kiemelt.length > 0 && <span className="m">Lejárt, bruttó{kiemelt[0].fizetesNap != null ? ` · ${kiemelt.map((k) => k.fizetesNap != null ? Math.round(k.fizetesNap) : "—").join(" és ")} nap alatt fizet` : ""}</span>}
+    </Doboz>
+  );
+}
 
-          {d.duplak.length > 0 && (
-            <section className="grid gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-amber-950" aria-label="Duplikátumok">
-              <h2 className="font-semibold">Lehet, hogy kétszer számol: {d.duplak.length} pár</h2>
-              <p className="text-xs">Azonos számlaszám két élő fuvaron, kb. {ft(dupla)} többlet a mostani kimutatásokban. Az ártárban ezek csak egyszer számítanak. Te döntöd el, melyik a valódi.</p>
-              {d.duplak.slice(0, 8).map((x) => (
-                <div key={x.szamla} className="text-xs">
-                  <b>{x.szamla}</b>: {x.fuvarok.map((f, i) => <span key={f.id}>{i > 0 ? ", " : " "}<Link className="underline" href={`/fuvarozas2/megbizasok/${f.id}`}>#{f.id}</Link></span>)} · {x.fuvarok[0].partner}
-                </div>
-              ))}
-            </section>
-          )}
-        </aside>
-      </div>
-    </>
+async function Flotta() {
+  const f = await getFlotta();
+  return (
+    <Doboz cim="Flotta" jobb={<Link href="/jarmuvek" aria-label="Járművek: flotta">Járművek</Link>}>
+      {f.tetelek.length === 0 && <span className="m">Nincs rögzített lejárat.</span>}
+      {f.tetelek.map((t) => <div key={t.cim} className="r"><span>{t.cim}</span>{t.figyel ? <span className="pill pwa">{t.ertek}</span> : <span className="n">{t.ertek}</span>}</div>)}
+      {f.l100 != null && <div className="r"><span>l/100 · 7 nap</span><span className="n">{f.l100.toFixed(1).replace(".", ",")}</span></div>}
+    </Doboz>
+  );
+}
+
+export default async function ProtoDashboard({ searchParams }: { searchParams: Promise<IdoszakParam> }) {
+  const sp = await searchParams;
+  const { kezdet, veg, idoszak } = idoszakBol(sp);
+  const cim = kezdet === veg ? napCimke(kezdet) : `${napCimke(kezdet)} – ${napCimke(veg)}`;
+  const v = await getMa();
+  const szeg = (k: string, c: string) => <Link href={`/proto?idoszak=${k}`} aria-current={idoszak === k ? "true" : undefined} style={{ minHeight: 0, lineHeight: "30px", padding: "0 10px", ...(idoszak === k ? { background: "var(--acc)", color: "var(--on)", fontWeight: 600 } : { color: "var(--mut)" }) }}>{c}</Link>;
+  return (
+    <div className="dash">
+      <header className="top">
+        <h1 className="brand">WWP Fuvarozás</h1>
+        <span className="m">frissítve {v.frissitve}</span>
+        <nav className="seg" aria-label="Időszak">{szeg("ma", "Ma")}{szeg("het", "Hét")}{szeg("ho", "Hónap")}<Link href={`/proto/penz?tol=${kezdet}&ig=${veg}`} style={{ minHeight: 0, lineHeight: "30px", padding: "0 10px", color: "var(--mut)" }}>Egyedi</Link></nav>
+        <form action="/proto/kereso" style={{ display: "contents" }}><input className="srch" type="search" name="q" aria-label="Keresés a teljes múltban" placeholder="Partner, rendszám, város, számla…" /></form>
+        <a className="btn dk" style={{ lineHeight: "30px" }} href={`/proto/penz/export?tol=${kezdet}&ig=${veg}`}>Excel-export</a>
+        <Link className="btn f dk" style={{ lineHeight: "32px" }} href="/fuvarozas2/megbizasok">Új fuvar</Link>
+      </header>
+      <main>
+        <Kocsik kezdet={kezdet} veg={veg} />
+        <Suspense fallback={<section className="kpi"><Toltes cim="Számok számolása" /></section>}><Szamok kezdet={kezdet} veg={veg} cim={cim} /></Suspense>
+        <section className="mid">
+          <Suspense fallback={<div className="col teendo"><Toltes cim="Teendő" /></div>}><Teendok /></Suspense>
+          <Suspense fallback={<div className="col ter"><Toltes cim="Térkép" /></div>}><Terkep /></Suspense>
+          <Suspense fallback={<div className="col dont"><Toltes cim="Bejövő" /></div>}><Bejovo /></Suspense>
+        </section>
+        <section className="bot">
+          <Suspense fallback={<Toltes cim="A hét" />}><Het /></Suspense>
+          <Suspense fallback={<Toltes cim="Kocsik eredménye" />}><KocsiTabla kezdet={kezdet} veg={veg} cim={cim} /></Suspense>
+          <Suspense fallback={<Toltes cim="Életút és pénz" />}><Eletut /></Suspense>
+          <Suspense fallback={<Toltes cim="Flotta" />}><Flotta /></Suspense>
+        </section>
+      </main>
+    </div>
   );
 }

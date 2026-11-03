@@ -8,6 +8,7 @@ const NAP = /^\d{4}-\d{2}-\d{2}$/;
 export function idoszakBol(p: IdoszakParam): { kezdet: string; veg: string; idoszak: string } {
   const ma = budapestNapISO();
   if (p.tol && p.ig && NAP.test(p.tol) && NAP.test(p.ig) && p.tol <= p.ig) return { kezdet: p.tol, veg: p.ig, idoszak: "egyedi" };
+  if (p.idoszak === "ma") return { kezdet: ma, veg: ma, idoszak: "ma" };
   if (p.idoszak === "het") return { kezdet: hetfo(ma), veg: ma, idoszak: "het" };
   if (p.idoszak === "elozo") {
     const d = new Date(`${ma.slice(0, 7)}-01T12:00:00Z`);

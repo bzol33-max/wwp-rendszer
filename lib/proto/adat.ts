@@ -100,9 +100,21 @@ export async function protoKeres(kereses: string, szuro: string): Promise<{ soro
     if (szuro === "ber" && s.jelleg !== "ber") return false;
     if (szuro === "sajat" && s.jelleg !== "sajat") return false;
     if (szuro === "nyitott" && (s.allapot === "lezart" || s.allapot === "postazva")) return false;
+    if (szuro === "papir" && (s.papirok_beerkeztek_at || !["teljesitve", "szamlazhato", "szamlazva", "email_elment"].includes(s.allapot))) return false;
     return keresEgyezik(s, kereses);
   });
   return { sorok: szurt.slice(0, 100), talalat: szurt.length, osszes: mind.length };
+}
+
+export async function protoFutoFuvarok(): Promise<MegbizasSor[]> {
+  await requireAdmin();
+  return query<MegbizasSor>(
+    `${SOR_SQL}
+     where m.allapot is not null and m.torolt_at is null and m.allapot <> 'ellenorzesre_var'
+       and (m.allapot = 'folyamatban'
+            or (m.datum <= (now() at time zone 'Europe/Budapest')::date and coalesce(m.lerakas_datum, m.datum) >= (now() at time zone 'Europe/Budapest')::date))
+     order by m.datum, m.id`
+  );
 }
 
 export async function protoHetFuvarok(hetKezdet: string): Promise<MegbizasSor[]> {
