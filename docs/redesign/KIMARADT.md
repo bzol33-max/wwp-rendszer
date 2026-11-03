@@ -9,7 +9,7 @@ A felügyelő (Claude) vezeti; a redesign végén ezt nézzük át a felhasznál
 - Info / kezdőlap, Dolgozók, Járművek, Beállítások — nem volt rájuk külön terv, csak az alap (0/0c) érvényes
 
 ## Színtémák
-- `.fuvarozas2`, `.szamlak` (menta) és `.jelenlet` (acélkék) saját témái felülírják az új kék sémát → a saját modul-lépésükben cserélendők.
+- ~~`.fuvarozas2`, `.szamlak` (menta) és `.jelenlet` (acélkék) saját témái~~ — kész (4., 6., 7. lépés).
 - A Jelenlét fő színe nagyon sötét (#0F172A) → a gombok gradiense ott halvány.
 - Beégetett színek a modulok kódjában (`bg-[#…]`, `text-orange-*`) — lista: `docs/redesign/0-alap-eredmeny.md`.
 - Badge: csak a destructive kapott halvány-piros pirulát; narancs/zöld/kék változat nincs.

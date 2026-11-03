@@ -4206,3 +4206,6 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 - Kutatás a saját adatból és a korábbi döntésekből: a Ma lap többszöri átrajzolása nem oldotta meg a gondot, a napi kérdés a „ki ürül ki hol, mit keressek rá, mennyiért”. Teszt-másolat (okt. 8-ig): 46% ismételt viszonylat, medián 539 Ft/km, 15/15 levél legfeljebb másnapra szól, 0 megerősített együttrakás, 8 azonos számlaszámú pár (1,245 M Ft).
 - Új első lap: bejövő megbízás árítélettel és valódi Elfogadom/Elutasítom gombbal (a meglévő `setFuvarJarmu`, `valtAllapot`, `torolMegbizast`), kocsinként a kiürülés, kereső-irány, kérhető díj, kit hívj (meglévő `getKeresesJavaslatok`), saját áru Kocsira gombbal (`kocsihozAdom`), ártár-ellenőrző telefonhoz (`lib/proto/artar-alap.ts`), partnerenkénti kintlévőség, duplikátum-jelzés. A régi Ma lap: `/proto/ma`.
 - Nincs migráció, nincs új írási művelet. Nyitott: valódi adaton böngészős ellenőrzés a felhasználónál; a duplikátumokról ember dönt.
+
+## 2026-11-03 — Redesign 7: Számlák a közös kék sémán
+- `app/globals.css` `.szamlak`: a menta szín-alaptokenek és a (Számlákban nem használt) `--f2-*` változók törölve, csak a `--radius` maradt, így a `:root` (0c) érvényesül. A komponensekben nem volt beégetett menta/emerald/teal; a Teendők és a Bevétel explicit színei érintetlenek. Csak szín, logika/mobil nem változott.
