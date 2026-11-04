@@ -39,6 +39,8 @@ export type BejovoSor = {
   /** EUR-os díj, de nincs MNB-árfolyam az átváltáshoz — a díj nem számít bevételnek, jelezni kell. */
   arfolyamNelkul: boolean;
   jarmuKod: string | null;
+  /** A megbízásból kiolvasott kocsi szövege (`jarmu`); a jarmuKod csak kocsira adás után van meg. */
+  kocsiSzoveg: string | null;
   /** A tárolt kalkulációból (becslés helyett a pontos HU-GO-számítás), ha van. */
   magaban: { minosites: AjanlatMinosites | null; eredmenyFt: number | null; onkoltsegFt: number } | null;
   kalkElavult: boolean;
@@ -83,7 +85,7 @@ export type Tervezo = {
 };
 
 type FuvarPont = {
-  id: string; jelleg: "ber" | "sajat"; allapot: string; jarmu_kod: string | null; partner: string | null; hivatkozas: string | null;
+  id: string; jelleg: "ber" | "sajat"; allapot: string; jarmu_kod: string | null; jarmu_szoveg: string | null; partner: string | null; hivatkozas: string | null;
   felrako: string | null; lerako: string | null; felrakas_nap: string; lerakas_nap: string;
   fuvardij: number | null; penznem: string; rakott_km: number | null;
   fel_lat: number | null; fel_lon: number | null; le_lat: number | null; le_lon: number | null;
@@ -118,7 +120,7 @@ export async function getTervezo(szuro: { m?: string; kocsi?: string }): Promise
 
   // A fuvarok (a bejövők és a kocsik hetei) — koordinátákkal a tárolt megállókból.
   const fuvarok = await query<FuvarPont>(
-    `select m.id::text, m.jelleg, m.allapot, j.kod as jarmu_kod, coalesce(p.nev, m.megrendelo) as partner,
+    `select m.id::text, m.jelleg, m.allapot, j.kod as jarmu_kod, nullif(trim(m.jarmu), '') as jarmu_szoveg, coalesce(p.nev, m.megrendelo) as partner,
        coalesce(m.hivatkozas_kanonikus, m.pozicioszam, m.reise_id) as hivatkozas,
        coalesce(fel.cim_nyers, m.felrako) as felrako, coalesce(le.cim_nyers, m.lerako) as lerako,
        to_char(m.datum, 'YYYY-MM-DD') as felrakas_nap, to_char(coalesce(m.lerakas_datum, m.datum), 'YYYY-MM-DD') as lerakas_nap,
@@ -277,7 +279,7 @@ export async function getTervezo(szuro: { m?: string; kocsi?: string }): Promise
     const el = elozmenyek(f);
     return {
       id: f.id, allapot: f.allapot, partner: f.partner, hivatkozas: f.hivatkozas, felrako: f.felrako, lerako: f.lerako,
-      felrakasNap: f.felrakas_nap, lerakasNap: f.lerakas_nap, fuvardij: f.fuvardij != null ? Number(f.fuvardij) : null, penznem: f.penznem, arfolyamNelkul: arfolyamNelkul(f), jarmuKod: f.jarmu_kod,
+      felrakasNap: f.felrakas_nap, lerakasNap: f.lerakas_nap, fuvardij: f.fuvardij != null ? Number(f.fuvardij) : null, penznem: f.penznem, arfolyamNelkul: arfolyamNelkul(f), jarmuKod: f.jarmu_kod, kocsiSzoveg: f.jarmu_szoveg,
       magaban: magabanKalkbol(t),
       kalkElavult: !t || t.elavult,
       kalkHiba: !!t && !t.eredmeny && !!t.hiba,

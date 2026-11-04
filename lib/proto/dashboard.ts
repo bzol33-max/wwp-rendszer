@@ -2,7 +2,14 @@ import "server-only";
 import { cache } from "react";
 import { requireAdmin } from "@/lib/auth/dal";
 import { query } from "@/lib/db";
-import { getFleetLastPositions, rendszamKulcs } from "@/lib/fuvarozas/ecofleet";
+import { getLastDataCachelve } from "@/lib/ecofleet/kliens";
+import {
+  sebessegOsszegzes, szenzorTankolasok, tachoTervLastDatabol, tankLiterLastDatabol, tankolasEgyeztetes,
+  type EgyeztetesTetel, type TachoTerv,
+} from "@/lib/ecofleet/plusz";
+import { ecofleetIdopont, tachoAllapotLastDatabol, tachoFriss } from "@/lib/ecofleet/szamitas";
+import { getFleetLastPositions, getVehicleTrips, rendszamKulcs } from "@/lib/fuvarozas/ecofleet";
+import { canNapokTobb } from "@/lib/jarmu-telemetria/repo";
 import { geokodolCachelve } from "@/lib/fuvarozas/erintes-felismeres";
 import { budapestNapISO } from "@/lib/fuvarozas/idozona";
 import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
@@ -105,11 +112,76 @@ export const getEletut = cache(async () => {
   return { szamlara: Number(s.szamlara), papir: Number(s.papir), postara: Number(s.postara) };
 });
 
+export type KocsiPlusz = { tankLiter: number | null; adatKorPerc: number | null; terv: TachoTerv | null };
+
+/** Tank és tachó-terv kocsikódonként, a közös getLastData-ból. Régi tachó-adatból nem adunk tervet. */
+export const getKocsiPlusz = cache(async (): Promise<Map<string, KocsiPlusz>> => {
+  await requireAdmin();
+  const ki = new Map<string, KocsiPlusz>();
+  const [jarmuvek, adat] = await Promise.all([getJarmuvek(), getLastDataCachelve().catch((e) => { console.warn("[proto] getLastData:", e); return null; })]);
+  const most = new Date();
+  for (const j of jarmuvek) {
+    const sor = adat?.sorok.find((s) => String(s.objectId) === j.ecofleetObjectId);
+    if (!j.kod || !sor) continue;
+    const tacho = tachoAllapotLastDatabol(sor);
+    const idopont = ecofleetIdopont(sor.timestamp);
+    ki.set(j.kod, { tankLiter: tankLiterLastDatabol(sor), adatKorPerc: idopont ? Math.round((most.getTime() - idopont.getTime()) / 60_000) : null, terv: tacho && tachoFriss(tacho, most) ? tachoTervLastDatabol(sor) : null });
+  }
+  return ki;
+});
+
+const NAP_MS = 86_400_000;
+const SEBESSEG_CACHE_MS = 10 * 60_000;
+let sebessegCache: { adat: Map<string, ReturnType<typeof sebessegOsszegzes>>; lekerveAt: number } | null = null;
+
+/** Kocsinként az elmúlt 7 nap legnagyobb sebessége és a túllépéses utak száma. */
+export const getSebesseg = cache(async (): Promise<Map<string, ReturnType<typeof sebessegOsszegzes>>> => {
+  await requireAdmin();
+  if (sebessegCache && Date.now() - sebessegCache.lekerveAt <= SEBESSEG_CACHE_MS) return sebessegCache.adat;
+  const jarmuvek = (await getJarmuvek()).filter((j) => j.kod && j.ecofleetObjectId);
+  const most = new Date();
+  const sorok = await Promise.all(jarmuvek.map(async (j) => {
+    const utak = await getVehicleTrips(j.ecofleetObjectId!, new Date(most.getTime() - 7 * NAP_MS), most).catch((e) => { console.warn("[proto] sebesség:", e); return null; });
+    return [j.kod!, utak ? sebessegOsszegzes(utak) : null] as const;
+  }));
+  const adat = new Map(sorok.filter((s): s is [string, ReturnType<typeof sebessegOsszegzes>] => s[1] !== null));
+  // Hibás lekérés nem kerül gyorsítótárba.
+  if (adat.size === jarmuvek.length) sebessegCache = { adat, lekerveAt: Date.now() };
+  return adat;
+});
+
+export type TankolasTetel = EgyeztetesTetel & { kod: string };
+
+/** Szenzor és kútszámla összevetése az elmúlt 30 napra, kocsinként. */
+export const getTankolasEgyeztetes = cache(async (): Promise<TankolasTetel[]> => {
+  await requireAdmin();
+  const jarmuvek = (await getJarmuvek()).flatMap((j) => (j.kod && j.ecofleetObjectId && j.id ? [{ id: j.id, kod: j.kod, kulcsok: new Set(j.rendszamok.map(rendszamKulcs)) }] : []));
+  const ma = budapestNapISO();
+  const tol = budapestNapISO(new Date(Date.now() - 30 * NAP_MS));
+  const can = await canNapokTobb(jarmuvek.map((j) => j.id), tol, ma);
+  // A kocsihoz még nem kötött számlát a nyers rendszám köti a kocsihoz, különben téves „nincs kútszámla” lenne belőle.
+  const szamlak = await query<{ jarmu_id: string | null; rendszam_nyers: string | null; idopont: Date; liter: string | null }>(
+    `select jarmu_id::text, rendszam_nyers, idopont, liter from tankolas
+     where (jarmu_id = any($1::bigint[]) or jarmu_id is null) and (idopont at time zone 'Europe/Budapest')::date between $2::date and $3::date`,
+    [jarmuvek.map((j) => j.id), tol, ma]
+  );
+  return jarmuvek.flatMap((j) => {
+    const napok = can.get(j.id) ?? [];
+    return tankolasEgyeztetes(
+      szenzorTankolasok(napok.flatMap((n) => n.tankolasok)),
+      szamlak.filter((s) => s.jarmu_id === j.id || (!s.jarmu_id && !!s.rendszam_nyers && j.kulcsok.has(rendszamKulcs(s.rendszam_nyers)))).map((s) => ({ idopont: new Date(s.idopont), liter: s.liter != null ? Number(s.liter) : null })),
+      new Set(napok.filter((n) => n.mintaDb > 0).map((n) => n.nap.slice(0, 10))),
+      (d) => budapestNapISO(d)
+    ).map((t) => ({ ...t, kod: j.kod }));
+  }).sort((a, b) => b.idopont.getTime() - a.idopont.getTime());
+});
+
 export type TerkepKocsi = {
   kod: string;
   szin: string;
-  pont: { lat: number; lon: number; sebesseg: number } | null;
+  pont: { lat: number; lon: number; sebesseg: number; korPerc: number | null } | null;
   megallok: { lat: number; lon: number; cim: string }[];
+  kimaradt: number;
 };
 export type TerkepAdat = {
   kocsik: TerkepKocsi[];
@@ -149,12 +221,20 @@ export const getTerkep = cache(async (): Promise<TerkepAdat> => {
       [j.kod, ma]
     );
     const megallok: TerkepKocsi["megallok"] = [];
+    let kocsiKimaradt = 0;
     for (const s of sorok) {
       const g = s.cim_nyers ? await geo(s.cim_nyers) : null;
       if (g && s.cim_nyers) megallok.push({ ...g, cim: varosNev(s.cim_nyers) || s.cim_nyers });
-      else kimaradt++;
+      else { kimaradt++; kocsiKimaradt++; }
     }
-    kocsik.push({ kod: j.kod!, szin: SZINEK[i % SZINEK.length], pont: p ? { lat: p.latitude, lon: p.longitude, sebesseg: p.speed } : null, megallok });
+    const gpsIdo = p ? ecofleetIdopont(p.timestamp) : null;
+    kocsik.push({
+      kod: j.kod!,
+      szin: SZINEK[i % SZINEK.length],
+      pont: p ? { lat: p.latitude, lon: p.longitude, sebesseg: p.speed, korPerc: gpsIdo ? Math.round((Date.now() - gpsIdo.getTime()) / 60_000) : null } : null,
+      megallok,
+      kimaradt: kocsiKimaradt,
+    });
   }
   const telepek: TerkepAdat["telepek"] = [];
   for (const t of telepLista.filter((x) => x.tipus !== "parkolo")) {

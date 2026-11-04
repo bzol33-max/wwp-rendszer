@@ -22,3 +22,19 @@
 .dash .btn{text-decoration:none;display:inline-block;box-sizing:border-box}
 .dash .mini{line-height:22px}
 .dash .seg a{min-height:0}
+
+/* 3-as terv: kocsinként kis, országhatárra vágott térkép. */
+.dash .trucks{align-items:stretch}
+.dash .minit{display:flex;flex-direction:column;gap:2px;margin:2px 0}
+.dash .minit svg{display:block;width:100%;height:auto;overflow:hidden}
+.dash .minit-v{aspect-ratio:668/413;border-radius:8px;background:var(--soft)}
+.dash .minit-o{fill:var(--acs);stroke:var(--fld);stroke-width:2}
+.dash .minit-t{fill:var(--ok)}
+.dash .minit-c{font:600 30px Inter,system-ui,sans-serif;fill:var(--ink);paint-order:stroke;stroke:var(--acs);stroke-width:5px}
+.dash .mid.h3{height:auto;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) minmax(0,1.1fr)}
+.dash .bot.b4{grid-template-columns:minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,.8fr) minmax(0,.8fr)}
+@media (max-width:1400px) and (min-width:1101px){.dash .bot.b4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:1100px) and (min-width:761px){.dash .mid.h3{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.dash .mid.h3 .het{grid-column:1/-1}.dash .bot.b4{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:760px){.dash .mid.h3{display:contents}.dash .het{order:2}.dash .bot.b4{grid-template-columns:minmax(0,1fr)}.dash .minit svg,.dash .minit-v{max-width:280px;width:100%;margin:0 auto}.dash .seg a{line-height:44px !important}}
+.dash .kor{flex-wrap:wrap}
+.dash .jelm{grid-column:1/-1;margin:0}

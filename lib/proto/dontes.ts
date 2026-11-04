@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/auth/dal";
 import { query } from "@/lib/db";
 import { getEurArfolyamok } from "@/lib/fuvarozas/arfolyam";
 import { budapestNapISO } from "@/lib/fuvarozas/idozona";
+import { findJarmuInSzoveg } from "@/lib/fuvarozas/vehicles";
 import { varosNev } from "@/lib/fuvarozas/varos";
 import { getKeresesJavaslatok, type KeresesJavaslatAdat } from "@/lib/fuvarozas2/kereses-javaslat";
 import { getTervezesHet } from "@/lib/fuvarozas2/tervezes-het";
@@ -34,7 +35,7 @@ export type ElvinniTetel = {
 export type Dontes = {
   ma: string;
   eurArfolyam: number | null;
-  bejovo: (BejovoSor & { csekk: ArCsekk; dijFt: number | null })[];
+  bejovo: (BejovoSor & { csekk: ArCsekk; dijFt: number | null; kocsiKod: string | null })[];
   javaslat: KeresesJavaslatAdat | null;
   elvinni: ElvinniTetel[];
   kintlevoseg: Kintlevoseg[];
@@ -122,7 +123,9 @@ export async function getDontes(): Promise<Dontes> {
     const fel = varosNev(b.felrako) || "?";
     const le = varosNev(b.lerako) || "?";
     const azonosKm = minta.find((m) => m.fel === fel && m.le === le && m.km)?.km ?? null;
-    return { ...b, dijFt, csekk: arCsekk(minta, { partner: b.partner, fel, le, dijFt, km: azonosKm }) };
+    // A bér megbízás rendszáma kötött: a kocsi a megbízásból jön, ajánlás nincs.
+    const kocsiKod = b.jarmuKod ?? findJarmuInSzoveg(b.kocsiSzoveg)?.kod ?? null;
+    return { ...b, dijFt, kocsiKod, csekk: arCsekk(minta, { partner: b.partner, fel, le, dijFt, km: azonosKm }) };
   });
 
   const elvinniMap = new Map<string, ElvinniTetel>();

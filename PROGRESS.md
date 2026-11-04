@@ -4213,6 +4213,13 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 ## 2026-11-03 — Redesign 7: Számlák a közös kék sémán
 - `app/globals.css` `.szamlak`: a menta szín-alaptokenek és a (Számlákban nem használt) `--f2-*` változók törölve, csak a `--radius` maradt, így a `:root` (0c) érvényesül. A komponensekben nem volt beégetett menta/emerald/teal; a Teendők és a Bevétel explicit színei érintetlenek. Csak szín, logika/mobil nem változott.
 
+## Prototípus 3b: a kiválasztott 3-as terv és az Ecofleet-adatok (2026-11-04)
+- `/proto`: kocsinként kis, országhatárra vágott térkép; a Leaflet-térkép kikerült a dashboardról.
+- Bér megbízásnál a kocsi a megbízásból jön (`jarmu`), ajánlás nincs; a `/fuvarozas2/tervezes` ajánlója még változatlan.
+- Új a kártyán: tank, következő szünet, napi pihenő, 7 napos max. sebesség. Új doboz: tankolás és kútszámla egyeztetése, 150 liter felett.
+- A `getLastData` egy kliensen megy (`lib/ecofleet/kliens.ts`), a `getFleetLastPositions` is abból olvas.
+- Nincs ellenőrizve: az élő oldal és a tankolás-egyeztetés valódi kútszámlákkal.
+
 ## 2026-11-03 — Prototípus 3: egyoldalas dashboard (/proto)
 - A jóváhagyott terv (Design artifact, „Végleges”) élő adatokkal: kocsikártyák (a megrendelt Jani és 4. kocsi csak hely), számok, teendők, Leaflet-térkép, bejövők, hét esti helye és kint alvás, kocsik eredménye, életút, kintlévőség, flotta-lejáratok. A lassú részek külön `Suspense`-ben (`lib/proto/dashboard.ts`, `cache`).
 - `/proto/kereso`: futó és mai fuvarok alapból, teljes múlt, hiányzó papír szűrő, üres állapot. Új: `/proto/fuvar/[id]` telefonos adatlap. A korábbi Döntés lap: `/proto/dontes`.

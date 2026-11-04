@@ -47,9 +47,9 @@ export default async function ProtoDontes() {
                   {b.csekk.ftKm != null && b.csekk.alapFtKm != null ? `${szam(b.csekk.ftKm)} Ft/km, ${b.csekk.alap}: ${szam(b.csekk.alapFtKm)} Ft/km. ` : ""}
                   {b.csekk.viszonylat.utolso ? `Szokásos díj ezen az úton ${ft(b.csekk.viszonylat.medianDij)} (${b.csekk.viszonylat.db} fuvar). ` : "Ezen az úton még nem volt fuvarod. "}
                   {b.magaban?.eredmenyFt != null ? `Számolt eredmény: ${ft(b.magaban.eredmenyFt)}. ` : ""}
-                  {b.legjobb ? `Legjobb kocsi: ${b.legjobb.kod}, ${b.legjobb.sofor}.` : "Nincs szabad kocsi javaslat."}
+                  {b.kocsiKod ? `Kocsi a megbízásból: ${b.kocsiKod}.` : "Nincs felismert rendszám a megbízásban."}
                 </p>
-                <div className="flex flex-wrap gap-2"><BejovoGombok id={b.id} allapot={b.allapot} kocsiKod={b.legjobb?.kod ?? null} cimke={b.legjobb ? `${b.legjobb.sofor}` : ""} /></div>
+                <div className="flex flex-wrap gap-2"><BejovoGombok id={b.id} allapot={b.allapot} kocsiKod={b.kocsiKod} cimke={b.kocsiKod ?? ""} /></div>
               </article>
             ))}
           </section>

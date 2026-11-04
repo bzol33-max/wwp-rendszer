@@ -120,6 +120,8 @@ export type MaKocsi = {
   /** Pillanatnyi sebesség (km/h) a már lekért élő Ecofleet-pozícióból; null, ha nincs GPS vagy 30 percnél régebbi az adat. */
   sebesseg?: number | null;
   etaSor: string | null;
+  /** Az etaSor időpontja ISO-ban, a tachó-pihenővel való összevetéshez. */
+  etaIdopont?: string | null;
   /** A mai megbízások megállói és a GPS-állások, tükörben (lásd TukorSor). */
   sorok: TukorSor[];
   /** A következő munkanap új fuvarjai (ami a maiból folytatódik, az a „ma” alatt van). */
@@ -861,6 +863,7 @@ export async function getMaVaszon(): Promise<MaVaszon> {
       napiKm: elo?.napiKm ?? null,
       sebesseg: elo?.eloPozicio && percKulonbseg(most, elo.eloPozicio.utolsoAdat) <= 30 ? Math.round(elo.eloPozicio.sebesseg) : null,
       etaSor,
+      etaIdopont: elo?.eloEta && !elo.eloEta.bizonytalan ? elo.eloEta.erkezes.toISOString() : null,
       sorok: tukorSorok({
         fuvarok: [...maiak, ...maiLezartak].map((s) => ({
           id: s.id, partner: s.partner, hivatkozas: s.hivatkozas, jelleg: s.jelleg,

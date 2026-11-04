@@ -3,12 +3,14 @@ import { Suspense, type ReactNode } from "react";
 import { varosNev } from "@/lib/fuvarozas/varos";
 import { ArPirula } from "@/components/proto/ar-pirula";
 import { BejovoSor } from "@/components/proto/bejovo-gombok";
-import { DashTerkep } from "@/components/proto/dash-terkep";
 import { eur, ft, napCimke, szam } from "@/components/proto/format";
 import { MasolGomb } from "@/components/proto/masol-gomb";
+import { MiniTerkep } from "@/components/proto/mini-terkep";
+import { pihenoErkezesElott, SEBESSEG_HATAR_KMH, TANKOLAS_KUSZOB_L } from "@/lib/ecofleet/plusz";
+import { percSzoveg } from "@/lib/ecofleet/szamitas";
 import { timocomKeresSzoveg } from "@/lib/fuvarozas2/kereses-javaslat-alap";
 import type { MaKocsi } from "@/lib/fuvarozas2/ma-vaszon";
-import { getDont, getEletut, getFlotta, getHet, getMa, getPenz, getTerkep } from "@/lib/proto/dashboard";
+import { getDont, getEletut, getFlotta, getHet, getKocsiPlusz, getMa, getPenz, getSebesseg, getTankolasEgyeztetes, getTerkep } from "@/lib/proto/dashboard";
 import { idoszakBol, type IdoszakParam } from "./penz/idoszak";
 import "./dashboard.css";
 
@@ -32,6 +34,40 @@ function megrendeltE(k: MaKocsi): boolean {
   return !!k.helykitolto;
 }
 
+const IDO = new Intl.DateTimeFormat("hu-HU", { timeZone: "Europe/Budapest", hour: "2-digit", minute: "2-digit" });
+const ROVID_NAP = new Intl.DateTimeFormat("hu-HU", { timeZone: "Europe/Budapest", month: "short", day: "numeric" });
+
+async function KocsiTerkep({ kod }: { kod: string | null }) {
+  const a = await getTerkep();
+  return <MiniTerkep kocsi={a.kocsik.find((x) => x.kod === kod) ?? null} telepek={a.telepek} />;
+}
+
+/** Tachó-terv és tank a kocsi kártyáján. */
+async function KocsiPluszSorok({ k }: { k: MaKocsi }) {
+  const adat = (await getKocsiPlusz()).get(k.kod ?? "");
+  if (!adat) return <div className="r m kor"><Suspense fallback={null}><KocsiSebesseg kod={k.kod} /></Suspense></div>;
+  const t = adat.terv;
+  const szunet = t?.szunetIdopont ? `Szünet ${IDO.format(t.szunetIdopont)}` : t?.szunetigPerc != null ? `Szünetig ${percSzoveg(t.szunetigPerc)} vezetés` : null;
+  const piheno = t?.napiPihenoIdopont ? `Napi pihenő ${IDO.format(t.napiPihenoIdopont)}` : null;
+  const figyel = pihenoErkezesElott(t, k.etaIdopont ? new Date(k.etaIdopont) : null);
+  return (
+    <>
+      {(szunet || piheno) && <div className="r m kor"><span>{szunet}</span><span>{piheno}</span></div>}
+      {figyel && <span className="m" style={{ color: "var(--wa)", fontWeight: 600 }}>Érkezés előtt napi pihenő kell</span>}
+      <div className="r m kor">
+        {adat.tankLiter != null && <span>Tank: {szam(adat.tankLiter)} l{adat.adatKorPerc != null && adat.adatKorPerc > 120 ? ` · ${Math.round(adat.adatKorPerc / 60)} órája` : ""}</span>}
+        <Suspense fallback={null}><KocsiSebesseg kod={k.kod} /></Suspense>
+      </div>
+    </>
+  );
+}
+
+async function KocsiSebesseg({ kod }: { kod: string | null }) {
+  const s = (await getSebesseg()).get(kod ?? "");
+  if (s?.max == null) return null;
+  return <span style={s.tullepesDb ? { color: "var(--wa)", fontWeight: 600 } : undefined}>Max {s.max} km/h, 7 nap{s.tullepesDb ? ` · ${s.tullepesDb} út ${SEBESSEG_HATAR_KMH} felett` : ""}</span>;
+}
+
 function Kocsikartya({ k, i, nov }: { k: MaKocsi; i: number; nov: ReactNode }) {
   if (megrendeltE(k)) return <Megrendelt nev={k.kod ?? k.cimke} i={i} />;
   const megallok = k.sorok.flatMap((s) => (s.tipus === "megallo" ? [s] : []));
@@ -48,6 +84,7 @@ function Kocsikartya({ k, i, nov }: { k: MaKocsi; i: number; nov: ReactNode }) {
         <h2 className="tn"><i className="dot" style={{ background: SZINEK[i % 4] }} />{k.kod ?? k.cimke}</h2>
         <span className={`pill ${piros ? "pwa" : szin === "amber" ? "pwa" : "pac"}`}>{k.allapot?.szoveg ?? "Nincs adat"}{k.sebesseg ? ` · ${Math.round(k.sebesseg)} km/h` : ""}</span>
       </div>
+      <Suspense fallback={<div className="minit" aria-hidden="true"><div className="minit-v" /></div>}><KocsiTerkep kod={k.kod} /></Suspense>
       <span className="m">{k.sofor ?? "Nincs sofőr"}{k.allapot?.hely ? ` · ${k.allapot.hely}` : ""}</span>
       {fuvar
         ? <div className="r"><span>{fuvar.partner} · {fuvar.utvonal}</span></div>
@@ -61,6 +98,7 @@ function Kocsikartya({ k, i, nov }: { k: MaKocsi; i: number; nov: ReactNode }) {
         </span>
         {k.etaSor && <span>{k.etaSor}</span>}
       </div>
+      <Suspense fallback={null}><KocsiPluszSorok k={k} /></Suspense>
       <div className="r m">
         {holnap
           ? <span>{k.holnapFolytatodik ? "Holnap is folytatódik" : `Következő nap: ${holnap.partner ?? "fuvar"}`}</span>
@@ -97,6 +135,7 @@ async function Kocsik({ kezdet, veg }: { kezdet: string; veg: string }) {
         <Kocsikartya key={k.kod ?? k.cimke} k={k} i={i} nov={<Suspense fallback={null}><KocsiEredmeny kod={k.kod} kezdet={kezdet} veg={veg} /></Suspense>} />
       ))}
       {Array.from({ length: hiany }, (_, j) => <Megrendelt key={j} nev={`${v.kocsik.length + j + 1}. kocsi`} i={v.kocsik.length + j} />)}
+      <p className="m jelm">Térkép: a vonal légvonal a megállók közt · nagy pont: a kocsi · zöld pont: telephely</p>
     </section>
   );
 }
@@ -126,7 +165,7 @@ async function Szamok({ kezdet, veg, cim }: { kezdet: string; veg: string; cim: 
 }
 
 async function Teendok() {
-  const [v, d, f] = await Promise.all([getMa(), getDont(), getFlotta()]);
+  const [v, d, f, tank] = await Promise.all([getMa(), getDont(), getFlotta(), getTankolasEgyeztetes().catch((e) => { console.warn("[proto] tankolás:", e); return []; })]);
   const tetelek: { kulcs: string; szint: "Most" | "Ma" | "Hét"; szoveg: string; href: string; gomb: string }[] = [];
   for (const e of v.elteresek) tetelek.push({ kulcs: e.kulcs, szint: e.szin === "red" ? "Most" : "Ma", szoveg: e.cim, href: e.href ?? "/fuvarozas2", gomb: "Nyit" });
   if (d.bejovo.length) tetelek.push({ kulcs: "bej", szint: "Ma", szoveg: `${d.bejovo.length} új megbízás vár`, href: "#bejovo", gomb: "Dönts" });
@@ -134,6 +173,8 @@ async function Teendok() {
   for (const t of v.teendok) tetelek.push({ kulcs: `t-${t.cimke}`, szint: "Ma", szoveg: `${t.cimke}: ${t.ertek}`, href: t.href, gomb: "Nyit" });
   for (const l of f.lejaro.filter((x) => x.nap <= 30)) tetelek.push({ kulcs: `o-${l.cim}`, szint: l.lejart ? "Most" : "Hét", szoveg: `${l.cim}: ${l.lejart ? `lejárt ${-l.nap} napja` : `${l.nap} nap`}`, href: "/jarmuvek", gomb: "Nyit" });
   if (d.duplak.length) tetelek.push({ kulcs: "dup", szint: "Hét", szoveg: `${d.duplak.length} azonos számlaszámú fuvarpár`, href: "/proto/dontes", gomb: "Nézd" });
+  const tankEltero = tank.filter((t) => t.tipus !== "egyezik");
+  if (tankEltero.length) tetelek.push({ kulcs: "tank", szint: "Hét", szoveg: `${tankEltero.length} tankolás nem egyezik a kútszámlával`, href: "#tankolas", gomb: "Nézd" });
   const sor = { Most: 0, Ma: 1, "Hét": 2 } as const;
   tetelek.sort((a, b) => sor[a.szint] - sor[b.szint]);
   const OSZTALY = { Most: "pba", Ma: "pwa", "Hét": "pac" } as const;
@@ -151,14 +192,29 @@ async function Teendok() {
   );
 }
 
-async function Terkep() {
-  const a = await getTerkep();
+const TANK_CIMKE = { elteres: "Eltér a számlától", nincsSzamla: "Nincs kútszámla", nincsSzenzor: "Szenzor nem látta" } as const;
+
+async function Tankolas() {
+  const tank = await getTankolasEgyeztetes().catch((e) => { console.warn("[proto] tankolás:", e); return null; });
+  if (!tank) return <Doboz cim="Tankolás · 30 nap"><span className="m">Most nem töltött be.</span></Doboz>;
+  const egyezik = tank.filter((t) => t.tipus === "egyezik").length;
+  const elteres = tank.filter((t) => t.tipus !== "egyezik");
   return (
-    <div className="col ter">
-      <div className="p" style={{ padding: 0, overflow: "hidden", position: "relative", flex: 1, minHeight: 170, isolation: "isolate" }}>
-        <DashTerkep adat={a} />
-        <div className="m" style={{ position: "absolute", left: 8, bottom: 6, background: "var(--card)", border: "1px solid var(--line)", borderRadius: 6, padding: "2px 7px", zIndex: 500 }}>Vonal: légvonal a megállók közt{a.kimaradt ? ` · ${a.kimaradt} cím nincs a térképen` : ""}</div>
-      </div>
+    <div id="tankolas" className="p">
+      <h2 className="h">Tankolás · 30 nap <Link href="/fuvarozas2/koltsegek" aria-label="Költségek: tankolások">Költségek</Link></h2>
+      {tank.length === 0 && <span className="m">Nincs {TANKOLAS_KUSZOB_L} liter feletti tankolás a szenzor szerint.</span>}
+      {tank.length > 0 && <div className="r"><span>Egyezik a számlával</span><b className="n">{egyezik}</b></div>}
+      {elteres.slice(0, 4).map((t) => {
+        if (t.tipus === "egyezik") return null;
+        return (
+          <div key={`${t.kod}-${t.idopont.toISOString()}`} className="r" style={{ borderTop: "1px solid var(--line)", paddingTop: 4 }}>
+            <span>{t.kod.split("-")[0]} · {ROVID_NAP.format(t.idopont)}<br /><span className="m">{TANK_CIMKE[t.tipus]}</span></span>
+            <span className="n" style={{ textAlign: "right" }}>{t.szenzorL != null ? `szenzor ${szam(t.szenzorL)} l` : ""}{t.szenzorL != null && t.szamlaL != null ? " · " : ""}{t.szamlaL != null ? `számla ${szam(t.szamlaL)} l` : ""}</span>
+          </div>
+        );
+      })}
+      {elteres.length > 4 && <span className="m">Még {elteres.length - 4} tétel.</span>}
+      <span className="m">A szenzor menet közben ingadozik, ezért csak a {TANKOLAS_KUSZOB_L} liter feletti tankolást nézi. Más kút számlája itt hiányozhat.</span>
     </div>
   );
 }
@@ -176,7 +232,7 @@ async function Bejovo() {
             <div key={b.id} style={{ display: "contents" }}>
               <div className="r" style={i ? { borderTop: "1px solid var(--line)", paddingTop: 4 } : undefined}><b>{ut}</b><ArPirula itelet={b.csekk.itelet} /></div>
               <div className="r m n"><span>{b.partner ?? "Ismeretlen"} · {napCimke(b.felrakasNap)}</span><span>{b.fuvardij != null ? `${szam(b.fuvardij)} ${b.penznem === "EUR" ? "€" : "Ft"}` : "Nincs díj"}{b.csekk.ftKm != null ? ` · ${szam(b.csekk.ftKm)} Ft/km` : ""}</span></div>
-              <div className="r m n"><span>{b.legjobb ? `${b.legjobb.kod} · ${b.legjobb.sofor}` : "Nincs szabad kocsi"}</span><span>{b.magaban?.eredmenyFt != null ? `Eredmény kb. ${ft(b.magaban.eredmenyFt)}` : ""}</span></div>
+              <div className="r m n"><span style={b.kocsiKod ? undefined : { color: "var(--wa)", fontWeight: 600 }}>{b.kocsiKod ?? b.kocsiSzoveg ?? "Nincs felismert rendszám, nézd meg az iratot"}</span><span>{b.magaban?.eredmenyFt != null ? `Eredmény kb. ${ft(b.magaban.eredmenyFt)}` : ""}</span></div>
               <div className="r"><span /><BejovoSor id={b.id} nev={`${b.partner ?? ""} ${ut}`} kiemelt={b.csekk.itelet !== "alacsony"} /></div>
             </div>
           );
@@ -291,14 +347,14 @@ export default async function ProtoDashboard({ searchParams }: { searchParams: P
       <main>
         <Kocsik kezdet={kezdet} veg={veg} />
         <Suspense fallback={<section className="kpi"><Toltes cim="Számok számolása" /></section>}><Szamok kezdet={kezdet} veg={veg} cim={cim} /></Suspense>
-        <section className="mid">
+        <section className="mid h3">
           <Suspense fallback={<div className="col teendo"><Toltes cim="Teendő" /></div>}><Teendok /></Suspense>
-          <Suspense fallback={<div className="col ter"><Toltes cim="Térkép" /></div>}><Terkep /></Suspense>
           <Suspense fallback={<div className="col dont"><Toltes cim="Bejövő" /></div>}><Bejovo /></Suspense>
+          <div className="col het"><Suspense fallback={<Toltes cim="A hét" />}><Het /></Suspense></div>
         </section>
-        <section className="bot">
-          <Suspense fallback={<Toltes cim="A hét" />}><Het /></Suspense>
+        <section className="bot b4">
           <Suspense fallback={<Toltes cim="Kocsik eredménye" />}><KocsiTabla kezdet={kezdet} veg={veg} cim={cim} /></Suspense>
+          <Suspense fallback={<Toltes cim="Tankolás" />}><Tankolas /></Suspense>
           <Suspense fallback={<Toltes cim="Életút és pénz" />}><Eletut /></Suspense>
           <Suspense fallback={<Toltes cim="Flotta" />}><Flotta /></Suspense>
         </section>

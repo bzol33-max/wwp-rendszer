@@ -1,6 +1,6 @@
 import { XMLParser } from "fast-xml-parser";
 import { formatBudapestFaliora } from "./idozona";
-import { EcofleetError, maszkoltUzenet } from "@/lib/ecofleet/kliens";
+import { EcofleetError, getLastDataCachelve, maszkoltUzenet } from "@/lib/ecofleet/kliens";
 
 // Ecofleet (FleetComplete / "seeme") GPS API kliens.
 //
@@ -11,8 +11,8 @@ import { EcofleetError, maszkoltUzenet } from "@/lib/ecofleet/kliens";
 //
 // 2026-10-16 (docs/ecofleet-telemetria-terv.md 1. pont): az új JSON-kliens a
 // lib/ecofleet/kliens.ts; az EcofleetError UGYANAZ az osztály (innen csak
-// re-exportálva), minden innen kijutó hibaüzenet maszkolva (kulcs/URL nélkül),
-// a getFleetLastPositions() pedig 30 s-ig gyorsítótárazott, in-flight dedup-pal.
+// re-exportálva), minden innen kijutó hibaüzenet maszkolva (kulcs/URL nélkül).
+// A getLastData csak a JSON-kliensen megy, innen csak az XML-es getTrips marad.
 
 const ECOFLEET_BASE = "https://app.ecofleet.com/seeme/Api";
 
@@ -109,44 +109,21 @@ export type EcofleetPosition = {
   odometerKm: number | null;
 };
 
-function toNumberOrNull(v: number | string | undefined): number | null {
-  if (v === undefined || v === "") return null;
+function toNumberOrNull(v: number | string | null | undefined): number | null {
+  if (v === undefined || v === null || v === "") return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
 }
 
-const POZICIO_CACHE_MS = 30_000;
-let poziciokCache: { adat: EcofleetPosition[]; lekerveAt: number } | null = null;
-let poziciokFolyamatban: Promise<EcofleetPosition[]> | null = null;
-
 /**
- * Az összes jármű utolsó ismert GPS-adata egy hívással. 30 s-ig
- * folyamaton belül gyorsítótárazva; egyidejű hívók ugyanazt az ígéretet
- * kapják, hiba nem kerül gyorsítótárba. A hívók ne módosítsák a tömböt
- * (megosztott) — mindegyik csak olvassa / find-ol benne.
+ * Az összes jármű utolsó ismert GPS-adata. A lekérés és a 30 s-os gyorsítótár
+ * közös a tachó-gyűjtővel (getLastDataCachelve), így minden nézet ugyanazt a
+ * mintát látja, és egy időben csak egy hívás megy az Ecofleet felé.
  */
-export function getFleetLastPositions(): Promise<EcofleetPosition[]> {
-  if (poziciokCache && Date.now() - poziciokCache.lekerveAt <= POZICIO_CACHE_MS) {
-    return Promise.resolve(poziciokCache.adat);
-  }
-  if (poziciokFolyamatban) return poziciokFolyamatban;
-  const igeret = lekerFleetLastPositions().then((adat) => {
-    poziciokCache = { adat, lekerveAt: Date.now() };
-    return adat;
-  });
-  poziciokFolyamatban = igeret;
-  const takarit = () => {
-    if (poziciokFolyamatban === igeret) poziciokFolyamatban = null;
-  };
-  igeret.then(takarit, takarit);
-  return igeret;
-}
-
-async function lekerFleetLastPositions(): Promise<EcofleetPosition[]> {
-  const response = await ecofleetGet<{ node?: RawLastData[] }>("Vehicles/getLastData");
-  const nodes = response.node ?? [];
-  return nodes
-    .filter((n) => n.latitude !== undefined && n.longitude !== undefined)
+export async function getFleetLastPositions(): Promise<EcofleetPosition[]> {
+  const { sorok } = await getLastDataCachelve();
+  return (sorok as RawLastData[])
+    .filter((n) => n.latitude != null && n.longitude != null)
     .map((n) => ({
       objectId: String(n.objectId ?? ""),
       name: String(n.objectName ?? n.plate ?? ""),
