@@ -375,26 +375,42 @@ async function kivonatolFuvarAdatot(szoveg: string): Promise<LlmValasz | null> {
     throw new Error("Hiányzik az OPENROUTER_API_KEY környezeti változó.");
   }
   const model = process.env.OPENROUTER_MODEL || "google/gemini-2.5-flash-lite";
+  // Tartalék modell: ha az elsődleges megosztott upstream-limitbe fut (429), ne álljon le a feldolgozás.
+  const tartalekModell = process.env.OPENROUTER_FALLBACK_MODEL || "google/gemini-2.5-flash";
 
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    // Időkorlát: egy beakadt hívás ne tartsa fel a teljes Drive-szinkront (audit PERF-1).
-    signal: AbortSignal.timeout(90_000),
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: KIVONATOLASI_UTASITAS },
-        // A dokumentum (és a kísérő levél) szövege esetlegesen hosszú — 30 000 karakternél vágjuk.
-        { role: "user", content: szoveg.slice(0, 30000) },
-      ],
-      temperature: 0,
-      response_format: { type: "json_object" },
-    }),
-  });
+  const hivas = (modell: string) =>
+    fetch("https://openrouter.ai/api/v1/chat/completions", {
+      // Időkorlát: egy beakadt hívás ne tartsa fel a teljes Drive-szinkront (audit PERF-1).
+      signal: AbortSignal.timeout(90_000),
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: modell,
+        messages: [
+          { role: "system", content: KIVONATOLASI_UTASITAS },
+          // A dokumentum (és a kísérő levél) szövege esetlegesen hosszú — 30 000 karakternél vágjuk.
+          { role: "user", content: szoveg.slice(0, 30000) },
+        ],
+        temperature: 0,
+        response_format: { type: "json_object" },
+      }),
+    });
+
+  // Ideiglenes hibánál (429 / 5xx) újrapróbálunk: elsődleges modell 2×, majd a tartalék 1×.
+  const probak: { modell: string; varakozasMs: number }[] = [
+    { modell: model, varakozasMs: 0 },
+    { modell: model, varakozasMs: 3000 },
+    { modell: tartalekModell, varakozasMs: 1000 },
+  ];
+  let res!: Response;
+  for (const proba of probak) {
+    if (proba.varakozasMs) await new Promise((r) => setTimeout(r, proba.varakozasMs));
+    res = await hivas(proba.modell);
+    if (res.ok || (res.status !== 429 && res.status < 500)) break;
+  }
   if (!res.ok) {
     throw new Error(`OpenRouter hiba (${res.status}): ${await res.text()}`);
   }
