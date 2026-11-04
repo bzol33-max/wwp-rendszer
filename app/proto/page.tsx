@@ -9,7 +9,7 @@ import { MiniTerkep } from "@/components/proto/mini-terkep";
 import { pihenoErkezesElott, SEBESSEG_HATAR_KMH, TANKOLAS_KUSZOB_L } from "@/lib/ecofleet/plusz";
 import { timocomKeresSzoveg } from "@/lib/fuvarozas2/kereses-javaslat-alap";
 import type { MaKocsi } from "@/lib/fuvarozas2/ma-vaszon";
-import { getDont, getEletut, getFlotta, getHet, getKocsiPlusz, getMa, getPenz, getSebesseg, getTankolasEgyeztetes, getTerkep } from "@/lib/proto/dashboard";
+import { getDont, getEletut, getFlotta, getHet, getKocsiPlusz, getMa, getMegtettUt, getPenz, getSebesseg, getTankolasEgyeztetes, getTerkep } from "@/lib/proto/dashboard";
 import { idoszakBol, type IdoszakParam } from "./penz/idoszak";
 import "./dashboard.css";
 
@@ -36,9 +36,9 @@ function megrendeltE(k: MaKocsi): boolean {
 const IDO = new Intl.DateTimeFormat("hu-HU", { timeZone: "Europe/Budapest", hour: "2-digit", minute: "2-digit" });
 const ROVID_NAP = new Intl.DateTimeFormat("hu-HU", { timeZone: "Europe/Budapest", month: "short", day: "numeric" });
 
-async function KocsiTerkep({ kod }: { kod: string | null }) {
-  const a = await getTerkep();
-  return <MiniTerkep kocsi={a.kocsik.find((x) => x.kod === kod) ?? null} telepek={a.telepek} />;
+async function KocsiTerkep({ kod, kovVaros }: { kod: string | null; kovVaros: string | null }) {
+  const [a, nyomok] = await Promise.all([getTerkep(), getMegtettUt()]);
+  return <MiniTerkep kocsi={a.kocsik.find((x) => x.kod === kod) ?? null} nyom={nyomok.get(kod ?? "") ?? []} kovVaros={kovVaros} />;
 }
 
 function Mezo({ cim, children }: { cim: string; children: ReactNode }) {
@@ -97,7 +97,7 @@ function Kocsikartya({ k, i, nov, eredmenyCim }: { k: MaKocsi; i: number; nov: R
         <h2 className="tn"><i className="dot" style={{ background: SZINEK[i % 4] }} />{k.kod ?? k.cimke}</h2>
         <span className={`pill ${piros ? "pwa" : szin === "amber" ? "pwa" : "pac"}`}>{k.allapot?.szoveg ?? "Nincs adat"}{k.sebesseg ? ` · ${Math.round(k.sebesseg)} km/h` : ""}</span>
       </div>
-      <Suspense fallback={<div className="minit" aria-hidden="true"><div className="minit-v" /></div>}><KocsiTerkep kod={k.kod} /></Suspense>
+      <Suspense fallback={<div className="minit" aria-hidden="true"><div className="minit-v" /></div>}><KocsiTerkep kod={k.kod} kovVaros={(megallok.find((m) => m.allapot === "most") ?? megallok.find((m) => m.allapot === "kovetkezo"))?.varos ?? null} /></Suspense>
       <span className="m">{k.sofor ?? "Nincs sofőr"}{k.allapot?.hely ? ` · ${k.allapot.hely}` : ""}</span>
       {fuvar
         ? <div className="r"><span>{fuvar.partner} · {fuvar.utvonal}</span></div>
@@ -146,7 +146,7 @@ async function Kocsik({ kezdet, veg, idoszak }: { kezdet: string; veg: string; i
         <Kocsikartya key={k.kod ?? k.cimke} k={k} i={i} eredmenyCim={IDOSZAK_CIMKE[idoszak] ?? "Időszak"} nov={<KocsiEredmeny kod={k.kod} kezdet={kezdet} veg={veg} />} />
       ))}
       {Array.from({ length: hiany }, (_, j) => <Megrendelt key={j} nev={`${v.kocsik.length + j + 1}. kocsi`} i={v.kocsik.length + j} />)}
-      <p className="m jelm">Térkép: a vonal légvonal a megállók közt · nagy pont: a kocsi · zöld pont: telephely</p>
+      <p className="m jelm">Térkép: teli vonal: a mai megtett út · pontozott: a következő megállóig, légvonalban · nagy pont: a kocsi</p>
     </section>
   );
 }

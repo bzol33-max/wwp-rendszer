@@ -27,15 +27,19 @@
 .dash .trucks{align-items:stretch}
 .dash .minit{display:flex;flex-direction:column;gap:2px;margin:2px 0}
 .dash .minit svg{display:block;width:100%;height:auto;overflow:hidden}
-.dash .minit-v{aspect-ratio:668/413;border-radius:8px;background:var(--soft)}
+.dash .minit-v{aspect-ratio:670/414;border-radius:8px;background:var(--soft)}
 .dash .minit-o{fill:var(--acs);stroke:var(--fld);stroke-width:2}
-.dash .minit-t{fill:var(--ok)}
-.dash .minit-c{font:600 30px Inter,system-ui,sans-serif;fill:var(--ink);paint-order:stroke;stroke:var(--acs);stroke-width:5px}
+.dash .minit-h{fill:none;stroke:#14213A;stroke-width:3}
+.dash .minit-ut{fill:none;stroke-width:9;stroke-linecap:round;stroke-linejoin:round}
+.dash .minit-hatra{stroke-width:5;stroke-dasharray:3 13;stroke-linecap:round}
+.dash .minit-m{fill:var(--card);stroke-width:5}
+.dash .minit-f{font-size:10.5px;color:var(--mut)}
+.dash .minit-f a{display:inline;min-height:0;line-height:inherit}
 .dash .mid.h3{height:auto;grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) minmax(0,1.1fr)}
 .dash .bot.b4{grid-template-columns:minmax(0,1.5fr) minmax(0,1.1fr) minmax(0,.8fr) minmax(0,.8fr)}
 @media (max-width:1400px) and (min-width:1101px){.dash .bot.b4{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:1100px) and (min-width:761px){.dash .mid.h3{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.dash .mid.h3 .het{grid-column:1/-1}.dash .bot.b4{grid-template-columns:minmax(0,1fr)}}
-@media (max-width:760px){.dash .mid.h3{display:contents}.dash .het{order:2}.dash .bot.b4{grid-template-columns:minmax(0,1fr)}.dash .minit svg,.dash .minit-v{max-width:280px;width:100%;margin:0 auto}.dash .seg a{line-height:44px !important}}
+@media (max-width:760px){.dash .mid.h3{display:contents}.dash .het{order:2}.dash .bot.b4{grid-template-columns:minmax(0,1fr)}.dash .seg a{line-height:44px !important}}
 .dash .kor{flex-wrap:wrap}
 .dash .rcs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;margin:2px 0}
 .dash .mezo{background:var(--soft);border-radius:7px;padding:4px 7px;display:flex;flex-direction:column;min-width:0}

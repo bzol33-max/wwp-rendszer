@@ -142,3 +142,34 @@ export function tankolasEgyeztetes(szenzor: SzenzorTankolas[], szamlak: SzamlaTa
   }
   return ki.sort((a, b) => b.idopont.getTime() - a.idopont.getTime());
 }
+
+// ── Megtett út ────────────────────────────────────────────────────────────
+// Élő mérés 2026-11-04: egy nap kocsinként 2–3 ezer minta (Latitude, Longitude, időrendben).
+
+export type Nyompont = { lat: number; lon: number };
+
+function ritkit(p: Nyompont[], tures: number): Nyompont[] {
+  if (p.length < 3) return p;
+  const a = p[0], b = p[p.length - 1];
+  const dx = b.lon - a.lon, dy = b.lat - a.lat;
+  const h = Math.hypot(dx, dy);
+  let max = -1, ix = 0;
+  for (let i = 1; i < p.length - 1; i++) {
+    // Azonos végpontoknál (oda-vissza út) a pont távolsága számít, nem az egyenestől mért.
+    const d = h ? Math.abs(dy * (p[i].lon - a.lon) - dx * (p[i].lat - a.lat)) / h : Math.hypot(p[i].lon - a.lon, p[i].lat - a.lat);
+    if (d > max) { max = d; ix = i; }
+  }
+  if (max <= tures) return [a, b];
+  return [...ritkit(p.slice(0, ix + 1), tures).slice(0, -1), ...ritkit(p.slice(ix), tures)];
+}
+
+/** A nap nyers mintáiból a rajzolható út. Hiányzó vagy 0 koordinátájú minta kimarad, így nem ugrik a vonal. */
+export function megtettUtNyersbol(sorok: unknown, tures = 0.004): Nyompont[] {
+  if (!Array.isArray(sorok)) return [];
+  const pontok = sorok.flatMap((s) => {
+    if (!objektum(s)) return [];
+    const lat = szam(s.Latitude), lon = szam(s.Longitude);
+    return lat !== null && lon !== null && lat !== 0 && lon !== 0 ? [{ lat, lon, t: String(s.timestamp ?? "") }] : [];
+  }).sort((a, b) => a.t.localeCompare(b.t)).map(({ lat, lon }) => ({ lat, lon }));
+  return ritkit(pontok, tures);
+}

@@ -2,10 +2,11 @@ import "server-only";
 import { cache } from "react";
 import { requireAdmin } from "@/lib/auth/dal";
 import { query } from "@/lib/db";
-import { getLastDataCachelve } from "@/lib/ecofleet/kliens";
+import { ecofleetJson, getLastDataCachelve } from "@/lib/ecofleet/kliens";
 import {
   sebessegOsszegzes, szenzorTankolasok, tachoTervLastDatabol, tankLiterLastDatabol, tankolasEgyeztetes,
   type EgyeztetesTetel, type TachoTerv,
+  megtettUtNyersbol, type Nyompont,
 } from "@/lib/ecofleet/plusz";
 import { ecofleetIdopont, tachoAllapotLastDatabol, tachoFriss } from "@/lib/ecofleet/szamitas";
 import { getFleetLastPositions, getVehicleTrips, rendszamKulcs } from "@/lib/fuvarozas/ecofleet";
@@ -147,6 +148,25 @@ export const getSebesseg = cache(async (): Promise<Map<string, ReturnType<typeof
   const adat = new Map(sorok.filter((s): s is [string, ReturnType<typeof sebessegOsszegzes>] => s[1] !== null));
   // Hibás lekérés nem kerül gyorsítótárba.
   if (adat.size === jarmuvek.length) sebessegCache = { adat, lekerveAt: Date.now() };
+  return adat;
+});
+
+const NYOM_CACHE_MS = 5 * 60_000;
+let nyomCache: { adat: Map<string, Nyompont[]>; nap: string; lekerveAt: number } | null = null;
+
+/** Kocsinként a mai megtett út az Ecofleet nyers GPS-mintáiból. Hiba esetén a kocsi kimarad, a térkép vonal nélkül is működik. */
+export const getMegtettUt = cache(async (): Promise<Map<string, Nyompont[]>> => {
+  await requireAdmin();
+  const nap = budapestNapISO();
+  if (nyomCache && nyomCache.nap === nap && Date.now() - nyomCache.lekerveAt <= NYOM_CACHE_MS) return nyomCache.adat;
+  const jarmuvek = (await getJarmuvek()).filter((j) => j.kod && j.ecofleetObjectId);
+  const sorok = await Promise.all(jarmuvek.map(async (j) => {
+    const nyers = await ecofleetJson<unknown>("Vehicles/getRawData", { objectId: j.ecofleetObjectId!, begTimestamp: `${nap} 00:00:00`, endTimestamp: `${nap} 23:59:59` }).catch((e) => { console.warn("[proto] megtett út:", e); return null; });
+    return [j.kod!, nyers === null ? null : megtettUtNyersbol(nyers)] as const;
+  }));
+  const adat = new Map(sorok.filter((s): s is [string, Nyompont[]] => s[1] !== null));
+  // Hibás lekérés nem kerül gyorsítótárba.
+  if (adat.size === jarmuvek.length) nyomCache = { adat, nap, lekerveAt: Date.now() };
   return adat;
 });
 

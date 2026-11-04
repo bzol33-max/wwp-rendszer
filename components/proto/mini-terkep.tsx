@@ -1,39 +1,48 @@
-import { ORSZAG_UTVONAL, orszagbanVan, vetit } from "@/lib/proto/orszag";
+import { orszagbanVan, vetit } from "@/lib/proto/orszag";
+import { csempek, csempeUrl, ORSZAG_HATAR, terkepPont, TERKEP_H, TERKEP_W } from "@/lib/proto/terkep-vetites";
 import type { TerkepKocsi } from "@/lib/proto/dashboard";
+import type { Nyompont } from "@/lib/ecofleet/plusz";
 
-// Csempe nincs: csak az ország látszik, a külföldi rész nem foglal helyet.
-export function MiniTerkep({ kocsi, telepek }: { kocsi: TerkepKocsi | null; telepek: { nev: string; lat: number; lon: number }[] }) {
-  const megallok = (kocsi?.megallok ?? []).map((m) => ({ ...vetit(m.lat, m.lon), cim: m.cim }));
-  const bent = megallok.filter(orszagbanVan);
-  const kint = megallok.filter((m) => !orszagbanVan(m));
-  const pont = kocsi?.pont ? vetit(kocsi.pont.lat, kocsi.pont.lon) : null;
-  const pontBent = pont && orszagbanVan(pont) ? pont : null;
-  const regi = kocsi?.pont?.korPerc != null && kocsi.pont.korPerc > 120;
+const bentVan = (lat: number, lon: number) => orszagbanVan(vetit(lat, lon));
+const azonos = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+// OpenStreetMap-csempe az országra vágva: a külföldi rész nem foglal helyet.
+export function MiniTerkep({ kocsi, nyom, kovVaros }: { kocsi: TerkepKocsi | null; nyom: Nyompont[]; kovVaros: string | null }) {
+  const cid = `orszag-${kocsi?.kod ?? "x"}`;
   const szin = kocsi?.szin ?? "var(--fld)";
-  const cimkek = bent.filter((_, i) => i === 0 || i === bent.length - 1);
+  const bent = (kocsi?.megallok ?? []).filter((m) => bentVan(m.lat, m.lon));
+  const kint = (kocsi?.megallok ?? []).filter((m) => !bentVan(m.lat, m.lon));
+  const hely = kocsi?.pont ?? null;
+  const pontBent = hely && bentVan(hely.lat, hely.lon) ? terkepPont(hely.lat, hely.lon) : null;
+  const regi = hely?.korPerc != null && hely.korPerc > 120;
+  const cel = kovVaros ? bent.find((m) => azonos(m.cim, kovVaros)) : undefined;
+  const celPont = cel ? terkepPont(cel.lat, cel.lon) : null;
   const leiras = !kocsi ? "nincs adat" : [
     kocsi.kod,
     bent.length ? `megállók: ${bent.map((m) => m.cim).join(", ")}` : "ma nincs megálló az országban",
-    !pont ? "nincs pozíció" : pontBent ? (regi ? "utolsó ismert hely az országban" : "a kocsi az országban van") : "a kocsi külföldön van",
+    !hely ? "nincs pozíció" : pontBent ? (regi ? "utolsó ismert hely az országban" : "a kocsi az országban van") : "a kocsi külföldön van",
   ].join(", ");
   const jegyzet = [
-    pont && !pontBent ? `A kocsi ${regi ? "utoljára" : "most"} külföldön.` : null,
+    hely && !pontBent ? `A kocsi ${regi ? "utoljára" : "most"} külföldön.` : null,
     kint.length ? `Külföldi megálló: ${kint.map((m) => m.cim).join(", ")}.` : null,
-    regi ? `Utolsó GPS ${Math.round(kocsi!.pont!.korPerc! / 60)} órája.` : null,
+    regi ? `Utolsó GPS ${Math.round(hely!.korPerc! / 60)} órája.` : null,
     kocsi?.kimaradt ? `${kocsi.kimaradt} cím nincs a térképen.` : null,
   ].filter(Boolean).join(" ");
   return (
     <div className="minit">
-      <svg viewBox="-14 -10 668 413" role="img" aria-label={`Magyarország térképe: ${leiras}`}>
-        <path className="minit-o" d={ORSZAG_UTVONAL} />
-        {telepek.map((t) => { const p = vetit(t.lat, t.lon); return <circle key={t.nev} className="minit-t" cx={p.x} cy={p.y} r={8} />; })}
-        {bent.length > 1 && <polyline fill="none" stroke={szin} strokeWidth={6} points={bent.map((m) => `${m.x},${m.y}`).join(" ")} />}
-        {bent.map((m, i) => <circle key={`${i}-${m.cim}`} cx={m.x} cy={m.y} r={8} fill={szin} />)}
-        {cimkek.map((m) => (
-          <text key={`c-${m.cim}-${m.x}`} className="minit-c" x={m.x > 320 ? m.x - 14 : m.x + 14} y={m.y > 60 ? m.y - 16 : m.y + 38} textAnchor={m.x > 320 ? "end" : "start"}>{m.cim}</text>
-        ))}
-        {pontBent && <circle cx={pontBent.x} cy={pontBent.y} r={13} fill={regi ? "var(--card)" : szin} stroke={regi ? szin : "#fff"} strokeWidth={4} />}
+      <svg viewBox={`0 0 ${TERKEP_W} ${TERKEP_H}`} role="img" aria-label={`Magyarország térképe: ${leiras}`}>
+        <clipPath id={cid}><path d={ORSZAG_HATAR} /></clipPath>
+        <path className="minit-o" d={ORSZAG_HATAR} />
+        <g clipPath={`url(#${cid})`}>
+          {csempek().map((c) => <image key={c.kulcs} href={csempeUrl(c.cx, c.cy)} x={c.x} y={c.y} width={c.meret} height={c.meret} preserveAspectRatio="none" />)}
+          {nyom.length > 1 && <polyline className="minit-ut" stroke={szin} points={nyom.map((p) => { const q = terkepPont(p.lat, p.lon); return `${q.x.toFixed(1)},${q.y.toFixed(1)}`; }).join(" ")} />}
+        </g>
+        <path className="minit-h" d={ORSZAG_HATAR} />
+        {pontBent && celPont && <line className="minit-hatra" stroke={szin} x1={pontBent.x} y1={pontBent.y} x2={celPont.x} y2={celPont.y} />}
+        {bent.map((m, i) => { const p = terkepPont(m.lat, m.lon); return <circle key={`${i}-${m.cim}`} className="minit-m" stroke={szin} cx={p.x} cy={p.y} r={8} />; })}
+        {pontBent && <circle cx={pontBent.x} cy={pontBent.y} r={15} fill={regi ? "var(--card)" : szin} stroke={regi ? szin : "#fff"} strokeWidth={5} />}
       </svg>
+      <span className="minit-f">© <a href="https://www.openstreetmap.org/copyright" rel="noreferrer" target="_blank">OpenStreetMap</a> közreműködők</span>
       {jegyzet && <span className="m">{jegyzet}</span>}
     </div>
   );

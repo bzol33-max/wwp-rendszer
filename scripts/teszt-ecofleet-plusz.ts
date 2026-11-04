@@ -3,11 +3,12 @@
 
 import { _tesztCacheUrit, _tesztFetchBeallit, getLastDataCachelve } from "@/lib/ecofleet/kliens";
 import {
-  pihenoErkezesElott, sebessegOsszegzes, szenzorTankolasok, tachoTervLastDatabol,
+  megtettUtNyersbol, pihenoErkezesElott, sebessegOsszegzes, szenzorTankolasok, tachoTervLastDatabol,
   tankLiterLastDatabol, tankolasEgyeztetes,
 } from "@/lib/ecofleet/plusz";
 import { getFleetLastPositions } from "@/lib/fuvarozas/ecofleet";
 import { orszagbanVan, vetit } from "@/lib/proto/orszag";
+import { csempek, csempeUrl, terkepPont, TERKEP_H, TERKEP_W } from "@/lib/proto/terkep-vetites";
 
 let ok = 0, bad = 0;
 function eq(nev: string, kapott: unknown, vart: unknown) {
@@ -111,6 +112,24 @@ async function kozos() {
   _tesztFetchBeallit(null);
   _tesztCacheUrit();
 }
+
+// Megtett út
+eq("nem lista → üres", megtettUtNyersbol(null), []);
+eq("0 és hiányzó koordináta kimarad", megtettUtNyersbol([{ Latitude: 47, Longitude: 19, timestamp: "1" }, { Latitude: 0, Longitude: 0, timestamp: "2" }, { Latitude: null, Longitude: 19.5, timestamp: "3" }, { Latitude: 47.1, Longitude: 19.1, timestamp: "4" }]), [{ lat: 47, lon: 19 }, { lat: 47.1, lon: 19.1 }]);
+eq("időrendbe teszi", megtettUtNyersbol([{ Latitude: 47.1, Longitude: 19.1, timestamp: "2" }, { Latitude: 47, Longitude: 19, timestamp: "1" }]), [{ lat: 47, lon: 19 }, { lat: 47.1, lon: 19.1 }]);
+eq("egyenesen ritkít", megtettUtNyersbol([0, 1, 2, 3, 4].map((i) => ({ Latitude: 47 + i / 10, Longitude: 19, timestamp: String(i) }))).length, 2);
+eq("oda-vissza út nem esik össze", megtettUtNyersbol([{ Latitude: 47, Longitude: 19, timestamp: "1" }, { Latitude: 47.5, Longitude: 19.5, timestamp: "2" }, { Latitude: 47, Longitude: 19, timestamp: "3" }]).length, 3);
+
+// Térkép vetítése
+const bp = terkepPont(47.4979, 19.0402), db = terkepPont(47.5316, 21.6273), szeged = terkepPont(46.253, 20.1414);
+eq("Budapest a kereten belül", bp.x > 0 && bp.x < TERKEP_W && bp.y > 0 && bp.y < TERKEP_H, true);
+eq("Debrecen keletebbre", db.x > bp.x, true);
+eq("Szeged délebbre", szeged.y > bp.y, true);
+const cs = csempek();
+eq("három csempe, z6", cs.map((c) => c.kulcs), ["34-22", "35-22", "36-22"]);
+eq("a csempék lefedik a keretet", cs[0].x <= 0 && cs[2].x + cs[2].meret >= TERKEP_W && cs[0].y <= 0 && cs[0].y + cs[0].meret >= TERKEP_H, true);
+eq("csempe címe", csempeUrl(35, 22), "https://a.tile.openstreetmap.org/6/35/22.png");
+eq("Budapest a 35-ös csempén", bp.x > cs[1].x && bp.x < cs[1].x + cs[1].meret, true);
 
 void kozos().then(() => {
   console.log(`\nEcofleet plusz teszt: ${ok} rendben, ${bad} hiba`);
