@@ -7,7 +7,6 @@ import { eur, ft, napCimke, szam } from "@/components/proto/format";
 import { MasolGomb } from "@/components/proto/masol-gomb";
 import { MiniTerkep } from "@/components/proto/mini-terkep";
 import { pihenoErkezesElott, SEBESSEG_HATAR_KMH, TANKOLAS_KUSZOB_L } from "@/lib/ecofleet/plusz";
-import { percSzoveg } from "@/lib/ecofleet/szamitas";
 import { timocomKeresSzoveg } from "@/lib/fuvarozas2/kereses-javaslat-alap";
 import type { MaKocsi } from "@/lib/fuvarozas2/ma-vaszon";
 import { getDont, getEletut, getFlotta, getHet, getKocsiPlusz, getMa, getPenz, getSebesseg, getTankolasEgyeztetes, getTerkep } from "@/lib/proto/dashboard";
@@ -42,20 +41,35 @@ async function KocsiTerkep({ kod }: { kod: string | null }) {
   return <MiniTerkep kocsi={a.kocsik.find((x) => x.kod === kod) ?? null} telepek={a.telepek} />;
 }
 
-/** Tachó-terv és tank a kocsi kártyáján. */
-async function KocsiPluszSorok({ k }: { k: MaKocsi }) {
-  const adat = (await getKocsiPlusz()).get(k.kod ?? "");
-  if (!adat) return <div className="r m kor"><Suspense fallback={null}><KocsiSebesseg kod={k.kod} /></Suspense></div>;
-  const t = adat.terv;
-  const szunet = t?.szunetIdopont ? `Szünet ${IDO.format(t.szunetIdopont)}` : t?.szunetigPerc != null ? `Szünetig ${percSzoveg(t.szunetigPerc)} vezetés` : null;
-  const piheno = t?.napiPihenoIdopont ? `Napi pihenő ${IDO.format(t.napiPihenoIdopont)}` : null;
+function Mezo({ cim, children }: { cim: string; children: ReactNode }) {
+  return <div className="mezo"><span className="m">{cim}</span>{children}</div>;
+}
+
+const NINCS = <b className="n">—</b>;
+const IDOSZAK_CIMKE: Record<string, string> = { ma: "Ma", het: "Hét", ho: "Hónap", elozo: "Előző hónap", egyedi: "Időszak" };
+
+async function TankMezo({ kod }: { kod: string | null }) {
+  const a = (await getKocsiPlusz()).get(kod ?? "");
+  const regi = a?.adatKorPerc != null && a.adatKorPerc > 120;
+  return <Mezo cim={regi ? `Tank · ${Math.round(a.adatKorPerc! / 60)} órája` : "Tank"}>{a?.tankLiter != null ? <b className="n">{szam(a.tankLiter)} l</b> : NINCS}</Mezo>;
+}
+
+async function SzunetMezo({ kod }: { kod: string | null }) {
+  const t = (await getKocsiPlusz()).get(kod ?? "")?.terv;
+  if (t?.szunetIdopont) return <Mezo cim="Szünet"><b className="n">{IDO.format(t.szunetIdopont)}</b></Mezo>;
+  if (t?.szunetigPerc != null) return <Mezo cim="Szünetig"><b className="n">{percOra(t.szunetigPerc)}</b></Mezo>;
+  return <Mezo cim="Szünet">{NINCS}</Mezo>;
+}
+
+/** Napi pihenő és sebesség a számrács alatt: ritkábban kell, ezért kisebb. */
+async function KocsiPluszSor({ k }: { k: MaKocsi }) {
+  const t = (await getKocsiPlusz()).get(k.kod ?? "")?.terv ?? null;
   const figyel = pihenoErkezesElott(t, k.etaIdopont ? new Date(k.etaIdopont) : null);
   return (
     <>
-      {(szunet || piheno) && <div className="r m kor"><span>{szunet}</span><span>{piheno}</span></div>}
       {figyel && <span className="m" style={{ color: "var(--wa)", fontWeight: 600 }}>Érkezés előtt napi pihenő kell</span>}
       <div className="r m kor">
-        {adat.tankLiter != null && <span>Tank: {szam(adat.tankLiter)} l{adat.adatKorPerc != null && adat.adatKorPerc > 120 ? ` · ${Math.round(adat.adatKorPerc / 60)} órája` : ""}</span>}
+        {t?.napiPihenoIdopont && <span>Napi pihenő {IDO.format(t.napiPihenoIdopont)}</span>}
         <Suspense fallback={null}><KocsiSebesseg kod={k.kod} /></Suspense>
       </div>
     </>
@@ -68,7 +82,7 @@ async function KocsiSebesseg({ kod }: { kod: string | null }) {
   return <span style={s.tullepesDb ? { color: "var(--wa)", fontWeight: 600 } : undefined}>Max {s.max} km/h, 7 nap{s.tullepesDb ? ` · ${s.tullepesDb} út ${SEBESSEG_HATAR_KMH} felett` : ""}</span>;
 }
 
-function Kocsikartya({ k, i, nov }: { k: MaKocsi; i: number; nov: ReactNode }) {
+function Kocsikartya({ k, i, nov, eredmenyCim }: { k: MaKocsi; i: number; nov: ReactNode; eredmenyCim: string }) {
   if (megrendeltE(k)) return <Megrendelt nev={k.kod ?? k.cimke} i={i} />;
   const megallok = k.sorok.flatMap((s) => (s.tipus === "megallo" ? [s] : []));
   const most = megallok.find((m) => m.allapot === "most") ?? megallok.find((m) => m.allapot === "kovetkezo") ?? megallok[megallok.length - 1] ?? null;
@@ -77,7 +91,6 @@ function Kocsikartya({ k, i, nov }: { k: MaKocsi; i: number; nov: ReactNode }) {
   const szin = k.allapot?.szin;
   const piros = kesik || szin === "red";
   const holnap = k.holnap[0] ?? null;
-  const tachoForras = k.tachoNapiHatraPerc != null;
   return (
     <article className="p">
       <div className="r">
@@ -92,26 +105,24 @@ function Kocsikartya({ k, i, nov }: { k: MaKocsi; i: number; nov: ReactNode }) {
       {most && (
         <div className="r"><b className="n">{most.felLe === "felrako" ? "Fel" : "Le"}: {most.varos}</b><span className="m n" style={most.kiemelt === "kesik" ? { color: "var(--wa)", fontWeight: 600 } : undefined}>{most.elteres ?? most.teny ?? most.terv ?? ""}</span></div>
       )}
-      <div className="r m">
-        <span className="n">
-          {tachoForras ? <>Tachó: ma még {percOra(k.tachoNapiHatraPerc!)}<span className="tacho" aria-hidden="true"><i style={{ width: `${Math.min(100, (k.tachoNapiHatraPerc! / 540) * 100)}%` }} /></span></> : "Tachó: nincs friss adat"}
-        </span>
-        {k.etaSor && <span>{k.etaSor}</span>}
+      {k.etaSor && <span className="m">{k.etaSor}</span>}
+      <div className="rcs">
+        <Mezo cim="Tachó, ma még">{k.tachoNapiHatraPerc != null ? <b className="n">{percOra(k.tachoNapiHatraPerc)}</b> : NINCS}</Mezo>
+        <Suspense fallback={<Mezo cim="Tank">{NINCS}</Mezo>}><TankMezo kod={k.kod} /></Suspense>
+        <Suspense fallback={<Mezo cim="Szünet">{NINCS}</Mezo>}><SzunetMezo kod={k.kod} /></Suspense>
+        <Mezo cim={eredmenyCim}><Suspense fallback={NINCS}>{nov}</Suspense></Mezo>
       </div>
-      <Suspense fallback={null}><KocsiPluszSorok k={k} /></Suspense>
-      <div className="r m">
-        {holnap
-          ? <span>{k.holnapFolytatodik ? "Holnap is folytatódik" : `Következő nap: ${holnap.partner ?? "fuvar"}`}</span>
-          : <span style={{ color: "var(--wa)", fontWeight: 600 }}>Következő napra nincs fuvar</span>}
-        {nov}
-      </div>
+      <Suspense fallback={null}><KocsiPluszSor k={k} /></Suspense>
+      {holnap
+        ? <span className="m">{k.holnapFolytatodik ? "Holnap is folytatódik" : `Következő nap: ${holnap.partner ?? "fuvar"}`}</span>
+        : <span className="m" style={{ color: "var(--wa)", fontWeight: 600 }}>Következő napra nincs fuvar</span>}
     </article>
   );
 }
 
 function Megrendelt({ nev, i }: { nev: string; i: number }) {
   return (
-    <article className="p" style={{ borderStyle: "dashed" }}>
+    <article className="p meg" style={{ borderStyle: "dashed" }}>
       <div className="r"><h2 className="tn"><i className="dot" style={{ background: SZINEK[i % 4] }} />{nev}</h2><span className="pill pmu">Megrendelve</span></div>
       <span className="m">Új kamion, még nem üzemel</span>
     </article>
@@ -121,18 +132,18 @@ function Megrendelt({ nev, i }: { nev: string; i: number }) {
 async function KocsiEredmeny({ kod, kezdet, veg }: { kod: string | null; kezdet: string; veg: string }) {
   const p = await getPenz(kezdet, veg);
   const k = p.kocsik.find((x) => x.kulcs === kod);
-  if (!k) return null;
+  if (!k) return NINCS;
   const e = k.nettoFt - k.alloSoforFt;
-  return <span className="n" style={e < 0 ? { color: "var(--ba)" } : undefined}>{PLUSZ(e)}</span>;
+  return <b className="n" style={{ color: e < 0 ? "var(--ba)" : "var(--ok)" }}>{PLUSZ(e)}</b>;
 }
 
-async function Kocsik({ kezdet, veg }: { kezdet: string; veg: string }) {
+async function Kocsik({ kezdet, veg, idoszak }: { kezdet: string; veg: string; idoszak: string }) {
   const v = await getMa();
   const hiany = Math.max(0, TERVEZETT_KOCSI - v.kocsik.length);
   return (
     <section className="trucks" aria-label="Kocsik most">
       {v.kocsik.map((k, i) => (
-        <Kocsikartya key={k.kod ?? k.cimke} k={k} i={i} nov={<Suspense fallback={null}><KocsiEredmeny kod={k.kod} kezdet={kezdet} veg={veg} /></Suspense>} />
+        <Kocsikartya key={k.kod ?? k.cimke} k={k} i={i} eredmenyCim={IDOSZAK_CIMKE[idoszak] ?? "Időszak"} nov={<KocsiEredmeny kod={k.kod} kezdet={kezdet} veg={veg} />} />
       ))}
       {Array.from({ length: hiany }, (_, j) => <Megrendelt key={j} nev={`${v.kocsik.length + j + 1}. kocsi`} i={v.kocsik.length + j} />)}
       <p className="m jelm">Térkép: a vonal légvonal a megállók közt · nagy pont: a kocsi · zöld pont: telephely</p>
@@ -345,7 +356,7 @@ export default async function ProtoDashboard({ searchParams }: { searchParams: P
         <Link className="btn f dk" style={{ lineHeight: "32px" }} href="/fuvarozas2/megbizasok">Új fuvar</Link>
       </header>
       <main>
-        <Kocsik kezdet={kezdet} veg={veg} />
+        <Kocsik kezdet={kezdet} veg={veg} idoszak={idoszak} />
         <Suspense fallback={<section className="kpi"><Toltes cim="Számok számolása" /></section>}><Szamok kezdet={kezdet} veg={veg} cim={cim} /></Suspense>
         <section className="mid h3">
           <Suspense fallback={<div className="col teendo"><Toltes cim="Teendő" /></div>}><Teendok /></Suspense>
