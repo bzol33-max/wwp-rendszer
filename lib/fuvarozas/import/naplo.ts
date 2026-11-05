@@ -7,6 +7,7 @@
 // NEM "use server" fájl — a drive-sync-core.ts (sima Node modul) hívja.
 
 import { query } from "@/lib/db";
+import { ugyanazAMegbizas, type MegbizasAzonosito } from "@/lib/fuvarozas/import/duplikatum";
 
 export type ImportVerdikt =
   | "biztos"
@@ -92,6 +93,23 @@ export async function azonosSzoveguIsmertIrat(
     [driveFileId, nyersSzoveg]
   );
   return sor ? { driveFileId: sor.drive_file_id, fajlnev: sor.fajlnev, fuvarId: sor.fuvar_id } : null;
+}
+
+/**
+ * Élő fuvar ugyanazzal a megbízóval, hivatkozással és felrakási nappal — az
+ * újraküldött, nem betűre azonos iratnál (lásd duplikatum.ts). A legrégebbit adja.
+ */
+export async function azonosHivatkozasuFuvar(azonosito: MegbizasAzonosito): Promise<string | null> {
+  if (!azonosito.datum || !azonosito.pozicioszam?.trim()) return null;
+  const sorok = await query<{ id: string; megrendelo: string | null; pozicioszam: string | null }>(
+    `select id::text, megrendelo, pozicioszam
+     from fuvar_megbizasok
+     where datum = $1::date and pozicioszam is not null
+       and torolt_at is null and statusz is distinct from 'torolt'
+     order by fuvar_megbizasok.id asc`,
+    [azonosito.datum]
+  );
+  return sorok.find((s) => ugyanazAMegbizas(azonosito, { ...s, datum: azonosito.datum }))?.id ?? null;
 }
 
 /**

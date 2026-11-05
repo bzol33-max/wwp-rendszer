@@ -1,5 +1,10 @@
 # PROGRESS
 
+## 2026-11-05 — Megbízás-beolvasás: az újraküldött irat nem lesz új fuvar
+- Eset: RBT poz 3542 — a #342 már kész volt, a #362 ugyanazzal a hivatkozással, a régi felrakási nappal jött létre, ezért Gergő holnapjának sorrendje is elromlott (Tervezés). A #362 törölve, kézzel.
+- `lib/fuvarozas/import/duplikatum.ts`, `azonosHivatkozasuFuvar` (`naplo.ts`), `drive-sync-core.ts`: azonos megbízó + hivatkozás + felrakási nap esetén az irat a meglévő fuvarhoz kerül, új sor nem keletkezik, a napló `duplikatum`, és figyelmeztetés megy. Hiányzó hivatkozásnál új sor marad. Teszt: `scripts/teszt-import.mts`.
+- Nyitott: a Ma oldal és a sofőr app (`napiSorrend`) időpont nélküli fuvaroknál a rögzítés sorrendjéből indul, nem a kocsi előző lerakójából; a Tervezés (`napBelulFuzve`) már onnan. Gergő 11.06-i napjánál a #364 kapott 08:00-t.
+
 ## 2026-11-04 — Megbízás-beolvasás: OpenRouter 429 újrapróbálás + tartalék modell
 - `lib/fuvarozas/drive-sync-core.ts` (`kivonatolFuvarAdatot`): 429/5xx esetén 2× újrapróbál az elsődleges modellel (3 s várakozás), majd 1× a tartalék modellel (`OPENROUTER_FALLBACK_MODEL`, alapértelmezés `google/gemini-2.5-flash`). Más hibakód (4xx) azonnal hibát ad, mint eddig. Az elsődleges modell (`OPENROUTER_MODEL`) változatlan.
 

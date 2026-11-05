@@ -26,6 +26,7 @@ import { kivonGhibliMezoket } from "@/lib/fuvarozas/import/ghibli";
 import { kivonKuehneNagelMezoket } from "@/lib/fuvarozas/import/kuehne-nagel";
 import { cimPontossaga } from "@/lib/fuvarozas/varos";
 import type { SzovegElem } from "@/lib/fuvarozas/import/pdf-elemek";
+import { ugyanazAMegbizas } from "@/lib/fuvarozas/import/duplikatum";
 
 const mintaDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "teszt-minta");
 const minta = (nev: string) => readFileSync(path.join(mintaDir, nev), "utf8");
@@ -463,6 +464,19 @@ egyenlo(kocsi("KLM-123"), null, "idegen rendszám: nincs kocsi");
 egyenlo(kocsi("HU13500287 UH748629"), null, "hosszabb azonosítók nem rendszámok");
 egyenlo(kocsi(null), null, "üres szöveg");
 egyenlo(kocsi(""), null, "üres string");
+
+// ---------------------------------------------------------------------------
+// Ugyanaz a megbízás más szöveggel (RBT poz 3542, 2026-11-05: #342 a kész fuvar,
+// #362 újra bekerült a régi dátummal, és a sofőr listáján az élre állt).
+const poz3542 = { megrendelo: "RBT EUROPE Kft.", pozicioszam: "R16 / 2993 / 3542", datum: "2026-11-03" };
+allit(ugyanazAMegbizas(poz3542, { ...poz3542 }), "azonos megbízó, hivatkozás, nap: ugyanaz");
+allit(ugyanazAMegbizas(poz3542, { ...poz3542, megrendelo: "RBT Europe KFT", pozicioszam: "r16/2993/3542" }), "a cégforma és a szóköz nem számít");
+allit(!ugyanazAMegbizas(poz3542, { ...poz3542, datum: "2026-11-10" }), "más felrakási nap: új fuvar (ismétlődő hivatkozás)");
+allit(!ugyanazAMegbizas(poz3542, { ...poz3542, pozicioszam: "R16 / 2993 / 3543" }), "más hivatkozás: új fuvar");
+allit(!ugyanazAMegbizas(poz3542, { ...poz3542, megrendelo: "Logo Trek Kft." }), "más megbízó: új fuvar");
+allit(!ugyanazAMegbizas({ ...poz3542, pozicioszam: null }, { ...poz3542, pozicioszam: null }), "hivatkozás nélkül nem dönthető el: új fuvar");
+allit(!ugyanazAMegbizas({ ...poz3542, pozicioszam: " / " }, { ...poz3542, pozicioszam: " / " }), "csak írásjelből álló hivatkozás nem számít");
+allit(!ugyanazAMegbizas({ ...poz3542, megrendelo: null }, { ...poz3542, megrendelo: null }), "megbízó nélkül nem dönthető el: új fuvar");
 
 // ---------------------------------------------------------------------------
 if (hibak.length > 0) {

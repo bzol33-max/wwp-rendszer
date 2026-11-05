@@ -58,6 +58,7 @@ import {
   nyersSzoveggelNaplozottFileIdk,
   nemMegbizasnakNaplozottFileIdk,
   azonosSzoveguIsmertIrat,
+  azonosHivatkozasuFuvar,
   csatolIratotFuvarhoz,
   hianyzoDuvenbeckParja,
 } from "@/lib/fuvarozas/import/naplo";
@@ -751,6 +752,23 @@ async function ujFajlokFeldolgozasa(
         elutasitottIratok++;
         await rogzitNaplot({ ...naploAlap, olvaso: "llm", verdikt, kifogasok, fuvarId: null });
         figyelmeztetesek.push(`${file.name}: nem vittük fel — ${kifogasok.join(" ")}`);
+        continue;
+      }
+
+      // --- Ugyanaz a megbízás újraküldve, nem betűre azonos szöveggel (duplikatum.ts) ---
+      // Új sor helyett a meglévő fuvarhoz csatoljuk, és szólunk: ha az újraküldés
+      // módosítást hozott, azt embernek kell átvezetnie.
+      const azonosFuvarId = await azonosHivatkozasuFuvar({
+        megrendelo: kivont.megrendelo,
+        pozicioszam: kivont.pozicioszam,
+        datum: kivont.felrakasDatum,
+      });
+      if (azonosFuvarId) {
+        await csatolIratotFuvarhoz(azonosFuvarId, { id: file.id, name: file.name, url });
+        osszefuzottDokumentumok++;
+        const uzenet = `Ugyanilyen megbízó, hivatkozás (${kivont.pozicioszam}) és felrakási nap már van a #${azonosFuvarId} fuvarnál — hozzá csatoltuk, új sor nem keletkezett. Ha az irat módosítást hoz, vezesd át kézzel.`;
+        figyelmeztetesek.push(`${file.name}: ${uzenet}`);
+        await rogzitNaplot({ ...naploAlap, olvaso: "llm", verdikt: "duplikatum", kifogasok: [uzenet], fuvarId: azonosFuvarId });
         continue;
       }
 
