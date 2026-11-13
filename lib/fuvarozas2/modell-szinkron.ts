@@ -157,18 +157,18 @@ export async function frissitsdFuvarozas2Modellt(fuvarId: string): Promise<Model
            where megbizas_id = $1 and sorszam = $2`,
           [sor.id, i + 1, m.nap, m.tol, m.ig]
         );
-        // A megbízáson átírt nap (Szerkesztés) is átmegy a megállóra, az ahhoz a naphoz
-        // tartozó ablakkal — de csak a még meg nem kezdett megállóra (#373, 2026-11-13:
-        // a lerakás napja a megbízáson péntek lett, a megálló hétfőn maradt).
-        if (m.nap) {
-          await query(
-            `update fuvar_megallok set tervezett_nap = $3::date, ablak_tol = $4, ablak_ig = $5
-             where megbizas_id = $1 and sorszam = $2
-               and tervezett_nap is distinct from $3::date
-               and gps_erkezes is null and sofor_kesz_at is null and sofor_megerkezett_at is null`,
-            [sor.id, i + 1, m.nap, m.tol, m.ig]
-          );
-        }
+        // A megbízáson átírt napot a 022-es trigger átviszi a még érintetlen megállóra, az
+        // ablakot viszont nem: a más napra eső (régi) ablak ott már nem érvényes — töröljük
+        // (#373, 2026-11-13: a lerakó péntekre került, az ablaka hétfő 00:00 maradt).
+        await query(
+          `update fuvar_megallok set ablak_tol = null, ablak_ig = null
+           where megbizas_id = $1 and sorszam = $2
+             and tervezett_nap is not null
+             and coalesce((ablak_tol at time zone 'Europe/Budapest')::date, (ablak_ig at time zone 'Europe/Budapest')::date) is distinct from tervezett_nap
+             and (ablak_tol is not null or ablak_ig is not null)
+             and gps_erkezes is null and sofor_kesz_at is null and sofor_megerkezett_at is null`,
+          [sor.id, i + 1]
+        );
         // A kézzel javított cím (Szerkesztés) is átmegy a megállóra — de csak
         // ha a megállót még nem érintette a GPS és a sofőr sem jelölte késznek
         // (2026-10-27, Logo Trek: a lerakó a fuvaron GYŐR lett, a megálló és a

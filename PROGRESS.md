@@ -4233,7 +4233,7 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 
 ## 2026-11-13 — Ma + hét átnézés: hibajavítások
 - „Csak dátum” időablak (Duvenbeck `PV/PB: 16.11.2026 00:00`): új `lib/fuvarozas2/ablak-alap.ts`; az import már nem ír 00:00-s ablakot/időpontot, a meglévő ilyen ablakot a Ma-tükör, a heti ütemterv, a késés-figyelés és a megálló-terv nem veszi időpontnak (nincs „hétfő 00:00”, „+480 p várható”, „−561 p”).
-- Megbízáson átírt nap (Szerkesztés) átmegy a még meg nem kezdett megállóra, a más napra eső ablak nélkül (`modell-szinkron.ts`, `megallo-terv.ts`).
+- Megbízáson átírt nap: a napot a 022-es trigger már átvitte, de a megálló régi, más napra eső ablaka megmaradt — a modell-szinkron ezt törli a még meg nem kezdett megállón (`modell-szinkron.ts`); új megállónál a `megallo-terv.ts` sem ad más napi / csak-dátum ablakot.
 - ETA csak a mai, élő érkezésnél (a más napra tolt lánc-idő nem „ETA”).
 - Heti kártya: már felrakott fuvarnál nincs hamis „fel” (a lerakó idejét írta).
 - „Szabad: …” nem ajánl a sofőr távolléti napjára (`kocsi-sav-alap.ts`).
