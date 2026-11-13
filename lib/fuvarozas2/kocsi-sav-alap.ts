@@ -20,6 +20,8 @@ export type KocsiSavBemenet = {
   hetKezdet: string;
   cellak: NapCella[];
   resek: Res[];
+  /** A sofőr távolléti napjai (szabadság, betegség) — ezek nem „szabad” napok. */
+  tavolletNapok?: readonly string[];
 };
 
 export type KocsiSavKovetkezo = {
@@ -106,6 +108,8 @@ function futoFuvar(sorok: TukorSor[]): KocsiSav["futo"] {
 function szabadNap(b: KocsiSavBemenet): KocsiSav["szabad"] {
   for (const c of b.cellak) {
     if (c.nap < b.ma) continue;
+    // Távollét napján nincs ajánlat (2026-11-13: Gergő szabadságon — „Szabad: K 11.17.”).
+    if (b.tavolletNapok?.includes(c.nap)) continue;
     const res = b.resek.find((r) => r.nap === c.nap);
     if (res) return { nap: c.nap, cimke: napCimke(c.nap, b.ma), honnan: res.honnan, resKulcs: res.kulcs, km: res.km };
     if (c.szabad) return { nap: c.nap, cimke: napCimke(c.nap, b.ma), honnan: null, resKulcs: null, km: null };

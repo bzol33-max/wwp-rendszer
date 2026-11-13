@@ -143,6 +143,7 @@ export async function getKocsiSavok(vaszon: MaVaszon, elotoltes?: KocsiSavElotol
         ma: vaszon.ma,
         hetKezdet,
         cellak: het?.kocsik.find((x) => x.kod === kod)?.cellak ?? [],
+        tavolletNapok: Object.keys(het?.kocsik.find((x) => x.kod === kod)?.tavollet ?? {}),
         resek: het?.resek.filter((r) => r.kocsi === kod) ?? [],
       });
     });

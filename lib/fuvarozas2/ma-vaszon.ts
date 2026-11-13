@@ -21,6 +21,8 @@
 // tachográf a sofőrnél van, ez előrejelzés.
 
 import { megbizoMegjelenites } from "@/lib/fuvarozas/fuvar-constants";
+import { csakDatumAblak } from "@/lib/fuvarozas2/ablak-alap";
+import { csuszikNap } from "@/lib/fuvarozas2/ma-het-alap";
 import { query } from "@/lib/db";
 import { requireSession } from "@/lib/auth/dal";
 import { revalidatePath } from "next/cache";
@@ -508,6 +510,8 @@ export async function getMaVaszon(): Promise<MaVaszon> {
     for (const g of gs) {
       const kesz = !!(g.gps_tavozas || g.sofor_kesz_at);
       if (kesz || !g.ablak_ig) continue;
+      // „Csak dátum” ablak (00:00–00:00) nem határidő-időpont: nem késés.
+      if (csakDatumAblak(g.ablak_tol, g.ablak_ig)) continue;
       const ig = idobelyeg(g.ablak_ig);
       if (!ig) continue;
       if (ig >= most) continue;
@@ -556,7 +560,11 @@ export async function getMaVaszon(): Promise<MaVaszon> {
         badge: "csúszik",
         kocsiKod: s.jarmu_kod, hely: s.partner ?? null,
         szin: "red",
-        sorok: [`Lerakás napja: ${s.lerakas_nap ?? "—"} — a fuvar még nyitott.`, `${s.felrako ?? "—"} → ${s.lerako ?? "—"}`],
+        // Az első sor a „Most dönts” listán is látszik: útvonal + olvasható nap (2026-11-13: nyers „2026-11-12” volt, útvonal nélkül).
+        sorok: [
+          `${varosNev(s.felrako ?? "") || s.felrako || "?"} → ${varosNev(s.lerako ?? "") || s.lerako || "?"} · lerakás ${s.lerakas_nap ? csuszikNap(s.lerakas_nap) : "—"} volt, még nyitott`,
+          `${s.felrako ?? "—"} → ${s.lerako ?? "—"}`,
+        ],
         href: `/fuvarozas2/megbizasok/${s.id}`,
       });
     }

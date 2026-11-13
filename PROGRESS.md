@@ -4230,3 +4230,14 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 - `/proto/kereso`: futó és mai fuvarok alapból, teljes múlt, hiányzó papír szűrő, üres állapot. Új: `/proto/fuvar/[id]` telefonos adatlap. A korábbi Döntés lap: `/proto/dontes`.
 - Csak admin. Migráció nincs. Írás csak az Elutasítom gombbal (`torolMegbizast`, megerősítés után).
 - Még nincs: kocsi fix költség (migráció kell), kézi költségsor író kód, azonos időszak előző havi összevetés, „hátra … elég” felirat, a kezdőlap cseréje. Élő adaton böngészős ellenőrzés a felhasználónál.
+
+## 2026-11-13 — Ma + hét átnézés: hibajavítások
+- „Csak dátum” időablak (Duvenbeck `PV/PB: 16.11.2026 00:00`): új `lib/fuvarozas2/ablak-alap.ts`; az import már nem ír 00:00-s ablakot/időpontot, a meglévő ilyen ablakot a Ma-tükör, a heti ütemterv, a késés-figyelés és a megálló-terv nem veszi időpontnak (nincs „hétfő 00:00”, „+480 p várható”, „−561 p”).
+- Megbízáson átírt nap (Szerkesztés) átmegy a még meg nem kezdett megállóra, a más napra eső ablak nélkül (`modell-szinkron.ts`, `megallo-terv.ts`).
+- ETA csak a mai, élő érkezésnél (a más napra tolt lánc-idő nem „ETA”).
+- Heti kártya: már felrakott fuvarnál nincs hamis „fel” (a lerakó idejét írta).
+- „Szabad: …” nem ajánl a sofőr távolléti napjára (`kocsi-sav-alap.ts`).
+- Saját telephelyen állás nem „nem tervezett állás” (`lib/fuvarozas/actions.ts`).
+- „Üresen indul” jelzés a nappal („Hétfő: üresen indul …”); „l” → „l/100”; „Hét:” → „Ez a hét (H–V):”.
+- Most dönts: a csúszó fuvar sora útvonallal és olvasható nappal; ami a Javaslatban van, nem ismétlődik a „Kocsira vár”-ban.
+- Teszt: új `teszt-ablak-alap` (14), `teszt-ma-tukor` +2, `teszt-2kor-kocsi-sav` +2; teljes `npm run teszt`, typecheck, eslint, build OK.

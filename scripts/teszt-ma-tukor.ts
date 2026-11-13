@@ -275,5 +275,20 @@ eq("más célú ETA nem kerül rossz megállóra", csaszarEta.find((r) => r.tipu
   eq("lerakó ablaka a felrakás napján nem felrakási időpont: az időzített elé nem kerül", fejek(tukorSorok({ fuvarok: [csakLerakoAblak, ber09], allasok: [], eta: null, most: d12("05:00"), ma: "2026-10-12" })), ["# Bér 09:00", "# Csak lerakó-ablak"]);
 }
 
+// --- 2026-11-13, #373 Duvenbeck: a lerakó „16.11.2026 00:00–00:00” (csak nap), a lánc-idő hétfő 08:00.
+{
+  const d13 = (hhmm: string) => new Date(`2026-11-13T${String(Number(hhmm.slice(0, 2)) - 1).padStart(2, "0")}:${hhmm.slice(3)}:00Z`); // CET
+  const duv: TukorFuvar = { id: "373", partner: "Duvenbeck", hivatkozas: "23624118", jelleg: "ber", megallo_reszletek: null, megallok: [
+    m(1, "felrako", "Budapest", { tervezett_nap: "2026-11-13", ablak_tol: "2026-11-13 13:00:00+00", ablak_ig: "2026-11-13 13:00:00+00", gps_erkezes: "2026-11-13 06:28:00+00", gps_tavozas: "2026-11-13 10:24:00+00" }),
+    m(2, "lerako", "Debrecen", { tervezett_nap: "2026-11-16", ablak_tol: "2026-11-15 23:00:00+00", ablak_ig: "2026-11-15 23:00:00+00" }),
+  ] };
+  const s = tukorSorok({ fuvarok: [duv], allasok: [], eta: new Date("2026-11-16T07:00:00Z"), etaCel: "Debrecen", most: d13("12:56"), ma: "2026-11-13" });
+  const le = s.find((r) => r.tipus === "megallo" && r.varos === "Debrecen");
+  eq("#373: csak-dátum ablak — nincs 00:00, nincs várható késés, más napi ETA nem jelenik meg", le && le.tipus === "megallo" ? [le.terv, le.teny, le.elteres] : null, ["hétfő", null, null]);
+  const s2 = tukorSorok({ fuvarok: [duv], allasok: [], eta: d13("14:20"), etaCel: "Debrecen", most: d13("12:56"), ma: "2026-11-13" });
+  const le2 = s2.find((r) => r.tipus === "megallo" && r.varos === "Debrecen");
+  eq("#373: mai élő ETA megmarad", le2 && le2.tipus === "megallo" ? le2.teny : null, "ETA 14:20");
+}
+
 console.log(`\nMa-tükör teszt: ${ok} rendben, ${bad} hiba`);
 if (bad > 0) process.exit(1);

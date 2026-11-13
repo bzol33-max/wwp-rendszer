@@ -14,6 +14,10 @@ import { varosNev } from "@/lib/fuvarozas/varos";
 import { kontaktNev, kontaktTelefon, megalloReszlete, type MegalloReszlet } from "@/lib/fuvarozas/sofor-adatok";
 import { napiSorrend, tervIdoMegbizasbol } from "@/lib/fuvarozas2/napi-sorrend";
 import { alkalmazMenetSorrendet } from "@/lib/menet/menet-alap";
+import { ervenyesAblak } from "@/lib/fuvarozas2/ablak-alap";
+
+const NAP_FMT = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Budapest", year: "numeric", month: "2-digit", day: "2-digit" });
+const budapestNap = (d: Date) => NAP_FMT.format(d);
 
 export type TukorAllas = {
   percek: number;
@@ -190,8 +194,10 @@ export function tukorSorok(be: {
       const kesz = !!(f.lezart || g.gps_tavozas || g.sofor_kesz_at);
       const erk = idobelyeg(g.gps_erkezes ?? g.sofor_megerkezett_at ?? null);
       const tav = idobelyeg(g.gps_tavozas ?? g.sofor_kesz_at);
-      const tol = idobelyeg(g.ablak_tol);
-      const ig = idobelyeg(g.ablak_ig);
+      // „Csak dátum” ablak (00:00–00:00): nincs időpont, késés sem számolható belőle.
+      const ab = ervenyesAblak(g.ablak_tol ?? null, g.ablak_ig ?? null);
+      const tol = idobelyeg(ab.tol);
+      const ig = idobelyeg(ab.ig);
       const varos = varosNev(g.cim_nyers) ?? g.cim_nyers;
       const varakozik = !f.lezart && !!(g.varakozas_kezdete && !g.varakozas_vege);
 
@@ -223,7 +229,9 @@ export function tukorSorok(be: {
         } else allapot = "hatra";
         if (allapot === "most" && !mostItt) kovetkezoVolt = true;
       }
-      const etaIde = allapot === "kovetkezo" && be.eta && (!etaCel || etaCel === ekezetNelkul(varos)) ? be.eta : null;
+      // Csak a mai, élő érkezés ETA: ha a lánc egy későbbi napra tolta (a megálló terve
+      // egy másik nap), az nem érkezés-becslés, hanem a terv napja (#373, 2026-11-13: „ETA 08:00”).
+      const etaIde = allapot === "kovetkezo" && be.eta && budapestNap(be.eta) === ma && (!etaCel || etaCel === ekezetNelkul(varos)) ? be.eta : null;
 
       const masNap = g.tervezett_nap && g.tervezett_nap !== ma ? napNeve(g.tervezett_nap) : null;
       const ablak = tol || ig ? (tol && ig && ORA(tol) !== ORA(ig) ? `${ORA(tol)}–${ORA(ig)}` : ORA(tol ?? ig)) : null;

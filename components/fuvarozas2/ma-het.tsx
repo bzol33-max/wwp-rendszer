@@ -313,8 +313,9 @@ function ResKartya({ r, aktiv, het }: { r: Res; aktiv: boolean; het: string | nu
 
 function FuvarKartya({ f, e, szerep }: { f: NapCella["fuvarok"][number]; e?: FuvarEredmeny; szerep: "teljes" | "utolso" | "kozep" }) {
   const jel = fuvarJel(f.allapot);
-  const fel = e?.megallok.find((m) => m.tipus === "felrako") ?? e?.megallok[0];
-  const le = e ? [...e.megallok].reverse().find((m) => m.tipus === "lerako") ?? e.megallok[e.megallok.length - 1] : undefined;
+  // A már felrakott fuvarnál (ma-mód) a lánc a lerakóval kezd: ott nincs „fel” (#373, 2026-11-13: „fel 09:21” a lerakó volt).
+  const fel = e?.megallok.find((m) => m.tipus === "felrako");
+  const le = e ? [...e.megallok].reverse().find((m) => m.tipus === "lerako") : undefined;
   const t = szerep !== "kozep" ? e?.legszukebbTartalek ?? null : null;
   const meta = szerep === "kozep"
     ? "↳ úton"
@@ -466,7 +467,8 @@ function HetSor({ s }: { s: KihasznaltsagSor | null | undefined }) {
     s.fizetosNapok > 0 ? `${s.fizetosNapok} nap fizetős` : null,
   ].filter(Boolean);
   if (!reszek.length) return null;
-  return <div className="text-[13px] font-semibold tabular-nums">Hét: {reszek.join(" · ")}</div>;
+  // A naptári hét (H–V) számai — nem a fölötte lévő gördülő napoké.
+  return <div className="text-[13px] font-semibold tabular-nums" title="Naptári hét, hétfőtől vasárnapig">Ez a hét (H–V): {reszek.join(" · ")}</div>;
 }
 
 export function MaHetKocsi({ k, adat, het, sav, hetSor, szerk }: {
@@ -524,7 +526,7 @@ export function MaHetKocsi({ k, adat, het, sav, hetSor, szerk }: {
             <span className="flex shrink-0 items-baseline gap-2 text-xs">
               {gps ? <span className="text-[var(--f2-amb)]">{gps}</span> : null}
               {l100 != null ? (
-                <span className={cn("tabular-nums", MEDDO)} title="átlag l/100 az utolsó 7 napból">{l100.toLocaleString("hu-HU")} l</span>
+                <span className={cn("tabular-nums", MEDDO)} title="átlag l/100 az utolsó 7 napból">{l100.toLocaleString("hu-HU")} l/100</span>
               ) : null}
             </span>
           </div>
@@ -564,7 +566,7 @@ export function MaHetKocsi({ k, adat, het, sav, hetSor, szerk }: {
               scroll={false}
               className="bg-[var(--f2-amb-l)] px-3 py-1 text-[13px] font-semibold text-[var(--f2-amb)] hover:underline"
             >
-              <span aria-hidden>⚠ </span>Üresen indul — {km(r.res.km)} km rés ({r.res.honnan} → {r.res.hova})
+              <span aria-hidden>⚠ </span>{r.res.nap === adat.ma ? "Ma" : napNevHosszu(r.res.nap)}: üresen indul — {km(r.res.km)} km rés ({r.res.honnan} → {r.res.hova})
             </Link>
           ))}
         </div>

@@ -13,6 +13,7 @@ import "server-only";
 // így a következő betöltésnél már pontos.
 
 import { query } from "@/lib/db";
+import { ervenyesAblak } from "@/lib/fuvarozas2/ablak-alap";
 import { getFuvarBeallitasok } from "@/lib/beallitasok/fuvar";
 import { calculateToll, FIXED_VEHICLE } from "@/lib/fuvarozas/utdijkalkulacio";
 import { geokodolCachelve } from "@/lib/fuvarozas/erintes-felismeres";
@@ -202,7 +203,8 @@ export async function szamoljUtemtervet(b: UtemBemenet, opciok: UtemOpciok = {})
         return {
           tipus: s.tipus, varos, cim: s.cim_nyers,
           nap: s.tervezett_nap ?? (s.tipus === "felrako" ? f.felNap : f.leNap),
-          ablakTol: s.ablak_tol, ablakIg: s.ablak_ig,
+          // „Csak dátum” ablak (00:00–00:00): a nap számít, időpont nincs (#373, 2026-11-13).
+          ...((a) => ({ ablakTol: a.tol, ablakIg: a.ig }))(ervenyesAblak(s.ablak_tol, s.ablak_ig)),
           rakodasPerc: rakodas(s.tipus, varos, s.cim_nyers),
           pont: s.lat != null && s.lon != null ? { lat: Number(s.lat), lon: Number(s.lon) } : null,
           kesz: !!s.kesz,
@@ -220,12 +222,12 @@ export async function szamoljUtemtervet(b: UtemBemenet, opciok: UtemOpciok = {})
       lista = [
         {
           tipus: "felrako", varos: f.felVaros, cim: f.felrako ?? "", nap: f.felNap,
-          ablakTol: mb?.fel_tol ?? (mb?.fel_ig ? null : idopontAblak), ablakIg: mb?.fel_ig ?? null,
+          ...((a) => ({ ablakTol: a.tol ?? (a.ig ? null : idopontAblak), ablakIg: a.ig }))(ervenyesAblak(mb?.fel_tol ?? null, mb?.fel_ig ?? null)),
           rakodasPerc: rakodas("felrako", f.felVaros, f.felrako), pont: f.fel, kesz: false,
         },
         {
           tipus: "lerako", varos: f.leVaros, cim: f.lerako ?? "", nap: f.leNap,
-          ablakTol: mb?.le_tol ?? null, ablakIg: mb?.le_ig ?? null,
+          ...((a) => ({ ablakTol: a.tol, ablakIg: a.ig }))(ervenyesAblak(mb?.le_tol ?? null, mb?.le_ig ?? null)),
           rakodasPerc: rakodas("lerako", f.leVaros, f.lerako), pont: f.le, kesz: false,
         },
       ];

@@ -64,12 +64,14 @@ export function dontLista(adat: MaVaszon, het: TervezesHet | null, bejovo: Bejov
   );
   const hatarido = [...bejovo].sort((a, b) => a.felrakasNap.localeCompare(b.felrakasNap));
   const ismert = new Set(adat.kocsiNelkul.map((s) => s.id));
+  // Ami a „Javaslat · elvinni való”-ban kocsit is kap, az nem jelenik meg kétszer (2026-11-13: Szigetszentmiklós → Tompaládony).
+  const javaslatIds = new Set(adat.elvinni.map((e) => e.id));
   const kocsiraVar = [
     ...adat.kocsiNelkul.map((s) => ({ id: s.id, partner: s.partner, utvonal: s.utvonal, nap: s.nap })),
     ...(het?.kiosztatlan.flat() ?? [])
       .filter((f, i, t) => !ismert.has(f.id) && t.findIndex((x) => x.id === f.id) === i)
       .map((f) => ({ id: f.id, partner: f.cim, utvonal: `${f.felVaros} → ${f.leVaros}`, nap: f.felNap as string | null })),
-  ];
+  ].filter((s) => !javaslatIds.has(s.id));
   const resek = [...(het?.resek ?? [])].filter((r) => r.nap >= (het?.ma ?? "")).sort((a, b) => b.km - a.km);
   // Elvinni való: a Ma-vászon listája, a hét legjobb helyével kiegészítve (★ = útba eső).
   const legjobbById = new Map<string, NonNullable<TervezesHet["elvinni"][number][number]["legjobb"]>>();

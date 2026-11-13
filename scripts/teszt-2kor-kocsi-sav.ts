@@ -268,6 +268,14 @@ eq("csak állás-sor → futo null", kocsiSav(bemenet({ sorok: [allasSor] })).fu
   eq("szabad cella, nincs rés → href rés nélkül", s.ajanlatHref, "/fuvarozas2/tervezes?het=2026-10-12");
 }
 {
+  // Távollét napja nem „szabad” (2026-11-13, Gergő szabadsága): a szombati szabad cella kimarad.
+  const c = alapCellak(); c.push(cella("2026-10-18", true));
+  const s = kocsiSav(bemenet({ cellak: c, tavolletNapok: ["2026-10-17"] }));
+  eq("szabad: távollét napja kimarad", s.szabad?.nap, "2026-10-18");
+  const s2 = kocsiSav(bemenet({ cellak: alapCellak(), tavolletNapok: ["2026-10-17"] }));
+  eq("szabad: csak távolléti szabad nap → nincs", s2.szabad, null);
+}
+{
   // Ma szabad → „ma”.
   const c = alapCellak(); c[3] = cella("2026-10-15", true);
   const s = kocsiSav(bemenet({ cellak: c }));

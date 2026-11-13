@@ -4,6 +4,19 @@
 // használja. Ugyanaz a bontás, mint amit a backfill és a sofor.ts vár.
 
 import { bontsMegallokra } from "@/lib/fuvarozas/varos";
+import { ervenyesAblak, helyiNap } from "@/lib/fuvarozas2/ablak-alap";
+
+/**
+ * A megálló ablaka a napjához: a „csak dátum” ablak (00:00–00:00) nem ablak,
+ * és a más napra eső ablak sem (kézzel átírt nap után a régi ablak nem érvényes —
+ * #373, 2026-11-13: a lerakás hétfőről péntekre került).
+ */
+function ablakNapra(nap: string | null, tol: string | null, ig: string | null): { tol: string | null; ig: string | null } {
+  const a = ervenyesAblak(tol, ig);
+  if (!nap) return a;
+  const n = helyiNap(a.tol ?? a.ig);
+  return n && n !== nap ? { tol: null, ig: null } : a;
+}
 
 export type MegalloTerv = {
   tipus: "felrako" | "lerako";
@@ -37,15 +50,13 @@ export function megalloTerv(sor: {
       tipus: "felrako" as const,
       cim,
       nap: sor.datum_iso,
-      tol: sor.felrakas_ablak_tol,
-      ig: sor.felrakas_ablak_ig,
+      ...ablakNapra(sor.datum_iso, sor.felrakas_ablak_tol, sor.felrakas_ablak_ig),
     })),
     ...bontsMegallokra(sor.lerako).map((cim) => ({
       tipus: "lerako" as const,
       cim,
       nap: sor.lerakas_datum_iso ?? sor.datum_iso,
-      tol: sor.lerakas_ablak_tol,
-      ig: sor.lerakas_ablak_ig,
+      ...ablakNapra(sor.lerakas_datum_iso ?? sor.datum_iso, sor.lerakas_ablak_tol, sor.lerakas_ablak_ig),
     })),
   ];
 }

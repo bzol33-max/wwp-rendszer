@@ -81,6 +81,12 @@ function ablakInstant(ablak: { datum: string; ido: string } | null): Date | null
   return budapestFalioraToInstant(ev, ho, nap, ora ?? 0, perc ?? 0);
 }
 
+/** Időpont nélküli nap: az ablak mindkét (meglévő) vége „00:00”. */
+function csakNap(m: { ablakTol: { ido: string } | null; ablakIg: { ido: string } | null } | null): boolean {
+  if (!m || (!m.ablakTol && !m.ablakIg)) return false;
+  return (!m.ablakTol || m.ablakTol.ido === "00:00") && (!m.ablakIg || m.ablakIg.ido === "00:00");
+}
+
 /** A dokumentumban talált rendszám-jelöltek közül az első, ami saját járműre illik. */
 function sajatJarmu(dok: DuvenbeckDok) {
   for (const jelolt of dok.rendszamJeloltek) {
@@ -189,11 +195,13 @@ export async function mentDuvenbeckDokumentumot(
     lerako,
     datum: elsoFelrako?.ablakTol?.datum ?? null,
     lerakasDatum: utolsoLerako?.ablakTol?.datum ?? null,
-    idopont: elsoFelrako?.ablakTol?.ido ?? null,
-    felrakasAblakTol: ablakInstant(elsoFelrako?.ablakTol ?? null),
-    felrakasAblakIg: ablakInstant(elsoFelrako?.ablakIg ?? null),
-    lerakasAblakTol: ablakInstant(utolsoLerako?.ablakTol ?? null),
-    lerakasAblakIg: ablakInstant(utolsoLerako?.ablakIg ?? null),
+    // A „PV: 16.11.2026 00:00 / PB: 16.11.2026 00:00” csak napot jelöl, nem éjféli
+    // időablakot (#373, 2026-11-13) — ilyenkor nincs időpont és nincs ablak, a nap marad.
+    idopont: csakNap(elsoFelrako) ? null : elsoFelrako?.ablakTol?.ido ?? null,
+    felrakasAblakTol: csakNap(elsoFelrako) ? null : ablakInstant(elsoFelrako?.ablakTol ?? null),
+    felrakasAblakIg: csakNap(elsoFelrako) ? null : ablakInstant(elsoFelrako?.ablakIg ?? null),
+    lerakasAblakTol: csakNap(utolsoLerako) ? null : ablakInstant(utolsoLerako?.ablakTol ?? null),
+    lerakasAblakIg: csakNap(utolsoLerako) ? null : ablakInstant(utolsoLerako?.ablakIg ?? null),
     // A fuvardij oszlop egész szám — a Duvenbeck EUR-összegei a gyakorlatban
     // kerek értékek ("500,00"), de a kerekítés itt explicit, hogy egy
     // tizedesjegyes ár se dobjon adatbázis-hibát a cron-futásban.

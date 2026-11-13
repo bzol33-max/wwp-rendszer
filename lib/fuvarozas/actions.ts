@@ -1050,7 +1050,9 @@ async function szamitsIdovonalakat(nap: string): Promise<IdovonalNap> {
             (sz) =>
               sz.idotartamSec >= NEM_TERVEZETT_ALLAS_PERC * 60 &&
               sz.kategoria !== "piheno" &&
-              !tervezettCimKozeleben(sz.lat, sz.lon, tervezettCimek)
+              !tervezettCimKozeleben(sz.lat, sz.lon, tervezettCimek) &&
+              // A saját telephelyen (Balkány, Szakoly …) állás nem riasztás (2026-11-13, Micó Balkányban).
+              !talalSajatTelephelyet(sz.lat, sz.lon, telephelyPontok)
           )
           .map((sz) => ({ kezdet: sz.kezdet, veg: sz.veg, cim: sz.cim, percek: Math.round(sz.idotartamSec / 60) }));
 
