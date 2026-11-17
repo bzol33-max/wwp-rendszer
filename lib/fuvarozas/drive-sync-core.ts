@@ -403,8 +403,9 @@ async function kivonatolFuvarAdatot(
   const hivas = (modell: string) =>
     fetch("https://openrouter.ai/api/v1/chat/completions", {
       // Időkorlát: egy beakadt hívás ne tartsa fel a teljes Drive-szinkront
-      // (audit PERF-1). Az ingyenes képolvasó lassabb (40–120 s), ezért 150 s.
-      signal: AbortSignal.timeout(150_000),
+      // (audit PERF-1). Az ingyenes képolvasó lassabb (40–120 s, esténként
+      // több), ezért 180 s; egy irat legrosszabb esetben ~6 percet vár.
+      signal: AbortSignal.timeout(180_000),
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -430,9 +431,11 @@ async function kivonatolFuvarAdatot(
       try {
         res = await hivas(modell);
       } catch (err) {
+        // Időtúllépés / hálózati hiba: ugyanezt a modellt nem várjuk ki még
+        // egyszer (az óránkénti szinkron ne álljon percekig), jön a következő.
         hibak.push(`${modell}: ${err instanceof Error ? err.message : "hálózati hiba"}`);
         res = null;
-        continue;
+        break;
       }
       if (res.ok) break;
       hibak.push(`${modell}: ${res.status}`);
