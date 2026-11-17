@@ -12,7 +12,11 @@ import { kepesKiolvasas } from "@/lib/fuvarozas/kiolvasas-kepes";
  */
 export const maxDuration = 180;
 
-const ENGEDETT_MODELLEK = new Set(["google/gemini-2.5-flash", "google/gemini-2.5-pro", "google/gemini-3-flash-preview"]);
+const ENGEDETT_MODELLEK = new Set([
+  "google/gemini-2.5-flash", "google/gemini-2.5-pro",
+  // ingyenes, képet olvasó modellek (2026-11-17: „ingyenes kell”)
+  "google/gemma-4-31b-it:free", "nvidia/nemotron-3.5-super-vl:free", "thinkingmachines/inkling-2-small:free", "inclusionai/ling-3.2-flash:free",
+]);
 
 export async function GET(request: Request, { params }: { params: Promise<{ fuvarId: string }> }) {
   const session = await verifySession();
