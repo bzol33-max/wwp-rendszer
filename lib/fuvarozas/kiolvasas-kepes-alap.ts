@@ -36,7 +36,7 @@ export function kulcs(s: string | null | undefined): string {
  * (FERSPED #375) éppen azért kell, mert ott nincs.
  */
 /** A cím irányítószáma (4 jegy) vagy leghosszabb szava (település) szerepel-e a szövegben. */
-function cimASzovegben(cim: string, szovegKulcs: string): boolean {
+export function cimASzovegben(cim: string, szovegKulcs: string): boolean {
   const irsz = cim.match(/\b\d{4}\b/)?.[0];
   if (irsz && szovegKulcs.includes(irsz)) return true;
   const szavak = cim.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().split(/[^a-z]+/).filter((w) => w.length >= 4);
@@ -89,4 +89,54 @@ export function megalloCimPotlas<T extends { ceg: string | null; cim: string | n
   if (!talalat || talalat.index === undefined) return m;
   const ceg = m.ceg.slice(0, talalat.index).replace(/[\s,;-]+$/, "").trim();
   return { ...m, ceg: ceg || null, cim: m.ceg.slice(talalat.index).trim() };
+}
+
+/** A díj számértéke (tizedes nélkül) a szövegben: „50.000 ft”, „450,00 EUR”, „155 000,00” egyaránt. */
+function dijASzovegben(dij: number | string, szoveg: string): boolean {
+  const szam = String(dij).trim().replace(/[.,]\d{1,2}$/, "").replace(/\D/g, "");
+  return szam.length === 0 || szoveg.replace(/\D/g, "").includes(szam);
+}
+
+/**
+ * A napi import forrás-ellenőrzése (drive-sync-core): a modell által adott
+ * fel-/lerakó (irányítószám vagy település) és díj benne van-e az irat
+ * szövegében. A null mező (nincs, vagy a partner szabályalapú olvasója adta)
+ * nem ellenőrizendő. Képes fejlécből jött megrendelőt nem nézünk itt: az a
+ * szövegben szándékosan nincs benne.
+ */
+export function importGyanu(
+  m: { felrako?: string | null; lerako?: string | null; fuvardij?: number | string | null },
+  szoveg: string
+): string[] {
+  const sz = kulcs(szoveg);
+  const ki: string[] = [];
+  for (const [nev, cim] of [["a felrakó", m.felrako], ["a lerakó", m.lerako]] as const) {
+    if (cim && !cimASzovegben(cim, sz)) ki.push(`${nev} („${cim}”) nem található az iratban`);
+  }
+  if (m.fuvardij != null && m.fuvardij !== "" && !dijASzovegben(m.fuvardij, szoveg)) {
+    ki.push(`a fuvardíj (${m.fuvardij}) nem található az iratban`);
+  }
+  return ki;
+}
+
+/** Az ISO nap ( ÉÉÉÉ-HH-NN ) szerepel-e a szövegben bármely szokásos írásmódban (2026.11.16, 16.11.2026, 2026 11.16., 11.16.). */
+export function datumASzovegben(iso: string | null | undefined, szoveg: string): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? "");
+  if (!m) return false;
+  const [, e, h, n] = m;
+  const szamok = szoveg.replace(/\D+/g, " ");
+  const tomor = szoveg.replace(/\D/g, "");
+  const nn = String(Number(n)), hh = String(Number(h));
+  return tomor.includes(`${e}${h}${n}`) || tomor.includes(`${n}${h}${e}`)
+    || new RegExp(`(^|\\D)${e}\\D{1,3}0?${hh}\\D{1,3}0?${nn}(\\D|$)`).test(szoveg)
+    || new RegExp(`(^|\\D)0?${nn}\\D{1,3}0?${hh}\\D{1,3}${e}(\\D|$)`).test(szoveg)
+    || szamok.includes(` ${h} ${n} `);
+}
+
+/** Melyik kiolvasott dátum igazolt az iratban (a csempe ezzel választja el a tervmódosítást a rossz olvasástól). */
+export function kiolvasottIgazolas(
+  d: { datum?: string | null; lerakasDatum?: string | null },
+  szoveg: string
+): { datum: boolean; lerakasDatum: boolean } {
+  return { datum: datumASzovegben(d.datum, szoveg), lerakasDatum: datumASzovegben(d.lerakasDatum, szoveg) };
 }

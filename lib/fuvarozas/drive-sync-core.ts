@@ -46,6 +46,8 @@ import { normalizaltSzoveg, torzsSzoveg } from "@/lib/fuvarozas/import/normaliza
 import { bontsMegallokra, cimPontossaga } from "@/lib/fuvarozas/varos";
 import { regiMegalloHivatkozasokTorlese } from "@/lib/megbizasok/megallo";
 import { pdfSzovegElemek } from "@/lib/fuvarozas/import/pdf-elemek";
+import { importModellek, oldalKepek } from "@/lib/fuvarozas/import/oldal-kepek";
+import { importGyanu, kiolvasottIgazolas } from "@/lib/fuvarozas/kiolvasas-kepes-alap";
 import { EXCEL_MIME_TIPUSOK, excelMegbizasnakLatszik, excelSzovege } from "@/lib/fuvarozas/import/excel";
 import { felismerPartner, partnerKodSzerint } from "@/lib/fuvarozas/import/partnerek";
 import { frissitsdFuvarozas2Modellt } from "@/lib/fuvarozas2/modell-szinkron";
@@ -285,7 +287,7 @@ type LlmValasz = KivontFuvar & {
   jarmuEloiras?: unknown;
 };
 
-const KIVONATOLASI_UTASITAS = `Egy fuvarmegbízás-dokumentum szövege következik. A szöveget már megtisztítottuk: a nyomtatási ismétléseket összevontuk, és a szerződéses kisbetűs részt levágtuk. Olvasd ki belőle ALAPOSAN az alábbi mezőket, és VÁLASZOLJ KIZÁRÓLAG egyetlen, érvényes JSON objektummal (ne írj mást, ne használj markdown code fence-t):
+const KIVONATOLASI_UTASITAS = `Egy fuvarmegbízás-dokumentum következik: ha PDF, az OLDALAK KÉPE is, a kinyert szöveg mellett — a KÉPET is nézd, mert a fejléc/logó és a táblázat elrendezése gyakran csak ott látszik helyesen (a megbízó cégneve sokszor csak képként van a fejlécben, a szövegben nincs). Ha "=== KÜLDŐ E-MAIL CÍME ===" rész is van, az a megbízás küldője. A szöveg: A szöveget már megtisztítottuk: a nyomtatási ismétléseket összevontuk, és a szerződéses kisbetűs részt levágtuk. Olvasd ki belőle ALAPOSAN az alábbi mezőket, és VÁLASZOLJ KIZÁRÓLAG egyetlen, érvényes JSON objektummal (ne írj mást, ne használj markdown code fence-t):
 
 {
   "isFuvarmegbizas": boolean, // false, ha a szöveg NYILVÁNVALÓAN nem fuvarmegbízás (pl. számla, összesítő táblázat)
@@ -304,6 +306,10 @@ const KIVONATOLASI_UTASITAS = `Egy fuvarmegbízás-dokumentum szövege következ
   "postazasiCim": string|null, // ahová az EREDETI papírokat postázni kell — elsőbbség: kifejezett postázási cím > számlázási cím > székhely
   "pozicioszam": string|null, // a megbízó hivatkozási/pozíció száma
   "megjegyzes": string|null, // bármi egyéb fontos infó egy rövid mondatban, vagy null
+  "forrasok": { // FORRÁSMEGJELÖLÉS: honnan vetted — szó szerinti, rövid idézet az iratból (max 80 karakter), vagy null
+    "megrendelo": "fejlec"|"szoveg"|"email"|null, // a megrendelőt a KÉPES fejlécből, a szövegből vagy a küldő e-mail címéből vetted
+    "felrako": string|null, "lerako": string|null, "felrakasDatum": string|null, "lerakasDatum": string|null, "fuvardij": string|null
+  },
   "megallok": [ // MINDEN felrakó és lerakó, útvonal-sorrendben (több lerakónál MIND, nem csak az utolsó)
     {
       "tipus": "felrako"|"lerako",
@@ -370,19 +376,35 @@ function parseJsonValasz(nyers: string): LlmValasz | null {
   }
 }
 
-async function kivonatolFuvarAdatot(szoveg: string): Promise<LlmValasz | null> {
+async function kivonatolFuvarAdatot(
+  szoveg: string,
+  opciok: { pdf?: Buffer | null; kuldo?: string | null } = {}
+): Promise<LlmValasz | null> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     throw new Error("Hiányzik az OPENROUTER_API_KEY környezeti változó.");
   }
-  const model = process.env.OPENROUTER_MODEL || "google/gemini-2.5-flash-lite";
-  // Tartalék modell: ha az elsődleges megosztott upstream-limitbe fut (429), ne álljon le a feldolgozás.
-  const tartalekModell = process.env.OPENROUTER_FALLBACK_MODEL || "google/gemini-2.5-flash";
+  // Képes kiolvasás, ingyenes modellekkel (2026-11-17, Budaházi Zoltán:
+  // „ingyenes kell”). A régi út csak a PDF szövegrétegét adta egy fizetős
+  // modellnek; a csak képként beágyazott fejléc (FERSPED #375) kimaradt, a
+  // hasábos táblázat összecsúszott. Fizetős modell itt nem fut: ha egyik
+  // ingyenes sem válaszol, hibát dobunk, és a következő szinkron újrapróbálja.
+  const modellek = importModellek();
+  const kepek = opciok.pdf ? await oldalKepek(opciok.pdf).catch(() => [] as string[]) : [];
+  const szovegResz = [
+    opciok.kuldo ? `=== KÜLDŐ E-MAIL CÍME ===\n${opciok.kuldo}` : null,
+    // A dokumentum (és a kísérő levél) szövege esetlegesen hosszú — 30 000 karakternél vágjuk.
+    szoveg.slice(0, 30000),
+  ].filter(Boolean).join("\n\n");
+  const tartalomResz = kepek.length > 0
+    ? [...kepek.map((url) => ({ type: "image_url", image_url: { url } })), { type: "text", text: szovegResz }]
+    : szovegResz;
 
   const hivas = (modell: string) =>
     fetch("https://openrouter.ai/api/v1/chat/completions", {
-      // Időkorlát: egy beakadt hívás ne tartsa fel a teljes Drive-szinkront (audit PERF-1).
-      signal: AbortSignal.timeout(90_000),
+      // Időkorlát: egy beakadt hívás ne tartsa fel a teljes Drive-szinkront
+      // (audit PERF-1). Az ingyenes képolvasó lassabb (40–120 s), ezért 150 s.
+      signal: AbortSignal.timeout(150_000),
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
@@ -392,28 +414,34 @@ async function kivonatolFuvarAdatot(szoveg: string): Promise<LlmValasz | null> {
         model: modell,
         messages: [
           { role: "system", content: KIVONATOLASI_UTASITAS },
-          // A dokumentum (és a kísérő levél) szövege esetlegesen hosszú — 30 000 karakternél vágjuk.
-          { role: "user", content: szoveg.slice(0, 30000) },
+          { role: "user", content: tartalomResz },
         ],
         temperature: 0,
         response_format: { type: "json_object" },
       }),
     });
 
-  // Ideiglenes hibánál (429 / 5xx) újrapróbálunk: elsődleges modell 2×, majd a tartalék 1×.
-  const probak: { modell: string; varakozasMs: number }[] = [
-    { modell: model, varakozasMs: 0 },
-    { modell: model, varakozasMs: 3000 },
-    { modell: tartalekModell, varakozasMs: 1000 },
-  ];
-  let res!: Response;
-  for (const proba of probak) {
-    if (proba.varakozasMs) await new Promise((r) => setTimeout(r, proba.varakozasMs));
-    res = await hivas(proba.modell);
-    if (res.ok || (res.status !== 429 && res.status < 500)) break;
+  // Ideiglenes hibánál (429 / 5xx / időtúllépés) a modellt egyszer újrapróbáljuk, aztán a következő ingyenes jön.
+  let res: Response | null = null;
+  const hibak: string[] = [];
+  for (const modell of modellek) {
+    for (const varakozasMs of [0, 3000]) {
+      if (varakozasMs) await new Promise((r) => setTimeout(r, varakozasMs));
+      try {
+        res = await hivas(modell);
+      } catch (err) {
+        hibak.push(`${modell}: ${err instanceof Error ? err.message : "hálózati hiba"}`);
+        res = null;
+        continue;
+      }
+      if (res.ok) break;
+      hibak.push(`${modell}: ${res.status}`);
+      if (res.status !== 429 && res.status < 500) break;
+    }
+    if (res?.ok) break;
   }
-  if (!res.ok) {
-    throw new Error(`OpenRouter hiba (${res.status}): ${await res.text()}`);
+  if (!res?.ok) {
+    throw new Error(`A megbízás-olvasó (ingyenes) modellek most nem érhetők el — a következő szinkron újrapróbálja. (${hibak.join("; ")})`);
   }
   const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
   const tartalom = data.choices?.[0]?.message?.content;
@@ -489,6 +517,15 @@ async function kiseroLevelSzovege(driveFileId: string): Promise<string | null> {
     [driveFileId]
   );
   return sor?.torzs ?? null;
+}
+
+/** A megbízást hozó levél küldője (a megbízó azonosításához, ha a fejléc nem olvasható). */
+async function kuldoCime(driveFileId: string): Promise<string | null> {
+  const [sor] = await query<{ felado: string }>(
+    `select felado from fuvar_level where drive_file_id = $1 order by erkezett desc limit 1`,
+    [driveFileId]
+  );
+  return sor?.felado ?? null;
 }
 
 const LEVEL_ELVALASZTO = "\n\n=== A MEGBÍZÁST KÍSÉRŐ E-MAIL SZÖVEGE ===\n";
@@ -685,7 +722,10 @@ async function ujFajlokFeldolgozasa(
       // A megbízó a helyeket néha a kísérő levélben adja meg ("részletes
       // felrakási adatokat emailben küldöm") — a levél szövege a modellhez megy.
       const kiseroLevel = await kiseroLevelSzovege(file.id);
-      const llm = await kivonatolFuvarAdatot(kiseroLevel ? torzs + LEVEL_ELVALASZTO + kiseroLevel : torzs);
+      const llm = await kivonatolFuvarAdatot(kiseroLevel ? torzs + LEVEL_ELVALASZTO + kiseroLevel : torzs, {
+        pdf: pdfBuffer,
+        kuldo: await kuldoCime(file.id),
+      });
       if (!llm || !llm.isFuvarmegbizas) {
         await rogzitNaplot({
           ...naploAlap,
@@ -742,6 +782,21 @@ async function ujFajlokFeldolgozasa(
       const ellenorzes = ellenorizKivontFuvart(kivont, !!partner, new Date(), !!partner?.nincsHivatkozas);
       let { verdikt } = ellenorzes;
       const kifogasok = [...ellenorzes.kifogasok];
+      // Forrás-ellenőrzés (2026-11-17): a modell által adott fel-/lerakó és díj
+      // tényleg benne van-e az iratban (vagy a kísérő levélben). Ami nincs,
+      // az nem csendben megy be: a sor ellenőrzésre kerül, a kifogással.
+      const gyanu = importGyanu(
+        {
+          felrako: determinisztikus.felrako ? null : kivont.felrako,
+          lerako: determinisztikus.lerako ? null : kivont.lerako,
+          fuvardij: determinisztikus.fuvardij != null ? null : kivont.fuvardij,
+        },
+        nyersSzoveg + "\n" + (kiseroLevel ?? "")
+      );
+      if (gyanu.length > 0) {
+        kifogasok.push(...gyanu.map((g) => `Ellenőrizd: ${g}.`));
+        if (verdikt === "biztos") verdikt = "ellenorizendo";
+      }
       if (EMAIL_HELYETTESITO.test(kivont.felrako ?? "") || EMAIL_HELYETTESITO.test(kivont.lerako ?? "")) {
         kifogasok.push("A felrakó/lerakó helyén csak „e-mailben küldöm” áll — a kísérő levél még nem érkezett meg; amint megjön, a rendszer újraolvassa.");
         if (verdikt === "biztos") verdikt = "ellenorizendo";
@@ -828,6 +883,18 @@ async function ujFajlokFeldolgozasa(
           hibak.push(`${file.name}: az irat csatolása nem sikerült — ${err instanceof Error ? err.message : "ismeretlen hiba"}`);
         });
         if (kiseroLevel) await query(`update fuvar_megbizasok set level_kiegeszitve_at = now() where id = $1`, [fuvarId]);
+        // Mit olvasott ki a gép, és mi igazolt belőle (a Rendszer lap
+        // „Kiolvasási hibák” csempéje ehhez méri a kézi javításokat: az
+        // iratban igazolt dátum átírása tervmódosítás, nem olvasási hiba).
+        await query(
+          `insert into fuvar_megbizas_esemeny (megbizas_id, esemeny, forras, reszletek) values ($1, 'importalva', 'import', $2)`,
+          [fuvarId, JSON.stringify({
+            kiolvasott: { datum: kivont.felrakasDatum, lerakasDatum: lerakasNap.lerakasDatum ?? null, felrako: felrakoMezo, lerako: lerakoMezo, megrendelo: kivont.megrendelo, fuvardij: kivont.fuvardij },
+            igazolt: kiolvasottIgazolas({ datum: kivont.felrakasDatum, lerakasDatum: lerakasNap.lerakasDatum ?? null }, nyersSzoveg + "\n" + (kiseroLevel ?? "")),
+            gyanu,
+            kepes: !!pdfBuffer,
+          })]
+        ).catch(() => { /* a napló írása a felvett megbízást nem buktathatja el */ });
         await mentsSoforAdatokat(fuvarId, soforAdatok).catch((err) => {
           // A sofőr-adat kiegészítés — a felvett megbízást nem buktathatja el.
           hibak.push(`${file.name}: a sofőr-adatok mentése nem sikerült — ${err instanceof Error ? err.message : "ismeretlen hiba"}`);

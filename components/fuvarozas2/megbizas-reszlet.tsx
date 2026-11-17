@@ -1,5 +1,6 @@
 "use client";
 
+import { ablakFelirat } from "@/lib/fuvarozas2/ablak-alap";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -130,7 +131,7 @@ export function MegbizasReszlet({
                 <span className="w-16 shrink-0 text-xs font-medium uppercase text-muted-foreground">{m.sorszam}. {m.tipus === "felrako" ? "felrakó" : "lerakó"}</span>
                 <span className="min-w-0 flex-1">{m.cim_nyers}</span>
                 <span className="text-xs text-muted-foreground tabular-nums">
-                  terv {formatNap(m.tervezett_nap)}{m.ablak_tol ? ` ${formatIdo(m.ablak_tol).slice(-5)}` : ""}{m.ablak_ig ? `–${formatIdo(m.ablak_ig).slice(-5)}` : ""}
+                  terv {formatNap(m.tervezett_nap)}{((f) => (f ? ` ${f}` : ""))(ablakFelirat(m.ablak_tol, m.ablak_ig))}
                   {m.gps_erkezes ? ` · GPS érk ${formatIdo(m.gps_erkezes)}` : ""}{m.gps_tavozas ? ` táv ${formatIdo(m.gps_tavozas)}` : ""}
                   {m.sofor_kesz_at ? ` · kész ${formatIdo(m.sofor_kesz_at)} (${m.sofor_kesz_by ?? "sofőr"})` : ""}
                 </span>

@@ -54,3 +54,19 @@ export function csakDatumAblak(tol: string | Date | null | undefined, ig: string
 export function ervenyesAblak<T extends string | Date | null | undefined>(tol: T, ig: T): { tol: T | null; ig: T | null } {
   return csakDatumAblak(tol, ig) ? { tol: null, ig: null } : { tol: tol ?? null, ig: ig ?? null };
 }
+
+/**
+ * Az ablak felirata a megálló sorában (2026-11-17, Duvenbeck #352/#373): a
+ * „csak dátum” ablak nem ír ki időt, a 00:00–23:59 „egész nap”, az azonos
+ * kezdet és vég egyetlen időpont („14:00”, nem „14:00–14:00”).
+ */
+export function ablakFelirat(tol: string | Date | null | undefined, ig: string | Date | null | undefined): string {
+  if (csakDatumAblak(tol, ig)) return "";
+  const t = helyiOraPerc(tol);
+  const i = helyiOraPerc(ig);
+  if (t === "00:00" && i === "23:59") return "egész nap";
+  if (t && i) return t === i ? t : `${t}–${i}`;
+  if (t) return `${t}-tól`;
+  if (i) return `${i}-ig`;
+  return "";
+}

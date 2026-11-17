@@ -1,6 +1,6 @@
 // „Csak dátum” időablak felismerése (lib/fuvarozas2/ablak-alap.ts) és a megálló-terv napja.
 // Futtatás: npx tsx scripts/teszt-ablak-alap.ts
-import { csakDatumAblak, ervenyesAblak, helyiNap, helyiOraPerc } from "@/lib/fuvarozas2/ablak-alap";
+import { ablakFelirat, csakDatumAblak, ervenyesAblak, helyiNap, helyiOraPerc } from "@/lib/fuvarozas2/ablak-alap";
 import { megalloTerv } from "@/lib/fuvarozas2/megallo-terv";
 
 let ok = 0, bad = 0;
@@ -30,5 +30,11 @@ eq("megalloTerv: csak-dátum lerakó ablak nélkül", megalloTerv(sor).map((m) =
 const atirt = { ...sor, lerakas_datum_iso: "2026-11-13", lerakas_ablak_tol: "2026-11-16 07:00:00+00", lerakas_ablak_ig: "2026-11-16 09:00:00+00" };
 eq("megalloTerv: átírt nap — a másik napi ablak nem jön vele", megalloTerv(atirt)[1], { tipus: "lerako", cim: "Debrecen", nap: "2026-11-13", tol: null, ig: null });
 
+eq("felirat: #373 00:00–00:00 → nincs idő", ablakFelirat("2026-11-15 23:00:00+00", "2026-11-15 23:00:00+00"), "");
+eq("felirat: #373 14:00–14:00 → 14:00", ablakFelirat("2026-11-13 13:00:00+00", "2026-11-13 13:00:00+00"), "14:00");
+eq("felirat: #352 00:00–23:59 → egész nap", ablakFelirat("2026-11-01 23:00:00+00", "2026-11-02 22:59:00+00"), "egész nap");
+eq("felirat: valódi ablak", ablakFelirat("2026-11-03T06:00", "2026-11-03T22:00"), "06:00–22:00");
+eq("felirat: csak vég", ablakFelirat(null, "2026-11-03T15:00"), "15:00-ig");
+eq("felirat: nincs ablak", ablakFelirat(null, null), "");
 console.log(`\nAblak-alap teszt: ${ok} rendben, ${bad} hiba`);
 if (bad > 0) process.exit(1);

@@ -14,6 +14,7 @@ import "server-only";
 // a mező gyanús. Ez a modul NEM ír semmit: a hívó dönt.
 
 import { gyanusPontok, megalloCimPotlas, type KepesValasz } from "@/lib/fuvarozas/kiolvasas-kepes-alap";
+import { INGYENES_OLVASO_MODELLEK, oldalKepek } from "@/lib/fuvarozas/import/oldal-kepek";
 
 export type KepesEredmeny = {
   adat: KepesValasz | null;
@@ -63,24 +64,18 @@ function jsonBol(nyers: string): KepesValasz | null {
   }
 }
 
-/** Az első `maxOldal` oldal JPEG-képe (data URL) és a teljes szövegréteg. */
+/** Az oldalak képe és a teljes szövegréteg. */
 async function oldalakEsSzoveg(pdf: Buffer, maxOldal: number): Promise<{ kepek: string[]; szoveg: string; oldalak: number }> {
   const { PDFParse } = await import("pdf-parse");
-  const sharp = (await import("sharp")).default;
   const parser = new PDFParse({ data: pdf });
+  let szoveg = "";
   try {
-    const szoveg = (await parser.getText()).text;
-    const kep = await parser.getScreenshot({ first: maxOldal, desiredWidth: 1400, imageBuffer: true, imageDataUrl: false });
-    const kepek: string[] = [];
-    for (const o of kep.pages) {
-      if (!o.data) continue;
-      const jpeg = await sharp(Buffer.from(o.data)).jpeg({ quality: 80 }).toBuffer();
-      kepek.push(`data:image/jpeg;base64,${jpeg.toString("base64")}`);
-    }
-    return { kepek, szoveg, oldalak: kep.total ?? kepek.length };
+    szoveg = (await parser.getText()).text;
   } finally {
     await parser.destroy();
   }
+  const kepek = await oldalKepek(pdf, maxOldal);
+  return { kepek, szoveg, oldalak: kepek.length };
 }
 
 export async function kepesKiolvasas(bemenet: {
@@ -90,7 +85,7 @@ export async function kepesKiolvasas(bemenet: {
   modell?: string;
   maxOldal?: number;
 }): Promise<KepesEredmeny> {
-  const modell = bemenet.modell ?? process.env.OPENROUTER_KEPES_MODEL ?? "google/gemini-2.5-pro";
+  const modell = bemenet.modell ?? INGYENES_OLVASO_MODELLEK[0];
   const kezd = Date.now();
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) return { adat: null, gyanus: [], modell, oldalak: 0, ms: 0, hiba: "Hiányzik az OPENROUTER_API_KEY." };

@@ -54,13 +54,22 @@ export async function getKiolvasasHibak30Nap(): Promise<KiolvasasHibak | null> {
            cross join lateral jsonb_array_elements_text(
              case when jsonb_typeof(e.reszletek->'mezok') = 'array' then e.reszletek->'mezok' else '[]'::jsonb end) x
            where e.megbizas_id = m.id and e.forras = 'ember' and e.esemeny = 'modositva'
+             -- Dátum: csak akkor olvasási hiba, ha az irat NEM igazolta a kiolvasott
+             -- napot (importalva esemény, 2026-11-17), nem Duvenbeck (szabályalapú,
+             -- reise_id), és az indulás előtt javították — különben tervmódosítás.
              and (x not in ('datum', 'lerakasDatum', 'idopont')
-                  or e.mikor < coalesce((select min(e2.mikor) from fuvar_megbizas_esemeny e2
-                                         where e2.megbizas_id = m.id and e2.esemeny in ('megerkezett', 'megallo_kesz', 'teljesitve')),
-                                        'infinity'::timestamptz))
+                  or (m.reise_id is null
+                      and not coalesce((imp.igazolt ->> case when x = 'lerakasDatum' then 'lerakasDatum' else 'datum' end)::boolean, false)
+                      and e.mikor < coalesce((select min(e2.mikor) from fuvar_megbizas_esemeny e2
+                                              where e2.megbizas_id = m.id and e2.esemeny in ('megerkezett', 'megallo_kesz', 'teljesitve')),
+                                             'infinity'::timestamptz)))
          ), '{}') as mezok
        from fuvar_megbizasok m
        left join fuvar_partnerek p on p.id = m.partner_id
+       left join lateral (
+         select ie.reszletek -> 'igazolt' as igazolt from fuvar_megbizas_esemeny ie
+         where ie.megbizas_id = m.id and ie.esemeny = 'importalva' order by ie.mikor desc limit 1
+       ) imp on true
        where m.jelleg = 'ber' and m.forras in ('pdf_import', 'drive_import', 'gmail_import')
          and m.created_at > now() - interval '30 days'`
     );

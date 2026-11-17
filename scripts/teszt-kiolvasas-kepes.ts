@@ -1,6 +1,6 @@
 // Képes kiolvasás — a gyanú-szabályok (lib/fuvarozas/kiolvasas-kepes-alap.ts).
 // Futtatás: npx tsx scripts/teszt-kiolvasas-kepes.ts
-import { gyanusPontok, megalloCimPotlas, type KepesValasz } from "@/lib/fuvarozas/kiolvasas-kepes-alap";
+import { datumASzovegben, gyanusPontok, importGyanu, kiolvasottIgazolas, megalloCimPotlas, type KepesValasz } from "@/lib/fuvarozas/kiolvasas-kepes-alap";
 
 let ok = 0, bad = 0;
 function eq(nev: string, kapott: unknown, vart: unknown) {
@@ -55,5 +55,20 @@ eq("cím a cégnévből: előtag nélkül", megalloCimPotlas({ ceg: "Metál Shee
   { ceg: "Metál Sheet Kft", cim: "4000 Debrecen, Apafa" });
 eq("meglévő címet nem bánt", megalloCimPotlas({ ceg: "X Kft 1234", cim: "Győr" }), { ceg: "X Kft 1234", cim: "Győr" });
 eq("irányítószám nélkül nem talál ki címet", megalloCimPotlas({ ceg: "Coca-Cola HBC", cim: null }), { ceg: "Coca-Cola HBC", cim: null });
+// napi import forrás-ellenőrzése
+eq("import: jó fel-/lerakó és díj → nincs gyanú", importGyanu({ felrako: "4562 Vaja, Rohodi u. 1-3", lerako: "Nyírszőlős", fuvardij: 50000 }, SZOVEG), []);
+eq("import: az iratban nem szereplő felrakó (A1P-féle kitalált megálló) gyanús",
+  importGyanu({ felrako: "1095 Budapest, Soroksári út 44", lerako: null, fuvardij: null }, SZOVEG),
+  ["a felrakó („1095 Budapest, Soroksári út 44”) nem található az iratban"]);
+eq("import: rossz díj", importGyanu({ fuvardij: 60000 }, SZOVEG), ["a fuvardíj (60000) nem található az iratban"]);
+eq("import: EUR tizedessel", importGyanu({ fuvardij: "450.00" }, "Fuvardij / Freight price 450,00 EUR"), []);
+// dátum az iratban (Duvenbeck, FERSPED, FLOTT írásmódok)
+eq("dátum: 16.11.2026", datumASzovegben("2026-11-16", "PV: 16.11.2026 00:00 Unloading"), true);
+eq("dátum: 2026 11.16.", datumASzovegben("2026-11-16", "Lerakás ideje: 2026 11.16."), true);
+eq("dátum: 2026.11.16", datumASzovegben("2026-11-16", "Felrakás ideje: 2026.11.16"), true);
+eq("dátum: hiányzik", datumASzovegben("2026-11-13", "PV: 16.11.2026 00:00"), false);
+eq("igazolás: #373 felrakás igazolt, kézi lerakás (11.13.) nem",
+  kiolvasottIgazolas({ datum: "2026-11-13", lerakasDatum: "2026-11-16" }, "PV: 13.11.2026 14:00 Loading PV: 16.11.2026 00:00 Unloading"),
+  { datum: true, lerakasDatum: true });
 console.log(`teszt-kiolvasas-kepes: ${ok} ok, ${bad} hiba`);
 if (bad > 0) process.exit(1);
