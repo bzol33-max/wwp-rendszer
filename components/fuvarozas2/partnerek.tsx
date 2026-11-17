@@ -1,13 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { kitoltHianyzoPartnerAdatokat, osszevonPartnereket, updatePartner, type Partner, type PartnerAdatJavaslat } from "@/lib/fuvarozas2/partnerek";
+import { getPartnerMegbizasok, kitoltHianyzoPartnerAdatokat, osszevonPartnereket, updatePartner, type Partner, type PartnerAdatJavaslat, type PartnerMegbizas } from "@/lib/fuvarozas2/partnerek";
 import { AdatJavaslatSor } from "@/components/fuvarozas2/partner-adat-javaslat";
 import { cimSzep } from "@/lib/fuvarozas2/cim-formazas";
 
@@ -49,7 +49,19 @@ function kmDijSzoveg(k: { penznem: string; perKm: number }): string {
   return `${Math.round(k.perKm).toLocaleString("hu-HU")} Ft/km`;
 }
 
-const ekezetNelkul = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+const penzEgesz = (n: number, penznem: string) => `${Math.round(n).toLocaleString("hu-HU")} ${/^(eur|€)$/i.test(penznem) ? "€" : penznem}`;
+/** 2026-10-13 → „10.13.” */
+const datumRovid = (d: string | null) => (d ? `${d.slice(5).replace("-", ".")}.` : "—");
+const ekezetNelkul = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+/** ABC-csoport kezdőbetű: ékezet nélkül, nagybetűvel; számmal kezdődő név „#”. */
+const kezdobetu = (nev: string) => { const c = ekezetNelkul(nev.trim()).charAt(0).toUpperCase(); return /[A-Z]/.test(c) ? c : "#"; };
+const telHref = (t: string) => `tel:${t.replace(/[^\d+]/g, "")}`;
+/** Város a megálló címéből: az irányítószám utáni szó(k) („…, 4002 Debrecen” → „Debrecen”), különben az első vesszőig. */
+const varos = (cim: string | null) => {
+  if (!cim) return null;
+  const irsz = cim.match(/\b\d{4,5}\s+([^,;]+)/);
+  return (irsz ? irsz[1] : cim.split(/[,;]/)[0]).trim().replace(/^(HU|H|D|A|SK|RO)-\s*/i, "") || null;
+};
 
 export function PartnerekNezet({ partnerek, javaslatok, adatJavaslatok = [], szerkeszthet, nyit }: {
   partnerek: Partner[]; javaslatok: Javaslat[];
@@ -59,7 +71,7 @@ export function PartnerekNezet({ partnerek, javaslatok, adatJavaslatok = [], sze
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
-  // A munkaasztal részletéből „?nyit=<id>” paraméterrel jövünk: a partner sora nyitva.
+  // A munkaasztal részletéből „?nyit=<id>” paraméterrel jövünk: az a partner van kiválasztva.
   const [nyitott, setNyitott] = useState<string | null>(nyit ?? null);
   const [kijelolt, setKijelolt] = useState<Set<string>>(new Set());
   const [confirm, confirmDialog] = useConfirm();
@@ -94,10 +106,15 @@ export function PartnerekNezet({ partnerek, javaslatok, adatJavaslatok = [], sze
   const berPartnerek = partnerek.filter((p) => p.berfuvar);
   const hianyosBer = berPartnerek.filter((p) => hianyok(p).length > 0);
   const q = ekezetNelkul(kereses.trim());
+  // Kereső mindenre: név, névváltozat, adószám, székhely, e-mailek, kapcsolattartók (név, telefon, e-mail).
   const lathato = partnerek
     .filter((p) => (kor === "ber" ? p.berfuvar : kor === "sajat" ? !p.berfuvar : true))
     .filter((p) => !csakHianyos || hianyok(p).length > 0)
-    .filter((p) => !q || ekezetNelkul([p.nev, ...p.nevvaltozatok, p.adoszam ?? "", p.szamlazasi_email ?? "", ...p.kapcsolatok.flatMap((k) => [k.nev ?? "", k.email ?? "", k.telefon ?? ""])].join(" ")).includes(q));
+    .filter((p) => !q || ekezetNelkul([p.nev, ...p.nevvaltozatok, p.adoszam ?? "", p.szekhely ?? "", p.szamlazasi_email ?? "", p.postazasi_cim ?? "", ...p.kapcsolatok.flatMap((k) => [k.nev ?? "", k.email ?? "", k.telefon ?? "", (k.telefon ?? "").replace(/\D/g, "")])].join(" ")).includes(q.replace(/\s+/g, " ")))
+    .sort((a, b) => a.nev.localeCompare(b.nev, "hu"));
+  // Kiválasztott partner: a kért, különben a lista első eleme (a szűrés ne hagyjon üres panelt).
+  const valasztott = partnerek.find((p) => p.id === nyitott) ?? lathato[0] ?? null;
+
   return (
     <div className="flex flex-col gap-4">
       {confirmDialog}
@@ -106,7 +123,7 @@ export function PartnerekNezet({ partnerek, javaslatok, adatJavaslatok = [], sze
         <KorGomb aktiv={kor === "sajat"} onClick={() => setKor("sajat")} cimke="Saját fuvar" db={partnerek.length - berPartnerek.length} />
         <KorGomb aktiv={kor === "mind"} onClick={() => setKor("mind")} cimke="Mind" db={partnerek.length} />
         <label className="ml-1 flex items-center gap-1.5 text-sm"><input type="checkbox" checked={csakHianyos} onChange={(e) => setCsakHianyos(e.target.checked)} />csak hiányos</label>
-        <Input value={kereses} onChange={(e) => setKereses(e.target.value)} placeholder="Keresés: partner, kapcsolattartó, e-mail" className="h-8 w-full text-sm sm:w-64" />
+        <Input value={kereses} onChange={(e) => setKereses(e.target.value)} placeholder="Keresés: partner, kapcsolattartó, telefon, e-mail, város" className="h-8 w-full text-sm sm:w-80" />
         <span className="ml-auto text-sm text-muted-foreground">
           {hianyosBer.length === 0 ? "Minden megbízó adata teljes" : <>Hiányos megbízó: <b className="text-[var(--f2-amb)]">{hianyosBer.length}</b> / {berPartnerek.length} <span className="text-xs">· a megbízásokból óránként magától pótlódik</span></>}
         </span>
@@ -169,38 +186,191 @@ export function PartnerekNezet({ partnerek, javaslatok, adatJavaslatok = [], sze
         </div>
       ) : null}
 
-      <div className="overflow-x-auto rounded-xl ring-1 ring-foreground/10">
-        <table className="w-full text-sm">
-          <thead className="bg-muted/50 text-left text-xs text-muted-foreground">
-            <tr>
-              {szerkeszthet ? <th className="w-8 px-2 py-2" /> : null}
-              <th className="px-3 py-2 font-medium">Partner</th>
-              <th className="px-3 py-2 font-medium">Kapcsolattartó</th>
-              <th className="px-3 py-2 text-right font-medium">Munkák</th>
-              <th className="px-3 py-2 text-right font-medium" title="Fuvardíj ÷ HU-GO szerinti rakott km, a megbízó összes bérfuvarján">Átlag km-díj</th>
-              <th className="px-3 py-2 font-medium">Fizetés</th>
-              <th className="px-3 py-2 font-medium">Számla · posta</th>
-            </tr>
-          </thead>
-          <tbody>
-            {lathato.length === 0 ? (
-              <tr><td colSpan={szerkeszthet ? 7 : 6} className="px-3 py-6 text-center text-sm text-muted-foreground">Nincs a szűrésnek megfelelő partner.</td></tr>
-            ) : null}
-            {lathato.map((p) => (
-              <PartnerSor key={p.id} p={p} nyitott={nyitott === p.id} onNyit={() => setNyitott(nyitott === p.id ? null : p.id)}
-                szerkeszthet={szerkeszthet} kijelolve={kijelolt.has(p.id)}
-                onKijelol={(v) => setKijelolt((s) => { const n = new Set(s); if (v) n.add(p.id); else n.delete(p.id); return n; })} />
-            ))}
-          </tbody>
-        </table>
+      {/* V2d (2026-11-17): keskeny ABC-lista + a kiválasztott partner lapja KPI-csempékkel és megbízás-táblával. */}
+      <div className="grid gap-4 lg:grid-cols-[18rem_minmax(0,1fr)]">
+        <PartnerLista partnerek={lathato} valasztott={valasztott?.id ?? null} onValaszt={setNyitott}
+          szerkeszthet={szerkeszthet} kijelolt={kijelolt}
+          onKijelol={(id, v) => setKijelolt((s) => { const n = new Set(s); if (v) n.add(id); else n.delete(id); return n; })} />
+        {valasztott ? <PartnerLap key={valasztott.id} p={valasztott} szerkeszthet={szerkeszthet} /> : (
+          <div className="rounded-xl px-3 py-10 text-center text-sm text-muted-foreground ring-1 ring-foreground/10">Nincs a szűrésnek megfelelő partner.</div>
+        )}
       </div>
     </div>
   );
 }
 
-function PartnerSor({ p, nyitott, onNyit, szerkeszthet, kijelolve, onKijelol }: {
-  p: Partner; nyitott: boolean; onNyit: () => void; szerkeszthet: boolean; kijelolve: boolean; onKijelol: (v: boolean) => void;
+/** Bal oszlop: ABC-csoportokba szedett névlista, munkaszámmal; a kijelölés az összevonáshoz. */
+function PartnerLista({ partnerek, valasztott, onValaszt, szerkeszthet, kijelolt, onKijelol }: {
+  partnerek: Partner[]; valasztott: string | null; onValaszt: (id: string) => void;
+  szerkeszthet: boolean; kijelolt: Set<string>; onKijelol: (id: string, v: boolean) => void;
 }) {
+  if (partnerek.length === 0) return <div className="rounded-xl px-3 py-6 text-center text-sm text-muted-foreground ring-1 ring-foreground/10">Nincs találat.</div>;
+  return (
+    <div className="max-h-[70vh] overflow-y-auto rounded-xl ring-1 ring-foreground/10 lg:max-h-[calc(100vh-14rem)]">
+      {partnerek.map((p, i) => {
+        const b = kezdobetu(p.nev);
+        const fej = i === 0 || kezdobetu(partnerek[i - 1].nev) !== b;
+        const hiany = hianyok(p).length > 0;
+        return (
+          <div key={p.id}>
+            {fej ? <div className="sticky top-0 bg-background/95 px-3 pb-0.5 pt-2 text-[11px] font-semibold text-muted-foreground backdrop-blur">{b}</div> : null}
+            <div id={`p-${p.id}`} className={`flex scroll-mt-20 items-center gap-2 px-2 ${valasztott === p.id ? "bg-primary/10" : "hover:bg-muted/40"}`}>
+              {szerkeszthet ? <input type="checkbox" checked={kijelolt.has(p.id)} onChange={(e) => onKijelol(p.id, e.target.checked)} aria-label="kijelölés összevonáshoz" /> : null}
+              <button type="button" onClick={() => onValaszt(p.id)} className={`flex min-w-0 flex-1 items-center justify-between gap-2 py-1.5 text-left text-sm ${valasztott === p.id ? "font-medium" : ""}`}>
+                <span className="truncate">{p.nev}{hiany ? <span className="ml-1 text-[var(--f2-amb)]" title={`hiányzik: ${hianyok(p).join(", ")}`}>•</span> : null}</span>
+                <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{p.megbizas_db}</span>
+              </button>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function Csempe({ cimke, ertek, alatta, figyelem }: { cimke: string; ertek: ReactNode; alatta?: ReactNode; figyelem?: boolean }) {
+  return (
+    <div className="rounded-xl bg-muted/40 px-3 py-2.5">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{cimke}</div>
+      <div className={`mt-0.5 text-xl font-semibold tabular-nums ${figyelem ? "text-[var(--f2-amb)]" : ""}`}>{ertek}</div>
+      {alatta ? <div className="text-xs text-muted-foreground">{alatta}</div> : null}
+    </div>
+  );
+}
+
+/** Jobb oldal: a kiválasztott partner lapja — fejléc, kapcsolattartók, KPI-csempék, megbízások, adatok szerkesztése. */
+function PartnerLap({ p, szerkeszthet }: { p: Partner; szerkeszthet: boolean }) {
+  const [megbizasok, setMegbizasok] = useState<PartnerMegbizas[] | null>(null);
+  const [hiba, setHiba] = useState(false);
+  const [csakNyitott, setCsakNyitott] = useState(false);
+  const [mind, setMind] = useState(false);
+  useEffect(() => {
+    let el = false;
+    getPartnerMegbizasok(p.id).then((m) => { if (!el) setMegbizasok(m); }).catch(() => { if (!el) setHiba(true); });
+    return () => { el = true; };
+  }, [p.id]);
+  const hiany = hianyok(p);
+  const emailek = (p.szamlazasi_email ?? "").split(/[,;]\s*/).map((e) => e.trim()).filter(Boolean);
+  const nyitott = p.nyitottSzamla.reduce((n, s) => n + s.db, 0);
+  const lejart = p.nyitottSzamla.reduce((n, s) => n + s.lejart, 0);
+  // Tipikus viszonylatok: a leggyakoribb felrakó → lerakó párok a megbízásokból.
+  const viszonylatok = useMemo(() => {
+    const db = new Map<string, number>();
+    for (const m of megbizasok ?? []) {
+      const k = `${varos(m.felrako) ?? "?"} → ${varos(m.lerako) ?? "?"}`;
+      if (m.felrako && m.lerako) db.set(k, (db.get(k) ?? 0) + 1);
+    }
+    return [...db.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+  }, [megbizasok]);
+  // A mai nap egyszer, a megnyitáskor (a render maradjon tiszta).
+  const [ma] = useState(() => new Date().toISOString().slice(0, 10));
+  const napOta = p.utolso_megbizas ? Math.floor((new Date(ma).getTime() - new Date(p.utolso_megbizas).getTime()) / 86_400_000) : null;
+  const lista = (megbizasok ?? []).filter((m) => !csakNyitott || (m.szamla_szam && m.fizetve === false));
+  const mutatott = mind ? lista : lista.slice(0, 8);
+
+  return (
+    <section className="flex min-w-0 flex-col gap-4 rounded-xl p-4 ring-1 ring-foreground/10">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <h2 className="flex flex-wrap items-center gap-2 text-lg font-semibold">
+            {p.nev}
+            <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{p.berfuvar ? "megbízó" : "saját fuvar partnere"}</span>
+            {hiany.length > 0 ? <span className="text-xs font-normal text-[var(--f2-amb)]">hiányzik: {hiany.join(", ")}</span> : null}
+          </h2>
+          <div className="mt-0.5 text-sm text-muted-foreground">
+            {[p.szekhely ? cimSzep(p.szekhely) : null, p.nevvaltozatok.length ? `névváltozat: ${p.nevvaltozatok.join(", ")}` : null].filter(Boolean).join(" · ") || "székhely nincs megadva"}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-1.5 text-sm">
+          <a href={`/fuvarozas2/megbizasok?${new URLSearchParams({ q: p.nev })}`} className="rounded-lg px-2.5 py-1 ring-1 ring-foreground/10 hover:bg-muted/40">Munkaasztalon keresés →</a>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2 text-sm">
+        {p.kapcsolatok.length === 0 ? <span className="text-muted-foreground">Még nincs kapcsolattartó — a megbízást küldő levelekből és a Kapcsolatok törzsből gyűlik.</span> : null}
+        {p.kapcsolatok.slice(0, 4).map((k, i) => (
+          <div key={i} className="flex flex-wrap items-center gap-x-2 rounded-lg bg-muted/40 px-2.5 py-1.5">
+            <span className="font-medium">{k.nev ?? k.email}</span>
+            {k.telefon ? <a href={telHref(k.telefon)} className="hover:underline">{k.telefon}</a> : null}
+            {k.email && k.nev ? <a href={`mailto:${k.email}`} className="text-muted-foreground hover:underline">{k.email}</a> : null}
+            {k.levelDb ? <span className="text-xs text-muted-foreground">{k.levelDb} levél</span> : null}
+          </div>
+        ))}
+        {p.kapcsolatok.length > 4 ? <span className="self-center text-xs text-muted-foreground">+{p.kapcsolatok.length - 4} további</span> : null}
+        {emailek.length > 0 ? <div className="flex items-center gap-x-2 rounded-lg px-2.5 py-1.5 ring-1 ring-foreground/10"><span className="text-xs text-muted-foreground">számla:</span><a href={`mailto:${emailek[0]}`} className="hover:underline">{emailek[0]}</a>{emailek.length > 1 ? <span className="text-xs text-muted-foreground">+{emailek.length - 1}</span> : null}</div> : null}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
+        <Csempe cimke="Munkák" ertek={p.megbizas_db} alatta={p.utolso_megbizas ? `utolsó ${datumRovid(p.utolso_megbizas)}${napOta != null && napOta > 60 ? ` · ${napOta} nap óta nincs` : ""}` : "még nincs"} figyelem={napOta != null && napOta > 60} />
+        <Csempe cimke="Forgalom" ertek={p.forgalom.length ? p.forgalom.map(penzRovid).join(" + ") : "—"} alatta={p.forgalom.length && p.megbizas_db ? `átl. ${penzRovid({ penznem: p.forgalom[0].penznem, osszeg: p.forgalom[0].osszeg / p.megbizas_db })} / munka` : "bérfuvar díja"} />
+        <Csempe cimke="Átlag km-díj" ertek={p.kmDij.length ? p.kmDij.map(kmDijSzoveg).join(" · ") : "—"} alatta={p.kmDij.length ? `${p.kmDij.reduce((n, k) => n + k.munka, 0)} munkából · HU-GO rakott km` : "nincs km-adat"} />
+        <Csempe cimke="Fizetési nap" ertek={p.fizetesNap ? p.fizetesNap.atlag : p.fizetesi_hatarido_nap === 0 ? "kp" : "—"}
+          alatta={p.fizetesNap ? `tényleges, ${p.fizetesNap.minta} számlából · szerződés ${p.fizetesi_hatarido_nap ?? "?"}` : p.fizetesi_hatarido_nap != null ? `szerződés ${p.fizetesi_hatarido_nap} nap · még nincs fizetett számla` : p.berfuvar ? "határidő hiányzik" : ""}
+          figyelem={!!p.fizetesNap && p.fizetesi_hatarido_nap != null && p.fizetesNap.atlag > p.fizetesi_hatarido_nap + 5} />
+        <Csempe cimke="Nyitott számla" ertek={nyitott} alatta={nyitott ? `${p.nyitottSzamla.map((s) => penzEgesz(s.osszeg, s.penznem)).join(" + ")}${lejart ? ` · ${lejart} lejárt` : " · nincs lejárt"}` : "mind fizetve"} figyelem={lejart > 0} />
+      </div>
+
+      {viszonylatok.length > 0 || p.rakodasFelrako || p.rakodasLerako ? (
+        <div className="grid gap-2 text-sm sm:grid-cols-2">
+          {viszonylatok.length > 0 ? <div className="rounded-xl bg-muted/40 px-3 py-2"><div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Tipikus viszonylat</div>{viszonylatok.map(([v, n]) => `${v} (${n}×)`).join(" · ")}</div> : null}
+          {p.rakodasFelrako || p.rakodasLerako ? (
+            <div className="rounded-xl bg-muted/40 px-3 py-2"><div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Tanult rakodási idő</div>
+              felrakó {p.rakodasFelrako ? <b>{p.rakodasFelrako.perc} p</b> : "—"} · lerakó {p.rakodasLerako ? <b>{p.rakodasLerako.perc} p</b> : "—"} <span className="text-xs text-muted-foreground">(GPS-mediánok)</span></div>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold">Megbízások {megbizasok ? <span className="font-normal text-muted-foreground">{lista.length}</span> : null}</h3>
+          <div className="flex gap-1.5">
+            <Button size="xs" variant={csakNyitott ? "default" : "outline"} onClick={() => setCsakNyitott((v) => !v)}>Nyitott számla</Button>
+          </div>
+        </div>
+        {hiba ? <p className="mt-2 text-sm text-muted-foreground">A megbízások most nem tölthetők be.</p> : megbizasok == null ? <p className="mt-2 text-sm text-muted-foreground">Betöltés…</p> : lista.length === 0 ? <p className="mt-2 text-sm text-muted-foreground">Nincs ilyen megbízás.</p> : (
+          <div className="mt-2 overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-left text-[11px] text-muted-foreground">
+                <tr><th className="py-1 pr-2 font-medium">#</th><th className="py-1 pr-2 font-medium">Dátum</th><th className="py-1 pr-2 font-medium">Viszonylat</th><th className="py-1 pr-2 text-right font-medium">km</th><th className="py-1 pr-2 text-right font-medium">Díj</th><th className="py-1 pr-2 text-right font-medium" title="fuvardíj ÷ HU-GO rakott km">/km</th><th className="py-1 pr-2 font-medium">Számla</th><th className="py-1 font-medium" /></tr>
+              </thead>
+              <tbody>
+                {mutatott.map((m) => {
+                  const perKm = m.fuvardij && m.rakott_km ? m.fuvardij / m.rakott_km : null;
+                  return (
+                    <tr key={m.id} className="border-t border-foreground/5">
+                      <td className="whitespace-nowrap py-1.5 pr-2"><a href={`/fuvarozas2/megbizasok/${m.id}`} className="font-medium hover:underline">#{m.id}</a>{m.jelleg === "sajat" ? <span className="ml-1 text-[10px] text-muted-foreground">saját</span> : null}</td>
+                      <td className="whitespace-nowrap py-1.5 pr-2 tabular-nums">{m.datum ?? "—"}</td>
+                      <td className="max-w-[18rem] truncate py-1.5 pr-2" title={`${m.felrako ?? ""} → ${m.lerako ?? ""}`}>{varos(m.felrako) ?? "?"} → {varos(m.lerako) ?? "?"}</td>
+                      <td className="whitespace-nowrap py-1.5 pr-2 text-right tabular-nums">{m.rakott_km ? Math.round(m.rakott_km) : <span className="text-muted-foreground">—</span>}</td>
+                      <td className="whitespace-nowrap py-1.5 pr-2 text-right tabular-nums">{m.fuvardij ? penzEgesz(m.fuvardij, m.penznem) : <span className="text-muted-foreground">—</span>}</td>
+                      <td className="whitespace-nowrap py-1.5 pr-2 text-right tabular-nums text-muted-foreground">{perKm ? kmDijSzoveg({ penznem: m.penznem, perKm }).replace("/km", "") : "—"}</td>
+                      <td className="whitespace-nowrap py-1.5 pr-2 text-xs">
+                        {m.szamla_szam ? <>{m.szamla_szam}{m.fizetve ? <span className="text-muted-foreground"> · fizetve {datumRovid(m.fizetve_datum)}</span> : m.fizetve === false ? <span className={m.fizetesi_hatarido && m.fizetesi_hatarido < ma ? "text-[var(--f2-amb)]" : "text-muted-foreground"}> · nyitott{m.fizetesi_hatarido ? `, ${datumRovid(m.fizetesi_hatarido)}` : ""}</span> : null}</> : <span className="text-muted-foreground">{m.allapot}</span>}
+                      </td>
+                      <td className="whitespace-nowrap py-1.5 text-right text-xs">
+                        <a href={`/fuvarozas2/megbizasok/${m.id}`} className="hover:underline">Megbízás ↗</a>
+                        {m.drive_url ? <> · <a href={m.drive_url} target="_blank" rel="noreferrer" className="hover:underline">Drive PDF ↗</a></> : null}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {lista.length > mutatott.length ? <button type="button" onClick={() => setMind(true)} className="mt-2 text-sm text-primary hover:underline">további {lista.length - mutatott.length} megbízás</button> : null}
+          </div>
+        )}
+      </div>
+
+      <details className="rounded-xl ring-1 ring-foreground/10">
+        <summary className="cursor-pointer px-3 py-2 text-sm font-medium">Adatok {szerkeszthet ? "szerkesztése" : ""} <span className="font-normal text-muted-foreground">— számlázás, posta, határidők, névváltozatok</span></summary>
+        <div className="px-3 pb-3"><PartnerSzerkeszto p={p} szerkeszthet={szerkeszthet} /></div>
+      </details>
+    </section>
+  );
+}
+
+/** A partner-törzs mezői (a korábbi lenyíló sor űrlapja változatlan mezőkkel). */
+function PartnerSzerkeszto({ p, szerkeszthet }: { p: Partner; szerkeszthet: boolean }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [f, setF] = useState({
@@ -210,11 +380,6 @@ function PartnerSor({ p, nyitott, onNyit, szerkeszthet, kijelolve, onKijelol }: 
     nevvaltozatok: p.nevvaltozatok.join("; "), email_domainek: p.email_domainek.join("; "), megjegyzes: p.megjegyzes ?? "",
   });
   const szam = (s: string) => (s.trim() === "" ? null : Number(s));
-  const hiany = hianyok(p);
-  const fo = p.kapcsolatok[0] ?? null;
-  const emailek = (p.szamlazasi_email ?? "").split(/[,;]\s*/).map((e) => e.trim()).filter(Boolean);
-  // Bérfuvar-megbízónál a hiány jelölt (a számlázáshoz kell), saját fuvar partnerénél csak „—”.
-  const nincs = p.berfuvar ? <span className="text-xs text-[var(--f2-amb)]">hiányzik</span> : <span className="text-muted-foreground">—</span>;
   function ment() {
     start(async () => {
       await updatePartner(p.id, {
@@ -231,108 +396,47 @@ function PartnerSor({ p, nyitott, onNyit, szerkeszthet, kijelolve, onKijelol }: 
   const M = (k: keyof typeof f, cimke: string, t: "text" | "number" = "text") => (
     <label className="flex flex-col gap-1 text-xs text-muted-foreground">
       {cimke}
-      <Input type={t} value={String(f[k])} onChange={(e) => setF({ ...f, [k]: e.target.value })} className="h-8 text-sm text-foreground" />
+      <Input type={t} value={String(f[k])} onChange={(e) => setF({ ...f, [k]: e.target.value })} disabled={!szerkeszthet} className="h-8 text-sm text-foreground" />
     </label>
   );
   const K = (k: "szamla_email_nem_kell" | "posta_nem_kell" | "megbizas_pdf_csatolva", cimke: string) => (
-    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.checked })} />{cimke}</label>
+    <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={f[k]} disabled={!szerkeszthet} onChange={(e) => setF({ ...f, [k]: e.target.checked })} />{cimke}</label>
   );
   return (
     <>
-      <tr id={`p-${p.id}`} className="scroll-mt-20 border-t border-foreground/5 hover:bg-muted/40">
-        {szerkeszthet ? <td className="px-2 py-2"><input type="checkbox" checked={kijelolve} onChange={(e) => onKijelol(e.target.checked)} aria-label="kijelölés összevonáshoz" /></td> : null}
-        <td className="px-3 py-2.5">
-          <button className="text-left font-medium hover:underline" onClick={onNyit}>{p.nev}</button>
-          {hiany.length > 0 ? <div className="text-xs text-[var(--f2-amb)]">hiányzik: {hiany.join(", ")}</div> : null}
-        </td>
-        <td className="max-w-[15rem] px-3 py-2.5">
-          {fo ? (
-            <>
-              <div className="truncate" title={fo.email ?? undefined}>{fo.nev ?? fo.email}{p.kapcsolatok.length > 1 ? <span className="text-xs text-muted-foreground"> +{p.kapcsolatok.length - 1}</span> : null}</div>
-              <div className="truncate text-xs text-muted-foreground">{[fo.telefon, fo.nev ? fo.email : null].filter(Boolean).join(" · ")}</div>
-            </>
-          ) : <span className="text-muted-foreground">—</span>}
-        </td>
-        <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">
-          <a href={`/fuvarozas2/megbizasok?partner=${p.id}`} className="font-medium hover:underline">{p.megbizas_db} munka</a>
-          <div className="text-xs text-muted-foreground">
-            {[p.forgalom.map(penzRovid).join(" + "), p.utolso_megbizas ? `utolsó ${p.utolso_megbizas.slice(5).replace("-", ".")}.` : null].filter(Boolean).join(" · ")}
-          </div>
-        </td>
-        <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">
-          {p.kmDij.length === 0 ? <span className="text-muted-foreground">—</span> : (
-            <>
-              <div className="font-medium">{p.kmDij.map(kmDijSzoveg).join(" · ")}</div>
-              <div className="text-xs text-muted-foreground">{p.kmDij.reduce((n, k) => n + k.munka, 0)} munkából</div>
-            </>
-          )}
-        </td>
-        <td className="whitespace-nowrap px-3 py-2.5 tabular-nums">
-          {p.fizetesi_hatarido_nap === 0 ? "készpénz" : p.fizetesi_hatarido_nap != null ? <>{p.fizetesi_hatarido_nap} nap</> : nincs}
-          <div className="text-xs text-muted-foreground">{p.papir_bekuldesi_hatarido_nap != null ? `papír ${p.papir_bekuldesi_hatarido_nap} napon belül` : p.berfuvar ? "papír: nincs kikötve" : ""}</div>
-        </td>
-        <td className="max-w-[17rem] px-3 py-2.5">
-          <div className="truncate" title={emailek.join(", ")}>
-            {p.szamla_email_nem_kell ? <span className="text-muted-foreground">e-mailt nem kér</span> : emailek.length === 0 ? nincs : <>{emailek[0]}{emailek.length > 1 ? <span className="text-xs text-muted-foreground"> +{emailek.length - 1}</span> : null}</>}
-          </div>
-          <div className="truncate text-xs text-muted-foreground" title={p.postazasi_cim ?? undefined}>
-            {p.posta_nem_kell ? "postát nem kér" : p.postazasi_cim ? cimSzep(p.postazasi_cim) : p.berfuvar ? <span className="text-[var(--f2-amb)]">postacím hiányzik</span> : null}
-          </div>
-        </td>
-      </tr>
-      {nyitott ? (
-        <tr className="border-t border-foreground/5 bg-muted/20">
-          <td colSpan={szerkeszthet ? 7 : 6} className="px-3 py-3">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              {M("nev", "Név")}
-              {M("nevvaltozatok", "Névváltozatok (; elválasztva)")}
-              {M("adoszam", "Adószám")}
-              {M("szekhely", "Székhely")}
-              {M("fizetesi_hatarido_nap", "Fizetési határidő (nap, 0 = készpénz)", "number")}
-              {M("papir_bekuldesi_hatarido_nap", "Papír beküldési határidő (nap)", "number")}
-              {M("szamlazasi_email", "Számlázási e-mail")}
-              {M("email_domainek", "E-mail domainek (; elválasztva)")}
-              {M("postazasi_cim", "Postázási cím")}
-              {M("szamlazasi_cim", "Számlázási cím")}
-              <label className="flex flex-col gap-1 text-xs text-muted-foreground">Számlán kért szám
-                <select value={f.szamlan_kert_szam} onChange={(e) => setF({ ...f, szamlan_kert_szam: e.target.value })} className="h-8 rounded-lg border bg-background px-2 text-sm text-foreground">
-                  <option value="pozicioszam">pozíciószám</option><option value="reise_id">Reise / Út ID</option><option value="hivatkozas">hivatkozás</option>
-                </select>
-              </label>
-              <div className="flex flex-col gap-1 pt-4">{K("szamla_email_nem_kell", "nem kér számla-e-mailt (pl. önszámlázás)")}{K("posta_nem_kell", "nem kér postát")}{K("megbizas_pdf_csatolva", "megbízás PDF-et is csatolni")}</div>
-              {M("megjegyzes", "Megjegyzés")}
-              <div className="flex flex-col gap-1 text-xs text-muted-foreground">Megbízás-sablon
-                <span className="text-sm text-foreground">{p.sablon_azonosito ?? "nincs (LLM olvassa)"}</span>
-              </div>
-            </div>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Kapcsolattartók</div>
-                {p.kapcsolatok.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">Még nincs kapcsolattartó — a megbízást küldő levelekből és a Kapcsolatok törzsből gyűlik.</p>
-                ) : (
-                  <ul className="mt-1 flex flex-col gap-0.5 text-sm">
-                    {p.kapcsolatok.map((k, i) => (
-                      <li key={i}>{k.nev ?? "—"}{k.telefon ? ` · ${k.telefon}` : ""}{k.email ? ` · ${k.email}` : ""}{k.levelDb ? <span className="text-xs text-muted-foreground"> · {k.levelDb} levél</span> : null}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-              <div>
-                <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Tanult rakodási idő</div>
-                <p className="mt-1 text-sm">
-                  felrakó {p.rakodasFelrako ? <b>{p.rakodasFelrako.perc} p</b> : "—"}
-                  {p.rakodasFelrako ? <span className="text-xs text-muted-foreground"> ({p.rakodasFelrako.minta} minta)</span> : null}
-                  {" · "}lerakó {p.rakodasLerako ? <b>{p.rakodasLerako.perc} p</b> : "—"}
-                  {p.rakodasLerako ? <span className="text-xs text-muted-foreground"> ({p.rakodasLerako.minta} minta)</span> : null}
-                </p>
-                <p className="text-[11px] text-muted-foreground">A megállókon mért érkezés→távozás mediánja (min. 3 minta).</p>
-              </div>
-            </div>
-            {szerkeszthet ? <div className="mt-3 flex gap-2"><Button size="sm" disabled={pending} onClick={ment}>Ment</Button><Button size="sm" variant="ghost" onClick={onNyit}>Bezár</Button></div> : null}
-          </td>
-        </tr>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {M("nev", "Név")}
+        {M("nevvaltozatok", "Névváltozatok (; elválasztva)")}
+        {M("adoszam", "Adószám")}
+        {M("szekhely", "Székhely")}
+        {M("fizetesi_hatarido_nap", "Fizetési határidő (nap, 0 = készpénz)", "number")}
+        {M("papir_bekuldesi_hatarido_nap", "Papír beküldési határidő (nap)", "number")}
+        {M("szamlazasi_email", "Számlázási e-mail")}
+        {M("email_domainek", "E-mail domainek (; elválasztva)")}
+        {M("postazasi_cim", "Postázási cím")}
+        {M("szamlazasi_cim", "Számlázási cím")}
+        <label className="flex flex-col gap-1 text-xs text-muted-foreground">Számlán kért szám
+          <select value={f.szamlan_kert_szam} disabled={!szerkeszthet} onChange={(e) => setF({ ...f, szamlan_kert_szam: e.target.value })} className="h-8 rounded-lg border bg-background px-2 text-sm text-foreground">
+            <option value="pozicioszam">pozíciószám</option><option value="reise_id">Reise / Út ID</option><option value="hivatkozas">hivatkozás</option>
+          </select>
+        </label>
+        <div className="flex flex-col gap-1 pt-4">{K("szamla_email_nem_kell", "nem kér számla-e-mailt (pl. önszámlázás)")}{K("posta_nem_kell", "nem kér postát")}{K("megbizas_pdf_csatolva", "megbízás PDF-et is csatolni")}</div>
+        {M("megjegyzes", "Megjegyzés")}
+        <div className="flex flex-col gap-1 text-xs text-muted-foreground">Megbízás-sablon
+          <span className="text-sm text-foreground">{p.sablon_azonosito ?? "nincs (LLM olvassa)"}</span>
+        </div>
+      </div>
+      {p.kapcsolatok.length > 0 ? (
+        <div className="mt-3">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Minden kapcsolattartó</div>
+          <ul className="mt-1 flex flex-col gap-0.5 text-sm">
+            {p.kapcsolatok.map((k, i) => (
+              <li key={i}>{k.nev ?? "—"}{k.telefon ? <> · <a href={telHref(k.telefon)} className="hover:underline">{k.telefon}</a></> : null}{k.email ? <> · <a href={`mailto:${k.email}`} className="hover:underline">{k.email}</a></> : null}{k.levelDb ? <span className="text-xs text-muted-foreground"> · {k.levelDb} levél</span> : null}</li>
+            ))}
+          </ul>
+        </div>
       ) : null}
+      {szerkeszthet ? <div className="mt-3 flex gap-2"><Button size="sm" disabled={pending} onClick={ment}>Ment</Button></div> : null}
     </>
   );
 }

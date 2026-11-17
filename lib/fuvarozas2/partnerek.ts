@@ -64,11 +64,63 @@ export type Partner = {
   /** Tanult rakodási idő percben, a megállókon mért érkezés→távozás mediánja. */
   rakodasFelrako: { perc: number; minta: number } | null;
   rakodasLerako: { perc: number; minta: number } | null;
+  /**
+   * Tényleges fizetési fegyelem (2026-11-17, Partnerek V2d): a megbízásaihoz
+   * párosított számlák kiállítás→jóváírás napjainak átlaga, és a még nyitott
+   * (nem fizetett, nem sztornó) számlák darab/összeg, ebből hány lejárt.
+   */
+  fizetesNap: { atlag: number; minta: number } | null;
+  nyitottSzamla: { db: number; osszeg: number; penznem: string; lejart: number }[];
 };
+
+/** Egy partner egy megbízása a partnerlapon (V2d): viszonylat, díj, km-díj, számla, Drive-irat. */
+export type PartnerMegbizas = {
+  id: string;
+  datum: string | null;
+  allapot: string;
+  jelleg: string;
+  felrako: string | null;
+  lerako: string | null;
+  rakott_km: number | null;
+  fuvardij: number | null;
+  penznem: string;
+  hivatkozas: string | null;
+  szamla_szam: string | null;
+  drive_url: string | null;
+  fizetve: boolean | null;
+  fizetve_datum: string | null;
+  fizetesi_hatarido: string | null;
+};
+
+/** A partner összes (nem törölt) megbízása, legújabb elöl — a partnerlap táblája. */
+export async function getPartnerMegbizasok(partnerId: string): Promise<PartnerMegbizas[]> {
+  await requireAnyViewPermission(["fuvarozas", "elszamolas"]);
+  if (!/^\d+$/.test(partnerId)) return [];
+  return query<PartnerMegbizas>(
+    `select m.id::text, to_char(m.datum, 'YYYY-MM-DD') as datum, m.allapot, m.jelleg,
+       coalesce((select coalesce(nullif(g.telepules, ''), g.cim_nyers) from fuvar_megallok g where g.megbizas_id = m.id and g.tipus = 'felrako' order by g.sorszam limit 1), m.felrako) as felrako,
+       coalesce((select coalesce(nullif(g.telepules, ''), g.cim_nyers) from fuvar_megallok g where g.megbizas_id = m.id and g.tipus = 'lerako' order by g.sorszam desc limit 1), m.lerako) as lerako,
+       m.rakott_km::float8 as rakott_km, m.fuvardij::float8 as fuvardij, coalesce(nullif(m.fuvardij_penznem, ''), 'Ft') as penznem,
+       coalesce(m.hivatkozas_kanonikus, m.pozicioszam, m.reise_id) as hivatkozas,
+       coalesce(e.szamla_szam, m.szamla_szam) as szamla_szam,
+       coalesce(m.dokumentum_url,
+         (select d.dokumentum_url from fuvar_dokumentumok d where d.fuvar_id = m.id and d.tipus = 'megbizas' and d.dokumentum_url is not null order by d.created_at limit 1),
+         case when m.drive_file_id is not null then 'https://drive.google.com/file/d/' || m.drive_file_id || '/view' end) as drive_url,
+       s.fizetve, to_char(s.fizetve_datum at time zone 'Europe/Budapest', 'YYYY-MM-DD') as fizetve_datum,
+       to_char(s.fizetesi_hatarido, 'YYYY-MM-DD') as fizetesi_hatarido
+     from fuvar_megbizasok m
+     left join fuvar_elszamolas e on e.megbizas_id = m.id
+     left join lateral (select s.fizetve, s.fizetve_datum, s.fizetesi_hatarido from szamla s
+        where s.szamlaszam = coalesce(e.szamla_szam, m.szamla_szam) and not s.sztorno and not s.sztornozva order by s.id desc limit 1) s on true
+     where m.partner_id = $1::bigint and m.torolt_at is null
+     order by m.datum desc nulls last, m.id desc limit 300`,
+    [partnerId]
+  );
+}
 
 export async function getPartnerek(): Promise<Partner[]> {
   await requireAnyViewPermission(["fuvarozas", "elszamolas"]);
-  const [alap, kapcsolatok, levelezok, forgalom, rakodas, kmDij] = await Promise.all([
+  const [alap, kapcsolatok, levelezok, forgalom, rakodas, kmDij, szamlak] = await Promise.all([
     getPartnerAlap(),
     query<{ partner_id: string | null; ceg: string; nev: string | null; telefon: string | null; email: string | null }>(
       `select partner_id::text, ceg, kapcsolattarto as nev, telefon, email from fuvar_kapcsolatok order by id`
@@ -97,6 +149,21 @@ export async function getPartnerek(): Promise<Partner[]> {
          (sum(fuvardij) / nullif(sum(rakott_km), 0))::float8 as per_km, count(*)::int as munka
        from fuvar_megbizasok
        where partner_id is not null and torolt_at is null and jelleg = 'ber' and fuvardij > 0 and rakott_km > 0
+       group by 1, 2`
+    ).catch(() => []),
+    // Fizetési fegyelem a párosított számlákból: kiállítás→jóváírás nap átlaga,
+    // és a nyitott (nem fizetett) számlák pénznemenként, ebből hány lejárt.
+    query<{ partner_id: string; penznem: string; nyitott_db: number; nyitott_osszeg: number; lejart_db: number; fizetes_nap: number | null; fizetes_minta: number }>(
+      `select m.partner_id::text, s.penznem,
+         count(*) filter (where not s.fizetve)::int as nyitott_db,
+         coalesce(sum(s.brutto + coalesce(s.helyesbites_osszeg, 0)) filter (where not s.fizetve), 0)::float8 as nyitott_osszeg,
+         count(*) filter (where not s.fizetve and s.fizetesi_hatarido < current_date)::int as lejart_db,
+         avg((s.fizetve_datum at time zone 'Europe/Budapest')::date - s.kiallitas_datum) filter (where s.fizetve and s.fizetve_datum is not null)::float8 as fizetes_nap,
+         count(*) filter (where s.fizetve and s.fizetve_datum is not null)::int as fizetes_minta
+       from fuvar_megbizasok m
+       left join fuvar_elszamolas e on e.megbizas_id = m.id
+       join szamla s on s.szamlaszam = coalesce(e.szamla_szam, m.szamla_szam) and not s.sztorno and not s.sztornozva
+       where m.partner_id is not null and m.torolt_at is null
        group by 1, 2`
     ).catch(() => []),
   ]);
@@ -137,10 +204,16 @@ export async function getPartnerek(): Promise<Partner[]> {
     kmDij: kmDij.filter((k) => k.partner_id === p.id && k.per_km != null).map((k) => ({ penznem: k.penznem, perKm: Number(k.per_km), munka: k.munka })),
     rakodasFelrako: median(rakodas.find((r) => r.partner_id === p.id && r.tipus === "felrako")),
     rakodasLerako: median(rakodas.find((r) => r.partner_id === p.id && r.tipus === "lerako")),
+    fizetesNap: (() => {
+      const sz = szamlak.filter((s) => s.partner_id === p.id && s.fizetes_minta > 0 && s.fizetes_nap != null);
+      const minta = sz.reduce((n, s) => n + s.fizetes_minta, 0);
+      return minta > 0 ? { atlag: Math.round(sz.reduce((n, s) => n + Number(s.fizetes_nap) * s.fizetes_minta, 0) / minta), minta } : null;
+    })(),
+    nyitottSzamla: szamlak.filter((s) => s.partner_id === p.id && s.nyitott_db > 0).map((s) => ({ db: s.nyitott_db, osszeg: Number(s.nyitott_osszeg), penznem: s.penznem, lejart: s.lejart_db })),
   }));
 }
 
-type PartnerAlap = Omit<Partner, "kapcsolatok" | "forgalom" | "kmDij" | "rakodasFelrako" | "rakodasLerako">;
+type PartnerAlap = Omit<Partner, "kapcsolatok" | "forgalom" | "kmDij" | "rakodasFelrako" | "rakodasLerako" | "fizetesNap" | "nyitottSzamla">;
 
 async function getPartnerAlap(): Promise<PartnerAlap[]> {
   return query<PartnerAlap>(
@@ -172,7 +245,7 @@ export async function getOsszevonasJavaslatok(): Promise<{ a: Partner; b: Partne
   return out;
 }
 
-export async function updatePartner(id: string, mezok: Partial<Omit<Partner, "id" | "nev_kulcs" | "megbizas_db" | "utolso_megbizas" | "berfuvar" | "kapcsolatok" | "forgalom" | "kmDij" | "rakodasFelrako" | "rakodasLerako">>): Promise<void> {
+export async function updatePartner(id: string, mezok: Partial<Omit<Partner, "id" | "nev_kulcs" | "megbizas_db" | "utolso_megbizas" | "berfuvar" | "kapcsolatok" | "forgalom" | "kmDij" | "rakodasFelrako" | "rakodasLerako" | "fizetesNap" | "nyitottSzamla">>): Promise<void> {
   await requireEditPermission("fuvarozas");
   const engedett = ["nev", "nevvaltozatok", "adoszam", "szekhely", "szamlazasi_cim", "postazasi_cim", "szamlazasi_email", "fizetesi_hatarido_nap",
     "papir_bekuldesi_hatarido_nap", "szamlan_kert_szam", "sablon_azonosito", "szamla_email_nem_kell", "posta_nem_kell", "megbizas_pdf_csatolva", "email_domainek", "megjegyzes"] as const;
