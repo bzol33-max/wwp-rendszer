@@ -12,7 +12,9 @@ import { kepesKiolvasas } from "@/lib/fuvarozas/kiolvasas-kepes";
  */
 export const maxDuration = 180;
 
-export async function GET(_request: Request, { params }: { params: Promise<{ fuvarId: string }> }) {
+const ENGEDETT_MODELLEK = new Set(["google/gemini-2.5-flash", "google/gemini-2.5-pro", "google/gemini-3-flash-preview"]);
+
+export async function GET(request: Request, { params }: { params: Promise<{ fuvarId: string }> }) {
   const session = await verifySession();
   if (!session.isAuth || session.role !== "admin") return NextResponse.json({ hiba: "Csak adminnak." }, { status: 403 });
   const { fuvarId } = await params;
@@ -38,7 +40,9 @@ export async function GET(_request: Request, { params }: { params: Promise<{ fuv
     if (fajl.mimeType !== "application/pdf") {
       return NextResponse.json({ fuvarId, hiba: `Nem PDF (${fajl.mimeType}) — a próba csak PDF-et olvas.`, jelenlegi: m });
     }
-    const eredmeny = await kepesKiolvasas({ pdf: fajl.buffer, kuldo: level?.felado ?? null, levelTorzs: level?.torzs ?? null });
+    const kert = new URL(request.url).searchParams.get("modell");
+    const modell = kert && ENGEDETT_MODELLEK.has(kert) ? kert : undefined;
+    const eredmeny = await kepesKiolvasas({ modell, pdf: fajl.buffer, kuldo: level?.felado ?? null, levelTorzs: level?.torzs ?? null });
     return NextResponse.json({ fuvarId, fajl: fajl.nev, kuldo: level?.felado ?? null, jelenlegi: m, kepes: eredmeny });
   } catch (e) {
     return NextResponse.json({ fuvarId, hiba: e instanceof Error ? e.message : "ismeretlen hiba", jelenlegi: m }, { status: 500 });

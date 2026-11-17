@@ -31,15 +31,23 @@ eq("szöveg-forrású, de a szövegben nem szereplő megrendelő → gyanús",
   ["megrendelő: az idézet nincs az irat szövegében"]);
 eq("kitalált díj-idézet → gyanús",
   gyanusPontok(alap({ fuvardij: { ertek: "60000", penznem: "Ft", idezet: "Fuvardíj: 60.000 Ft", hol: "szoveg" } }), SZOVEG),
-  ["fuvardíj: az idézet nincs az irat szövegében"]);
+  ["fuvardíj: az összeg nincs az irat szövegében"]);
+eq("díj tizedesekkel (450,00) és tagolva (50.000) is megtalálva",
+  gyanusPontok(alap({ fuvardij: { ertek: "50000.00", penznem: "Ft", idezet: null, hol: "szoveg" } }), SZOVEG), []);
+eq("cím nélküli megálló → gyanús",
+  gyanusPontok(alap({ megallok: [{ ...alap({}).megallok[0], cim: null }, alap({}).megallok[1]] }), SZOVEG),
+  ["felrakó: nincs cím"]);
+eq("a szövegben nem szereplő település → gyanús",
+  gyanusPontok(alap({ megallok: [alap({}).megallok[0], { ...alap({}).megallok[1], cim: "1095 Budapest, Soroksári út 44" }] }), SZOVEG),
+  ["lerakó (1095 Budapest, Soroksári út 44): a cím nincs az irat szövegében"]);
 eq("hiányzó megrendelő és lerakó",
   gyanusPontok(alap({ megrendelo: { ertek: null, idezet: null, hol: "nincs" }, megallok: [alap({}).megallok[0]] }), SZOVEG),
   ["megrendelő: nem található", "nincs lerakó"]);
 eq("lerakás a felrakás előtt",
   gyanusPontok(alap({ megallok: [{ ...alap({}).megallok[0], nap: "2026-11-17" }, alap({}).megallok[1]] }), SZOVEG),
   ["lerakás (2026-11-16) a felrakás (2026-11-17) előtt"]);
-eq("megálló-idézet írásmód-függetlenül megtalálva (szóköz, vessző)",
-  gyanusPontok(alap({ megallok: [{ ...alap({}).megallok[0], idezet: "4562 Vaja, Rohodi u. 1-3" }, alap({}).megallok[1]] }), SZOVEG), []);
+eq("cím a hasábos szövegben szétszórva is igazolt (irányítószám)",
+  gyanusPontok(alap({ megallok: [{ ...alap({}).megallok[0], cim: "Vaja\n4562 Rohodi utca 1" }, alap({}).megallok[1]] }), SZOVEG), []);
 
 console.log(`teszt-kiolvasas-kepes: ${ok} ok, ${bad} hiba`);
 if (bad > 0) process.exit(1);

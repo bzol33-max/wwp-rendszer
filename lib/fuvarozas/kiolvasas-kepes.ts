@@ -34,6 +34,8 @@ A megrendelő (megbízó) az a cég, amelyik az iratot KIADTA. Sorrend, amit né
 3. a küldő e-mail címének domainje vagy az aláírás cége.
 A felrakó vagy a lerakó cége LEHET a megrendelő, de csak ha az irat ezt mutatja (pl. a fejlécben ő áll). Ha a fejlécben más cég áll, az a megrendelő.
 
+MINDEN megállónál töltsd ki a "ceg" és a "cim" mezőt a hozzá tartozó „Felrakóhely” / „Lerakóhely” (vagy hasonló) rovatból: a cím irányítószám + település + utca. Ha egy rovatban cégnév és cím is áll, a cégnév a "ceg", a többi a "cim". A megálló "idezet"-e a CÍM szó szerinti részlete legyen (nem a dátumé).
+Csak a ténylegesen kiírt fel- és lerakóhelyek megállók — a megbízó, a megbízott, a számlázási vagy postázási cím NEM megálló.
 A felrakó és a lerakó helyét a KÉPEN lévő elrendezés szerint olvasd: a címke („Felrakóhely”, „Lerakóhely”, „Rakodás”, „Kirakás”) melletti/alatti mező tartozik hozzá. Ne cseréld fel őket. Minden megállót add vissza, útvonal-sorrendben.
 A dátum az adott megállóhoz tartozó „ideje/napja” mezőből jön (ÉÉÉÉ-HH-NN). A fuvardíj a „Fuvardíj” mező nettó összege — kötbér, állásdíj, raklapár NEM fuvardíj.
 
