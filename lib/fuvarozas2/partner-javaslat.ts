@@ -10,6 +10,7 @@
 // NEM "use server" fájl: csak a szerver ütemezője hívja.
 
 import { query } from "@/lib/db";
+import { importModellek, oldalKepek } from "@/lib/fuvarozas/import/oldal-kepek";
 import { letoltDriveFajlt } from "@/lib/fuvarozas/drive-sync-core";
 import { partnerEgyezik } from "@/lib/fuvarozas/szamla-parositas";
 import { javaslatokKiolvasasbol, vevoCimSzamlaXmlbol, type Javaslat, type NyersKiolvasas } from "@/lib/fuvarozas2/partner-javaslat-alap";
@@ -51,32 +52,50 @@ const WORD_MIME = new Set(["application/msword", "application/vnd.openxmlformats
 async function kiolvasPdfbol(pdf: Buffer, nev: string, szoveg?: string): Promise<NyersKiolvasas | null> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) throw new Error("Hiányzik az OPENROUTER_API_KEY környezeti változó.");
-  const model = process.env.OPENROUTER_PDF_MODEL || "google/gemini-2.5-flash";
-  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-    signal: AbortSignal.timeout(60_000),
-    method: "POST",
-    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: UTASITAS },
-        {
-          role: "user",
-          content: [
-            ...(szoveg != null
-              ? [{ type: "text", text: `A megbízás szövege (Word-irat, ${nev}):\n\n${szoveg.slice(0, 30_000)}` }]
-              : [
-                  { type: "text", text: "A megbízás PDF-je:" },
-                  { type: "file", file: { filename: nev, file_data: `data:application/pdf;base64,${pdf.toString("base64")}` } },
-                ]),
+  // Ingyenes modellekkel (2026-11-17, Budaházi Zoltán: „ingyenes kell”): a
+  // PDF-et oldalképként + szövegként kapja (az ingyenes modellek a PDF-fájlt
+  // magát nem olvassák). Ha egyik sem válaszol, a hívó naplózza, és a
+  // következő óránkénti kör újrapróbálja — fizetős modell nem fut.
+  let tartalom: unknown[];
+  if (szoveg != null) {
+    tartalom = [{ type: "text", text: `A megbízás szövege (Word-irat, ${nev}):\n\n${szoveg.slice(0, 30_000)}` }];
+  } else {
+    const { PDFParse } = await import("pdf-parse");
+    const parser = new PDFParse({ data: pdf });
+    const pdfSzoveg = await parser.getText().then((t) => t.text).catch(() => "").finally(() => parser.destroy());
+    const kepek = await oldalKepek(pdf).catch(() => [] as string[]);
+    tartalom = [
+      ...kepek.map((url) => ({ type: "image_url", image_url: { url } })),
+      { type: "text", text: `A megbízás PDF-je (${nev}) — az oldalak képe fent, a kinyert szöveg:\n\n${pdfSzoveg.slice(0, 30_000)}` },
+    ];
+  }
+  let res: Response | null = null;
+  const hibak: string[] = [];
+  for (const model of importModellek()) {
+    try {
+      res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        signal: AbortSignal.timeout(180_000),
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: UTASITAS },
+            { role: "user", content: tartalom },
           ],
-        },
-      ],
-      temperature: 0,
-      response_format: { type: "json_object" },
-    }),
-  });
-  if (!res.ok) throw new Error(`OpenRouter hiba (${res.status}): ${(await res.text()).slice(0, 300)}`);
+          temperature: 0,
+          response_format: { type: "json_object" },
+        }),
+      });
+    } catch (err) {
+      hibak.push(`${model}: ${err instanceof Error ? err.message : "hálózati hiba"}`);
+      continue;
+    }
+    if (res.ok) break;
+    hibak.push(`${model}: ${res.status}`);
+  }
+  if (!res?.ok) throw new Error(`A partneradat-olvasó (ingyenes) modellek most nem érhetők el — a következő kör újrapróbálja. (${hibak.join("; ")})`);
+
   const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
   const t = data.choices?.[0]?.message?.content ?? "";
   const eleje = t.indexOf("{");
@@ -129,7 +148,7 @@ async function rogzit(p: HianyosPartner, javaslatok: Javaslat[], forras: string,
  * Egy kör: partnerenként a legutóbbi, még ki nem olvasott megbízás-PDF
  * (legfeljebb `korlat` irat), és a postázási címhez a számlák vevőcíme.
  */
-export async function futtatPartnerJavaslatokat(korlat = 10): Promise<{ irat: number; javaslat: number; hiba: number }> {
+export async function futtatPartnerJavaslatokat(korlat = 3): Promise<{ irat: number; javaslat: number; hiba: number }> {
   const eredmeny = { irat: 0, javaslat: 0, hiba: 0 };
   const partnerek = await hianyosPartnerek();
   if (partnerek.length === 0) return eredmeny;
@@ -192,6 +211,12 @@ export async function futtatPartnerJavaslatokat(korlat = 10): Promise<{ irat: nu
     } catch (err) {
       eredmeny.hiba++;
       const uzenet = err instanceof Error ? err.message : String(err);
+      // Ha csak az ingyenes modellek voltak épp elérhetetlenek, nem rögzítjük
+      // véglegesnek: a következő óránkénti kör újra megpróbálja.
+      if (uzenet.includes("most nem érhetők el")) {
+        console.error(`[partner-javaslat] ${p.nev}: ${uzenet}`);
+        continue;
+      }
       await query(
         `insert into fuvar_partner_kiolvasas (drive_file_id, partner_id, megbizas_id, hiba) values ($1, $2, $3, $4)
          on conflict (drive_file_id) do update set hiba = excluded.hiba, futott_at = now()`,

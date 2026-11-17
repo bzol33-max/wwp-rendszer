@@ -289,8 +289,10 @@ export async function setPartnerPostazasiCim(partnerId: string, cim: string): Pr
 export async function kitoltHianyzoPartnerAdatokat(): Promise<{ partner: number; mezo: number }> {
   await requireEditPermission("fuvarozas");
   const session = await requireSession();
-  // Előbb a még ki nem olvasott megbízás-iratok (PDF, Word), hogy az új megbízó adatai is meglegyenek.
-  await futtatPartnerJavaslatokat(5).catch((err) => console.error("[partner-javaslat] kézi kör:", err));
+  // A még ki nem olvasott megbízás-iratok (PDF, Word) a háttérben futnak: az
+  // ingyenes modell iratonként akár 1–3 perc (2026-11-17), a gomb ne várjon rá.
+  // Az új javaslatok a következő megnyitáskor látszanak.
+  void futtatPartnerJavaslatokat(2).catch((err) => console.error("[partner-javaslat] kézi kör:", err));
   const r = await futtatPartnerKitoltest(`${session.name ?? session.username} (automatikus kitöltés)`);
   return { partner: r.partner, mezo: r.mezo };
 }
