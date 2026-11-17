@@ -43,6 +43,12 @@ function penzRovid(f: { penznem: string; osszeg: number }): string {
   return `${Math.round(f.osszeg).toLocaleString("hu-HU")} ${f.penznem}`;
 }
 
+/** Átlag km-díj: „542 Ft/km”, euróban két tizedesig („1,85 €/km”). */
+function kmDijSzoveg(k: { penznem: string; perKm: number }): string {
+  if (/^(eur|€)$/i.test(k.penznem)) return `${k.perKm.toLocaleString("hu-HU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €/km`;
+  return `${Math.round(k.perKm).toLocaleString("hu-HU")} Ft/km`;
+}
+
 const ekezetNelkul = (s: string) => s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
 export function PartnerekNezet({ partnerek, javaslatok, adatJavaslatok = [], szerkeszthet, nyit }: {
@@ -171,13 +177,14 @@ export function PartnerekNezet({ partnerek, javaslatok, adatJavaslatok = [], sze
               <th className="px-3 py-2 font-medium">Partner</th>
               <th className="px-3 py-2 font-medium">Kapcsolattartó</th>
               <th className="px-3 py-2 text-right font-medium">Munkák</th>
+              <th className="px-3 py-2 text-right font-medium" title="Fuvardíj ÷ HU-GO szerinti rakott km, a megbízó összes bérfuvarján">Átlag km-díj</th>
               <th className="px-3 py-2 font-medium">Fizetés</th>
               <th className="px-3 py-2 font-medium">Számla · posta</th>
             </tr>
           </thead>
           <tbody>
             {lathato.length === 0 ? (
-              <tr><td colSpan={szerkeszthet ? 6 : 5} className="px-3 py-6 text-center text-sm text-muted-foreground">Nincs a szűrésnek megfelelő partner.</td></tr>
+              <tr><td colSpan={szerkeszthet ? 7 : 6} className="px-3 py-6 text-center text-sm text-muted-foreground">Nincs a szűrésnek megfelelő partner.</td></tr>
             ) : null}
             {lathato.map((p) => (
               <PartnerSor key={p.id} p={p} nyitott={nyitott === p.id} onNyit={() => setNyitott(nyitott === p.id ? null : p.id)}
@@ -252,6 +259,14 @@ function PartnerSor({ p, nyitott, onNyit, szerkeszthet, kijelolve, onKijelol }: 
             {[p.forgalom.map(penzRovid).join(" + "), p.utolso_megbizas ? `utolsó ${p.utolso_megbizas.slice(5).replace("-", ".")}.` : null].filter(Boolean).join(" · ")}
           </div>
         </td>
+        <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums">
+          {p.kmDij.length === 0 ? <span className="text-muted-foreground">—</span> : (
+            <>
+              <div className="font-medium">{p.kmDij.map(kmDijSzoveg).join(" · ")}</div>
+              <div className="text-xs text-muted-foreground">{p.kmDij.reduce((n, k) => n + k.munka, 0)} munkából</div>
+            </>
+          )}
+        </td>
         <td className="whitespace-nowrap px-3 py-2.5 tabular-nums">
           {p.fizetesi_hatarido_nap === 0 ? "készpénz" : p.fizetesi_hatarido_nap != null ? <>{p.fizetesi_hatarido_nap} nap</> : nincs}
           <div className="text-xs text-muted-foreground">{p.papir_bekuldesi_hatarido_nap != null ? `papír ${p.papir_bekuldesi_hatarido_nap} napon belül` : p.berfuvar ? "papír: nincs kikötve" : ""}</div>
@@ -267,7 +282,7 @@ function PartnerSor({ p, nyitott, onNyit, szerkeszthet, kijelolve, onKijelol }: 
       </tr>
       {nyitott ? (
         <tr className="border-t border-foreground/5 bg-muted/20">
-          <td colSpan={szerkeszthet ? 6 : 5} className="px-3 py-3">
+          <td colSpan={szerkeszthet ? 7 : 6} className="px-3 py-3">
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               {M("nev", "Név")}
               {M("nevvaltozatok", "Névváltozatok (; elválasztva)")}

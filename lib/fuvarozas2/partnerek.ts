@@ -54,6 +54,13 @@ export type Partner = {
   kapcsolatok: { nev: string | null; telefon: string | null; email: string | null; levelDb?: number }[];
   /** A nem törölt bérfuvar-megbízások díja pénznemenként (a „mennyit dolgoztunk neki”). */
   forgalom: { penznem: string; osszeg: number }[];
+  /**
+   * Átlag km-díj pénznemenként (2026-11-17): a fuvardíj ÷ a HU-GO szerinti
+   * rakott km (rakott-km.ts), csak azokon a bérfuvarokon, ahol mindkettő
+   * megvan — ugyanaz a képlet, mint a Ma oldal km-díj csempéjéé.
+   * munka = hány munkából számolva (a többinek még nincs km-e).
+   */
+  kmDij: { penznem: string; perKm: number; munka: number }[];
   /** Tanult rakodási idő percben, a megállókon mért érkezés→távozás mediánja. */
   rakodasFelrako: { perc: number; minta: number } | null;
   rakodasLerako: { perc: number; minta: number } | null;
@@ -61,7 +68,7 @@ export type Partner = {
 
 export async function getPartnerek(): Promise<Partner[]> {
   await requireAnyViewPermission(["fuvarozas", "elszamolas"]);
-  const [alap, kapcsolatok, levelezok, forgalom, rakodas] = await Promise.all([
+  const [alap, kapcsolatok, levelezok, forgalom, rakodas, kmDij] = await Promise.all([
     getPartnerAlap(),
     query<{ partner_id: string | null; ceg: string; nev: string | null; telefon: string | null; email: string | null }>(
       `select partner_id::text, ceg, kapcsolattarto as nev, telefon, email from fuvar_kapcsolatok order by id`
@@ -85,6 +92,13 @@ export async function getPartnerek(): Promise<Partner[]> {
        where m.partner_id is not null and g.gps_erkezes is not null and g.gps_tavozas > g.gps_erkezes
        group by 1, 2`
     ),
+    query<{ partner_id: string; penznem: string; per_km: number; munka: number }>(
+      `select partner_id::text, coalesce(nullif(fuvardij_penznem, ''), 'Ft') as penznem,
+         (sum(fuvardij) / nullif(sum(rakott_km), 0))::float8 as per_km, count(*)::int as munka
+       from fuvar_megbizasok
+       where partner_id is not null and torolt_at is null and jelleg = 'ber' and fuvardij > 0 and rakott_km > 0
+       group by 1, 2`
+    ).catch(() => []),
   ]);
   const median = (sorok: { percek: number[] } | undefined) => {
     if (!sorok) return null;
@@ -120,12 +134,13 @@ export async function getPartnerek(): Promise<Partner[]> {
     ...p,
     kapcsolatok: kapcsolatai(p),
     forgalom: forgalom.filter((f) => f.partner_id === p.id).map(({ penznem, osszeg }) => ({ penznem, osszeg })),
+    kmDij: kmDij.filter((k) => k.partner_id === p.id && k.per_km != null).map((k) => ({ penznem: k.penznem, perKm: Number(k.per_km), munka: k.munka })),
     rakodasFelrako: median(rakodas.find((r) => r.partner_id === p.id && r.tipus === "felrako")),
     rakodasLerako: median(rakodas.find((r) => r.partner_id === p.id && r.tipus === "lerako")),
   }));
 }
 
-type PartnerAlap = Omit<Partner, "kapcsolatok" | "forgalom" | "rakodasFelrako" | "rakodasLerako">;
+type PartnerAlap = Omit<Partner, "kapcsolatok" | "forgalom" | "kmDij" | "rakodasFelrako" | "rakodasLerako">;
 
 async function getPartnerAlap(): Promise<PartnerAlap[]> {
   return query<PartnerAlap>(
@@ -157,7 +172,7 @@ export async function getOsszevonasJavaslatok(): Promise<{ a: Partner; b: Partne
   return out;
 }
 
-export async function updatePartner(id: string, mezok: Partial<Omit<Partner, "id" | "nev_kulcs" | "megbizas_db" | "utolso_megbizas" | "berfuvar" | "kapcsolatok" | "forgalom" | "rakodasFelrako" | "rakodasLerako">>): Promise<void> {
+export async function updatePartner(id: string, mezok: Partial<Omit<Partner, "id" | "nev_kulcs" | "megbizas_db" | "utolso_megbizas" | "berfuvar" | "kapcsolatok" | "forgalom" | "kmDij" | "rakodasFelrako" | "rakodasLerako">>): Promise<void> {
   await requireEditPermission("fuvarozas");
   const engedett = ["nev", "nevvaltozatok", "adoszam", "szekhely", "szamlazasi_cim", "postazasi_cim", "szamlazasi_email", "fizetesi_hatarido_nap",
     "papir_bekuldesi_hatarido_nap", "szamlan_kert_szam", "sablon_azonosito", "szamla_email_nem_kell", "posta_nem_kell", "megbizas_pdf_csatolva", "email_domainek", "megjegyzes"] as const;
