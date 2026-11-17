@@ -10,7 +10,8 @@ const nextConfig: NextConfig = {
   // '.../pdf.worker.mjs'" hibát okozva élesben. A serverExternalPackages
   // kizárja ezeket a bundlingből, így natív node_modules-os require-dal
   // töltődnek be, ahol a worker-fájl ténylegesen megtalálható.
-  serverExternalPackages: ["pdf-parse", "pdfjs-dist"],
+  // A képes kiolvasás (lib/fuvarozas/kiolvasas-kepes.ts) a pdf-parse oldal-képéhez a natív @napi-rs/canvas-t használja — az sem bundle-elhető.
+  serverExternalPackages: ["pdf-parse", "pdfjs-dist", "@napi-rs/canvas"],
   experimental: {
     // A kontókivonat-feltöltés (lib/szamlak/kontokivonat.ts) az .xlsx-et
     // base64-ként küldi a Server Actionnek — a Next.js alapértelmezett 1MB-os
