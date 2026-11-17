@@ -77,3 +77,16 @@ export function gyanusPontok(v: KepesValasz, szoveg: string): string[] {
   if (elsoFel && utolsoLe && utolsoLe < elsoFel) ki.push(`lerakás (${utolsoLe}) a felrakás (${elsoFel}) előtt`);
   return ki;
 }
+
+/**
+ * Ha a modell a teljes rovatot a cégnévbe tette és a cím üres (FERSPED #375:
+ * „Trivium Packaking Hungary kft HU,4562 Vaja,Rohodi u.1-3”), a cím az
+ * irányítószámtól (az előtte álló „HU,” / „H-” jelöléssel együtt) indul.
+ */
+export function megalloCimPotlas<T extends { ceg: string | null; cim: string | null }>(m: T): T {
+  if (m.cim || !m.ceg) return m;
+  const talalat = m.ceg.match(/(?:\b(?:HU|H)\s*[,-]?\s*)?\b\d{4}\b/);
+  if (!talalat || talalat.index === undefined) return m;
+  const ceg = m.ceg.slice(0, talalat.index).replace(/[\s,;-]+$/, "").trim();
+  return { ...m, ceg: ceg || null, cim: m.ceg.slice(talalat.index).trim() };
+}

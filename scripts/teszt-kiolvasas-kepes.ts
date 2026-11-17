@@ -1,6 +1,6 @@
 // Képes kiolvasás — a gyanú-szabályok (lib/fuvarozas/kiolvasas-kepes-alap.ts).
 // Futtatás: npx tsx scripts/teszt-kiolvasas-kepes.ts
-import { gyanusPontok, type KepesValasz } from "@/lib/fuvarozas/kiolvasas-kepes-alap";
+import { gyanusPontok, megalloCimPotlas, type KepesValasz } from "@/lib/fuvarozas/kiolvasas-kepes-alap";
 
 let ok = 0, bad = 0;
 function eq(nev: string, kapott: unknown, vart: unknown) {
@@ -49,5 +49,11 @@ eq("lerakás a felrakás előtt",
 eq("cím a hasábos szövegben szétszórva is igazolt (irányítószám)",
   gyanusPontok(alap({ megallok: [{ ...alap({}).megallok[0], cim: "Vaja\n4562 Rohodi utca 1" }, alap({}).megallok[1]] }), SZOVEG), []);
 
+eq("cím a cégnévből: HU,irsz előtag", megalloCimPotlas({ ceg: "Trivium Packaking Hungary kft HU,4562 Vaja,Rohodi u.1-3", cim: null }),
+  { ceg: "Trivium Packaking Hungary kft", cim: "HU,4562 Vaja,Rohodi u.1-3" });
+eq("cím a cégnévből: előtag nélkül", megalloCimPotlas({ ceg: "Metál Sheet Kft, 4000 Debrecen, Apafa", cim: null }),
+  { ceg: "Metál Sheet Kft", cim: "4000 Debrecen, Apafa" });
+eq("meglévő címet nem bánt", megalloCimPotlas({ ceg: "X Kft 1234", cim: "Győr" }), { ceg: "X Kft 1234", cim: "Győr" });
+eq("irányítószám nélkül nem talál ki címet", megalloCimPotlas({ ceg: "Coca-Cola HBC", cim: null }), { ceg: "Coca-Cola HBC", cim: null });
 console.log(`teszt-kiolvasas-kepes: ${ok} ok, ${bad} hiba`);
 if (bad > 0) process.exit(1);

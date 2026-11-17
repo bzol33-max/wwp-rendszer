@@ -13,7 +13,7 @@ import "server-only";
 // visszakeressük — ha nincs ott, és nem a képes fejlécből/e-mailből jött,
 // a mező gyanús. Ez a modul NEM ír semmit: a hívó dönt.
 
-import { gyanusPontok, type KepesValasz } from "@/lib/fuvarozas/kiolvasas-kepes-alap";
+import { gyanusPontok, megalloCimPotlas, type KepesValasz } from "@/lib/fuvarozas/kiolvasas-kepes-alap";
 
 export type KepesEredmeny = {
   adat: KepesValasz | null;
@@ -90,7 +90,7 @@ export async function kepesKiolvasas(bemenet: {
   modell?: string;
   maxOldal?: number;
 }): Promise<KepesEredmeny> {
-  const modell = bemenet.modell ?? process.env.OPENROUTER_KEPES_MODEL ?? "google/gemini-2.5-flash";
+  const modell = bemenet.modell ?? process.env.OPENROUTER_KEPES_MODEL ?? "google/gemini-2.5-pro";
   const kezd = Date.now();
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) return { adat: null, gyanus: [], modell, oldalak: 0, ms: 0, hiba: "Hiányzik az OPENROUTER_API_KEY." };
@@ -128,6 +128,6 @@ export async function kepesKiolvasas(bemenet: {
   const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
   const adat = jsonBol(data.choices?.[0]?.message?.content ?? "");
   if (!adat) return { adat: null, gyanus: [], modell, oldalak, ms: Date.now() - kezd, hiba: "A modell válasza nem értelmezhető JSON." };
-  adat.megallok = Array.isArray(adat.megallok) ? adat.megallok : [];
+  adat.megallok = (Array.isArray(adat.megallok) ? adat.megallok : []).map(megalloCimPotlas);
   return { adat, gyanus: gyanusPontok(adat, szoveg), modell, oldalak, ms: Date.now() - kezd };
 }
