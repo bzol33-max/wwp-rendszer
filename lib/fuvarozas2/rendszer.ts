@@ -14,7 +14,7 @@ import { query } from "@/lib/db";
 import { requireAnyViewPermission } from "@/lib/auth/require-permission";
 import { verifySession } from "@/lib/auth/dal";
 import { hasznalatOsszesit, type HasznalatSor, type HasznalatUtvonal } from "@/lib/fuvarozas2/oldal-naplo-alap";
-import { gpsEgeszseg } from "@/lib/fuvarozas2/rendszer-alap";
+import { gpsEgeszseg, kiolvasasHibaOsszesit, type KiolvasasHibak, type KiolvasasSor } from "@/lib/fuvarozas2/rendszer-alap";
 
 /**
  * „Használat (14 nap)” (db/migrations/039_oldal_megnyitas.sql): útvonalanként
@@ -34,6 +34,39 @@ export async function getHasznalat14Nap(): Promise<HasznalatUtvonal[] | null> {
     return hasznalatOsszesit(sorok);
   } catch {
     return [];
+  }
+}
+
+/**
+ * „Kiolvasási hibák (30 nap)”: az elmúlt 30 napban importált bérfuvarok közül
+ * hánynak kellett kézzel javítani kiolvasott mezőjét (a szabály:
+ * rendszer-alap.ts kiolvasasHibaOsszesit). Csak olvas; hibánál null — a
+ * Rendszer-lap ettől nem áll le.
+ */
+export async function getKiolvasasHibak30Nap(): Promise<KiolvasasHibak | null> {
+  await requireAnyViewPermission(["rendszer", "fuvarozas"]);
+  try {
+    const sorok = await query<KiolvasasSor>(
+      `select m.id::text, coalesce(p.nev, nullif(m.megrendelo, ''), '—') as partner, m.torolt_at is not null as torolt,
+         coalesce((
+           select array_agg(distinct x)
+           from fuvar_megbizas_esemeny e
+           cross join lateral jsonb_array_elements_text(
+             case when jsonb_typeof(e.reszletek->'mezok') = 'array' then e.reszletek->'mezok' else '[]'::jsonb end) x
+           where e.megbizas_id = m.id and e.forras = 'ember' and e.esemeny = 'modositva'
+             and (x not in ('datum', 'lerakasDatum', 'idopont')
+                  or e.mikor < coalesce((select min(e2.mikor) from fuvar_megbizas_esemeny e2
+                                         where e2.megbizas_id = m.id and e2.esemeny in ('megerkezett', 'megallo_kesz', 'teljesitve')),
+                                        'infinity'::timestamptz))
+         ), '{}') as mezok
+       from fuvar_megbizasok m
+       left join fuvar_partnerek p on p.id = m.partner_id
+       where m.jelleg = 'ber' and m.forras in ('pdf_import', 'drive_import', 'gmail_import')
+         and m.created_at > now() - interval '30 days'`
+    );
+    return kiolvasasHibaOsszesit(sorok);
+  } catch {
+    return null;
   }
 }
 

@@ -1,5 +1,5 @@
 import { PageHeader } from "@/components/layout/page-header";
-import { getHasznalat14Nap, getRendszerEgeszseg, type EgeszsegAllapot } from "@/lib/fuvarozas2/rendszer";
+import { getHasznalat14Nap, getKiolvasasHibak30Nap, getRendszerEgeszseg, type EgeszsegAllapot } from "@/lib/fuvarozas2/rendszer";
 import { formatIdo} from "@/components/fuvarozas2/kozos";
 import { Fuvarozas2Fulek } from "@/components/fuvarozas2/fulek";
 import { cn } from "@/lib/utils";
@@ -17,7 +17,7 @@ const CIMKE: Record<EgeszsegAllapot, string> = {
 };
 
 export default async function Page() {
-  const [e, hasznalat] = await Promise.all([getRendszerEgeszseg(), getHasznalat14Nap()]);
+  const [e, hasznalat, kiolvasas] = await Promise.all([getRendszerEgeszseg(), getHasznalat14Nap(), getKiolvasasHibak30Nap()]);
   const gond = e.sorok.filter((s) => s.allapot === "gond").length;
   const figy = e.sorok.filter((s) => s.allapot === "figyelmeztetes").length;
   return (
@@ -40,6 +40,50 @@ export default async function Page() {
           </div>
         ))}
       </div>
+      {kiolvasas ? (
+        // Kiolvasási hibák: importált bérfuvar, amelynek kiolvasott mezőjét
+        // utólag kézzel javítani kellett (szabály: rendszer-alap.ts).
+        <div className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-medium">Kiolvasási hibák (30 nap)</span>
+            <span className="text-xs text-muted-foreground">kézzel javított kiolvasott mező alapján</span>
+          </div>
+          <div className="mt-1 text-lg font-semibold tabular-nums">
+            {kiolvasas.hibas} / {kiolvasas.importalt} megbízás
+            {kiolvasas.importalt > 0 ? (
+              <span className="ml-2 text-sm font-normal text-muted-foreground">
+                ({Math.round((kiolvasas.hibas / kiolvasas.importalt) * 100)}%)
+              </span>
+            ) : null}
+          </div>
+          <div className="text-sm text-muted-foreground">
+            {kiolvasas.mezonkent.length > 0
+              ? kiolvasas.mezonkent.map((m) => `${m.cimke} ${m.db}`).join(" · ")
+              : "nem kellett kézzel javítani kiolvasott mezőt"}
+            {kiolvasas.torolt > 0 ? ` · törölt import (duplikátum/rossz): ${kiolvasas.torolt}` : ""}
+          </div>
+          {kiolvasas.partnerenkent.length > 0 ? (
+            <table className="mt-2 w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-muted-foreground">
+                  <th className="py-1 pr-2 font-normal">Partner</th>
+                  <th className="py-1 pr-2 text-right font-normal">Hibás / import</th>
+                  <th className="py-1 font-normal">Mit kellett javítani</th>
+                </tr>
+              </thead>
+              <tbody>
+                {kiolvasas.partnerenkent.map((p) => (
+                  <tr key={p.partner} className="border-t border-foreground/5 align-top">
+                    <td className="py-1 pr-2">{p.partner}</td>
+                    <td className="py-1 pr-2 text-right font-semibold tabular-nums">{p.hibas} / {p.importalt}</td>
+                    <td className="py-1 text-muted-foreground">{p.cimkek.join(", ")}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : null}
+        </div>
+      ) : null}
       {hasznalat ? (
         // Használati napló (csak admin): melyik lapot nyitják meg — ebből
         // döntünk 2 hét után, mit lehet törölni / összevonni.
