@@ -18,7 +18,7 @@ export type KitoltesEredmeny = { partner: number; mezo: number; reszletek: { par
 export async function futtatPartnerKitoltest(ki = "automatikus kitöltés"): Promise<KitoltesEredmeny> {
   const [partnerek, szamlak, javaslatok, megbizasok] = await Promise.all([
     query<KitoltesPartner>(
-      `select id::text, nev, nevvaltozatok, adoszam, szamlazasi_cim, postazasi_cim, szamlazasi_email,
+      `select id::text, nev, nevvaltozatok, adoszam, szamlazasi_cim, postazasi_cim, szekhely, szamlazasi_email,
          fizetesi_hatarido_nap, papir_bekuldesi_hatarido_nap, posta_nem_kell, szamla_email_nem_kell
        from fuvar_partnerek`
     ),

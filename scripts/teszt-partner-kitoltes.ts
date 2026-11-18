@@ -36,13 +36,14 @@ eq("HAPP: minden hiányzó mező kitöltve", terv.map((k) => [k.mezo, k.ertek, k
   ["adoszam", "12497883-2-19", "szamla"],
   ["szamlazasi_cim", "8441 Márkó, Iparos utca 10.", "szamla"],
   ["postazasi_cim", "8441 Márkó, Iparos utca 10.", "megbizas_pdf"],
+  ["szekhely", "8441 Márkó, Iparos utca 10.", "szamla"],
   ["szamlazasi_email", "finance@happ.eu, burkus.arpad@happ.eu", "szamla"],
   ["fizetesi_hatarido_nap", 60, "megbizas_pdf"],
   ["papir_bekuldesi_hatarido_nap", 3, "megbizas_pdf"],
 ]);
 
 eq("meglévő adatot nem ír felül", kitoltesTerv({ ...ures, szamlazasi_email: "x@y.hu", fizetesi_hatarido_nap: 30 }, happSzamlak, happJav).map((k) => k.mezo),
-  ["adoszam", "szamlazasi_cim", "postazasi_cim", "papir_bekuldesi_hatarido_nap"]);
+  ["adoszam", "szamlazasi_cim", "postazasi_cim", "szekhely", "papir_bekuldesi_hatarido_nap"]);
 eq("nem kér postát → nincs postacím", kitoltesTerv({ ...ures, posta_nem_kell: true }, happSzamlak, []).some((k) => k.mezo === "postazasi_cim"), false);
 eq("saját cégünk → semmi", kitoltesTerv({ ...ures, nev: "Well-Worn Pallet Kft.", nevvaltozatok: [] }, happSzamlak, happJav), []);
 

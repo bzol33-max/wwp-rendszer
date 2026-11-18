@@ -12,11 +12,12 @@
 import { sajatCegunkE } from "@/lib/fuvarozas/fuvar-constants";
 import { partnerEgyezik } from "@/lib/fuvarozas/szamla-parositas";
 
-export const JAVASLAT_MEZOK = ["postazasi_cim", "szamlazasi_email", "papir_bekuldesi_hatarido_nap", "fizetesi_hatarido_nap"] as const;
+export const JAVASLAT_MEZOK = ["postazasi_cim", "szekhely", "szamlazasi_email", "papir_bekuldesi_hatarido_nap", "fizetesi_hatarido_nap"] as const;
 export type JavaslatMezo = (typeof JAVASLAT_MEZOK)[number];
 
 export const JAVASLAT_CIMKE: Record<JavaslatMezo, string> = {
   postazasi_cim: "Postázási cím",
+  szekhely: "Székhely",
   szamlazasi_email: "Számlázási e-mail",
   papir_bekuldesi_hatarido_nap: "Papír-határidő (nap)",
   fizetesi_hatarido_nap: "Fizetési határidő (nap)",
@@ -26,10 +27,61 @@ export const JAVASLAT_CIMKE: Record<JavaslatMezo, string> = {
 export type NyersKiolvasas = {
   megbizoNev?: unknown;
   postazasiCim?: unknown;
+  /** 2026-11-18: a megbízó székhelye (fejléc / lábléc) és a megbízást küldő emberek. */
+  szekhely?: unknown;
+  kapcsolattartok?: unknown;
   szamlazasiEmail?: unknown;
   papirHataridoNap?: unknown;
   fizetesiHataridoNap?: unknown;
 };
+
+export type KapcsolattartoJavaslat = { nev: string | null; telefon: string | null; email: string | null };
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/;
+/** Magyar vagy nemzetközi telefonszám egységesen: „+36 20 123 4567”; ha nem hihető, null. */
+export function telefonSzep(x: unknown): string | null {
+  const t = szoveg(x);
+  if (!t) return null;
+  let d = t.replace(/[^\d+]/g, "");
+  if (d.startsWith("0036")) d = `+${d.slice(2)}`;
+  else if (d.startsWith("06")) d = `+36${d.slice(2)}`;
+  else if (/^\d{9}$/.test(d)) d = `+36${d}`;
+  if (!/^\+\d{9,15}$/.test(d)) return null;
+  if (d.startsWith("+36")) {
+    const r = d.slice(3);
+    const kor = r.startsWith("1") ? 1 : 2;
+    return `+36 ${r.slice(0, kor)} ${r.slice(kor, kor + 3)} ${r.slice(kor + 3)}`.trim();
+  }
+  return d;
+}
+
+/**
+ * A modell által a megbízáson talált kapcsolattartók, megtisztítva: csak akinek
+ * telefonja vagy e-mailje van, a mi embereink és címeink nélkül, egy ember egyszer.
+ */
+export function kapcsolattartokKiolvasasbol(nyers: NyersKiolvasas | null, partnerNevek: string[]): KapcsolattartoJavaslat[] {
+  if (!nyers || !Array.isArray(nyers.kapcsolattartok)) return [];
+  const megbizo = szoveg(nyers.megbizoNev);
+  if (megbizo && (sajatCegunkE(megbizo) || !partnerEgyezik(megbizo, partnerNevek))) return [];
+  const ki: KapcsolattartoJavaslat[] = [];
+  const lattuk = new Set<string>();
+  for (const k of nyers.kapcsolattartok.slice(0, 6)) {
+    if (!k || typeof k !== "object") continue;
+    const o = k as Record<string, unknown>;
+    const nev = szoveg(o.nev)?.replace(/^(mr|ms|mrs|dr)\.?\s+/i, "") ?? null;
+    const telefon = telefonSzep(o.telefon);
+    const email = szoveg(o.email)?.toLowerCase() ?? null;
+    const joEmail = email && EMAIL_RE.test(email) && !/well-?worn/.test(email) ? email : null;
+    if (!telefon && !joEmail) continue;
+    if (nev && (sajatCegunkE(nev) || /budah[aá]zi/i.test(nev))) continue;
+    if (telefon === "+36 20 355 8797") continue;
+    const kulcs = joEmail ?? `${(nev ?? "").toLowerCase()}|${telefon}`;
+    if (lattuk.has(kulcs)) continue;
+    lattuk.add(kulcs);
+    ki.push({ nev: nev && nev.length <= 80 ? nev : null, telefon, email: joEmail });
+  }
+  return ki;
+}
 
 export type Javaslat = { mezo: JavaslatMezo; ertek: string };
 
@@ -77,6 +129,8 @@ export function javaslatokKiolvasasbol(nyers: NyersKiolvasas | null, partnerNeve
   const ki: Javaslat[] = [];
   const cim = szoveg(nyers.postazasiCim);
   if (cim && hihetoCim(cim)) ki.push({ mezo: "postazasi_cim", ertek: cim });
+  const szekhely = szoveg(nyers.szekhely);
+  if (szekhely && hihetoCim(szekhely)) ki.push({ mezo: "szekhely", ertek: szekhely });
   const email = szoveg(nyers.szamlazasiEmail)?.toLowerCase() ?? null;
   if (email && /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/.test(email) && !/well-?worn/.test(email)) ki.push({ mezo: "szamlazasi_email", ertek: email });
   const papir = napSzam(nyers.papirHataridoNap);

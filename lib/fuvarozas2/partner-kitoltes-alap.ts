@@ -28,7 +28,7 @@ import { hihetoCim, vevoCimSzamlaXmlbol } from "@/lib/fuvarozas2/partner-javasla
 import { cimSzep } from "@/lib/fuvarozas2/cim-formazas";
 
 export const KITOLTHETO_MEZOK = [
-  "adoszam", "szamlazasi_cim", "postazasi_cim", "szamlazasi_email", "fizetesi_hatarido_nap", "papir_bekuldesi_hatarido_nap",
+  "adoszam", "szamlazasi_cim", "postazasi_cim", "szekhely", "szamlazasi_email", "fizetesi_hatarido_nap", "papir_bekuldesi_hatarido_nap",
 ] as const;
 export type KitolthetoMezo = (typeof KITOLTHETO_MEZOK)[number];
 
@@ -36,6 +36,7 @@ export const KITOLTES_CIMKE: Record<KitolthetoMezo, string> = {
   adoszam: "Adószám",
   szamlazasi_cim: "Számlázási cím",
   postazasi_cim: "Postázási cím",
+  szekhely: "Székhely",
   szamlazasi_email: "Számlázási e-mail",
   fizetesi_hatarido_nap: "Fizetési határidő",
   papir_bekuldesi_hatarido_nap: "Papír-határidő",
@@ -48,6 +49,8 @@ export type KitoltesPartner = {
   adoszam: string | null;
   szamlazasi_cim: string | null;
   postazasi_cim: string | null;
+  /** 2026-11-18: a székhely is pótlódik (megbízás fejléce, különben a számla vevőcíme). A régi tesztek nem adják meg. */
+  szekhely?: string | null;
   szamlazasi_email: string | null;
   fizetesi_hatarido_nap: number | null;
   papir_bekuldesi_hatarido_nap: number | null;
@@ -175,6 +178,15 @@ export function kitoltesTerv(p: KitoltesPartner, osszesSzamla: KitoltesSzamla[],
     if (pdf && hihetoCim(pdf.ertek)) ki.push({ mezo: "postazasi_cim", ertek: cimSzep(pdf.ertek), forras: "megbizas_pdf", leiras: pdf.forras_leiras });
     else if (mb) ki.push({ mezo: "postazasi_cim", ertek: cimSzep(mb.ertek), forras: "megbizas_pdf", leiras: `#${mb.id} megbízás` });
     else if (szamlaCim) ki.push({ mezo: "postazasi_cim", ertek: cimSzep(szamlaCim), forras: "szamla", leiras: legujabb!.szamlaszam });
+  }
+  if (hiany.has("szekhely")) {
+    // Székhely: a megbízás fejlécéből; ha onnan nincs, a Számlázz.hu vevőcíme
+    // (az a cég hivatalos címe), vagy a már meglévő számlázási cím.
+    const pdf = egyertelmu(javaslatok, "szekhely", "megbizas_pdf");
+    const szamlaCim = vevo?.telepules && vevo.cim ? `${vevo.irsz ? `${vevo.irsz} ` : ""}${vevo.telepules}, ${vevo.cim}`.replace(/\s+/g, " ") : null;
+    if (pdf && hihetoCim(pdf.ertek)) ki.push({ mezo: "szekhely", ertek: cimSzep(pdf.ertek), forras: "megbizas_pdf", leiras: pdf.forras_leiras });
+    else if (szamlaCim && hihetoCim(szamlaCim)) ki.push({ mezo: "szekhely", ertek: cimSzep(szamlaCim), forras: "szamla", leiras: legujabb!.szamlaszam });
+    else if (p.szamlazasi_cim && hihetoCim(p.szamlazasi_cim)) ki.push({ mezo: "szekhely", ertek: cimSzep(p.szamlazasi_cim), forras: "szamla", leiras: "számlázási cím" });
   }
   if (hiany.has("szamlazasi_email")) {
     const szamlaEmail = szamlak.map((sz) => ({ sz, e: emailLista(vevoXmlbol(sz.raw_xml).email) })).find((x) => x.e);

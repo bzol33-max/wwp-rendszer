@@ -251,6 +251,10 @@ function PartnerLap({ p, szerkeszthet }: { p: Partner; szerkeszthet: boolean }) 
     return () => { el = true; };
   }, [p.id]);
   const hiany = hianyok(p);
+  // A teljes képhez (nem a számlázáshoz) hiányzó adatok — szürkén, a kiolvasás pótolja.
+  const tovabbiHiany = p.berfuvar
+    ? [!p.szekhely ? "székhely" : null, !p.adoszam ? "adószám" : null, !p.kapcsolatok.some((k) => k.telefon || k.email) ? "kapcsolattartó" : null].filter((x): x is string => !!x)
+    : [];
   const emailek = (p.szamlazasi_email ?? "").split(/[,;]\s*/).map((e) => e.trim()).filter(Boolean);
   const nyitott = p.nyitottSzamla.reduce((n, s) => n + s.db, 0);
   const lejart = p.nyitottSzamla.reduce((n, s) => n + s.lejart, 0);
@@ -277,6 +281,7 @@ function PartnerLap({ p, szerkeszthet }: { p: Partner; szerkeszthet: boolean }) 
             {p.nev}
             <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{p.berfuvar ? "megbízó" : "saját fuvar partnere"}</span>
             {hiany.length > 0 ? <span className="text-xs font-normal text-[var(--f2-amb)]">hiányzik: {hiany.join(", ")}</span> : null}
+            {tovabbiHiany.length > 0 ? <span className="text-xs font-normal text-muted-foreground" title="A megbízás-iratokból és a számlákból óránként magától pótlódik">még nincs: {tovabbiHiany.join(", ")}</span> : null}
           </h2>
           <div className="mt-0.5 text-sm text-muted-foreground">
             {[p.szekhely ? cimSzep(p.szekhely) : null, p.nevvaltozatok.length ? `névváltozat: ${p.nevvaltozatok.join(", ")}` : null].filter(Boolean).join(" · ") || "székhely nincs megadva"}

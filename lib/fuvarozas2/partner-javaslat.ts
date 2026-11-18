@@ -13,7 +13,14 @@ import { query } from "@/lib/db";
 import { importModellek, oldalKepek } from "@/lib/fuvarozas/import/oldal-kepek";
 import { letoltDriveFajlt } from "@/lib/fuvarozas/drive-sync-core";
 import { partnerEgyezik } from "@/lib/fuvarozas/szamla-parositas";
-import { javaslatokKiolvasasbol, vevoCimSzamlaXmlbol, type Javaslat, type NyersKiolvasas } from "@/lib/fuvarozas2/partner-javaslat-alap";
+import { javaslatokKiolvasasbol, kapcsolattartokKiolvasasbol, vevoCimSzamlaXmlbol, type Javaslat, type KapcsolattartoJavaslat, type NyersKiolvasas } from "@/lib/fuvarozas2/partner-javaslat-alap";
+
+/**
+ * 2026-11-18 (tulajdonos: „minden adat minden partnernél meglegyen”): a
+ * kiolvasás új mezőket kér (székhely, kapcsolattartók), ezért az ennél
+ * korábban kiolvasott iratok egyszer újra sorra kerülnek.
+ */
+const UJRAOLVASAS_UTAN = "2026-11-18T09:00:00Z";
 
 const MAX_PDF_BAJT = 8 * 1024 * 1024;
 
@@ -25,6 +32,10 @@ Válasz kizárólag JSON:
 {
   "megbizoNev": string|null,          // a megbízó cég neve
   "postazasiCim": string|null,        // ahová az eredeti papírokat postázni kell: kifejezett postázási/levelezési cím > számlázási cím > székhely. Irányítószámmal, településsel, utcával, házszámmal, ahogy az iraton áll.
+  "szekhely": string|null,            // a megbízó cég székhelye / címe a fejlécből vagy láblécből (irányítószám, település, utca, házszám)
+  "kapcsolattartok": [                // a megbízó emberei az iraton (diszpécser, ügyintéző, aláíró): akinek telefonja vagy e-mailje van
+    { "nev": string|null, "telefon": string|null, "email": string|null }
+  ],
   "szamlazasiEmail": string|null,     // ahová a számlát e-mailben kérik
   "papirHataridoNap": number|null,    // hány napon belül kell a számlát / eredeti papírokat beküldeni (pl. "15 napon belül postázni" -> 15)
   "fizetesiHataridoNap": number|null  // fizetési határidő napokban (pl. "30 naptári nap" -> 30)
@@ -120,6 +131,8 @@ async function hianyosPartnerek(): Promise<HianyosPartner[]> {
     `select p.id::text, p.nev, p.nevvaltozatok,
        array_remove(array[
          case when p.postazasi_cim is null and not p.posta_nem_kell then 'postazasi_cim' end,
+         case when p.szekhely is null then 'szekhely' end,
+         case when not exists (select 1 from fuvar_kapcsolatok k where k.partner_id = p.id and (k.telefon is not null or k.email is not null)) then 'kapcsolat' end,
          case when p.szamlazasi_email is null and not p.szamla_email_nem_kell then 'szamlazasi_email' end,
          case when p.papir_bekuldesi_hatarido_nap is null then 'papir_bekuldesi_hatarido_nap' end,
          case when p.fizetesi_hatarido_nap is null then 'fizetesi_hatarido_nap' end
@@ -145,10 +158,42 @@ async function rogzit(p: HianyosPartner, javaslatok: Javaslat[], forras: string,
 }
 
 /**
- * Egy kör: partnerenként a legutóbbi, még ki nem olvasott megbízás-PDF
- * (legfeljebb `korlat` irat), és a postázási címhez a számlák vevőcíme.
+ * A megbízáson talált kapcsolattartók a Kapcsolatok törzsbe, a partnerhez kötve —
+ * aki már ott van (ugyanaz az e-mail, vagy ugyanaz a név), annak csak a hiányzó
+ * telefonja/e-mailje pótlódik. Nem partner-mező, ezért nem javaslat: egyből bekerül.
  */
-export async function futtatPartnerJavaslatokat(korlat = 3): Promise<{ irat: number; javaslat: number; hiba: number }> {
+async function rogzitKapcsolatokat(p: HianyosPartner, kapcsolatok: KapcsolattartoJavaslat[], forras: string): Promise<number> {
+  if (kapcsolatok.length === 0) return 0;
+  const meglevo = await query<{ id: string; kapcsolattarto: string | null; telefon: string | null; email: string | null }>(
+    `select id::text, kapcsolattarto, telefon, email from fuvar_kapcsolatok where partner_id = $1`,
+    [p.id]
+  );
+  let db = 0;
+  for (const k of kapcsolatok) {
+    const volt = meglevo.find((m) => (k.email && m.email?.toLowerCase() === k.email) || (k.nev && m.kapcsolattarto?.toLowerCase() === k.nev.toLowerCase()));
+    if (volt) {
+      if ((!volt.telefon && k.telefon) || (!volt.email && k.email)) {
+        await query(`update fuvar_kapcsolatok set telefon = coalesce(telefon, $2), email = coalesce(email, $3) where id = $1`, [volt.id, k.telefon, k.email]);
+        db++;
+      }
+      continue;
+    }
+    await query(
+      `insert into fuvar_kapcsolatok (ceg, kapcsolattarto, telefon, email, forras, partner_id) values ($1, $2, $3, $4, $5, $6)`,
+      [p.nev, k.nev, k.telefon, k.email, `megbízás: ${forras}`.slice(0, 200), p.id]
+    );
+    meglevo.push({ id: "", kapcsolattarto: k.nev, telefon: k.telefon, email: k.email });
+    db++;
+  }
+  return db;
+}
+
+/**
+ * Egy kör: partnerenként a legutóbbi, még ki nem olvasott megbízás-PDF
+ * (legfeljebb `korlat` irat — óránként 2, hogy az ingyenes modellek napi
+ * kerete az importnak is jusson), és a postázási címhez a számlák vevőcíme.
+ */
+export async function futtatPartnerJavaslatokat(korlat = 2): Promise<{ irat: number; javaslat: number; hiba: number }> {
   const eredmeny = { irat: 0, javaslat: 0, hiba: 0 };
   const partnerek = await hianyosPartnerek();
   if (partnerek.length === 0) return eredmeny;
@@ -184,9 +229,9 @@ export async function futtatPartnerJavaslatokat(korlat = 3): Promise<{ irat: num
        from fuvar_megbizasok m where m.torolt_at is null and m.drive_file_id is not null
      ) x
      where x.partner_id = any($1::bigint[])
-       and not exists (select 1 from fuvar_partner_kiolvasas k where k.drive_file_id = x.drive_file_id)
+       and not exists (select 1 from fuvar_partner_kiolvasas k where k.drive_file_id = x.drive_file_id and k.futott_at >= $2::timestamptz)
      order by x.partner_id, x.megbizas_id desc, x.fajlnev nulls last`,
-    [partnerek.map((p) => p.id)]
+    [partnerek.map((p) => p.id), UJRAOLVASAS_UTAN]
   );
   for (const irat of iratok.slice(0, korlat)) {
     const p = partnerek.find((x) => x.id === irat.partner_id);
@@ -202,6 +247,8 @@ export async function futtatPartnerJavaslatokat(korlat = 3): Promise<{ irat: num
       else throw new Error(`nem olvasható irat (${fajl.mimeType})`);
       const javaslatok = javaslatokKiolvasasbol(nyers, [p.nev, ...p.nevvaltozatok]);
       eredmeny.javaslat += await rogzit(p, javaslatok, "megbizas_pdf", irat.fajlnev, irat.megbizas_id);
+      const kapcsolatok = kapcsolattartokKiolvasasbol(nyers, [p.nev, ...p.nevvaltozatok]);
+      eredmeny.javaslat += await rogzitKapcsolatokat(p, kapcsolatok, irat.fajlnev ?? irat.drive_file_id);
       await query(
         `insert into fuvar_partner_kiolvasas (drive_file_id, partner_id, megbizas_id, eredmeny) values ($1, $2, $3, $4)
          on conflict (drive_file_id) do update set eredmeny = excluded.eredmeny, hiba = null, futott_at = now()`,
