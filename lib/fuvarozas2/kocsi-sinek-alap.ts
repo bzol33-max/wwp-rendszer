@@ -187,23 +187,3 @@ export function eFt(x: number | null | undefined): string {
   if (a >= 10_000_000) return `${(x / 1_000_000).toFixed(1).replace(".", ",")} M Ft`;
   return `${String(Math.round(x / 1000)).replace(/\B(?=(\d{3})+(?!\d))/g, " ")} e Ft`;
 }
-
-// ---------- MNB árfolyam-válasz feldolgozása (lib/fuvarozas2/arfolyam.ts hívja) ----------
-/** MNB GetExchangeRates válasz → { nap → árfolyam } (1 egységre vetítve). Exportált, hogy tesztelhető legyen. */
-export function mnbValaszArfolyamok(xml: string, penznem: string): Map<string, number> {
-  const ki = new Map<string, number>();
-  // A SOAP-válaszban a belső XML entitás-kódolva (&lt;Day date=...&gt;) jön.
-  const sima = xml.replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"');
-  const napRe = /<Day date="(\d{4}-\d{2}-\d{2})">([\s\S]*?)<\/Day>/g;
-  let m: RegExpExecArray | null;
-  while ((m = napRe.exec(sima))) {
-    const rateRe = new RegExp(`<Rate unit="(\\d+)" curr="${penznem}">([\\d,.]+)<\\/Rate>`);
-    const r = rateRe.exec(m[2]);
-    if (!r) continue;
-    const egyseg = Number(r[1]) || 1;
-    const ertek = Number(r[2].replace(",", ".")) / egyseg;
-    if (Number.isFinite(ertek) && ertek > 0) ki.set(m[1], ertek);
-  }
-  return ki;
-}
-

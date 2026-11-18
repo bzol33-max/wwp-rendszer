@@ -1,6 +1,6 @@
 // Megbízások „Kocsi-sínek” nézet tiszta számításai (lib/fuvarozas2/kocsi-sinek-alap.ts).
 // Futtatás: npx tsx scripts/teszt-kocsi-sinek.ts
-import { pecsetek, lepesbenNap, jegySzin, haviOsszesites, elozoHonapUgyanezNap, honapNapjai, mnbValaszArfolyamok, eFt, type HaviFuvar, type PecsetBemenet } from "@/lib/fuvarozas2/kocsi-sinek-alap";
+import { pecsetek, lepesbenNap, jegySzin, haviOsszesites, elozoHonapUgyanezNap, honapNapjai, eFt, type HaviFuvar, type PecsetBemenet } from "@/lib/fuvarozas2/kocsi-sinek-alap";
 
 let ok = 0, bad = 0;
 function eq(nev: string, kapott: unknown, vart: unknown) {
@@ -76,12 +76,6 @@ eq("kocsi AOPU Ft/km", Math.round(h.kocsik["AOPU-427"].ftKm ?? 0), 667);
 eq("kocsi NMZ saját db", h.kocsik["NMZ-492"].sajatDb, 1);
 const ures = haviOsszesites(MA, [], [], arf, { kiadasFt: null, celFt: null });
 eq("üres: eredmény null", [ures.eredmenyFt, ures.celSzazalek, ures.elozoSzazalek, ures.atlagFtKm], [null, null, null, null]);
-
-// 8. MNB válasz
-const xml = `<GetExchangeRatesResult>&lt;MNBExchangeRates&gt;&lt;Day date="2026-11-17"&gt;&lt;Rate unit="1" curr="EUR"&gt;402,15&lt;/Rate&gt;&lt;/Day&gt;&lt;Day date="2026-11-14"&gt;&lt;Rate unit="100" curr="JPY"&gt;230,5&lt;/Rate&gt;&lt;Rate unit="1" curr="EUR"&gt;401,9&lt;/Rate&gt;&lt;/Day&gt;&lt;/MNBExchangeRates&gt;</GetExchangeRatesResult>`;
-eq("MNB EUR", [...mnbValaszArfolyamok(xml, "EUR")], [["2026-11-17", 402.15], ["2026-11-14", 401.9]]);
-eq("MNB JPY egység", [...mnbValaszArfolyamok(xml, "JPY")], [["2026-11-14", 2.305]]);
-eq("MNB üres", mnbValaszArfolyamok("<x/>", "EUR").size, 0);
 
 eq("eFt", [eFt(4877000), eFt(12300000), eFt(null)], ["4 877 e Ft", "12,3 M Ft", "—"]);
 

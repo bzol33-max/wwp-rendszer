@@ -4,7 +4,7 @@ import { requireAnyViewPermission } from "@/lib/auth/require-permission";
 import { SOR_SQL } from "@/lib/megbizasok/repo";
 import { getJarmuvek } from "@/lib/fuvarozas/jarmuvek-db";
 import type { MegbizasSor, MunkaasztalSor } from "@/lib/fuvarozas2/megbizasok";
-import { arfolyamNapokra } from "@/lib/fuvarozas2/arfolyam";
+import { getEurArfolyamok } from "@/lib/fuvarozas/arfolyam";
 import {
   elozoHonapUgyanezNap, haviOsszesites, honapEleje, jegySzin, lepesbenNap, pecsetek,
   type HaviFuvar, type HaviOsszesites, type Pecset, type PecsetKulcs,
@@ -119,8 +119,9 @@ export async function getKocsiSinekAdat(nyitott: MunkaasztalSor[], ma: string, k
   // Árfolyam: minden EUR-os fuvar számla-keltére (vagy ma), egy kéréssel.
   const eurNapok = mind.filter((s) => (s.fuvardij_penznem || "").toUpperCase() === "EUR")
     .map((s) => (s.szamla_szam ? kelte.get(s.szamla_szam) : null) ?? ma);
-  const arf = await arfolyamNapokra([...eurNapok, ma]);
-  const arfolyam = (nap: string) => arf.get(nap) ?? null;
+  // A meglévő MNB-modul (lib/fuvarozas/arfolyam.ts) — hiba esetén árfolyam nélkül megy tovább.
+  const arf = await getEurArfolyamok([...eurNapok, ma]).catch(() => new Map<string, { ft: number }>());
+  const arfolyam = (nap: string) => arf.get(nap)?.ft ?? null;
 
   const havi = haviOsszesites(ma, honap.map((s) => haviFuvar(s, kelte)), elozoHo.map((s) => haviFuvar(s, kelte)), arfolyam, beallitas);
 
