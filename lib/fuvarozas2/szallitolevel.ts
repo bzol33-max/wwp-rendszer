@@ -96,13 +96,29 @@ export async function sajatFuvarokSzallitolevelekbol(tolIso: string, alkalmaz: b
   const partnerek = await query<{ id: string; nev: string; nevvaltozatok: string[]; szekhely: string | null; postazasi_cim: string | null }>(
     `select id::text, nev, nevvaltozatok, szekhely, postazasi_cim from fuvar_partnerek`
   );
+  // A meglévő, szállítólevél nélküli saját fuvarok a kezdő nap -7-től: ha a
+  // vevőhöz ±7 napon belül van ilyen, nem hozunk létre újat (a párosítás ±3
+  // napja nem fogta meg, de lehet ugyanaz az út) — kézi döntés.
+  const meglevo = await query<{ id: string; datum: string; partner_id: string | null; megrendelo: string | null; lerako: string | null }>(
+    `select m.id::text, to_char(m.datum, 'YYYY-MM-DD') as datum, m.partner_id::text, m.megrendelo, m.lerako
+     from fuvar_megbizasok m
+     where m.jelleg = 'sajat' and m.torolt_at is null and m.datum >= $1::date - 7
+       and not exists (select 1 from szallitolevel_import s where s.megbizas_id = m.id and s.parositas_allapot = 'parositva')`,
+    [tolIso]
+  );
+  const napSzam = (iso: string) => Math.round(Date.parse(`${iso}T12:00:00Z`) / 86_400_000);
   const sorok: SzlPotlasSor[] = [];
   for (const sz of nyitott) {
     const partner = sz.vevo ? partnerek.find((p) => partnerEgyezik(sz.vevo!, [p.nev, ...p.nevvaltozatok])) ?? null : null;
     const jarmu = findJarmuInSzoveg(sz.rendszam);
     const tetelek = (sz.tetelek ?? []).map((t) => `${t.nev}${t.mennyiseg != null ? ` ${t.mennyiseg} db` : ""}`).join(", ") || null;
     const sor: SzlPotlasSor = { id: null, bizonylatszam: sz.bizonylatszam, kelt: sz.kelt, vevo: sz.vevo, partner: partner?.nev ?? null, raklap: sz.raklap_db, tetelek, jarmu: jarmu?.kod ?? null, ok: "" };
-    if (!sz.vevo) { sor.ok = "nincs vevő a szállítólevélen"; sorok.push(sor); continue; }
+    if (!sz.vevo) { sor.ok = "kihagyva: nincs vevő a szállítólevélen"; sorok.push(sor); continue; }
+    // Saját kocsi nélkül nem a mi fuvarunk (a vevő vitte el, vagy más fuvarozó) — nem lesz belőle saját fuvar.
+    if (!jarmu) { sor.ok = "kihagyva: nincs saját kocsi a szállítólevélen (a vevő vitte?)"; sorok.push(sor); continue; }
+    const hasonlo = meglevo.filter((m) => Math.abs(napSzam(m.datum) - napSzam(sz.kelt)) <= 7
+      && ((partner && m.partner_id === partner.id) || (m.megrendelo && partnerEgyezik(m.megrendelo, [sz.vevo!, ...(partner ? [partner.nev, ...partner.nevvaltozatok] : [])])) || (m.lerako && partnerEgyezik(m.lerako, [sz.vevo!]))));
+    if (hasonlo.length > 0) { sor.ok = `kihagyva: van hasonló saját fuvar ±7 napon belül (#${hasonlo.map((m) => m.id).join(", #")}) — kézzel párosítsd`; sorok.push(sor); continue; }
     if (!alkalmaz) { sor.ok = "létrehozható"; sorok.push(sor); continue; }
     const hova = sz.szallitasi_cim?.trim() || partner?.postazasi_cim || partner?.szekhely || sz.vevo;
     const aru = (sz.tetelek ?? []).map((t) => t.nev).filter(Boolean).join(", ") || null;
