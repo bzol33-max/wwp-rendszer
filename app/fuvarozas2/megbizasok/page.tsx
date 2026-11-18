@@ -41,7 +41,7 @@ export const dynamic = "force-dynamic";
 // külön sávban, a kész saját fuvar az utolsó 7 napból is látszik.
 
 export default async function Page({ searchParams }: {
-  searchParams: Promise<{ q?: string; reszlet?: string; uj?: string; szerk?: string; ujber?: string; jelleg?: string; elvinni?: string; het?: string; penz?: string; sajat?: string; nezet?: string }>;
+  searchParams: Promise<{ q?: string; reszlet?: string; uj?: string; szerk?: string; ujber?: string; jelleg?: string; elvinni?: string; het?: string; penz?: string; sajat?: string; nezet?: string; kocsi?: string }>;
 }) {
   const sp = await searchParams;
   const q = sp.q?.trim() || undefined;
@@ -101,7 +101,7 @@ export default async function Page({ searchParams }: {
       id={elokeszitett?.id ?? null}
       kezdo={{
         datum: elokeszitett?.felrakas_nap ?? "",
-        jarmuKod: elokeszitett?.elokeszites_jarmu ?? null,
+        jarmuKod: elokeszitett?.elokeszites_jarmu ?? (sp.kocsi && /^[\w .\/-]{1,40}$/.test(sp.kocsi) ? sp.kocsi : null),
         honnan: elokeszitett?.felrako ?? "",
         hova: elokeszitett?.lerako ?? "",
         kitol: elokeszitett?.kitol ?? null,
@@ -146,7 +146,6 @@ export default async function Page({ searchParams }: {
               fejlecJobb={szerkeszthet ? (
                 <div className="flex shrink-0 items-center gap-2">
                   <DriveFrissitesGomb />
-                  <Link href={munkaasztalLink(szuro, { ujBer: true, reszlet: undefined, uj: false, szerk: false })} scroll={false} className="rounded-lg bg-primary px-3 py-1.5 text-sm font-bold text-primary-foreground hover:opacity-90">+ Új bérfuvar</Link>
                 </div>
               ) : null}
             />

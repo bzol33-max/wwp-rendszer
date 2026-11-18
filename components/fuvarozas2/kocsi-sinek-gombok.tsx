@@ -53,29 +53,54 @@ export function HaviSzerkeszto({ ev, ho, kiadasFt, celFt }: { ev: number; ho: nu
   );
 }
 
-/** Tálca-jegy alatt: egy gomb kocsinként. Saját fuvar → kocsihozAdom (nap: a felrakás napja vagy ma); bér → setFuvarJarmu. */
-export function KocsiraGombok({ id, jelleg, nap, kocsik }: { id: string; jelleg: "ber" | "sajat"; nap: string; kocsik: { kod: string; cimke: string }[] }) {
-  const router = useRouter();
-  const [fut, start] = useTransition();
-  const ad = (kod: string) =>
-    start(async () => {
-      try {
-        const r = jelleg === "sajat" ? await kocsihozAdom(id, { jarmuKod: kod, nap }) : await setFuvarJarmu(id, kod);
-        if (!r.ok) { toast.error(r.hiba); return; }
-        toast.success(`Kocsira adva: ${kod}.`);
-        router.refresh();
-      } catch {
-        toast.error("Nem sikerült a kocsira adás.");
-      }
-    });
+const HUZAS_TIPUS = "application/x-wwp-fuvar";
+
+/** Tálca-jegy: megfogható, a kocsi sínjére húzható. */
+export function HuzhatoJegy({ id, jelleg, nap, children }: { id: string; jelleg: "ber" | "sajat"; nap: string; children: React.ReactNode }) {
   return (
-    <div className="mt-1.5 flex flex-wrap gap-1">
-      {kocsik.map((k) => (
-        <button key={k.kod} type="button" disabled={fut} onClick={() => ad(k.kod)} title={k.cimke}
-          className="h-6 rounded-md border bg-background px-2 text-[11px] font-semibold hover:border-primary hover:text-primary disabled:opacity-50">
-          → {k.kod}
-        </button>
-      ))}
-    </div>
+    <li
+      draggable
+      onDragStart={(e) => { e.dataTransfer.setData(HUZAS_TIPUS, JSON.stringify({ id, jelleg, nap })); e.dataTransfer.effectAllowed = "move"; }}
+      className="w-56 shrink-0 cursor-grab active:cursor-grabbing"
+      title="Fogd meg és húzd a kocsi sínjére"
+    >
+      {children}
+    </li>
+  );
+}
+
+/** Egy kocsi sínje mint ejtési cél: a ráejtett tálca-jegy erre a kocsira kerül (kocsihozAdom / setFuvarJarmu). */
+export function SinCel({ kod, engedett, children }: { kod: string; engedett: boolean; children: React.ReactNode }) {
+  const router = useRouter();
+  const [felette, setFelette] = useState(false);
+  const [fut, start] = useTransition();
+  const huzas = (e: React.DragEvent) => engedett && e.dataTransfer.types.includes(HUZAS_TIPUS);
+  return (
+    <section
+      aria-label={kod}
+      onDragOver={(e) => { if (huzas(e)) { e.preventDefault(); e.dataTransfer.dropEffect = "move"; setFelette(true); } }}
+      onDragLeave={() => setFelette(false)}
+      onDrop={(e) => {
+        if (!huzas(e)) return;
+        e.preventDefault();
+        setFelette(false);
+        let adat: { id: string; jelleg: "ber" | "sajat"; nap: string };
+        try { adat = JSON.parse(e.dataTransfer.getData(HUZAS_TIPUS)); } catch { return; }
+        start(async () => {
+          try {
+            const r = adat.jelleg === "sajat" ? await kocsihozAdom(adat.id, { jarmuKod: kod, nap: adat.nap }) : await setFuvarJarmu(adat.id, kod);
+            if (!r.ok) { toast.error(r.hiba); return; }
+            toast.success(`Kocsira adva: ${kod}.`);
+            router.refresh();
+          } catch {
+            toast.error("Nem sikerült a kocsira adás.");
+          }
+        });
+      }}
+      className={"rounded-2xl bg-card/60 p-3 shadow-[var(--shadow-card)] transition " + (felette ? "ring-2 ring-primary bg-primary/5" : "") + (fut ? " opacity-60" : "")}
+    >
+      {felette ? <p className="mb-2 text-xs font-semibold text-primary">Engedd el: erre a kocsira kerül ({kod})</p> : null}
+      {children}
+    </section>
   );
 }

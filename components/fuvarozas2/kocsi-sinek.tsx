@@ -3,7 +3,7 @@ import { formatFt } from "@/components/fuvarozas2/kozos";
 import { megbizasCim, utolsoVaros, varos } from "@/lib/megbizasok/megjelenites";
 import { munkaasztalLink, type MunkaasztalSzuro } from "@/components/fuvarozas2/munkaasztal";
 import { JovahagyasGomb } from "@/components/fuvarozas2/ma-het-gombok";
-import { HaviSzerkeszto, KocsiraGombok } from "@/components/fuvarozas2/kocsi-sinek-gombok";
+import { HaviSzerkeszto, HuzhatoJegy, SinCel } from "@/components/fuvarozas2/kocsi-sinek-gombok";
 import { PECSET_NEVEK, eFt, type Pecset } from "@/lib/fuvarozas2/kocsi-sinek-alap";
 import type { Jegy, KocsiSinekAdat, Sin } from "@/lib/fuvarozas2/kocsi-sinek";
 import { cn } from "@/lib/utils";
@@ -35,7 +35,7 @@ function PecsetSor({ pecsetek }: { pecsetek: Pecset[] }) {
 
 function Dij({ j }: { j: Jegy }) {
   const s = j.sor;
-  if (s.jelleg === "sajat") return <span className="text-xs text-muted-foreground">saját</span>;
+  if (s.jelleg === "sajat") return <span className="rounded-full bg-[#1d7a2a] px-2 py-0.5 text-[10px] font-semibold text-white">saját</span>;
   if (s.fuvardij == null) return <span className="text-xs text-muted-foreground">nincs díj</span>;
   const eur = (s.fuvardij_penznem || "").toUpperCase() === "EUR";
   return (
@@ -50,12 +50,13 @@ function Dij({ j }: { j: Jegy }) {
   );
 }
 
-function JegyKartya({ j, szuro, kocsik, szerkesztheto }: { j: Jegy; szuro: MunkaasztalSzuro; kocsik?: { kod: string; cimke: string }[]; szerkesztheto: boolean }) {
+function JegyKartya({ j, szuro, huzhatoNap, szerkesztheto }: { j: Jegy; szuro: MunkaasztalSzuro; /** Tálcán: húzható, ezzel a nappal kerül kocsira. */ huzhatoNap?: string; szerkesztheto: boolean }) {
   const s = j.sor;
   const href = munkaasztalLink(szuro, { reszlet: s.id, elvinni: undefined, uj: false, ujBer: false, szerk: false });
-  return (
-    <li className="w-56 shrink-0">
-      <Link href={href} scroll={false} className="lift block rounded-xl bg-card p-2.5 text-sm shadow-[var(--shadow-card)] focus-visible:outline-2 focus-visible:outline-ring" style={{ borderTop: `3px solid ${SZIN[j.szin]}` }}>
+  const sajat = s.jelleg === "sajat";
+  const belso = (
+    <>
+      <Link href={href} scroll={false} className={cn("lift block rounded-xl p-2.5 text-sm", sajat ? "bg-[#e3f6e4] ring-1 ring-[#1d7a2a]/25" : "bg-card")} style={{ borderTop: `3px solid ${sajat && j.szin !== "piros" && j.szin !== "sarga" ? "#1d7a2a" : SZIN[j.szin]}`, boxShadow: "var(--shadow-card)" }}>
         <span className="flex items-start justify-between gap-2">
           <span className="min-w-0">
             <strong className="block truncate text-sm font-semibold">{megbizasCim(s)}</strong>
@@ -69,9 +70,11 @@ function JegyKartya({ j, szuro, kocsik, szerkesztheto }: { j: Jegy; szuro: Munka
         </span>
       </Link>
       {szerkesztheto && s.jelleg === "ber" && s.allapot === "ellenorzesre_var" ? <div className="mt-1 flex justify-end"><JovahagyasGomb megbizasId={s.id} /></div> : null}
-      {szerkesztheto && kocsik?.length ? <KocsiraGombok id={s.id} jelleg={s.jelleg} nap={s.felrakas_nap ?? s.legkorabban ?? ""} kocsik={kocsik} /> : null}
-    </li>
+    </>
   );
+  return szerkesztheto && huzhatoNap
+    ? <HuzhatoJegy id={s.id} jelleg={s.jelleg} nap={huzhatoNap}>{belso}</HuzhatoJegy>
+    : <li className="w-56 shrink-0">{belso}</li>;
 }
 
 function Csempe({ cim, ertek, alatta, szin }: { cim: string; ertek: string; alatta: string; szin: string }) {
@@ -119,7 +122,7 @@ function HaviSav({ adat, szerkesztheto }: { adat: KocsiSinekAdat; szerkesztheto:
 function SinSor({ sin, szuro, szerkesztheto }: { sin: Sin; szuro: MunkaasztalSzuro; szerkesztheto: boolean }) {
   const h = sin.havi;
   return (
-    <section className="rounded-2xl bg-card/60 p-3 shadow-[var(--shadow-card)]" aria-label={sin.cimke}>
+    <SinCel kod={sin.kod} engedett={szerkesztheto}>
       <div className="mb-2 flex items-baseline justify-between gap-3">
         <h3 className="text-sm font-semibold">{sin.cimke} <span className="font-normal text-muted-foreground">· {sin.sofor} · {sin.jegyek.length} nyitott</span></h3>
         <div className="flex gap-4 text-xs text-muted-foreground">
@@ -135,14 +138,14 @@ function SinSor({ sin, szuro, szerkesztheto }: { sin: Sin; szuro: MunkaasztalSzu
         {sin.jegyek.map((j) => <JegyKartya key={j.sor.id} j={j} szuro={szuro} szerkesztheto={szerkesztheto} />)}
         {szerkesztheto ? (
           <li className="w-36 shrink-0">
-            <Link href={munkaasztalLink(szuro, { uj: true, reszlet: undefined })} scroll={false}
-              className="flex h-full min-h-20 items-center justify-center rounded-xl border-2 border-dashed border-foreground/15 text-xs font-semibold text-muted-foreground hover:border-primary hover:text-primary">
+            <Link href={`${munkaasztalLink(szuro, { uj: true, reszlet: undefined })}&kocsi=${encodeURIComponent(sin.kod)}`} scroll={false}
+              className="flex h-full min-h-20 items-center justify-center rounded-xl border-2 border-dashed border-[#1d7a2a]/40 text-xs font-semibold text-[#1d7a2a] hover:bg-[#e3f6e4]">
               + saját fuvar
             </Link>
           </li>
         ) : null}
       </ul>
-    </section>
+    </SinCel>
   );
 }
 
@@ -154,7 +157,6 @@ export function KocsiSinek({ adat, szuro, szerkesztheto, kereso, fejlecJobb }: {
   /** Frissítés / + Új bérfuvar gombok (szerver oldalon összerakva). */
   fejlecJobb?: React.ReactNode;
 }) {
-  const kocsik = adat.sinek.map((s) => ({ kod: s.kod, cimke: s.cimke }));
   const talca = [...adat.talca, ...adat.kocsiNelkul];
   return (
     <div className="flex flex-col gap-3">
@@ -166,11 +168,14 @@ export function KocsiSinek({ adat, szuro, szerkesztheto, kereso, fejlecJobb }: {
       <section className="rounded-2xl bg-[var(--f2-amb-l)]/60 p-3 ring-1 ring-[var(--f2-amb)]/15" aria-label="Elvinni való">
         <div className="mb-2 flex items-baseline justify-between">
           <h3 className="text-sm font-semibold">Elvinni való · kocsira vár <span className="font-normal text-muted-foreground">· {talca.length}</span></h3>
-          <span className="text-xs text-muted-foreground">a jegy alatti gombbal adod kocsira</span>
+          <span className="flex items-center gap-3">
+            <span className="text-xs text-muted-foreground">fogd meg a jegyet, és húzd a kocsi sínjére</span>
+            {szerkesztheto ? <Link href={munkaasztalLink(szuro, { uj: true, reszlet: undefined })} scroll={false} className="rounded-lg bg-[#1d7a2a] px-3 py-1.5 text-sm font-bold text-white hover:opacity-90">+ Saját fuvar</Link> : null}
+          </span>
         </div>
         {talca.length === 0 ? <p className="py-3 text-center text-sm text-muted-foreground">Nincs kocsira váró fuvar.</p> : (
           <ul className="flex gap-2.5 overflow-x-auto pb-1">
-            {talca.map((j) => <JegyKartya key={j.sor.id} j={j} szuro={szuro} kocsik={kocsik} szerkesztheto={szerkesztheto} />)}
+            {talca.map((j) => <JegyKartya key={j.sor.id} j={j} szuro={szuro} huzhatoNap={j.sor.felrakas_nap ?? j.sor.legkorabban ?? adat.ma} szerkesztheto={szerkesztheto} />)}
           </ul>
         )}
       </section>
