@@ -1,5 +1,11 @@
 # PROGRESS
 
+## 2026-11-18 — Útvonaltervező 3D térképpel és élő GPS-szel (új oldal, meglévő funkció nem változott)
+- `public/utvonaltervezo.html`: önálló oldal a `/utvonaltervezo.html` címen (a `proxy.ts` miatt csak bejelentkezve). Több megálló, km / menetidő / útdíj a HU-GO kalkulátorból (J5 · EURO6 · 40 t, a böngészőből közvetlenül: a HU-GO engedi), 3D térkép csak Magyarországgal, lejátszó követő kamerával (szünet 4:30-nál, napi 9 óra), műholdas közelkép a megállóknál (a jelölő húzható), üres km radar (`Max. üres szakasz`, alap 100 km) HU-GO-val számolt üres hazaúttal, rakott/üres jelölés szakaszonként. A szünet és a kamion helye a lejátszóban hozzávetőleges (folyamatos vezetéssel számol).
+- `app/api/fuvarozas2/gps-pozicio/route.ts`: csak olvasó végpont a kamionok pillanatnyi helyéhez, a meglévő `getFleetLastPositions()`-ből (30 mp-es közös gyorsítótár, új Ecofleet-hívás nincs). `fuvarozas` megtekintési jog kell hozzá; a sofőri `fuvarozas_sajat` nem elég. Az oldal 30 mp-enként kéri le.
+- `public/vendor/maplibre-gl-4.7.1.{js,css}`: a térképkönyvtár helyben (BSD-3), külső szkript nincs. `next.config.ts`: az oldalra saját, bővebb CSP (Report-Only) a külső térképforrásokra és a HU-GO-ra — ha a fő CSP élesre vált, ezt is át kell nevezni.
+- Nincs még menüpont: a Fuvarozásból link kell rá (külön lépés). A meglévő Kalkulátor fül változatlan.
+
 ## 2026-11-18 — Partnerek oldal V2d + partner-törzs teljes kitöltése
 - **Partnerek oldal** (`components/fuvarozas2/partnerek.tsx`, `lib/fuvarozas2/partnerek.ts`): bal oldalt ABC-csoportos névlista (munkaszám, hiány-pont, kijelölés összevonáshoz), jobb oldalt a kiválasztott partner lapja: kapcsolattartók `tel:`/`mailto:` linkkel, 5 csempe (munkák, forgalom, átlag km-díj, **tényleges fizetési nap** a párosított `szamla` sorokból, **nyitott/lejárt számla**), tipikus viszonylatok, rakodási idő, megbízás-tábla (`getPartnerMegbizasok`: város, HU-GO km, díj, Ft/km, számla állapot, „Megbízás ↗ · Drive PDF ↗”), a törzs űrlapja lenyíló „Adatok” alatt. Kereső minden mezőre (telefon számjegyekkel is).
 - **Postacím** (`lib/megbizasok/repo.ts` SOR_SQL): ha a megbízáson és a partneren nincs, a megbízó **székhelye** a postacím (tulajdonos döntése). Partnerek: székhellyel nem hiányos.

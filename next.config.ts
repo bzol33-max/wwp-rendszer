@@ -92,6 +92,35 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      {
+        // Az Útvonaltervező (public/utvonaltervezo.html) térképe külső
+        // forrásokból dolgozik: OpenFreeMap (stílus, csempe, betű), AWS
+        // domborzat, Esri műholdkép, és a HU-GO útdíjkalkulátor (útvonal,
+        // km, útdíj). Ugyanarra az útra a később álló fejléc írja felül a
+        // fentit, ezért ez csak ennek az egy oldalnak enged többet. Ha a
+        // fenti fejléc élesre vált, ezt is át kell nevezni.
+        source: "/utvonaltervezo.html",
+        headers: [
+          {
+            key: "Content-Security-Policy-Report-Only",
+            value: [
+              "default-src 'self'",
+              "script-src 'self' 'unsafe-inline'",
+              "style-src 'self' 'unsafe-inline'",
+              "img-src 'self' data: blob: https://tiles.openfreemap.org https://server.arcgisonline.com https://s3.amazonaws.com",
+              "font-src 'self' data:",
+              "connect-src 'self' https://tiles.openfreemap.org https://server.arcgisonline.com https://s3.amazonaws.com https://utdijkalkulacio.hu",
+              // A MapLibre a csempéket blob-ból indított workerben dolgozza fel.
+              "worker-src 'self' blob:",
+              "frame-ancestors 'self'",
+              "object-src 'none'",
+              "base-uri 'self'",
+              "form-action 'self'",
+              "report-uri /api/csp-jelentes",
+            ].join("; "),
+          },
+        ],
+      },
     ];
   },
 };
