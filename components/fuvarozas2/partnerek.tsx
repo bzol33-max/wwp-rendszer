@@ -113,7 +113,7 @@ export function PartnerekNezet({ partnerek, javaslatok, adatJavaslatok = [], sze
     .filter((p) => !q || ekezetNelkul([p.nev, ...p.nevvaltozatok, p.adoszam ?? "", p.szekhely ?? "", p.szamlazasi_email ?? "", p.postazasi_cim ?? "", ...p.kapcsolatok.flatMap((k) => [k.nev ?? "", k.email ?? "", k.telefon ?? "", (k.telefon ?? "").replace(/\D/g, "")])].join(" ")).includes(q.replace(/\s+/g, " ")))
     .sort((a, b) => a.nev.localeCompare(b.nev, "hu"));
   // Kiválasztott partner: a kért, különben a lista első eleme (a szűrés ne hagyjon üres panelt).
-  const valasztott = partnerek.find((p) => p.id === nyitott) ?? lathato[0] ?? null;
+  const valasztott = partnerek.find((p) => p.id === nyitott) ?? [...lathato].sort((a, b) => b.megbizas_db - a.megbizas_db)[0] ?? null;
 
   return (
     <div className="flex flex-col gap-4">
@@ -192,7 +192,7 @@ export function PartnerekNezet({ partnerek, javaslatok, adatJavaslatok = [], sze
           szerkeszthet={szerkeszthet} kijelolt={kijelolt}
           onKijelol={(id, v) => setKijelolt((s) => { const n = new Set(s); if (v) n.add(id); else n.delete(id); return n; })} />
         {valasztott ? <PartnerLap key={valasztott.id} p={valasztott} szerkeszthet={szerkeszthet} /> : (
-          <div className="rounded-xl px-3 py-10 text-center text-sm text-muted-foreground ring-1 ring-foreground/10">Nincs a szűrésnek megfelelő partner.</div>
+          <div className="rounded-xl bg-card px-3 py-10 text-center text-sm text-muted-foreground ring-1 ring-foreground/10">Nincs a szűrésnek megfelelő partner.</div>
         )}
       </div>
     </div>
@@ -206,14 +206,14 @@ function PartnerLista({ partnerek, valasztott, onValaszt, szerkeszthet, kijelolt
 }) {
   if (partnerek.length === 0) return <div className="rounded-xl px-3 py-6 text-center text-sm text-muted-foreground ring-1 ring-foreground/10">Nincs találat.</div>;
   return (
-    <div className="max-h-[70vh] overflow-y-auto rounded-xl ring-1 ring-foreground/10 lg:max-h-[calc(100vh-14rem)]">
+    <div className="max-h-[70vh] overflow-y-auto rounded-xl bg-card shadow-[var(--shadow-card)] lg:max-h-[calc(100vh-14rem)]">
       {partnerek.map((p, i) => {
         const b = kezdobetu(p.nev);
         const fej = i === 0 || kezdobetu(partnerek[i - 1].nev) !== b;
         const hiany = hianyok(p).length > 0;
         return (
           <div key={p.id}>
-            {fej ? <div className="sticky top-0 bg-background/95 px-3 pb-0.5 pt-2 text-[11px] font-semibold text-muted-foreground backdrop-blur">{b}</div> : null}
+            {fej ? <div className="sticky top-0 bg-card/95 px-3 pb-0.5 pt-2 text-[11px] font-semibold text-muted-foreground backdrop-blur">{b}</div> : null}
             <div id={`p-${p.id}`} className={`flex scroll-mt-20 items-center gap-2 px-2 ${valasztott === p.id ? "bg-primary/10" : "hover:bg-muted/40"}`}>
               {szerkeszthet ? <input type="checkbox" checked={kijelolt.has(p.id)} onChange={(e) => onKijelol(p.id, e.target.checked)} aria-label="kijelölés összevonáshoz" /> : null}
               <button type="button" onClick={() => onValaszt(p.id)} className={`flex min-w-0 flex-1 items-center justify-between gap-2 py-1.5 text-left text-sm ${valasztott === p.id ? "font-medium" : ""}`}>
@@ -230,7 +230,7 @@ function PartnerLista({ partnerek, valasztott, onValaszt, szerkeszthet, kijelolt
 
 function Csempe({ cimke, ertek, alatta, figyelem }: { cimke: string; ertek: ReactNode; alatta?: ReactNode; figyelem?: boolean }) {
   return (
-    <div className="rounded-xl bg-muted/40 px-3 py-2.5">
+    <div className="rounded-xl bg-muted/60 px-3 py-2.5">
       <div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{cimke}</div>
       <div className={`mt-0.5 text-xl font-semibold tabular-nums ${figyelem ? "text-[var(--f2-amb)]" : ""}`}>{ertek}</div>
       {alatta ? <div className="text-xs text-muted-foreground">{alatta}</div> : null}
@@ -269,7 +269,7 @@ function PartnerLap({ p, szerkeszthet }: { p: Partner; szerkeszthet: boolean }) 
   const mutatott = mind ? lista : lista.slice(0, 8);
 
   return (
-    <section className="flex min-w-0 flex-col gap-4 rounded-xl p-4 ring-1 ring-foreground/10">
+    <section className="flex min-w-0 flex-col gap-4 rounded-xl bg-card p-4 shadow-[var(--shadow-card)]">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <h2 className="flex flex-wrap items-center gap-2 text-lg font-semibold">
@@ -289,7 +289,7 @@ function PartnerLap({ p, szerkeszthet }: { p: Partner; szerkeszthet: boolean }) 
       <div className="flex flex-wrap gap-2 text-sm">
         {p.kapcsolatok.length === 0 ? <span className="text-muted-foreground">Még nincs kapcsolattartó — a megbízást küldő levelekből és a Kapcsolatok törzsből gyűlik.</span> : null}
         {p.kapcsolatok.slice(0, 4).map((k, i) => (
-          <div key={i} className="flex flex-wrap items-center gap-x-2 rounded-lg bg-muted/40 px-2.5 py-1.5">
+          <div key={i} className="flex flex-wrap items-center gap-x-2 rounded-lg bg-muted/60 px-2.5 py-1.5">
             <span className="font-medium">{k.nev ?? k.email}</span>
             {k.telefon ? <a href={telHref(k.telefon)} className="hover:underline">{k.telefon}</a> : null}
             {k.email && k.nev ? <a href={`mailto:${k.email}`} className="text-muted-foreground hover:underline">{k.email}</a> : null}
@@ -312,9 +312,9 @@ function PartnerLap({ p, szerkeszthet }: { p: Partner; szerkeszthet: boolean }) 
 
       {viszonylatok.length > 0 || p.rakodasFelrako || p.rakodasLerako ? (
         <div className="grid gap-2 text-sm sm:grid-cols-2">
-          {viszonylatok.length > 0 ? <div className="rounded-xl bg-muted/40 px-3 py-2"><div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Tipikus viszonylat</div>{viszonylatok.map(([v, n]) => `${v} (${n}×)`).join(" · ")}</div> : null}
+          {viszonylatok.length > 0 ? <div className="rounded-xl bg-muted/60 px-3 py-2"><div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Tipikus viszonylat</div>{viszonylatok.map(([v, n]) => `${v} (${n}×)`).join(" · ")}</div> : null}
           {p.rakodasFelrako || p.rakodasLerako ? (
-            <div className="rounded-xl bg-muted/40 px-3 py-2"><div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Tanult rakodási idő</div>
+            <div className="rounded-xl bg-muted/60 px-3 py-2"><div className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Tanult rakodási idő</div>
               felrakó {p.rakodasFelrako ? <b>{p.rakodasFelrako.perc} p</b> : "—"} · lerakó {p.rakodasLerako ? <b>{p.rakodasLerako.perc} p</b> : "—"} <span className="text-xs text-muted-foreground">(GPS-mediánok)</span></div>
           ) : null}
         </div>
