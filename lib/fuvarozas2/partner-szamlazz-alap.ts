@@ -114,18 +114,18 @@ export function szamlazzPartnerek(csv: string): SzamlazzPartner[] {
 const adoTorzs = (a: string | null) => (a ?? "").replace(/\D/g, "").slice(0, 8);
 
 /** Számlázz.hu-partner a törzs egy partneréhez: adószám-törzs szerint, különben név szerint (egyértelmű találat kell). */
-export function parositSzamlazzPartnert(p: ImportPartner, lista: SzamlazzPartner[]): SzamlazzPartner | null {
+export function parositSzamlazzPartnert(p: ImportPartner, lista: SzamlazzPartner[]): { sz: SzamlazzPartner; alap: "adoszam" | "nev" } | null {
   const t = adoTorzs(p.adoszam);
   if (t.length === 8) {
     const a = lista.filter((x) => adoTorzs(x.adoszam) === t);
-    if (a.length === 1) return a[0];
+    if (a.length === 1) return { sz: a[0], alap: "adoszam" };
   }
   const nevek = [p.nev, ...p.nevvaltozatok];
   const n = lista.filter((x) => partnerEgyezik(x.nev, nevek));
-  if (n.length === 1) return n[0];
+  if (n.length === 1) return { sz: n[0], alap: "nev" };
   // Több névtalálat (pl. SOLINWEST 2000 / SOLINWEST AGRO): ha az egyik pontosan a partner neve, az.
   const pontos = n.filter((x) => x.nev.toLowerCase() === p.nev.toLowerCase());
-  return pontos.length === 1 ? pontos[0] : null;
+  return pontos.length === 1 ? { sz: pontos[0], alap: "nev" } : null;
 }
 
 /** Egy partner kitöltési terve — csak az üres mezők, meg a névváltozat. */
@@ -148,11 +148,15 @@ export function szamlazzImportTerv(partnerek: ImportPartner[], csv: string): { t
   const lista = szamlazzPartnerek(csv);
   const tervek: ImportTerv[] = [];
   const parositatlan: string[] = [];
-  for (const p of partnerek) {
-    if (sajatCegunkE(p.nev)) continue;
-    const sz = parositSzamlazzPartnert(p, lista);
-    if (!sz) { parositatlan.push(p.nev); continue; }
-    const t = szamlazzTerv(p, sz);
+  const talalatok = partnerek.filter((p) => !sajatCegunkE(p.nev)).map((p) => ({ p, m: parositSzamlazzPartnert(p, lista) }));
+  // Ha egy Számlázz.hu-partner NÉV alapján több törzs-partnerre illik (PÁNTYA Kft. ↔
+  // Pántya Gáborné és PÁNTYA Teherfuvarozó, 2026-11-18), egyikhez sem kötjük —
+  // rossz partnerhez kerülne a számla. Adószám-találat nem számít ütközésnek.
+  const nevSzerint = new Map<string, number>();
+  for (const { m } of talalatok) if (m) nevSzerint.set(m.sz.nev, (nevSzerint.get(m.sz.nev) ?? 0) + 1);
+  for (const { p, m } of talalatok) {
+    if (!m || (m.alap === "nev" && (nevSzerint.get(m.sz.nev) ?? 0) > 1)) { parositatlan.push(m ? `${p.nev} (többértelmű: ${m.sz.nev})` : p.nev); continue; }
+    const t = szamlazzTerv(p, m.sz);
     if (t) tervek.push(t);
   }
   return { tervek, parositatlan, szamlazzDb: lista.length };

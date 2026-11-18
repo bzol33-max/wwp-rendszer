@@ -57,5 +57,12 @@ eq("saját cég: nincs terv", terv("7"), null);
 const t2 = szamlazzImportTerv([{ id: "6", nev: "Solinvest", nevvaltozatok: ["SOLINWEST AGRO Kft"], ...ures }], CSV);
 eq("Solinvest névváltozattal párosul", [t2.parositatlan, t2.tervek[0]?.valtozas.adoszam], [[], "25277362-2-13"]);
 
+// Név alapján két törzs-partnerre illő Számlázz.hu-partner: egyikhez sem.
+const t3 = szamlazzImportTerv([
+  { id: "10", nev: "PÁNTYA Teherfuvarozó Kft.", nevvaltozatok: [], ...ures },
+  { id: "11", nev: "Pántya Gáborné", nevvaltozatok: [], ...ures },
+], `"partner neve","adószám","irányítószám","település","utca és házszám"\n"PÁNTYA Kft.","10443534-2-09","4030","Debrecen","Vécsey u. 24 sz."\n`);
+eq("többértelmű névtalálat → egyik sem", [t3.tervek.length, t3.parositatlan], [0, ["PÁNTYA Teherfuvarozó Kft. (többértelmű: PÁNTYA Kft.)", "Pántya Gáborné (többértelmű: PÁNTYA Kft.)"]]);
+
 console.log(`\nteszt-partner-szamlazz: ${ok} ok, ${bad} hiba`);
 if (bad > 0) process.exit(1);
