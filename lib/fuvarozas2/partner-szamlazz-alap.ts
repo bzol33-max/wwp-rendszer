@@ -149,13 +149,14 @@ export function szamlazzImportTerv(partnerek: ImportPartner[], csv: string): { t
   const tervek: ImportTerv[] = [];
   const parositatlan: string[] = [];
   const talalatok = partnerek.filter((p) => !sajatCegunkE(p.nev)).map((p) => ({ p, m: parositSzamlazzPartnert(p, lista) }));
-  // Ha egy Számlázz.hu-partner NÉV alapján több törzs-partnerre illik (PÁNTYA Kft. ↔
-  // Pántya Gáborné és PÁNTYA Teherfuvarozó, 2026-11-18), egyikhez sem kötjük —
-  // rossz partnerhez kerülne a számla. Adószám-találat nem számít ütközésnek.
-  const nevSzerint = new Map<string, number>();
-  for (const { m } of talalatok) if (m) nevSzerint.set(m.sz.nev, (nevSzerint.get(m.sz.nev) ?? 0) + 1);
+  // Ha egy Számlázz.hu-partner több törzs-partnerre illik (PÁNTYA Kft. ↔ Pántya
+  // Gáborné és PÁNTYA Teherfuvarozó, 2026-11-18 — a duplikátum ugyanazt az
+  // adószámot is viseli), egyikhez sem kötjük: előbb az összevonás/törlés, aztán
+  // a betöltés. Különben rossz partnerhez kerülne a számla.
+  const talalatDb = new Map<string, number>();
+  for (const { m } of talalatok) if (m) talalatDb.set(m.sz.nev, (talalatDb.get(m.sz.nev) ?? 0) + 1);
   for (const { p, m } of talalatok) {
-    if (!m || (m.alap === "nev" && (nevSzerint.get(m.sz.nev) ?? 0) > 1)) { parositatlan.push(m ? `${p.nev} (többértelmű: ${m.sz.nev})` : p.nev); continue; }
+    if (!m || (talalatDb.get(m.sz.nev) ?? 0) > 1) { parositatlan.push(m ? `${p.nev} (többértelmű: ${m.sz.nev})` : p.nev); continue; }
     const t = szamlazzTerv(p, m.sz);
     if (t) tervek.push(t);
   }
