@@ -40,6 +40,14 @@ export const FOFULEK: Fofül[] = [
     ],
   },
   {
+    // 2026-11-18: az Útvonaltervező (public/utvonaltervezo.html, önálló statikus
+    // oldal 3D térképpel, élő GPS-szel és a kocsik mai útjával). Nem Next-útvonal,
+    // ezért a fülsor sima <a>-val nyitja (components/fuvarozas2/fulek.tsx).
+    kulcs: "terkep",
+    label: "Térkép",
+    alfulek: [{ href: "/utvonaltervezo.html", label: "Útvonaltervező", csakFuvarozas: true }],
+  },
+  {
     kulcs: "megbizasok",
     label: "Megbízások",
     alfulek: [

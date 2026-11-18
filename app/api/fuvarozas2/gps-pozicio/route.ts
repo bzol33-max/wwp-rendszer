@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireViewPermission } from "@/lib/auth/require-permission";
-import { getFleetLastPositions, parseEcofleetTimestamp } from "@/lib/fuvarozas/ecofleet";
+import { getFleetLastPositions, parseEcofleetTimestamp, rendszamKulcs } from "@/lib/fuvarozas/ecofleet";
 
 /**
  * A kamionok pillanatnyi helye az Útvonaltervező (public/utvonaltervezo.html)
@@ -12,6 +12,12 @@ import { getFleetLastPositions, parseEcofleetTimestamp } from "@/lib/fuvarozas/e
  * "fuvarozas_sajat" jog nem elég, a flotta helyét a sofőr nem látja.
  */
 export const dynamic = "force-dynamic";
+
+/** Az Ecofleet „AO PU-427” írásmódját is egységesen „AOPU-427” alakban adjuk ki. */
+function egysegesRendszam(nyers: string): string {
+  const m = /^([A-Z]+)(\d+)$/.exec(rendszamKulcs(nyers));
+  return m ? `${m[1]}-${m[2]}` : nyers.trim();
+}
 
 export async function GET() {
   try {
@@ -25,7 +31,7 @@ export async function GET() {
     const poziciok = await getFleetLastPositions();
     return NextResponse.json(
       poziciok.map((p) => ({
-        rendszam: p.plate || p.name,
+        rendszam: egysegesRendszam(p.plate || p.name),
         lat: p.latitude,
         lon: p.longitude,
         sebesseg: p.speed,

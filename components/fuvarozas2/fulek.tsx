@@ -28,8 +28,10 @@ export async function Fuvarozas2Fulek({ aktiv, cim, cimNagy = false }: { aktiv: 
         {fulek.map((f) => {
           const elso = f.alfulek[0];
           const aktivE = aktivFofül?.kulcs === f.kulcs;
+          // A statikus oldal (….html) nem Next-útvonal: teljes oldalbetöltés kell, előtöltés nélkül.
+          const Elem = elso.href.endsWith(".html") ? "a" : Link;
           return (
-            <Link
+            <Elem
               key={f.kulcs}
               href={elso.href}
               aria-current={aktivE ? "page" : undefined}
@@ -39,7 +41,7 @@ export async function Fuvarozas2Fulek({ aktiv, cim, cimNagy = false }: { aktiv: 
               )}
             >
               {f.label}
-            </Link>
+            </Elem>
           );
         })}
         {rendszer ? (

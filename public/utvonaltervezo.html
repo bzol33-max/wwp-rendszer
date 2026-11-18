@@ -84,6 +84,12 @@
   .gps span{background:var(--fg);color:#fff;font-size:12px;font-weight:600;padding:3px 7px;border-radius:7px;white-space:nowrap}
   @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(26,114,89,.6),0 4px 10px rgba(0,0,0,.45)}70%{box-shadow:0 0 0 14px rgba(26,114,89,0),0 4px 10px rgba(0,0,0,.45)}100%{box-shadow:0 0 0 0 rgba(26,114,89,0),0 4px 10px rgba(0,0,0,.45)}}
   @media (prefers-reduced-motion:reduce){.gps.moving i{animation:none}}
+  .fstop{width:20px;height:20px;border-radius:50%;background:#fff;border:3px solid;font-size:10px;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,.35)}
+  #truckCard{left:24px;top:var(--ft,96px);width:380px;max-height:calc(100% - var(--ft,96px) - 130px);overflow:auto}
+  .tl{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin-top:12px;font-variant-numeric:tabular-nums}
+  .tl dt{color:var(--mf);font-size:12px;white-space:nowrap} .tl dd{margin:0}
+  .ms{display:flex;gap:10px;align-items:flex-start;padding:8px 0;border-bottom:1px solid var(--bd)} .ms:last-child{border-bottom:0}
+  .ms b{font-weight:600} .ms .fstop{flex:none;box-shadow:none;margin-top:1px} .ms.kesz{opacity:.55}
   #credit{position:absolute;right:30px;bottom:122px;font-size:11px;color:var(--mf);background:rgba(255,255,255,.85);padding:2px 6px;border-radius:6px;z-index:3}
   @media (max-width:1100px){.kpis{display:none}}
 </style>
@@ -100,6 +106,7 @@
   <span class="grow"></span>
   <button class="btn" id="bLegs" type="button" disabled>Szakaszok</button>
   <button class="btn" id="bRadar" type="button" disabled title="Üres km körök a lerakó és a telephelyek körül">Üres km radar</button>
+  <button class="btn on" id="bFleet" type="button" title="A kocsik hátralévő útja a mai megbízásokból">Kocsik útja</button>
   <div class="seg" id="segBase"><button data-b="map" class="on" type="button">Térkép</button><button data-b="sat" type="button">Műhold</button></div>
   <div class="seg" id="segView"><button data-v="3d" class="on" type="button">3D</button><button data-v="2d" type="button">Felülről</button></div>
   <button class="btn pri" id="go" type="button">Útvonal számítása</button>
@@ -110,6 +117,14 @@
 <div id="hudR" class="card float"><div style="display:flex;align-items:center;justify-content:space-between"><span class="sm">Vezetési idő</span><span class="chip warn" id="hChip">–</span></div><div class="rowk" style="margin-top:10px"><div class="kv"><span>Szünetig</span><b id="hBrk">–</b></div><div class="kv"><span>Napi keretből marad</span><b id="hDay">–</b></div></div><div class="bar"><i id="hBar" style="width:0"></i></div><div class="sm" style="margin-top:6px" id="hDaySub">–</div></div>
 
 <div id="stopCard" class="card float"><div style="display:flex;align-items:center;gap:8px"><span class="dot" id="sDot">D</span><span class="h" id="sName">–</span><span class="grow"></span><button class="x" id="sClose" aria-label="Bezárás">✕</button></div><div class="sm" id="sSub" style="margin-top:2px">–</div><div class="note">Nézd meg a behajtót és a rakodóhelyet. Ha a jelölő nem a kapunál áll, húzd oda, és a HU-GO onnan számol tovább.</div><div style="display:flex;gap:8px;margin-top:14px"><a class="btn" id="sMaps" target="_blank" rel="noopener" style="text-decoration:none">Google Maps</a><button class="btn" id="sBack" type="button">Vissza az útvonalhoz</button></div></div>
+
+<div id="truckCard" class="card float">
+  <div style="display:flex;align-items:center;gap:8px"><span class="dot" id="kDot"></span><span class="h" id="kName">–</span><span class="grow"></span><button class="x" id="kClose" aria-label="Bezárás">✕</button></div>
+  <div class="sm" id="kSub" style="margin-top:2px">–</div>
+  <dl class="tl" id="kRows"></dl>
+  <div class="note"><div class="sm" id="kHatra"></div><div id="kStops" style="margin-top:6px"></div></div>
+  <div style="display:flex;gap:8px;margin-top:12px"><button class="btn" id="kZoom" type="button">Ráközelítés</button><button class="btn" id="kRoute" type="button">Hátralévő út</button></div>
+</div>
 
 <div id="legsCard" class="card float">
   <div style="display:flex;align-items:center;justify-content:space-between"><span class="h">Szakaszok</span><button class="x" id="lClose" aria-label="Bezárás">✕</button></div>
@@ -176,6 +191,9 @@
     map.addLayer({id:'ringsF',type:'fill',source:'rings',paint:{'fill-color':['get','col'],'fill-opacity':.12}});
     map.addLayer({id:'ringsL',type:'line',source:'rings',paint:{'line-color':['get','col'],'line-width':2.5,'line-dasharray':[2,2]}});
     const cap={'line-cap':'round','line-join':'round'};
+    map.addSource('fleet',{type:'geojson',data:empty});
+    map.addLayer({id:'fleetCase',type:'line',source:'fleet',layout:cap,paint:{'line-color':'#ffffff','line-width':7,'line-opacity':.9}});
+    map.addLayer({id:'fleetLine',type:'line',source:'fleet',layout:cap,paint:{'line-color':['get','col'],'line-width':4,'line-dasharray':[2,1.3]}});
     map.addLayer({id:'ret',type:'line',source:'ret',layout:cap,paint:{'line-color':'#ad3328','line-width':4,'line-dasharray':[1.5,1.5]}});
     map.addLayer({id:'rglow',type:'line',source:'route',layout:cap,paint:{'line-color':'#2f6fed','line-width':20,'line-blur':14,'line-opacity':.3}});
     map.addLayer({id:'rcase',type:'line',source:'route',layout:cap,paint:{'line-color':'#ffffff','line-width':11}});
@@ -183,7 +201,7 @@
     map.addLayer({id:'emptyLegs',type:'line',source:'emptyLegs',layout:cap,paint:{'line-color':['case',['get','over'],'#ad3328','#875a0c'],'line-width':7,'line-dasharray':[1,1.6]}});
     map.addLayer({id:'legal',type:'line',source:'legal',layout:cap,paint:{'line-color':'#ad3328','line-width':3,'line-dasharray':[1,2]}});
     SITES.forEach((s,i)=>{const e=document.createElement('div');e.className='site';e.innerHTML='<i></i><span>'+s[0]+'</span>';new maplibregl.Marker({element:e,anchor:'left',offset:[-7,i===1?16:(i===0?-14:0)]}).setLngLat(s[1]).addTo(map);});
-    ready=true; if(pendingCalc){pendingCalc=false;calc();} loadGps();
+    ready=true; if(pendingCalc){pendingCalc=false;calc();} loadGps(); loadFleet();
   });
   function setBase(b){
     const sat=b==='sat';
@@ -333,7 +351,7 @@
     if(S.t>=S.T){stop();return;} raf=requestAnimationFrame(frame);
   }
   const PLAY='<path d="M6 4l14 8-14 8z"/>', PAUSE='<path d="M6 4h4v16H6zM14 4h4v16h-4z"/>';
-  function play(){if(!S)return; if(S.t>=S.T) setT(0); closeStop(); radar(false); playing=true; camB=null; lastTs=performance.now(); $('#playIc').innerHTML=PAUSE; $('#play').setAttribute('aria-label','Szünet'); hud(true); raf=requestAnimationFrame(frame);}
+  function play(){if(!S)return; if(S.t>=S.T) setT(0); closeStop(); closeTruck(); radar(false); playing=true; camB=null; lastTs=performance.now(); $('#playIc').innerHTML=PAUSE; $('#play').setAttribute('aria-label','Szünet'); hud(true); raf=requestAnimationFrame(frame);}
   function stop(){const was=playing;playing=false;cancelAnimationFrame(raf);$('#playIc').innerHTML=PLAY;$('#play').setAttribute('aria-label','Lejátszás');if(was&&S&&S.t>=S.T){hud(false);fitAll();}}
   $('#play').onclick=()=>playing?stop():play();
   $('#seek').addEventListener('input',e=>{if(!S)return;stop();setT(e.target.value/1000*S.T,true);hud(true);});
@@ -375,7 +393,7 @@
   // ---------- megálló közelről (műhold)
   let prevBase='map';
   function openStop(i){
-    stop(); hud(false); radar(false); const p=S.pts[i];
+    stop(); hud(false); radar(false); closeTruck(); const p=S.pts[i];
     prevBase=document.querySelector('#segBase button.on').dataset.b; setBase('sat');
     $('#sDot').textContent=L(i); $('#sDot').className='dot'+(i===0?' first':(i===S.pts.length-1?' last':'')); $('#sName').textContent=S.names[i];
     $('#sSub').textContent=(i===0?'Indulás':(i===S.pts.length-1?'Lerakó, az útvonal vége':'Megálló'))+' · '+(i>0?'érkezés '+fmtH(S.tcum[i])+' vezetés után · ':'')+p.name;
@@ -408,21 +426,90 @@
   }
   $('#bRadar').onclick=()=>radar(!radarOn);
 
-  // ---------- élő GPS
-  const gpsM={};
+  // ---------- élő GPS és a kocsik útja a mai megbízásokból
+  const gpsM={}, gpsPos={}, fleet={}, fleetRoute={}, fleetMk={};
+  let fleetOn=store.get('fleetOn',true), openKey=null;
+  const SZIN={blue:'#2f6fed',yellow:'#b58900',green:'#12a150',purple:'#8b5cf6'};
+  const kulcs=r=>String(r||'').replace(/[^A-Z0-9]/gi,'').toUpperCase();
+  const hatraLevok=k=>((k&&k.megallok)||[]).filter(m=>m.allapot!=='kesz');
+  function gpsLabel(key){
+    const m=gpsM[key], g=gpsPos[key]; if(!m||!g) return; const k=fleet[key], mv=g.seb>3, kov=hatraLevok(k)[0], el=m.getElement();
+    el.classList.toggle('moving',mv);
+    el.querySelector('i').style.background=mv?(SZIN[k&&k.szin]||'var(--pri)'):'';
+    el.querySelector('span').textContent=g.rendszam+(k&&k.sofor?' · '+k.sofor:'')+(mv?' · '+Math.round(g.seb)+' km/h':' · áll')+(kov?' → '+kov.varos:(g.ido?' · '+new Date(g.ido).toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit'}):''));
+  }
   async function loadGps(){
     if(!GPS_URL) return;
     try{
       const r=await fetch(GPS_URL,{credentials:'same-origin',headers:{Accept:'application/json'}}); if(!r.ok) throw 0;
-      const list=await r.json(); (Array.isArray(list)?list:(list.jarmuvek||[])).forEach(v=>{
-        if(typeof v.lat!=='number'||typeof v.lon!=='number') return;
-        let m=gpsM[v.rendszam]; if(!m){const e=document.createElement('div');e.className='gps';e.innerHTML='<i>'+TRUCK.replace(/20/g,'16')+'</i><span></span>';e.onclick=()=>map.flyTo({center:[v.lon,v.lat],zoom:12.5,pitch:60,duration:1800});m=gpsM[v.rendszam]=new maplibregl.Marker({element:e,anchor:'left',offset:[-15,0]}).setLngLat([v.lon,v.lat]).addTo(map);}
-        m.setLngLat([v.lon,v.lat]); const el=m.getElement(), mv=(v.sebesseg||0)>3; el.classList.toggle('moving',mv);
-        el.querySelector('span').textContent=v.rendszam+(mv?' · '+Math.round(v.sebesseg)+' km/h':' · áll')+(v.ido?' · '+new Date(v.ido).toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit'}):'');
+      const list=await r.json(); (Array.isArray(list)?list:[]).forEach(v=>{
+        if(typeof v.lat!=='number'||typeof v.lon!=='number') return; const key=kulcs(v.rendszam);
+        gpsPos[key]={lon:v.lon,lat:v.lat,seb:v.sebesseg||0,ido:v.ido,rendszam:v.rendszam};
+        if(!gpsM[key]){const e=document.createElement('div');e.className='gps';e.innerHTML='<i>'+TRUCK.replace(/20/g,'16')+'</i><span></span>';e.onclick=ev=>{ev.stopPropagation();openTruck(key);};gpsM[key]=new maplibregl.Marker({element:e,anchor:'left',offset:[-15,0]}).setLngLat([v.lon,v.lat]).addTo(map);}
+        gpsM[key].setLngLat([v.lon,v.lat]); gpsLabel(key);
       });
+      drawFleet();
     }catch(e){}
     setTimeout(loadGps,30000);
   }
+  async function loadFleet(){
+    if(!GPS_URL){$('#bFleet').style.display='none';return;}
+    try{
+      const r=await fetch('/api/fuvarozas2/kocsi-utak',{credentials:'same-origin',headers:{Accept:'application/json'}}); if(!r.ok) throw 0;
+      const j=await r.json(); (j.kocsik||[]).forEach(k=>{fleet[kulcs(k.rendszam)]=k;}); await drawFleet();
+    }catch(e){}
+    setTimeout(loadFleet,60000);
+  }
+  let drawing=false;
+  async function drawFleet(){
+    if(!ready||drawing) return; drawing=true;
+    try{
+      const feats=[];
+      for(const key of Object.keys(fleet)){
+        const k=fleet[key], g=gpsPos[key], hatra=hatraLevok(k);
+        (fleetMk[key]||[]).forEach(m=>m.remove()); fleetMk[key]=[];
+        if(!g||!hatra.length){delete fleetRoute[key];continue;}
+        const sig=hatra.map(m=>m.felLe+m.varos).join('|'); let fr=fleetRoute[key];
+        if(!fr||fr.sig!==sig||(hav([fr.lon,fr.lat],[g.lon,g.lat])>1500&&Date.now()-fr.t>120000)){
+          try{
+            const pts=[]; for(const m of hatra) pts.push(await geocode(m.varos));
+            const R=await hugo([[g.lon,g.lat]].concat(pts.map(p=>[p.lon,p.lat])));
+            fr=fleetRoute[key]={sig,lon:g.lon,lat:g.lat,t:Date.now(),line:R.geometry.coordinates,km:R.distanceMeter,sec:R.durationSecond,parts:R.partials||[],pts};
+          }catch(e){if(!fr||fr.sig!==sig){delete fleetRoute[key];continue;}}
+        }
+        if(!fleetOn) continue;
+        const col=SZIN[k.szin]||'#1c2422';
+        feats.push({type:'Feature',properties:{col},geometry:{type:'LineString',coordinates:fr.line}});
+        hatra.forEach((m,i)=>{const p=fr.pts[i]; if(!p) return; const e=document.createElement('div');e.className='fstop';e.style.borderColor=col;e.style.color=col;e.textContent=m.felLe==='felrako'?'F':'L';e.title=(m.felLe==='felrako'?'Felrakó':'Lerakó')+' · '+m.varos+(m.ceg?' · '+m.ceg:'')+(m.terv?' · '+m.terv:'');e.onclick=ev=>{ev.stopPropagation();openTruck(key);};fleetMk[key].push(new maplibregl.Marker({element:e}).setLngLat([p.lon,p.lat]).addTo(map));});
+      }
+      map.getSource('fleet').setData({type:'FeatureCollection',features:feats});
+      Object.keys(gpsM).forEach(gpsLabel); if(openKey) renderTruck(openKey);
+    }finally{drawing=false;}
+  }
+  $('#bFleet').onclick=()=>{fleetOn=!fleetOn;store.set('fleetOn',fleetOn);$('#bFleet').classList.toggle('on',fleetOn);drawFleet();};
+  $('#bFleet').classList.toggle('on',fleetOn);
+  function renderTruck(key){
+    const k=fleet[key]||{}, g=gpsPos[key]||{}, fr=fleetRoute[key], col=SZIN[k.szin]||'#1c2422';
+    $('#kDot').style.background=col; $('#kDot').innerHTML=TRUCK.replace(/20/g,'13'); $('#kName').textContent=g.rendszam||k.rendszam||key;
+    $('#kSub').textContent=[k.sofor,k.allapot,k.hely].filter(Boolean).join(' · ')||'Nincs adat a kocsiról.';
+    const rows=[['Sebesség',g.seb>3?Math.round(g.seb)+' km/h':'áll'],['GPS-adat',g.ido?new Date(g.ido).toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit'}):null],['Vezetés',k.vezetes],['Heti keret',k.heti],['Érkezés',k.eta],['Ma megtett',k.napiKm!=null?Math.round(k.napiKm).toLocaleString('hu-HU')+' km':null],['Fogyasztás',k.fogyasztas!=null?String(k.fogyasztas).replace('.',',')+' l/100 km (7 nap)':null]];
+    const dl=$('#kRows'); dl.innerHTML=''; rows.forEach(r=>{if(!r[1])return;const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=r[0];dd.textContent=r[1];dl.append(dt,dd);});
+    const all=(k.megallok||[]), box=$('#kStops'); box.innerHTML='';
+    $('#kHatra').textContent=fr?'Hátra a mai megállókig: '+fmtKm(fr.km)+' km · '+fmtH(fr.sec)+' vezetés (HU-GO, a település közepéig számolva).':(all.length?(hatraLevok(k).length?'A hátralévő út számítása folyamatban…':'A mai megállók mind készen vannak.'):'Mára nincs megbízás ennél a kocsinál.');
+    all.forEach(m=>{const d=document.createElement('div');d.className='ms'+(m.allapot==='kesz'?' kesz':'');const b=document.createElement('span');b.className='fstop';b.style.borderColor=col;b.style.color=col;b.textContent=m.felLe==='felrako'?'F':'L';
+      const t=document.createElement('div');const l1=document.createElement('div');const nb=document.createElement('b');nb.textContent=m.varos;l1.append(nb,document.createTextNode([m.ceg,m.partner&&m.partner!==m.ceg?m.partner:null].filter(Boolean).map(x=>' · '+x).join('')));
+      const l2=document.createElement('div');l2.className='sm';l2.textContent=[m.allapot==='kesz'?'kész':(m.allapot==='most'?'most ott':(m.allapot==='kovetkezo'?'következő':null)),m.terv?'terv '+m.terv:null,m.teny,m.elteres].filter(Boolean).join(' · ');
+      t.append(l1,l2);d.append(b,t);box.appendChild(d);});
+    $('#kRoute').disabled=!fr; $('#kZoom').disabled=!gpsPos[key];
+  }
+  function openTruck(key){
+    stop(); hud(false); radar(false); closeStop(); openKey=key; renderTruck(key); $('#truckCard').classList.add('show');
+    const fr=fleetRoute[key]; if(fr&&fleetOn) fitFleet(key); else if(gpsPos[key]) map.flyTo({center:[gpsPos[key].lon,gpsPos[key].lat],zoom:12,pitch:55,duration:1600});
+  }
+  function fitFleet(key){const fr=fleetRoute[key]; if(!fr) return; const b=new maplibregl.LngLatBounds();fr.line.forEach(c=>b.extend(c));map.fitBounds(b,{padding:{top:topH()+50,bottom:170,left:440,right:100},pitch:45,duration:1400,maxZoom:12});}
+  function closeTruck(){openKey=null;$('#truckCard').classList.remove('show');}
+  $('#kClose').onclick=closeTruck; $('#kRoute').onclick=()=>openKey&&fitFleet(openKey);
+  $('#kZoom').onclick=()=>{const g=gpsPos[openKey]; if(g) map.flyTo({center:[g.lon,g.lat],zoom:14,pitch:60,duration:1600});};
 })();
 </script>
 </body>

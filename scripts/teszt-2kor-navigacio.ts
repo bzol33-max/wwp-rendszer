@@ -14,9 +14,10 @@ function eq(nev: string, kapott: unknown, vart: unknown) {
 const fofulek: Fofül[] = FOFULEK;
 const osszesAlful: Alful[] = fofulek.flatMap((f) => f.alfulek);
 
-// Három főfül, ebben a sorrendben. (A ⚙ Rendszer külön ikon, nem a FOFULEK eleme — feltevés, mint eddig.)
-eq("főfül-kulcsok sorrendben", fofulek.map((f) => f.kulcs), ["kocsik", "megbizasok", "penz"]);
-eq("főfül-címkék", fofulek.map((f) => f.label), ["Kocsik", "Megbízások", "Pénz"]);
+// Négy főfül, ebben a sorrendben (2026-11-18: Térkép a Kocsik és a Megbízások között). (A ⚙ Rendszer külön ikon, nem a FOFULEK eleme — feltevés, mint eddig.)
+eq("főfül-kulcsok sorrendben", fofulek.map((f) => f.kulcs), ["kocsik", "terkep", "megbizasok", "penz"]);
+eq("főfül-címkék", fofulek.map((f) => f.label), ["Kocsik", "Térkép", "Megbízások", "Pénz"]);
+eq("Térkép alfüle", (fofulek.find((f) => f.kulcs === "terkep")?.alfulek ?? []).map((a) => [a.href, a.label, a.csakFuvarozas === true]), [["/utvonaltervezo.html", "Útvonaltervező", true]]);
 
 const alfulek = (kulcs: string) => (fofulek.find((f) => f.kulcs === kulcs)?.alfulek ?? []).map((a) => [a.href, a.label]);
 eq("Kocsik alfülei", alfulek("kocsik"), [
@@ -33,23 +34,24 @@ eq("Pénz alfülei", alfulek("penz"), [
 // /fuvarozas2/tervezes már csak a Bejövő megbízások döntése — fül nélkül, a Kocsik alá sorolva.)
 const REGI = [
   "/fuvarozas2", "/fuvarozas2/timocom",
+  "/utvonaltervezo.html",
   "/fuvarozas2/megbizasok", "/fuvarozas2/levelek", "/fuvarozas2/partnerek",
   "/fuvarozas2/eredmeny", "/fuvarozas2/kimutatas", "/fuvarozas2/koltsegek",
 ];
 for (const href of REGI) eq(`${href} pontosan egyszer`, osszesAlful.filter((a) => a.href === href).length, 1);
-eq("összesen 8 alfül", osszesAlful.length, 8);
+eq("összesen 9 alfül", osszesAlful.length, 9);
 eq("nincs ismeretlen href", osszesAlful.map((a) => a.href).filter((h) => !REGI.includes(h)), []);
 eq("a tervezés nem fül", osszesAlful.some((a) => a.href === "/fuvarozas2/tervezes"), false);
 eq("a tervezés a Kocsik főfül alá tartozik", aktivFofulKulcs(fofulek, "/fuvarozas2/tervezes"), "kocsik");
 eq("a kocsi lapja a Kocsik főfül alá tartozik", aktivFofulKulcs(fofulek, "/fuvarozas2/kocsi/AOPU-427"), "kocsik");
 
-// csakFuvarozas pontosan az Ajánlat, Áttekintés, Kimutatás alfüleken.
-eq("csakFuvarozas pontosan a 3 alfülön",
+// csakFuvarozas pontosan az Ajánlat, Útvonaltervező, Áttekintés, Kimutatás alfüleken.
+eq("csakFuvarozas pontosan a 4 alfülön",
   osszesAlful.filter((a) => a.csakFuvarozas === true).map((a) => a.label),
-  ["Ajánlat", "Áttekintés", "Kimutatás"]);
+  ["Ajánlat", "Útvonaltervező", "Áttekintés", "Kimutatás"]);
 eq("csakFuvarozas hrefjei",
   osszesAlful.filter((a) => a.csakFuvarozas === true).map((a) => a.href),
-  ["/fuvarozas2/timocom", "/fuvarozas2/eredmeny", "/fuvarozas2/kimutatas"]);
+  ["/fuvarozas2/timocom", "/utvonaltervezo.html", "/fuvarozas2/eredmeny", "/fuvarozas2/kimutatas"]);
 // A többi (Ma + hét, Lista, Levelek, Partnerek, Költségek) mindenki számára látható: a jelölés hiányzik vagy false.
 eq("a többi alfül nem csakFuvarozas",
   osszesAlful.filter((a) => !a.csakFuvarozas).map((a) => a.label),
@@ -69,7 +71,8 @@ eq("a többi alfül nem csakFuvarozas",
 }
 
 // Minden alfül a /fuvarozas2 alatt, és egyik főfül sem üres.
-eq("minden href /fuvarozas2-vel kezdődik", osszesAlful.every((a) => a.href === "/fuvarozas2" || a.href.startsWith("/fuvarozas2/")), true);
+// Az egyetlen kivétel az Útvonaltervező statikus oldala (public/utvonaltervezo.html).
+eq("minden href /fuvarozas2-vel kezdődik (az Útvonaltervező kivételével)", osszesAlful.every((a) => a.href === "/fuvarozas2" || a.href.startsWith("/fuvarozas2/") || a.href === "/utvonaltervezo.html"), true);
 eq("nincs üres főfül", fofulek.every((f) => f.alfulek.length > 0), true);
 eq("főfül-kulcsok egyediek", new Set(fofulek.map((f) => f.kulcs)).size, fofulek.length);
 
