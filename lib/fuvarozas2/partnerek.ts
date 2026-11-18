@@ -13,6 +13,7 @@ import { partnerEgyezik } from "@/lib/fuvarozas/szamla-parositas";
 import { JAVASLAT_MEZOK, type JavaslatMezo } from "@/lib/fuvarozas2/partner-javaslat-alap";
 import { futtatPartnerKitoltest } from "@/lib/fuvarozas2/partner-kitoltes";
 import { futtatPartnerJavaslatokat } from "@/lib/fuvarozas2/partner-javaslat";
+import { szamlazzImportTerv, type ImportPartner, type ImportTerv } from "@/lib/fuvarozas2/partner-szamlazz-alap";
 
 /** Nyitott javaslat a partner egy hiányzó adatára (lásd lib/fuvarozas2/partner-javaslat.ts). */
 export type PartnerAdatJavaslat = {
@@ -296,6 +297,59 @@ export async function getOsszevonasJavaslatok(): Promise<{ a: Partner; b: Partne
     }
   }
   return out;
+}
+
+/**
+ * Számlázz.hu partner-export betöltése (2026-11-18): a beillesztett CSV-ből a
+ * törzs ÜRES mezői töltődnek (adószám, székhely, számlázási/postázási cím,
+ * e-mail, fizetési határidő) és a Számlázz.hu-s név névváltozat lesz. Próba
+ * módban csak a tervet adja vissza. Lásd partner-szamlazz-alap.ts.
+ */
+export async function importSzamlazzPartnerek(csv: string, alkalmaz: boolean): Promise<{
+  ok: true; szamlazzDb: number; tervek: ImportTerv[]; parositatlan: string[]; irt: number;
+} | { ok: false; hiba: string }> {
+  await requireEditPermission("fuvarozas");
+  if (typeof csv !== "string" || csv.length < 50) return { ok: false, hiba: "Üres vagy túl rövid CSV." };
+  if (csv.length > 2_000_000) return { ok: false, hiba: "Túl nagy CSV (max. 2 MB)." };
+  const partnerek = await query<ImportPartner>(
+    `select id::text, nev, nevvaltozatok, adoszam, szekhely, szamlazasi_cim, postazasi_cim, szamlazasi_email, fizetesi_hatarido_nap, posta_nem_kell, szamla_email_nem_kell
+     from fuvar_partnerek order by nev`
+  );
+  const terv = szamlazzImportTerv(partnerek, csv);
+  if (terv.szamlazzDb === 0) return { ok: false, hiba: "Nem Számlázz.hu partner-export: nincs „partner neve” oszlop." };
+  let irt = 0;
+  if (alkalmaz) {
+    const session = await requireSession();
+    const ki = `${session.name ?? session.username} (Számlázz.hu export)`;
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      for (const t of terv.tervek) {
+        for (const [mezo, ertek] of Object.entries(t.valtozas)) {
+          // A mezőnév az ImportMezo listából jön (szamlazzTerv), nem felhasználói bemenet.
+          const r = mezo === "nevvaltozatok"
+            ? await client.query(`update fuvar_partnerek set nevvaltozatok = $2::text[], frissitve_at = now() where id = $1`, [t.partnerId, ertek])
+            : await client.query(`update fuvar_partnerek set ${mezo} = $2, frissitve_at = now() where id = $1 and ${mezo} is null`, [t.partnerId, ertek]);
+          if (r.rowCount) irt++;
+          if (r.rowCount && (JAVASLAT_MEZOK as readonly string[]).includes(mezo)) {
+            await client.query(
+              `insert into fuvar_partner_javaslat (partner_id, mezo, ertek, forras, forras_leiras, allapot, dontes_at, dontes_by)
+               values ($1, $2, $3, 'szamla', $4, 'elfogadva', now(), $5) on conflict (partner_id, mezo, ertek) do nothing`,
+              [t.partnerId, mezo, String(ertek), `Számlázz.hu partner: ${t.szamlazzNev}`, ki]
+            );
+          }
+        }
+      }
+      await client.query("commit");
+    } catch (err) {
+      await client.query("rollback").catch(() => {});
+      throw err;
+    } finally {
+      client.release();
+    }
+    console.log(`[partnerek] Számlázz.hu export betöltve: ${terv.tervek.length} partner, ${irt} mező — ${ki}`);
+  }
+  return { ok: true, szamlazzDb: terv.szamlazzDb, tervek: terv.tervek, parositatlan: terv.parositatlan, irt };
 }
 
 /**

@@ -7,7 +7,8 @@ import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getPartnerMegbizasok, kitoltHianyzoPartnerAdatokat, osszevonPartnereket, torolHivatkozatlanPartnert, updatePartner, type Partner, type PartnerAdatJavaslat, type PartnerMegbizas } from "@/lib/fuvarozas2/partnerek";
+import { getPartnerMegbizasok, importSzamlazzPartnerek, kitoltHianyzoPartnerAdatokat, osszevonPartnereket, torolHivatkozatlanPartnert, updatePartner, type Partner, type PartnerAdatJavaslat, type PartnerMegbizas } from "@/lib/fuvarozas2/partnerek";
+import type { ImportTerv } from "@/lib/fuvarozas2/partner-szamlazz-alap";
 import { AdatJavaslatSor } from "@/components/fuvarozas2/partner-adat-javaslat";
 import { cimSzep } from "@/lib/fuvarozas2/cim-formazas";
 
@@ -139,6 +140,8 @@ export function PartnerekNezet({ partnerek, javaslatok, adatJavaslatok = [], sze
           <a href="/fuvarozas2/kimutatas?idoszak=ho&jelleg=sajat" className="font-medium hover:underline">Saját utak: mikor, hová, mennyi lett volna a díja →</a>
         </div>
       ) : null}
+
+      {szerkeszthet ? <SzamlazzBetoltes /> : null}
 
       {javasoltPartnerek.length > 0 ? (
         <details className="rounded-xl ring-1 ring-foreground/10">
@@ -379,6 +382,50 @@ function PartnerLap({ p, szerkeszthet }: { p: Partner; szerkeszthet: boolean }) 
         <div className="px-3 pb-3"><PartnerSzerkeszto p={p} szerkeszthet={szerkeszthet} /></div>
       </details>
     </section>
+  );
+}
+
+/**
+ * Számlázz.hu partner-export betöltése: a CSV szövegét beillesztve előbb próba
+ * (mit töltene ki), aztán betöltés. Csak az üres mezők töltődnek.
+ */
+function SzamlazzBetoltes() {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [csv, setCsv] = useState("");
+  const [terv, setTerv] = useState<{ szamlazzDb: number; tervek: ImportTerv[]; parositatlan: string[]; irt: number; alkalmazva: boolean } | null>(null);
+  const CIMKE: Record<string, string> = { adoszam: "adószám", szekhely: "székhely", szamlazasi_cim: "számlázási cím", postazasi_cim: "postacím", szamlazasi_email: "e-mail", fizetesi_hatarido_nap: "fizetési nap", nevvaltozatok: "névváltozat" };
+  function futtat(alkalmaz: boolean) {
+    start(async () => {
+      const r = await importSzamlazzPartnerek(csv, alkalmaz);
+      if (!r.ok) { toast.error(r.hiba); return; }
+      setTerv({ ...r, alkalmazva: alkalmaz });
+      if (alkalmaz) { toast.success(`Betöltve: ${r.irt} mező, ${r.tervek.length} partnernél`); router.refresh(); }
+    });
+  }
+  return (
+    <details className="rounded-xl ring-1 ring-foreground/10">
+      <summary className="cursor-pointer px-3 py-2 text-sm font-medium">Számlázz.hu partner-export betöltése <span className="font-normal text-muted-foreground">— székhely, adószám, e-mail, fizetési határidő, postacím a hivatalos törzsből (csak az üres mezők)</span></summary>
+      <div className="flex flex-col gap-2 px-3 pb-3 text-sm">
+        <p className="text-xs text-muted-foreground">Számlázz.hu → Partnerek → Export (CSV) → a fájl tartalmát másold ide. Új partnert nem hoz létre, meglévő adatot nem ír felül; a Számlázz.hu-s név névváltozat lesz, hogy a számlák párosuljanak.</p>
+        <textarea value={csv} onChange={(e) => { setCsv(e.target.value); setTerv(null); }} rows={4} placeholder='"partner neve","partner azonosító","ország",…' className="w-full rounded-lg border bg-background p-2 font-mono text-xs" />
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" disabled={pending || csv.length < 50} onClick={() => futtat(false)}>Próba (mit töltene ki)</Button>
+          <Button size="sm" disabled={pending || !terv || terv.alkalmazva || terv.tervek.length === 0} onClick={() => futtat(true)}>Betöltés</Button>
+        </div>
+        {terv ? (
+          <div className="flex flex-col gap-1">
+            <div>{terv.szamlazzDb} Számlázz.hu partner · <b>{terv.tervek.length}</b> partnernél van kitöltenivaló{terv.alkalmazva ? <> · <b>{terv.irt}</b> mező betöltve</> : null}{terv.parositatlan.length ? <> · nem párosult: {terv.parositatlan.length}</> : null}</div>
+            <ul className="max-h-64 overflow-y-auto rounded-lg bg-muted/40 p-2 text-xs">
+              {terv.tervek.map((t) => (
+                <li key={t.partnerId}><b>{t.partnerNev}</b>{t.szamlazzNev.toLowerCase() !== t.partnerNev.toLowerCase() ? <span className="text-muted-foreground"> ← {t.szamlazzNev}</span> : null}: {Object.entries(t.valtozas).map(([k, v]) => `${CIMKE[k] ?? k} = ${Array.isArray(v) ? v[v.length - 1] : v}`).join(" · ")}</li>
+              ))}
+            </ul>
+            {terv.parositatlan.length ? <div className="text-xs text-muted-foreground">Nem párosult (nincs ilyen nevű/adószámú a Számlázz.hu-ban): {terv.parositatlan.join(", ")}</div> : null}
+          </div>
+        ) : null}
+      </div>
+    </details>
   );
 }
 
