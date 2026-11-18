@@ -105,11 +105,13 @@ export function PartnerekNezet({ partnerek, javaslatok, adatJavaslatok = [], sze
 
   const javasoltPartnerek = [...new Set(adatJavaslatok.map((j) => j.partner_id))];
   const berPartnerek = partnerek.filter((p) => p.berfuvar);
+  // Saját fuvar: csak a vevőink (saját fuvar + szállítólevél + raklap-számla) — a bérfuvarok rakodóhelyei nem.
+  const sajatVevok = partnerek.filter((p) => p.sajatVevo);
   const hianyosBer = berPartnerek.filter((p) => hianyok(p).length > 0);
   const q = ekezetNelkul(kereses.trim());
   // Kereső mindenre: név, névváltozat, adószám, székhely, e-mailek, kapcsolattartók (név, telefon, e-mail).
   const lathato = partnerek
-    .filter((p) => (kor === "ber" ? p.berfuvar : kor === "sajat" ? !p.berfuvar : true))
+    .filter((p) => (kor === "ber" ? p.berfuvar : kor === "sajat" ? p.sajatVevo : true))
     .filter((p) => !csakHianyos || hianyok(p).length > 0)
     .filter((p) => !q || ekezetNelkul([p.nev, ...p.nevvaltozatok, p.adoszam ?? "", p.szekhely ?? "", p.szamlazasi_email ?? "", p.postazasi_cim ?? "", ...p.kapcsolatok.flatMap((k) => [k.nev ?? "", k.email ?? "", k.telefon ?? "", (k.telefon ?? "").replace(/\D/g, "")])].join(" ")).includes(q.replace(/\s+/g, " ")))
     .sort((a, b) => a.nev.localeCompare(b.nev, "hu"));
@@ -121,7 +123,7 @@ export function PartnerekNezet({ partnerek, javaslatok, adatJavaslatok = [], sze
       {confirmDialog}
       <div className="flex flex-wrap items-center gap-2 rounded-xl px-3 py-2 ring-1 ring-foreground/10">
         <KorGomb aktiv={kor === "ber"} onClick={() => setKor("ber")} cimke="Bérfuvar megbízók" db={berPartnerek.length} />
-        <KorGomb aktiv={kor === "sajat"} onClick={() => setKor("sajat")} cimke="Saját fuvar" db={partnerek.length - berPartnerek.length} />
+        <KorGomb aktiv={kor === "sajat"} onClick={() => setKor("sajat")} cimke="Saját fuvar vevői" db={sajatVevok.length} />
         <KorGomb aktiv={kor === "mind"} onClick={() => setKor("mind")} cimke="Mind" db={partnerek.length} />
         <label className="ml-1 flex items-center gap-1.5 text-sm"><input type="checkbox" checked={csakHianyos} onChange={(e) => setCsakHianyos(e.target.checked)} />csak hiányos</label>
         <Input value={kereses} onChange={(e) => setKereses(e.target.value)} placeholder="Keresés: partner, kapcsolattartó, telefon, e-mail, város" className="h-8 w-full text-sm sm:w-80" />
@@ -133,7 +135,7 @@ export function PartnerekNezet({ partnerek, javaslatok, adatJavaslatok = [], sze
 
       {kor === "sajat" ? (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-muted/40 px-3 py-2 text-sm">
-          <span>Saját fuvarnál a megbízó mindig a Well-Worn Pallet — itt az áru címzettjei és feladói vannak.</span>
+          <span>Akinek saját árut (raklap, gitterbox) szállítunk: van saját fuvarja, szállítólevele és raklap-számlája. A bérfuvarok rakodóhelyei a „Mind” alatt vannak.</span>
           <a href="/fuvarozas2/kimutatas?idoszak=ho&jelleg=sajat" className="font-medium hover:underline">Saját utak: mikor, hová, mennyi lett volna a díja →</a>
         </div>
       ) : null}
@@ -279,7 +281,7 @@ function PartnerLap({ p, szerkeszthet }: { p: Partner; szerkeszthet: boolean }) 
         <div className="min-w-0">
           <h2 className="flex flex-wrap items-center gap-2 text-lg font-semibold">
             {p.nev}
-            <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{p.berfuvar ? "megbízó" : "saját fuvar partnere"}</span>
+            <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{p.berfuvar ? "megbízó" : p.sajatVevo ? "saját fuvar vevője" : "rakodóhely / egyéb"}</span>
             {hiany.length > 0 ? <span className="text-xs font-normal text-[var(--f2-amb)]">hiányzik: {hiany.join(", ")}</span> : null}
             {tovabbiHiany.length > 0 ? <span className="text-xs font-normal text-muted-foreground" title="A megbízás-iratokból és a számlákból óránként magától pótlódik">még nincs: {tovabbiHiany.join(", ")}</span> : null}
           </h2>
@@ -308,7 +310,11 @@ function PartnerLap({ p, szerkeszthet }: { p: Partner; szerkeszthet: boolean }) 
 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
         <Csempe cimke="Munkák" ertek={p.megbizas_db} alatta={p.utolso_megbizas ? `utolsó ${datumRovid(p.utolso_megbizas)}${napOta != null && napOta > 60 ? ` · ${napOta} nap óta nincs` : ""}` : "még nincs"} figyelem={napOta != null && napOta > 60} />
-        <Csempe cimke="Forgalom" ertek={p.forgalom.length ? p.forgalom.map(penzRovid).join(" + ") : "—"} alatta={p.forgalom.length && p.megbizas_db ? `átl. ${penzRovid({ penznem: p.forgalom[0].penznem, osszeg: p.forgalom[0].osszeg / p.megbizas_db })} / munka` : "bérfuvar díja"} />
+        {p.berfuvar || p.raklapSzamla.length === 0 ? (
+          <Csempe cimke="Forgalom" ertek={p.forgalom.length ? p.forgalom.map(penzRovid).join(" + ") : "—"} alatta={p.forgalom.length && p.megbizas_db ? `átl. ${penzRovid({ penznem: p.forgalom[0].penznem, osszeg: p.forgalom[0].osszeg / p.megbizas_db })} / munka` : "bérfuvar díja"} />
+        ) : (
+          <Csempe cimke="Raklap-számlák" ertek={p.raklapSzamla.map(penzRovid).join(" + ")} alatta={`${p.raklapSzamla.reduce((n, r) => n + r.db, 0)} számla · ${p.szallitolevel_db} szállítólevél`} />
+        )}
         <Csempe cimke="Átlag km-díj" ertek={p.kmDij.length ? p.kmDij.map(kmDijSzoveg).join(" · ") : "—"} alatta={p.kmDij.length ? `${p.kmDij.reduce((n, k) => n + k.munka, 0)} munkából · HU-GO rakott km` : "nincs km-adat"} />
         <Csempe cimke="Fizetési nap" ertek={p.fizetesNap ? p.fizetesNap.atlag : p.fizetesi_hatarido_nap === 0 ? "kp" : "—"}
           alatta={p.fizetesNap ? `tényleges, ${p.fizetesNap.minta} számlából · szerződés ${p.fizetesi_hatarido_nap ?? "?"}` : p.fizetesi_hatarido_nap != null ? `szerződés ${p.fizetesi_hatarido_nap} nap · még nincs fizetett számla` : p.berfuvar ? "határidő hiányzik" : ""}

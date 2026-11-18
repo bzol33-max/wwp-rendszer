@@ -47,6 +47,18 @@ export type Partner = {
   utolso_megbizas: string | null;
   /** Van (nem törölt) bérfuvar-megbízása — ő a számlázandó megbízó; a többi saját fuvar partnere. */
   berfuvar: boolean;
+  /** Saját fuvarok száma, ahol ő az áru címzettje, és ebből hánynak van párosított szállítólevele. */
+  sajat_db: number;
+  szallitolevel_db: number;
+  /**
+   * Saját fuvar VEVŐJE (2026-11-18, tulajdonos): akinek saját árut (raklap,
+   * gitterbox) szállítunk — van saját fuvarja címzettként, párosított
+   * szállítólevele ÉS a nevére szóló raklap-számlánk (szamla.kategoria =
+   * 'raklap'). A bérfuvarok rakodóhelyei (Coca-Cola, Bonduelle…) nem azok.
+   */
+  sajatVevo: boolean;
+  /** A nevére kiállított raklap-számláink (Számlázz.hu, nem sztornó): darab és bruttó összeg pénznemenként. */
+  raklapSzamla: { db: number; osszeg: number; penznem: string }[];
   /**
    * Kapcsolattartók, a leggyakoribb elöl: akik a megbízásokat küldik (Levelek,
    * fuvar_level feladói) és a Kapcsolatok törzs (fuvar_kapcsolatok, név szerint is párosítva).
@@ -120,7 +132,7 @@ export async function getPartnerMegbizasok(partnerId: string): Promise<PartnerMe
 
 export async function getPartnerek(): Promise<Partner[]> {
   await requireAnyViewPermission(["fuvarozas", "elszamolas"]);
-  const [alap, kapcsolatok, levelezok, forgalom, rakodas, kmDij, szamlak] = await Promise.all([
+  const [alap, kapcsolatok, levelezok, forgalom, rakodas, kmDij, szamlak, raklapSzamlak] = await Promise.all([
     getPartnerAlap(),
     query<{ partner_id: string | null; ceg: string; nev: string | null; telefon: string | null; email: string | null }>(
       `select partner_id::text, ceg, kapcsolattarto as nev, telefon, email from fuvar_kapcsolatok order by id`
@@ -166,6 +178,13 @@ export async function getPartnerek(): Promise<Partner[]> {
        where m.partner_id is not null and m.torolt_at is null
        group by 1, 2`
     ).catch(() => []),
+    // A saját értékesítés számlái vevőnként — a vevő a partnerhez név szerint párosul (partnerEgyezik).
+    query<{ vevo_nev: string; penznem: string; db: number; osszeg: number }>(
+      `select vevo_nev, coalesce(nullif(penznem, ''), 'Ft') as penznem, count(*)::int as db,
+         sum(brutto + coalesce(helyesbites_osszeg, 0))::float8 as osszeg
+       from szamla where kategoria = 'raklap' and not sztorno and not sztornozva and vevo_nev is not null
+       group by 1, 2`
+    ).catch(() => []),
   ]);
   const median = (sorok: { percek: number[] } | undefined) => {
     if (!sorok) return null;
@@ -197,6 +216,17 @@ export async function getPartnerek(): Promise<Partner[]> {
     }
     return ki;
   };
+  const raklapSzamlai = (p: PartnerAlap) => {
+    const nevek = [p.nev, ...p.nevvaltozatok];
+    const ossz = new Map<string, { db: number; osszeg: number; penznem: string }>();
+    for (const r of raklapSzamlak) {
+      if (!partnerEgyezik(r.vevo_nev, nevek)) continue;
+      const e = ossz.get(r.penznem) ?? { db: 0, osszeg: 0, penznem: r.penznem };
+      e.db += r.db; e.osszeg += Number(r.osszeg);
+      ossz.set(r.penznem, e);
+    }
+    return [...ossz.values()];
+  };
   return alap.map((p) => ({
     ...p,
     kapcsolatok: kapcsolatai(p),
@@ -210,10 +240,12 @@ export async function getPartnerek(): Promise<Partner[]> {
       return minta > 0 ? { atlag: Math.round(sz.reduce((n, s) => n + Number(s.fizetes_nap) * s.fizetes_minta, 0) / minta), minta } : null;
     })(),
     nyitottSzamla: szamlak.filter((s) => s.partner_id === p.id && s.nyitott_db > 0).map((s) => ({ db: s.nyitott_db, osszeg: Number(s.nyitott_osszeg), penznem: s.penznem, lejart: s.lejart_db })),
+    raklapSzamla: raklapSzamlai(p),
+    sajatVevo: p.sajat_db > 0 && p.szallitolevel_db > 0 && raklapSzamlai(p).length > 0,
   }));
 }
 
-type PartnerAlap = Omit<Partner, "kapcsolatok" | "forgalom" | "kmDij" | "rakodasFelrako" | "rakodasLerako" | "fizetesNap" | "nyitottSzamla">;
+type PartnerAlap = Omit<Partner, "kapcsolatok" | "forgalom" | "kmDij" | "rakodasFelrako" | "rakodasLerako" | "fizetesNap" | "nyitottSzamla" | "raklapSzamla" | "sajatVevo">;
 
 async function getPartnerAlap(): Promise<PartnerAlap[]> {
   return query<PartnerAlap>(
@@ -222,7 +254,10 @@ async function getPartnerAlap(): Promise<PartnerAlap[]> {
        p.szamla_email_nem_kell, p.posta_nem_kell, p.megbizas_pdf_csatolva, p.email_domainek, p.megjegyzes,
        (select count(*) from fuvar_megbizasok m where m.partner_id = p.id and m.torolt_at is null)::int as megbizas_db,
        (select to_char(max(m.datum), 'YYYY-MM-DD') from fuvar_megbizasok m where m.partner_id = p.id) as utolso_megbizas,
-       coalesce((select bool_or(m.jelleg = 'ber') from fuvar_megbizasok m where m.partner_id = p.id and m.torolt_at is null), false) as berfuvar
+       coalesce((select bool_or(m.jelleg = 'ber') from fuvar_megbizasok m where m.partner_id = p.id and m.torolt_at is null), false) as berfuvar,
+       (select count(*) from fuvar_megbizasok m where m.partner_id = p.id and m.torolt_at is null and m.jelleg = 'sajat')::int as sajat_db,
+       (select count(*) from szallitolevel_import s join fuvar_megbizasok m on m.id = s.megbizas_id
+         where m.partner_id = p.id and m.torolt_at is null and m.jelleg = 'sajat' and s.parositas_allapot = 'parositva')::int as szallitolevel_db
      from fuvar_partnerek p
      order by megbizas_db desc, p.nev`
   );
@@ -245,7 +280,7 @@ export async function getOsszevonasJavaslatok(): Promise<{ a: Partner; b: Partne
   return out;
 }
 
-export async function updatePartner(id: string, mezok: Partial<Omit<Partner, "id" | "nev_kulcs" | "megbizas_db" | "utolso_megbizas" | "berfuvar" | "kapcsolatok" | "forgalom" | "kmDij" | "rakodasFelrako" | "rakodasLerako" | "fizetesNap" | "nyitottSzamla">>): Promise<void> {
+export async function updatePartner(id: string, mezok: Partial<Omit<Partner, "id" | "nev_kulcs" | "megbizas_db" | "utolso_megbizas" | "berfuvar" | "sajat_db" | "szallitolevel_db" | "sajatVevo" | "raklapSzamla" | "kapcsolatok" | "forgalom" | "kmDij" | "rakodasFelrako" | "rakodasLerako" | "fizetesNap" | "nyitottSzamla">>): Promise<void> {
   await requireEditPermission("fuvarozas");
   const engedett = ["nev", "nevvaltozatok", "adoszam", "szekhely", "szamlazasi_cim", "postazasi_cim", "szamlazasi_email", "fizetesi_hatarido_nap",
     "papir_bekuldesi_hatarido_nap", "szamlan_kert_szam", "sablon_azonosito", "szamla_email_nem_kell", "posta_nem_kell", "megbizas_pdf_csatolva", "email_domainek", "megjegyzes"] as const;
