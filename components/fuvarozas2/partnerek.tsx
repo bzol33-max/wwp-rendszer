@@ -135,7 +135,7 @@ export function PartnerekNezet({ partnerek, javaslatok, adatJavaslatok = [], sze
 
       {kor === "sajat" ? (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-muted/40 px-3 py-2 text-sm">
-          <span>Vevő: akinek saját árut (raklap, gitterbox) viszünk — saját fuvar + szállítólevél + raklap-számla. Beszállító: akitől a telephelyünkre hozunk. A bérfuvarok rakodóhelyei a „Mind” alatt vannak.</span>
+          <span>Vevő: akinek saját árut (raklap, gitterbox) viszünk — saját fuvar + a nevére szóló raklap-számla. Beszállító: akitől a telephelyünkre hozunk. A bérfuvarok rakodóhelyei a „Mind” alatt vannak.</span>
           <a href="/fuvarozas2/kimutatas?idoszak=ho&jelleg=sajat" className="font-medium hover:underline">Saját utak: mikor, hová, mennyi lett volna a díja →</a>
         </div>
       ) : null}

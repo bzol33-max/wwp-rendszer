@@ -56,9 +56,10 @@ export type Partner = {
   hivatkozas_db: number;
   /**
    * Saját fuvar VEVŐJE (2026-11-18, tulajdonos): akinek saját árut (raklap,
-   * gitterbox) szállítunk — van saját fuvarja címzettként, párosított
-   * szállítólevele ÉS a nevére szóló raklap-számlánk (szamla.kategoria =
-   * 'raklap'). A bérfuvarok rakodóhelyei (Coca-Cola, Bonduelle…) nem azok.
+   * gitterbox) szállítunk — van saját fuvarja ÉS a nevére szóló raklap-számlánk
+   * (szamla.kategoria = 'raklap'). A szállítólevél csak bizonylat, nem feltétel
+   * (Solinvest #88: számla van, szállítólevél nem lett importálva). A bérfuvarok
+   * rakodóhelyei (Coca-Cola, Bonduelle…) nem azok.
    */
   sajatVevo: boolean;
   /** Saját fuvar beszállítója: van saját fuvar, ahol tőle a mi telephelyünkre hoztunk. (Bejövő számla a rendszerben nincs, ezért csak a fuvar a feltétel.) */
@@ -247,7 +248,7 @@ export async function getPartnerek(): Promise<Partner[]> {
     })(),
     nyitottSzamla: szamlak.filter((s) => s.partner_id === p.id && s.nyitott_db > 0).map((s) => ({ db: s.nyitott_db, osszeg: Number(s.nyitott_osszeg), penznem: s.penznem, lejart: s.lejart_db })),
     raklapSzamla: raklapSzamlai(p),
-    sajatVevo: p.sajat_db > 0 && p.szallitolevel_db > 0 && raklapSzamlai(p).length > 0,
+    sajatVevo: p.sajat_db > 0 && raklapSzamlai(p).length > 0,
     // A saját cégünk és a „telephelyek közti” bejegyzés nem beszállító.
     sajatBeszallito: p.beszallito_db > 0 && !sajatCegunkE(p.nev) && !/telephely/i.test(p.nev),
   }));
