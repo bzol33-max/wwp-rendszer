@@ -56,6 +56,32 @@ export function BejovoGombok({ id, allapot, kocsiKod, cimke }: { id: string; all
   );
 }
 
+/** Beérkezett bérmegbízás csempéjén: „Jóváhagyás → Tervezett” kocsi-választás
+ *  nélkül — ugyanaz a `valtAllapot`, mint a részletoldalon. */
+export function JovahagyasGomb({ megbizasId }: { megbizasId: string }) {
+  const router = useRouter();
+  const [fut, start] = useTransition();
+
+  function jovahagy() {
+    start(async () => {
+      try {
+        const v = await valtAllapot(megbizasId, "tervezett", { kliensUuid: crypto.randomUUID() });
+        if (!v.ok) { toast.error(v.hiba); return; }
+        toast.success("Jóváhagyva → Tervezett.");
+        router.refresh();
+      } catch {
+        toast.error("Nem sikerült a jóváhagyás.");
+      }
+    });
+  }
+
+  return (
+    <button type="button" disabled={fut} onClick={jovahagy} className={FO_GOMB}>
+      {fut ? "Jóváhagyás…" : "Jóváhagyás → Tervezett"}
+    </button>
+  );
+}
+
 /** Rugalmas saját fuvar a szabad kocsira és napra (a meglévő `kocsihozAdom`). */
 export function KocsiraGomb({ id, jarmuKod, nap, cimke }: { id: string; jarmuKod: string; nap: string; cimke: string }) {
   const router = useRouter();

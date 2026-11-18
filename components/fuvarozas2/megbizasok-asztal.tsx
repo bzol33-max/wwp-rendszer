@@ -11,6 +11,7 @@ import { utolsoVaros, varos } from "@/lib/megbizasok/megjelenites";
 import { MegbizasKartya } from "@/components/fuvarozas2/megbizas-kartya";
 import { AsztalKartya } from "@/components/fuvarozas2/asztal-kartya";
 import { SzamlazasiSegedGomb } from "@/components/fuvarozas2/szamlazasi-seged";
+import { JovahagyasGomb } from "@/components/fuvarozas2/ma-het-gombok";
 import { munkaasztalLink, type MunkaasztalSzuro } from "@/components/fuvarozas2/munkaasztal";
 import {
   modositElvinnivalot,
@@ -332,6 +333,13 @@ function SzakaszOszlop({
               {sor.jelleg === "ber" && sor.szakasz === "szamlazasra" && !sor.szamla_szam ? (
                 <div className="mt-1 flex justify-end">
                   <SzamlazasiSegedGomb megbizasId={sor.id} elszamolasJog={szamlazhat} />
+                </div>
+              ) : null}
+              {/* Beérkezett bérmegbízás: jóváhagyás közvetlenül a csempén (ugyanaz a
+                  valtAllapot, mint a részletoldal „Jóváhagyás → Tervezett” gombja). */}
+              {sor.jelleg === "ber" && sor.allapot === "ellenorzesre_var" ? (
+                <div className="mt-1 flex justify-end">
+                  <JovahagyasGomb megbizasId={sor.id} />
                 </div>
               ) : null}
             </li>
