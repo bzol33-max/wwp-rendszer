@@ -3,6 +3,8 @@ import { getHasznalat14Nap, getKiolvasasHibak30Nap, getRendszerEgeszseg, type Eg
 import { formatIdo} from "@/components/fuvarozas2/kozos";
 import { Fuvarozas2Fulek } from "@/components/fuvarozas2/fulek";
 import { cn } from "@/lib/utils";
+import { requireSession } from "@/lib/auth/dal";
+import { SzallitolevelPotlas } from "@/components/fuvarozas2/szallitolevel-potlas";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +19,7 @@ const CIMKE: Record<EgeszsegAllapot, string> = {
 };
 
 export default async function Page() {
-  const [e, hasznalat, kiolvasas] = await Promise.all([getRendszerEgeszseg(), getHasznalat14Nap(), getKiolvasasHibak30Nap()]);
+  const [e, hasznalat, kiolvasas, session] = await Promise.all([getRendszerEgeszseg(), getHasznalat14Nap(), getKiolvasasHibak30Nap(), requireSession()]);
   const gond = e.sorok.filter((s) => s.allapot === "gond").length;
   const figy = e.sorok.filter((s) => s.allapot === "figyelmeztetes").length;
   return (
@@ -27,6 +29,7 @@ export default async function Page() {
         subtitle={gond === 0 && figy === 0 ? "Minden figyelő és kapu rendben." : `${gond} gond · ${figy} figyelmeztetés — alább, melyik.`}
       />
       <Fuvarozas2Fulek aktiv="/fuvarozas2/rendszer" />
+      {session.can("fuvarozas").edit ? <SzallitolevelPotlas /> : null}
       <div className="grid gap-3 md:grid-cols-2">
         {e.sorok.map((s) => (
           <div key={s.kulcs} className="rounded-xl bg-card p-4 ring-1 ring-foreground/10">

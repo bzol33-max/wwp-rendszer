@@ -137,6 +137,47 @@ function rendszamAMegjegyzesbol(megjegyzes: string | null): string | null {
   return m ? m[1].trim().slice(0, 60) : null;
 }
 
+/** Egy Számlázz.hu-s szállítólevél a szallitolevel_import táblába (a már párosítottat nem írja át). */
+async function mentSzallitolevel(t: SzamlazzHuSzamla): Promise<void> {
+  const raklapDb = t.tetelek
+    .filter((x) => x.mennyiseg !== null && (!x.egyseg || /db|darab/i.test(x.egyseg)))
+    .reduce((a, x) => a + (x.mennyiseg ?? 0), 0);
+  await query(
+    `insert into szallitolevel_import (bizonylatszam, kelt, vevo, rendszam, tetelek, raklap_db, forras_fajl)
+     values ($1, $2, $3, $4, $5::jsonb, $6, 'szamlazzhu')
+     on conflict (bizonylatszam) do update set kelt = excluded.kelt, vevo = excluded.vevo, rendszam = excluded.rendszam,
+       tetelek = excluded.tetelek, raklap_db = excluded.raklap_db
+     where szallitolevel_import.parositas_allapot <> 'parositva'`,
+    [t.szamlaszam, t.teljesitesDatum ?? t.kiallitasDatum, t.vevoNev, rendszamAMegjegyzesbol(t.megjegyzes) ?? rendszamAMegjegyzesbol(t.rawXml), JSON.stringify(t.tetelek), raklapDb || null]
+  );
+}
+
+/**
+ * Szállítólevelek pótlása sorszám-tartományra (2026-11-18, tulajdonos: „nézd át
+ * az éves szállítókat”): az óránkénti kereső csak a 150-es sorszámtól indult,
+ * a korábbi (januártól) szállítólevelek nem kerültek be. Kézi indítás a
+ * Rendszer oldalról; a hiányzó sorszámot átugorja, nem áll meg.
+ */
+export async function potolSzallitoleveleket(ev: number, tol: number, ig: number): Promise<{ uj: number; hianyzo: number; hibak: string[] }> {
+  const agentKulcs = process.env.SZAMLAZZHU_API_KEY;
+  if (!agentKulcs) throw new Error("Hiányzik a SZAMLAZZHU_API_KEY.");
+  const r = { uj: 0, hianyzo: 0, hibak: [] as string[] };
+  for (let n = Math.max(1, tol); n <= Math.min(ig, tol + 400); n++) {
+    const szam = `${SZALLITOLEVEL_ELOTAG}-${ev}-${n}`;
+    try {
+      const t = await lekerdezSzamla(szam, agentKulcs);
+      if (!t) { r.hianyzo++; continue; }
+      await mentSzallitolevel(t);
+      r.uj++;
+    } catch (err) {
+      r.hibak.push(`${szam}: ${err instanceof SzamlazzHuError ? err.message : "ismeretlen hiba"}`);
+      if (r.hibak.length >= 5) break;
+    }
+  }
+  console.log(`[szallitolevel] pótlás ${ev} ${tol}–${ig}: ${r.uj} mentve, ${r.hianyzo} hiányzó, ${r.hibak.length} hiba`);
+  return r;
+}
+
 async function szallitolevelekKeresese(agentKulcs: string, ev: number, eredmeny: PollEredmeny): Promise<void> {
   const [allapot] = await query<{ ev: number; utolso_sorszam: number }>(
     `select ev, utolso_sorszam from szamlak_poll_allapot where elotag = $1`,
@@ -154,17 +195,7 @@ async function szallitolevelekKeresese(agentKulcs: string, ev: number, eredmeny:
       if (!t) { hiany++; continue; }
       hiany = 0;
       utolso = proba;
-      const raklapDb = t.tetelek
-        .filter((x) => x.mennyiseg !== null && (!x.egyseg || /db|darab/i.test(x.egyseg)))
-        .reduce((a, x) => a + (x.mennyiseg ?? 0), 0);
-      await query(
-        `insert into szallitolevel_import (bizonylatszam, kelt, vevo, rendszam, tetelek, raklap_db, forras_fajl)
-         values ($1, $2, $3, $4, $5::jsonb, $6, 'szamlazzhu')
-         on conflict (bizonylatszam) do update set kelt = excluded.kelt, vevo = excluded.vevo, rendszam = excluded.rendszam,
-           tetelek = excluded.tetelek, raklap_db = excluded.raklap_db
-         where szallitolevel_import.parositas_allapot <> 'parositva'`,
-        [t.szamlaszam, t.teljesitesDatum ?? t.kiallitasDatum, t.vevoNev, rendszamAMegjegyzesbol(t.megjegyzes) ?? rendszamAMegjegyzesbol(t.rawXml), JSON.stringify(t.tetelek), raklapDb || null]
-      );
+      await mentSzallitolevel(t);
       uj++;
     } catch (err) {
       eredmeny.hibak.push(`${szam}: ${err instanceof SzamlazzHuError ? err.message : "ismeretlen hiba"}`);
