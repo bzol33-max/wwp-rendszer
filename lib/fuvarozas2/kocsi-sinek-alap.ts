@@ -100,7 +100,8 @@ export type HaviOsszesites = {
   eredmenyFt: number | null; celSzazalek: number | null;
   /** Előző hónap ugyanezen napjáig számolt bérbevétel (Ft, EUR-ral együtt) és az eltérés %-a. */
   elozoFt: number; elozoSzazalek: number | null;
-  kocsik: Record<string, { berFt: number; berDb: number; km: number; ftKm: number | null; sajatDb: number }>;
+  /** km = összes rakott km (bér + saját); berKm = csak a bérfuvaroké, az Ft/km ebből számol. */
+  kocsik: Record<string, { berFt: number; berDb: number; km: number; berKm: number; ftKm: number | null; sajatDb: number }>;
 };
 
 export function honapEleje(ma: string): string { return ma.slice(0, 8) + "01"; }
@@ -160,12 +161,12 @@ export function haviOsszesites(
   const kocsik: HaviOsszesites["kocsik"] = {};
   for (const f of fuvarok) {
     const k = f.jarmu_kod ?? "—";
-    const c = (kocsik[k] ??= { berFt: 0, berDb: 0, km: 0, ftKm: null, sajatDb: 0 });
+    const c = (kocsik[k] ??= { berFt: 0, berDb: 0, km: 0, berKm: 0, ftKm: null, sajatDb: 0 });
     if (f.jelleg === "sajat") { c.sajatDb++; c.km += f.rakott_km ?? 0; continue; }
-    c.berDb++; c.km += f.rakott_km ?? 0;
+    c.berDb++; c.km += f.rakott_km ?? 0; c.berKm += f.rakott_km ?? 0;
     c.berFt += (f.fuvardij_penznem || "Ft").toUpperCase() === "EUR" ? eurFt(f, { v: false }) : (f.fuvardij ?? 0);
   }
-  for (const c of Object.values(kocsik)) c.ftKm = c.km > 0 ? c.berFt / c.km : null;
+  for (const c of Object.values(kocsik)) c.ftKm = c.berKm > 0 ? c.berFt / c.berKm : null;
   const bevetel = osszBer + sajatBelsoFt;
   return {
     ev, ho, napMa, napokSzama: honapNapjai(ma),

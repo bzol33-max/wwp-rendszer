@@ -74,6 +74,8 @@ eq("előző hóhoz", h.elozoSzazalek, 101);
 eq("kocsi NMZ bér", h.kocsik["NMZ-492"].berFt, 141000);
 eq("kocsi AOPU Ft/km", Math.round(h.kocsik["AOPU-427"].ftKm ?? 0), 667);
 eq("kocsi NMZ saját db", h.kocsik["NMZ-492"].sajatDb, 1);
+eq("kocsi NMZ Ft/km csak bér km-ből (141000/200)", h.kocsik["NMZ-492"].ftKm, 705);
+eq("kocsi NMZ összes km", h.kocsik["NMZ-492"].km, 300);
 const ures = haviOsszesites(MA, [], [], arf, { kiadasFt: null, celFt: null });
 eq("üres: eredmény null", [ures.eredmenyFt, ures.celSzazalek, ures.elozoSzazalek, ures.atlagFtKm], [null, null, null, null]);
 

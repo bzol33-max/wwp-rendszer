@@ -4258,3 +4258,13 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 - „Üresen indul” jelzés a nappal („Hétfő: üresen indul …”); „l” → „l/100”; „Hét:” → „Ez a hét (H–V):”.
 - Most dönts: a csúszó fuvar sora útvonallal és olvasható nappal; ami a Javaslatban van, nem ismétlődik a „Kocsira vár”-ban.
 - Teszt: új `teszt-ablak-alap` (14), `teszt-ma-tukor` +2, `teszt-2kor-kocsi-sav` +2; teljes `npm run teszt`, typecheck, eslint, build OK.
+
+## 2026-11-18 — Megbízások: „Kocsi-sínek” asztali nézet (Q5b-F terv)
+- Terv: projekt-doc `claude/megbizasok-kocsi-sinek-terv.md` (40+ terv a Design canvason, választott: Q5b-F).
+- Új: `lib/fuvarozas2/kocsi-sinek-alap.ts` (pecsétek, havi aggregátum — tiszta, teszt: `scripts/teszt-kocsi-sinek.ts`),
+  `lib/fuvarozas2/kocsi-sinek.ts` (adat), `kocsi-sinek-actions.ts` (havi kiadás/cél mentés),
+  `components/fuvarozas2/kocsi-sinek.tsx` + `kocsi-sinek-gombok.tsx`, migráció 053 (`fuvar_havi_beallitas`).
+- 4 pecsét: beérkezés (created_at) · felvétel (első felrakó sofőr-kész/GPS) · lerakás (utolsó lerakó) · számla (szamla.kiallitas_datum); saját: 3.
+- EUR → Ft: a MEGLÉVŐ `lib/fuvarozas/arfolyam.ts` (MNB, `arfolyam` tábla, `ft` oszlop) — számla kelte, számla előtt mai (előzetes).
+- A régi életút-tábla: `?nezet=regi` és a pénz-szűrős linkek. A mobil nézet változatlan.
+- Hátra: havi kiadás részletezése (üzemanyag, HU-GO, kocsinap), „+ saját fuvar” a sínen előre kitöltött kocsival, húzás a tálcáról.
