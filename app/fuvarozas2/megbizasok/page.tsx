@@ -21,6 +21,8 @@ import { elvinniOszlop } from "@/lib/megbizasok/elvinni-szabalyok";
 import { getPenzLista } from "@/lib/fuvarozas2/penz-lista";
 import { PENZ_SZUROK, type PenzSzuro } from "@/lib/fuvarozas2/penz-lista-alap";
 import { PenzCsempek, PenzSzuroSav, PenzTabla } from "@/components/fuvarozas2/penz-nezet";
+import { KocsiSinek } from "@/components/fuvarozas2/kocsi-sinek";
+import { getKocsiSinekAdat } from "@/lib/fuvarozas2/kocsi-sinek";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +41,7 @@ export const dynamic = "force-dynamic";
 // külön sávban, a kész saját fuvar az utolsó 7 napból is látszik.
 
 export default async function Page({ searchParams }: {
-  searchParams: Promise<{ q?: string; reszlet?: string; uj?: string; szerk?: string; ujber?: string; jelleg?: string; elvinni?: string; het?: string; penz?: string; sajat?: string }>;
+  searchParams: Promise<{ q?: string; reszlet?: string; uj?: string; szerk?: string; ujber?: string; jelleg?: string; elvinni?: string; het?: string; penz?: string; sajat?: string; nezet?: string }>;
 }) {
   const sp = await searchParams;
   const q = sp.q?.trim() || undefined;
@@ -87,6 +89,10 @@ export default async function Page({ searchParams }: {
     szerkeszthet ? getSajatFuvarSegedlet() : Promise.resolve(null),
   ]);
   const ujBerLap = szerkeszthet && szuro.ujBer && !lapon;
+  // 2026-11-18 (Q5b-F terv): az asztali alapnézet a „Kocsi-sínek”; a régi
+  // életút-tábla a ?nezet=regi címen és a pénz-szűrős linkeken marad elérhető.
+  const sinNezet = sp.nezet !== "regi" && !penz;
+  const sinAdat = sinNezet ? await getKocsiSinekAdat([...asztal.ber, ...asztal.sajat], asztal.ma, !!q) : null;
   const reszletLink = (id: string) => munkaasztalLink(szuro, { reszlet: id, uj: false, szerk: false, ujBer: false });
 
   const sajatFelso = !szerkeszthet ? null : segedlet ? (
@@ -124,6 +130,29 @@ export default async function Page({ searchParams }: {
       <Fuvarozas2Fulek aktiv="/fuvarozas2/megbizasok" cim="Megbízások" />
 
       <div className="hidden flex-col gap-4 lg:flex">
+        {sinAdat ? (
+          <>
+            {parositatlan.length > 0 ? (
+              <div className="flex min-w-0 flex-col gap-1 rounded-xl bg-warning/10 px-4 py-3 text-sm ring-1 ring-warning/25">
+                <b className="text-foreground">{parositatlan.length} fuvarszámla nincs fuvarhoz párosítva</b>
+                <span className="truncate text-warning">{parositatlan.slice(0, 3).map((p) => `${p.szamlaszam} · ${p.vevo_nev} · ${formatFt(p.netto)}`).join(" | ")}{parositatlan.length > 3 ? " …" : ""}</span>
+              </div>
+            ) : null}
+            <KocsiSinek
+              adat={sinAdat}
+              szuro={szuro}
+              szerkesztheto={szerkeszthet}
+              kereso={<div className="flex items-start gap-2"><div className="min-w-0 flex-1"><KeresoJavaslatok key={q ?? ""} index={asztal.kereso} kezdo={q ?? ""} /></div>{q ? <Link href="/fuvarozas2/megbizasok" className="mt-1 shrink-0 rounded-lg border bg-card px-3 py-1.5 text-sm">× törlés</Link> : null}</div>}
+              fejlecJobb={szerkeszthet ? (
+                <div className="flex shrink-0 items-center gap-2">
+                  <DriveFrissitesGomb />
+                  <Link href={munkaasztalLink(szuro, { ujBer: true, reszlet: undefined, uj: false, szerk: false })} scroll={false} className="rounded-lg bg-primary px-3 py-1.5 text-sm font-bold text-primary-foreground hover:opacity-90">+ Új bérfuvar</Link>
+                </div>
+              ) : null}
+            />
+          </>
+        ) : (
+          <>
         <PenzCsempek
           adat={penzLista}
           szuro={szuro}
@@ -139,6 +168,8 @@ export default async function Page({ searchParams }: {
           kereso={<div className="flex items-start gap-2"><div className="min-w-0 flex-1"><KeresoJavaslatok key={q ?? ""} index={asztal.kereso} kezdo={q ?? ""} /></div>{q ? <Link href="/fuvarozas2/megbizasok" className="mt-1 shrink-0 rounded-lg border bg-card px-3 py-1.5 text-sm">× törlés</Link> : null}</div>}
           szurok={<PenzSzuroSav adat={penzLista} szuro={szuro} />}
           key={szuro.elvinni ?? "lista"} sorok={[...asztal.ber,...asztal.sajat]} nyitottak={nyitottak} szuro={szuro} het={elvinniHet} szerkesztheto={szerkeszthet} helyek={gyorsHelyek?.helyek} jarmuvek={gyorsHelyek?.jarmuvek} ma={asztal.ma} penzIdk={penz ? penzLista.idk : null} penzJelek={penzLista.jelek} szamlazhat={jogok.elszamol} archiv={asztal.archiv} fizetes={penzLista.fizetes} />
+          </>
+        )}
         {lezartTalalat.length > 0 ? <PenzTabla sorok={lezartTalalat.slice(0, 300)} osszes={lezartTalalat.length} szuro={szuro} elszamolasJog={jogok.elszamol} /> : null}
       </div>
       {szerkeszthet && elokeszitett && segedlet ? <div className="hidden lg:block"><ReszletLap bezarHref={bezar} cim={`#${elokeszitett.id} · Előkészítés`}>{elokeszitett.idopont_nyitott ? null : <VisszaElvinniGomb id={elokeszitett.id} />}{sajatFelso}</ReszletLap></div> : null}
