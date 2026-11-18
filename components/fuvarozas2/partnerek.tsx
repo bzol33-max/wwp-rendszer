@@ -19,12 +19,13 @@ type Kor = "ber" | "sajat" | "mind";
  * (postacím, e-mail, fizetési határidő). Az adószám a tulajdonosnak nem fontos
  * (2026-10-19), a számlán úgyis a Számlázz.hu vevő-adata áll. A papír-beküldési határidőt
  * csak az a megbízó adja meg, aki kiköti; ha nincs, az nem hiány (2026-10-19).
- * Saját fuvar partnerénél semmi nem számít hiánynak.
+ * Saját fuvar partnerénél semmi nem számít hiánynak. Postacím helyett a
+ * székhely is jó (2026-11-18): ha a megbízáson nincs postacím, oda megy a papír.
  */
 function hianyok(p: Partner): string[] {
   if (!p.berfuvar) return [];
   const h: string[] = [];
-  if (!p.postazasi_cim && !p.posta_nem_kell) h.push("postacím");
+  if (!p.postazasi_cim && !p.szekhely && !p.posta_nem_kell) h.push("postacím");
   if (!p.szamlazasi_email && !p.szamla_email_nem_kell) h.push("e-mail");
   if (p.fizetesi_hatarido_nap == null) h.push("fizetési határidő");
   return h;

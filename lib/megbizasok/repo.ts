@@ -89,7 +89,10 @@ export const SOR_SQL = `
     -- Trans megbízás PDF-jéből „pod@loesung-trans.hu” került ide). Ha sehol nincs, a partner legutóbbi olyan
     -- fuvarjáról, amelyiken volt (2026-10-07, Szabina Posta lapja: a Lösung
     -- Trans fuvarjánál „nincs postázási cím”, holott korábban már volt).
-    coalesce(${postaiCim("e.postazasi_cim")}, ${postaiCim("m.postazasi_cim")}, ${postaiCim("p.postazasi_cim")},
+    -- 2026-11-18 (tulajdonos): ha a megbízáson nincs postacím, a megbízó
+    -- székhelye a postacím — a partner saját postázási címe után, a többi
+    -- megbízásáról vett cím előtt.
+    coalesce(${postaiCim("e.postazasi_cim")}, ${postaiCim("m.postazasi_cim")}, ${postaiCim("p.postazasi_cim")}, ${postaiCim("p.szekhely")},
       (select coalesce(${postaiCim("e2.postazasi_cim")}, ${postaiCim("m2.postazasi_cim")})
          from fuvar_megbizasok m2 left join fuvar_elszamolas e2 on e2.megbizas_id = m2.id
         where m.partner_id is not null and m2.partner_id = m.partner_id and m2.id <> m.id
