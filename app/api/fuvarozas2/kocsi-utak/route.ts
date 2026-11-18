@@ -7,6 +7,8 @@ import { tachoTervLastDatabol } from "@/lib/ecofleet/plusz";
 import { rendszamKulcs } from "@/lib/fuvarozas/ecofleet";
 import { geokodolCachelve, megalloPontossaga } from "@/lib/fuvarozas/erintes-felismeres";
 import { query } from "@/lib/db";
+import { kocsiSzin } from "@/lib/fuvarozas2/kocsi-szin";
+import { getSajatTelephelyek } from "@/lib/fuvarozas/telephelyek-db";
 
 /**
  * A kocsik mai megállói az Útvonaltervező (public/utvonaltervezo.html)
@@ -134,7 +136,8 @@ export async function GET() {
         return {
           rendszam: k.kod,
           sofor: k.sofor,
-          szin: k.szin ?? null,
+          // A kocsi törzsadat-színe ugyanabból a palettából, mint a Hét nézeten.
+          szin: kocsiSzin(k.szin).c,
           allapot: k.allapot?.szoveg ?? null,
           hely: k.allapot?.hely ?? null,
           vezetes: k.vezetesSor,
@@ -148,7 +151,10 @@ export async function GET() {
         };
       })
     );
-    return NextResponse.json({ frissitve: vaszon.frissitve, kocsik }, { headers: { "Cache-Control": "no-store" } });
+    const telephelyek = (await getSajatTelephelyek())
+      .filter((t) => t.lat != null && t.lon != null)
+      .map((t) => ({ nev: t.nev, cim: t.cim, lat: t.lat, lon: t.lon }));
+    return NextResponse.json({ frissitve: vaszon.frissitve, kocsik, telephelyek }, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {
     if (err && typeof err === "object" && "digest" in err) throw err;
     return NextResponse.json({ hiba: "A kocsik mai megállói most nem érhetők el." }, { status: 500 });
