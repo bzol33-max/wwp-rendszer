@@ -8,7 +8,7 @@
 import { pool, query } from "@/lib/db";
 import { requireSession } from "@/lib/auth/dal";
 import { requireAnyViewPermission, requireEditPermission } from "@/lib/auth/require-permission";
-import { normalizaltCegKulcs } from "@/lib/fuvarozas/fuvar-constants";
+import { normalizaltCegKulcs, sajatCegunkE } from "@/lib/fuvarozas/fuvar-constants";
 import { partnerEgyezik } from "@/lib/fuvarozas/szamla-parositas";
 import { JAVASLAT_MEZOK, type JavaslatMezo } from "@/lib/fuvarozas2/partner-javaslat-alap";
 import { futtatPartnerKitoltest } from "@/lib/fuvarozas2/partner-kitoltes";
@@ -47,9 +47,13 @@ export type Partner = {
   utolso_megbizas: string | null;
   /** Van (nem törölt) bérfuvar-megbízása — ő a számlázandó megbízó; a többi saját fuvar partnere. */
   berfuvar: boolean;
-  /** Saját fuvarok száma, ahol ő az áru címzettje, és ebből hánynak van párosított szállítólevele. */
+  /** Saját fuvarok száma, ahol ő a partner (címzett vagy feladó), és ebből hánynak van párosított szállítólevele. */
   sajat_db: number;
   szallitolevel_db: number;
+  /** Saját fuvarok, ahol a lerakó a mi telephelyünk (Szakoly, Balkány, Nyíregyháza Tünde út): tőle hozunk árut — beszállító. */
+  beszallito_db: number;
+  /** Hivatkozások összesen (megbízás töröltekkel, kapcsolat, radar, pontszám): 0 = törölhető helymaradvány. */
+  hivatkozas_db: number;
   /**
    * Saját fuvar VEVŐJE (2026-11-18, tulajdonos): akinek saját árut (raklap,
    * gitterbox) szállítunk — van saját fuvarja címzettként, párosított
@@ -57,6 +61,8 @@ export type Partner = {
    * 'raklap'). A bérfuvarok rakodóhelyei (Coca-Cola, Bonduelle…) nem azok.
    */
   sajatVevo: boolean;
+  /** Saját fuvar beszállítója: van saját fuvar, ahol tőle a mi telephelyünkre hoztunk. (Bejövő számla a rendszerben nincs, ezért csak a fuvar a feltétel.) */
+  sajatBeszallito: boolean;
   /** A nevére kiállított raklap-számláink (Számlázz.hu, nem sztornó): darab és bruttó összeg pénznemenként. */
   raklapSzamla: { db: number; osszeg: number; penznem: string }[];
   /**
@@ -242,10 +248,15 @@ export async function getPartnerek(): Promise<Partner[]> {
     nyitottSzamla: szamlak.filter((s) => s.partner_id === p.id && s.nyitott_db > 0).map((s) => ({ db: s.nyitott_db, osszeg: Number(s.nyitott_osszeg), penznem: s.penznem, lejart: s.lejart_db })),
     raklapSzamla: raklapSzamlai(p),
     sajatVevo: p.sajat_db > 0 && p.szallitolevel_db > 0 && raklapSzamlai(p).length > 0,
+    // A saját cégünk és a „telephelyek közti” bejegyzés nem beszállító.
+    sajatBeszallito: p.beszallito_db > 0 && !sajatCegunkE(p.nev) && !/telephely/i.test(p.nev),
   }));
 }
 
-type PartnerAlap = Omit<Partner, "kapcsolatok" | "forgalom" | "kmDij" | "rakodasFelrako" | "rakodasLerako" | "fizetesNap" | "nyitottSzamla" | "raklapSzamla" | "sajatVevo">;
+type PartnerAlap = Omit<Partner, "kapcsolatok" | "forgalom" | "kmDij" | "rakodasFelrako" | "rakodasLerako" | "fizetesNap" | "nyitottSzamla" | "raklapSzamla" | "sajatVevo" | "sajatBeszallito">;
+
+/** A mi telephelyeink a lerakó szövegében (SQL regex, ékezet nélkül is): Szakoly, Balkány, Nyíregyháza Tünde út 20/A. */
+const SAJAT_TELEPHELY_RE = "(szakoly|balk[aá]ny|t[uü]nde\\s*(u|ut|út|utca)\\.?\\s*20)";
 
 async function getPartnerAlap(): Promise<PartnerAlap[]> {
   return query<PartnerAlap>(
@@ -257,7 +268,13 @@ async function getPartnerAlap(): Promise<PartnerAlap[]> {
        coalesce((select bool_or(m.jelleg = 'ber') from fuvar_megbizasok m where m.partner_id = p.id and m.torolt_at is null), false) as berfuvar,
        (select count(*) from fuvar_megbizasok m where m.partner_id = p.id and m.torolt_at is null and m.jelleg = 'sajat')::int as sajat_db,
        (select count(*) from szallitolevel_import s join fuvar_megbizasok m on m.id = s.megbizas_id
-         where m.partner_id = p.id and m.torolt_at is null and m.jelleg = 'sajat' and s.parositas_allapot = 'parositva')::int as szallitolevel_db
+         where m.partner_id = p.id and m.torolt_at is null and m.jelleg = 'sajat' and s.parositas_allapot = 'parositva')::int as szallitolevel_db,
+       (select count(*) from fuvar_megbizasok m where m.partner_id = p.id and m.torolt_at is null and m.jelleg = 'sajat'
+         and coalesce((select g.cim_nyers from fuvar_megallok g where g.megbizas_id = m.id and g.tipus = 'lerako' order by g.sorszam desc limit 1), m.lerako) ~* '${SAJAT_TELEPHELY_RE}'
+         and not coalesce((select g.cim_nyers from fuvar_megallok g where g.megbizas_id = m.id and g.tipus = 'felrako' order by g.sorszam limit 1), m.felrako) ~* '${SAJAT_TELEPHELY_RE}')::int as beszallito_db,
+       ((select count(*) from fuvar_megbizasok m where m.partner_id = p.id)
+        + (select count(*) from fuvar_kapcsolatok k where k.partner_id = p.id)
+        + (select count(*) from radar_kiiras r where r.partner_id = p.id))::int as hivatkozas_db
      from fuvar_partnerek p
      order by megbizas_db desc, p.nev`
   );
@@ -280,7 +297,34 @@ export async function getOsszevonasJavaslatok(): Promise<{ a: Partner; b: Partne
   return out;
 }
 
-export async function updatePartner(id: string, mezok: Partial<Omit<Partner, "id" | "nev_kulcs" | "megbizas_db" | "utolso_megbizas" | "berfuvar" | "sajat_db" | "szallitolevel_db" | "sajatVevo" | "raklapSzamla" | "kapcsolatok" | "forgalom" | "kmDij" | "rakodasFelrako" | "rakodasLerako" | "fizetesNap" | "nyitottSzamla">>): Promise<void> {
+/**
+ * Helymaradvány törlése (2026-11-18, tulajdonos): a régi táblázatból bérfuvarok
+ * fel-/lerakóhelyei (Coca-Cola, Bonduelle, FIEGE…) kerültek partnerként a
+ * törzsbe. Csak az törölhető, amire semmi nem hivatkozik (megbízás a
+ * töröltekkel együtt, kapcsolat, radar, pontszám) — különben hibát ad.
+ */
+export async function torolHivatkozatlanPartnert(id: string): Promise<{ ok: true } | { ok: false; hiba: string }> {
+  await requireEditPermission("fuvarozas");
+  if (!/^\d+$/.test(id)) return { ok: false, hiba: "Érvénytelen partner." };
+  const [p] = await query<{ nev: string; hiv: number }>(
+    `select p.nev,
+       ((select count(*) from fuvar_megbizasok m where m.partner_id = p.id)
+        + (select count(*) from fuvar_kapcsolatok k where k.partner_id = p.id)
+        + (select count(*) from radar_kiiras r where r.partner_id = p.id))::int as hiv
+     from fuvar_partnerek p where p.id = $1`,
+    [id]
+  );
+  if (!p) return { ok: false, hiba: "Nincs ilyen partner." };
+  if (p.hiv > 0) return { ok: false, hiba: `„${p.nev}” nem törölhető: ${p.hiv} megbízás/kapcsolat hivatkozik rá — előbb összevonás vagy átírás kell.` };
+  const session = await requireSession();
+  // A számított pontszám és a nyitott javaslatok mehetnek vele (a javaslat FK cascade).
+  await query(`delete from partner_pontszam where partner_id = $1`, [id]).catch(() => {});
+  await query(`delete from fuvar_partnerek where id = $1`, [id]);
+  console.log(`[partnerek] törölve (hivatkozatlan): #${id} ${p.nev} — ${session.name ?? session.username}`);
+  return { ok: true };
+}
+
+export async function updatePartner(id: string, mezok: Partial<Omit<Partner, "id" | "nev_kulcs" | "megbizas_db" | "utolso_megbizas" | "berfuvar" | "sajat_db" | "szallitolevel_db" | "beszallito_db" | "hivatkozas_db" | "sajatVevo" | "sajatBeszallito" | "raklapSzamla" | "kapcsolatok" | "forgalom" | "kmDij" | "rakodasFelrako" | "rakodasLerako" | "fizetesNap" | "nyitottSzamla">>): Promise<void> {
   await requireEditPermission("fuvarozas");
   const engedett = ["nev", "nevvaltozatok", "adoszam", "szekhely", "szamlazasi_cim", "postazasi_cim", "szamlazasi_email", "fizetesi_hatarido_nap",
     "papir_bekuldesi_hatarido_nap", "szamlan_kert_szam", "sablon_azonosito", "szamla_email_nem_kell", "posta_nem_kell", "megbizas_pdf_csatolva", "email_domainek", "megjegyzes"] as const;

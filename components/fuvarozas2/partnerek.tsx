@@ -7,7 +7,7 @@ import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getPartnerMegbizasok, kitoltHianyzoPartnerAdatokat, osszevonPartnereket, updatePartner, type Partner, type PartnerAdatJavaslat, type PartnerMegbizas } from "@/lib/fuvarozas2/partnerek";
+import { getPartnerMegbizasok, kitoltHianyzoPartnerAdatokat, osszevonPartnereket, torolHivatkozatlanPartnert, updatePartner, type Partner, type PartnerAdatJavaslat, type PartnerMegbizas } from "@/lib/fuvarozas2/partnerek";
 import { AdatJavaslatSor } from "@/components/fuvarozas2/partner-adat-javaslat";
 import { cimSzep } from "@/lib/fuvarozas2/cim-formazas";
 
@@ -106,12 +106,12 @@ export function PartnerekNezet({ partnerek, javaslatok, adatJavaslatok = [], sze
   const javasoltPartnerek = [...new Set(adatJavaslatok.map((j) => j.partner_id))];
   const berPartnerek = partnerek.filter((p) => p.berfuvar);
   // Saját fuvar: csak a vevőink (saját fuvar + szállítólevél + raklap-számla) — a bérfuvarok rakodóhelyei nem.
-  const sajatVevok = partnerek.filter((p) => p.sajatVevo);
+  const sajatVevok = partnerek.filter((p) => p.sajatVevo || p.sajatBeszallito);
   const hianyosBer = berPartnerek.filter((p) => hianyok(p).length > 0);
   const q = ekezetNelkul(kereses.trim());
   // Kereső mindenre: név, névváltozat, adószám, székhely, e-mailek, kapcsolattartók (név, telefon, e-mail).
   const lathato = partnerek
-    .filter((p) => (kor === "ber" ? p.berfuvar : kor === "sajat" ? p.sajatVevo : true))
+    .filter((p) => (kor === "ber" ? p.berfuvar : kor === "sajat" ? p.sajatVevo || p.sajatBeszallito : true))
     .filter((p) => !csakHianyos || hianyok(p).length > 0)
     .filter((p) => !q || ekezetNelkul([p.nev, ...p.nevvaltozatok, p.adoszam ?? "", p.szekhely ?? "", p.szamlazasi_email ?? "", p.postazasi_cim ?? "", ...p.kapcsolatok.flatMap((k) => [k.nev ?? "", k.email ?? "", k.telefon ?? "", (k.telefon ?? "").replace(/\D/g, "")])].join(" ")).includes(q.replace(/\s+/g, " ")))
     .sort((a, b) => a.nev.localeCompare(b.nev, "hu"));
@@ -123,7 +123,7 @@ export function PartnerekNezet({ partnerek, javaslatok, adatJavaslatok = [], sze
       {confirmDialog}
       <div className="flex flex-wrap items-center gap-2 rounded-xl px-3 py-2 ring-1 ring-foreground/10">
         <KorGomb aktiv={kor === "ber"} onClick={() => setKor("ber")} cimke="Bérfuvar megbízók" db={berPartnerek.length} />
-        <KorGomb aktiv={kor === "sajat"} onClick={() => setKor("sajat")} cimke="Saját fuvar vevői" db={sajatVevok.length} />
+        <KorGomb aktiv={kor === "sajat"} onClick={() => setKor("sajat")} cimke="Saját fuvar" db={sajatVevok.length} />
         <KorGomb aktiv={kor === "mind"} onClick={() => setKor("mind")} cimke="Mind" db={partnerek.length} />
         <label className="ml-1 flex items-center gap-1.5 text-sm"><input type="checkbox" checked={csakHianyos} onChange={(e) => setCsakHianyos(e.target.checked)} />csak hiányos</label>
         <Input value={kereses} onChange={(e) => setKereses(e.target.value)} placeholder="Keresés: partner, kapcsolattartó, telefon, e-mail, város" className="h-8 w-full text-sm sm:w-80" />
@@ -135,7 +135,7 @@ export function PartnerekNezet({ partnerek, javaslatok, adatJavaslatok = [], sze
 
       {kor === "sajat" ? (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl bg-muted/40 px-3 py-2 text-sm">
-          <span>Akinek saját árut (raklap, gitterbox) szállítunk: van saját fuvarja, szállítólevele és raklap-számlája. A bérfuvarok rakodóhelyei a „Mind” alatt vannak.</span>
+          <span>Vevő: akinek saját árut (raklap, gitterbox) viszünk — saját fuvar + szállítólevél + raklap-számla. Beszállító: akitől a telephelyünkre hozunk. A bérfuvarok rakodóhelyei a „Mind” alatt vannak.</span>
           <a href="/fuvarozas2/kimutatas?idoszak=ho&jelleg=sajat" className="font-medium hover:underline">Saját utak: mikor, hová, mennyi lett volna a díja →</a>
         </div>
       ) : null}
@@ -281,7 +281,7 @@ function PartnerLap({ p, szerkeszthet }: { p: Partner; szerkeszthet: boolean }) 
         <div className="min-w-0">
           <h2 className="flex flex-wrap items-center gap-2 text-lg font-semibold">
             {p.nev}
-            <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{p.berfuvar ? "megbízó" : p.sajatVevo ? "saját fuvar vevője" : "rakodóhely / egyéb"}</span>
+            <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">{p.berfuvar ? "megbízó" : p.sajatVevo ? "saját fuvar vevője" : p.sajatBeszallito ? "saját fuvar beszállítója" : "rakodóhely / egyéb"}</span>
             {hiany.length > 0 ? <span className="text-xs font-normal text-[var(--f2-amb)]">hiányzik: {hiany.join(", ")}</span> : null}
             {tovabbiHiany.length > 0 ? <span className="text-xs font-normal text-muted-foreground" title="A megbízás-iratokból és a számlákból óránként magától pótlódik">még nincs: {tovabbiHiany.join(", ")}</span> : null}
           </h2>
@@ -291,6 +291,7 @@ function PartnerLap({ p, szerkeszthet }: { p: Partner; szerkeszthet: boolean }) 
         </div>
         <div className="flex flex-wrap gap-1.5 text-sm">
           <a href={`/fuvarozas2/megbizasok?${new URLSearchParams({ q: p.nev })}`} className="rounded-lg px-2.5 py-1 ring-1 ring-foreground/10 hover:bg-muted/40">Munkaasztalon keresés →</a>
+          {szerkeszthet && p.hivatkozas_db === 0 ? <TorlesGomb p={p} /> : null}
         </div>
       </div>
 
@@ -379,6 +380,21 @@ function PartnerLap({ p, szerkeszthet }: { p: Partner; szerkeszthet: boolean }) 
       </details>
     </section>
   );
+}
+
+/** Helymaradvány törlése — csak akkor látszik, ha semmi nem hivatkozik a partnerre. */
+function TorlesGomb({ p }: { p: Partner }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [confirm, confirmDialog] = useConfirm();
+  async function torol() {
+    if (!(await confirm(`Törlöd „${p.nev}” partnert? Nincs megbízása, kapcsolattartója — a bérfuvarok rakodóhelyeként került ide. Nem visszavonható.`))) return;
+    start(async () => {
+      const r = await torolHivatkozatlanPartnert(p.id);
+      if (r.ok) { toast.success(`„${p.nev}” törölve`); router.refresh(); } else toast.error(r.hiba);
+    });
+  }
+  return <>{confirmDialog}<Button size="xs" variant="outline" disabled={pending} onClick={torol} title="Nincs megbízása és kapcsolattartója — helymaradvány">Törlés</Button></>;
 }
 
 /** A partner-törzs mezői (a korábbi lenyíló sor űrlapja változatlan mezőkkel). */
