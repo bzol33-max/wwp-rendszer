@@ -342,9 +342,10 @@
     $('#hBrk').textContent=fmtH(toBrk); $('#hDay').textContent=day>=0?fmtH(day):'túllépve'; $('#hBar').style.width=Math.min(100,S.t/32400*100)+'%'; $('#hBar').style.background=day<0?'var(--bad)':'var(--pri)';
     $('#hDaySub').textContent=fmtH(S.t)+' a napi 9:00-ból'; $('#hChip').textContent=toBrk<1800?'szünet '+fmtH(toBrk)+' múlva':'szünet '+fmtH(toBrk)+' múlva'; $('#hChip').className='chip '+(toBrk<1800?'warn':'ok');
     if(cam&&$('#follow').checked){const br=bearingAt(a.d); camB=camB==null?br:camB+(((br-camB+540)%360)-180)*.08; map.jumpTo({center:posD(Math.min(S.D,a.d+1800)),zoom:11.6,pitch:70,bearing:camB});
-      const W=innerWidth,H=innerHeight,tp=topH(); markers.concat(brkMarkers).forEach(m=>{const p=map.project(m.getLngLat());m.getElement().style.visibility=(p.x>0&&p.x<W&&p.y>tp&&p.y<H-110)?'':'hidden';});}
+      const W=innerWidth,H=innerHeight,tp=topH(); allMk().forEach(m=>{const p=map.project(m.getLngLat());m.getElement().style.visibility=(p.x>0&&p.x<W&&p.y>tp&&p.y<H-110)?'':'hidden';});}
   }
-  function hud(on){const f=on&&$('#follow').checked;if(!f)markers.concat(brkMarkers).forEach(m=>m.getElement().style.visibility='');$('#hudL').classList.toggle('show',f);$('#hudR').classList.toggle('show',f&&!$('#legsCard').classList.contains('show'));}
+  const allMk=()=>markers.concat(brkMarkers,Object.values(gpsM),[].concat(...Object.values(fleetMk)));
+  function hud(on){const f=on&&$('#follow').checked;if(!f)allMk().forEach(m=>m.getElement().style.visibility='');$('#hudL').classList.toggle('show',f);$('#hudR').classList.toggle('show',f&&!$('#legsCard').classList.contains('show'));}
   function frame(ts){
     if(!playing) return; const dt=Math.min(.1,(ts-lastTs)/1000); lastTs=ts;
     const dur=$('#follow').checked?70:18; setT(S.t+S.T/dur*dt,true);
@@ -469,30 +470,32 @@
         const k=fleet[key], g=gpsPos[key], hatra=hatraLevok(k);
         (fleetMk[key]||[]).forEach(m=>m.remove()); fleetMk[key]=[];
         if(!g||!hatra.length){delete fleetRoute[key];continue;}
-        const sig=hatra.map(m=>m.felLe+m.varos).join('|'); let fr=fleetRoute[key];
-        if(!fr||fr.sig!==sig||(hav([fr.lon,fr.lat],[g.lon,g.lat])>1500&&Date.now()-fr.t>120000)){
+        const sig=hatra.map(m=>m.felLe+m.varos+(m.lat!=null?m.lat+','+m.lon:'')).join('|'); let fr=fleetRoute[key];
+        if(!fr||fr.sig!==sig||(hav([fr.lon,fr.lat],[g.lon,g.lat])>1500&&Date.now()-fr.t>180000)){
           try{
-            const pts=[]; for(const m of hatra) pts.push(await geocode(m.varos));
+            // a rendszer saját megálló-koordinátája (rögzített pont vagy cím); ha nincs, a település
+            const pts=[]; for(const m of hatra) pts.push(m.lat!=null&&m.lon!=null?{lat:m.lat,lon:m.lon,name:m.cim||m.varos,cimbol:true}:await geocode(m.varos));
             const R=await hugo([[g.lon,g.lat]].concat(pts.map(p=>[p.lon,p.lat])));
             fr=fleetRoute[key]={sig,lon:g.lon,lat:g.lat,t:Date.now(),line:R.geometry.coordinates,km:R.distanceMeter,sec:R.durationSecond,parts:R.partials||[],pts};
           }catch(e){if(!fr||fr.sig!==sig){delete fleetRoute[key];continue;}}
         }
         if(!fleetOn) continue;
-        const col=SZIN[k.szin]||'#1c2422', tc=tachoOf(k);
+        const col=SZIN[k.szin]||'#1c2422', tc=tachoOf(k,g);
+        if(tc&&tc.szun===0) fleetMk[key].push(tachoMk([g.lon,g.lat],'brk lim','szünet esedékes most'));
         // tachó: a napi kereten túli szakasz piros, a szünet és a keret vége jelölve a vonalon
         const napiD=tc&&tc.napi!=null&&tc.napi*60<fr.sec?distAt(fr,tc.napi*60):null;
         if(napiD!=null){const c=cutLine(fr,napiD);feats.push({type:'Feature',properties:{col},geometry:{type:'LineString',coordinates:c[0]}},{type:'Feature',properties:{col:'#ad3328'},geometry:{type:'LineString',coordinates:c[1]}});
           fleetMk[key].push(tachoMk(c[1][0],'brk lim','napi keret vége '+fmtH(tc.napi*60)+' múlva'));}
         else feats.push({type:'Feature',properties:{col},geometry:{type:'LineString',coordinates:fr.line}});
         if(tc&&tc.szun!=null&&tc.szun>0&&tc.szun*60<fr.sec&&(tc.napi==null||tc.szun<tc.napi)) fleetMk[key].push(tachoMk(cutLine(fr,distAt(fr,tc.szun*60))[1][0],'brk','45 perc szünet '+fmtH(tc.szun*60)+' múlva'));
-        hatra.forEach((m,i)=>{const p=fr.pts[i]; if(!p) return; const e=document.createElement('div');e.className='fstop';e.style.borderColor=col;e.style.color=col;e.textContent=m.felLe==='felrako'?'F':'L';e.title=(m.felLe==='felrako'?'Felrakó':'Lerakó')+' · '+m.varos+(m.ceg?' · '+m.ceg:'')+(m.terv?' · '+m.terv:'');e.onclick=ev=>{ev.stopPropagation();openTruck(key);};fleetMk[key].push(new maplibregl.Marker({element:e}).setLngLat([p.lon,p.lat]).addTo(map));});
+        hatra.forEach((m,i)=>{const p=fr.pts[i]; if(!p) return; const e=document.createElement('div');e.className='fstop';e.style.borderColor=col;e.style.color=col;e.textContent=m.felLe==='felrako'?'F':'L';e.title=(m.felLe==='felrako'?'Felrakó':'Lerakó')+' · '+(m.cim||m.varos)+(m.ceg?' · '+m.ceg:'')+(m.terv?' · '+m.terv:'');e.onclick=ev=>{ev.stopPropagation();openTruck(key);};fleetMk[key].push(new maplibregl.Marker({element:e}).setLngLat([p.lon,p.lat]).addTo(map));});
       }
       map.getSource('fleet').setData({type:'FeatureCollection',features:feats});
       Object.keys(gpsM).forEach(gpsLabel); if(openKey) renderTruck(openKey);
     }finally{drawing=false;}
   }
   // A tachó csak friss adatból számít (20 percnél nem régebbi).
-  function tachoOf(k){const t=k&&k.tacho; if(!t||!t.adat) return null; const kor=(Date.now()-Date.parse(t.adat))/60000; if(!(kor<=20)) return null; return {szun:t.szunetigPerc,napi:t.napiHatraPerc,adat:t.adat};}
+  function tachoOf(k,g){const t=k&&k.tacho; if(!t||!t.adat) return null; const kor=(Date.now()-Date.parse(t.adat))/60000, all=!g||!(g.seb>3); if(!(kor<=20||(all&&kor<=720))) return null; return {szun:t.szunetigPerc,napi:t.napiHatraPerc,adat:t.adat,allapot:t.allapot};}
   function frCum(fr){if(!fr.cum){fr.cum=[0];for(let i=1;i<fr.line.length;i++)fr.cum.push(fr.cum[i-1]+hav(fr.line[i-1],fr.line[i]));}return fr.cum;}
   // vezetési idő (mp) -> távolság a vonalon; szakaszonként a HU-GO menetidejével arányosan
   function distAt(fr,sec){const cum=frCum(fr),D=cum[cum.length-1],sumM=fr.parts.reduce((a,p)=>a+p.distanceMeter,0)||fr.km; let t=sec,m=0;
@@ -506,15 +509,23 @@
     const k=fleet[key]||{}, g=gpsPos[key]||{}, fr=fleetRoute[key], col=SZIN[k.szin]||'#1c2422';
     $('#kDot').style.background=col; $('#kDot').innerHTML=TRUCK.replace(/20/g,'13'); $('#kName').textContent=g.rendszam||k.rendszam||key;
     $('#kSub').textContent=[k.sofor,k.allapot,k.hely].filter(Boolean).join(' · ')||'Nincs adat a kocsiról.';
-    const tc=tachoOf(k), hatra=hatraLevok(k); let ossz=0; const eler=fr?fr.parts.map(p=>(ossz+=p.durationSecond)):[];
-    const rows=[['Sebesség',g.seb>3?Math.round(g.seb)+' km/h':'áll'],['GPS-adat',g.ido?new Date(g.ido).toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit'}):null],['Vezetés',k.vezetes],['Tachó most',tc?[tc.szun!=null?'szünetig '+fmtH(tc.szun*60):null,tc.napi!=null?'napi keretből '+fmtH(tc.napi*60):null,'adat '+new Date(tc.adat).toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit'})].filter(Boolean).join(' · '):(k.tacho?'nincs friss tachóadat':null)],['Heti keret',k.heti],['Érkezés',k.eta],['Ma megtett',k.napiKm!=null?Math.round(k.napiKm).toLocaleString('hu-HU')+' km':null],['Fogyasztás',k.fogyasztas!=null?String(k.fogyasztas).replace('.',',')+' l/100 km (7 nap)':null]];
+    const tc=tachoOf(k,gpsPos[key]), hatra=hatraLevok(k); let ossz=0; const eler=fr?fr.parts.map(p=>(ossz+=p.durationSecond)):[];
+    const ora=d=>new Date(d).toLocaleTimeString('hu-HU',{hour:'2-digit',minute:'2-digit'});
+    const tachos=typeof k.vezetes==='string'&&k.vezetes.indexOf('Tachó: ')===0;
+    // a rendszer „ETA”-ja a megálló láncolt terv-ideje: a nap is kell mellé, ha nem ma van
+    let erk=null; if(k.eta){const cel=(/^ETA (.*): \d/.exec(k.eta)||[])[1]; if(k.etaIdopont){const d=new Date(k.etaIdopont), ma=new Date().toDateString()===d.toDateString(); erk=(cel?cel+' · ':'')+(ma?'ma ':d.toLocaleDateString('hu-HU',{weekday:'long'})+' ')+ora(d);} else erk=k.eta.replace(/^ETA /,'');}
+    const rows=[['Sebesség',g.seb>3?Math.round(g.seb)+' km/h':'áll'],['GPS-adat',g.ido?ora(g.ido):null],
+      [tachos?'Tachó':'Vezetés (GPS-becslés)',tachos?k.vezetes.slice(7):k.vezetes],
+      ['Szünetig',tc?(tc.szun===0?'szünet esedékes most':(tc.szun!=null?fmtH(tc.szun*60)+' vezetés':'álló kocsinál a tachó nem adja'))+' · tachóadat '+ora(tc.adat):(k.tacho?'nincs friss tachóadat':null)],
+      ['Heti keret',tachos?null:k.heti],['Érkezés a terv szerint',erk],
+      ['Ma megtett',k.napiKm?Math.round(k.napiKm).toLocaleString('hu-HU')+' km':null],['Fogyasztás',k.fogyasztas!=null?String(k.fogyasztas).replace('.',',')+' l/100 km (7 nap)':null]];
     const dl=$('#kRows'); dl.innerHTML=''; rows.forEach(r=>{if(!r[1])return;const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=r[0];dd.textContent=r[1];dl.append(dt,dd);});
     const all=(k.megallok||[]), box=$('#kStops'); box.innerHTML='';
-    $('#kHatra').textContent=fr?'Hátra a mai megállókig: '+fmtKm(fr.km)+' km · '+fmtH(fr.sec)+' vezetés (HU-GO, a település közepéig számolva).':(all.length?(hatraLevok(k).length?'A hátralévő út számítása folyamatban…':'A mai megállók mind készen vannak.'):'Mára nincs megbízás ennél a kocsinál.');
+    $('#kHatra').textContent=fr?'Hátra a mai megállókig: '+fmtKm(fr.km)+' km · '+fmtH(fr.sec)+' vezetés (HU-GO, '+(fr.pts.every(p=>p.cimbol)?'a megállók címéig':(fr.pts.some(p=>p.cimbol)?'ahol nincs meg a pontos cím, ott a település közepéig':'a település közepéig'))+').':(all.length?(hatraLevok(k).length?'A hátralévő út számítása folyamatban…':'A mai megállók mind készen vannak.'):'Mára nincs megbízás ennél a kocsinál.');
     all.forEach(m=>{const d=document.createElement('div');d.className='ms'+(m.allapot==='kesz'?' kesz':'');const b=document.createElement('span');b.className='fstop';b.style.borderColor=col;b.style.color=col;b.textContent=m.felLe==='felrako'?'F':'L';
-      const t=document.createElement('div');const l1=document.createElement('div');const nb=document.createElement('b');nb.textContent=m.varos;l1.append(nb,document.createTextNode([m.ceg,m.partner&&m.partner!==m.ceg?m.partner:null].filter(Boolean).map(x=>' · '+x).join('')));
+      const t=document.createElement('div');const l1=document.createElement('div');const nb=document.createElement('b');nb.textContent=m.varos;nb.title=m.cim||'';l1.append(nb,document.createTextNode([m.ceg,m.partner&&m.partner!==m.ceg?m.partner:null].filter(Boolean).map(x=>' · '+x).join('')));
       const l2=document.createElement('div');l2.className='sm';l2.textContent=[m.allapot==='kesz'?'kész':(m.allapot==='most'?'most ott':(m.allapot==='kovetkezo'?'következő':null)),m.terv?'terv '+m.terv:null,m.teny,m.elteres].filter(Boolean).join(' · ');
-      const hi=hatra.indexOf(m); let l3=null; if(hi>=0&&eler[hi]!=null){l3=document.createElement('div');l3.className='sm';const tul=tc&&tc.napi!=null&&eler[hi]>tc.napi*60;l3.textContent='innen '+fmtH(eler[hi])+' vezetés'+(tul?' — a napi kereten túl ('+fmtH(eler[hi]-tc.napi*60)+'-val)':(tc&&tc.napi!=null?' — belefér a napi keretbe':''));if(tul){l3.style.color='var(--bad)';l3.style.fontWeight='600';}}
+      const hi=hatra.indexOf(m); let l3=null; if(hi>=0&&eler[hi]!=null){l3=document.createElement('div');l3.className='sm';const tul=tc&&tc.napi!=null&&eler[hi]>tc.napi*60;l3.textContent='innen '+fmtH(eler[hi])+' vezetés'+(tul?' — a napi kereten túl (+'+fmtH(eler[hi]-tc.napi*60)+')':(tc&&tc.napi!=null?' — belefér a napi keretbe':''));if(tul){l3.style.color='var(--bad)';l3.style.fontWeight='600';}}
       t.append(l1,l2); if(l3) t.append(l3);d.append(b,t);box.appendChild(d);});
     $('#kRoute').disabled=!fr; $('#kZoom').disabled=!gpsPos[key];
   }
