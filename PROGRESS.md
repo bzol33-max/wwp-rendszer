@@ -1,5 +1,12 @@
 # PROGRESS
 
+## 2026-11-18 — Partnerek oldal V2d + partner-törzs teljes kitöltése
+- **Partnerek oldal** (`components/fuvarozas2/partnerek.tsx`, `lib/fuvarozas2/partnerek.ts`): bal oldalt ABC-csoportos névlista (munkaszám, hiány-pont, kijelölés összevonáshoz), jobb oldalt a kiválasztott partner lapja: kapcsolattartók `tel:`/`mailto:` linkkel, 5 csempe (munkák, forgalom, átlag km-díj, **tényleges fizetési nap** a párosított `szamla` sorokból, **nyitott/lejárt számla**), tipikus viszonylatok, rakodási idő, megbízás-tábla (`getPartnerMegbizasok`: város, HU-GO km, díj, Ft/km, számla állapot, „Megbízás ↗ · Drive PDF ↗”), a törzs űrlapja lenyíló „Adatok” alatt. Kereső minden mezőre (telefon számjegyekkel is).
+- **Postacím** (`lib/megbizasok/repo.ts` SOR_SQL): ha a megbízáson és a partneren nincs, a megbízó **székhelye** a postacím (tulajdonos döntése). Partnerek: székhellyel nem hiányos.
+- **Teljes kitöltés** („minden adat minden partnernél meglegyen”): a kiolvasó (`partner-javaslat.ts`, ingyenes modellek) a székhelyt és a kapcsolattartókat is kéri; a 2026-11-18 09:00 előtt olvasott iratok egyszer újra sorra kerülnek (óránként 2 irat, `UJRAOLVASAS_UTAN`). Kapcsolattartók egyből a `fuvar_kapcsolatok`-ba a partnerhez kötve (`rogzitKapcsolatokat`, a mi embereink kiszűrve, telefon `telefonSzep`). Kitöltés (`partner-kitoltes-alap.ts`): székhely a megbízás fejlécéből, különben a Számlázz.hu vevőcíméből / számlázási címből. Migráció `052`: a `fuvar_partner_javaslat.mezo` check a székhelyt is engedi (enélkül a „Frissítés most” elbukott).
+- Teszt: partner-javaslat 19, partner-kitoltes 28, megbízás-szűrő 21, munkaasztal 40, papír-jelzés 21, állapotgép 71; tsc/eslint tiszta. Élesben: ÁB SPEED, ÁJ-TRANS székhelye a számlából megjött.
+- Nyitott: az újraolvasás ~43 megbízónál óránként 2 irat → 1–2 nap; utána látszik, kinek nincs még kapcsolattartója/székhelye (a partnerlapon szürkén „még nincs: …”). Keskeny ablakban a megbízás-tábla vízszintesen görgethető.
+
 ## 2026-11-05 — Megbízás-beolvasás: az újraküldött irat nem lesz új fuvar
 - Eset: RBT poz 3542 — a #342 már kész volt, a #362 ugyanazzal a hivatkozással, a régi felrakási nappal jött létre, ezért Gergő holnapjának sorrendje is elromlott (Tervezés). A #362 törölve, kézzel.
 - `lib/fuvarozas/import/duplikatum.ts`, `azonosHivatkozasuFuvar` (`naplo.ts`), `drive-sync-core.ts`: azonos megbízó + hivatkozás + felrakási nap esetén az irat a meglévő fuvarhoz kerül, új sor nem keletkezik, a napló `duplikatum`, és figyelmeztetés megy. Hiányzó hivatkozásnál új sor marad. Teszt: `scripts/teszt-import.mts`.
