@@ -104,7 +104,7 @@ export default async function Page({ searchParams }: {
         jarmuKod: elokeszitett?.elokeszites_jarmu ?? (sp.kocsi && /^[\w .\/-]{1,40}$/.test(sp.kocsi) ? sp.kocsi : null),
         honnan: elokeszitett?.felrako ?? "",
         hova: elokeszitett?.lerako ?? "",
-        kitol: elokeszitett?.kitol ?? null,
+        kitol: elokeszitett ? elokeszitett.kitol ?? null : "Well-Worn Pallet Kft.",
         kinek: elokeszitett?.partner_nev ?? null,
         megjegyzes: elokeszitett?.megjegyzes ?? null,
       }}

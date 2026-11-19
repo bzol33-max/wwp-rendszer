@@ -53,6 +53,23 @@ export function SajatFuvarUrlap({
   const allit = (k: keyof SajatFuvarAdat) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setA({ ...a, [k]: e.target.value });
 
+  // Kinek ↔ Hová (2026-11-19): a saját áru partnerét választva a címe beíródik,
+  // címet írva a partner. Csak üres (vagy az előzőleg így kitöltött) mezőt ír felül.
+  const kulcs = (x: string) => x.trim().toLowerCase();
+  const sp = segedlet.sajatPartnerek;
+  function kinekValt(v: string) {
+    const p = sp.find((x) => kulcs(x.nev) === kulcs(v));
+    const elozo = sp.find((x) => kulcs(x.nev) === kulcs(a.kinek ?? ""));
+    const irhato = !a.hova.trim() || (!!elozo?.cim && kulcs(elozo.cim) === kulcs(a.hova));
+    setA({ ...a, kinek: v, hova: p?.cim && irhato ? p.cim : a.hova });
+  }
+  function hovaValt(v: string) {
+    const p = sp.find((x) => x.cim && kulcs(x.cim) === kulcs(v));
+    const elozo = sp.find((x) => x.cim && kulcs(x.cim) === kulcs(a.hova));
+    const irhato = !(a.kinek ?? "").trim() || (!!elozo && kulcs(elozo.nev) === kulcs(a.kinek ?? ""));
+    setA({ ...a, hova: v, kinek: p && irhato ? p.nev : a.kinek });
+  }
+
   function ment(utana?: "kocsira") {
     start(async () => {
       let r = await mentSajatFuvart(id, a);
@@ -112,16 +129,20 @@ export function SajatFuvarUrlap({
           </select>
         </label>
         <label className={cimke}>Honnan<input id="sf-honnan" list="sf-helyek" className={mezo} value={a.honnan} onChange={allit("honnan")} placeholder="telephely vagy cím" /></label>
-        <label className={cimke}>Hová<input id="sf-hova" list="sf-helyek" className={mezo} value={a.hova} onChange={allit("hova")} placeholder="cím" /></label>
-        <label className={cimke}>Kitől (nem kötelező)<input id="sf-kitol" list="sf-partnerek" className={mezo} value={a.kitol ?? ""} onChange={allit("kitol")} placeholder="ki adja az árut" /></label>
-        <label className={cimke}>Kinek (nem kötelező)<input id="sf-kinek" list="sf-partnerek" className={mezo} value={a.kinek ?? ""} onChange={allit("kinek")} placeholder="pl. FABRIKA + 2000 Kft." /></label>
+        <label className={cimke}>Hová<input id="sf-hova" list="sf-hova-lista" className={mezo} value={a.hova} onChange={(e) => hovaValt(e.target.value)} placeholder="cím — a partnert kitölti" /></label>
+        <label className={cimke}>Kitől<input id="sf-kitol" className={mezo} value={a.kitol ?? ""} onChange={allit("kitol")} placeholder="Well-Worn Pallet Kft." /></label>
+        <label className={cimke}>Kinek<input id="sf-kinek" list="sf-partnerek" className={mezo} value={a.kinek ?? ""} onChange={(e) => kinekValt(e.target.value)} placeholder="saját partner — a címet kitölti" /></label>
         <label className={`${cimke} col-span-2`}>Megjegyzés<textarea id="sf-megj" rows={2} className={mezo} value={a.megjegyzes ?? ""} onChange={allit("megjegyzes")} /></label>
       </div>
       <datalist id="sf-helyek">
         {segedlet.helyek.map((h) => <option key={h.cim} value={h.cim} label={h.nev ?? undefined} />)}
       </datalist>
       <datalist id="sf-partnerek">
-        {segedlet.partnerek.map((p) => <option key={p} value={p} />)}
+        {sp.map((p) => <option key={p.nev} value={p.nev} label={p.cim ?? undefined} />)}
+      </datalist>
+      <datalist id="sf-hova-lista">
+        {sp.filter((p) => p.cim).map((p) => <option key={`p-${p.nev}`} value={p.cim!} label={p.nev} />)}
+        {segedlet.helyek.filter((h) => !sp.some((p) => p.cim === h.cim)).map((h) => <option key={h.cim} value={h.cim} label={h.nev ?? undefined} />)}
       </datalist>
 
       <div className="flex flex-wrap items-center gap-2">

@@ -1,5 +1,6 @@
 "use server";
 
+import { sajatCegunkE } from "@/lib/fuvarozas/fuvar-constants";
 import * as actions from "@/lib/megbizasok/akciok";
 
 // Saját fuvar előkészítése és „kocsira adása” (Budaházi Zoltán,
@@ -85,12 +86,30 @@ export type SajatFuvarSegedlet = {
   /** Választható helyek: a cím kerül a mezőbe (a geokódolás a címből dolgozik), a név csak segít választani. */
   helyek: { cim: string; nev: string | null }[];
   partnerek: string[];
+  /** Saját áru partnerei (2026-11-19): akinek saját fuvar ment, vagy raklap-számlája van — fuvarmegbízók nélkül. A cím az utolsó saját lerakó, különben székhely. */
+  sajatPartnerek: { nev: string; cim: string | null }[];
 };
 
 /** A rögzítő űrlap választólistái: kocsik, telephelyek + korábbi címek, partnerek. */
 export async function getSajatFuvarSegedlet(): Promise<SajatFuvarSegedlet> {
   await requireViewPermission("fuvarozas");
-  const [cimek, partnerek, jarmuLista, telephelyLista] = await Promise.all([
+  const [sajatPartnerek, cimek, partnerek, jarmuLista, telephelyLista] = await Promise.all([
+    query<{ nev: string; cim: string | null }>(
+      `select p.nev,
+              coalesce(
+                -- a partner oldali cím: az utolsó saját fuvar lerakója, ha nem a mi telephelyünk, különben a felrakója
+                (select x.cim from fuvar_megbizasok m
+                   cross join lateral (values (1, m.lerako), (2, m.felrako)) as x(sorrend, cim)
+                  where m.jelleg = 'sajat' and m.partner_id = p.id and m.torolt_at is null and coalesce(x.cim, '') <> ''
+                    and x.cim !~* '(szakoly|balk[aá]ny|t[uü]nde\\s*(u|ut|út|utca)\\.?\\s*20)'
+                  order by m.datum desc, m.id desc, x.sorrend limit 1),
+                nullif(p.szekhely, '')) as cim
+         from fuvar_partnerek p
+        where exists (select 1 from fuvar_megbizasok m where m.jelleg = 'sajat' and m.partner_id = p.id and m.torolt_at is null)
+           or exists (select 1 from szamla s where s.kategoria = 'raklap' and not s.sztorno
+                       and lower(s.vevo_nev) = any (select lower(x) from unnest(array_append(coalesce(p.nevvaltozatok, '{}'), p.nev)) x))
+        order by p.nev`
+    ),
     query<{ cim: string }>(
       `select cim from (
          select felrako as cim, max(datum) as utolso from fuvar_megbizasok where jelleg = 'sajat' and felrako <> '' group by felrako
@@ -108,5 +127,6 @@ export async function getSajatFuvarSegedlet(): Promise<SajatFuvarSegedlet> {
     jarmuvek: jarmuLista.filter((j) => j.rendszamok.length > 0).map((j) => ({ kod: j.kod ?? j.rendszamok[0], cimke: `${j.sofor} · ${j.rendszamok[0]}` })),
     helyek: [...telephelyek, ...cimek.filter((c) => !ismert.has(c.cim)).map((c) => ({ cim: c.cim, nev: null }))],
     partnerek: partnerek.map((p) => p.nev),
+    sajatPartnerek: sajatPartnerek.filter((p) => !sajatCegunkE(p.nev) && !/telephely/i.test(p.nev)),
   };
 }
