@@ -88,9 +88,9 @@ function UMezo({ m, szam, kesz, onMasol, cimke, className }: { m: UrlapMezo; sza
           title="Kattints a másoláshoz"
           aria-label={`${cimke} másolása`}
           onClick={() => onMasol(m.kulcs, m.ertek!)}
-          className={`flex h-7 min-w-0 flex-1 items-center justify-between gap-2 border bg-background px-2 text-left text-[13px] font-semibold tabular-nums ${megvan ? "border-[var(--f2-mint)] ring-2 ring-[var(--f2-mint)]/25" : "border-primary ring-2 ring-primary/20 hover:bg-primary/5"}`}
+          className={`flex min-h-7 min-w-0 flex-1 items-center justify-between gap-2 border bg-background px-2 py-0.5 text-left text-[13px] font-semibold tabular-nums ${megvan ? "border-[var(--f2-mint)] ring-2 ring-[var(--f2-mint)]/25" : "border-primary ring-2 ring-primary/20 hover:bg-primary/5"}`}
         >
-          <span className="truncate">{m.ertek}</span>
+          <span className="min-w-0 break-words">{m.ertek}</span>
           {megvan ? <Check className="size-3.5 shrink-0 text-[var(--f2-mint)]" aria-hidden /> : <Copy className="size-3.5 shrink-0 text-primary" aria-hidden />}
         </button>
       ) : (
@@ -182,7 +182,7 @@ function SzamlazzUrlap({ adat, kesz, onMasol }: { adat: SzamlazasiSeged; kesz: s
       </div>
       <div className="mt-4 bg-[#c9d3e3]/70 px-5 pb-4 pt-3">
         <div className="mb-1.5 text-base font-bold text-[#4a5a85]">Tételek</div>
-        <div className="grid grid-cols-[minmax(0,3fr)_3.5rem_3.5rem_minmax(0,1.3fr)_4rem_minmax(0,1fr)_minmax(0,1fr)] items-center gap-2 text-xs">
+        <div className="grid grid-cols-[minmax(0,4fr)_3rem_3rem_minmax(0,1.3fr)_3.5rem_minmax(0,0.9fr)_minmax(0,1fr)] items-center gap-2 text-xs">
           <span>Tétel neve</span><span>Menny.</span><span>Egys.</span><span>Nettó egységár</span><span>Áfa</span><span className="text-right">Nettó ár</span><span className="text-right">Bruttó ár</span>
           <UMezo m={{ kulcs: "megn", ertek: adat.megnevezes }} szam={nMegn} cimke="Tétel neve" {...k} />
           <UMezo m={{ kulcs: "menny", ertek: `${adat.mennyiseg}`, auto: true }} cimke="Mennyiség" {...k} />
