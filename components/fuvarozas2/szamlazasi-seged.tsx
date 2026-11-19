@@ -77,21 +77,21 @@ type UrlapMezo = { kulcs: string; ertek: string | null; auto?: boolean; hiany?: 
 function UMezo({ m, szam, kesz, onMasol, cimke, className }: { m: UrlapMezo; szam?: number; kesz: string[]; onMasol: (k: string, v: string) => void; cimke: string; className?: string }) {
   const megvan = kesz.includes(m.kulcs);
   if (m.auto) {
-    return <div className={`flex h-7 items-center border border-foreground/15 bg-muted/40 px-2 text-[13px] text-muted-foreground ${className ?? ""}`}>{m.ertek ?? ""}</div>;
+    return <div className={`flex h-7 items-center border border-[#4a5a85] bg-white px-2 text-[13px] text-[#333] ${className ?? ""}`}>{m.ertek ?? ""}</div>;
   }
   return (
     <div className={`flex items-center gap-1.5 ${className ?? ""}`}>
-      {szam ? <span className={`flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white ${megvan ? "bg-[var(--f2-mint)]" : "bg-primary"}`}>{megvan ? "✓" : szam}</span> : null}
+      {szam ? <span className={`flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white ${megvan ? "bg-[var(--f2-mint)]" : "bg-[#ff6630]"}`}>{megvan ? "✓" : szam}</span> : null}
       {m.ertek ? (
         <button
           type="button"
           title="Kattints a másoláshoz"
           aria-label={`${cimke} másolása`}
           onClick={() => onMasol(m.kulcs, m.ertek!)}
-          className={`flex min-h-7 min-w-0 flex-1 items-center justify-between gap-2 border bg-background px-2 py-0.5 text-left text-[13px] font-semibold tabular-nums ${megvan ? "border-[var(--f2-mint)] ring-2 ring-[var(--f2-mint)]/25" : "border-primary ring-2 ring-primary/20 hover:bg-primary/5"}`}
+          className={`flex min-h-7 min-w-0 flex-1 items-center justify-between gap-2 border-2 bg-white px-2 py-0.5 text-left text-[#111] text-[13px] font-semibold tabular-nums ${megvan ? "border-[var(--f2-mint)] ring-2 ring-[var(--f2-mint)]/25" : "border-[#ff6630] ring-[3px] ring-[#ffe1d6] hover:bg-[#fff4ef]"}`}
         >
           <span className="min-w-0 break-words">{m.ertek}</span>
-          {megvan ? <Check className="size-3.5 shrink-0 text-[var(--f2-mint)]" aria-hidden /> : <Copy className="size-3.5 shrink-0 text-primary" aria-hidden />}
+          {megvan ? <Check className="size-3.5 shrink-0 text-[var(--f2-mint)]" aria-hidden /> : <Copy className="size-3.5 shrink-0 text-[#ff6630]" aria-hidden />}
         </button>
       ) : (
         <span className="flex h-7 flex-1 items-center border border-[var(--f2-amb)] bg-[var(--f2-amb-l)] px-2 text-xs font-semibold text-[var(--f2-amb)]">hiányzik</span>
@@ -112,11 +112,11 @@ function SzamlazzUrlap({ adat, kesz, onMasol }: { adat: SzamlazasiSeged; kesz: s
   const nTelj = sz(), nHat = sz(), nDev = adat.devizas ? sz() : 0, nRend = adat.rendelesszam.ertek || adat.rendelesszam.kotelezo ? sz() : 0;
   const nMegn = sz(), nReszlet = adat.reszlet ? sz() : 0, nAr = sz(), nMail = sz();
   return (
-    <div className="overflow-hidden rounded-lg border bg-background font-[Arial,Helvetica,sans-serif] text-foreground">
+    <div className="overflow-hidden rounded-lg border bg-white font-[Arial,Helvetica,sans-serif] text-[#222]">
       <div className="px-5 pt-4">
         <div className="flex items-end">
           <span className="w-40 pb-1.5 text-lg font-bold text-[#00c16e]">Számla</span>
-          <span className="bg-muted px-3 py-2 text-xs text-muted-foreground">Díjbekérő · Előlegszámla · Szállítólevél · Nyugta</span>
+          <span className="bg-[#eef0f5] px-3 py-2 text-xs text-[#4a5a85]">Díjbekérő · Előlegszámla · Szállítólevél · Nyugta</span>
         </div>
         <div className="mb-3 h-1 bg-[#00c16e]" />
         <div className="grid gap-8 md:grid-cols-2">
@@ -129,7 +129,7 @@ function SzamlazzUrlap({ adat, kesz, onMasol }: { adat: SzamlazasiSeged; kesz: s
               <div><span className={cim}>Számla típusa</span><UMezo m={{ kulcs: "tipus", ertek: "ahogy szoktad", auto: true }} cimke="Számla típusa" {...k} /></div>
               <div><span className={cim}>Számlaszám előtag</span><UMezo m={{ kulcs: "elotag", ertek: "WLLWR", auto: true }} cimke="Előtag" {...k} /></div>
             </div>
-            <div className="mt-3 bg-muted/60 px-3 pb-4 pt-1">
+            <div className="mt-3 bg-[#f4f5f9] px-3 pb-4 pt-1">
               <div className="grid grid-cols-2 gap-4">
                 <div><span className={cim}>Teljesítés</span><UMezo m={{ kulcs: "telj", ertek: adat.teljesites }} szam={nTelj} cimke="Teljesítés" {...k} /></div>
                 <div><span className={cim}>Fizetési mód</span><UMezo m={{ kulcs: "mod", ertek: adat.fizetesiMod, auto: true }} cimke="Fizetési mód" {...k} /></div>
@@ -137,19 +137,19 @@ function SzamlazzUrlap({ adat, kesz, onMasol }: { adat: SzamlazasiSeged; kesz: s
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <span className={cim}>Keltezés</span>
-                  <b className="text-[13px]">{adat.kiallitas}</b> <span className="text-[11px] text-muted-foreground">(ma)</span>
-                  <div className="mt-1 text-[11px] text-muted-foreground">határidő-gomb: <b className="rounded bg-primary/15 px-1 text-primary">+{adat.hataridoNap}</b> <span>— {adat.hataridoForras}</span></div>
+                  <b className="text-[13px]">{adat.kiallitas}</b> <span className="text-[11px] text-[#555]">(ma)</span>
+                  <div className="mt-1 text-[11px] text-[#555]">határidő-gomb: <b className="rounded bg-[#ff6630] px-1.5 text-white">+{adat.hataridoNap}</b> <span>— {adat.hataridoForras}</span></div>
                 </div>
                 <div><span className={cim}>Fizetési határidő</span><UMezo m={{ kulcs: "hat", ertek: adat.hatarido }} szam={nHat} cimke="Fizetési határidő" {...k} /></div>
               </div>
               <span className={cimV}>Deviza</span>
               <UMezo m={{ kulcs: "penznem", ertek: deviza, auto: !adat.devizas }} szam={nDev || undefined} cimke="Deviza" className="w-32" {...k} />
-              {adat.devizas ? <p className="mt-1 text-[11px] text-muted-foreground">Devizás: <b className="text-foreground">Árfolyam: MNB</b>, a teljesítés napjával ({adat.teljesites}).</p> : null}
+              {adat.devizas ? <p className="mt-1 text-[11px] text-[#555]">Devizás: <b className="text-foreground">Árfolyam: MNB</b>, a teljesítés napjával ({adat.teljesites}).</p> : null}
               <span className={cimV}>Számla nyelve</span>
               <UMezo m={{ kulcs: "nyelv", ertek: "magyar", auto: true }} cimke="Számla nyelve" className="w-44" {...k} />
               <span className={cimV}>Rendelésszám</span>
               {nRend ? <UMezo m={{ kulcs: "rend", ertek: adat.rendelesszam.ertek }} szam={nRend} cimke="Rendelésszám" className="w-64" {...k} /> : <UMezo m={{ kulcs: "rend", ertek: "nem kell", auto: true }} cimke="Rendelésszám" className="w-64" {...k} />}
-              {adat.rendelesszam.forras ? <div className="mt-1 text-[11px] text-muted-foreground">{adat.rendelesszam.forras}</div> : null}
+              {adat.rendelesszam.forras ? <div className="mt-1 text-[11px] text-[#555]">{adat.rendelesszam.forras}</div> : null}
               {!adat.rendelesszam.ertek && adat.rendelesszam.kotelezo ? (
                 <div className="mt-1 text-[11px] text-[var(--f2-amb)]">Sem a megbízáson, sem a megbízó levelében nincs. <a href={`/fuvarozas2/megbizasok?reszlet=${adat.megbizasId}&szerk=1`} className="font-semibold underline">Beírom a megbízásba →</a></div>
               ) : null}
@@ -172,15 +172,15 @@ function SzamlazzUrlap({ adat, kesz, onMasol }: { adat: SzamlazasiSeged; kesz: s
             </div>
             <span className={cimV}>Utca, házszám</span>
             <UMezo m={{ kulcs: "cim", ertek: adat.vevo.cim }} szam={nCim} cimke="Utca, házszám" {...k} />
-            <div className="mt-1 text-[11px] text-muted-foreground">forrás: {adat.vevo.forras}</div>
+            <div className="mt-1 text-[11px] text-[#555]">forrás: {adat.vevo.forras}</div>
             <div className="mt-4 border-t border-dashed border-foreground/40" />
             <span className={cim}>E-mail cím</span>
             <UMezo m={{ kulcs: "mail", ertek: adat.email }} szam={nMail} cimke="E-mail cím" {...k} />
-            <div className="mt-1 text-[11px] text-muted-foreground">{adat.emailForras ? `(${adat.emailForras}) · ` : ""}csatolmány: a fuvarlevél-fotók ({adat.cmrDb} db)</div>
+            <div className="mt-1 text-[11px] text-[#555]">{adat.emailForras ? `(${adat.emailForras}) · ` : ""}csatolmány: a fuvarlevél-fotók ({adat.cmrDb} db)</div>
           </section>
         </div>
       </div>
-      <div className="mt-4 bg-[#c9d3e3]/70 px-5 pb-4 pt-3">
+      <div className="mt-4 bg-[#c9d3e3] px-5 pb-4 pt-3 text-[#222]">
         <div className="mb-1.5 text-base font-bold text-[#4a5a85]">Tételek</div>
         <div className="grid grid-cols-[minmax(0,4fr)_3rem_3rem_9rem_3.5rem_minmax(0,0.9fr)_minmax(0,1fr)] items-center gap-2 text-xs">
           <span>Tétel neve</span><span>Menny.</span><span>Egys.</span><span>Nettó egységár</span><span>Áfa</span><span className="text-right">Nettó ár</span><span className="text-right">Bruttó ár</span>
@@ -243,7 +243,7 @@ export function SzamlazasiSegedGomb({ megbizasId, elszamolasJog }: { megbizasId:
         <DialogContent className="fuvarozas2 max-h-[92vh] overflow-y-auto sm:max-w-6xl">
           <DialogHeader>
             <DialogTitle>Számlázási segéd</DialogTitle>
-            <DialogDescription>{adat?.fejlec ?? ""} — a Számlázz.hu „Számla szerkesztés” oldalának mása: a kék, számozott mezőket másold át ugyanarra a helyre, a halványakhoz nem kell nyúlni.</DialogDescription>
+            <DialogDescription>{adat?.fejlec ?? ""} — a Számlázz.hu „Számla szerkesztés” oldalának mása: a narancs keretes, számozott mezőket másold át ugyanarra a helyre, a halványakhoz nem kell nyúlni.</DialogDescription>
           </DialogHeader>
           {toltes && !adat ? <p className="text-sm text-muted-foreground">Betöltés…</p> : null}
           {hiba ? <p className="text-sm text-[var(--f2-red)]">{hiba}</p> : null}
@@ -278,7 +278,7 @@ export function SzamlazasiSegedGomb({ megbizasId, elszamolasJog }: { megbizasId:
                   </Button>
                   {!adat.kiallithato ? <span className="text-xs text-[var(--f2-red)]">Előbb a piros tételeket kell rendezni.</span> : null}
                   {!adat.papirMegvan ? <span className="rounded-md bg-[var(--f2-amb-l)] px-2 py-1 text-xs font-medium text-[var(--f2-amb)]">{PAPIR_HIANY_SZOVEG} — a számla ettől kiállítható, de a papírt kérd be.</span> : null}
-                  {adat.elozoSzamla ? <span className="text-[11px] text-muted-foreground">legutóbbi számla ennek a megbízónak: {adat.elozoSzamla.szamlaszam} ({adat.elozoSzamla.kiallitas})</span> : null}
+                  {adat.elozoSzamla ? <span className="text-[11px] text-[#555]">legutóbbi számla ennek a megbízónak: {adat.elozoSzamla.szamlaszam} ({adat.elozoSzamla.kiallitas})</span> : null}
                 </div>
                 <Button variant="outline" onClick={() => masol("mind", mindSzovegkent([...m.vevo, ...m.fizetes, ...m.tetel, ...m.kuldes]))}>
                   {masolt === "mind" ? "Minden mező másolva" : "Mind másolása egyben (szövegként)"}
