@@ -100,7 +100,6 @@ export async function getSajatFuvarSegedlet(): Promise<SajatFuvarSegedlet> {
               (select nullif(s.szallitasi_cim, '') from szallitolevel_import s
                 where lower(s.vevo) = any (select lower(x) from unnest(array_append(coalesce(p.nevvaltozatok, '{}'), p.nev)) x) and coalesce(s.szallitasi_cim, '') <> ''
                 order by s.kelt desc limit 1) as szl_cim,
-              (
                 -- a partner oldali cím: az utolsó saját fuvar lerakója, ha nem a mi telephelyünk, különben a felrakója
                 (select x.cim from fuvar_megbizasok m
                    cross join lateral (values (1, m.lerako), (2, m.felrako)) as x(sorrend, cim)
