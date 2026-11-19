@@ -6,15 +6,11 @@
 // setSzamlaSzam-mal kerül a megbízásra (számlázható → számlázva).
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Check, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { getSzamlazasiSeged, type SzamlazasiSeged } from "@/lib/fuvarozas2/szamlazasi-seged";
-import { setSzamlaSzam } from "@/lib/fuvarozas2/megbizasok";
-import { PAPIR_HIANY_SZOVEG } from "@/lib/megbizasok/papir-alap";
 import { mindSzovegkent, type SegedMezo } from "@/lib/fuvarozas2/szamlazasi-seged-alap";
 
 async function vagolapra(szoveg: string): Promise<boolean> {
@@ -202,16 +198,14 @@ function SzamlazzUrlap({ adat, kesz, onMasol }: { adat: SzamlazasiSeged; kesz: s
 }
 
 
-export function SzamlazasiSegedGomb({ megbizasId, elszamolasJog }: { megbizasId: string; elszamolasJog: boolean }) {
-  const router = useRouter();
+// `elszamolasJog`: a hívók adják; a számlaszám-mentés kikerült a segédből (2026-11-19), a prop megmaradt.
+export function SzamlazasiSegedGomb({ megbizasId }: { megbizasId: string; elszamolasJog?: boolean }) {
   const [nyitva, setNyitva] = useState(false);
   const [adat, setAdat] = useState<SzamlazasiSeged | null>(null);
   const [hiba, setHiba] = useState<string | null>(null);
   const [masolt, setMasolt] = useState<string | null>(null);
   const [kesz, setKesz] = useState<string[]>([]);
-  const [szamlaSzam, setSzamlaSzamErtek] = useState("");
   const [toltes, startToltes] = useTransition();
-  const [mentes, startMentes] = useTransition();
 
   function megnyit() {
     setNyitva(true);
@@ -222,7 +216,6 @@ export function SzamlazasiSegedGomb({ megbizasId, elszamolasJog }: { megbizasId:
         const a = await getSzamlazasiSeged(megbizasId);
         if (!a) setHiba("Ehhez a megbízáshoz nem készíthető számla (nem bérfuvar).");
         setAdat(a);
-        if (a?.elozoSzamla) setSzamlaSzamErtek(a.elozoSzamla.szamlaszam.replace(/\d+$/, ""));
       } catch (e) {
         setHiba(e instanceof Error ? e.message : "Nem sikerült betölteni.");
       }
@@ -240,50 +233,19 @@ export function SzamlazasiSegedGomb({ megbizasId, elszamolasJog }: { megbizasId:
     <>
       <Button size="sm" onClick={megnyit}>Számlázok</Button>
       <Dialog open={nyitva} onOpenChange={setNyitva}>
-        <DialogContent className="fuvarozas2 max-h-[92vh] overflow-y-auto sm:max-w-6xl">
+        <DialogContent className="fuvarozas2 max-h-[92vh] overflow-y-auto sm:max-w-5xl">
           <DialogHeader>
             <DialogTitle>Számlázási segéd</DialogTitle>
-            <DialogDescription>{adat?.fejlec ?? ""} — a Számlázz.hu „Számla szerkesztés” oldalának mása: a narancs keretes, számozott mezőket másold át ugyanarra a helyre, a halványakhoz nem kell nyúlni.</DialogDescription>
+            <DialogDescription>{adat?.fejlec ?? ""}</DialogDescription>
           </DialogHeader>
           {toltes && !adat ? <p className="text-sm text-muted-foreground">Betöltés…</p> : null}
           {hiba ? <p className="text-sm text-[var(--f2-red)]">{hiba}</p> : null}
           {adat && m ? (
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+            <div className="flex flex-col gap-3">
               <SzamlazzUrlap adat={adat} kesz={kesz} onMasol={masol} />
-
-              <div className="flex flex-col gap-3">
-                <div className="rounded-lg border bg-background p-4">
-                  <h3 className="mb-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Ellenőrzés kiállítás előtt</h3>
-                  <ul className="flex flex-col gap-2 text-sm">
-                    {adat.ellenorzes.map((e, i) => (
-                      <li key={i} className="flex items-start gap-2">
-                        <span className={`mt-0.5 flex size-[18px] shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white ${e.ok ? "bg-[var(--f2-mint)]" : e.blokkol ? "bg-[var(--f2-red)]" : "bg-[var(--f2-amb)]"}`}>{e.ok ? "✓" : "!"}</span>
-                        <span>{e.szoveg}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-                <div className="flex flex-col gap-2 rounded-lg border bg-background p-4">
-                  <h3 className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">Kiállítás után</h3>
-                  <label htmlFor="seged-szamlaszam" className="text-sm">Számlaszám a Számlázz.hu-ból</label>
-                  <Input id="seged-szamlaszam" value={szamlaSzam} onChange={(e) => setSzamlaSzamErtek(e.target.value)} placeholder="WLLWR-2026-…" disabled={!elszamolasJog || mentes} />
-                  <Button
-                    disabled={!elszamolasJog || mentes || !adat.kiallithato || !/\d+$/.test(szamlaSzam.trim())}
-                    onClick={() => startMentes(async () => {
-                      const r = await setSzamlaSzam(adat.megbizasId, szamlaSzam.trim());
-                      if (r.ok) { toast.success("Számlaszám mentve"); setNyitva(false); router.refresh(); } else toast.error(r.hiba);
-                    })}
-                  >
-                    Kiállítva — számlaszám mentése
-                  </Button>
-                  {!adat.kiallithato ? <span className="text-xs text-[var(--f2-red)]">Előbb a piros tételeket kell rendezni.</span> : null}
-                  {!adat.papirMegvan ? <span className="rounded-md bg-[var(--f2-amb-l)] px-2 py-1 text-xs font-medium text-[var(--f2-amb)]">{PAPIR_HIANY_SZOVEG} — a számla ettől kiállítható, de a papírt kérd be.</span> : null}
-                  {adat.elozoSzamla ? <span className="text-[11px] text-[#555]">legutóbbi számla ennek a megbízónak: {adat.elozoSzamla.szamlaszam} ({adat.elozoSzamla.kiallitas})</span> : null}
-                </div>
-                <Button variant="outline" onClick={() => masol("mind", mindSzovegkent([...m.vevo, ...m.fizetes, ...m.tetel, ...m.kuldes]))}>
-                  {masolt === "mind" ? "Minden mező másolva" : "Mind másolása egyben (szövegként)"}
-                </Button>
-              </div>
+              <Button variant="outline" className="self-end" onClick={() => masol("mind", mindSzovegkent([...m.vevo, ...m.fizetes, ...m.tetel, ...m.kuldes]))}>
+                {masolt === "mind" ? "Minden mező másolva" : "Mind másolása egyben (szövegként)"}
+              </Button>
             </div>
           ) : null}
         </DialogContent>
