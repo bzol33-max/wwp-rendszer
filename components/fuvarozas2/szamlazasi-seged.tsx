@@ -182,7 +182,7 @@ function SzamlazzUrlap({ adat, kesz, onMasol }: { adat: SzamlazasiSeged; kesz: s
       </div>
       <div className="mt-4 bg-[#c9d3e3]/70 px-5 pb-4 pt-3">
         <div className="mb-1.5 text-base font-bold text-[#4a5a85]">Tételek</div>
-        <div className="grid grid-cols-[minmax(0,4fr)_3rem_3rem_minmax(0,1.3fr)_3.5rem_minmax(0,0.9fr)_minmax(0,1fr)] items-center gap-2 text-xs">
+        <div className="grid grid-cols-[minmax(0,4fr)_3rem_3rem_9rem_3.5rem_minmax(0,0.9fr)_minmax(0,1fr)] items-center gap-2 text-xs">
           <span>Tétel neve</span><span>Menny.</span><span>Egys.</span><span>Nettó egységár</span><span>Áfa</span><span className="text-right">Nettó ár</span><span className="text-right">Bruttó ár</span>
           <UMezo m={{ kulcs: "megn", ertek: adat.megnevezes }} szam={nMegn} cimke="Tétel neve" {...k} />
           <UMezo m={{ kulcs: "menny", ertek: `${adat.mennyiseg}`, auto: true }} cimke="Mennyiség" {...k} />
