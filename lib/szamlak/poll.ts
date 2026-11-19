@@ -19,6 +19,7 @@
 // a hiányzó sorszámokat minden körben újra megvizsgáljuk, függetlenül
 // attól, hogy a fő kereső időközben már jóval előrébb jár.
 
+import { vevoCimXmlbol } from "@/lib/szamlak/vevo-cim";
 import { query, egyetlenPeldanybanVarva, ZAR_KULCS } from "@/lib/db";
 import { decodeEntities, lekerdezSzamla, SzamlazzHuError, type SzamlazzHuSzamla } from "./szamlazzhu-client";
 import { kategorizalSzamla, alkategorizalRaklap } from "./categorize";
@@ -143,12 +144,13 @@ async function mentSzallitolevel(t: SzamlazzHuSzamla): Promise<void> {
     .filter((x) => x.mennyiseg !== null && (!x.egyseg || /db|darab/i.test(x.egyseg)))
     .reduce((a, x) => a + (x.mennyiseg ?? 0), 0);
   await query(
-    `insert into szallitolevel_import (bizonylatszam, kelt, vevo, rendszam, tetelek, raklap_db, forras_fajl)
-     values ($1, $2, $3, $4, $5::jsonb, $6, 'szamlazzhu')
+    `insert into szallitolevel_import (bizonylatszam, kelt, vevo, rendszam, tetelek, raklap_db, forras_fajl, szallitasi_cim)
+     values ($1, $2, $3, $4, $5::jsonb, $6, 'szamlazzhu', $7)
      on conflict (bizonylatszam) do update set kelt = excluded.kelt, vevo = excluded.vevo, rendszam = excluded.rendszam,
-       tetelek = excluded.tetelek, raklap_db = excluded.raklap_db
+       tetelek = excluded.tetelek, raklap_db = excluded.raklap_db,
+       szallitasi_cim = coalesce(excluded.szallitasi_cim, szallitolevel_import.szallitasi_cim)
      where szallitolevel_import.parositas_allapot <> 'parositva'`,
-    [t.szamlaszam, t.teljesitesDatum ?? t.kiallitasDatum, t.vevoNev, rendszamAMegjegyzesbol(t.megjegyzes) ?? rendszamAMegjegyzesbol(t.rawXml), JSON.stringify(t.tetelek), raklapDb || null]
+    [t.szamlaszam, t.teljesitesDatum ?? t.kiallitasDatum, t.vevoNev, rendszamAMegjegyzesbol(t.megjegyzes) ?? rendszamAMegjegyzesbol(t.rawXml), JSON.stringify(t.tetelek), raklapDb || null, vevoCimXmlbol(t.rawXml)]
   );
 }
 

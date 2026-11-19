@@ -1,5 +1,6 @@
 "use server";
 
+import { teljesCim, vevoCimXmlbol } from "@/lib/szamlak/vevo-cim";
 import { sajatCegunkE } from "@/lib/fuvarozas/fuvar-constants";
 import * as actions from "@/lib/megbizasok/akciok";
 
@@ -94,16 +95,18 @@ export type SajatFuvarSegedlet = {
 export async function getSajatFuvarSegedlet(): Promise<SajatFuvarSegedlet> {
   await requireViewPermission("fuvarozas");
   const [sajatPartnerek, cimek, partnerek, jarmuLista, telephelyLista] = await Promise.all([
-    query<{ nev: string; cim: string | null }>(
-      `select p.nev,
-              coalesce(
+    query<{ nev: string; nevek: string[]; cim: string | null; szl_cim: string | null; szekhely: string | null }>(
+      `select p.nev, array_append(coalesce(p.nevvaltozatok, '{}'), p.nev) as nevek, nullif(p.szekhely, '') as szekhely,
+              (select nullif(s.szallitasi_cim, '') from szallitolevel_import s
+                where lower(s.vevo) = any (select lower(x) from unnest(array_append(coalesce(p.nevvaltozatok, '{}'), p.nev)) x) and coalesce(s.szallitasi_cim, '') <> ''
+                order by s.kelt desc limit 1) as szl_cim,
+              (
                 -- a partner oldali cím: az utolsó saját fuvar lerakója, ha nem a mi telephelyünk, különben a felrakója
                 (select x.cim from fuvar_megbizasok m
                    cross join lateral (values (1, m.lerako), (2, m.felrako)) as x(sorrend, cim)
                   where m.jelleg = 'sajat' and m.partner_id = p.id and m.torolt_at is null and coalesce(x.cim, '') <> ''
                     and x.cim !~* '(szakoly|balk[aá]ny|t[uü]nde\\s*(u|ut|út|utca)\\.?\\s*20)'
-                  order by m.datum desc, m.id desc, x.sorrend limit 1),
-                nullif(p.szekhely, '')) as cim
+                  order by m.datum desc, m.id desc, x.sorrend limit 1) as cim
          from fuvar_partnerek p
         where exists (select 1 from fuvar_megbizasok m where m.jelleg = 'sajat' and m.partner_id = p.id and m.torolt_at is null)
            or exists (select 1 from szamla s where s.kategoria = 'raklap' and not s.sztorno
@@ -121,12 +124,29 @@ export async function getSajatFuvarSegedlet(): Promise<SajatFuvarSegedlet> {
     getJarmuvek(),
     getSajatTelephelyek(),
   ]);
+  const sajatP = sajatPartnerek.filter((p) => !sajatCegunkE(p.nev) && !/telephely/i.test(p.nev));
+  // A vevő címe a legutóbbi raklap-számla XML-jéből (minden szállítón / számlán rajta van).
+  const xmlSorok = sajatP.length
+    ? await query<{ vevo: string; x: string }>(
+        `select distinct on (lower(vevo_nev)) lower(vevo_nev) as vevo, substr(raw_xml, position('<vevo>' in raw_xml), 1500) as x
+           from szamla
+          where kategoria = 'raklap' and not sztorno and raw_xml like '%<vevo>%' and lower(vevo_nev) = any($1::text[])
+          order by lower(vevo_nev), kiallitas_datum desc, id desc`,
+        [sajatP.flatMap((p) => p.nevek.map((n) => n.toLowerCase()))]
+      )
+    : [];
+  const szamlaCim = new Map(xmlSorok.map((r) => [r.vevo, vevoCimXmlbol(r.x)]));
   const telephelyek = telephelyLista.map((t) => ({ cim: t.cim, nev: t.nev }));
   const ismert = new Set(telephelyek.map((t) => t.cim));
   return {
     jarmuvek: jarmuLista.filter((j) => j.rendszamok.length > 0).map((j) => ({ kod: j.kod ?? j.rendszamok[0], cimke: `${j.sofor} · ${j.rendszamok[0]}` })),
     helyek: [...telephelyek, ...cimek.filter((c) => !ismert.has(c.cim)).map((c) => ({ cim: c.cim, nev: null }))],
     partnerek: partnerek.map((p) => p.nev),
-    sajatPartnerek: sajatPartnerek.filter((p) => !sajatCegunkE(p.nev) && !/telephely/i.test(p.nev)),
+    sajatPartnerek: sajatP.map((p) => {
+      // Cím-sorrend: az első TELJES cím (van benne szám) nyer — korábbi saját fuvar megállója,
+      // szállítólevél címe, a legutóbbi raklap-számla vevő-címe, székhely; különben az első, ami van.
+      const jeloltek = [p.cim, p.szl_cim, p.nevek.map((n) => szamlaCim.get(n.toLowerCase())).find(Boolean) ?? null, p.szekhely];
+      return { nev: p.nev, cim: jeloltek.find((c) => teljesCim(c)) ?? jeloltek.find(Boolean) ?? null };
+    }),
   };
 }

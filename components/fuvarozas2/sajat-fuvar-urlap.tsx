@@ -70,6 +70,23 @@ export function SajatFuvarUrlap({
     setA({ ...a, hova: v, kinek: p && irhato ? p.nev : a.kinek });
   }
 
+  // Kitől (2026-11-19): alapból mi vagyunk; ha beszállítót választasz, a Kinek mi leszünk,
+  // és a Honnan a beszállító címe (ha üres, vagy az előző beszállító címe állt benne).
+  const MI = "Well-Worn Pallet Kft.";
+  const miVagyunk = (x: string | null | undefined) => /well.?worn/i.test(x ?? "");
+  function kitolValt(v: string) {
+    const p = sp.find((x) => kulcs(x.nev) === kulcs(v));
+    const elozo = sp.find((x) => kulcs(x.nev) === kulcs(a.kitol ?? ""));
+    const honnanIrhato = !a.honnan.trim() || (!!elozo?.cim && kulcs(elozo.cim) === kulcs(a.honnan));
+    const kulso = !!v.trim() && !miVagyunk(v);
+    setA({
+      ...a,
+      kitol: v,
+      kinek: kulso ? MI : miVagyunk(a.kinek) ? "" : a.kinek,
+      honnan: p?.cim && honnanIrhato ? p.cim : a.honnan,
+    });
+  }
+
   function ment(utana?: "kocsira") {
     start(async () => {
       let r = await mentSajatFuvart(id, a);
@@ -130,7 +147,7 @@ export function SajatFuvarUrlap({
         </label>
         <label className={cimke}>Honnan<input id="sf-honnan" list="sf-helyek" className={mezo} value={a.honnan} onChange={allit("honnan")} placeholder="telephely vagy cím" /></label>
         <label className={cimke}>Hová<input id="sf-hova" list="sf-hova-lista" className={mezo} value={a.hova} onChange={(e) => hovaValt(e.target.value)} placeholder="cím — a partnert kitölti" /></label>
-        <label className={cimke}>Kitől<input id="sf-kitol" className={mezo} value={a.kitol ?? ""} onChange={allit("kitol")} placeholder="Well-Worn Pallet Kft." /></label>
+        <label className={cimke}>Kitől<input id="sf-kitol" list="sf-kitol-lista" className={mezo} value={a.kitol ?? ""} onChange={(e) => kitolValt(e.target.value)} onFocus={(e) => e.target.select()} placeholder="Well-Worn Pallet Kft. — vagy beszállító" /></label>
         <label className={cimke}>Kinek<input id="sf-kinek" list="sf-partnerek" className={mezo} value={a.kinek ?? ""} onChange={(e) => kinekValt(e.target.value)} placeholder="saját partner — a címet kitölti" /></label>
         <label className={`${cimke} col-span-2`}>Megjegyzés<textarea id="sf-megj" rows={2} className={mezo} value={a.megjegyzes ?? ""} onChange={allit("megjegyzes")} /></label>
       </div>
@@ -138,6 +155,10 @@ export function SajatFuvarUrlap({
         {segedlet.helyek.map((h) => <option key={h.cim} value={h.cim} label={h.nev ?? undefined} />)}
       </datalist>
       <datalist id="sf-partnerek">
+        {sp.map((p) => <option key={p.nev} value={p.nev} label={p.cim ?? undefined} />)}
+      </datalist>
+      <datalist id="sf-kitol-lista">
+        <option value={MI} label="saját áru — mi visszük" />
         {sp.map((p) => <option key={p.nev} value={p.nev} label={p.cim ?? undefined} />)}
       </datalist>
       <datalist id="sf-hova-lista">
