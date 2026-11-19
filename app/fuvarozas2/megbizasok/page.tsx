@@ -142,6 +142,7 @@ export default async function Page({ searchParams }: {
               adat={sinAdat}
               szuro={szuro}
               szerkesztheto={szerkeszthet}
+              szamlazhat={jogok.elszamol}
               kereso={<div className="flex items-start gap-2"><div className="min-w-0 flex-1"><KeresoJavaslatok key={q ?? ""} index={asztal.kereso} kezdo={q ?? ""} /></div>{q ? <Link href="/fuvarozas2/megbizasok" className="mt-1 shrink-0 rounded-lg border bg-card px-3 py-1.5 text-sm">× törlés</Link> : null}</div>}
               fejlecJobb={szerkeszthet ? (
                 <div className="flex shrink-0 items-center gap-2">

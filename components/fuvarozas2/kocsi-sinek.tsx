@@ -2,6 +2,7 @@ import Link from "next/link";
 import { formatFt } from "@/components/fuvarozas2/kozos";
 import { megbizasCim, utolsoVaros, varos } from "@/lib/megbizasok/megjelenites";
 import { munkaasztalLink, type MunkaasztalSzuro } from "@/components/fuvarozas2/munkaasztal";
+import { SzamlazasiSegedGomb } from "@/components/fuvarozas2/szamlazasi-seged";
 import { JovahagyasGomb } from "@/components/fuvarozas2/ma-het-gombok";
 import { HaviSzerkeszto, HuzhatoJegy, SinCel } from "@/components/fuvarozas2/kocsi-sinek-gombok";
 import { PECSET_NEVEK, eFt, type Pecset } from "@/lib/fuvarozas2/kocsi-sinek-alap";
@@ -50,7 +51,7 @@ function Dij({ j }: { j: Jegy }) {
   );
 }
 
-function JegyKartya({ j, szuro, huzhatoNap, szerkesztheto }: { j: Jegy; szuro: MunkaasztalSzuro; /** Tálcán: húzható, ezzel a nappal kerül kocsira. */ huzhatoNap?: string; szerkesztheto: boolean }) {
+function JegyKartya({ j, szuro, huzhatoNap, szerkesztheto, szamlazhat = false }: { j: Jegy; szuro: MunkaasztalSzuro; /** Tálcán: húzható, ezzel a nappal kerül kocsira. */ huzhatoNap?: string; szerkesztheto: boolean; szamlazhat?: boolean }) {
   const s = j.sor;
   const href = munkaasztalLink(szuro, { reszlet: s.id, elvinni: undefined, uj: false, ujBer: false, szerk: false });
   const sajat = s.jelleg === "sajat";
@@ -70,6 +71,10 @@ function JegyKartya({ j, szuro, huzhatoNap, szerkesztheto }: { j: Jegy; szuro: M
         </span>
       </Link>
       {szerkesztheto && s.jelleg === "ber" && s.allapot === "ellenorzesre_var" ? <div className="mt-1 flex justify-end"><JovahagyasGomb megbizasId={s.id} /></div> : null}
+      {/* Lerakta a sofőr, számla még nincs: „Számlázok” — a számla minden mezője másolható (Számlázási segéd). */}
+      {s.jelleg === "ber" && !s.szamla_szam && j.pecsetek.some((p) => p.kulcs === "lerakas" && p.nap) ? (
+        <div className="mt-1 flex justify-end"><SzamlazasiSegedGomb megbizasId={s.id} elszamolasJog={szamlazhat} /></div>
+      ) : null}
     </>
   );
   return szerkesztheto && huzhatoNap
@@ -119,7 +124,7 @@ function HaviSav({ adat, szerkesztheto }: { adat: KocsiSinekAdat; szerkesztheto:
   );
 }
 
-function SinSor({ sin, szuro, szerkesztheto }: { sin: Sin; szuro: MunkaasztalSzuro; szerkesztheto: boolean }) {
+function SinSor({ sin, szuro, szerkesztheto, szamlazhat }: { sin: Sin; szuro: MunkaasztalSzuro; szerkesztheto: boolean; szamlazhat: boolean }) {
   const h = sin.havi;
   return (
     <SinCel kod={sin.kod} engedett={szerkesztheto}>
@@ -135,7 +140,7 @@ function SinSor({ sin, szuro, szerkesztheto }: { sin: Sin; szuro: MunkaasztalSzu
         </div>
       </div>
       <ul className="flex gap-2.5 overflow-x-auto pb-1">
-        {sin.jegyek.map((j) => <JegyKartya key={j.sor.id} j={j} szuro={szuro} szerkesztheto={szerkesztheto} />)}
+        {sin.jegyek.map((j) => <JegyKartya key={j.sor.id} j={j} szuro={szuro} szerkesztheto={szerkesztheto} szamlazhat={szamlazhat} />)}
         {szerkesztheto ? (
           <li className="w-36 shrink-0">
             <Link href={`${munkaasztalLink(szuro, { uj: true, reszlet: undefined })}&kocsi=${encodeURIComponent(sin.kod)}`} scroll={false}
@@ -149,7 +154,9 @@ function SinSor({ sin, szuro, szerkesztheto }: { sin: Sin; szuro: MunkaasztalSzu
   );
 }
 
-export function KocsiSinek({ adat, szuro, szerkesztheto, kereso, fejlecJobb }: {
+export function KocsiSinek({ adat, szuro, szerkesztheto, szamlazhat = false, kereso, fejlecJobb }: {
+  /** Elszámolási jog: a Számlázási segéd beírhatja-e a számlaszámot. */
+  szamlazhat?: boolean;
   adat: KocsiSinekAdat;
   szuro: MunkaasztalSzuro;
   szerkesztheto: boolean;
@@ -179,7 +186,7 @@ export function KocsiSinek({ adat, szuro, szerkesztheto, kereso, fejlecJobb }: {
           </ul>
         )}
       </section>
-      {adat.sinek.map((s) => <SinSor key={s.kod} sin={s} szuro={szuro} szerkesztheto={szerkesztheto} />)}
+      {adat.sinek.map((s) => <SinSor key={s.kod} sin={s} szuro={szuro} szerkesztheto={szerkesztheto} szamlazhat={szamlazhat} />)}
       <p className="text-xs text-muted-foreground">
         Pecsétek: {PECSET_NEVEK.join(" · ")} (saját fuvarnál az első három). A jegy a számla pecsétje után lekerül a sínről.{" "}
         <Link href="/fuvarozas2/megbizasok?nezet=regi" className="text-primary hover:underline">Régi táblás nézet →</Link>
