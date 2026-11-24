@@ -398,6 +398,9 @@ function vezetes(honnan: { lat: number; lon: number }, hova: { lat: number; lon:
   eq("SpediTrans cím: város", varosNev("Bestpallet Kft. HU-4254 Nyíradony Patak utca 1"), "Nyíradony");
   eq("Duvenbeck cím továbbra is jó", varosNev("Yanfeng International Automotive, Juhar utca 17, HU 8500 Papa"), "Papa");
   eq("zárójeles irsz továbbra is jó", varosNev("Nyíregyháza (4400 Móricz Zsigmond u. 24.)"), "Nyíregyháza");
+  eq("város, telephely, utca (irsz nélkül): város az első darab", varosNev("Mátészalka, Régi Bászna Gabona telep, Jármi út"), "Mátészalka");
+  eq("cégnév, város, utca továbbra is jó", varosNev("Bestpallet Kft., Nyíradony, Patak utca 1"), "Nyíradony");
+  eq("egybeírt város+utca továbbra is jó", varosNev("Budapest Hoffher Albert u.42."), "Budapest");
 }
 
 // 6) Korábban lerakott megálló (Micó EUCARGO #281, 2026-09-28): a lerakók

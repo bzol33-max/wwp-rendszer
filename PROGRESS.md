@@ -4268,3 +4268,8 @@ szerver-akción át, szerkesztési joggal). A Ma oldal nem változott.
 - EUR → Ft: a MEGLÉVŐ `lib/fuvarozas/arfolyam.ts` (MNB, `arfolyam` tábla, `ft` oszlop) — számla kelte, számla előtt mai (előzetes).
 - A régi életút-tábla: `?nezet=regi` és a pénz-szűrős linkek. A mobil nézet változatlan.
 - Hátra: havi kiadás részletezése (üzemanyag, HU-GO, kocsinap), „+ saját fuvar” a sínen előre kitöltött kocsival, húzás a tálcáról.
+
+## 2026-11-24 — Városnév: „Város, telephely, utca” cím irányítószám nélkül
+- Élesben a #443 lerakója („Mátészalka, Régi Bászna Gabona telep, Jármi út”) „Régi” városként jelent meg, a kocsi mátészalkai állása „nem tervezett állás” lett.
+- `lib/fuvarozas/varos.ts` (`talalVaros`): 3+ darabos címnél, ha a többi darab között nincs város, és az első darab egyetlen szó (szám, utcatípus-szó, cégforma nélkül), az a város — az egybeírt „Város Utca” ág előtt.
+- Teszt: `teszt-erintes` +3 (92 → `npm run teszt` OK, eslint OK). Adatmodell, UI nem változott.

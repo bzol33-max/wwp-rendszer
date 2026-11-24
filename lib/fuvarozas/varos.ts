@@ -131,6 +131,20 @@ export function talalVaros(parts: string[]): { zip: string; city: string; idx: n
     }
   }
 
+  // "Város, telephely neve, utca" alak irányítószám és cégnév nélkül (élesben
+  // a #443: "Mátészalka, Régi Bászna Gabona telep, Jármi út"). 3+ darabnál az
+  // első darabot a fenti kör cégnévnek véve kihagyja; ha a többi között nem
+  // akadt város, és az első darab egyetlen szó (magyar településnév szóközt
+  // nem tartalmaz), szám, utcatípus-szó és cégforma nélkül, akkor az a város.
+  // Enélkül a lenti ág a "Régi Bászna Gabona telep" első szavát ("Régi") adta
+  // városnak, és a GPS a mátészalkai lerakást "nem tervezett állás"-nak vette.
+  if (parts.length >= 3) {
+    const elso = parts[0].trim();
+    if (!/\s/.test(elso) && csupaszVarosnev(elso)) {
+      return { zip: "", city: elso, idx: 0 };
+    }
+  }
+
   // Vessző nélkül egybeírt "Város Utcanév házszám" alak (pl. "Budapest
   // Hoffher Albert u.42."). A városnév az utcatípus-szó ELŐTTI első szó — de
   // csak akkor, ha legalább két szó áll előtte. Ez különbözteti meg a valódi
