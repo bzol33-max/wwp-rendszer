@@ -166,5 +166,13 @@ function vezetes(hova: { lat: number; lon: number }, kezdet: Date, veg: Date): I
   eq("elsőbbség: a második a város szintűt", b[0].varosSzintuEgyezes, true);
 }
 
+// Trans-Sped / InnoManagement: az irányítószám után az ország áll (2026-11-24, 59913).
+{
+  const { varosNev } = await import("@/lib/fuvarozas/varos");
+  eq("Hungary: város elöl", varosNev("Környe, 2851 Hungary"), "Környe");
+  eq("Hungary: utca közte", varosNev("Debrecen, Monostorpályi út 92, 4030 Hungary"), "Debrecen");
+  eq("Hungary: cégnévvel", varosNev("Környe, Sonoco Metal Packaging Kft., Környe, 2851 Hungary"), "Környe");
+  eq("rendes cím változatlan", varosNev("4400 Nyíregyháza, Fő u. 1."), "Nyíregyháza");
+}
 console.log(`\nVáros szintű érintés: ${ok} rendben, ${bad} hiba`);
 if (bad > 0) process.exit(1);

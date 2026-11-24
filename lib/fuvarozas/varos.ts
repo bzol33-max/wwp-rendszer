@@ -25,6 +25,9 @@ const CEGFORMA_SZAVAK = /\b(kft\.?|zrt\.?|bt\.?|nyrt\.?|kkt\.?|gmbh|s\.r\.o\.?|a
  */
 const ORSZAGKOD = /^[A-Z]{2}$/;
 
+/** Kiírt országnév — az irányítószám után állva nem városnév ("4030 Hungary"). */
+const ORSZAGNEV = /^(hungary|magyarorsz[aá]g|hungaria|ungarn|hongrie|slovakia|szlov[aá]kia|slowakei|romania|rom[aá]nia|rum[aä]nien|austria|ausztria|[oö]sterreich|germany|n[eé]metorsz[aá]g|deutschland|poland|lengyelorsz[aá]g|polen|czechia|czech republic|csehorsz[aá]g|slovenia|szlov[eé]nia|croatia|horv[aá]torsz[aá]g|serbia|szerbia|italy|olaszorsz[aá]g|ukraine|ukrajna)\.?$/i;
+
 /**
  * Egyértelmű állomás-elválasztók: a Drive-automatika " + "-szal fűzi össze a
  * teljes címeket egy több-megállós megbízásnál. Szóközzel körülvéve, hogy
@@ -106,7 +109,16 @@ export function talalVaros(parts: string[]): { zip: string; city: string; idx: n
   // meg, és a GPS-felismerés (pontosság "ismeretlen") kihagyta a megállót.
   for (let i = 0; i < parts.length; i++) {
     const m = parts[i].match(/(?<!\()(\d{4})\]?\s+([^(]+)/);
-    if (m) return { zip: m[1], city: varosUtcaNelkul(m[2].trim()), idx: i };
+    if (!m) continue;
+    // "Város, utca hsz., 4030 Hungary" (Trans-Sped / InnoManagement, élesben a
+    // #369 és a 2026-11-24-i 59913-as megbízás): az irányítószám után az ORSZÁG
+    // áll, a város a cím ELEJÉN van. Enélkül a fuvar "Hungary → Hungary" lett.
+    if (ORSZAGNEV.test(m[2].trim())) {
+      const elotte = parts.slice(0, i).findIndex((p) => csupaszVarosnev(p));
+      if (elotte >= 0) return { zip: m[1], city: parts[elotte].trim(), idx: elotte };
+      continue;
+    }
+    return { zip: m[1], city: varosUtcaNelkul(m[2].trim()), idx: i };
   }
 
   for (let i = 0; i < parts.length; i++) {
