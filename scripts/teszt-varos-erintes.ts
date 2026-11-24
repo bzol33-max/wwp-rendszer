@@ -8,6 +8,7 @@
 // 12:01–12:39 a Nyomdász u. 5-ben állt), a #300 felrakója "4541 Nyírjákó,
 // Fermentáló üzem Nyírjákó külterület" (Micó 11:06–13:12 a falu határában).
 
+import { varosNev } from "@/lib/fuvarozas/varos";
 import { jelolMegallokat, megalloJeloltjei, type IdovonalSzakasz, type TervezettMegallo } from "@/lib/fuvarozas/idovonal";
 import { cimPontossaga } from "@/lib/fuvarozas/varos";
 import { erintesDontes, telepulesEgyezik, varosKorben, type ErintesMegalloAdat } from "@/lib/fuvarozas/varos-erintes";
@@ -168,7 +169,6 @@ function vezetes(hova: { lat: number; lon: number }, kezdet: Date, veg: Date): I
 
 // Trans-Sped / InnoManagement: az irányítószám után az ország áll (2026-11-24, 59913).
 {
-  const { varosNev } = await import("@/lib/fuvarozas/varos");
   eq("Hungary: város elöl", varosNev("Környe, 2851 Hungary"), "Környe");
   eq("Hungary: utca közte", varosNev("Debrecen, Monostorpályi út 92, 4030 Hungary"), "Debrecen");
   eq("Hungary: cégnévvel", varosNev("Környe, Sonoco Metal Packaging Kft., Környe, 2851 Hungary"), "Környe");
