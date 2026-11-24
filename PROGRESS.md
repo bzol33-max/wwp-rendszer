@@ -1,5 +1,11 @@
 # PROGRESS
 
+## 2026-11-24 — Megbízások: városnév ország helyett, számlázási segéd, saját fuvar űrlap
+- `lib/fuvarozas/varos.ts`: ha az irányítószám után országnév áll („Környe, 2851 Hungary”, „Debrecen, Monostorpályi út 92, 4030 Hungary” — Trans-Sped), a város a cím első, házszám nélküli tagja. A városnév megjelenítéskor számolódik, ezért a régi sorok is javultak (#369, #452). Teszt: `scripts/teszt-varos-erintes.ts` (44 ok).
+- Kocsi-sínek: a jegy húzással adható kocsira; saját fuvar zöld; „+ Új bérfuvar” kivéve; „Számlázok” gomb a lerakott, számlázatlan bérfuvar jegye alatt.
+- `components/fuvarozas2/szamlazasi-seged.tsx`: a Számlázz.hu szerkesztő oldalának mása, számozott másolható mezőkkel; az ellenőrzőlista és a számlaszám-mentés kikerült.
+- Saját fuvar űrlap: Kitől alapból Well-Worn, lenyíló a beszállítókkal; külső Kitől esetén Kinek = Well-Worn; cím↔cég kitöltés (`lib/fuvarozas2/sajat-fuvar.ts`, `lib/szamlak/vevo-cim.ts`).
+
 ## 2026-11-18 — Útvonaltervező 3D térképpel és élő GPS-szel (új oldal, meglévő funkció nem változott)
 - `public/utvonaltervezo.html`: önálló oldal a `/utvonaltervezo.html` címen (a `proxy.ts` miatt csak bejelentkezve). Több megálló, km / menetidő / útdíj a HU-GO kalkulátorból (J5 · EURO6 · 40 t, a böngészőből közvetlenül: a HU-GO engedi), 3D térkép csak Magyarországgal, lejátszó követő kamerával (szünet 4:30-nál, napi 9 óra), műholdas közelkép a megállóknál (a jelölő húzható), üres km radar (`Max. üres szakasz`, alap 100 km) HU-GO-val számolt üres hazaúttal, rakott/üres jelölés szakaszonként. A szünet és a kamion helye a lejátszóban hozzávetőleges (folyamatos vezetéssel számol).
 - `app/api/fuvarozas2/gps-pozicio/route.ts`: csak olvasó végpont a kamionok pillanatnyi helyéhez, a meglévő `getFleetLastPositions()`-ből (30 mp-es közös gyorsítótár, új Ecofleet-hívás nincs). `fuvarozas` megtekintési jog kell hozzá; a sofőri `fuvarozas_sajat` nem elég. Az oldal 30 mp-enként kéri le.
